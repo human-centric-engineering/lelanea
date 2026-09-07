@@ -185,7 +185,20 @@ describe('main', () => {
       onSignal: vi.fn(),
     });
 
-    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toMatch(/--max-old-space-size=\d+/);
+    // This is the assertion that binds `main` to the real resolver: with
+    // nothing injected, what it emits must be what `resolveHeapMb` computes
+    // for this machine. Calling the same function rather than restating its
+    // arithmetic is what keeps that host-independent — both sides read the
+    // same host, so the runner's size cancels out.
+    //
+    // It matters because the case below injects the resolver. Without this,
+    // nothing asserts that the *default* is `resolveHeapMb` at all, and
+    // `resolveHeap = () => 512` passes the whole file — a wrapper handing V8
+    // a 512MB ceiling, green. A `/--max-old-space-size=\d+/` match, which is
+    // what stood here, cannot tell those apart.
+    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toBe(
+      `--max-old-space-size=${resolveHeapMb({ requestedMb: undefined })}`
+    );
   });
 
   it('defers to a cap the environment already set', async () => {
@@ -204,6 +217,18 @@ describe('main', () => {
 
   it('reads NODE_HEAP_MB as the requested cap', async () => {
     const spawnFn = vi.fn().mockReturnValue(fakeChild());
+    // Injected, so this asserts the *wiring* and not the runner. The previous
+    // version let the real clamp run and asserted the result was at least
+    // DEFAULT_HEAP_MB — a claim about the host, not about this code: true on a
+    // 16GB machine, false on the 2-core runner, which reports ~7938MB, of which
+    // 75% is 5953MB.
+    // It reds when a repo moves from GitHub's free 4-core/16GB public runner to
+    // the standard 2-core/8GB private one, with nothing in the code changed and
+    // the clamp behaving exactly as designed.
+    //
+    // Fork-carried fix for Sunrise #700 (adopted from hce-hub) — take Sunrise's
+    // version when it lands.
+    const resolveHeap = vi.fn().mockReturnValue(7777);
 
     await main(['eslint', '.'], {
       spawnFn,
@@ -211,14 +236,14 @@ describe('main', () => {
       resolveCommand: () => '/bin/eslint',
       exit: vi.fn(),
       onSignal: vi.fn(),
+      resolveHeap,
     });
 
-    // Clamped by this machine's real memory, so assert it moved off the
-    // default rather than pinning a number the test host decides.
-    const opts = spawnFn.mock.calls[0][2].env.NODE_OPTIONS as string;
-    expect(Number(/--max-old-space-size=(\d+)/.exec(opts)![1])).toBeGreaterThanOrEqual(
-      DEFAULT_HEAP_MB
-    );
+    // Two halves, and the first is the one the test is named for: the env var
+    // is parsed and handed on as the request. `resolveHeapMb` owns what happens
+    // to it from there, and has its own tests above for the clamping.
+    expect(resolveHeap).toHaveBeenCalledWith({ requestedMb: 9999 });
+    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toBe('--max-old-space-size=7777');
   });
 
   it('forwards the child exit code', async () => {
