@@ -298,7 +298,7 @@ process.
   unset unless Sunrise's tags are genuinely unreachable** — see
   [`CUSTOMIZATION.md` §9](../../CUSTOMIZATION.md) for the trap it opens.
   > **Net effect depends on how your leaf tracks Daybreak.** The guard was _added_
-  > earlier in this same `[Unreleased]` cycle (see Added below) and never appeared
+  > earlier in this same 0.2.0 cycle (see Added above) and never appeared
   > in a tagged Daybreak release, so a leaf that upgrades release-to-release sees
   > no change at all and can ignore both entries. A leaf tracking `main` did pick
   > the script up and needs this one. Both entries are kept deliberately rather
