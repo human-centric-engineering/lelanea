@@ -177,6 +177,21 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     onSignal = (signal, handler) => process.on(signal, handler),
     clearSignal = (signal) => process.removeAllListeners(signal),
     raise = (signal) => process.kill(process.pid, signal),
+    // Injected like the rest of this list, for a different reason: it is the
+    // only collaborator here that reads the *machine*. A test that cannot
+    // replace it has to assert against whatever memory the runner happens to
+    // have, and such an assertion changes answer when the runner does — a repo
+    // going private swaps GitHub's free 4-core/16GB runner for the standard
+    // 2-core one, which reports ~7938MB — 75% of which is 5953MB, below the
+    // 6144 default. The `NODE_HEAP_MB` test then reds on a clamp that is
+    // working exactly as designed.
+    //
+    // FORK-CARRIED FIX for Sunrise #700, adopted from hce-hub. Sunrise is public,
+    // so its own 4-core/16GB runner never clamps and the defect cannot fire
+    // upstream — it only reds downstream, on the private runner `ci.md` tells
+    // forks to size for. DELETE this seam and take Sunrise's version when #700
+    // lands; expect a conflict here on that sync.
+    resolveHeap = resolveHeapMb,
   } = deps;
 
   const [name, ...passthrough] = argv;
@@ -187,7 +202,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     return undefined;
   }
 
-  const heapMb = resolveHeapMb({ requestedMb: parseRequestedMb(env.NODE_HEAP_MB) });
+  const heapMb = resolveHeap({ requestedMb: parseRequestedMb(env.NODE_HEAP_MB) });
 
   const child = spawnFn(resolveCommand(name), passthrough, {
     cwd: ROOT,

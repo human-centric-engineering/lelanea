@@ -44,6 +44,7 @@ import {
   DEFAULT_HEAP_MB,
   LINTABLE,
 } from '@/scripts/ci/chunked-lint.mjs';
+import { resolveHeapMb } from '@/scripts/run-capped.mjs';
 
 const files = (n: number): string[] => Array.from({ length: n }, (_, i) => `f${i}.ts`);
 
@@ -496,7 +497,24 @@ describe('runChunk', () => {
     await runChunk(['a.ts'], [], { spawnFn, command: ['eslint'], env: {} });
 
     const options = spawnFn.mock.calls[0]?.[2];
-    expect(options?.env.NODE_OPTIONS).toContain(`--max-old-space-size=${DEFAULT_HEAP_MB}`);
+    // NOT the `DEFAULT_HEAP_MB` literal. `withHeapCap` CLAMPS its default to a
+    // fraction of physical memory, so pinning the number asserts something
+    // about the runner rather than about `runChunk`: 6144 on a 16GB machine,
+    // 5953 on the 2-core/8GB one a repo gets the day it goes private. That is
+    // what reddened this case on the v0.11.2 sync PR — the sibling case six
+    // above already warns of it in as many words, and this one pinned the
+    // number anyway.
+    //
+    // The oracle is the production resolver, whose result `withHeapCap`
+    // documents as its default: both sides read the same host, so the runner's
+    // size cancels out. The case still discriminates — cap the coordinator
+    // instead of the child and this env carries no NODE_OPTIONS at all.
+    //
+    // Fork-carried fix for Sunrise #700 (adopted from hce-hub) — take Sunrise's
+    // version when it lands.
+    expect(options?.env.NODE_OPTIONS).toContain(
+      `--max-old-space-size=${resolveHeapMb({ requestedMb: DEFAULT_HEAP_MB })}`
+    );
   });
 });
 
