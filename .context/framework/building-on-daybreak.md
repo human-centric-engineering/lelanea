@@ -164,13 +164,25 @@ for everything else it covers.
 
 ## Versions
 
-Your app reports three, on `GET /api/health`:
+Your app reports three, and **they are not all on the same endpoint** — 0.2.0 moved
+two of them:
 
-| Field      | Is                     | You set it                |
-| ---------- | ---------------------- | ------------------------- |
-| `version`  | **your** app's version | `package.json`            |
-| `daybreak` | the framework version  | never — it merges through |
-| `sunrise`  | the platform version   | never — it merges through |
+| Field                    | Is                     | Read it from                                | You set it                |
+| ------------------------ | ---------------------- | ------------------------------------------- | ------------------------- |
+| `version`                | **your** app's version | `GET /api/health` (unauthenticated)         | `package.json`            |
+| `system.daybreakVersion` | the framework version  | `GET /api/v1/admin/stats` (`withAdminAuth`) | never — it merges through |
+| `system.sunriseVersion`  | the platform version   | `GET /api/v1/admin/stats` (`withAdminAuth`) | never — it merges through |
+
+All three are also rendered together on `/admin/overview`, which is where an operator
+answers "did that upgrade actually ship?" without a terminal.
+
+**Why the split.** `/api/health` is unauthenticated — load balancers and orchestrators
+probe it — so a framework or platform version there names the exact set of published
+issues to try against **every** Daybreak-derived deployment, not just yours. Your own
+app version is different in kind: it means nothing outside your leaf, it is yours to
+disclose, and health checks read it. If your monitoring asserted on `body.daybreak` or
+`body.sunrise`, that breaks on this release; see the Removed entry in
+[`CHANGELOG.md`](./CHANGELOG.md).
 
 Do not edit `lib/daybreak-version.ts` or `lib/sunrise-version.ts`. Editing them makes
 your app claim a version it isn't running, which is worse than no answer.

@@ -14,7 +14,10 @@
  *     Daybreak is built on.
  *
  * Together they are what lets an operator answer "what is actually deployed?"
- * for a three-tier app, via `/api/health` (`version` / `daybreak` / `sunrise`).
+ * for a three-tier app. Only `version` is on `/api/health`; the other two are
+ * behind `withAdminAuth` on `GET /api/v1/admin/stats` (`system.daybreakVersion`
+ * / `system.sunriseVersion`) and rendered on `/admin/overview`. See the note
+ * under Conventions for why.
  *
  * # Who edits this
  *
@@ -40,9 +43,16 @@
  *
  * - **Server-side use only.** Symmetric with `lib/sunrise-version.ts` — this file
  *   is deliberately NOT marked `server-only`, so it can be imported from
- *   platform-agnostic tiers. Render the framework version in a client component
- *   by fetching `/api/health` (where it appears as `daybreak`), not by importing
- *   this constant.
+ *   platform-agnostic tiers. Do not import this constant into a `'use client'`
+ *   component; reach it from one through `GET /api/v1/admin/stats`, as
+ *   `system.daybreakVersion`.
+ * - **Not on `/api/health`.** That endpoint is unauthenticated, and this version
+ *   names the exact framework release — and therefore the exact set of published
+ *   Daybreak issues — for every Daybreak-derived deployment, not just one. It was
+ *   removed from that payload in Daybreak 0.2.0, for the reason Sunrise removed
+ *   `SUNRISE_VERSION` in its 0.10.0 (#531). The invariant is that no
+ *   unauthenticated surface carries it. `APP_VERSION` is unaffected: it is the
+ *   leaf's own number to disclose, and health checks read it.
  * - **Lives at `lib/` root, not `lib/framework/`, and this is forced.** The
  *   ESLint boundary (`lib/framework/eslint.config.mjs`) bans core code from
  *   importing `@/lib/framework`, because a static specifier resolves at BUILD
