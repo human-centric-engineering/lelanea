@@ -56,7 +56,10 @@
  * - **Lives at `lib/` root, not `lib/framework/`, and this is forced.** The
  *   ESLint boundary (`lib/framework/eslint.config.mjs`) bans core code from
  *   importing `@/lib/framework`, because a static specifier resolves at BUILD
- *   time and would break any fork without that folder. `app/api/health/route.ts`
- *   is core, so the constant it reads cannot live in the framework tier.
+ *   time and would break any fork without that folder. `app/api/v1/admin/stats/route.ts`
+ *   is core and is the sole core reader, so the constant it reads cannot live in
+ *   the framework tier. (That witness used to be `app/api/health/route.ts`, until
+ *   0.2.0 took this version off the unauthenticated payload — the constraint did
+ *   not lapse with it, it just moved to a different core route.)
  */
 export const DAYBREAK_VERSION = '0.2.0';
