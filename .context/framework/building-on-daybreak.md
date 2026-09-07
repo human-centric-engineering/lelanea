@@ -94,7 +94,7 @@ the registry refuses a section another tier claimed.
 ```bash
 git remote add daybreak git@github.com:human-centric-engineering/daybreak.git
 git fetch daybreak --tags
-git merge daybreak-v0.1.0
+git merge daybreak-v0.2.0
 ```
 
 Then, because a release usually carries Sunrise migrations as well as Daybreak ones:

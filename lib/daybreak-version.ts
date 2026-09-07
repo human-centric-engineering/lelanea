@@ -49,4 +49,4 @@
  *   time and would break any fork without that folder. `app/api/health/route.ts`
  *   is core, so the constant it reads cannot live in the framework tier.
  */
-export const DAYBREAK_VERSION = '0.1.0';
+export const DAYBREAK_VERSION = '0.2.0';

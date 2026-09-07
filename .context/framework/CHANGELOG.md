@@ -25,6 +25,22 @@ process.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-07
+
+> **Second tagged Daybreak release, and the first a leaf actually merges** — 0.1.0
+> was the baseline forks were cut from. **MINOR bump carrying two breaking changes**,
+> which `0.x` permits: see [`VERSIONING.md`](./VERSIONING.md#0x-semantics--loose-by-design).
+>
+> **Read Changed and Removed before merging.** A subject-access export bundle
+> changes shape, `GET /api/health` loses two fields, and `lib/app/leaf-data-export.ts`
+> gains a second export that is **not optional** — the platform now holds a fork
+> tier's schema to full accounting, so a leaf owes a declaration on every model in
+> `prisma/schema/app.prisma`. Three seams are new or moved for leaves in total:
+> `leaf-brand.ts`, `initLeafSubjectSources()`, and the ancestry guard that became a
+> workflow.
+>
+> Platform range: **Sunrise v0.8.0 → v0.11.2** (see [Platform](#platform) below).
+
 ### Added
 
 - **`lib/app/leaf-brand.ts` — a leaf declares its own brand identity here.**
@@ -49,6 +65,25 @@ process.
   Note this defect was live in Daybreak until now. `NEXT_PUBLIC_*` is inlined at
   build time and `.dockerignore` excludes `.env*`, so a container build shipped
   `© <year> Sunrise` in both footers regardless of what was configured.
+
+
+- **`npm run framework:sync-ancestry`, wired into the fork-owned `app:ci-checks`
+  seam** — fails the build when `lib/sunrise-version.ts` claims a Sunrise release
+  that is not in the tree's git history, the signature of a squash-merged sync PR
+  that silently resets the fork's merge base.
+
+  **Leaves inherit this check.** It compares the *claimed* version against history
+  — never against the newest upstream release — so being deliberately behind
+  upstream stays silent.
+
+  The check **bootstraps its own refs**: a CI runner (or a leaf clone) has none of
+  Sunrise's `vX.Y.Z` tags and checks out at depth 1, so it adds the `upstream`
+  remote, fetches the tags, and deepens a shallow clone before answering.
+  Deepening matters most — on a depth-1 clone `HEAD` has no parents, so an
+  un-deepened check would call *every* release a violation. If those refs cannot be
+  fetched (offline runner, blocked egress) it skips loudly rather than accusing the
+  tree of a violation it could not observe. On a machine that already has the tags
+  and full history it is a no-op and touches no git config. (Sunrise #539.)
 
 ### Changed
 
@@ -81,128 +116,6 @@ process.
   must not collide with the framework tier's — the registry refuses a section
   another tier claimed, and a refused declaration then fails that guard.
 
-### Fixed
-
-- **`FrameworkConversationEval` was silently absent from every subject-access
-  export.** It holds the automated quality scores and judge reasoning recorded
-  against a subject's own conversation turns — assessments *of* what they said —
-  and Art. 15 covers those as squarely as it covers the words assessed.
-
-  It was missed because it reaches the subject through `conversationId` with no
-  user column, and the coverage guard Daybreak carried scanned for
-  `userId` / `createdBy`. A table keyed by a join is invisible to that scan, and
-  the tables such a scan cannot see are exactly the ones nobody remembers. It
-  surfaced the moment full accounting replaced the heuristic — which is the whole
-  argument for full accounting, and the reason a leaf now owes a decision on
-  every one of its own tables rather than only the obvious ones.
-
-  **Leaf action: none for this table** — the fix ships in the framework
-  collector. But if your leaf has a table reached by a join rather than by a user
-  column, it has the same defect today and the new guard will now name it.
-
-### Removed
-
-- **BREAKING: `daybreak` is gone from the `GET /api/health` response**, along
-  with `sunrise` — which Sunrise removed for its own reasons in 0.10.0 (#531).
-  Anything reading `body.daybreak` breaks: an uptime monitor asserting on it, a
-  deploy-verification script grepping it.
-
-  The reason is the one Sunrise gave, applied one tier up. `/api/health` takes no
-  authentication — load balancers and container orchestrators probe it — so the
-  field named the exact Daybreak release a deployment runs, and therefore the
-  exact set of published Daybreak issues to try against it, to anyone who asked.
-  Unlike a leaf's own app version, that answer is useful against **every**
-  Daybreak-derived deployment rather than one. `version` is unaffected: it is the
-  leaf's own number to disclose, it means nothing outside that leaf, and health
-  checks read it.
-
-  **Read it from `GET /api/v1/admin/stats` instead** — `system.daybreakVersion`,
-  behind `withAdminAuth`, beside `system.sunriseVersion` — or import
-  `DAYBREAK_VERSION` server-side. It is also rendered on `/admin/overview`, where
-  the System Information card now shows all three tiers: the leaf's app version,
-  the Daybreak framework version, and the Sunrise platform version. That card is
-  where an operator can now answer "did that upgrade actually ship?" without a
-  terminal.
-
-- **`npm run framework:sync-ancestry`** and its `app:ci-checks` entry, together
-  with `scripts/release/sync-ancestry.ts`, `sync-ancestry-check.ts` and their unit
-  tests. Sunrise 0.9.0 landed the seam this shim stood in for (Sunrise #539) as the
-  [`Fork Sync Integrity`](../../.github/workflows/fork-sync-integrity.yml)
-  workflow, so the fork stops carrying its own.
-
-  **Leaf-visible, no action required — but read this if your leaf pinned it.** A
-  leaf invoking `framework:sync-ancestry` directly must switch to the workflow,
-  which ships in the same merge. The trigger changes: the npm guard ran on every
-  CI job, the workflow runs on **push to `main`**. That is the right trigger for a
-  leaf as well as for Daybreak — and, unlike the shim, the workflow resolves its
-  upstream through `SUNRISE_UPSTREAM_URL` instead of hardcoding Sunrise's clone
-  URL, which is what a fork of Daybreak actually needs. **Leave that variable
-  unset unless Sunrise's tags are genuinely unreachable** — see
-  [`CUSTOMIZATION.md` §9](../../CUSTOMIZATION.md) for the trap it opens.
-  > **Net effect depends on how your leaf tracks Daybreak.** The guard was _added_
-  > earlier in this same `[Unreleased]` cycle (see Added below) and never appeared
-  > in a tagged Daybreak release, so a leaf that upgrades release-to-release sees
-  > no change at all and can ignore both entries. A leaf tracking `main` did pick
-  > the script up and needs this one. Both entries are kept deliberately rather
-  > than cancelled out, because silently dropping the pair would leave the second
-  > kind of leaf with a script that vanished and no note saying why.
-
-  ([`upstream-asks.md`](./upstream-asks.md) — Sunrise #539.)
-
-### Fixed
-
-- **Module registrations now survive the request realm** — `registerModule()` /
-  `getRegisteredModule()` (`lib/framework/modules/registry.ts`) and
-  `registerFrameworkCapability()` / `getRegisteredFrameworkCapabilities()`
-  (`lib/framework/capabilities/registry.ts`) are backed by `globalThis`.
-
-  **Leaf-visible fix, no action required.** Next 16 + Turbopack loads
-  `instrumentation.ts` in a different module graph from route handlers and RSC, so
-  a registry populated at boot was empty on every request. A correctly registered,
-  active, DB-synced module rendered _"This module's code is no longer registered,
-  so its config can't be edited"_ — the whole generic module-config surface was
-  dead for any leaf module. If your leaf carries a local `keep-mine` copy of either
-  registry to work around this, you can drop it on merging this release.
-  (Daybreak #160; same class as Sunrise #462, which swept core's own registries.)
-
-- **Map publish listeners now fire on the request path**
-  (`registerMapPublishListener()` / `notifyMapPublished()`,
-  `lib/framework/facilitation/map/publish-hooks.ts`) — same `globalThis` fix, same
-  root cause. The seam registers at boot but fires from the admin publish/rollback
-  routes, so `autoEmbedAfterPublish` never ran after a real publish and overlay
-  embeddings went stale with no error and no log.
-
-  > **Scope — this fixes Daybreak's own registries, not the whole class.** Four
-  > **Sunrise-owned** registries have the same split and the framework registers
-  > into all of them at boot: the workflow `executor-registry`, and the
-  > agent-access, guard-floor and guard-event contributors. Until those are backed
-  > upstream, framework workflow step types throw _unknown step type_, and module
-  > knowledge scope, facilitation guard minimums and escalation silently no-op on
-  > the request path. They cannot be fixed from a fork without editing core; each
-  > is tracked in
-  > [`upstream-asks.md`](./upstream-asks.md) as a Sunrise #462 follow-on.
-
-### Added
-
-- **`npm run framework:sync-ancestry`, wired into the fork-owned `app:ci-checks`
-  seam** — fails the build when `lib/sunrise-version.ts` claims a Sunrise release
-  that is not in the tree's git history, the signature of a squash-merged sync PR
-  that silently resets the fork's merge base.
-
-  **Leaves inherit this check.** It compares the *claimed* version against history
-  — never against the newest upstream release — so being deliberately behind
-  upstream stays silent.
-
-  The check **bootstraps its own refs**: a CI runner (or a leaf clone) has none of
-  Sunrise's `vX.Y.Z` tags and checks out at depth 1, so it adds the `upstream`
-  remote, fetches the tags, and deepens a shallow clone before answering.
-  Deepening matters most — on a depth-1 clone `HEAD` has no parents, so an
-  un-deepened check would call *every* release a violation. If those refs cannot be
-  fetched (offline runner, blocked egress) it skips loudly rather than accusing the
-  tree of a violation it could not observe. On a machine that already has the tags
-  and full history it is a no-op and touches no git config. (Sunrise #539.)
-
-### Changed
 
 - **The slot capabilities read their per-agent exposure allowlist from the execution
   context instead of re-querying the grant** — `loadExposureConfig(agentId, slug)` in
@@ -345,6 +258,106 @@ process.
   `FacilitationSurface` still declare `conversationId: string | undefined` (a required
   property that may be undefined, not an optional one).
 
+### Removed
+
+- **BREAKING: `daybreak` is gone from the `GET /api/health` response**, along
+  with `sunrise` — which Sunrise removed for its own reasons in 0.10.0 (#531).
+  Anything reading `body.daybreak` breaks: an uptime monitor asserting on it, a
+  deploy-verification script grepping it.
+
+  The reason is the one Sunrise gave, applied one tier up. `/api/health` takes no
+  authentication — load balancers and container orchestrators probe it — so the
+  field named the exact Daybreak release a deployment runs, and therefore the
+  exact set of published Daybreak issues to try against it, to anyone who asked.
+  Unlike a leaf's own app version, that answer is useful against **every**
+  Daybreak-derived deployment rather than one. `version` is unaffected: it is the
+  leaf's own number to disclose, it means nothing outside that leaf, and health
+  checks read it.
+
+  **Read it from `GET /api/v1/admin/stats` instead** — `system.daybreakVersion`,
+  behind `withAdminAuth`, beside `system.sunriseVersion` — or import
+  `DAYBREAK_VERSION` server-side. It is also rendered on `/admin/overview`, where
+  the System Information card now shows all three tiers: the leaf's app version,
+  the Daybreak framework version, and the Sunrise platform version. That card is
+  where an operator can now answer "did that upgrade actually ship?" without a
+  terminal.
+
+- **`npm run framework:sync-ancestry`** and its `app:ci-checks` entry, together
+  with `scripts/release/sync-ancestry.ts`, `sync-ancestry-check.ts` and their unit
+  tests. Sunrise 0.9.0 landed the seam this shim stood in for (Sunrise #539) as the
+  [`Fork Sync Integrity`](../../.github/workflows/fork-sync-integrity.yml)
+  workflow, so the fork stops carrying its own.
+
+  **Leaf-visible, no action required — but read this if your leaf pinned it.** A
+  leaf invoking `framework:sync-ancestry` directly must switch to the workflow,
+  which ships in the same merge. The trigger changes: the npm guard ran on every
+  CI job, the workflow runs on **push to `main`**. That is the right trigger for a
+  leaf as well as for Daybreak — and, unlike the shim, the workflow resolves its
+  upstream through `SUNRISE_UPSTREAM_URL` instead of hardcoding Sunrise's clone
+  URL, which is what a fork of Daybreak actually needs. **Leave that variable
+  unset unless Sunrise's tags are genuinely unreachable** — see
+  [`CUSTOMIZATION.md` §9](../../CUSTOMIZATION.md) for the trap it opens.
+  > **Net effect depends on how your leaf tracks Daybreak.** The guard was _added_
+  > earlier in this same `[Unreleased]` cycle (see Added below) and never appeared
+  > in a tagged Daybreak release, so a leaf that upgrades release-to-release sees
+  > no change at all and can ignore both entries. A leaf tracking `main` did pick
+  > the script up and needs this one. Both entries are kept deliberately rather
+  > than cancelled out, because silently dropping the pair would leave the second
+  > kind of leaf with a script that vanished and no note saying why.
+
+  ([`upstream-asks.md`](./upstream-asks.md) — Sunrise #539.)
+
+### Fixed
+
+- **`FrameworkConversationEval` was silently absent from every subject-access
+  export.** It holds the automated quality scores and judge reasoning recorded
+  against a subject's own conversation turns — assessments *of* what they said —
+  and Art. 15 covers those as squarely as it covers the words assessed.
+
+  It was missed because it reaches the subject through `conversationId` with no
+  user column, and the coverage guard Daybreak carried scanned for
+  `userId` / `createdBy`. A table keyed by a join is invisible to that scan, and
+  the tables such a scan cannot see are exactly the ones nobody remembers. It
+  surfaced the moment full accounting replaced the heuristic — which is the whole
+  argument for full accounting, and the reason a leaf now owes a decision on
+  every one of its own tables rather than only the obvious ones.
+
+  **Leaf action: none for this table** — the fix ships in the framework
+  collector. But if your leaf has a table reached by a join rather than by a user
+  column, it has the same defect today and the new guard will now name it.
+
+
+- **Module registrations now survive the request realm** — `registerModule()` /
+  `getRegisteredModule()` (`lib/framework/modules/registry.ts`) and
+  `registerFrameworkCapability()` / `getRegisteredFrameworkCapabilities()`
+  (`lib/framework/capabilities/registry.ts`) are backed by `globalThis`.
+
+  **Leaf-visible fix, no action required.** Next 16 + Turbopack loads
+  `instrumentation.ts` in a different module graph from route handlers and RSC, so
+  a registry populated at boot was empty on every request. A correctly registered,
+  active, DB-synced module rendered _"This module's code is no longer registered,
+  so its config can't be edited"_ — the whole generic module-config surface was
+  dead for any leaf module. If your leaf carries a local `keep-mine` copy of either
+  registry to work around this, you can drop it on merging this release.
+  (Daybreak #160; same class as Sunrise #462, which swept core's own registries.)
+
+- **Map publish listeners now fire on the request path**
+  (`registerMapPublishListener()` / `notifyMapPublished()`,
+  `lib/framework/facilitation/map/publish-hooks.ts`) — same `globalThis` fix, same
+  root cause. The seam registers at boot but fires from the admin publish/rollback
+  routes, so `autoEmbedAfterPublish` never ran after a real publish and overlay
+  embeddings went stale with no error and no log.
+
+  > **Scope — this fixes Daybreak's own registries, not the whole class.** Four
+  > **Sunrise-owned** registries have the same split and the framework registers
+  > into all of them at boot: the workflow `executor-registry`, and the
+  > agent-access, guard-floor and guard-event contributors. Until those are backed
+  > upstream, framework workflow step types throw _unknown step type_, and module
+  > knowledge scope, facilitation guard minimums and escalation silently no-op on
+  > the request path. They cannot be fixed from a fork without editing core; each
+  > is tracked in
+  > [`upstream-asks.md`](./upstream-asks.md) as a Sunrise #462 follow-on.
+
 ### Documentation
 
 - **The two framework surface stream routes now say why they exist.** Their headers
@@ -357,6 +370,22 @@ process.
   `module.entered`. **A leaf should not read those routes as scaffolding to delete.** The
   remaining upstream ask is now filed honestly: a consumer entry point that accepts a
   server-resolved context tuple. See [`upstream-asks.md`](./upstream-asks.md).
+
+
+### Platform
+
+- **Sunrise v0.11.2** is the platform version as of this release, up from v0.8.0 at
+  Daybreak 0.1.0 — three sync merges spanning four Sunrise releases:
+  [#210](https://github.com/human-centric-engineering/daybreak/pull/210) (v0.9.0),
+  [#215](https://github.com/human-centric-engineering/daybreak/pull/215) (v0.10.0 and
+  v0.11.0, merged as v0.11.1) and
+  [#221](https://github.com/human-centric-engineering/daybreak/pull/221) (v0.11.2).
+  Sunrise's own changes are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md);
+  only the leaf-contract consequences are repeated above. The three worth knowing
+  are the subject-source registry (0.10.0) that the export entries above build on,
+  the removal of `NEXT_PUBLIC_APP_NAME` and friends (0.11.0) behind `leaf-brand.ts`,
+  and the `Fork Sync Integrity` workflow (0.9.0) that replaced Daybreak's own
+  ancestry shim.
 
 ## [0.1.0] — 2026-08-05
 
@@ -428,5 +457,6 @@ process.
   are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md). Only the
   leaf-contract consequence is repeated above.
 
-[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.1.0...HEAD
+[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.2.0...HEAD
+[0.2.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.2.0
 [0.1.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.1.0
