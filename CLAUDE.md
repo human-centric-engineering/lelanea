@@ -1,98 +1,136 @@
 # CLAUDE.md
 
-> ## ⚠️ This is Daybreak — a fork of Sunrise. Read this first.
+> ## ⚠️ This is Lelañea — a leaf app on Daybreak. Read this first.
 >
-> This repository is **Daybreak**, an AI-application framework built **on** the
-> Sunrise platform (`human-centric-engineering/sunrise`), forked at Sunrise
-> **v0.4.1**. You are **building on Sunrise, not developing Sunrise itself.**
+> This repository is **Lelañea**, an application built **on** the Daybreak
+> framework (`human-centric-engineering/daybreak`), which is itself built on the
+> Sunrise platform (`human-centric-engineering/sunrise`). Lelañea was cut from
+> Daybreak **`daybreak-v0.2.0`** (Sunrise 0.11.2).
 >
-> Everything below this banner is **Sunrise's own platform documentation**. Its
-> guidance about how the codebase works still applies — but the _maintainer_
-> workflows in it are **Sunrise's, not yours**: cutting Sunrise releases,
-> "CHANGELOG follows the public surface", the public-surface `/pre-pr` checks,
-> and `VERSIONING.md` all describe how the _platform_ is maintained upstream. In
-> Daybreak you consume the platform; you don't version or release it.
+> **You are building an app. You are not developing Daybreak, and you are not
+> developing Sunrise.** Everything below this banner is **Sunrise's own platform
+> documentation**. Its guidance about how the codebase works still applies — but
+> the _maintainer_ workflows in it belong to the tier that owns them: cutting
+> Sunrise releases, "CHANGELOG follows the public surface", and `VERSIONING.md`
+> describe how the **platform** is maintained upstream. Here you consume both
+> tiers; you version and release neither.
 >
-> ### The golden rule: extend through the seams; don't edit platform-owned files.
+> ### The golden rule: fill the `leaf-*` seams; don't edit the tiers above you.
 >
-> Every Sunrise-owned file you edit becomes a merge conflict the next time you
-> pull a Sunrise release. Prefer adding new files and using the designed seams.
-> Full playbook: [`CUSTOMIZATION.md`](./CUSTOMIZATION.md) (§0 app/platform model,
-> §9 upstream sync) and [`.context/framework/README.md`](./.context/framework/README.md)
-> (the three-tier model + ownership table).
+> Every Daybreak- or Sunrise-owned file you edit becomes a merge conflict on the
+> next sync. Prefer adding new files and using the designed seams. The canonical
+> guide is
+> [`.context/framework/building-on-daybreak.md`](./.context/framework/building-on-daybreak.md)
+> — read it before your first change. [`CUSTOMIZATION.md`](./CUSTOMIZATION.md)
+> describes the platform underneath and still applies.
 >
-> **Building or picking up a framework feature?** Start with
-> [`.context/framework/planning/building-a-feature.md`](./.context/framework/planning/building-a-feature.md)
-> — the operational flow (plan-first → per-task gate loop → close-out) — and the
-> [board in `plan.md`](./.context/framework/planning/plan.md) for what's claimable. This saves
-> you the learning curve the first features went through.
+> ### Three tiers
 >
-> **Three tiers: Sunrise → Daybreak → app.** Apps are built by forking **Daybreak**,
-> not Sunrise. So Daybreak applies Sunrise's fork discipline _one level up_: it owns the
-> framework layer and **reserves the leaf-app surface empty** for its own forks. Working in
-> **this** repo you are building **Daybreak** — edit the framework layer, never the reserved
-> leaf surface.
+> ```
+> Sunrise      the platform   — auth, API conventions, orchestration, security middleware
+>   └── Daybreak   the framework  — modules, facilitation maps, journeys, slots, guidance
+>         └── Lelañea    the leaf   — this repo, our product
+> ```
 >
-> **Daybreak-owned (the framework — edit these):**
+> **Lelañea-owned (edit these freely):**
 >
-> - `lib/framework/` — the framework code and its registration seams
->   (`registerModule()`, the map, slots, guidance, …); register into Sunrise's seams
->   **from here**, driven by `initFramework()`
-> - `prisma/schema/framework-*.prisma` (your models) + `framework_…` migrations touching
->   only `framework_*` tables (the boundary CI keys on this prefix)
-> - **`.context/framework/`** — Daybreak's own documentation tree
-> - Daybreak identity: `package.json`, `README.md`, `CUSTOMIZATION.md`, `.env*`, and brand
->   values in `lib/app/brand.ts` — not by editing `lib/brand.ts`. (The old
->   `NEXT_PUBLIC_APP_NAME` / `NEXT_PUBLIC_LEGAL_NAME` env vars were removed in Sunrise 0.11.0;
->   they are inlined at build time and never reached a container build.)
-> - New framework files anywhere (admin pages/routes under a `framework` segment, `components/`)
+> - The five `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+>   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-brand.ts`
+> - Every other `lib/app/*` file Daybreak keeps empty for us (`capabilities.ts`,
+>   `context-contributors.ts`, `env.ts`, `rate-limit.ts`, `public-nav.ts`,
+>   `protected-nav.ts`, `auth-landing.ts`, `emails.ts`, `csp.ts`, `jobs.ts`,
+>   `user-created.ts`, …)
+> - `prisma/schema/app.prisma` (models with `@@map("app_…")`) + `app_…` migrations
+> - **`.context/app/`** — our documentation tree · `components/app/**` — our components
+> - `app/brand-theme.css`, and our identity: `package.json`, `README.md`, `.env*`
+> - New files anywhere: pages in a route group, routes under `app/api/v1/`, `lib/` modules
 >
-> **Reserved for leaf apps (Daybreak keeps these EMPTY — do NOT fill):**
+> **The four bridges — DO NOT FILL. Fill the `leaf-*` file each delegates to:**
 >
-> - The `lib/app/*` **leaf** scaffolds (`env.ts`, `capabilities.ts`, `context-contributors.ts`,
->   `leaf-bootstrap.ts`, `leaf-admin-nav.ts`, …) — Sunrise ships them empty; Daybreak keeps them
->   empty for the app. Filling one collides with a leaf's registrations on a Daybreak upgrade.
->   **Exception — the four `lib/app/*` _bridges_ Daybreak DOES fill:** `bootstrap.ts` (server boot →
->   `initFramework()`), `admin-nav.ts` (client sidebar → the framework nav section),
->   `data-export.ts` (GDPR Art. 15 subject access → the framework's own manifest at
->   `lib/framework/privacy/export-sources.ts`, declared through core's
->   `registerAppSubjectSources({ tier: 'framework' })`), and `brand.ts` (product name + legal
->   entity → `lib/brand.ts`). A framework registration that must run in a realm
->   `initFramework()` can't reach — server-boot, the client sidebar, a lazy seam core owns the
->   init of, or a static function core imports directly — has nowhere else to go; each bridge
->   delegates to a reserved leaf hook (`leaf-bootstrap.ts` / `leaf-admin-nav.ts` /
->   `leaf-data-export.ts` / `leaf-brand.ts`) so the leaf's own registrations never collide.
->   `brand.ts` is the one bridge where the leaf hook **overrides** rather than appends — brand
->   identity is single-valued, so a leaf replaces Daybreak's name, it does not compose with it.
-> - `prisma/schema/app.prisma` + `app_…` migrations, `app/brand-theme.css`, and **`.context/app/`**
+> | Fill this (ours)              | NOT this (Daybreak's) |
+> | ----------------------------- | --------------------- |
+> | `lib/app/leaf-bootstrap.ts`   | `bootstrap.ts`        |
+> | `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        |
+> | `lib/app/leaf-data-export.ts` | `data-export.ts`      |
+> | `lib/app/leaf-brand.ts`       | `brand.ts`            |
 >
-> **Sunrise-owned (do NOT edit; extend through a seam instead):**
+> Each bridge runs Daybreak's registration and then calls our hook. Filling a
+> bridge directly collides with Daybreak on the next merge — and in the
+> `data-export.ts` case, resolving that conflict the obvious way **silently drops
+> the framework's tables from every GDPR subject-access export**.
+>
+> **Daybreak-owned (do NOT edit; it merges through):**
+>
+> - `lib/framework/`, `components/framework/`, `prisma/schema/framework-*.prisma`
+> - **`.context/framework/`** — including its `CHANGELOG.md`, `VERSIONING.md` and
+>   planning board. That board tracks **Daybreak's** work, not ours; ours goes in
+>   `.context/app/`.
+> - `lib/daybreak-version.ts`, and the four `lib/app/*` bridges above
+>
+> **Sunrise-owned (do NOT edit; extend through a seam):**
 >
 > - Core `lib/` utilities, core `app/api/v1` routes, core `components/`, the
 >   security / rate-limit middleware (`proxy.ts`, `lib/security/**`)
-> - `lib/sunrise-version.ts`, `VERSIONING.md`, `CHANGELOG.md`, and `.context/**`
->   **except `.context/framework/` and `.context/app/`**, plus the SQL of any **Sunrise** migration
-> - This `CLAUDE.md` **below the banner** — keep Daybreak-specific instructions
->   in this banner or in [`.context/framework/README.md`](./.context/framework/README.md), so
->   upstream `CLAUDE.md` edits merge cleanly
+> - `lib/sunrise-version.ts`, `VERSIONING.md`, `CHANGELOG.md`, `CUSTOMIZATION.md`,
+>   and `.context/**` **except `.context/framework/` and `.context/app/`**
+> - This `CLAUDE.md` **below the banner** — keep Lelañea-specific instructions in
+>   this banner or in [`.context/app/`](./.context/app/), so upstream edits merge cleanly
 > - If you genuinely must change platform behaviour and no seam exists, keep the
->   edit minimal and add a follow-up rather than rewriting Sunrise's file — a
->   one-line "keep mine" is a cheap merge; a rewritten platform file is not
+>   edit minimal, cite the upstream issue at the site, and add a follow-up rather
+>   than rewriting the file — a one-line "keep mine" is a cheap merge
 >
 > ### Version model
 >
-> `package.json.version` is **Daybreak's** app version (surfaced via
-> `lib/app-version.ts` → `/api/health` `version`). `lib/sunrise-version.ts` is
-> the **Sunrise platform** version you forked from — you merge it through on
-> upstream syncs; never edit it directly.
+> Three versions, three owners, and **only the first is ours**:
 >
-> ### Pulling upstream Sunrise
+> | Constant                              | Is                    | We set it                 |
+> | ------------------------------------- | --------------------- | ------------------------- |
+> | `package.json` → `lib/app-version.ts` | **Lelañea's** version | yes                       |
+> | `lib/daybreak-version.ts`             | the framework version | never — it merges through |
+> | `lib/sunrise-version.ts`              | the platform version  | never — it merges through |
 >
-> Sunrise is the `upstream` remote. To adopt a release:
-> `git fetch upstream --tags && git merge vX.Y.Z`. Resolve conflicts by keeping
-> your version and adding follow-ups; then run `npm run db:migrate:status` →
-> `db:migrate:dev` to apply newly-merged Sunrise migrations. See
-> [`CUSTOMIZATION.md` §9](./CUSTOMIZATION.md).
+> Editing either of the last two makes this app claim a version it isn't running,
+> which is worse than no answer. Only `version` is on the unauthenticated
+> `GET /api/health`; the other two are on `GET /api/v1/admin/stats` behind
+> `withAdminAuth`, and all three render on `/admin/overview`.
+>
+> ### Syncing Daybreak
+>
+> ```bash
+> git fetch daybreak --tags
+> git merge daybreak-v0.3.0        # tags are prefixed `daybreak-v`
+> npm install && npm run db:migrate:status && npm run db:migrate:dev
+> npm run db:drift-check
+> ```
+>
+> **Read [`.context/framework/CHANGELOG.md`](./.context/framework/CHANGELOG.md)
+> BEFORE merging, not after** — a seam changing hands is a breaking change and is
+> called out there.
+>
+> **Never merge Sunrise directly**, however tempting. Daybreak carries Sunrise
+> through along with the reconciliation each platform sync required; merging
+> Sunrise yourself means solving that work a second time, differently, and then
+> conflicting with Daybreak's version of it on the next merge. Wait for the
+> Daybreak release, or ask Daybreak to sync. The `sunrise` remote exists for
+> reading and for ancestry checks only.
+>
+> **Merge the sync PR with a merge commit — never squash.** Squashing keeps every
+> file but drops the second parent, silently resetting the merge base so the next
+> sync replays the whole range and re-conflicts everything already resolved by
+> hand. Nothing errors and nothing logs; the bill arrives months later.
+> `Fork Sync Integrity` watches for it on push to `main`.
+>
+> ### Two tests that are adjusted here on purpose
+>
+> Both assert a property a leaf is _supposed_ to violate. They are already
+> adjusted; **do not "restore" them** on a sync.
+>
+> - `tests/unit/lib/daybreak-version.test.ts` — the `DAYBREAK_VERSION ===
+package.json.version` parity case is **removed**, with the reasoning recorded
+>   in place. Our version and the framework's are meant to diverge.
+> - `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
+>   **pinned** to our brand values rather than deleted, so every seam still left
+>   empty keeps its protection. Update it whenever `leaf-brand.ts` changes.
 
 Instructions for Claude Code when working in this repository.
 
@@ -493,3 +531,13 @@ All commands default to branch diff mode but accept file/folder paths. The test-
 
 - Expected — `.npmrc` has `legacy-peer-deps=true`
 - No action required
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

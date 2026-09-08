@@ -392,15 +392,19 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     seam: 'lib/app/reserved-tiers.ts',
-    // PINNED (Daybreak is the framework-layer fork): it occupies `lib/framework`
-    // and `.context/framework`, so those two rows of reserved-fork-tiers.test.ts
-    // are unsatisfiable here and are declared away. Pinned exactly, not loosened
-    // to a `toContain`: the value of this row in a fork is that the OTHER three
-    // tiers keep guarding, and `/app` in particular — Daybreak reserves the leaf
-    // surface EMPTY for its own forks, so a file appearing under `components/app/`
-    // or `.context/app/` in THIS repo is a real defect that guard is what catches.
-    risk: 'a stray entry would switch OFF the guard that keeps a reserved tier empty — for Daybreak that means silently permitting core, or this repo itself, to occupy the leaf surface it holds in trust for its own forks',
-    assert: () => expect(occupiedTiers).toEqual(['lib/framework', '.context/framework']),
+    // PINNED (Lelañea is a LEAF on Daybreak, which is itself a framework-layer
+    // fork of Sunrise), so this checkout occupies tiers at both levels:
+    // `lib/framework` + `.context/framework` are Daybreak's, inherited full of
+    // its code and docs; `.context/app` is ours.
+    //
+    // Pinned exactly, not loosened to a `toContain`: the value of this row is
+    // that the tiers we have NOT filled keep guarding. `components/app` in
+    // particular — declaring it before the first component lands there would
+    // both fail this test (a tier declared but empty) and switch off the guard
+    // for the surface we are most likely to fill next.
+    risk: 'a stray entry would switch OFF the guard that keeps a reserved tier empty — for Lelañea that means silently permitting core or Daybreak to occupy leaf surface, and permitting us to occupy a tier we do not own',
+    assert: () =>
+      expect(occupiedTiers).toEqual(['lib/framework', '.context/framework', '.context/app']),
   },
   {
     seam: 'lib/app/brand.ts',
@@ -411,29 +415,59 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // by construction and would keep passing in a fork that had filled the real
     // file — turning the one row that tells a fork to pin its value into a row
     // that can never fail.
-    // PINNED (Daybreak fills this bridge): the framework's own identity, which a
-    // leaf fork overrides from the reserved-empty `leaf-brand.ts` (row below).
+    // PINNED TO THE RESOLVED IDENTITY, WHICH IN THIS LEAF IS OURS.
+    //
+    // Note this is a row for a seam we did NOT fill — `brand.ts` is Daybreak's
+    // bridge and we leave it alone. It changed answer because filling
+    // `leaf-brand.ts` (row below) is precisely what the bridge reads: it resolves
+    // `leafBrandName ?? 'Daybreak'`, so a leaf that sets its name correctly makes
+    // this row report the leaf's name. That is the override working, not a
+    // regression — the upstream row's own comment anticipates the override and
+    // pins Daybreak's value anyway, so it fails for any leaf that actually does it.
+    //
+    // Worth knowing on a sync: `building-on-daybreak.md` names TWO tests a leaf
+    // must adjust and this row is a third, reached second-hand. If a future
+    // Daybreak release changes its own fallbacks, this row keeps passing (we
+    // override all three), which is correct — we would only notice, and only
+    // need to care, if we cleared a value back to `null`.
     assert: async () => {
       const seam = await vi.importActual<typeof import('@/lib/app/brand')>('@/lib/app/brand');
-      expect(seam.appBrandName).toBe('Daybreak');
+      expect(seam.appBrandName).toBe('Lelañea');
       expect(seam.appBrandLegalName).toBe('All Too Human Ltd');
       expect(seam.appBrandDescription).toBe(
-        'Daybreak — an AI-application framework built on the Sunrise platform.'
+        'Lelañea — an application built on the Daybreak framework.'
       );
     },
   },
   {
     seam: 'lib/app/leaf-brand.ts',
-    risk: 'a stray value would rebrand every Daybreak leaf — page titles, both footers’ copyright line, the root meta description and every transactional email — and the legal-entity field is a legal-attribution surface, not a cosmetic one',
+    risk: 'a stray value would rebrand every surface — page titles, both footers’ copyright line, the root meta description and every transactional email — and the legal-entity field is a legal-attribution surface, not a cosmetic one',
+    // FILLED BY THIS LEAF. Upstream this row asserts all three are `null`,
+    // because in Daybreak the seam is reserved-empty for its forks. Lelañea IS
+    // that fork, so the row is PINNED to our values rather than deleted:
+    // deleting it would switch the guard off for the one seam most likely to be
+    // edited by accident, and the risk line above is why that matters — this is
+    // where a wrong string becomes a wrong copyright notice in production.
+    //
+    // `.context/framework/building-on-daybreak.md` ("Two tests you are expected
+    // to adjust") calls for exactly this: change the row, keep the file, so
+    // every seam still left empty keeps its protection.
+    //
+    // Update these three literals whenever `lib/app/leaf-brand.ts` changes —
+    // that coupling is the point, not an annoyance. A rebrand should have to be
+    // stated twice.
+    //
     // `importActual` for the same reason the row above uses it: tests/setup.ts
     // pins the brand seam for the whole suite, and asserting against the mock
     // would be true by construction.
     assert: async () => {
       const seam =
         await vi.importActual<typeof import('@/lib/app/leaf-brand')>('@/lib/app/leaf-brand');
-      expect(seam.leafBrandName).toBeNull();
-      expect(seam.leafBrandLegalName).toBeNull();
-      expect(seam.leafBrandDescription).toBeNull();
+      expect(seam.leafBrandName).toBe('Lelañea');
+      expect(seam.leafBrandLegalName).toBe('All Too Human Ltd');
+      expect(seam.leafBrandDescription).toBe(
+        'Lelañea — an application built on the Daybreak framework.'
+      );
     },
   },
   {

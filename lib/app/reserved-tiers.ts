@@ -74,19 +74,25 @@
  * tier, not an empty reservation. Sunrise ships files there (this one included)
  * and the test has never asserted it empty.
  */
-// DAYBREAK — the framework-layer tier. Daybreak sits between Sunrise and its own
-// leaf forks, so it fills `lib/framework/` (the framework code and its
-// registration seams) and `.context/framework/` (its own documentation tree).
+// LELAÑEA — a leaf app on Daybreak, which is itself a framework-layer fork of
+// Sunrise. So this checkout occupies tiers at BOTH levels, and the list is the
+// union of the two:
 //
-// `components/framework` is deliberately NOT declared: Daybreak's admin
-// components live under `components/admin/framework/`, which is an ordinary
-// subfolder of a Sunrise-owned tree, not the reserved tier. The test fails a
-// tier declared but left empty, so declaring it would fail — and, more to the
-// point, leaving it undeclared keeps that row guarding, which is what we want
-// while the tier is genuinely free.
+//   - `lib/framework` / `.context/framework` are DAYBREAK's, inherited through
+//     the fork. They are full of Daybreak's code and docs in this tree, so they
+//     must stay declared — dropping them would fail the two rows the moment the
+//     test looked, and would blame Sunrise core for files Daybreak created.
+//   - `.context/app` is OURS, and is the reason this file changes at all: it is
+//     the leaf documentation tree Daybreak reserved and kept empty for us.
 //
-// The `/app` tiers stay undeclared too and keep guarding: Daybreak reserves the
-// leaf surface EMPTY for its own forks (see the CLAUDE.md banner), so a file
-// appearing under `components/app/` or `.context/app/` in THIS repo is a real
-// defect and this test is what catches it.
-export const occupiedTiers: readonly string[] = ['lib/framework', '.context/framework'];
+// `components/app` and `components/framework` stay UNDECLARED, and that is
+// deliberate rather than an omission. The test fails a tier that is declared but
+// left empty, so declaring a tier we have not filled would red immediately — and
+// leaving them undeclared keeps those rows guarding, which is what we want while
+// the tiers are genuinely free. **Declare `components/app` in the same commit as
+// the first component that lands there**, not before.
+export const occupiedTiers: readonly string[] = [
+  'lib/framework',
+  '.context/framework',
+  '.context/app',
+];
