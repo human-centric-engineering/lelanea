@@ -143,8 +143,37 @@ into a workflow.
 3. **Move the changelog's `[Unreleased]` section under a new `## [X.Y.Z] — YYYY-MM-DD`
    heading**, and add a fresh empty `[Unreleased]`. Read it as a leaf would: does it
    say what will land on them?
-4. **Open a PR** (`chore(release): Daybreak X.Y.Z`), merge it.
-5. **Tag the merge commit on `main`** and push the single ref:
+4. **Re-read the prose around what the release changed** — the step that is easy
+   to skip and cost 0.2.0 four defects. A release is unusually good at falsifying
+   sentences that were true when written, because it removes and moves things
+   other prose cites as evidence. Nothing automated catches this: type-check and
+   lint do not read prose, and `check:changelog-drift` correlates _identifiers_,
+   which here never change — `/api/health` still exists, it just no longer
+   carries what a docblock says it does.
+
+   Three places, in this order:
+
+   - **Docblocks in the files the release touched.** `/pre-pr` does not read
+     these — its documentation step is `.context/`-scoped, so it prints CLEAN
+     having looked at no comment at all (Sunrise #733). 0.2.0 shipped
+     `lib/daybreak-version.ts` telling a leaf to fetch a field the same release
+     removed.
+   - **The leaf-facing docs for the surfaces that moved** — especially
+     [`building-on-daybreak.md`](./building-on-daybreak.md), which is the copy a
+     leaf actually follows. Its Versions table named the wrong endpoint for two
+     of the three versions.
+   - **The new release section itself**, re-read after any reshuffle. Consolidating
+     duplicate `###` headings moved `Added` above `Removed` and falsified a
+     "see Added below" written when it was true.
+
+   The test is not "is the rule still right?" but **"is this still the witness?"**
+   — grep the cited file, endpoint or field rather than reasoning from memory. The
+   rule usually survives; the example is what rots. When repointing one, name the
+   succession ("that witness used to be X, until …") so the next reader does not
+   re-derive it.
+
+5. **Open a PR** (`chore(release): Daybreak X.Y.Z`), merge it.
+6. **Tag the merge commit on `main`** and push the single ref:
 
    ```bash
    git checkout main && git pull --ff-only
@@ -152,9 +181,9 @@ into a workflow.
    git push origin daybreak-v0.2.0
    ```
 
-6. **Create a GitHub release** pointing at the tag, with the changelog section as
+7. **Create a GitHub release** pointing at the tag, with the changelog section as
    its body.
-7. **Tell the leaves** — especially if the release moved a seam's ownership.
+8. **Tell the leaves** — especially if the release moved a seam's ownership.
 
 ---
 
