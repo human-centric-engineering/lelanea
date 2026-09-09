@@ -1,0 +1,456 @@
+{
+  "app": {
+    "name": "Lelañea",
+    "url": "lelanea.com",
+    "journeyTitle": "The Lelañea App Journey",
+    "journeySubtitle": "A guided path from inner foundations to expanded consciousness",
+    "version": "1.0",
+    "sources": [
+      "The_Lelanea_App_Flow_Chart_pptx.pdf (page 1: app journey, page 2: Module 01 phases)",
+      "The_Lelanea_App_pptx.pdf (Module 01 phases)"
+    ],
+    "structureNotes": [
+      "Modules run in a single sequential order, 01 to 16, following the left-to-right reading of every row on the chart.",
+      "The numerals printed inside rows 2 and 4 of the source chart run the other way and do not match this sequence. The chart artwork needs updating to match.",
+      "Onboarding is not on the chart. It is added here as module 00 and drawn from the foundational documents already written.",
+      "Module titles are transcribed exactly as they appear on the chart. See reviewNotes for the ones worth settling."
+    ],
+    "locale": "en-US"
+  },
+  "tiers": [
+    {
+      "id": "onboarding",
+      "label": "Onboarding",
+      "order": 0,
+      "modules": ["module_00_onboarding"],
+      "intent": "Welcome, orientation, consent, and the first meeting with the guide."
+    },
+    {
+      "id": "foundations",
+      "label": "Foundations",
+      "order": 1,
+      "modules": [
+        "module_01_values",
+        "module_02_boundaries",
+        "module_03_standards",
+        "module_04_the_self"
+      ],
+      "intent": "Establish the inner compass, the lines that protect it, the bar it is held to, and who is holding it."
+    },
+    {
+      "id": "inner_authority",
+      "label": "Inner Authority",
+      "order": 2,
+      "modules": [
+        "module_05_kindness_vs_nice",
+        "module_06_discernment_vs_judgment",
+        "module_07_morals_and_integrity",
+        "module_08_my_lotus_of_life"
+      ],
+      "intent": "Move from externally granted permission to internally held authority."
+    },
+    {
+      "id": "embodied_relationship",
+      "label": "Embodied Relationship",
+      "order": 3,
+      "modules": [
+        "module_09_nervous_system",
+        "module_10_capacity",
+        "module_11_curiosity_of_self",
+        "module_12_communication"
+      ],
+      "intent": "Bring the work into the body and into contact with other people."
+    },
+    {
+      "id": "integration_and_expansion",
+      "label": "Integration & Expansion",
+      "order": 4,
+      "modules": [
+        "module_13_consciousness_hawkins_scale",
+        "module_14_shadow_work",
+        "module_15_dogma_of_reality",
+        "module_16_oneness"
+      ],
+      "intent": "The Spiritual Oneness arc, where Lelañea's own original frameworks emerge."
+    }
+  ],
+  "modules": [
+    {
+      "id": "module_00_onboarding",
+      "number": 0,
+      "displayNumber": "00",
+      "title": "Onboarding",
+      "tier": "onboarding",
+      "contentRef": ["lelanea_foundational_documents.json", "onboarding_discovery_questions.json"],
+      "phases": [
+        {
+          "number": 1,
+          "displayNumber": "01",
+          "title": "The Initiation",
+          "description": "The welcome statement. Frames Lelañea as an invitation rather than an app, and introduces the guide.",
+          "contentRef": "the_initiation",
+          "personalized": true
+        },
+        {
+          "number": 2,
+          "displayNumber": "02",
+          "title": "The Heart Behind Lelañea",
+          "description": "The intent and philosophy: remembering rather than improving; lowercase self and capital Self.",
+          "contentRef": "the_heart_behind_lelanea"
+        },
+        {
+          "number": 3,
+          "displayNumber": "03",
+          "title": "The Mission",
+          "description": "Why the app exists: making transcendental coaching accessible regardless of financial means.",
+          "contentRef": "the_mission"
+        },
+        {
+          "number": 4,
+          "displayNumber": "04",
+          "title": "About the Creator",
+          "description": "Lelañea Fulton's background, training, and lineage of study.",
+          "contentRef": "about_the_creator"
+        },
+        {
+          "number": 5,
+          "displayNumber": "05",
+          "title": "The Lineage of Lelañea",
+          "description": "Acknowledgement of the traditions, teachers, and research the work draws on.",
+          "contentRef": "the_lineage_of_lelanea"
+        },
+        {
+          "number": 6,
+          "displayNumber": "06",
+          "title": "What It Is, What It Is Not",
+          "description": "The disclaimer: educational and contemplative, not healthcare, not crisis support.",
+          "contentRef": "disclaimer",
+          "requiresAcknowledgement": true
+        },
+        {
+          "number": 7,
+          "displayNumber": "07",
+          "title": "Terms of Use",
+          "description": "Legal agreement, accepted before the journey begins.",
+          "contentRef": "terms_of_use",
+          "requiresAcknowledgement": true
+        },
+        {
+          "number": 8,
+          "displayNumber": "08",
+          "title": "Discovery Questions",
+          "description": "Thirty long-form self-examination questions on ego and Higher Self, individuality, purpose, conditioning, memory, love, prayer, and transcendence. Establishes the user's starting point.",
+          "contentRef": "onboarding_discovery_questions",
+          "contentFile": "onboarding_discovery_questions.json",
+          "questionCount": 30,
+          "produces": {
+            "artifact": "discovery_baseline",
+            "revisitable": true
+          }
+        },
+        {
+          "number": 9,
+          "displayNumber": "09",
+          "title": "Begin the Journey",
+          "description": "Hand-off into Module 01. Sets expectations for pace, journaling, and returning check-ins.",
+          "contentRef": null,
+          "proposed": true
+        }
+      ],
+      "notes": [
+        "Phase order is proposed, not charted. The one fixed constraint is that the disclaimer and terms are acknowledged before any module content is reached.",
+        "Phases 2 to 5 are reference reading and could sit in an always-available About section rather than in the linear flow.",
+        "Phase 8 is the only authored interactive content in onboarding; everything before it is reading and consent."
+      ]
+    },
+    {
+      "id": "module_01_values",
+      "number": 1,
+      "displayNumber": "01",
+      "title": "Values",
+      "chartTitle": "Module 01 | Values",
+      "subtitle": "From inherited definitions to an embodied, consciously chosen inner compass",
+      "tier": "foundations",
+      "contentRef": "values_module.json",
+      "phaseTiers": [
+        {
+          "id": "orientation",
+          "label": "Orientation",
+          "order": 1,
+          "phases": [1, 2, 3, 4]
+        },
+        {
+          "id": "discernment",
+          "label": "Discernment",
+          "order": 2,
+          "phases": [5, 6, 7, 8]
+        },
+        {
+          "id": "integration",
+          "label": "Integration",
+          "order": 3,
+          "phases": [9, 10, 11, 12]
+        }
+      ],
+      "phases": [
+        {
+          "number": 1,
+          "displayNumber": "01",
+          "title": "Enter the Values Module",
+          "description": "Frame values as an inner compass, not goals.",
+          "phaseTier": "orientation",
+          "contentSteps": [],
+          "contentNote": "No authored screen yet. Needs a short module opener."
+        },
+        {
+          "number": 2,
+          "displayNumber": "02",
+          "title": "Understand Values",
+          "description": "Psychological lens: beliefs, identity, decisions, and behavior.",
+          "phaseTier": "orientation",
+          "contentSteps": ["lesson_psychological"]
+        },
+        {
+          "number": 3,
+          "displayNumber": "03",
+          "title": "Expand the Lens",
+          "description": "Spiritual + energetic perspectives: purpose, coherence, resonance, and alignment.",
+          "phaseTier": "orientation",
+          "contentSteps": ["lesson_spiritual", "lesson_energetic"]
+        },
+        {
+          "number": 4,
+          "displayNumber": "04",
+          "title": "Why Values Matter",
+          "description": "Centered living vs. inherited “default settings” and external conditioning.",
+          "phaseTier": "orientation",
+          "contentSteps": ["lesson_centered_living"]
+        },
+        {
+          "number": 5,
+          "displayNumber": "05",
+          "title": "Values Inventory",
+          "description": "Explore the full values library and notice what resonates.",
+          "phaseTier": "discernment",
+          "contentSteps": ["exercise_value_selection"],
+          "contentNote": "Browse and select pass over the 265-value library."
+        },
+        {
+          "number": 6,
+          "displayNumber": "06",
+          "title": "Color-Code the Self",
+          "description": "Green = confirmed • Yellow = wavering • Red = release • Purple = future self.",
+          "phaseTier": "discernment",
+          "contentSteps": ["exercise_value_selection"],
+          "contentNote": "Marking pass over the same step. Phases 05 and 06 are two passes over one authored exercise; they can be one screen or two."
+        },
+        {
+          "number": 7,
+          "displayNumber": "07",
+          "title": "Question the Inherited",
+          "description": "Examine yellow + red values: family, culture, safety, belonging, and past survival.",
+          "phaseTier": "discernment",
+          "contentSteps": ["reflection_yellow", "reflection_red"]
+        },
+        {
+          "number": 8,
+          "displayNumber": "08",
+          "title": "Meet the Becoming Self",
+          "description": "Explore purple values and the qualities the user wants to embody next.",
+          "phaseTier": "discernment",
+          "contentSteps": ["reflection_purple"]
+        },
+        {
+          "number": 9,
+          "displayNumber": "09",
+          "title": "Choose the Core",
+          "description": "Narrow to Top 10 extended values, then Top 5 core values.",
+          "phaseTier": "integration",
+          "contentSteps": ["reflection_core_values"],
+          "contentQuestions": ["q1", "q2", "q3"]
+        },
+        {
+          "number": 10,
+          "displayNumber": "10",
+          "title": "Alignment Audit",
+          "description": "Test values across relationships, self, career, home, family, habits, beliefs, and choices.",
+          "phaseTier": "integration",
+          "contentSteps": ["reflection_core_values"],
+          "contentQuestions": [
+            "q4",
+            "q5",
+            "q6",
+            "q7",
+            "q8",
+            "q9",
+            "q10",
+            "q11",
+            "q12",
+            "q13",
+            "q14",
+            "q15",
+            "q16",
+            "q17",
+            "q18"
+          ],
+          "contentNote": "Phases 09 and 10 split one authored question set. Splitting at q4 keeps selection separate from the alignment enquiry."
+        },
+        {
+          "number": 11,
+          "displayNumber": "11",
+          "title": "Reflect + Embody",
+          "description": "Journal, somatic pause, letting go, gratitude, and integration.",
+          "phaseTier": "integration",
+          "contentSteps": ["closing_check_in_with_gratitude"]
+        },
+        {
+          "number": 12,
+          "displayNumber": "12",
+          "title": "Save the Values Baseline",
+          "description": "Store core values + reflections so the app can revisit shifts over time.",
+          "phaseTier": "integration",
+          "contentSteps": [],
+          "contentNote": "System behavior rather than authored copy. Writes the values profile."
+        }
+      ],
+      "appBehavior": "Each reflection becomes part of the user's evolving values profile, allowing future check-ins to compare what has remained stable, what has shifted, and what the user is consciously becoming.",
+      "produces": {
+        "artifact": "values_profile",
+        "contents": [
+          "color_coded_selections",
+          "top_10_extended_values",
+          "top_5_core_values",
+          "reflection_responses"
+        ],
+        "revisitable": true
+      }
+    },
+    {
+      "id": "module_02_boundaries",
+      "number": 2,
+      "displayNumber": "02",
+      "title": "Boundaries",
+      "tier": "foundations"
+    },
+    {
+      "id": "module_03_standards",
+      "number": 3,
+      "displayNumber": "03",
+      "title": "Standards",
+      "tier": "foundations"
+    },
+    {
+      "id": "module_04_the_self",
+      "number": 4,
+      "displayNumber": "04",
+      "title": "The self",
+      "tier": "foundations"
+    },
+    {
+      "id": "module_05_kindness_vs_nice",
+      "number": 5,
+      "displayNumber": "05",
+      "title": "Kindness vs. Nice",
+      "tier": "inner_authority"
+    },
+    {
+      "id": "module_06_discernment_vs_judgment",
+      "number": 6,
+      "displayNumber": "06",
+      "title": "Discernment vs. Judgment",
+      "tier": "inner_authority"
+    },
+    {
+      "id": "module_07_morals_and_integrity",
+      "number": 7,
+      "displayNumber": "07",
+      "title": "Morals & Integrity",
+      "tier": "inner_authority"
+    },
+    {
+      "id": "module_08_my_lotus_of_life",
+      "number": 8,
+      "displayNumber": "08",
+      "title": "My Lotus of Life",
+      "tier": "inner_authority"
+    },
+    {
+      "id": "module_09_nervous_system",
+      "number": 9,
+      "displayNumber": "09",
+      "title": "Nervous System",
+      "tier": "embodied_relationship"
+    },
+    {
+      "id": "module_10_capacity",
+      "number": 10,
+      "displayNumber": "10",
+      "title": "Capacity",
+      "tier": "embodied_relationship"
+    },
+    {
+      "id": "module_11_curiosity_of_self",
+      "number": 11,
+      "displayNumber": "11",
+      "title": "Curiosity of self (work of Byron Katie)",
+      "tier": "embodied_relationship"
+    },
+    {
+      "id": "module_12_communication",
+      "number": 12,
+      "displayNumber": "12",
+      "title": "Communication",
+      "tier": "embodied_relationship"
+    },
+    {
+      "id": "module_13_consciousness_hawkins_scale",
+      "number": 13,
+      "displayNumber": "13",
+      "title": "Consciousness: Dr. Hawkins’ Scale",
+      "tier": "integration_and_expansion"
+    },
+    {
+      "id": "module_14_shadow_work",
+      "number": 14,
+      "displayNumber": "14",
+      "title": "Shadow Work",
+      "tier": "integration_and_expansion"
+    },
+    {
+      "id": "module_15_dogma_of_reality",
+      "number": 15,
+      "displayNumber": "15",
+      "title": "Dogma of Reality",
+      "tier": "integration_and_expansion"
+    },
+    {
+      "id": "module_16_oneness",
+      "number": 16,
+      "displayNumber": "16",
+      "title": "Oneness",
+      "tier": "integration_and_expansion"
+    }
+  ],
+  "reviewNotes": [
+    {
+      "scope": "chart",
+      "note": "The chart artwork still shows the old numerals in rows 2 and 4 and should be redrawn to match the sequence in this file."
+    },
+    {
+      "scope": "tier_labels",
+      "note": "The Module 01 phase tiers (Orientation, Discernment, Integration) and the app tier labels (Foundations, Inner Authority, Embodied Relationship, Integration & Expansion) both use the word Integration for different things."
+    },
+    {
+      "scope": "module_01_values",
+      "note": "Phases 05 and 06 both map to the single authored value-selection exercise, and phases 09 and 10 split a single authored question set. Both are presentation decisions, not content gaps."
+    },
+    {
+      "scope": "module_01_values",
+      "note": "Phase 01 has no authored copy; phase 12 is system behavior with no copy required."
+    },
+    {
+      "scope": "module_01_values",
+      "note": "Module 01 phase numbering is unchanged. Its chart rows also snake, but the printed numerals there already give the workable order, since the values inventory has to come before the color-coding."
+    }
+  ]
+}

@@ -1,0 +1,1440 @@
+{
+  "collection": {
+    "id": "lelanea_app_foundational_documents",
+    "title": "Lelañea — Foundational Documents",
+    "version": "1.1",
+    "app": {
+      "name": "Lelañea",
+      "trademarkedName": "Lelañea™",
+      "url": "lelanea.com",
+      "nameNote": "The app is called Lelañea, with the tilde, in all display copy. The domain lelanea.com is written without it."
+    },
+    "creator": {
+      "name": "Lelañea Fulton",
+      "titles": [
+        "Transcendental Coach",
+        "Unity-Consciousness Guide",
+        "Professional Certified Coach (PCC)"
+      ]
+    },
+    "textFormat": "markdown-inline",
+    "formatNotes": [
+      "Body text follows the source .docx files, with typos, punctuation and typography corrected. No content has been reworded, cut or reordered.",
+      "Inline emphasis is preserved as markdown: **bold**. Block structure is explicit (heading / paragraph / list).",
+      "Headings carry a level; numbered legal clauses also carry a number field.",
+      "The app name is written Lelañea throughout; the domain lelanea.com stays without the tilde.",
+      "Typography is normalized: curly apostrophes and quotation marks, em dashes, a space after a mid-sentence ellipsis.",
+      "Unresolved placeholders are listed per document in the placeholders array and must be filled before publication."
+    ],
+    "suggestedOrder": [
+      "the_initiation",
+      "the_heart_behind_lelanea",
+      "the_mission",
+      "about_the_creator",
+      "the_lineage_of_lelanea",
+      "disclaimer",
+      "terms_of_use"
+    ],
+    "sourceFiles": [
+      "The_Initiation_-_Lelanea_App_Welcome_Statement.docx",
+      "The_Heart_Behind_Lelanea.docx",
+      "Mission_Statement.docx",
+      "About_the_Creator.docx",
+      "The_Lineage_of_The_Lelanea_App.docx",
+      "Disclaimer_-_What_it_is_and_what_it_is_not.docx",
+      "The_Lelanea_App_Terms_of_Use.docx"
+    ],
+    "locale": "en-US"
+  },
+  "documents": [
+    {
+      "id": "the_initiation",
+      "title": "The Initiation",
+      "subtitle": "Lelañea App Welcome Statement",
+      "category": "onboarding",
+      "surface": "first_run_welcome",
+      "sourceFile": "The_Initiation_-_Lelanea_App_Welcome_Statement.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Welcome, {{first_name}}."
+        },
+        {
+          "type": "paragraph",
+          "text": "I am so incredibly grateful you’re here."
+        },
+        {
+          "type": "paragraph",
+          "text": "Whether you realize it or not, something within you has called you to this moment."
+        },
+        {
+          "type": "paragraph",
+          "text": "Perhaps it arrived as curiosity, a longing for something more, a desire for a great shift to occur, or even from frustration that this human experience isn’t in alignment with what you internally know is possible. We all know that little whisper inside of us that says, “this can’t possibly be it. There has to be more to this life.”"
+        },
+        {
+          "type": "paragraph",
+          "text": "Whatever it is that brought you here, you listened."
+        },
+        {
+          "type": "paragraph",
+          "text": "And that matters."
+        },
+        {
+          "type": "paragraph",
+          "text": "Welcome to Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "This is not simply an app."
+        },
+        {
+          "type": "paragraph",
+          "text": "It is an invitation."
+        },
+        {
+          "type": "paragraph",
+          "text": "An invitation to explore the relationship you have with yourself, your consciousness, and the magnificent intelligence that has always existed beneath the noise of the human experience."
+        },
+        {
+          "type": "paragraph",
+          "text": "For centuries, we have been taught to understand ourselves through limitation."
+        },
+        {
+          "type": "paragraph",
+          "text": "We have learned to identify with our labels, our accomplishments, our fears, our wounds, our beliefs, and the stories we inherited long before we were ever conscious enough to question them."
+        },
+        {
+          "type": "paragraph",
+          "text": "Slowly, almost invisibly, we began to mistake the conditioned self for our true nature."
+        },
+        {
+          "type": "paragraph",
+          "text": "Yet throughout the wisdom traditions of our world, from the Hermetic teachings of ancient Egypt and Greece to the Vedas and Vedanta of India, to the mystics who have spoken of unity throughout history, there exists a common thread."
+        },
+        {
+          "type": "paragraph",
+          "text": "And that is… the possibility that we are infinitely more than we appear to be."
+        },
+        {
+          "type": "paragraph",
+          "text": "That beneath the personality lives consciousness."
+        },
+        {
+          "type": "paragraph",
+          "text": "Beneath fear lives love."
+        },
+        {
+          "type": "paragraph",
+          "text": "Beneath conditioning lives awareness."
+        },
+        {
+          "type": "paragraph",
+          "text": "And beneath the lowercase self—known as the ego—exists the capital Self, or Higher Self."
+        },
+        {
+          "type": "paragraph",
+          "text": "Which is not something to become."
+        },
+        {
+          "type": "paragraph",
+          "text": "But rather, something to remember."
+        },
+        {
+          "type": "paragraph",
+          "text": "You, {{first_name}}, are far more powerful than you know."
+        },
+        {
+          "type": "paragraph",
+          "text": "Like every one of our brothers and sisters walking this Earth, we often forget that we possess the extraordinary capacity to consciously participate in the unfolding of our lives."
+        },
+        {
+          "type": "paragraph",
+          "text": "To create."
+        },
+        {
+          "type": "paragraph",
+          "text": "To transform."
+        },
+        {
+          "type": "paragraph",
+          "text": "To heal."
+        },
+        {
+          "type": "paragraph",
+          "text": "And even to transcend."
+        },
+        {
+          "type": "paragraph",
+          "text": "To move into greater harmony with ourselves, with one another, and with the greater intelligence that has always been moving through life itself."
+        },
+        {
+          "type": "paragraph",
+          "text": "This journey is not about becoming someone else."
+        },
+        {
+          "type": "paragraph",
+          "text": "It is about remembering who you have always been beneath the conditioning. This leads us to “Purpose,” which is often imagined as something waiting somewhere outside of us."
+        },
+        {
+          "type": "paragraph",
+          "text": "A career."
+        },
+        {
+          "type": "paragraph",
+          "text": "A mission."
+        },
+        {
+          "type": "paragraph",
+          "text": "A destination."
+        },
+        {
+          "type": "paragraph",
+          "text": "Yet purpose is first an internal experience."
+        },
+        {
+          "type": "paragraph",
+          "text": "It begins in the relationship you cultivate with yourself."
+        },
+        {
+          "type": "paragraph",
+          "text": "Every belief you transform."
+        },
+        {
+          "type": "paragraph",
+          "text": "Every unconscious pattern you illuminate."
+        },
+        {
+          "type": "paragraph",
+          "text": "Every shadow you meet and accept with compassion."
+        },
+        {
+          "type": "paragraph",
+          "text": "Every story you release."
+        },
+        {
+          "type": "paragraph",
+          "text": "And every gentle shift in the clarity of self-awareness."
+        },
+        {
+          "type": "paragraph",
+          "text": "This is purpose."
+        },
+        {
+          "type": "paragraph",
+          "text": "When we understand and actuate our purpose internally, we naturally begin to externalize it. This is called expression, which may become a business, a family, a work of art, a quiet life of service, contributions to societal shifts, visionary accomplishments, or something the world never sees or even applauds."
+        },
+        {
+          "type": "paragraph",
+          "text": "Expression is unique to you, as your vehicle is a unique expression of consciousness."
+        },
+        {
+          "type": "paragraph",
+          "text": "Purpose is universal, and it begins within."
+        },
+        {
+          "type": "paragraph",
+          "text": "I am your personal guide, and together we will move in tandem as we explore the beliefs, identities, emotional patterns, language, perceptions, and unconscious systems that quietly shape your reality."
+        },
+        {
+          "type": "paragraph",
+          "text": "Not because these parts of you are broken."
+        },
+        {
+          "type": "paragraph",
+          "text": "Not because they need fixing."
+        },
+        {
+          "type": "paragraph",
+          "text": "But because they deserve to be seen."
+        },
+        {
+          "type": "paragraph",
+          "text": "What is seen can be understood."
+        },
+        {
+          "type": "paragraph",
+          "text": "What is understood can be transformed or alchemized."
+        },
+        {
+          "type": "paragraph",
+          "text": "And what is transformed creates new possibilities for the life you are here to live."
+        },
+        {
+          "type": "paragraph",
+          "text": "My role is not to tell you who you are."
+        },
+        {
+          "type": "paragraph",
+          "text": "It is to walk beside you as you begin to remember you."
+        },
+        {
+          "type": "paragraph",
+          "text": "To offer perspectives."
+        },
+        {
+          "type": "paragraph",
+          "text": "Practices."
+        },
+        {
+          "type": "paragraph",
+          "text": "Questions."
+        },
+        {
+          "type": "paragraph",
+          "text": "Ancient wisdom."
+        },
+        {
+          "type": "paragraph",
+          "text": "Modern understanding."
+        },
+        {
+          "type": "paragraph",
+          "text": "And experiences that invite you into deeper awareness of your own truth."
+        },
+        {
+          "type": "paragraph",
+          "text": "There is nothing you are required to believe."
+        },
+        {
+          "type": "paragraph",
+          "text": "Only experiences to have."
+        },
+        {
+          "type": "paragraph",
+          "text": "Perspectives to explore."
+        },
+        {
+          "type": "paragraph",
+          "text": "Practices to embody."
+        },
+        {
+          "type": "paragraph",
+          "text": "And a relationship with yourself waiting to deepen."
+        },
+        {
+          "type": "paragraph",
+          "text": "Your journey is powerful."
+        },
+        {
+          "type": "paragraph",
+          "text": "Your journey is sacred."
+        },
+        {
+          "type": "paragraph",
+          "text": "Your journey is entirely your own."
+        },
+        {
+          "type": "paragraph",
+          "text": "And I am deeply honored to walk beside you as you discover the extraordinary being you have always been."
+        },
+        {
+          "type": "paragraph",
+          "text": "Welcome to Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "Let’s begin your journey."
+        }
+      ],
+      "renderStyle": "cadence",
+      "renderNote": "Single-sentence paragraphs are an intentional stylistic cadence. Render each as its own line or beat; do not merge them into flowing prose.",
+      "placeholders": ["{{first_name}}"]
+    },
+    {
+      "id": "the_heart_behind_lelanea",
+      "title": "The Heart Behind Lelañea",
+      "subtitle": "The Intent and Mission of Lelañea",
+      "category": "about",
+      "surface": "about_philosophy",
+      "sourceFile": "The_Heart_Behind_Lelanea.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Lelañea was created as an invitation into conscious living."
+        },
+        {
+          "type": "paragraph",
+          "text": "Its purpose is not simply to help individuals improve themselves, but to support them in remembering who they are beneath conditioning, inherited beliefs, unconscious patterns, and the countless identities accumulated throughout life."
+        },
+        {
+          "type": "paragraph",
+          "text": "At its heart, Lelañea is a transcendental coaching experience. It invites each individual to explore the relationship between the lowercase self—the conditioned personality shaped by experiences, culture, family systems, and survival—and the capital Self, the deeper awareness that many contemplative traditions describe as our authentic nature."
+        },
+        {
+          "type": "paragraph",
+          "text": "Rather than focusing solely on symptom reduction or external achievement, Lelañea encourages the cultivation of self-awareness, discernment, compassion, integrity, and conscious choice. Through reflective practices, contemplative exercises, guided meditations, values clarification, mindset exploration, nervous system awareness, shadow inquiry, and intentional action, users are invited to examine the internal landscape from which every external experience emerges."
+        },
+        {
+          "type": "paragraph",
+          "text": "The philosophy of Lelañea recognizes that our internal world shapes the way we perceive ourselves, relate to others, and participate in life. As awareness expands, greater freedom becomes possible. As unconscious patterns become conscious, new choices emerge. As those choices become embodied, life begins to reflect a deeper alignment with authenticity."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea does not ask its users to adopt a particular belief system."
+        },
+        {
+          "type": "paragraph",
+          "text": "Instead, it offers perspectives, practices, and questions that encourage thoughtful exploration. Every individual is invited to retain their own discernment, integrating only what resonates with their lived experience and personal truth."
+        },
+        {
+          "type": "paragraph",
+          "text": "Transformation is not viewed as becoming someone new."
+        },
+        {
+          "type": "paragraph",
+          "text": "It is the continual remembrance of who we have always been."
+        }
+      ]
+    },
+    {
+      "id": "the_mission",
+      "title": "The Mission",
+      "subtitle": null,
+      "category": "about",
+      "surface": "about_mission",
+      "sourceFile": "Mission_Statement.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Coach Lelañea Fulton believes that the journey inward should never be reserved for the privileged. For generations, profound personal transformation has often been hidden behind financial barriers. One-on-one coaching, retreats, intensive programs, and private mentorship have provided life-changing experiences for many, yet they remain inaccessible to millions of individuals who long for this work but simply cannot afford it."
+        },
+        {
+          "type": "paragraph",
+          "text": "The Lelañea App was created to help change that. Its mission is to make transcendental coaching, contemplative self-inquiry, and consciousness-expanding practices accessible to anyone who feels called to explore the deeper dimensions of themselves, regardless of their financial means."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coach Lelañea believes that every human being deserves access to the tools that cultivate greater self-awareness, emotional freedom, discernment, compassion, integrity, and authentic living. The opportunity to remember who we are, to examine our conditioning, to transform inherited patterns, and to become conscious participants in our own human experience should never depend solely upon economic circumstance."
+        },
+        {
+          "type": "paragraph",
+          "text": "This app exists because transformation should not belong exclusively to those who can afford private coaching. It belongs to humanity."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea often says that purpose is not something we discover somewhere outside ourselves. Purpose begins within. The work we do internally becomes the foundation from which every external expression of our lives naturally unfolds."
+        },
+        {
+          "type": "paragraph",
+          "text": "The vision of The Lelañea App extends far beyond individual transformation. It is rooted in the understanding that as individuals become more conscious, compassionate, self-aware, and internally aligned, they naturally influence their families, communities, workplaces, institutions, and cultures. One awakened life has the potential to influence countless others."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coach Lelañea believes that when enough individuals courageously turn inward, examine their own conditioning, and choose to live from greater awareness rather than unconscious programming, humanity has the opportunity to participate in a profound collective evolution."
+        },
+        {
+          "type": "paragraph",
+          "text": "Such an evolution reaches far beyond personal fulfillment."
+        },
+        {
+          "type": "paragraph",
+          "text": "It has the potential to reshape how we educate our children, how we lead our organizations, how we resolve conflict, how we build our economies, how we care for one another, and how we relate to every living being that shares this planet with us."
+        },
+        {
+          "type": "paragraph",
+          "text": "Rather than remaining imprisoned by inherited beliefs, unconscious fear, and stories of limitation, each individual can begin reclaiming their capacity to consciously participate in the creation of their own human experience. This inner work is not an escape from the world. It is a deeper engagement with it."
+        },
+        {
+          "type": "paragraph",
+          "text": "At the heart of Coach Lelañea’s work is the understanding that the greatest transformation available to humanity is not external. It is internal. The human being is the temple, one of many through which consciousness experiences itself. It is through this human experience that we encounter love, compassion, creativity, discernment, and the hidden wisdom that so many traditions have pointed toward throughout history."
+        },
+        {
+          "type": "paragraph",
+          "text": "From this perspective, what many describe as “Heaven on Earth” is not a distant destination waiting somewhere beyond us. It is a way of being that becomes increasingly available as we cultivate awareness, embody compassion, and remember our interconnectedness with all life."
+        },
+        {
+          "type": "paragraph",
+          "text": "This is the vision that inspired The Lelañea App. Not simply to create another self-development app. But to contribute, in whatever way it can, to a more conscious humanity—one person, one family, one community, and one act of awareness at a time."
+        },
+        {
+          "type": "paragraph",
+          "text": "If this work reaches millions of people, Coach Lelañea hopes it will do more than change individual lives. She hopes it will help inspire a world in which greater awareness gives rise to greater compassion, wiser choices, healthier relationships, more conscious leadership, deeper reverence for all sentient life, and a future in which humanity remembers that the power to transform our experience has always begun within."
+        }
+      ]
+    },
+    {
+      "id": "about_the_creator",
+      "title": "About the Creator",
+      "subtitle": null,
+      "category": "about",
+      "surface": "about_creator",
+      "sourceFile": "About_the_Creator.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Lelañea Fulton is a Transcendental Coach, Unity-Consciousness Guide, Professional Certified Coach (PCC), writer, podcast host, speaker, philanthropist, and lifelong student of consciousness."
+        },
+        {
+          "type": "paragraph",
+          "text": "Her work emerged through the convergence of professional coaching, years of corporate leadership, contemplative study, profound mystical experiences of Oneness, and a childhood near-death experience that fundamentally transformed her understanding of reality, identity, and the nature of human consciousness."
+        },
+        {
+          "type": "paragraph",
+          "text": "With more than fifteen years of experience in leadership, business development, legal operations, and organizational strategy, Lelañea understands both the external demands of modern life and the internal longing for meaning that often accompanies personal success."
+        },
+        {
+          "type": "paragraph",
+          "text": "As the founder of Integrating Consciousness Coaching, she developed a transcendental coaching approach that supports individuals in moving beyond fear-based narratives, inherited conditioning, unconscious patterns, and limiting identities. Rather than viewing human beings as problems to be solved, her work recognizes each individual as inherently whole, possessing an innate capacity for awareness, wisdom, creativity, and transformation."
+        },
+        {
+          "type": "paragraph",
+          "text": "Her coaching integrates professional coaching methodologies with contemplative philosophy, meditation, nervous system awareness, pattern recognition, symbolic inquiry, and lived experiences of Unity Consciousness. While informed by psychology, her work is not intended to replicate Western psychological models. Instead, it approaches human transformation through the philosophical lens of nonduality, Advaita Vedanta, contemplative inquiry, and the understanding that consciousness itself is the primary ground from which meaningful change emerges."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea describes herself first and foremost as a student. A lifelong student of consciousness. A devoted student of Carl Jung and his work on symbolism, archetypes, individuation, and the unconscious. A student of Advaita Vedanta, contemplative traditions, meditation, Hermetic philosophy, systems thinking, and the ever-evolving dialogue between science and spirituality."
+        },
+        {
+          "type": "paragraph",
+          "text": "Her work continues to evolve through study, direct experience, coaching, research, and the countless individuals whose lives continually deepen her understanding of what it means to be fully human."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea represents her ongoing contribution to that exploration."
+        },
+        {
+          "type": "paragraph",
+          "text": "She currently maintains a 1:1 practice where she works with clients supporting transcendental shifts. She is a writer and continues to publish on Substack. She has two podcasts designed to support the collective. She hosts a free monthly workshop virtually, allowing those who are seeking support around their inner work to inquire more deeply."
+        }
+      ]
+    },
+    {
+      "id": "the_lineage_of_lelanea",
+      "title": "The Lineage of Lelañea",
+      "subtitle": null,
+      "category": "about",
+      "surface": "about_lineage",
+      "sourceFile": "The_Lineage_of_The_Lelanea_App.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The Lelañea App was never intended to present itself as a completely original body of work."
+        },
+        {
+          "type": "paragraph",
+          "text": "Like every meaningful discipline, philosophy, or tradition, it exists because of the wisdom, courage, curiosity, and generosity of those who came before."
+        },
+        {
+          "type": "paragraph",
+          "text": "Every reflection, exercise, meditation, coaching framework, journaling prompt, and contemplative practice within this app has been influenced by centuries of philosophical inquiry, scientific research, contemplative traditions, educational methodologies, and modern coaching practices."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea Fulton believes that intellectual integrity requires acknowledging this lineage with gratitude and humility. Among the many individuals, traditions, and disciplines that have shaped The Lelañea App are:"
+        },
+        {
+          "type": "heading",
+          "text": "Values Clarification and Values-Based Living",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Louis Raths, Sidney Simon, Merrill Harmin, and John Dewey, whose pioneering work established many of the reflective values exercises used throughout education and coaching today."
+        },
+        {
+          "type": "heading",
+          "text": "Professional Coaching",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "The International Coaching Federation (ICF) and the Whole Person Coaching® methodology created by Feroshia Knight, which emphasize presence, curiosity, ethics, reflective inquiry, and whole-person development."
+        },
+        {
+          "type": "heading",
+          "text": "Depth Psychology",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Carl Jung’s work on individuation, symbolism, archetypes, projection, dreams, and shadow integration has profoundly influenced the reflective practices throughout The Lelañea App."
+        },
+        {
+          "type": "heading",
+          "text": "Parts Work",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Dr. Richard Schwartz’s Internal Family Systems model has inspired compassionate approaches to understanding the many aspects of our internal experience."
+        },
+        {
+          "type": "heading",
+          "text": "Transpersonal and Humanistic Psychology",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "The work of Abraham Maslow, Roberto Assagioli, Stanislav Grof, Viktor Frankl, and others who expanded psychology beyond pathology toward meaning, purpose, transcendence, and human potential."
+        },
+        {
+          "type": "heading",
+          "text": "Trauma, Somatics, and Nervous System Regulation",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "The research and clinical contributions of Dr. Stephen Porges, Deb Dana, Dr. Peter Levine, Dr. Bessel van der Kolk, and Pat Ogden have informed the app’s understanding of regulation, embodiment, and compassionate self-awareness."
+        },
+        {
+          "type": "heading",
+          "text": "Meditation and Contemplative Practice",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "The teachings of Jon Kabat-Zinn, Thich Nhat Hanh, Jack Kornfield, Tara Brach, Sharon Salzberg, and Tracee Stanley have contributed to the meditation, mindfulness, and contemplative practices found throughout the app."
+        },
+        {
+          "type": "heading",
+          "text": "Consciousness and Human Flourishing",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "The work of Dr. Lisa Miller, David Bohm, Iain McGilchrist, Donald Hoffman, Dean Radin, Rupert Sheldrake, Martin Seligman, Mihaly Csikszentmihalyi, and Barbara Fredrickson has informed many of the conversations surrounding consciousness, resilience, meaning, perception, and human flourishing."
+        },
+        {
+          "type": "paragraph",
+          "text": "Where scientific consensus is still evolving, Lelañea presents these perspectives as opportunities for thoughtful exploration rather than established fact."
+        },
+        {
+          "type": "heading",
+          "text": "Ancient Wisdom Traditions",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Perhaps the deepest influence upon Lelañea comes from the timeless contemplative traditions that have explored consciousness for thousands of years, including Advaita Vedanta, the Upanishads, the Bhagavad Gita, the Yoga Sutras of Patanjali, Buddhism, Taoism, Hermetic philosophy, Christian mysticism, Sufism, and the enduring wisdom of Indigenous cultures around the world."
+        },
+        {
+          "type": "paragraph",
+          "text": "Although these traditions differ in language and practice, they each invite humanity toward greater awareness, compassion, presence, self-inquiry, and an understanding of our profound interconnectedness."
+        },
+        {
+          "type": "heading",
+          "text": "An Evolving Body of Work",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is not a finished system."
+        },
+        {
+          "type": "paragraph",
+          "text": "It is a living body of work."
+        },
+        {
+          "type": "paragraph",
+          "text": "As new research emerges, as contemplative understanding continues to deepen, and as Lelañea Fulton continues her own lifelong study of consciousness, philosophy, coaching, neuroscience, and spirituality, the app will continue to evolve."
+        },
+        {
+          "type": "paragraph",
+          "text": "Many of the foundational practices within Lelañea are inspired by established disciplines and respected teachers. As users progress into the later Spiritual Oneness modules, they will encounter Lelañea’s own original frameworks and teachings. These emerge from years of professional coaching, contemplative practice, direct experiences of Unity Consciousness, and her continuing exploration of nondual awareness through the lens of Advaita Vedanta and transcendental inquiry."
+        },
+        {
+          "type": "paragraph",
+          "text": "The Lelañea App is not offered as the definitive path. It is offered as one sincere contribution to humanity’s ongoing exploration of consciousness."
+        },
+        {
+          "type": "paragraph",
+          "text": "May it encourage curiosity."
+        },
+        {
+          "type": "paragraph",
+          "text": "May it deepen compassion."
+        },
+        {
+          "type": "paragraph",
+          "text": "May it strengthen discernment."
+        },
+        {
+          "type": "paragraph",
+          "text": "And above all, may it help each individual remember that the greatest teacher they will ever encounter has always existed within."
+        }
+      ]
+    },
+    {
+      "id": "disclaimer",
+      "title": "The Lelañea App",
+      "subtitle": "What It Is, What It Is Not, and Important Disclosures",
+      "category": "legal",
+      "surface": "legal_disclaimer",
+      "sourceFile": "Disclaimer_-_What_it_is_and_what_it_is_not.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Please read this section carefully before using Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "By accessing or using this application, you acknowledge that you have read, understood, and agreed to the information contained within this disclaimer."
+        },
+        {
+          "type": "heading",
+          "text": "The Purpose of Lelañea",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is an educational, contemplative, and personal development application created by **Lelañea Fulton**, a **Transcendental Coach** and **Unity-Consciousness Guide**."
+        },
+        {
+          "type": "paragraph",
+          "text": "The app has been designed to support self-awareness, conscious living, values clarification, reflective inquiry, meditation, personal growth, and transcendental coaching through educational content, guided exercises, contemplative practices, journaling, and coaching methodologies."
+        },
+        {
+          "type": "paragraph",
+          "text": "Its purpose is to encourage thoughtful self-exploration and conscious personal development."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is not intended to provide healthcare, mental healthcare, psychotherapy, or crisis intervention."
+        },
+        {
+          "type": "heading",
+          "text": "What Lelañea Is Not",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a medical application."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a mental health application."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a psychotherapy platform."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a counseling service."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** psychiatric care."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** psychological treatment."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a substitute for professional medical or mental healthcare."
+        },
+        {
+          "type": "paragraph",
+          "text": "Although some concepts discussed within the app may reference established psychological theories, neuroscience, coaching methodologies, contemplative traditions, philosophy, or spiritual practices, all content is presented for educational and personal development purposes only."
+        },
+        {
+          "type": "heading",
+          "text": "About the Creator",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea Fulton is a **Professional Certified Coach (PCC)** through the International Coaching Federation (ICF), a **Transcendental Coach**, and a **Unity-Consciousness Guide**."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a licensed psychologist."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a licensed psychiatrist."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a licensed psychotherapist."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a licensed clinical social worker."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a licensed professional counselor."
+        },
+        {
+          "type": "paragraph",
+          "text": "She is **not** a physician or medical doctor."
+        },
+        {
+          "type": "paragraph",
+          "text": "She does not diagnose medical conditions, psychiatric disorders, or psychological conditions."
+        },
+        {
+          "type": "paragraph",
+          "text": "She does not prescribe medications."
+        },
+        {
+          "type": "paragraph",
+          "text": "She does not provide psychotherapy."
+        },
+        {
+          "type": "paragraph",
+          "text": "She does not provide psychiatric treatment."
+        },
+        {
+          "type": "paragraph",
+          "text": "She does not provide medical treatment."
+        },
+        {
+          "type": "paragraph",
+          "text": "Nothing contained within Lelañea should be interpreted as establishing a therapist-client relationship, psychologist-patient relationship, physician-patient relationship, or any other licensed healthcare relationship."
+        },
+        {
+          "type": "paragraph",
+          "text": "Your use of this application creates only an educational relationship between you and the platform."
+        },
+        {
+          "type": "heading",
+          "text": "Coaching Is Different from Therapy",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Transcendental coaching is a personal development modality."
+        },
+        {
+          "type": "paragraph",
+          "text": "Therapy and psychotherapy are licensed healthcare professions."
+        },
+        {
+          "type": "paragraph",
+          "text": "Although coaching and therapy may both involve meaningful conversations and self-reflection, they serve different purposes."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coaching focuses on awareness, intentional living, values, personal responsibility, conscious decision-making, self-exploration, and future growth."
+        },
+        {
+          "type": "paragraph",
+          "text": "Therapy and psychotherapy are licensed clinical professions that assess, diagnose, and treat mental health conditions and psychological disorders."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is intended to complement—not replace—the work of qualified healthcare professionals where appropriate."
+        },
+        {
+          "type": "heading",
+          "text": "No Diagnosis or Treatment",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Nothing within this application should be interpreted as:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "medical advice;",
+            "psychological advice;",
+            "psychiatric advice;",
+            "psychotherapy;",
+            "counseling;",
+            "diagnosis;",
+            "treatment;",
+            "crisis intervention;",
+            "medication management; or",
+            "a substitute for licensed professional care."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "The exercises, meditations, reflections, and educational materials are offered solely for personal growth and self-exploration."
+        },
+        {
+          "type": "heading",
+          "text": "Mental Health Conditions",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "If you have been diagnosed with a mental health condition—or believe you may be experiencing one—you are strongly encouraged to seek care from a licensed psychologist, psychiatrist, psychotherapist, counselor, physician, or other appropriately qualified healthcare professional."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is not designed to diagnose, monitor, or treat mental illness."
+        },
+        {
+          "type": "paragraph",
+          "text": "Any decisions regarding medications, treatment plans, diagnoses, or mental healthcare should always be made with a licensed healthcare provider."
+        },
+        {
+          "type": "heading",
+          "text": "Crisis Situations",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is **not** a crisis service."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you are experiencing:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "thoughts of suicide;",
+            "thoughts of self-harm;",
+            "thoughts of harming another person;",
+            "a psychiatric emergency;",
+            "severe depression;",
+            "hallucinations;",
+            "delusions;",
+            "mania;",
+            "inability to care for yourself; or",
+            "any situation that places you or another person at immediate risk,"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "stop using this application immediately."
+        },
+        {
+          "type": "paragraph",
+          "text": "Contact your local emergency services, go to your nearest emergency department, or contact a licensed mental health crisis service in your area without delay."
+        },
+        {
+          "type": "paragraph",
+          "text": "Do not rely on Lelañea during a medical or mental health emergency."
+        },
+        {
+          "type": "heading",
+          "text": "Spiritual Perspectives",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea explores themes including consciousness, contemplative traditions, Advaita Vedanta, Unity Consciousness, meditation, symbolism, philosophy, spirituality, and transcendental inquiry."
+        },
+        {
+          "type": "paragraph",
+          "text": "Many of these subjects involve philosophical, contemplative, metaphysical, and spiritual perspectives that are not universally accepted and should not be interpreted as established scientific or medical fact."
+        },
+        {
+          "type": "paragraph",
+          "text": "Users are encouraged to exercise personal discernment and engage thoughtfully with all material presented within the app."
+        },
+        {
+          "type": "heading",
+          "text": "Personal Responsibility",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Your participation in Lelañea is entirely voluntary."
+        },
+        {
+          "type": "paragraph",
+          "text": "You remain solely responsible for your own decisions, interpretations, actions, health, wellbeing, and outcomes arising from your use of this application."
+        },
+        {
+          "type": "paragraph",
+          "text": "While Lelañea aims to support meaningful reflection and personal growth, no specific results or outcomes are promised or guaranteed. Personal growth is a highly individual process influenced by many factors beyond the scope of this app."
+        },
+        {
+          "type": "heading",
+          "text": "Medical Care",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Never delay seeking medical care, mental healthcare, psychiatric treatment, or emergency assistance because of information contained within Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you have concerns about your physical health, mental health, medications, diagnosis, or treatment plan, consult an appropriately licensed healthcare professional."
+        },
+        {
+          "type": "heading",
+          "text": "Our Commitment",
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea was created with deep respect for both contemplative wisdom and modern healthcare."
+        },
+        {
+          "type": "paragraph",
+          "text": "The intention of this app is not to replace licensed professionals, but to provide accessible transcendental coaching, reflective education, and contemplative practices that may complement an individual’s broader journey of personal growth and wellbeing."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea Fulton believes that coaching, self-awareness, and conscious living can exist alongside psychotherapy, psychiatry, medicine, and other professional healthcare services. These disciplines are not mutually exclusive; they often serve different roles and, when appropriate, may work together in supporting the whole person."
+        }
+      ],
+      "requiresAcknowledgement": true
+    },
+    {
+      "id": "terms_of_use",
+      "title": "Lelañea™",
+      "subtitle": "Terms of Use",
+      "category": "legal",
+      "surface": "legal_terms",
+      "sourceFile": "The_Lelanea_App_Terms_of_Use.docx",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "**Effective Date:** [Month Day, Year]"
+        },
+        {
+          "type": "paragraph",
+          "text": "Welcome to Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "These Terms of Use (“Terms”) govern your access to and use of the Lelañea application, website, services, educational content, coaching materials, guided meditations, journaling tools, artificial intelligence features, community features, and all related content (collectively, the “Services”)."
+        },
+        {
+          "type": "paragraph",
+          "text": "By creating an account, accessing, downloading, or using Lelañea, you acknowledge that you have read, understood, and agree to be legally bound by these Terms."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you do not agree with these Terms, you should not use Lelañea."
+        },
+        {
+          "type": "heading",
+          "text": "About Lelañea",
+          "number": 1,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is an educational and transcendental coaching platform created by **Lelañea Fulton**, Professional Certified Coach (PCC), Transcendental Coach, and Unity-Consciousness Guide."
+        },
+        {
+          "type": "paragraph",
+          "text": "The Services are intended solely for education, self-reflection, personal development, contemplative practice, and coaching."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is not a healthcare provider and does not provide medical, psychological, psychiatric, or psychotherapeutic services."
+        },
+        {
+          "type": "heading",
+          "text": "Eligibility",
+          "number": 2,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "You must be at least eighteen (18) years of age, or the age of legal majority in your jurisdiction, to create an account unless otherwise permitted under applicable law and with any required parental or guardian consent."
+        },
+        {
+          "type": "paragraph",
+          "text": "By using Lelañea, you represent that you have the legal authority to enter into these Terms."
+        },
+        {
+          "type": "heading",
+          "text": "Educational Purpose Only",
+          "number": 3,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "All content within Lelañea is provided solely for educational, informational, contemplative, and personal development purposes."
+        },
+        {
+          "type": "paragraph",
+          "text": "Nothing contained within the Services should be interpreted as:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "medical advice;",
+            "psychological advice;",
+            "psychiatric advice;",
+            "legal advice;",
+            "financial advice;",
+            "diagnosis;",
+            "treatment;",
+            "psychotherapy; or",
+            "counseling."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Users remain solely responsible for their own decisions, actions, and wellbeing."
+        },
+        {
+          "type": "heading",
+          "text": "No Professional Healthcare Relationship",
+          "number": 4,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Your use of Lelañea does not create:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "a physician-patient relationship;",
+            "psychologist-patient relationship;",
+            "psychiatrist-patient relationship;",
+            "therapist-client relationship;",
+            "counselor-client relationship; or",
+            "any other licensed healthcare relationship."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "No healthcare services are provided through Lelañea."
+        },
+        {
+          "type": "heading",
+          "text": "Coaching Relationship",
+          "number": 5,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea provides educational coaching experiences."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coaching is not therapy."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coaching is not psychotherapy."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coaching is not psychiatric treatment."
+        },
+        {
+          "type": "paragraph",
+          "text": "Coaching does not diagnose or treat mental illness."
+        },
+        {
+          "type": "paragraph",
+          "text": "Any coaching provided through Lelañea is intended solely to support personal growth, self-awareness, reflection, values exploration, and conscious living."
+        },
+        {
+          "type": "heading",
+          "text": "Personal Responsibility",
+          "number": 6,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "You acknowledge that you are solely responsible for:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "your decisions;",
+            "your interpretations;",
+            "your physical health;",
+            "your mental health;",
+            "your emotional wellbeing;",
+            "your actions; and",
+            "any outcomes resulting from your use of Lelañea."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "No specific results are promised or guaranteed."
+        },
+        {
+          "type": "heading",
+          "text": "Crisis Situations",
+          "number": 7,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is not intended for crisis intervention."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you are experiencing thoughts of suicide, self-harm, harming another person, or any mental health emergency, discontinue use of the Services immediately and contact emergency services or an appropriate crisis resource in your location."
+        },
+        {
+          "type": "paragraph",
+          "text": "Do not rely upon Lelañea during an emergency."
+        },
+        {
+          "type": "heading",
+          "text": "Artificial Intelligence",
+          "number": 8,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Some features within Lelañea may utilize artificial intelligence."
+        },
+        {
+          "type": "paragraph",
+          "text": "AI-generated responses are created through automated systems and may occasionally contain inaccuracies, omissions, or content that does not apply to your individual circumstances."
+        },
+        {
+          "type": "paragraph",
+          "text": "AI responses are educational in nature and should never be considered medical, psychological, psychiatric, legal, financial, or professional advice."
+        },
+        {
+          "type": "paragraph",
+          "text": "Users are encouraged to exercise independent judgment and consult qualified professionals whenever appropriate."
+        },
+        {
+          "type": "heading",
+          "text": "Spiritual and Philosophical Content",
+          "number": 9,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea explores consciousness, contemplative traditions, meditation, Advaita Vedanta, Unity Consciousness, Hermetic philosophy, symbolism, and other philosophical or spiritual perspectives."
+        },
+        {
+          "type": "paragraph",
+          "text": "These perspectives are offered for reflection and exploration."
+        },
+        {
+          "type": "paragraph",
+          "text": "They are not presented as universally accepted scientific or medical facts."
+        },
+        {
+          "type": "paragraph",
+          "text": "Users are encouraged to engage with all material thoughtfully and exercise their own discernment."
+        },
+        {
+          "type": "heading",
+          "text": "Intellectual Property",
+          "number": 10,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Unless otherwise indicated, all original content created specifically for Lelañea—including text, graphics, audio recordings, videos, coaching frameworks, guided experiences, proprietary exercises, branding, logos, software, and design—is the intellectual property of Lelañea Fulton and Lelañea and is protected under applicable copyright, trademark, and intellectual property laws."
+        },
+        {
+          "type": "paragraph",
+          "text": "Nothing within these Terms transfers ownership of any intellectual property to users."
+        },
+        {
+          "type": "paragraph",
+          "text": "Users may not reproduce, distribute, modify, publish, sell, sublicense, or commercially exploit Lelañea content without prior written permission."
+        },
+        {
+          "type": "paragraph",
+          "text": "Where Lelañea incorporates or adapts concepts influenced by third-party authors, researchers, philosophical traditions, or established methodologies, those influences are acknowledged separately in “The Lineage of Lelañea.”"
+        },
+        {
+          "type": "heading",
+          "text": "User Content",
+          "number": 11,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Users retain ownership of the journals, reflections, writings, and other original content they create within Lelañea."
+        },
+        {
+          "type": "paragraph",
+          "text": "By submitting content to the platform, users grant Lelañea a limited license necessary to store, process, and display that content for the purpose of providing the Services."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea does not claim ownership of users’ personal writings."
+        },
+        {
+          "type": "heading",
+          "text": "Privacy",
+          "number": 12,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Your use of Lelañea is also governed by the Lelañea Privacy Policy."
+        },
+        {
+          "type": "heading",
+          "text": "Limitation of Liability",
+          "number": 13,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "To the fullest extent permitted by applicable law, Lelañea Fulton, Lelañea, its employees, contractors, affiliates, licensors, and service providers shall not be liable for any direct, indirect, incidental, consequential, special, exemplary, or punitive damages arising from or related to your use of the Services."
+        },
+        {
+          "type": "paragraph",
+          "text": "This includes, but is not limited to:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "emotional distress;",
+            "personal injury;",
+            "business interruption;",
+            "data loss;",
+            "lost profits;",
+            "reliance upon educational content;",
+            "decisions made by users; or",
+            "inability to access the Services."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Some jurisdictions do not allow certain limitations of liability. In those jurisdictions, these limitations will apply only to the extent permitted by law."
+        },
+        {
+          "type": "heading",
+          "text": "No Warranties",
+          "number": 14,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea is provided on an “as is” and “as available” basis."
+        },
+        {
+          "type": "paragraph",
+          "text": "No warranties, express or implied, are made regarding:"
+        },
+        {
+          "type": "list",
+          "style": "unordered",
+          "items": [
+            "uninterrupted availability;",
+            "accuracy;",
+            "completeness;",
+            "reliability;",
+            "suitability for a particular purpose; or",
+            "specific outcomes."
+          ]
+        },
+        {
+          "type": "heading",
+          "text": "Changes to the Services",
+          "number": 15,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Lelañea may modify, suspend, update, or discontinue features of the Services at any time without prior notice."
+        },
+        {
+          "type": "heading",
+          "text": "Modifications to These Terms",
+          "number": 16,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "These Terms may be updated periodically."
+        },
+        {
+          "type": "paragraph",
+          "text": "Continued use of Lelañea following any update constitutes acceptance of the revised Terms."
+        },
+        {
+          "type": "heading",
+          "text": "Governing Law",
+          "number": 17,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "These Terms shall be governed by and interpreted in accordance with the laws of the jurisdiction in which Lelañea is legally organized, without regard to conflict-of-law principles."
+        },
+        {
+          "type": "paragraph",
+          "text": "Any disputes arising from these Terms shall be resolved in the appropriate courts of that jurisdiction, unless otherwise required by applicable law."
+        },
+        {
+          "type": "heading",
+          "text": "Severability",
+          "number": 18,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "If any provision of these Terms is found to be unenforceable or invalid, the remaining provisions shall remain in full force and effect."
+        },
+        {
+          "type": "heading",
+          "text": "Entire Agreement",
+          "number": 19,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "These Terms constitute the entire agreement between Lelañea and its users regarding the Services and supersede all prior communications relating to the subject matter herein."
+        },
+        {
+          "type": "heading",
+          "text": "Contact",
+          "number": 20,
+          "level": 2
+        },
+        {
+          "type": "paragraph",
+          "text": "Questions regarding these Terms may be directed to:"
+        },
+        {
+          "type": "paragraph",
+          "text": "**Lelañea**"
+        },
+        {
+          "type": "paragraph",
+          "text": "Email: [Support Email]"
+        },
+        {
+          "type": "paragraph",
+          "text": "Website: lelanea.com"
+        },
+        {
+          "type": "paragraph",
+          "text": "By selecting **“I Agree”**, creating an account, or continuing to use Lelañea, you acknowledge that you have read, understood, and agreed to these Terms of Use."
+        }
+      ],
+      "requiresAcknowledgement": true,
+      "placeholders": ["[Month Day, Year]", "[Support Email]"]
+    }
+  ],
+  "reviewNotes": [
+    {
+      "document": "terms_of_use",
+      "note": "The effective date and support email are still unfilled placeholders."
+    },
+    {
+      "document": "terms_of_use",
+      "note": "Clause 12 refers to a Lelañea Privacy Policy that was not supplied; it needs to exist and be linked."
+    },
+    {
+      "document": "terms_of_use",
+      "note": "Clause 10 cross-references “The Lineage of Lelañea” — link it to the the_lineage_of_lelanea document."
+    },
+    {
+      "document": "terms_of_use",
+      "note": "Clause 17 leaves the governing jurisdiction unnamed; a named jurisdiction is usually required."
+    },
+    {
+      "document": "the_initiation",
+      "note": "Contains the {{first_name}} merge field twice; needs a fallback for users with no name on file."
+    },
+    {
+      "document": "disclaimer",
+      "note": "Contains its own “About the Creator” section, which differs from the standalone about_the_creator document. Keep both in sync or reference one from the other."
+    },
+    {
+      "document": "disclaimer",
+      "note": "Crisis guidance tells users to contact local emergency services but names no specific resource."
+    }
+  ]
+}
