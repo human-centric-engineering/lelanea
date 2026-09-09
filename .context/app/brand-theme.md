@@ -112,6 +112,12 @@ contrast reason and every one recorded at the site:
   same hairline as everything else. See the ruling below.
 - **`--color-ring` is the secondary ink** — `#17718A` light, `#7CC0D6` dark —
   not the ceremonial orange. See the ruling below.
+- **`--color-selected` is `#786573`, not §6.2's heather amethyst `#806C7B`**,
+  which carries a label at 4.25:1. Same move as the terracotta and the orange;
+  the named amethyst survives as `--color-status-purple`. See t-2's rulings.
+- **`--color-primary-hover` does not lighten in dark mode**, where §6.5's text
+  reads as though it should. See t-2's rulings — the value §6.5 names is the
+  pressed step of the ceremonial orange, not of the fill.
 
 ## The three contrast rulings (t-18)
 
@@ -184,8 +190,8 @@ a pointer hovers, and the badge's `/80` would still fail at 3.70. The real
 mechanism is a hover **token**, which the accent already has
 (`--color-primary-hover`) and which shadcn's alpha-hover bypasses.
 `bg-primary/90` has the identical shape at 3.83:1 and is untouched here, so one
-fix serves both. **It lands with our own Button in t-2, beside the ring offset
-below.**
+fix serves both. **t-2 landed it** — see "Every filled variant hovers to a
+token" below.
 
 **One thing this does not fix, and no colour could.** `components/ui/button.tsx`
 draws `ring-1` with no `ring-offset`, so a focused button's ring sits flush
@@ -195,9 +201,10 @@ _is_ this teal, so a focused secondary button just grows a pixel in its own
 colour. The same arithmetic as the switch closes off every alternative:
 lightness at most 0.258 to clear the ground, at least 0.561 to clear a fill.
 This is a **missing mechanism — an offset — not a wrong value**, so it belongs
-to the component rather than to the palette. It is latent today, since nothing
-on this surface renders `<Button variant="secondary">`, and **t-2 builds our own
-Button under `components/app/`, which is where the offset should land.**
+to the component rather than to the palette. **t-2 landed it** in
+`components/app/ui/button.tsx`, as an offset `outline` rather than the
+`ring-offset-2` that `Badge`, `Switch` and `SelectTrigger` use — see "The focus
+indicator is an outline" below.
 
 Every number above is **measured from the stylesheet** by
 `tests/unit/app/brand-theme.test.ts`, which composites the `rgba()` boundary
@@ -208,6 +215,101 @@ ground**, which is what 1.4.11 governs; the two adjacencies above — off-track
 against on-track, ring against fill — are deliberately not asserted, because
 neither is reachable by choosing a colour and a permanently failing assertion
 for an accepted trade is noise.
+
+## What the components needed that the palette did not have (t-2)
+
+t-18 closed three gaps and named two it could not reach, both of them mechanism
+rather than colour. Building the seven kit components under
+`components/app/ui/` is what made them live, and turned up two more.
+
+### The focus indicator is an outline, not a ring
+
+`components/app/ui/button.tsx` and `chip.tsx` draw
+`focus-visible:outline-solid outline-2 outline-offset-2
+outline-[var(--color-ring)]`, and suppress the `ring-1` they inherit.
+
+**An `outline` rather than `ring-offset-2`**, which is what `Badge`, `Switch`
+and `SelectTrigger` use and would also have worked. `ring-offset` _paints_ the
+gap, in `--color-background` — so a button on a card or inside a popover gets
+two pixels of oyster that is not the colour underneath it. An outline leaves
+whatever is actually there showing, so one class is correct on all four grounds.
+
+**`outline-solid` is load-bearing and is the silent half.** shadcn's base
+carries `focus-visible:outline-none`, which in Tailwind 4 sets
+`outline-style: none` — an `outline-2` inherited beside it is two pixels of
+nothing. `tailwind-merge` drops it only because `outline-solid` is in the same
+group and comes later. Nothing about that is guaranteed by a type, so the
+component tests assert the resolved class list rather than trusting it.
+
+### Every filled variant hovers to a token
+
+`--color-secondary-hover` and `--color-destructive-hover` join
+`--color-primary-hover`, and all three **hold across both modes**. An alpha of a
+fill composites against whatever is behind it, so it lands on a different colour
+on every ground and cannot be measured at all; a token is a known colour.
+
+| Fill        | At rest | On hover | Hover fill |
+| ----------- | ------- | -------- | ---------- |
+| primary     | 4.54:1  | 5.09:1   | `#9C5130`  |
+| secondary   | 4.91:1  | 5.65:1   | `#15677E`  |
+| destructive | 4.68:1  | 5.15:1   | `#9F4C42`  |
+
+All three dim by the same 2.75 points of lightness, so every hover measures
+**above** its resting value. The test asserts that direction as well as the 4.5
+threshold — a hover that deepens can only improve a label's contrast, which is
+what stops a later edit clearing the bar with a value that lifts off the fill.
+
+**`--color-primary-hover` no longer inverts in dark mode, and that is a
+correction.** t-1 restated it as §6.5's `#B5633B` under `.dark`. But `#B5633B`
+is §6.2's _pressed_ step of the **ceremonial** `#C96F43`, and the fill is
+`--color-primary` — a darker step of that same orange, chosen precisely because
+`#C96F43` cannot carry oyster text. Applied to the fill it made hover **lighter
+than rest** and took the label to **3.84:1**. This is the same confusion t-18
+resolved between the destructive fill and the destructive ink, one token along:
+§6.5's "lightens by about 6% in dark" governs _surfaces_ — the pill wash and
+shadcn's `accent`, which both still do exactly that — and a ceremonial fill
+carrying a label is not one of those. Nothing consumed the token before t-2, so
+the correction regressed nothing.
+
+### A fifth status hue, and a selection fill
+
+**`--color-status-blue`** is §6.2's info steel slate blue. The palette named
+four status trios and §6.2 names five; nothing had consumed the fifth until
+`Banner`'s `info` tone. It joins as a `-bg`/`-ink` trio like its siblings rather
+than borrowing the teal, which is a brand colour with a job (§6.2 gives teal and
+aqua the active states) and would have made an informational banner look like
+something you could act on.
+
+Its ink is measured **on the wash, not on the ground** — the distinction t-18's
+third review round caught. `#A3C2DC` measures 5.61 against the bare dark muted
+ground and **4.31** once the wash is over it, so the dark ink is `#B0CBE1`
+(4.76 at its tightest) and the light ink `#33567A` (5.27).
+
+**`--color-selected`** is a fifth deviation from a §6.2-named colour, and the
+fourth time this palette has made the same move. Heather amethyst `#806C7B`
+carries a label at **4.25:1**. The fill is that hue three points of lightness
+darker — `#786573`, 4.73:1 — and the named amethyst survives as
+`--color-status-purple`. It is a token of its own rather than the status one
+because the status hues **lighten in dark mode** for badge use, which is the
+exact trap that put oyster on the status red at 2.99:1 before t-18.
+
+### The lotus has its own fourteen values
+
+`--color-lotus-*` names the petal tiers, their edges, the veins, the core's
+three gradient stops, its glint, two ripple steps and the halation. §6.2 names
+four of them; the rest are named nowhere but the kit's geometry.
+
+They exist so the no-colour-literal guard over `components/app/ui/` can be
+**absolute**. The alternative was exempting `lotus.tsx` — the one file in that
+directory that would most have needed the guard — and an exemption is a hole
+that widens.
+
+**They are deliberately not wired to `--color-secondary` and
+`--color-status-green`**, though the outer petal and the near ripple are
+byte-identical to them today. Those are UI roles that can be re-tuned for
+contrast: t-18 moved `--color-ring` onto the teal, and a later pass could move
+the teal itself. The bloom must not follow it. Same colour, different reason to
+exist — and they hold across both modes, because a mark is not a surface.
 
 ## The destructive token has two roles, and only one rule separates them
 
