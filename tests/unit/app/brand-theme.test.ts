@@ -117,9 +117,7 @@ function flattenOver(value: string, ground: string): string {
   const trimmed = value.trim();
   if (trimmed.startsWith('#')) return trimmed;
 
-  const parts = trimmed.match(
-    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/
-  );
+  const parts = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
   if (!parts) throw new Error(`cannot composite \`${value}\` — not a hex or rgb()/rgba()`);
 
   const alpha = parts[4] === undefined ? 1 : Number.parseFloat(parts[4]);
@@ -341,7 +339,9 @@ describe('app/brand-theme.css', () => {
       // Proves the four measurements above can actually fail. Without it they
       // pass for free if `contrastOn` ever returned something inert — which is
       // exactly what a new compositing helper is able to do.
-      expect(contrastRatio(token(lightTokens, '--color-destructive-foreground'), '#b75d52')).toBeLessThan(4.5);
+      expect(
+        contrastRatio(token(lightTokens, '--color-destructive-foreground'), '#b75d52')
+      ).toBeLessThan(4.5);
       expect(
         contrastOn('rgba(111, 115, 118, 0.24)', token(lightTokens, '--color-background'))
       ).toBeLessThan(3);
