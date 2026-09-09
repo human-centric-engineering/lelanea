@@ -302,6 +302,40 @@ describe('app/brand-theme.css', () => {
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
 
+    it.each(GROUND_PAIRINGS)('%s: destructive TEXT on %s clears AA', (theme, ground) => {
+      // `--color-destructive` has two roles and they pull opposite ways: a FILL
+      // dark enough to hold oyster, and INK light enough to read on charcoal.
+      // Darkening the fill for the button took the ink from 2.86:1 to 2.44:1 in
+      // dark mode on the `bg-destructive/10` wash every form error uses — so
+      // the ink role is sent to `--color-status-red-ink` by a rule after the
+      // dark block. This measures the colour that actually paints those twenty
+      // components, which is why it reads the status ink and not the token the
+      // utility is named after.
+      const scope = scopeFor(theme);
+      const ratio = contrastRatio(token(scope, '--color-status-red-ink'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('sends the destructive TEXT role away from the fill', () => {
+      // The measurement above is only about what ships if this rule exists and
+      // points where it says. Delete the rule and `text-destructive` silently
+      // falls back to the fill value, with nothing else noticing.
+      const rule = ruleFor(`${LIGHT_SCOPE} .text-destructive`);
+      expect(rule.body).toMatch(/color:\s*var\(--color-status-red-ink\)/);
+      expect(token(lightTokens, '--color-status-red-ink')).not.toBe(
+        token(lightTokens, '--color-destructive')
+      );
+    });
+
+    it('would fail if the ink role were left on the fill', () => {
+      // Proves the pairing above can fail: the fill value is what
+      // `text-destructive` resolves to without the rule, and in dark mode on a
+      // card it measures 2.01:1.
+      expect(
+        contrastRatio(token(lightTokens, '--color-destructive'), token(darkTokens, '--color-card'))
+      ).toBeLessThan(4.5);
+    });
+
     it('holds the destructive fill across both themes', () => {
       // §6.2: the functional colours do not change between modes. A dark-only
       // restatement is also how the 2.99:1 pairing got in — the status red

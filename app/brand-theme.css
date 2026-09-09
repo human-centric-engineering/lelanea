@@ -111,11 +111,13 @@
    * moves and the design's hairline character survives everywhere it was
    * decorative.
    *
-   * The kit's silver `#6F7376` cannot reach 3:1 by alpha at all — opaque, it
-   * measures 3.85 on the card ground — so the base here is the heading ink
-   * instead. At 50% it composites to 3.31 / 3.24 / 3.24 / 3.33 against
-   * background, card, muted and popover; 0.48 lands at 3.07 and is too close to
-   * survive a future ground moving a step.
+   * The base changed too, and the reason is an ALPHA CEILING rather than an
+   * impossibility: the kit's silver `#6F7376` does clear 3:1 — but only from
+   * 0.85 up (3.02 at its tightest there, 3.85 opaque). At 0.85 an alpha has
+   * stopped being a hairline and is just a muddier way of writing a solid
+   * colour, so the base here is the heading ink, which reaches the same band at
+   * 0.50: 3.31 / 3.24 / 3.24 / 3.33 against background, card, muted and
+   * popover. 0.48 lands at 3.07, too close to survive a ground moving a step.
    *
    * IT IS ALSO A FILL, and that is not a detail — shadcn's <Switch> paints its
    * OFF-TRACK with `bg-input` (`components/ui/switch.tsx`), and <Switch> is
@@ -202,6 +204,14 @@
    * danger hue is actually read as a colour rather than sat on. */
   --color-destructive: #a95146;
   --color-destructive-foreground: #f3f0ec;
+  /* THE FILL IS NOT THE INK. `--color-destructive` is a shadcn token with two
+   * jobs — `bg-destructive` under oyster, and `text-destructive` on a page
+   * ground — and darkening it for the first made the second worse in dark mode
+   * (2.86:1 → 2.44:1 on the `bg-destructive/10` wash every form error uses).
+   * One token cannot do both: the fill must be dark enough to carry oyster,
+   * the ink light enough to be read on charcoal. See the `.text-destructive`
+   * rule after the dark block, which sends the ink role to
+   * `--color-status-red-ink`. */
 
   /* ---- Status and tone -------------------------------------------------- */
   --color-status-green: #457b6a;
@@ -361,6 +371,41 @@
   /* ---- Elevation: opaque black, since the warm shadow disappears here ---- */
   --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.3);
   --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.32), 0 24px 60px rgba(0, 0, 0, 0.48);
+}
+
+/* ================================================== the destructive ink role
+ * ONE OVERRIDE OF AN EXISTING UTILITY, and the only one in this file — so it
+ * needs its reasons.
+ *
+ * `--color-destructive` carries two roles that pull in opposite directions.
+ * `bg-destructive` is a FILL that must be dark enough to hold oyster text
+ * (4.68:1 at `#A95146`); `text-destructive` is INK that must be light enough to
+ * be read on charcoal. Twenty consumer-surface components use the second —
+ * every form's error banner (`bg-destructive/10 text-destructive`), the avatar
+ * upload's error line, the delete-account confirmation — and at the fill value
+ * it measured 2.44:1 on that wash in dark mode. There is no value that serves
+ * both roles, for the same reason a ring cannot clear both a ground and a fill.
+ *
+ * The palette already carries the mode-aware answer: `--color-status-red-ink`
+ * is `#94433A` light and `#E0A197` dark, precisely because a status colour is
+ * READ rather than sat on. Pointing the text role at it gives 5.92 / 5.42 /
+ * 5.57 / 6.18 in light and 6.52 / 4.93 / 5.65 / 4.71 in dark, against the four
+ * grounds — every one of the eight clear of AA, where six of the eight failed
+ * before this file existed at all.
+ *
+ * WHY A RULE AND NOT A TOKEN: `text-destructive` is generated from
+ * `--color-destructive`, so the only way to separate the two roles without
+ * editing twenty platform components is to override the utility. Being
+ * unlayered it wins, which also means no other class can recolour an element
+ * carrying it — acceptable here, and only here, because the class IS a colour:
+ * anything wanting a different one does not reach for `text-destructive`. That
+ * is the opposite of the `.brand-*` registers below, which set no colour for
+ * exactly that reason.
+ *
+ * The `/admin` surface keeps shadcn's behaviour, as it keeps everything else.
+ */
+[data-surface='consumer'] .text-destructive {
+  color: var(--color-status-red-ink);
 }
 
 /* ====================================================== typography utilities

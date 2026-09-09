@@ -138,10 +138,12 @@ line that merely separates. So `--color-border`, `--color-divider` and
 sections are exactly as they were — and only `--color-input` rose. In this
 component set that token is the edge of `<Input>`, `<Textarea>`,
 `<SelectTrigger>`, `<Checkbox>` and the outline `<Button>`; it measured ~1.33:1
-light and ~1.45:1 dark. The kit's silver `#6F7376` cannot reach 3:1 by any alpha
-— opaque it is 3.85 on the card ground — so light is based on the heading ink
-instead. The two values clear 3:1 on all four grounds in both themes, with 3.24
-the tightest.
+light and ~1.45:1 dark. The base changed too, for an **alpha ceiling** rather
+than an impossibility: the kit's silver `#6F7376` does clear 3:1, but only from
+0.85 up (3.02 at its tightest; 3.85 opaque). At 0.85 an alpha has stopped being
+a hairline and is a muddier way of writing a solid colour, so light is based on
+the heading ink, which reaches the same band at 0.50. The two values clear 3:1
+on all four grounds in both themes, with 3.24 the tightest.
 
 `--color-input` **is also a fill**, and that changes a live control. shadcn's
 `<Switch>` paints its off-track with `bg-input`, and `<Switch>` is on this
@@ -187,6 +189,43 @@ ground**, which is what 1.4.11 governs; the two adjacencies above — off-track
 against on-track, ring against fill — are deliberately not asserted, because
 neither is reachable by choosing a colour and a permanently failing assertion
 for an accepted trade is noise.
+
+## The destructive token has two roles, and only one rule separates them
+
+`--color-destructive` is a shadcn token doing two opposite jobs. `bg-destructive`
+is a **fill** that must be dark enough to hold oyster text; `text-destructive` is
+**ink** that must be light enough to read on charcoal. Twenty consumer-surface
+components use the second — every form's error banner renders
+`bg-destructive/10 text-destructive`, and so do the avatar upload's error line
+and the delete-account confirmation.
+
+Darkening the fill to `#A95146` for the button therefore made the ink worse in
+dark mode: **2.86:1 → 2.44:1** on that wash, and 2.21 → 1.89 inside a card. Both
+numbers already failed AA before this repo existed, but the change moved them the
+wrong way, which is not something to ship from a task about contrast.
+
+No value serves both roles, for the same reason a ring cannot clear both a ground
+and a fill. The palette already carries the mode-aware answer:
+`--color-status-red-ink` is `#94433A` light and `#E0A197` dark, precisely because
+a status colour is read rather than sat on. So `app/brand-theme.css` carries **one
+override of an existing utility** — its only one —
+
+```css
+[data-surface='consumer'] .text-destructive {
+  color: var(--color-status-red-ink);
+}
+```
+
+which measures 5.92 / 5.42 / 5.57 / 6.18 light and 6.52 / 4.93 / 5.65 / 4.71 dark
+against the four grounds. All eight clear AA; six of the eight failed it before.
+
+It is a rule rather than a token because `text-destructive` is _generated from_
+`--color-destructive`, so separating the roles any other way means editing twenty
+platform components. Being unlayered it wins, which also means no class can
+recolour an element carrying it — acceptable here and only here, because the
+class **is** a colour, and anything wanting a different one does not reach for
+`text-destructive`. That is the exact opposite of the `.brand-*` registers, which
+set no colour for the same reason. `/admin` keeps shadcn's behaviour.
 
 Secondary text is `#5A5F62` light and `#A8AEB1` dark (decision D5, already
 carried by the prototype). The kit's original `#6F7376` fails 4.5:1 in all four
