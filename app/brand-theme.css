@@ -289,10 +289,17 @@
  * read cannot become Tailwind utilities (note 4 above). Scoped to the consumer
  * surface so they are inert on `/admin`.
  *
- * Each one carries ONLY the properties that define its register — family,
- * tracking, and the line-height the register is drawn at. They are unlayered,
- * so they beat Tailwind's `leading-*` and `tracking-*`; reach for a different
- * measure with plain CSS on the element rather than a utility that will lose.
+ * THEY CARRY NO COLOUR, deliberately. These rules are unlayered, so they beat
+ * every Tailwind utility on the same element — and `@layer utilities` is where
+ * arbitrary values land too, so `text-[var(--color-heading)]` would lose just
+ * the same. A `color` here could therefore not be overridden by ANY class, and
+ * `<h2 class="brand-display text-secondary-ink">` would silently ignore the
+ * second half. Colour is the caller's, set with an ordinary utility.
+ *
+ * What each one DOES fix is its type: family, tracking, line-height, and (for
+ * the eyebrow, whose size is the register) font-size. Those are unoverridable
+ * by a utility for the same reason — if you need a different measure, write
+ * plain CSS on the element rather than a class that will lose.
  */
 
 /* Display — Instrument Serif, set tight and given room to be large (40–72px). */
@@ -301,7 +308,6 @@
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: -0.02em;
-  color: var(--color-heading);
 }
 
 /* Her own voice on the page — pull quotes, session prompts, invocations. This
@@ -310,7 +316,6 @@
   font-family: var(--font-quote);
   font-style: italic;
   line-height: 1.42;
-  color: var(--color-heading);
 }
 
 /* Eyebrow — tracked out at 0.14em. Casing is deliberately NOT forced: §6.10
@@ -324,7 +329,6 @@
   font-size: 0.75rem;
   line-height: 1.4;
   letter-spacing: 0.14em;
-  color: var(--color-muted-foreground);
 }
 
 /* Numerics, wherever alignment matters — meters, counts, spend. */

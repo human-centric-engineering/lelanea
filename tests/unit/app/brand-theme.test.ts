@@ -243,6 +243,18 @@ describe('app/brand-theme.css', () => {
       }
     });
 
+    it('lets a utility set the colour of every register', () => {
+      // These rules are unlayered, so they beat Tailwind utilities on the same
+      // element — and `@layer utilities` is where ARBITRARY values land too, so
+      // even `text-[var(--color-heading)]` would lose. A `color` here could
+      // therefore not be overridden by any class at all, and
+      // `<h2 class="brand-display text-secondary-ink">` would silently ignore
+      // the second half. Type is the register's; colour is the caller's.
+      for (const register of ['brand-display', 'brand-quote', 'brand-eyebrow', 'brand-num']) {
+        expect(ruleFor(`${LIGHT_SCOPE} .${register}`).body).not.toMatch(/(^|[\s;]) *color:/);
+      }
+    });
+
     it('does not force casing on the eyebrow', () => {
       // §6.10 says eyebrows MAY be lowercase; forcing it would strip the capital
       // from Lelañea's name wherever an eyebrow carries it.

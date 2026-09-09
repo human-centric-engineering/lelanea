@@ -56,6 +56,12 @@ from `@theme` at build time, and `@theme` lives in Sunrise's `globals.css`.
    and line-height together, because a register is all three at once. They are
    scoped to the consumer surface, so they do nothing on `/admin`.
 
+   **They set no colour.** Being unlayered, they beat every utility on the same
+   element — and arbitrary values live in `@layer utilities` too, so a `color`
+   in one of these rules could not be overridden by _any_ class, not even
+   `text-[var(--color-heading)]`. Type belongs to the register; colour belongs
+   to the caller. A test enforces it.
+
 ## Four rules that are load-bearing
 
 - **Nothing in `brand-theme.css` may be wrapped in `@layer`.** Tailwind emits
@@ -69,9 +75,10 @@ from `@theme` at build time, and `@theme` lives in Sunrise's `globals.css`.
   fonts, radii, easings, `--shadow-bloom` — is declared once in the light block.
   A token declared _only_ under `.dark` would have no light value; a test
   asserts every dark token has a light twin.
-- **The registers beat Tailwind.** `.brand-display` and friends are unlayered,
-  so they win over `leading-*` and `tracking-*`. Override with plain CSS on the
-  element, not with a utility that will lose.
+- **The registers beat Tailwind, for the type they set.** `.brand-display` and
+  friends are unlayered, so they win over `leading-*`, `tracking-*`, and
+  `text-<size>` on the eyebrow. Change one with plain CSS on the element, not
+  with a utility that will lose. Colour is exempt — they set none.
 
 ## Where the values come from
 
