@@ -1,0 +1,20 @@
+<!-- @dsCard group="Components" viewport="700x150" name="Buttons" subtitle="Primary, hover, secondary, ghost, destructive" -->
+<!doctype html>
+<!-- @dsCard group="Components" name="Buttons" subtitle="Primary, hover, secondary, ghost, destructive" viewport="700x150" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_preview.css">
+<style>
+  body { padding: 24px 28px; display:flex; flex-wrap:wrap; gap: 14px; align-items:center; }
+  .btn { font-family: var(--font-body); font-size: 15px; font-weight:500; padding: 13px 22px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; line-height:1;}
+  .p { background:#C96F43; color:#F3F0EC;}
+  .ph { background:#B5633B; color:#F3F0EC;}
+  .s { background:#EBE6DF; color:#11181A; border-color: rgba(111,115,118,.24);}
+  .g { color:#11181A; background: transparent;}
+  .d { background:#B75D52; color:#F3F0EC;}
+  .lab { font-size:11px; color: var(--fg-secondary); text-align:center; font-family: var(--font-mono); margin-top:6px;}
+  .col2 { display:flex; flex-direction:column; align-items:center; gap: 2px;}
+</style></head><body>
+<div class="col2"><button class="btn p">Begin</button><div class="lab">primary · rest</div></div>
+<div class="col2"><button class="btn ph">Begin</button><div class="lab">primary · hover</div></div>
+<div class="col2"><button class="btn s">Return</button><div class="lab">secondary</div></div>
+<div class="col2"><button class="btn g">Skip</button><div class="lab">ghost</div></div>
+<div class="col2"><button class="btn d">Delete session</button><div class="lab">destructive</div></div>
+</body></html>

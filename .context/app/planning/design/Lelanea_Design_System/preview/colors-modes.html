@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Light and dark modes" subtitle="Same message across both surface modes" -->
+<!doctype html>
+<!-- @dsCard group="Colors" name="Light + dark modes" subtitle="Same message across both surface modes" viewport="700x180" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_preview.css">
+<style>
+  .pair { display:flex; gap:16px; }
+  .panel { flex:1; padding:18px 20px; border-radius: var(--r-lg); }
+  .l { background:#F3F0EC; color:#11181A; border:1px solid rgba(111,115,118,.24); }
+  .d { background:#282C2E; color:#F3F0EC; border:1px solid rgba(227,218,209,.12); }
+  .ttl { font-family: var(--font-display); font-size: 26px; line-height:1.1; margin-bottom:4px;}
+  .bd  { font-size: 14px; line-height:1.5; opacity:.85; }
+  .mt { color:#6F7376; font-size: 11px; letter-spacing:.14em; text-transform:lowercase; margin-top:10px;}
+</style></head><body>
+<div class="pair">
+  <div class="panel l">
+    <div class="mt">light mode</div>
+    <div class="ttl">Welcome.</div>
+    <div class="bd">Take a slow breath. When you're ready, the lotus will open.</div>
+  </div>
+  <div class="panel d">
+    <div class="mt" style="color:#6F7376;">dark mode</div>
+    <div class="ttl" style="color:#F3F0EC;">Welcome.</div>
+    <div class="bd" style="color:#E3DAD1;">Take a slow breath. When you're ready, the lotus will open.</div>
+  </div>
+</div>
+</body></html>

@@ -40,6 +40,13 @@ export default tseslint.config(
       // Throwaway scripts (one-shot codemods, scratch utilities). Gitignored
       // but visible to eslint without this exclusion.
       '.claude/tmp/**',
+      // Authored planning material (leaf-owned, Lelañea): the product
+      // description, the approved prototype, and the exported design-system
+      // kit. Source inputs the build reads, not source it maintains — the
+      // `.jsx` files there are standalone doc-page examples with no build
+      // step, so `js.configs.recommended` reports parse errors on syntax it
+      // is not configured for. Also excluded in `.prettierignore`.
+      '.context/app/planning/**',
     ],
   },
 

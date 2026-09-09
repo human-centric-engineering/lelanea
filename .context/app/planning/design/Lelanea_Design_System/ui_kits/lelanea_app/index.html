@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- @dsCard group="UI Kit — Lelanea App" name="Lelanea app · UI kit" subtitle="Interactive click-thru — onboarding, lotus home, sit (chat), journal, practices, you" viewport="900x900" -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lelanea · coaching app</title>
+<link rel="stylesheet" href="../../colors_and_type.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #201f1d; overflow: hidden; }
+  body {
+    display: grid;
+    place-items: center;
+    font-family: 'Hanken Grotesk', system-ui, sans-serif;
+    padding: 30px;
+    box-sizing: border-box;
+  }
+  .stage {
+    display: flex; gap: 40px; align-items: center;
+  }
+  .meta {
+    color: rgba(243,240,236,0.75);
+    max-width: 340px;
+  }
+  .meta h1 {
+    font-family: 'Instrument Serif', serif;
+    color: #F3F0EC;
+    font-size: 36px;
+    line-height: 1.18;
+    margin: 0 0 18px;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+  }
+  .meta p { font-size: 14px; line-height: 1.55; margin: 0 0 14px; }
+  .meta .ey { font-size: 11px; letter-spacing: 0.14em; text-transform: lowercase; color: #7CC0D6; margin-bottom: 10px; }
+  .nav-demo {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 18px;
+  }
+  .nav-demo button {
+    background: rgba(243,240,236,0.08); color: #F3F0EC;
+    border: 1px solid rgba(243,240,236,0.15); padding: 6px 12px;
+    border-radius: 999px; font-family: inherit; font-size: 12px; cursor: pointer;
+  }
+  .nav-demo button:hover { background: rgba(243,240,236,0.14); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="meta">
+    <div class="ey">lelanea app</div>
+    <h1>A quiet companion for the work.</h1>
+    <p>Coaching between sessions — through an AI trained on Lelanea's Unity Consciousness practice.</p>
+    <p>Tap around. The lotus opens once per launch, then breathes.</p>
+    <div class="nav-demo" id="nav"></div>
+  </div>
+  <div id="root"></div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="lotus-figure.jsx"></script>
+<script type="text/babel" src="Primitives.jsx"></script>
+<script type="text/babel" src="Screens.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+
+<script type="text/babel">
+  const App = () => {
+    const [route, setRoute] = React.useState('onboarding');
+    const [opened, setOpened] = React.useState(false);
+
+    const screen =
+      route === 'onboarding' ? <OnboardingScreen onNav={setRoute} /> :
+      route === 'home'       ? <HomeScreen onNav={setRoute} opened={opened} setOpened={setOpened} /> :
+      route === 'sit'        ? <SitScreen onNav={setRoute} /> :
+      route === 'journal'    ? <JournalScreen onNav={setRoute} /> :
+      route === 'practice'   ? <PracticesScreen onNav={setRoute} /> :
+      route === 'you'        ? <YouScreen onNav={setRoute} /> :
+      null;
+
+    const showTabs = !['onboarding', 'sit'].includes(route);
+
+    return (
+      <div style={{ position: 'relative' }}>
+        <IOSDevice>
+          <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+            {screen}
+            {showTabs && <TabBar active={route} onChange={setRoute} />}
+          </div>
+        </IOSDevice>
+
+        {/* Route buttons outside device */}
+        <script dangerouslySetInnerHTML={{__html:''}}/>
+      </div>
+    );
+  };
+
+  const Root = () => {
+    const [route, setRoute] = React.useState('onboarding');
+    const [opened, setOpened] = React.useState(false);
+
+    const screen =
+      route === 'onboarding' ? <OnboardingScreen onNav={setRoute} /> :
+      route === 'home'       ? <HomeScreen onNav={setRoute} opened={opened} setOpened={setOpened} /> :
+      route === 'sit'        ? <SitScreen onNav={setRoute} /> :
+      route === 'journal'    ? <JournalScreen onNav={setRoute} /> :
+      route === 'practice'   ? <PracticesScreen onNav={setRoute} /> :
+      route === 'you'        ? <YouScreen onNav={setRoute} /> :
+      null;
+
+    const showTabs = !['onboarding', 'sit'].includes(route);
+
+    // Populate nav buttons
+    React.useEffect(() => {
+      const el = document.getElementById('nav');
+      if (!el) return;
+      el.innerHTML = '';
+      ['onboarding', 'home', 'sit', 'journal', 'practice', 'you'].forEach(r => {
+        const b = document.createElement('button');
+        b.textContent = r;
+        b.onclick = () => setRoute(r);
+        el.appendChild(b);
+      });
+    }, []);
+
+    return (
+      <IOSDevice>
+        <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+          {screen}
+          {showTabs && <TabBar active={route} onChange={setRoute} />}
+        </div>
+      </IOSDevice>
+    );
+  };
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>

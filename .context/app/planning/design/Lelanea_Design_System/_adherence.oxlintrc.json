@@ -1,0 +1,302 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/Banner/**",
+              "components/Button/**",
+              "components/Card/**",
+              "components/ChatBubble/**",
+              "components/Chip/**",
+              "components/Lotus/**",
+              "components/LotusMark/**",
+              "doc-page.js",
+              "ui_kits/lelanea_app/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Instrument Serif|Cormorant Garamond|Hanken Grotesk))/i]",
+        "message": "Font not provided by the design system. Available: Instrument Serif, Cormorant Garamond, Hanken Grotesk."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Banner'] > JSXAttribute > JSXIdentifier[name!=/^(?:tone|lead|children|style|key|ref|className|style|children)$/]",
+        "message": "<Banner> doesn't accept that prop. Declared props: tone, lead, children, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Banner'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:success|error|warning|info)$/]",
+        "message": "<Banner> tone must be one of 'success' | 'error' | 'warning' | 'info'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|variant|size|block|disabled|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: children, variant, size, block, disabled, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:primary|secondary|ghost|destructive)$/]",
+        "message": "<Button> variant must be one of 'primary' | 'secondary' | 'ghost' | 'destructive'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md|lg)$/]",
+        "message": "<Button> size must be one of 'sm' | 'md' | 'lg'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute > JSXIdentifier[name!=/^(?:eyebrow|title|children|meta|dark|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Card> doesn't accept that prop. Declared props: eyebrow, title, children, meta, dark, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ChatBubble'] > JSXAttribute > JSXIdentifier[name!=/^(?:from|children|avatar|style|key|ref|className|style|children)$/]",
+        "message": "<ChatBubble> doesn't accept that prop. Declared props: from, children, avatar, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ChatBubble'] > JSXAttribute[name.name='from'] > Literal[value!=/^(?:ai|user)$/]",
+        "message": "<ChatBubble> from must be one of 'ai' | 'user'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Chip'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|selected|tone|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Chip> doesn't accept that prop. Declared props: children, selected, tone, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Chip'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:default|teal)$/]",
+        "message": "<Chip> tone must be one of 'default' | 'teal'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Lotus'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|open|autoOpen|idle|water|delay|onOpened|key|ref|className|style|children)$/]",
+        "message": "<Lotus> doesn't accept that prop. Declared props: size, open, autoOpen, idle, water, delay, onOpened."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='LotusMark'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|water|style|key|ref|className|style|children)$/]",
+        "message": "<LotusMark> doesn't accept that prop. Declared props: size, water, style."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Banner": {
+        "replaces": []
+      },
+      "Button": {
+        "replaces": []
+      },
+      "Card": {
+        "replaces": []
+      },
+      "ChatBubble": {
+        "replaces": []
+      },
+      "Chip": {
+        "replaces": []
+      },
+      "Lotus": {
+        "replaces": []
+      },
+      "LotusMark": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--accent",
+      "--accent-pressed",
+      "--bg",
+      "--border",
+      "--brand-aqua",
+      "--brand-teal",
+      "--danger",
+      "--deep-teal",
+      "--divider",
+      "--dur-base",
+      "--dur-cer",
+      "--dur-micro",
+      "--dusted-coral",
+      "--dusted-ochre",
+      "--dusted-stone-gray",
+      "--ease-breath",
+      "--ease-quick",
+      "--fg-heading",
+      "--fg-on-accent",
+      "--fg-primary",
+      "--fg-secondary",
+      "--font-body",
+      "--font-display",
+      "--font-mono",
+      "--font-quote",
+      "--fs-body",
+      "--fs-body-l",
+      "--fs-body-s",
+      "--fs-display-l",
+      "--fs-display-m",
+      "--fs-display-xl",
+      "--fs-h1",
+      "--fs-h2",
+      "--fs-h3",
+      "--fs-meta",
+      "--heather-amethyst",
+      "--info",
+      "--lh-body",
+      "--lh-display",
+      "--lh-heading",
+      "--lh-meta",
+      "--light-aqua",
+      "--mid-dark-steel",
+      "--muted-lavender-grey",
+      "--near-black-charcoal",
+      "--near-black-teal",
+      "--neutral-silver-ash",
+      "--oyster-white",
+      "--r-lg",
+      "--r-md",
+      "--r-pill",
+      "--r-sm",
+      "--r-xl",
+      "--rustic-burnt-orange",
+      "--sage-forest",
+      "--selected",
+      "--shadow-bloom",
+      "--shadow-lift",
+      "--shadow-rest",
+      "--sp-1",
+      "--sp-10",
+      "--sp-2",
+      "--sp-3",
+      "--sp-4",
+      "--sp-5",
+      "--sp-6",
+      "--sp-7",
+      "--sp-8",
+      "--sp-9",
+      "--steel-slate-blue",
+      "--success",
+      "--surface",
+      "--surface-sunk",
+      "--terracotta-red",
+      "--tr-body",
+      "--tr-display",
+      "--tr-eyebrow",
+      "--tr-heading",
+      "--warm-soft-stone",
+      "--warning"
+    ],
+    "tokenKinds": {
+      "--oyster-white": "color",
+      "--near-black-charcoal": "color",
+      "--dusted-stone-gray": "color",
+      "--mid-dark-steel": "color",
+      "--near-black-teal": "color",
+      "--warm-soft-stone": "color",
+      "--neutral-silver-ash": "color",
+      "--rustic-burnt-orange": "color",
+      "--deep-teal": "color",
+      "--light-aqua": "color",
+      "--sage-forest": "color",
+      "--terracotta-red": "color",
+      "--dusted-ochre": "color",
+      "--steel-slate-blue": "color",
+      "--heather-amethyst": "color",
+      "--dusted-coral": "color",
+      "--muted-lavender-grey": "color",
+      "--bg": "color",
+      "--surface": "color",
+      "--surface-sunk": "color",
+      "--fg-heading": "color",
+      "--fg-primary": "color",
+      "--fg-secondary": "color",
+      "--fg-on-accent": "color",
+      "--border": "color",
+      "--divider": "color",
+      "--accent": "color",
+      "--accent-pressed": "color",
+      "--brand-teal": "color",
+      "--brand-aqua": "color",
+      "--success": "color",
+      "--danger": "color",
+      "--warning": "color",
+      "--info": "color",
+      "--selected": "color",
+      "--font-display": "font",
+      "--font-body": "font",
+      "--font-quote": "font",
+      "--font-mono": "font",
+      "--fs-display-xl": "spacing",
+      "--fs-display-l": "spacing",
+      "--fs-display-m": "spacing",
+      "--fs-h1": "spacing",
+      "--fs-h2": "spacing",
+      "--fs-h3": "spacing",
+      "--fs-body-l": "spacing",
+      "--fs-body": "spacing",
+      "--fs-body-s": "spacing",
+      "--fs-meta": "spacing",
+      "--lh-display": "other",
+      "--lh-heading": "other",
+      "--lh-body": "other",
+      "--lh-meta": "other",
+      "--tr-display": "spacing",
+      "--tr-heading": "spacing",
+      "--tr-body": "spacing",
+      "--tr-eyebrow": "spacing",
+      "--sp-1": "spacing",
+      "--sp-2": "spacing",
+      "--sp-3": "spacing",
+      "--sp-4": "spacing",
+      "--sp-5": "spacing",
+      "--sp-6": "spacing",
+      "--sp-7": "spacing",
+      "--sp-8": "spacing",
+      "--sp-9": "spacing",
+      "--sp-10": "spacing",
+      "--r-sm": "spacing",
+      "--r-md": "spacing",
+      "--r-lg": "spacing",
+      "--r-xl": "spacing",
+      "--r-pill": "spacing",
+      "--shadow-rest": "shadow",
+      "--shadow-lift": "shadow",
+      "--shadow-bloom": "shadow",
+      "--ease-breath": "other",
+      "--ease-quick": "other",
+      "--dur-micro": "other",
+      "--dur-base": "other",
+      "--dur-cer": "other"
+    },
+    "fontFamilies": [
+      "Cormorant Garamond",
+      "Hanken Grotesk",
+      "Instrument Serif"
+    ]
+  }
+}

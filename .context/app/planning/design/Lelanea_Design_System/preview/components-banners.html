@@ -1,0 +1,17 @@
+<!-- @dsCard group="Components" viewport="700x260" name="Banners / system states" subtitle="Success, error, warning, info" -->
+<!doctype html>
+<!-- @dsCard group="Components" name="Banners · system states" subtitle="Success, error, warning, info" viewport="700x260" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_preview.css">
+<style>
+  body { padding: 24px 28px; display:flex; flex-direction:column; gap: 12px; max-width: 620px;}
+  .banner { display:flex; gap:12px; align-items:flex-start; padding: 14px 16px; border-radius: 12px; border: 1px solid; font-size: 14px; line-height:1.45;}
+  .dot { width:8px; height:8px; border-radius:999px; margin-top:7px; flex:0 0 auto;}
+  .s { background:#EDF3F0; border-color:#457B6A; color:#2E5447;} .s .dot { background:#457B6A;}
+  .e { background:#F4E6E3; border-color:#B75D52; color:#7A3A33;} .e .dot { background:#B75D52;}
+  .w { background:#F6EEDA; border-color:#C9A65D; color:#6E5524;} .w .dot { background:#C9A65D;}
+  .i { background:#E4ECF4; border-color:#497AA8; color:#2D4A6E;} .i .dot { background:#497AA8;}
+</style></head><body>
+<div class="banner s"><span class="dot"></span><div><b style="font-weight:500">Saved.</b> Your reflection is in the journal.</div></div>
+<div class="banner e"><span class="dot"></span><div><b style="font-weight:500">Something didn't land.</b> Try that once more.</div></div>
+<div class="banner w"><span class="dot"></span><div><b style="font-weight:500">Gentle note.</b> You've been here for 40 minutes — consider a pause.</div></div>
+<div class="banner i"><span class="dot"></span><div><b style="font-weight:500">New teaching.</b> Lelanea added a practice on return.</div></div>
+</body></html>

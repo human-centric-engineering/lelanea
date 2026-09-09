@@ -48,3 +48,13 @@ coverage
 # Per-developer local Claude Code settings (gitignored, written by the CLI).
 # Format is owned by the tool, so Prettier should not gate `npm run validate` on it.
 .claude/settings.local.json
+
+# Authored planning material (leaf-owned, Lelañea).
+# The product description, the approved prototype (`design/lelanea.html`), and
+# the exported `Lelanea_Design_System` kit are source inputs the build works
+# from, not source the build maintains — the bundle README states they are
+# "transcribed ... corrected only for typography. Not a draft for the build to
+# improve on." Reformatting them would rewrite authored copy and a signed-off
+# prototype. `lelanea.html` also fails Prettier's HTML parser outright
+# (implied-end-tag SyntaxError), which exits 2 and fails the whole check.
+.context/app/planning/

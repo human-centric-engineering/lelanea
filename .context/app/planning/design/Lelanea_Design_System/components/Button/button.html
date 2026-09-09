@@ -1,0 +1,22 @@
+<!-- @dsCard group="Components" viewport="700x120" name="Button" subtitle="Primary, secondary, ghost, destructive" -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>html,body{margin:0;background:#F3F0EC}body{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:24px 28px}</style>
+</head><body>
+<div id="root" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script>
+const { Button } = window.LelaneaDesignSystem_a15360;
+const e = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(
+  e(React.Fragment, null,
+    e(Button, { variant: 'primary' }, 'Begin a sit'),
+    e(Button, { variant: 'secondary' }, 'Return'),
+    e(Button, { variant: 'ghost' }, 'Skip'),
+    e(Button, { variant: 'destructive' }, 'Delete session'),
+    e(Button, { variant: 'primary', disabled: true }, 'Disabled')
+  )
+);
+</script>
+</body></html>

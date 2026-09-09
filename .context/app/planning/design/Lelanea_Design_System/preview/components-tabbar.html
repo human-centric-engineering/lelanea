@@ -1,0 +1,18 @@
+<!-- @dsCard group="Components" viewport="700x90" name="Tab bar" subtitle="Floating pill tab bar" -->
+<!doctype html>
+<!-- @dsCard group="Components" name="Tab bar" subtitle="Floating pill tab bar" viewport="700x90" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_preview.css">
+<style>
+  body { padding: 18px 28px; display:flex; justify-content:center; background:#F3F0EC;}
+  .tabbar { background:#EBE6DF; border-radius: 999px; padding: 8px; display:flex; gap:6px; box-shadow: 0 1px 2px rgba(17,24,26,.04), 0 2px 6px rgba(17,24,26,.04);}
+  .tab { padding: 10px 16px; border-radius: 999px; display:flex; gap:8px; align-items:center; font-size:13px; color:#6F7376; cursor:pointer;}
+  .tab.on { background:#F3F0EC; color:#17718A; font-weight:500;}
+  .dot { width: 8px; height:8px; border-radius:999px; background: currentColor;}
+</style></head><body>
+<div class="tabbar">
+  <div class="tab on"><span class="dot"></span>Home</div>
+  <div class="tab">Sit</div>
+  <div class="tab">Journal</div>
+  <div class="tab">Practices</div>
+  <div class="tab">You</div>
+</div>
+</body></html>
