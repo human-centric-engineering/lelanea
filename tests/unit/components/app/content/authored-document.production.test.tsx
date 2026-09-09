@@ -46,9 +46,29 @@ describe('placeholder marking in production', () => {
   });
 
   it('renders the document otherwise identically', () => {
+    // Counting blocks alone would pass on a production build that emitted every
+    // block empty, at the wrong tag, or with the markdown markers intact.
     const doc = load('terms_of_use');
     const { container } = render(<AuthoredDocument document={doc} />);
+    const text = container.textContent ?? '';
 
     expect(container.querySelectorAll('article > :not(header)')).toHaveLength(doc.blocks.length);
+    expect(container.querySelector('h1')?.textContent).toBe('Lelañea™');
+    expect(container.querySelector('article > h2')?.textContent).toBe('1. About Lelañea');
+    expect(Array.from(container.querySelectorAll('strong')).map((el) => el.textContent)).toContain(
+      'Effective Date:'
+    );
+    expect(text).not.toContain('**');
+    expect(text).toContain('Welcome to Lelañea.');
+  });
+
+  it('still substitutes the merge field', () => {
+    const { container } = render(
+      <AuthoredDocument document={load('the_initiation')} firstName="Maya" />
+    );
+    const text = container.textContent ?? '';
+
+    expect(text).toContain('Welcome, Maya.');
+    expect(text).not.toContain('{{first_name}}');
   });
 });

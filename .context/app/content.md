@@ -226,9 +226,12 @@ is how they stay visible to whoever is looking at the page, and in production a
 reader is shown the copy, not our editorial state.
 
 **Type comes from the `.brand-*` utilities** in `app/brand-theme.css`, which
-carry no colour by design. Layout — measure, page chrome, the descriptive
-eyebrow the prototype uses per section — belongs to the page that mounts this,
-not here.
+carry no colour by design — and which are scoped `[data-surface='consumer']`. So
+`brand-display` and `brand-eyebrow` are inert on a page that does not carry that
+surface, and the test asserting them checks the class string, not the computed
+type: it would pass on such a page. Layout — measure, page chrome, the
+descriptive eyebrow the prototype uses per section — belongs to the page that
+mounts this, and so does setting the surface.
 
 ## Referential integrity
 

@@ -64,14 +64,19 @@ function load(id: string): FoundationalDocumentDetail {
   return doc;
 }
 
-/** `**bold**` markers removed — what a reader should end up seeing. */
-function plain(text: string): string {
-  return text.replaceAll('**', '');
-}
-
-/** Collapses the whitespace React introduces between adjacent children. */
-function normalize(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
+/**
+ * What a reader with a name on file should end up seeing: bold markers gone and
+ * the merge field replaced.
+ *
+ * Deliberately NOT `applyFirstName()`. Calling the component's own function here
+ * would put any bug in it on both sides of the assertion — a stand-in returning
+ * "MANGLED" for every merge-field string passes. With a name supplied the
+ * expected value is a plain substitution, so the test can derive it itself; the
+ * comma rules for a reader with no name are pinned literally in the D7 block,
+ * which is where that logic is actually checked.
+ */
+function expectedFor(text: string, firstName: string): string {
+  return text.replaceAll('**', '').split('{{first_name}}').join(firstName);
 }
 
 /**
@@ -126,27 +131,21 @@ describe('the seven documents render block for block', () => {
       switch (block.type) {
         case 'heading': {
           expect(element.tagName).toBe(`H${Math.min(6, Math.max(2, block.level))}`);
-          const expected =
-            block.number === undefined
-              ? plain(block.text)
-              : `${block.number}. ${plain(block.text)}`;
-          expect(normalize(element.textContent ?? '')).toBe(
-            normalize(applyFirstName(expected, 'Maya'))
-          );
+          const text = expectedFor(block.text, 'Maya');
+          const expected = block.number === undefined ? text : `${block.number}. ${text}`;
+          expect(element.textContent).toBe(expected);
           break;
         }
         case 'paragraph': {
           expect(element.tagName).toBe('P');
-          expect(normalize(element.textContent ?? '')).toBe(
-            normalize(applyFirstName(plain(block.text), 'Maya'))
-          );
+          expect(element.textContent).toBe(expectedFor(block.text, 'Maya'));
           break;
         }
         case 'list': {
           expect(element.tagName).toBe('UL');
           const items = Array.from(element.querySelectorAll('li'));
-          expect(items.map((li) => normalize(li.textContent ?? ''))).toEqual(
-            block.items.map((item) => normalize(applyFirstName(plain(item), 'Maya')))
+          expect(items.map((li) => li.textContent)).toEqual(
+            block.items.map((item) => expectedFor(item, 'Maya'))
           );
           break;
         }
@@ -160,6 +159,18 @@ describe('the seven documents render block for block', () => {
 
     expect(text).not.toContain('**');
     expect(text).not.toContain('{{');
+  });
+
+  it('applies the cadence class to the document that asked for it', () => {
+    // Previously asserted only on a synthetic doc, so nothing tied the class to
+    // `renderStyle` as the real content carries it.
+    const doc = load('the_initiation');
+    expect(doc.renderStyle).toBe('cadence');
+
+    const { container } = render(<AuthoredDocument document={doc} />);
+    for (const paragraph of container.querySelectorAll('article > p')) {
+      expect(paragraph.className).toContain('whitespace-pre-line');
+    }
   });
 
   it('does not reflow the welcome statement into prose', () => {
@@ -201,7 +212,7 @@ describe('inline emphasis', () => {
 
     expect(strongs).toContain('Lelañea Fulton');
     expect(strongs).toContain('Transcendental Coach');
-    expect(normalize(container.textContent ?? '')).toContain(
+    expect(container.textContent ?? '').toContain(
       'created by Lelañea Fulton, a Transcendental Coach and Unity-Consciousness Guide.'
     );
   });
@@ -269,8 +280,8 @@ describe('headings', () => {
     const headings = Array.from(container.querySelectorAll('article > h2'));
 
     expect(headings).toHaveLength(doc.blocks.filter((b) => b.type === 'heading').length);
-    expect(normalize(headings[0].textContent ?? '')).toBe('1. About Lelañea');
-    expect(normalize(headings[1].textContent ?? '')).toBe('2. Eligibility');
+    expect(headings[0].textContent).toBe('1. About Lelañea');
+    expect(headings[1].textContent).toBe('2. Eligibility');
   });
 
   it('leaves the document title as the only h1', () => {
@@ -300,7 +311,7 @@ describe('{{first_name}} (decision D7)', () => {
 
   it('substitutes the reader’s name at both sites', () => {
     const { container } = render(<AuthoredDocument document={initiation()} firstName="Maya" />);
-    const text = normalize(container.textContent ?? '');
+    const text = container.textContent ?? '';
 
     expect(text).toContain('Welcome, Maya.');
     expect(text).toContain('You, Maya, are far more powerful than you know.');
@@ -308,7 +319,7 @@ describe('{{first_name}} (decision D7)', () => {
 
   it('closes the sentence over the gap when there is no name on file', () => {
     const { container } = render(<AuthoredDocument document={initiation()} />);
-    const text = normalize(container.textContent ?? '');
+    const text = container.textContent ?? '';
 
     expect(text).toContain('Welcome.');
     expect(text).not.toContain('Welcome,');
@@ -368,9 +379,12 @@ describe('unresolved placeholders', () => {
     expect(strong?.querySelector('[data-unresolved-placeholder]')).not.toBeNull();
   });
 
-  it('scans each string independently — a match does not shift the next one', () => {
-    // A shared /g regex would carry lastIndex from the first call into the
-    // second and miss the placeholder near the start of it.
+  it('finds a placeholder wherever it sits in the string', () => {
+    // These used to be labelled as proving the `lastIndex` reset in
+    // `tokenizeInline`. They cannot: both `exec` loops drain to `null`, and
+    // `exec` zeroes `lastIndex` when it returns `null`, so a stale index is
+    // unreachable and these pass with the reset deleted. The reset stays as
+    // belt-and-braces; these cases prove position-independence, which is real.
     expect(tokenizeInline('a long stretch of prose then [Support Email]').at(-1)).toEqual({
       text: '[Support Email]',
       bold: false,
@@ -383,7 +397,119 @@ describe('unresolved placeholders', () => {
   });
 });
 
+describe('the merge field in every block type', () => {
+  // The heading and list branches call `applyFirstName` too, and no authored
+  // heading or list item carries the field — so without these, dropping either
+  // call would ship green.
+  it('substitutes inside a heading', () => {
+    const doc = synthetic({
+      blocks: [{ type: 'heading', text: 'Welcome, {{first_name}}', level: 2 }],
+    });
+    const { container } = render(<AuthoredDocument document={doc} firstName="Maya" />);
+
+    expect(container.querySelector('h2')?.textContent).toBe('Welcome, Maya');
+  });
+
+  it('substitutes inside a list item', () => {
+    const doc = synthetic({
+      blocks: [{ type: 'list', style: 'unordered', items: ['for you, {{first_name}}'] }],
+    });
+    const { container } = render(<AuthoredDocument document={doc} firstName="Maya" />);
+
+    expect(container.querySelector('li')?.textContent).toBe('for you, Maya');
+  });
+
+  it('closes the gap inside a heading and a list item too', () => {
+    const doc = synthetic({
+      blocks: [
+        { type: 'heading', text: 'Welcome, {{first_name}}', level: 2 },
+        { type: 'list', style: 'unordered', items: ['for you, {{first_name}}, always'] },
+      ],
+    });
+    const { container } = render(<AuthoredDocument document={doc} />);
+
+    expect(container.querySelector('h2')?.textContent).toBe('Welcome');
+    expect(container.querySelector('li')?.textContent).toBe('for you always');
+  });
+});
+
+describe('a name is data, not a replacement pattern', () => {
+  // `replaceAll(field, name)` interprets `$&`, `` $` ``, `$'` and `$$` in the
+  // replacement. The name is reader-supplied, so `A$&B` re-emitted a literal
+  // `{{first_name}}` into her sentence — in production, unmarked.
+  it.each([
+    ['A$&B', 'Welcome, A$&B.'],
+    ["$'", "Welcome, $'."],
+    ['$`', 'Welcome, $`.'],
+    ['Ada$$', 'Welcome, Ada$$.'],
+    ['$1', 'Welcome, $1.'],
+  ])('renders the name %s literally', (name, expected) => {
+    expect(applyFirstName('Welcome, {{first_name}}.', name)).toBe(expected);
+  });
+
+  it('does not re-emit the merge field for any of them', () => {
+    for (const name of ['A$&B', "$'", '$`', 'Ada$$']) {
+      expect(applyFirstName('Welcome, {{first_name}}.', name)).not.toContain('{{first_name}}');
+    }
+  });
+
+  it('leaves the rest of the authored block alone', () => {
+    // The gap-closing branch used to collapse whitespace and trim across the
+    // WHOLE string, so a named and an anonymous reader saw different whitespace
+    // in the same block — in the one document whose cadence makes it matter.
+    const authored = 'I see you.\n\nWelcome, {{first_name}}. Far  apart.';
+
+    expect(applyFirstName(authored, 'Maya')).toBe('I see you.\n\nWelcome, Maya. Far  apart.');
+    expect(applyFirstName(authored, null)).toBe('I see you.\n\nWelcome. Far  apart.');
+  });
+});
+
+describe('what the renderer does not handle, pinned so a change is visible', () => {
+  it('has exactly two merge-field sites in the authored content', () => {
+    // The reason `applyFirstName` does not handle a sentence-initial field is
+    // that no such line exists. `placeholders.test.ts` cannot protect that: it
+    // pins the set of distinct placeholder STRINGS, and a third occurrence of
+    // `{{first_name}}` leaves that set unchanged. This counts occurrences.
+    const sites = DOCUMENT_IDS.flatMap((id) =>
+      load(id).blocks.flatMap((block) =>
+        (block.type === 'list' ? block.items : [block.text]).filter((text) =>
+          text.includes('{{first_name}}')
+        )
+      )
+    );
+
+    expect(sites).toEqual([
+      'Welcome, {{first_name}}.',
+      'You, {{first_name}}, are far more powerful than you know.',
+    ]);
+  });
+
+  it('loses the capital on a sentence-initial field — characterised, not endorsed', () => {
+    expect(applyFirstName('{{first_name}}, welcome.', null)).toBe(' welcome.');
+    expect(applyFirstName('{{first_name}}, welcome.', 'Maya')).toBe('Maya, welcome.');
+  });
+
+  it('misses a placeholder that straddles a bold boundary', () => {
+    // Bold is split first, so neither run holds a complete `[…]`. No authored
+    // string does this; there is no ordering that handles both nestings.
+    expect(tokenizeInline('[Support **Email**]').some((token) => token.placeholder)).toBe(false);
+  });
+
+  it('renders an empty bold span as literal asterisks', () => {
+    expect(tokenizeInline('****')).toEqual([{ text: '****', bold: false, placeholder: false }]);
+  });
+});
+
 describe('document chrome', () => {
+  it.each([
+    ['the_initiation', 'welcome'],
+    ['the_mission', 'about lelañea'],
+    ['terms_of_use', 'important disclosures'],
+  ])('labels the eyebrow for %s', (id, label) => {
+    const { container } = render(<AuthoredDocument document={load(id)} />);
+    expect(container.querySelector('.brand-eyebrow')?.textContent).toBe(label);
+  });
+
   it('shows the category eyebrow and the subtitle', () => {
     const { container } = render(<AuthoredDocument document={load('disclaimer')} />);
     const header = container.querySelector('header');

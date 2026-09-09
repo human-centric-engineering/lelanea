@@ -58,11 +58,18 @@ const CATEGORY_LABEL: Record<FoundationalDocumentDetail['category'], string> = {
 };
 
 /**
- * `**bold**`, non-greedy so three spans in one sentence stay three spans.
+ * `**bold**`, and only that.
  *
- * `[^*]` rather than `.` for the body: it cannot run past the closing `**`, so
- * an odd number of markers degrades to literal asterisks rather than swallowing
- * the rest of the paragraph.
+ * `[^*]` rather than `.` for the body is doing two jobs. It keeps three spans in
+ * one sentence as three spans — the quantifier is greedy, so a `.` body would
+ * run from the first `**` to the last. And it means an odd number of markers
+ * degrades to literal asterisks rather than swallowing the rest of the
+ * paragraph.
+ *
+ * `[^*]+` requires a character, so `****` is not a match and renders as four
+ * literal asterisks. Nothing authors that today, and the suite's
+ * "no markers visible" case would fail on it rather than let it through
+ * silently, which is the outcome we want from content that has gone wrong.
  */
 const BOLD_PATTERN = /\*\*([^*]+)\*\*/g;
 
@@ -71,9 +78,12 @@ const BOLD_PATTERN = /\*\*([^*]+)\*\*/g;
  * drift — a placeholder the loader reports but the renderer does not mark would
  * ship to a reader as literal `[Support Email]`.
  *
- * Built as a **separate instance** rather than used directly: a `/g` regex
- * carries `lastIndex` between calls, and sharing one with `findPlaceholders()`
- * would make each function's result depend on who scanned last.
+ * Built as a **separate instance** rather than used directly. Not because
+ * sharing would break `findPlaceholders()` — that calls `String.match`, which
+ * ignores `lastIndex` and resets it — but because a `/g` regex is mutable
+ * state, and two modules driving one with `exec` is a coupling neither can see.
+ * The copy costs one object at module load and makes the isolation structural
+ * rather than a property of how the other caller currently happens to scan.
  */
 const PLACEHOLDER_SCANNER = new RegExp(PLACEHOLDER_PATTERN.source, 'g');
 
@@ -101,9 +111,11 @@ interface InlineToken {
  * That covers both authored sites and any vocative shaped like them.
  *
  * It does **not** cover a field that opens a sentence (`"{{first_name}}, welcome."`
- * would lose its capital). No such line exists, and one would show up in
- * `tests/unit/lib/app/content/placeholders.test.ts`, which pins the merge-field
- * set — introducing a third site means revisiting this function.
+ * would lose its capital and keep a leading space). No such line exists, and
+ * `authored-document.test.tsx` pins the number of merge-field OCCURRENCES at
+ * two so a third cannot land unnoticed — `placeholders.test.ts` cannot do that
+ * job, because it pins the set of distinct placeholder strings and a third
+ * occurrence of an existing one leaves that set unchanged.
  */
 export function applyFirstName(text: string, firstName: string | null | undefined): string {
   if (!text.includes('{{first_name}}')) return text;
@@ -111,12 +123,23 @@ export function applyFirstName(text: string, firstName: string | null | undefine
   // Trimmed, because a profile field that holds only whitespace is a missing
   // name, not a name — and substituting it would render "Welcome,  ."
   const name = firstName?.trim();
-  if (name) return text.replaceAll('{{first_name}}', name);
 
-  return text
-    .replace(/,?\s*\{\{first_name\}\},?/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  // `split`/`join`, NOT `replaceAll(field, name)`: a string replacement is
+  // interpreted, and `$&`, `` $` ``, `$'` and `$$` are meaningful in it. The
+  // name is reader-supplied, so a profile reading `A$&B` would re-emit a literal
+  // `{{first_name}}` into the sentence — the exact failure this file exists to
+  // prevent — and `$'` would duplicate the rest of her clause.
+  if (name) return text.split('{{first_name}}').join(name);
+
+  // Scoped to the removed span: a space class rather than `\s`, and no global
+  // whitespace collapse or trim afterwards. An earlier version cleaned the whole
+  // string, which meant an anonymous reader and a named one saw different
+  // whitespace in the SAME authored block — and both merge fields sit in
+  // `the_initiation`, the one document whose `renderStyle: "cadence"` makes
+  // whitespace load-bearing. Removing exactly `, {{first_name}}` and
+  // `, {{first_name}},` already yields "Welcome." and "You are far more…"
+  // without touching anything else.
+  return text.replace(/,?[ \t]*\{\{first_name\}\},?/g, '');
 }
 
 /**
@@ -124,6 +147,14 @@ export function applyFirstName(text: string, firstName: string | null | undefine
  *
  * Bold is found first and placeholders within each run second, so a placeholder
  * inside a bold span keeps its emphasis instead of falling out of it.
+ *
+ * That precedence has a consequence worth naming: a placeholder whose brackets
+ * STRADDLE a bold boundary (`[Support **Email**]`) is not detected, because
+ * neither run contains a complete `[…]`. It would then ship unmarked. Nothing
+ * authors that today — both unfilled placeholders sit wholly outside any bold
+ * span — and there is no ordering that handles both nestings, since the mirror
+ * case (`**a [b** c]**`) breaks whichever pattern runs second. Bold-first is the
+ * choice; `authored-document.test.tsx` pins what the other case does.
  */
 export function tokenizeInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = [];
@@ -131,6 +162,10 @@ export function tokenizeInline(text: string): InlineToken[] {
   const pushRun = (run: string, bold: boolean): void => {
     if (run.length === 0) return;
 
+    // Belt-and-braces, not a live fix: both loops below drain to `null`, and
+    // `exec` zeroes `lastIndex` when it returns `null`, so neither can currently
+    // be entered stale. The reset makes that a local property instead of one
+    // that depends on nobody ever adding a `break`.
     PLACEHOLDER_SCANNER.lastIndex = 0;
     let cursor = 0;
     let match: RegExpExecArray | null;
@@ -206,8 +241,10 @@ function InlineText({ text }: { text: string }): React.ReactNode {
 
   // Contiguous bold tokens share one `<strong>`. A placeholder inside a bold
   // span splits the run in two, and wrapping each half separately would emit
-  // `<strong>Effective: </strong><strong>[…]</strong>` — identical on screen,
-  // but two elements where the author wrote one emphasis.
+  // two adjacent `<strong>` elements where the author wrote one emphasis —
+  // identical on screen, wrong in the markup. No authored string does this yet
+  // (the Terms of Use writes `**Effective Date:** [Month Day, Year]`, with the
+  // placeholder OUTSIDE the emphasis), so the case is covered synthetically.
   const groups = groupByEmphasis(tokenizeInline(text));
 
   return (
