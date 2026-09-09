@@ -453,6 +453,33 @@ describe('a name is data, not a replacement pattern', () => {
     }
   });
 
+  it('removes every occurrence, not just the first', () => {
+    // Without the `g` flag a second field in one block ships to an anonymous
+    // reader as raw `{{first_name}}`. No authored block carries two today, and
+    // the occurrence-count test below cannot see this: its two sites are in
+    // separate blocks.
+    expect(applyFirstName('Hi, {{first_name}}, and again, {{first_name}}.', null)).toBe(
+      'Hi and again.'
+    );
+    expect(applyFirstName('Hi, {{first_name}}, and again, {{first_name}}.', 'Maya')).toBe(
+      'Hi, Maya, and again, Maya.'
+    );
+  });
+
+  it('takes the comma across a non-breaking space, but never across a line break', () => {
+    // The removal spans horizontal whitespace only. `\s` would cross a newline
+    // and reflow the cadence document; `[ \t]` would miss these two and leave
+    // the comma stranded. Both directions ship green without this case.
+    expect(applyFirstName('Welcome,\u00a0{{first_name}}.', null)).toBe('Welcome.');
+    expect(applyFirstName('Welcome,\u3000{{first_name}}.', null)).toBe('Welcome.');
+
+    // The line break is kept, and so is the comma in front of it — removing the
+    // break is the worse error. Characterised, not endorsed; nothing authored
+    // contains a newline.
+    expect(applyFirstName('Welcome,\n{{first_name}}.', null)).toBe('Welcome,\n.');
+    expect(applyFirstName('You,\n{{first_name}},\nare here.', null)).toBe('You,\n\nare here.');
+  });
+
   it('leaves the rest of the authored block alone', () => {
     // The gap-closing branch used to collapse whitespace and trim across the
     // WHOLE string, so a named and an anonymous reader saw different whitespace
@@ -487,6 +514,24 @@ describe('what the renderer does not handle, pinned so a change is visible', () 
   it('loses the capital on a sentence-initial field — characterised, not endorsed', () => {
     expect(applyFirstName('{{first_name}}, welcome.', null)).toBe(' welcome.');
     expect(applyFirstName('{{first_name}}, welcome.', 'Maya')).toBe('Maya, welcome.');
+  });
+
+  it('leaves an empty bold span when the merge field itself was emphasised', () => {
+    // Substitution runs before the inline pass, so removing a field wrapped in
+    // its own `**…**` leaves the markers behind — and `****` renders literally.
+    // Same class as the straddling case below: the two passes cannot see each
+    // other's boundaries. No authored site emphasises a merge field.
+    expect(applyFirstName('Welcome, **{{first_name}}**.', null)).toBe('Welcome, ****.');
+    expect(applyFirstName('Welcome, **{{first_name}}**.', 'Maya')).toBe('Welcome, **Maya**.');
+  });
+
+  it('treats a name of only zero-width characters as a name', () => {
+    // `trim()` removes whitespace, and a zero-width space is not whitespace, so
+    // this renders as a near-blank vocative. Left alone deliberately: the
+    // obvious fix — stripping zero-width characters — strips ZWJ too, which
+    // would break a legitimate emoji name like 👩‍👩‍👧.
+    expect(applyFirstName('Welcome, {{first_name}}.', '\u200b')).toBe('Welcome, \u200b.');
+    expect(applyFirstName('Welcome, {{first_name}}.', '👩‍👩‍👧')).toBe('Welcome, 👩‍👩‍👧.');
   });
 
   it('misses a placeholder that straddles a bold boundary', () => {

@@ -131,15 +131,26 @@ export function applyFirstName(text: string, firstName: string | null | undefine
   // prevent — and `$'` would duplicate the rest of her clause.
   if (name) return text.split('{{first_name}}').join(name);
 
-  // Scoped to the removed span: a space class rather than `\s`, and no global
-  // whitespace collapse or trim afterwards. An earlier version cleaned the whole
-  // string, which meant an anonymous reader and a named one saw different
-  // whitespace in the SAME authored block — and both merge fields sit in
-  // `the_initiation`, the one document whose `renderStyle: "cadence"` makes
-  // whitespace load-bearing. Removing exactly `, {{first_name}}` and
-  // `, {{first_name}},` already yields "Welcome." and "You are far more…"
-  // without touching anything else.
-  return text.replace(/,?[ \t]*\{\{first_name\}\},?/g, '');
+  // Scoped to the removed span, with no global whitespace collapse or trim
+  // afterwards. An earlier version cleaned the whole string, which meant an
+  // anonymous reader and a named one saw different whitespace in the SAME
+  // authored block — and both merge fields sit in `the_initiation`, the one
+  // document whose `renderStyle: "cadence"` makes whitespace load-bearing.
+  // Removing exactly `, {{first_name}}` and `, {{first_name}},` already yields
+  // "Welcome." and "You are far more…" without touching anything else.
+  //
+  // `[^\S\n]` is horizontal whitespace: every space character EXCEPT a line
+  // break. Not `\s`, which would cross a newline and reflow the cadence
+  // document; not `[ \t]`, which would miss a non-breaking or ideographic space
+  // and leave the comma before it stranded. The remaining gap is a field
+  // separated from its comma by a LINE BREAK — `"Welcome,\n{{first_name}}."`
+  // keeps the comma — because removing the break is the worse error here. No
+  // authored block contains a newline at all; the test suite pins what this
+  // does rather than leaving it to be discovered.
+  //
+  // `g`, because a single block could carry the field twice — without it the
+  // second occurrence ships to an anonymous reader as raw `{{first_name}}`.
+  return text.replace(/,?[^\S\n]*\{\{first_name\}\},?/g, '');
 }
 
 /**
