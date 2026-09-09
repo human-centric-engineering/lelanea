@@ -19,7 +19,7 @@ callbacks are checked against it.
 
 ## The dev-proxy
 
-Lelañea is registered in the dev-proxy at `~/Documents/Dev/dev-proxy` — slug
+Lelañea is registered in the dev-proxy at `~/code/dev-proxy` — slug
 `lelanea`, port `3014` — which uses Laravel Herd to serve
 `https://lelanea.test` → `127.0.0.1:3014` over a trusted local CA.
 

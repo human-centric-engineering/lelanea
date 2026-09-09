@@ -24,7 +24,7 @@ npm run dev                    # binds :3014 (pinned in .env.development)
 ```
 
 Then open **https://lelanea.test** — Lelañea is registered in the dev-proxy
-(`~/Documents/Dev/dev-proxy`, slug `lelanea`), which serves that hostname to
+(`~/code/dev-proxy`, slug `lelanea`), which serves that hostname to
 `127.0.0.1:3014`. Use the proxied hostname rather than `localhost:3014`: both
 reach the same server, but only the hostname matches `BETTER_AUTH_URL`, and auth
 callbacks are checked against it. See
