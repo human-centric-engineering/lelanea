@@ -104,6 +104,68 @@ function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * Composites a token over an opaque ground and returns the hex it PAINTS AS.
+ *
+ * Needed because the boundary tokens are `rgba()` — they are hairlines, and a
+ * hairline is an alpha by design — while `relativeLuminance` deliberately
+ * refuses anything but opaque hex, since a ratio measured against a colour with
+ * an alpha still in it is not a ratio of anything on screen. An opaque token is
+ * returned untouched, so a caller does not have to know which kind it has.
+ */
+function flattenOver(value: string, ground: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('#')) return trimmed;
+
+  const parts = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
+  if (!parts) throw new Error(`cannot composite \`${value}\` — not a hex or rgb()/rgba()`);
+
+  const alpha = parts[4] === undefined ? 1 : Number.parseFloat(parts[4]);
+  const base = ground.trim().replace('#', '');
+  const blended = [1, 2, 3].map((channel, index) => {
+    const over = Number.parseInt(parts[channel], 10);
+    const under = Number.parseInt(base.slice(index * 2, index * 2 + 2), 16);
+    return Math.round(alpha * over + (1 - alpha) * under);
+  });
+  return `#${blended.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** A token's contrast against the ground it is painted on, alpha resolved. */
+function contrastOn(value: string, ground: string): number {
+  return contrastRatio(flattenOver(value, ground), ground);
+}
+
+/**
+ * The ground a Tailwind `bg-<token>/<n>` wash actually paints — the token at
+ * that alpha, over whatever is behind it. Every form's error banner is
+ * `bg-destructive/10 text-destructive`, so the ink there is read against this
+ * and not against the page ground.
+ */
+function washOver(hex: string, alpha: number, ground: string): string {
+  const [red, green, blue] = [0, 2, 4].map((offset) =>
+    Number.parseInt(hex.replace('#', '').slice(offset, offset + 2), 16)
+  );
+  return flattenOver(`rgba(${red}, ${green}, ${blue}, ${alpha})`, ground);
+}
+
+/**
+ * Every opaque ground a control or a line can land on, in either theme. The
+ * page ground, a card, a sunk surface, and a popover — <FieldHelp>, <Select>
+ * and <DropdownMenu> all render onto the last of these, and it is the one that
+ * has twice turned out to be the tightest of the four.
+ */
+const GROUNDS = ['--color-background', '--color-card', '--color-muted', '--color-popover'];
+
+/** `[theme, ground]` for every combination, for `it.each`. */
+const GROUND_PAIRINGS = GROUNDS.flatMap((ground) => [
+  ['light', ground] as const,
+  ['dark', ground] as const,
+]);
+
+function scopeFor(theme: 'light' | 'dark'): Map<string, string> {
+  return theme === 'light' ? lightTokens : darkTokens;
+}
+
 /** Reads a token's value from the stylesheet, so the test measures what ships. */
 function token(scope: Map<string, string>, name: string): string {
   const value = scope.get(name);
@@ -192,16 +254,11 @@ describe('app/brand-theme.css', () => {
     // renders its whole body as muted text on it, and CLAUDE.md mandates one on
     // every non-trivial form field, so it is arguably the most-read of the four.
     // Select and dropdown content share the ground.
-    const GROUNDS = ['--color-background', '--color-card', '--color-muted', '--color-popover'];
-    const pairings = GROUNDS.flatMap((ground) => [
-      ['light', ground] as const,
-      ['dark', ground] as const,
-    ]);
 
     // `%s` twice — an earlier version used `%#`, which prints the CASE INDEX, so
     // a failure read "light: secondary text on 0" and named no ground at all.
-    it.each(pairings)('%s: secondary text on %s', (theme, ground) => {
-      const scope = theme === 'light' ? lightTokens : darkTokens;
+    it.each(GROUND_PAIRINGS)('%s: secondary text on %s', (theme, ground) => {
+      const scope = scopeFor(theme);
       const ratio = contrastRatio(token(scope, '--color-muted-foreground'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
@@ -219,6 +276,188 @@ describe('app/brand-theme.css', () => {
       // assertions pass for free if `token()` ever returned something inert.
       expect(contrastRatio('#6f7376', token(lightTokens, '--color-background'))).toBeLessThan(4.5);
       expect(contrastRatio('#6f7376', token(darkTokens, '--color-card'))).toBeLessThan(4.5);
+    });
+  });
+
+  describe('controls are visible (t-18)', () => {
+    // t-1 shipped TWO measured gaps here and raised them with the owner rather
+    // than patching them, because closing either read as a palette decision.
+    // Auditing the second turned up the third, the focus ring. This is that
+    // decision, measured rather than restated: every number below is read out
+    // of the stylesheet, so a later edit that regresses one fails here and not
+    // in front of a person who cannot see it.
+    //
+    // WHAT THESE GUARDS COVER, and what they deliberately do not. Every
+    // assertion below pairs a token against a PAGE GROUND, because that is what
+    // WCAG 1.4.11 governs — the boundary or indicator against the surface
+    // behind it. Two adjacencies are knowingly outside them, both recorded at
+    // their site in the stylesheet with the arithmetic showing no value can
+    // satisfy both constraints at once:
+    //
+    //   `--color-input` against `--color-primary` (a <Switch>'s off-track
+    //   beside its on-track, 1.37:1), and `--color-ring` against a filled
+    //   button's own fill (1.00:1 on `secondary`).
+    //
+    // Neither is asserted, because neither is achievable by choosing a colour,
+    // and a failing assertion for an accepted trade is noise. If a future
+    // change adds a ring OFFSET to our own Button, the second becomes solvable
+    // and an assertion belongs here then.
+
+    it('puts oyster on a filled destructive button at AA', () => {
+      // 3.93:1 was the gap. `#A95146` is §6.2's terracotta darkened five points
+      // of lightness — the same move `--color-primary` makes on the accent —
+      // and measures 4.68:1. The foreground is read too: pinning only the fill
+      // would let the pairing regress from the other side.
+      const ratio = contrastRatio(
+        token(lightTokens, '--color-destructive-foreground'),
+        token(lightTokens, '--color-destructive')
+      );
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // `--color-destructive` has two roles pulling opposite ways: a FILL dark
+    // enough to hold oyster, and INK light enough to read on charcoal.
+    // Darkening the fill for the button took the ink from 2.86:1 to 2.44:1 in
+    // dark mode, so the ink role is sent to `--color-status-red-ink` by a rule
+    // after the dark block. Both guards below read the status ink rather than
+    // the token the utility is named after, because that is what paints.
+
+    it.each(GROUND_PAIRINGS)('%s: destructive TEXT on a bare %s', (theme, ground) => {
+      // A plain `text-destructive` line with no wash behind it —
+      // `components/forms/avatar-upload.tsx` renders exactly that on a card.
+      const scope = scopeFor(theme);
+      const ratio = contrastRatio(token(scope, '--color-status-red-ink'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // The grounds an error BANNER can appear on. Not `--color-popover`: no
+    // component renders `bg-destructive/10` inside a popover, and the wash over
+    // the dark popover is the tightest number in the palette at 4.44 — so
+    // asserting it would fail on a case that does not exist, while dropping the
+    // threshold to accommodate it would stop guarding the three that do.
+    const BANNER_GROUNDS = ['--color-background', '--color-card', '--color-muted'];
+
+    it.each(
+      BANNER_GROUNDS.flatMap((ground) => [['light', ground] as const, ['dark', ground] as const])
+    )('%s: destructive TEXT on a bg-destructive/10 wash over %s', (theme, ground) => {
+      // The measurement that matches what twelve form banners actually paint.
+      // The wash is lighter than a dark ground, so it eats margin the bare-
+      // ground guard above cannot see: dark card is 4.93 bare and 4.65 washed.
+      // A future palette nudge that keeps the bare numbers at 4.5 can still
+      // take the real banner under it, which is what this catches.
+      const scope = scopeFor(theme);
+      // The FILL is read from the light block in both themes, because it is
+      // declared only there — it holds across both modes by design, which the
+      // `holds the destructive fill across both themes` case below asserts.
+      // Reading it from `scope` throws in dark, and that throw is how this
+      // comment came to exist.
+      const wash = washOver(token(lightTokens, '--color-destructive'), 0.1, token(scope, ground));
+      expect(contrastRatio(token(scope, '--color-status-red-ink'), wash)).toBeGreaterThanOrEqual(
+        4.5
+      );
+    });
+
+    it('sends the destructive TEXT role away from the fill', () => {
+      // The measurement above is only about what ships if this rule exists and
+      // points where it says. Delete the rule and `text-destructive` silently
+      // falls back to the fill value, with nothing else noticing.
+      const rule = ruleFor(`${LIGHT_SCOPE} .text-destructive`);
+      expect(rule.body).toMatch(/color:\s*var\(--color-status-red-ink\)/);
+      expect(token(lightTokens, '--color-status-red-ink')).not.toBe(
+        token(lightTokens, '--color-destructive')
+      );
+    });
+
+    it('would fail if the ink role were left on the fill', () => {
+      // Proves the pairing above can fail: the fill value is what
+      // `text-destructive` resolves to without the rule, and in dark mode on a
+      // card it measures 2.01:1.
+      expect(
+        contrastRatio(token(lightTokens, '--color-destructive'), token(darkTokens, '--color-card'))
+      ).toBeLessThan(4.5);
+    });
+
+    it('holds the destructive fill across both themes', () => {
+      // §6.2: the functional colours do not change between modes. A dark-only
+      // restatement is also how the 2.99:1 pairing got in — the status red
+      // lightens for its badge, and that lighter value under oyster fails.
+      expect(darkTokens.has('--color-destructive')).toBe(false);
+      expect(darkTokens.has('--color-destructive-foreground')).toBe(false);
+    });
+
+    it.each(GROUND_PAIRINGS)('%s: the control boundary on %s clears 1.4.11', (theme, ground) => {
+      // `--color-input` is the edge of <Input>, <Textarea>, <SelectTrigger>,
+      // <Checkbox> and the outline <Button>, and the off-track FILL of
+      // <Switch> — which is live on this surface in the cookie-consent modal,
+      // so this token is not only ever a hairline. WCAG 1.4.11 asks 3:1 of
+      // anything needed to identify a control. It was ~1.33:1 light and
+      // ~1.45:1 dark.
+      const scope = scopeFor(theme);
+      const ratio = contrastOn(token(scope, '--color-input'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(GROUND_PAIRINGS)('%s: the focus ring on %s clears 1.4.11', (theme, ground) => {
+      // The ring is a state indicator, so the same 3:1 applies — and it is the
+      // one of the three that matters most, because a focus ring is the only
+      // thing telling a keyboard user where they are. The ceremonial orange
+      // measured 2.90 on the light card and 2.83 on the dark popover. This is
+      // the ring against the GROUND it is drawn on; against a filled button's
+      // own fill it is a mechanism problem, not a colour one — see the block
+      // comment above.
+      const scope = scopeFor(theme);
+      const ratio = contrastOn(token(scope, '--color-ring'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    });
+
+    it('keeps the focus ring on the secondary ink in both themes', () => {
+      // Not decoration: §6.2 gives teal and aqua the active states, and the
+      // prototype focuses a field with `border-color: var(--color-secondary)`.
+      // The ring is declared as a hex so this file can measure it, which means
+      // the two can drift — this is what notices.
+      expect(token(lightTokens, '--color-ring')).toBe(token(lightTokens, '--color-secondary-ink'));
+      expect(token(darkTokens, '--color-ring')).toBe(token(darkTokens, '--color-secondary-ink'));
+    });
+
+    it('leaves the decorative hairline at the design\u2019s alphas', () => {
+      // The whole point of moving `--color-input` alone was NOT to coarsen the
+      // rest. §6.4: hairline 1px at 24% in light, 14% in dark, cards bordered
+      // only in dark at 8%. A later "just make the borders 3:1 too" would
+      // repaint every card and divider in the product, so it fails here first.
+      expect(token(lightTokens, '--color-border')).toBe('rgba(111, 115, 118, 0.24)');
+      expect(token(lightTokens, '--color-divider')).toBe('rgba(111, 115, 118, 0.16)');
+      expect(token(lightTokens, '--color-card-border')).toBe('rgba(111, 115, 118, 0)');
+      expect(token(darkTokens, '--color-border')).toBe('rgba(227, 218, 209, 0.14)');
+      expect(token(darkTokens, '--color-divider')).toBe('rgba(227, 218, 209, 0.08)');
+      expect(token(darkTokens, '--color-card-border')).toBe('rgba(227, 218, 209, 0.08)');
+    });
+
+    it('would fail if any of the three regressed to what t-1 shipped', () => {
+      // Proves the four measurements above can actually fail. Without it they
+      // pass for free if `contrastOn` ever returned something inert — which is
+      // exactly what a new compositing helper is able to do.
+      expect(
+        contrastRatio(token(lightTokens, '--color-destructive-foreground'), '#b75d52')
+      ).toBeLessThan(4.5);
+      expect(
+        contrastOn('rgba(111, 115, 118, 0.24)', token(lightTokens, '--color-background'))
+      ).toBeLessThan(3);
+      expect(
+        contrastOn('rgba(227, 218, 209, 0.14)', token(darkTokens, '--color-background'))
+      ).toBeLessThan(3);
+      expect(contrastOn('#c96f43', token(lightTokens, '--color-card'))).toBeLessThan(3);
+      expect(contrastOn('#c96f43', token(darkTokens, '--color-popover'))).toBeLessThan(3);
+    });
+
+    it('composites an alpha rather than measuring the channels raw', () => {
+      // The helper is the load-bearing new thing in this file: read raw, a
+      // hairline's channels measure as if it were opaque, and every boundary
+      // assertion above would pass while the line stayed invisible.
+      expect(flattenOver('rgba(17, 24, 26, 0.5)', '#f3f0ec')).toBe('#828483');
+      expect(flattenOver('#a95146', '#f3f0ec')).toBe('#a95146');
+      expect(() => flattenOver('oklch(0.5 0 0)', '#f3f0ec')).toThrow(/cannot composite/);
+      // And the wash form, which is the same arithmetic reached from a hex.
+      expect(washOver('#a95146', 0.1, '#f3f0ec')).toBe('#ece0db');
     });
   });
 

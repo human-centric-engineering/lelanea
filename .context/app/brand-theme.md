@@ -93,24 +93,167 @@ specify: the radius scale (8/12/20/28/999), `--shadow-bloom`, and `--ease-quick`
 Where the two disagree — `--shadow-rest` and `--shadow-lift` have different
 values in each — **the prototype wins**.
 
-Two values deviate from the prototype, both for measured contrast reasons and
-both recorded at the site:
+Four values deviate from the prototype, every one of them for a measured
+contrast reason and every one recorded at the site:
 
 - **Dark `--color-popover` is `#3D4245`, one step darker than the prototype's
   `#3F4446`.** At the prototype's value, secondary text measured 4.40:1 — the
   only one of the four grounds that missed D5's bar. Popovers are where
   secondary text lives most: `<FieldHelp>` renders its whole body as muted text
   on that ground, and CLAUDE.md mandates one on every non-trivial form field.
-- **`--color-destructive` holds `#B75D52` across both modes** rather than
-  lightening in dark. §6.2 says the functional colours hold; the prototype's
-  `--color-status-red` lightens because it is a badge tint used behind a
-  `-bg`/`-ink` pair, and taking that lighter value as a button fill put oyster
-  text on it at 2.99:1.
+- **`--color-destructive` is `#A95146` and holds across both modes.** It does
+  not lighten in dark, because §6.2 says the functional colours hold — the
+  prototype's `--color-status-red` lightens only because it is a badge tint used
+  behind a `-bg`/`-ink` pair, and that lighter value taken as a button fill put
+  oyster text on it at 2.99:1. And it is not §6.2's `#B75D52` either, which
+  measured 3.93:1 under oyster; see the ruling below.
+- **`--color-input` is `rgba(17, 24, 26, 0.50)` light and
+  `rgba(227, 218, 209, 0.52)` dark**, where the prototype gives `.input` the
+  same hairline as everything else. See the ruling below.
+- **`--color-ring` is the secondary ink** — `#17718A` light, `#7CC0D6` dark —
+  not the ceremonial orange. See the ruling below.
 
-**One open gap, with the owner rather than in the build:** even at `#B75D52`,
-oyster text on a filled destructive button measures 3.93:1, below the design's
-own filled-button baseline (primary 4.54, teal 4.91). Closing it needs a darker
-terracotta than the `#B75D52` §6.2 names — a palette decision, not a build one.
+## The three contrast rulings (t-18)
+
+t-1 shipped two measured gaps rather than patching them quietly, because closing
+either looked like a palette decision rather than a build one. The owner made
+it. Auditing the second turned up a third — the focus ring — which nobody had
+asked about and which mattered more than the boundary that led to it. The
+reasoning is here because none of it is recoverable from the values themselves.
+
+**A filled destructive button now uses a darker terracotta than §6.2 names.**
+`#B75D52` under oyster measures 3.93:1 — below the design's own filled-button
+baseline (primary 4.54, teal 4.91) and below AA. `--color-destructive` is
+therefore `#A95146`: the identical hue and saturation (6.5°, 41.2%) five points
+darker in lightness, giving 4.68:1. **This is the move the orange already
+makes** — `--color-accent-ink` keeps §6.2's named `#C96F43` while
+`--color-primary` is the darker `#A85732` that can carry a fill. Nothing is lost
+from the palette: the named terracotta is still `--color-status-red` and its
+`-ink`, which is where §6.2's danger hue is read as a colour rather than sat on.
+
+**The control boundary is not the hairline, and only the boundary moved.** WCAG
+1.4.11 asks 3:1 of anything needed to _identify_ a control, and nothing of a
+line that merely separates. So `--color-border`, `--color-divider` and
+`--color-card-border` keep §6.4's alphas untouched — cards, dividers and
+sections are exactly as they were — and only `--color-input` rose. In this
+component set that token is the edge of `<Input>`, `<Textarea>`,
+`<SelectTrigger>`, `<Checkbox>` and the outline `<Button>`; it measured ~1.33:1
+light and ~1.45:1 dark. The base changed too, for an **alpha ceiling** rather
+than an impossibility: the kit's silver `#6F7376` does clear 3:1, but only from
+0.85 up (3.02 at its tightest; 3.85 opaque). At 0.85 an alpha has stopped being
+a hairline and is a muddier way of writing a solid colour, so light is based on
+the heading ink, which reaches the same band at 0.50. The two values clear 3:1
+on all four grounds in both themes, with 3.24 the tightest.
+
+`--color-input` **is also a fill**, and that changes a live control. shadcn's
+`<Switch>` paints its off-track with `bg-input`, and `<Switch>` is on this
+surface today in the cookie-consent modal. Before, the off-track was `#D3D2D0`:
+1.33:1 against the ground, so invisible as a control, but 3.41:1 against the
+orange on-track. After, it is `#828483`: 3.24:1 against the ground, and 1.37:1
+against the on-track. **The trade is taken deliberately.** 1.4.11 governs the
+first number and it now passes; the second is 1.4.1's territory, which asks only
+that colour not be the _sole_ carrier of state — and the thumb slides, so it
+never was. What is left is grey-off against orange-on, the ordinary switch
+idiom, in place of a near-white track nobody could see. No value could have had
+both: 3:1 on an oyster ground caps lightness at 0.258 and 3:1 on the primary
+fill demands 0.561, and those ranges do not meet.
+
+**The focus ring left the ceremonial orange.** `--color-ring` was `#C96F43`,
+which measures 2.90 on the light card ground and 2.83 on the dark popover — a
+_focus_ indicator below 1.4.11, which is worse than a resting border below it,
+because it is the only thing telling a keyboard user where they are. It is now
+the secondary ink, `#17718A` light and `#7CC0D6` dark, clearing 4.49 and 5.02 at
+their tightest. Both are §6.2-named brand colours, §6.2 gives teal and aqua the
+active states, and the prototype's own `.input:focus` sets
+`border-color: var(--color-secondary)`. The orange keeps the primary action and
+the lotus, which is all §6.2 asked of it.
+
+### The resting fill is not the whole story
+
+**4.68:1 is the fill at rest.** `button.tsx` writes its hover as
+`hover:bg-destructive/90` — an alpha over whatever is behind it — so on a light
+ground the hover fill composites to `#B06157` and the label drops to **3.92:1**,
+which is the gap this token was moved to close. `<Badge variant="destructive">`'s
+`/80` is 3.26:1.
+
+**Darkening further does not fix it, and is not worth what it would cost.** The
+90% composite reaches 4.5:1 only at a lightness of 0.42 — `#97493F` — which puts
+the _resting_ fill at 5.53:1 and lands ten points below §6.2's terracotta: a
+palette shift visible on every surface, bought for a state that lasts as long as
+a pointer hovers, and the badge's `/80` would still fail at 3.70. The real
+mechanism is a hover **token**, which the accent already has
+(`--color-primary-hover`) and which shadcn's alpha-hover bypasses.
+`bg-primary/90` has the identical shape at 3.83:1 and is untouched here, so one
+fix serves both. **It lands with our own Button in t-2, beside the ring offset
+below.**
+
+**One thing this does not fix, and no colour could.** `components/ui/button.tsx`
+draws `ring-1` with no `ring-offset`, so a focused button's ring sits flush
+against its own fill. Its outer edge still meets the page ground at 4.91:1,
+which is what you perceive on the orange and terracotta fills — but `secondary`
+_is_ this teal, so a focused secondary button just grows a pixel in its own
+colour. The same arithmetic as the switch closes off every alternative:
+lightness at most 0.258 to clear the ground, at least 0.561 to clear a fill.
+This is a **missing mechanism — an offset — not a wrong value**, so it belongs
+to the component rather than to the palette. It is latent today, since nothing
+on this surface renders `<Button variant="secondary">`, and **t-2 builds our own
+Button under `components/app/`, which is where the offset should land.**
+
+Every number above is **measured from the stylesheet** by
+`tests/unit/app/brand-theme.test.ts`, which composites the `rgba()` boundary
+tokens over each ground rather than reading their channels raw — read raw, an
+invisible hairline measures as though it were opaque and every assertion passes
+while nothing is on screen. The guards pair each token against a **page
+ground**, which is what 1.4.11 governs; the two adjacencies above — off-track
+against on-track, ring against fill — are deliberately not asserted, because
+neither is reachable by choosing a colour and a permanently failing assertion
+for an accepted trade is noise.
+
+## The destructive token has two roles, and only one rule separates them
+
+`--color-destructive` is a shadcn token doing two opposite jobs. `bg-destructive`
+is a **fill** that must be dark enough to hold oyster text; `text-destructive` is
+**ink** that must be light enough to read on charcoal. Twenty consumer-surface
+components use the second — every form's error banner renders
+`bg-destructive/10 text-destructive`, and so do the avatar upload's error line
+and the delete-account confirmation.
+
+Darkening the fill to `#A95146` for the button therefore made the ink worse in
+dark mode: **2.86:1 → 2.44:1** on that wash, and 2.21 → 1.89 inside a card. Both
+numbers already failed AA before this repo existed, but the change moved them the
+wrong way, which is not something to ship from a task about contrast.
+
+No value serves both roles, for the same reason a ring cannot clear both a ground
+and a fill. The palette already carries the mode-aware answer:
+`--color-status-red-ink` is `#94433A` light and `#E0A197` dark, precisely because
+a status colour is read rather than sat on. So `app/brand-theme.css` carries **one
+override of an existing utility** — its only one —
+
+```css
+[data-surface='consumer'] .text-destructive {
+  color: var(--color-status-red-ink);
+}
+```
+
+which measures 5.92 / 5.42 / 5.57 / 6.18 light and 6.52 / 4.93 / 5.65 / 4.71 dark
+against the four bare grounds. All eight clear AA; six of the eight failed it
+before.
+
+Against the `bg-destructive/10` **wash** the banners actually paint on — lighter
+than a dark ground, and therefore tighter — it measures 5.20 / 4.78 / 4.92 light
+and 6.01 / 4.65 / 5.25 dark over background, card and muted. A wash over the
+_dark popover_ would be 4.44, the tightest number in the palette; nothing renders
+an error banner inside a popover, so the test measures the three grounds a banner
+can reach and says why rather than lowering its threshold to cover a case that
+does not exist.
+
+It is a rule rather than a token because `text-destructive` is _generated from_
+`--color-destructive`, so separating the roles any other way means editing twenty
+platform components. Being unlayered it wins, which also means no class can
+recolour an element carrying it — acceptable here and only here, because the
+class **is** a colour, and anything wanting a different one does not reach for
+`text-destructive`. That is the exact opposite of the `.brand-*` registers, which
+set no colour for the same reason. `/admin` keeps shadcn's behaviour.
 
 Secondary text is `#5A5F62` light and `#A8AEB1` dark (decision D5, already
 carried by the prototype). The kit's original `#6F7376` fails 4.5:1 in all four
