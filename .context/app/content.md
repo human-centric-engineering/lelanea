@@ -4,7 +4,8 @@ Lelañea Fulton's own words: six JSON files, validated against Zod schemas, serv
 through the versioned API. **Never paraphrased in the build.**
 
 **Locations:** `content/*.json` (the words) · `lib/app/content/` (schemas +
-loader) · `app/api/v1/app/content/` (the HTTP surface)
+loader) · `app/api/v1/app/content/` (the HTTP surface) ·
+`components/app/content/` (the renderer)
 
 ## Anti-patterns
 
@@ -166,6 +167,71 @@ _and_ whatever substitutes it.
 
 Per decision D7, `{{first_name}}` falls back to "Welcome." with the comma
 dropped when there is no name on file.
+
+**D7 is written for the opening line, and there are two sites.** The second is a
+vocative bracketed by _two_ commas, so dropping only the leading one leaves a
+broken sentence:
+
+| Authored                                      | No name on file              |
+| --------------------------------------------- | ---------------------------- |
+| `Welcome, {{first_name}}.`                    | `Welcome.`                   |
+| `You, {{first_name}}, are far more powerful…` | `You are far more powerful…` |
+
+So the rule `applyFirstName()` implements is: take the comma before the field,
+the field, and a comma directly after it. It does not handle a field that
+_opens_ a sentence (the capital would be lost with the preceding word); no such
+line exists, and a third site would surface in the placeholder test above,
+which is the moment to revisit the function.
+
+## Rendering
+
+`components/app/content/authored-document.tsx` is the **only** place an authored
+block list becomes markup. One renderer is the point: the description forbids
+paraphrase and forbids reflowing her single-sentence cadence into prose, and two
+pages with two ideas of what a document looks like is how that erodes.
+
+`<AuthoredDocument document={…} firstName={…} />` — a server component. It takes
+a `FoundationalDocumentDetail` straight from the loader and renders the category
+eyebrow, the title, the subtitle where there is one, and every block in authored
+order.
+
+**It is not a markdown renderer and must not become one.** The files declare
+`textFormat: "markdown-inline"` and use exactly one inline construct, `**bold**`.
+The inline pass recognises that and nothing else; every string reaches the DOM as
+a React child, so there is no `dangerouslySetInnerHTML` and no HTML parser in the
+path. A test asserts that of the source, with comments stripped — the docblock
+names the API in order to rule it out.
+
+**Substitution happens in the renderer, never in the loader.** The loader parses
+once, memoises and deep-freezes precisely so a per-reader edit cannot leak into
+every other reader, and `{{first_name}}` is a per-reader edit. A test renders
+with a name and then re-reads the document to prove the authored text is intact.
+
+**Headings.** The document title is the page's only `h1`; authored levels render
+as written, clamped into `h2`–`h6`. Every heading in the seven documents is level
+2 today, so the clamp has no live input — it is there so a deeper outline
+degrades rather than emitting a second `h1`. A numbered clause renders its
+`number` as a prefix inside the heading, with a real space, so a copied heading
+reads `1. About Lelañea`.
+
+**Cadence.** `the_initiation` carries `renderStyle: "cadence"` and a `renderNote`
+saying not to merge its beats into flowing prose. Each beat is already its own
+`<p>`, which is most of the promise; a cadence document additionally gets
+`whitespace-pre-line`, so a line break authored _inside_ a beat survives. No
+block contains one today.
+
+**Unresolved placeholders** are highlighted outside production and plain inside
+it. `[Month Day, Year]` and `[Support Email]` are launch blockers; the highlight
+is how they stay visible to whoever is looking at the page, and in production a
+reader is shown the copy, not our editorial state.
+
+**Type comes from the `.brand-*` utilities** in `app/brand-theme.css`, which
+carry no colour by design — and which are scoped `[data-surface='consumer']`. So
+`brand-display` and `brand-eyebrow` are inert on a page that does not carry that
+surface, and the test asserting them checks the class string, not the computed
+type: it would pass on such a page. Layout — measure, page chrome, the
+descriptive eyebrow the prototype uses per section — belongs to the page that
+mounts this, and so does setting the surface.
 
 ## Referential integrity
 

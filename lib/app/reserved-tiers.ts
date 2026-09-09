@@ -84,15 +84,19 @@
 //     test looked, and would blame Sunrise core for files Daybreak created.
 //   - `.context/app` is OURS, and is the reason this file changes at all: it is
 //     the leaf documentation tree Daybreak reserved and kept empty for us.
+//   - `components/app` is OURS, declared here because the tier is now occupied:
+//     `components/app/content/authored-document.tsx` (§02 t-4) is the first
+//     component to land in it. Declaring it earlier would have failed this test
+//     — the row fails a tier declared but left empty — which is why the note
+//     below said to wait for the component.
 //
-// `components/app` and `components/framework` stay UNDECLARED, and that is
-// deliberate rather than an omission. The test fails a tier that is declared but
-// left empty, so declaring a tier we have not filled would red immediately — and
-// leaving them undeclared keeps those rows guarding, which is what we want while
-// the tiers are genuinely free. **Declare `components/app` in the same commit as
-// the first component that lands there**, not before.
+// `components/framework` stays UNDECLARED, and that is deliberate rather than an
+// omission. Leaving it undeclared keeps that row guarding, which is what we want
+// while the tier is genuinely free. **Declare a tier in the same commit as the
+// first file that lands in it**, not before.
 export const occupiedTiers: readonly string[] = [
   'lib/framework',
   '.context/framework',
   '.context/app',
+  'components/app',
 ];

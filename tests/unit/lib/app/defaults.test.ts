@@ -415,14 +415,22 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // `lib/framework` + `.context/framework` are Daybreak's, inherited full of
     // its code and docs; `.context/app` is ours.
     //
+    // `components/app` joined the list in §02 t-4, with the first component to
+    // land there (`components/app/content/authored-document.tsx`). It could not
+    // be declared before that: this row fails a tier declared but left empty.
+    //
     // Pinned exactly, not loosened to a `toContain`: the value of this row is
-    // that the tiers we have NOT filled keep guarding. `components/app` in
-    // particular — declaring it before the first component lands there would
-    // both fail this test (a tier declared but empty) and switch off the guard
-    // for the surface we are most likely to fill next.
+    // that the tiers we have NOT filled keep guarding. `components/framework` is
+    // the one still free, and it is Daybreak's — an entry for it appearing here
+    // would mean we had occupied a tier we do not own.
     risk: 'a stray entry would switch OFF the guard that keeps a reserved tier empty — for Lelañea that means silently permitting core or Daybreak to occupy leaf surface, and permitting us to occupy a tier we do not own',
     assert: () =>
-      expect(occupiedTiers).toEqual(['lib/framework', '.context/framework', '.context/app']),
+      expect(occupiedTiers).toEqual([
+        'lib/framework',
+        '.context/framework',
+        '.context/app',
+        'components/app',
+      ]),
   },
   {
     seam: 'lib/app/brand.ts',
