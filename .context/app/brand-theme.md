@@ -80,7 +80,8 @@ The approved prototype's token block
 product description makes the prototype the authority on how the product looks.
 
 Four things it does not carry come from the design kit
-(`design/Lelanea_Design_System/colors_and_type.css`), which §6.4 and §6.5
+(`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`),
+which §6.4 and §6.5
 specify: the radius scale (8/12/20/28/999), `--shadow-bloom`, and `--ease-quick`.
 Where the two disagree — `--shadow-rest` and `--shadow-lift` have different
 values in each — **the prototype wins**.

@@ -54,9 +54,9 @@
  *   `:root[data-theme='dark']`), which §6.1 makes the authority on how the
  *   product looks. Four tokens the prototype does not carry — the radius scale,
  *   `--shadow-bloom` and `--ease-quick` — come from the design kit
- *   (`design/Lelanea_Design_System/colors_and_type.css`), which §6.4 and §6.5
- *   specify. Where the kit and the prototype disagree (`--shadow-rest`,
- *   `--shadow-lift`), the prototype wins, per §6.1.
+ *   (`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`),
+ *   which §6.4 and §6.5 specify. Where the kit and the prototype disagree
+ *   (`--shadow-rest`, `--shadow-lift`), the prototype wins, per §6.1.
  *
  *   The secondary-text values are decision D4/D5, already carried by the
  *   prototype: `#5A5F62` light and `#A8AEB1` dark. `#6F7376` — the kit's
