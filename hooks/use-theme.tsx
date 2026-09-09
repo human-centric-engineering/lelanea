@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -11,39 +11,79 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
+/**
+ * LELAÑEA divergence — see `.context/app/divergences.md`, row 2.
+ *
+ * Upstream persisted the resolved SYSTEM preference to `localStorage` on first
+ * paint, so from the second visit onward "hasn't chosen yet" was stored exactly
+ * like "chose light", and a later OS switch was never followed. In vanilla
+ * Sunrise that is invisible — both themes are near-greyscale. On Lelañea the
+ * two are oyster white and near-black charcoal, so it is the difference between
+ * the app tracking your machine and ignoring it.
+ *
+ * Decision D4: the system preference is the DEFAULT; only the toggle persists a
+ * choice. So this reads storage without writing to it, and follows the OS for
+ * as long as nothing is stored. The storage key, the `<html>` class and the
+ * hook's public shape are all unchanged from the platform's.
+ *
+ * The matching read in the no-flash script in `app/layout.tsx` had the same
+ * write and lost it in the same commit; the two must agree or the first paint
+ * disagrees with the first render.
+ */
+const STORAGE_KEY = 'theme';
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
+/** The stored EXPLICIT choice, or null when the user has not made one. */
+function readStoredTheme(): Theme | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : null;
+  } catch {
+    // Private-mode or blocked storage: treat it as "no choice recorded".
+    return null;
+  }
+}
+
+function readSystemTheme(): Theme {
+  return window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light';
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Initialize theme from localStorage, system preferences, or default to light
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      // Check localStorage first
-      const stored = localStorage.getItem('theme') as Theme | null;
-      if (stored === 'light' || stored === 'dark') {
-        return stored;
-      }
-
-      // Check system preferences
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const systemTheme: Theme = prefersDark ? 'dark' : 'light';
-
-      // Save system preference to localStorage
-      localStorage.setItem('theme', systemTheme);
-      return systemTheme;
-    }
-    return 'light';
+  // Matches the no-flash script's resolution exactly: an explicit choice wins,
+  // otherwise the system preference. Neither writes.
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return readStoredTheme() ?? readSystemTheme();
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-
-    // Remove existing theme classes
     root.classList.remove('light', 'dark');
-
-    // Add current theme class
     root.classList.add(theme);
-
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Follow the OS while no explicit choice is stored. The guard is re-read on
+  // every event rather than captured, so the listener stops taking effect the
+  // moment the toggle records a choice — including in another tab.
+  useEffect(() => {
+    const media = window.matchMedia(DARK_QUERY);
+    const onChange = (event: MediaQueryListEvent) => {
+      if (readStoredTheme() !== null) return;
+      setThemeState(event.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  // The ONLY writer. Persisting here is what makes a choice explicit.
+  const setTheme = useCallback((next: Theme) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Storage unavailable — the choice still applies for this session.
+    }
+    setThemeState(next);
+  }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
