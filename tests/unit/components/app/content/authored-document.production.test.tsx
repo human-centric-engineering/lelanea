@@ -3,6 +3,12 @@
 /**
  * AuthoredDocument in production: an unresolved placeholder is her copy, plain.
  *
+ * FORK NOTE — this reads the real `lib/app/content` seam (no `vi.mock`). It
+ * asserts one property of the renderer — an unresolved placeholder is plain in
+ * production — using `terms_of_use` because that is where this app's unfilled
+ * placeholders are. A fork swaps in a document of its own that still carries
+ * one, or drops the file if it has none left.
+ *
  * Its own file because `vi.mock` is hoisted for the whole module, and the
  * `doMock` + `resetModules` alternative races the module graph on CI — the same
  * reason `tests/unit/components/brand/brand-mark.test.tsx` splits its cases.

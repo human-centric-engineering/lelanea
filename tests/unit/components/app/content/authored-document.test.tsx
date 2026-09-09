@@ -12,6 +12,14 @@
  * is pinned, so a content change that removed one could not quietly shrink the
  * test to nothing.
  *
+ * FORK NOTE — this reads the real `lib/app/content` seam (no `vi.mock`), so a
+ * fork that has not filled `content/` has nothing for these cases to render.
+ * The seam here is the LOADER, not the renderer: `AuthoredDocument` takes a
+ * plain `FoundationalDocumentDetail`, so a fork keeps the component as-is and
+ * repoints the fixtures. Pin your own document ids in `DOCUMENT_IDS` and your
+ * own merge-field sites in the D7 block; every other case builds its input with
+ * `synthetic()` and is content-independent.
+ *
  * Production behaviour of the placeholder marker lives in
  * `authored-document.production.test.tsx`: `vi.mock` is hoisted per file, and
  * the `doMock` + `resetModules` alternative races the module graph on CI (see
