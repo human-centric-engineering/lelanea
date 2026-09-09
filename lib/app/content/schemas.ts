@@ -288,12 +288,20 @@ const discoveryQuestionsFileBase = z.strictObject({
 // a missing document in a list, a tier that renders empty. These checks turn all
 // three into a validation error at the file, naming the id that broke.
 
-/** Foundational documents, plus: `suggestedOrder` is exactly the document set. */
+/** Foundational documents, plus: `suggestedOrder` is exactly the document set —
+ * every id resolves, every document appears, and none appears twice. */
 export const foundationalDocumentsFileSchema = foundationalDocumentsFileBase.superRefine(
   (file, ctx) => {
     const ids = new Set(file.documents.map((document) => document.id));
     if (ids.size !== file.documents.length) {
       ctx.addIssue({ code: 'custom', path: ['documents'], message: 'Duplicate document id' });
+    }
+    if (new Set(file.collection.suggestedOrder).size !== file.collection.suggestedOrder.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['collection', 'suggestedOrder'],
+        message: 'suggestedOrder repeats a document id, so the index would list it twice',
+      });
     }
     for (const [index, id] of file.collection.suggestedOrder.entries()) {
       if (!ids.has(id)) {
@@ -337,7 +345,18 @@ export const journeyStructureFileSchema = journeyStructureFileBase.superRefine((
       }
     }
   }
-  const listed = new Set(file.tiers.flatMap((tier) => tier.modules));
+  // Cross-tier duplication is caught above (the second tier disagrees with the
+  // module's declared `tier`), but a tier listing the same id twice satisfies
+  // both loops and renders that module twice within the tier.
+  const allListed = file.tiers.flatMap((tier) => tier.modules);
+  const listed = new Set(allListed);
+  if (listed.size !== allListed.length) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['tiers'],
+      message: 'A module id is listed more than once, so the journey would show it twice',
+    });
+  }
   for (const [index, entry] of file.modules.entries()) {
     if (!listed.has(entry.id)) {
       ctx.addIssue({
@@ -345,6 +364,31 @@ export const journeyStructureFileSchema = journeyStructureFileBase.superRefine((
         path: ['modules', index],
         message: `Module "${entry.id}" belongs to no tier, so the journey would not show it`,
       });
+    }
+
+    // The same drift one level down. A module's phases are its running order,
+    // and its `phaseTiers` group them — two phases sharing a number, or a
+    // grouping naming a phase the module does not have, renders as a duplicate
+    // step or an empty group rather than as an error.
+    const phaseNumbers = (entry.phases ?? []).map((phase) => phase.number);
+    if (new Set(phaseNumbers).size !== phaseNumbers.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['modules', index, 'phases'],
+        message: `Module "${entry.id}" repeats a phase number, so the journey would show it twice`,
+      });
+    }
+    const known = new Set(phaseNumbers);
+    for (const [tierIndex, phaseTier] of (entry.phaseTiers ?? []).entries()) {
+      for (const number of phaseTier.phases) {
+        if (!known.has(number)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['modules', index, 'phaseTiers', tierIndex, 'phases'],
+            message: `Phase tier "${phaseTier.id}" names phase ${number}, which module "${entry.id}" does not have`,
+          });
+        }
+      }
     }
   }
 });
@@ -676,6 +720,8 @@ export type FoundationalDocumentsFile = z.infer<typeof foundationalDocumentsFile
 export type JourneyModule = z.infer<typeof journeyModuleSchema>;
 export type ModulePhase = z.infer<typeof modulePhaseSchema>;
 export type ModuleTier = z.infer<typeof moduleTierSchema>;
+export type PhaseTier = z.infer<typeof phaseTierSchema>;
+export type Produces = z.infer<typeof producesSchema>;
 export type JourneyStructureFile = z.infer<typeof journeyStructureFileSchema>;
 export type DiscoveryQuestion = z.infer<typeof discoveryQuestionSchema>;
 export type DiscoveryQuestionsFile = z.infer<typeof discoveryQuestionsFileSchema>;

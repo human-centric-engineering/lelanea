@@ -2,8 +2,10 @@
  * Unit Tests: GET /api/v1/app/content/documents
  *
  * The public index of foundational documents. Covers the 200 payload, the
- * conditional-GET 304, the public cache directive (this is the one content
- * surface a CDN may hold), and what the envelope must not leak.
+ * conditional-GET 304, the cache directive on both (they must agree — an
+ * earlier draft marked the 200 `public` while the 304 kept the platform
+ * default, so the first revalidation silently undid the override), and what the
+ * envelope must not leak.
  *
  * @see app/api/v1/app/content/documents/route.ts
  */
@@ -52,11 +54,26 @@ describe('GET /api/v1/app/content/documents', () => {
     expect(body.data.collection.locale).toBe('en-US');
   });
 
-  it('sends a weak ETag and a publicly cacheable, always-revalidated directive', async () => {
+  it('sends a weak ETag and keeps the platform’s private cache directive', async () => {
     const response = await GET(createRequest());
 
     expect(response.headers.get('ETag')).toMatch(/^W\/"/);
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-cache');
+  });
+
+  it('sends the same cache directive on the 200 and the 304', async () => {
+    // An earlier draft marked the 200 `public` while `checkConditional` sent
+    // the private default on the 304 (it hard-codes it, and lib/api/etag.ts is
+    // Sunrise-owned). RFC 9111 §4.3.4 has a cache update its stored headers
+    // from the 304, so the first revalidation silently undid the override. No
+    // test compared the two, which is why it survived; this one does.
+    const ok = await GET(createRequest());
+    const etag = ok.headers.get('ETag')!;
+
+    const notModified = await GET(createRequest({ 'If-None-Match': etag }));
+
+    expect(notModified.status).toBe(304);
+    expect(notModified.headers.get('Cache-Control')).toBe(ok.headers.get('Cache-Control'));
   });
 
   it('answers 304 with an empty body when the client already has this version', async () => {

@@ -19,6 +19,7 @@
 import rawValuesModule from '@/content/values_module.json';
 import rawValuesReferenceFramework from '@/content/values_reference_framework.json';
 import rawValueExplorations from '@/content/value_explorations.json';
+import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   valuesModuleFileSchema,
   valuesReferenceFrameworkFileSchema,
@@ -34,20 +35,22 @@ let valueExplorationsCache: ValueExplorationsFile | null = null;
 
 /** The ten-step Values module: its lessons, the value library, the reflections. */
 export function getValuesModule(): ValuesModuleFile {
-  valuesModuleCache ??= valuesModuleFileSchema.parse(rawValuesModule);
+  valuesModuleCache ??= deepFreezeParsed(valuesModuleFileSchema.parse(rawValuesModule));
   return valuesModuleCache;
 }
 
 /** The framework a value exploration is written against — lenses, structure, tests. */
 export function getValuesReferenceFramework(): ValuesReferenceFrameworkFile {
-  valuesReferenceFrameworkCache ??= valuesReferenceFrameworkFileSchema.parse(
-    rawValuesReferenceFramework
+  valuesReferenceFrameworkCache ??= deepFreezeParsed(
+    valuesReferenceFrameworkFileSchema.parse(rawValuesReferenceFramework)
   );
   return valuesReferenceFrameworkCache;
 }
 
 /** The sixteen written value explorations. */
 export function getValueExplorations(): ValueExplorationsFile {
-  valueExplorationsCache ??= valueExplorationsFileSchema.parse(rawValueExplorations);
+  valueExplorationsCache ??= deepFreezeParsed(
+    valueExplorationsFileSchema.parse(rawValueExplorations)
+  );
   return valueExplorationsCache;
 }

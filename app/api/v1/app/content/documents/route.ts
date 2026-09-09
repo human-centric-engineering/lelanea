@@ -13,10 +13,15 @@
  * `proxy.ts` (see `lib/security/rate-limit-policy.ts`). No handler limiter —
  * this reads a parsed, memoised constant.
  *
- * Caching: the payload is identical for every caller and changes only on
- * deploy, so it overrides the private default with a public, revalidate-every-
- * time directive and carries an ETag. A shared cache in front of the origin can
- * hold it; the conditional GET keeps the transfer at 304.
+ * Caching: an ETag and the platform default (`private, no-cache`), so a repeat
+ * caller gets a 304 with an empty body. The payload IS identical for every
+ * caller, and an earlier draft marked it `public` for that reason — twice
+ * wrong. `checkConditional` hard-codes the private default on its 304
+ * (`lib/api/etag.ts`, Sunrise-owned), so the first revalidation flips a shared
+ * cache's stored entry back to private and it stops serving it. And `proxy.ts`
+ * attaches a per-visitor `Set-Cookie` to these responses, which a shared cache
+ * would then replay to other visitors. The directive bought nothing and risked
+ * that; the ETag delivers the saving on its own.
  */
 
 import type { NextRequest } from 'next/server';
@@ -24,7 +29,6 @@ import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { listFoundationalDocuments } from '@/lib/app/content';
-import { PUBLIC_CONTENT_CACHE_CONTROL } from '@/lib/app/content/http';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const log = await getRouteLogger(request);
@@ -40,6 +44,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   });
 
   return successResponse(index, undefined, {
-    headers: { ETag: etag, 'Cache-Control': PUBLIC_CONTENT_CACHE_CONTROL },
+    headers: { ETag: etag },
   });
 }

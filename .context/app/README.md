@@ -27,6 +27,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | -------------------------------- | --------------------------------------------------------- |
 | [`syncing.md`](./syncing.md)     | Pulling a Daybreak release, and the three traps around it |
 | [`local-dev.md`](./local-dev.md) | Running locally alongside a Daybreak checkout             |
+| [`content.md`](./content.md)     | Lelañea's authored words: the files, the loader, the API  |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 

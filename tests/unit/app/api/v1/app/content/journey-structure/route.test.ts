@@ -59,10 +59,12 @@ describe('GET /api/v1/app/content/journey-structure', () => {
     expect(await response.text()).toBe('');
   });
 
-  it('is publicly cacheable but always revalidated', async () => {
-    const response = await GET(createRequest());
+  it('sends the same cache directive on the 200 and the 304', async () => {
+    const ok = await GET(createRequest());
+    const notModified = await GET(createRequest({ 'If-None-Match': ok.headers.get('ETag')! }));
 
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate');
+    expect(ok.headers.get('Cache-Control')).toBe('private, no-cache');
+    expect(notModified.headers.get('Cache-Control')).toBe(ok.headers.get('Cache-Control'));
   });
 
   it('withholds the editorial review notes', async () => {

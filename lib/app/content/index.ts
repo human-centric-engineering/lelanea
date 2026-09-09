@@ -38,6 +38,7 @@
 import rawFoundationalDocuments from '@/content/lelanea_foundational_documents.json';
 import rawJourneyStructure from '@/content/lelanea_module_structure.json';
 import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
+import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   foundationalDocumentsFileSchema,
   journeyStructureFileSchema,
@@ -47,12 +48,31 @@ import {
   type FoundationalDocumentsFile,
   type JourneyModule,
   type JourneyStructureFile,
+  type ModuleTier,
+  type PhaseTier,
+  type Produces,
   type DiscoveryQuestionsFile,
 } from '@/lib/app/content/schemas';
 
 // ============================================================================
 // Served shapes
 // ============================================================================
+
+/**
+ * Immutable all the way down, not just at the outermost array.
+ *
+ * `readonly Block[]` stops `blocks.sort()` but not `blocks[0].text = …`, and the
+ * second is the one that matters here: in-place placeholder substitution is the
+ * motivating scenario, it writes to an element, and with a shallow `readonly` it
+ * compiles clean and throws `TypeError` at request time on a public endpoint.
+ * Caught on the third review pass, by probing the exact line the docblock below
+ * warns about. The type has to mirror the freeze, or it is decoration.
+ */
+export type DeepReadonly<T> = T extends (infer U)[]
+  ? readonly DeepReadonly<U>[]
+  : T extends object
+    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+    : T;
 
 /** Identity and version of one authored collection, for clients and ETags. */
 export interface ContentCollectionMeta {
@@ -82,7 +102,7 @@ export interface FoundationalDocumentSummary {
   surface: string;
   requiresAcknowledgement: boolean;
   /** Merge fields present in the copy, e.g. `{{first_name}}`. */
-  placeholders: string[];
+  placeholders: readonly string[];
   /** `'cadence'` on the welcome statement — render each beat on its own line. */
   renderStyle: string | null;
   renderNote: string | null;
@@ -91,50 +111,137 @@ export interface FoundationalDocumentSummary {
 
 /** A foundational document with its blocks, in authored order. */
 export interface FoundationalDocumentDetail extends FoundationalDocumentSummary {
-  blocks: DocumentBlock[];
+  blocks: readonly DeepReadonly<DocumentBlock>[];
 }
 
 /** The document index, in the collection's own `suggestedOrder`. */
 export interface FoundationalDocumentIndex {
   collection: ContentCollectionMeta;
-  documents: FoundationalDocumentSummary[];
+  documents: readonly FoundationalDocumentSummary[];
+}
+
+/** One tier of the journey, as served. */
+export interface JourneyTierView {
+  id: ModuleTier;
+  label: string;
+  order: number;
+  /** Module ids in this tier, in order. */
+  modules: readonly string[];
+  /** Authored prose: what this tier is for. */
+  intent: string;
+}
+
+/** A module's internal phase grouping, as served. */
+export interface JourneyPhaseTier {
+  id: PhaseTier;
+  label: string;
+  order: number;
+  /** Phase numbers in this grouping. */
+  phases: readonly number[];
+}
+
+/**
+ * One phase of a module, as served.
+ *
+ * `contentRef` survives the projection because it is a *link* — it names the
+ * foundational document this phase shows, which a client turns straight into a
+ * `/documents/:id` request. `proposed` survives because dropping it would be
+ * the dishonest choice: a public reader would see a phase that is only a
+ * proposal rendered exactly like one that is built.
+ */
+export interface JourneyPhase {
+  number: number;
+  displayNumber: string;
+  title: string;
+  description: string;
+  /** The document or question set this phase shows, where there is one. */
+  contentRef: string | null;
+  /** `true` where the phase is a proposal rather than authored material. */
+  proposed: boolean;
+  phaseTier: PhaseTier | null;
+  questionCount: number | null;
+  personalized: boolean;
+  requiresAcknowledgement: boolean;
+  produces: DeepReadonly<Produces> | null;
+}
+
+/** One module of the journey, as served. */
+export interface JourneyModuleView {
+  id: string;
+  number: number;
+  displayNumber: string;
+  title: string;
+  subtitle: string | null;
+  chartTitle: string | null;
+  tier: ModuleTier;
+  phases: readonly JourneyPhase[];
+  phaseTiers: readonly JourneyPhaseTier[] | null;
+  produces: DeepReadonly<Produces> | null;
 }
 
 /** The seventeen-module journey: its tiers, its modules, and their phases. */
 export interface JourneyStructure {
   collection: ContentCollectionMeta & { subtitle: string };
-  tiers: JourneyStructureFile['tiers'];
-  modules: JourneyModule[];
+  tiers: readonly JourneyTierView[];
+  modules: readonly JourneyModuleView[];
 }
 
 /** The onboarding module's thirty discovery questions, with pacing guidance. */
 export interface DiscoveryQuestionSet {
   collection: ContentCollectionMeta & { chartTitle: string; module: string; phase: number };
-  preamble: DiscoveryQuestionsFile['preamble'];
-  pacing: DiscoveryQuestionsFile['pacing'];
-  questions: DiscoveryQuestion[];
+  preamble: DeepReadonly<DiscoveryQuestionsFile['preamble']>;
+  pacing: DeepReadonly<DiscoveryQuestionsFile['pacing']>;
+  questions: readonly DeepReadonly<DiscoveryQuestion>[];
 }
 
 // ============================================================================
 // Parse-once caches
 // ============================================================================
 
+/**
+ * Both the parse and the projections built from it are frozen.
+ *
+ * Everything here is built once and shared for the life of the process — the
+ * parse, and the views the accessors project from it. That is the right trade
+ * for content that changes only on deploy, and it is exactly what makes mutation
+ * dangerous: there is one copy, so writing to it rewrites the authored words for
+ * every later request. Placeholder substitution is the next thing to be built on
+ * this module, and doing it in place on `blocks` would serve a wrong Terms of
+ * Use to everyone after the first caller, until the next deploy.
+ *
+ * Freezing makes that attempt throw (modules are strict mode) instead of
+ * silently succeeding, at a one-off cost. Identity is preserved,
+ * so the memoisation contract is unchanged.
+ */
+
+// Projected views, memoised alongside the parse. Frozen because they are now
+// shared across requests rather than rebuilt per call.
+let foundationalMetaView: ContentCollectionMeta | null = null;
+let foundationalIndexView: FoundationalDocumentIndex | null = null;
+const foundationalDetailViews = new Map<string, FoundationalDocumentDetail>();
+let journeyStructureView: JourneyStructure | null = null;
+let discoveryQuestionSetView: DiscoveryQuestionSet | null = null;
+
 let foundationalDocumentsCache: FoundationalDocumentsFile | null = null;
 let journeyStructureCache: JourneyStructureFile | null = null;
 let discoveryQuestionsCache: DiscoveryQuestionsFile | null = null;
 
 function foundationalDocumentsFile(): FoundationalDocumentsFile {
-  foundationalDocumentsCache ??= foundationalDocumentsFileSchema.parse(rawFoundationalDocuments);
+  foundationalDocumentsCache ??= deepFreezeParsed(
+    foundationalDocumentsFileSchema.parse(rawFoundationalDocuments)
+  );
   return foundationalDocumentsCache;
 }
 
 function journeyStructureFile(): JourneyStructureFile {
-  journeyStructureCache ??= journeyStructureFileSchema.parse(rawJourneyStructure);
+  journeyStructureCache ??= deepFreezeParsed(journeyStructureFileSchema.parse(rawJourneyStructure));
   return journeyStructureCache;
 }
 
 function discoveryQuestionsFile(): DiscoveryQuestionsFile {
-  discoveryQuestionsCache ??= discoveryQuestionsFileSchema.parse(rawDiscoveryQuestions);
+  discoveryQuestionsCache ??= deepFreezeParsed(
+    discoveryQuestionsFileSchema.parse(rawDiscoveryQuestions)
+  );
   return discoveryQuestionsCache;
 }
 
@@ -160,6 +267,27 @@ function toSummary(
 }
 
 /**
+ * Identity and version of the foundational-document collection.
+ *
+ * Its own accessor so the single-document route can say what it wants. It used
+ * to read `listFoundationalDocuments().collection` and discard the rest, which
+ * cost a `Map` and seven summary objects per request until that index was
+ * memoised too; now the cost is gone either way and this is about intent.
+ */
+export function getFoundationalCollectionMeta(): ContentCollectionMeta {
+  if (foundationalMetaView) return foundationalMetaView;
+
+  const { collection } = foundationalDocumentsFile();
+  foundationalMetaView = deepFreezeParsed({
+    id: collection.id,
+    title: collection.title,
+    version: collection.version,
+    locale: collection.locale,
+  });
+  return foundationalMetaView;
+}
+
+/**
  * Every foundational document, in the collection's authored reading order.
  *
  * `suggestedOrder` is the author's sequence (the welcome statement, then the
@@ -167,22 +295,20 @@ function toSummary(
  * document ids by the schema, so this cannot silently drop or duplicate one.
  */
 export function listFoundationalDocuments(): FoundationalDocumentIndex {
+  if (foundationalIndexView) return foundationalIndexView;
+
   const file = foundationalDocumentsFile();
   const byId = new Map(file.documents.map((document) => [document.id, document]));
 
-  return {
-    collection: {
-      id: file.collection.id,
-      title: file.collection.title,
-      version: file.collection.version,
-      locale: file.collection.locale,
-    },
+  foundationalIndexView = deepFreezeParsed({
+    collection: getFoundationalCollectionMeta(),
     documents: file.collection.suggestedOrder.map((id) => {
       // Non-null: the schema's referential check guarantees every id resolves.
       const document = byId.get(id)!;
       return toSummary(document);
     }),
-  };
+  });
+  return foundationalIndexView;
 }
 
 /**
@@ -193,10 +319,17 @@ export function listFoundationalDocuments(): FoundationalDocumentIndex {
  * `notFound()`.
  */
 export function getFoundationalDocument(id: string): FoundationalDocumentDetail | null {
+  const cached = foundationalDetailViews.get(id);
+  if (cached) return cached;
+
   const document = foundationalDocumentsFile().documents.find((candidate) => candidate.id === id);
   if (!document) return null;
 
-  return { ...toSummary(document), blocks: document.blocks };
+  // Keyed on the id, so the seven real documents memoise and an unknown id
+  // caches nothing — an anonymous caller cannot grow this map by guessing.
+  const view = deepFreezeParsed({ ...toSummary(document), blocks: document.blocks });
+  foundationalDetailViews.set(id, view);
+  return view;
 }
 
 // ============================================================================
@@ -252,15 +385,86 @@ export function listOccurringPlaceholders(): string[] {
 // Journey structure and discovery questions
 // ============================================================================
 
+function toQuestionView(question: DiscoveryQuestion): DeepReadonly<DiscoveryQuestion> {
+  return {
+    id: question.id,
+    number: question.number,
+    text: question.text,
+    inputType: question.inputType,
+    ...(question.hint !== undefined && { hint: question.hint }),
+    ...(question.conditionalFollowUp !== undefined && {
+      conditionalFollowUp: {
+        ifYes: question.conditionalFollowUp.ifYes,
+        ifNo: question.conditionalFollowUp.ifNo,
+      },
+    }),
+  };
+}
+
+function toTierView(tier: JourneyStructureFile['tiers'][number]): JourneyTierView {
+  return {
+    id: tier.id,
+    label: tier.label,
+    order: tier.order,
+    modules: tier.modules,
+    intent: tier.intent,
+  };
+}
+
+function toModuleView(entry: JourneyModule): JourneyModuleView {
+  return {
+    id: entry.id,
+    number: entry.number,
+    displayNumber: entry.displayNumber,
+    title: entry.title,
+    subtitle: entry.subtitle ?? null,
+    chartTitle: entry.chartTitle ?? null,
+    tier: entry.tier,
+    phases: (entry.phases ?? []).map((phase) => ({
+      number: phase.number,
+      displayNumber: phase.displayNumber,
+      title: phase.title,
+      description: phase.description,
+      contentRef: phase.contentRef ?? null,
+      proposed: phase.proposed ?? false,
+      phaseTier: phase.phaseTier ?? null,
+      questionCount: phase.questionCount ?? null,
+      personalized: phase.personalized ?? false,
+      requiresAcknowledgement: phase.requiresAcknowledgement ?? false,
+      produces: phase.produces ?? null,
+    })),
+    phaseTiers:
+      entry.phaseTiers?.map((tier) => ({
+        id: tier.id,
+        label: tier.label,
+        order: tier.order,
+        phases: tier.phases,
+      })) ?? null,
+    produces: entry.produces ?? null,
+  };
+}
+
 /**
  * The journey: five tiers over seventeen modules, each with its phases.
  *
  * Public, because the structure of the work is part of what the product tells
  * you before you sign up. The authored copy *inside* a module is not here.
+ *
+ * Every level is projected field-by-field — tiers, modules, phases and phase
+ * tiers. An earlier draft returned `file.modules` wholesale and shipped the
+ * maintainers' working notes to anonymous callers — `notes`, `contentNote`,
+ * `appBehavior`, and the names of the content files on disk — while the module
+ * header claimed working notes are never served. Both reviews caught it, and a
+ * second pass caught that `tiers` was still passing through: safe today, but
+ * the one place where a future authored annotation would be published by
+ * default instead of withheld by default, which is the whole failure mode.
+ * Listing served fields explicitly at every level is what makes the claim true.
  */
 export function getJourneyStructure(): JourneyStructure {
+  if (journeyStructureView) return journeyStructureView;
+
   const file = journeyStructureFile();
-  return {
+  journeyStructureView = deepFreezeParsed({
     collection: {
       id: file.app.name,
       title: file.app.journeyTitle,
@@ -268,9 +472,10 @@ export function getJourneyStructure(): JourneyStructure {
       version: file.app.version,
       locale: file.app.locale,
     },
-    tiers: file.tiers,
-    modules: file.modules,
-  };
+    tiers: file.tiers.map(toTierView),
+    modules: file.modules.map(toModuleView),
+  });
+  return journeyStructureView;
 }
 
 /**
@@ -281,8 +486,10 @@ export function getJourneyStructure(): JourneyStructure {
  * ("this is not a form to rush") only makes sense to someone in the journey.
  */
 export function getDiscoveryQuestions(): DiscoveryQuestionSet {
+  if (discoveryQuestionSetView) return discoveryQuestionSetView;
+
   const file = discoveryQuestionsFile();
-  return {
+  discoveryQuestionSetView = deepFreezeParsed({
     collection: {
       id: file.content.id,
       title: file.content.title,
@@ -294,6 +501,7 @@ export function getDiscoveryQuestions(): DiscoveryQuestionSet {
     },
     preamble: file.preamble,
     pacing: file.pacing,
-    questions: file.questions,
-  };
+    questions: file.questions.map(toQuestionView),
+  });
+  return discoveryQuestionSetView;
 }

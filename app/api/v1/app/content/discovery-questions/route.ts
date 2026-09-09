@@ -12,10 +12,9 @@
  * Rate limiting: inherited from the `/api/v1/**` section cap in
  * `lib/security/rate-limit-policy.ts`.
  *
- * Caching: keeps the platform default (`private, no-cache`) rather than the
- * public directive the unauthenticated content routes use — the payload is the
- * same for every member today, but it sits behind a session, and a shared cache
- * has no business holding it.
+ * Caching: the platform default (`private, no-cache`) and an ETag, the same as
+ * the three unauthenticated routes. None of them marks a payload `public` — see
+ * the documents index route for the two reasons why.
  */
 
 import { withAuth } from '@/lib/auth/guards';
