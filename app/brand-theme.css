@@ -278,10 +278,13 @@
    * `info` tone. It joins as a `-bg`/`-ink` trio like the four above rather
    * than as a one-off, so the fifth tone is not a special case in the
    * component. Measured: the base clears 3:1 as a dot and a border on all four
-   * grounds (3.65 tightest), the ink clears 4.5:1 on all four (5.38). */
+   * grounds (3.65 tightest), and the ink clears 4.5:1 ON THE WASH — 5.27 at its
+   * tightest — not on the bare ground. That distinction is the one t-18's third
+   * review round caught: `Banner` paints its text on `-bg`, and a light ink
+   * measured against the ground behind that wash reads better than it looks. */
   --color-status-blue: #497aa8;
   --color-status-blue-bg: rgba(73, 122, 168, 0.14);
-  --color-status-blue-ink: #395f84;
+  --color-status-blue-ink: #33567a;
 
   /* ---- Selection --------------------------------------------------------
    * §6.2's heather amethyst `#806C7B` marks a selected chip. As a FILL under
@@ -476,7 +479,10 @@
   --color-status-purple-ink: #c8b4c3;
   --color-status-blue: #6f9dc6;
   --color-status-blue-bg: rgba(111, 157, 198, 0.18);
-  --color-status-blue-ink: #a3c2dc;
+  /* Two steps lighter than the value the bare-ground arithmetic suggested:
+     `#A3C2DC` measures 5.61 on the dark muted ground and 4.31 on the same
+     ground once the wash is over it. 4.76 at its tightest. */
+  --color-status-blue-ink: #b0cbe1;
 
   /* ---- Washes and scrim ------------------------------------------------- */
   --color-pill: rgba(227, 218, 209, 0.06);

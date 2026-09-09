@@ -299,9 +299,14 @@ describe('app/brand-theme.css', () => {
     //   button's own fill (1.00:1 on `secondary`).
     //
     // Neither is asserted, because neither is achievable by choosing a colour,
-    // and a failing assertion for an accepted trade is noise. If a future
-    // change adds a ring OFFSET to our own Button, the second becomes solvable
-    // and an assertion belongs here then.
+    // and a failing assertion for an accepted trade is noise.
+    //
+    // THE SECOND OF THE TWO IS NOW CLOSED, by the mechanism this block said it
+    // would take: `components/app/ui/button.tsx` draws an OFFSET outline, so
+    // the indicator no longer has to clear the fill it sits on — it clears the
+    // ground, which the ring assertions below already measure. The `t-2` block
+    // after this one asserts the offset itself, on the component, because a
+    // colour cannot express it.
 
     it('puts oyster on a filled destructive button at AA', () => {
       // 3.93:1 was the gap. `#A95146` is §6.2's terracotta darkened five points
@@ -458,6 +463,123 @@ describe('app/brand-theme.css', () => {
       expect(() => flattenOver('oklch(0.5 0 0)', '#f3f0ec')).toThrow(/cannot composite/);
       // And the wash form, which is the same arithmetic reached from a hex.
       expect(washOver('#a95146', 0.1, '#f3f0ec')).toBe('#ece0db');
+    });
+  });
+
+  describe('a filled control is still legible while you are on it (t-2)', () => {
+    // t-18 measured every fill AT REST and said, in as many words, that the
+    // resting number is only half the answer: shadcn writes a filled button's
+    // hover as a 90% alpha of its own fill, which composites against whatever
+    // is behind it and lands somewhere nobody measured. On a light ground the
+    // destructive hover reached 3.92:1 and the primary's 3.83:1 — both below
+    // the bar their resting values had just cleared.
+    //
+    // The fix is a hover TOKEN per filled variant, which is a known colour and
+    // therefore measurable. These are those measurements. That the COMPONENT
+    // reaches for the token rather than the alpha is asserted separately, in
+    // `tests/unit/components/app/ui/button.test.tsx` — a token nothing uses
+    // would pass every case below.
+
+    const FILLED_VARIANTS = [
+      ['primary', '--color-primary', '--color-primary-hover', '--color-primary-foreground'],
+      ['secondary', '--color-secondary', '--color-secondary-hover', '--color-secondary-foreground'],
+      [
+        'destructive',
+        '--color-destructive',
+        '--color-destructive-hover',
+        '--color-destructive-foreground',
+      ],
+    ] as const;
+
+    it.each(FILLED_VARIANTS)('%s carries its label on the hover fill', (_name, _rest, hover, ink) => {
+      const ratio = contrastRatio(token(lightTokens, ink), token(lightTokens, hover));
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it.each(FILLED_VARIANTS)('%s hovers DARKER than it rests', (_name, rest, hover, ink) => {
+      // The direction is the property, not the threshold. §6.5 asks a hover to
+      // deepen, and a hover that deepens can only IMPROVE a label's contrast —
+      // so this is what stops a future edit satisfying the case above with a
+      // value that happens to clear 4.5 while lifting off the resting colour.
+      const atRest = contrastRatio(token(lightTokens, ink), token(lightTokens, rest));
+      const onHover = contrastRatio(token(lightTokens, ink), token(lightTokens, hover));
+      expect(onHover).toBeGreaterThan(atRest);
+    });
+
+    it('holds every hover fill across both themes', () => {
+      // §6.2: the functional colours do not change between modes, and their
+      // hovers must not either — a token restated in the dark block would be a
+      // second value nothing here measures.
+      expect(darkTokens.has('--color-primary-hover')).toBe(false);
+      expect(darkTokens.has('--color-secondary-hover')).toBe(false);
+      expect(darkTokens.has('--color-destructive-hover')).toBe(false);
+    });
+
+    it('would fail on the dark hover t-1 shipped', () => {
+      // The negative control, and the reason this block exists at all.
+      // `--color-primary-hover` used to LIFT to §6.5's `#B5633B` in dark mode —
+      // which is the pressed step of the ceremonial `#C96F43`, not of the fill.
+      // Applied to the fill it made hover lighter than rest and took the label
+      // to 3.84:1. Nothing in t-18's suite could see it, because it measured
+      // rest.
+      const oyster = token(lightTokens, '--color-primary-foreground');
+      expect(contrastRatio(oyster, '#b5633b')).toBeLessThan(4.5);
+      expect(contrastRatio(oyster, '#b5633b')).toBeLessThan(
+        contrastRatio(oyster, token(lightTokens, '--color-primary'))
+      );
+    });
+
+    it('puts a label on a selected chip at AA, which §6.2 heather amethyst does not', () => {
+      // `#806C7B` is named for reading, not for sitting on: as a fill it is
+      // 4.25:1. `--color-selected` is that hue three points darker, and is a
+      // token of its own rather than `--color-status-purple` because the status
+      // hues LIGHTEN in dark mode for badge use — the exact trap that had
+      // oyster on the status red at 2.99:1 before t-18.
+      const ink = token(lightTokens, '--color-selected-foreground');
+      expect(contrastRatio(ink, token(lightTokens, '--color-selected'))).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(ink, token(lightTokens, '--color-selected-hover'))).toBeGreaterThan(
+        contrastRatio(ink, token(lightTokens, '--color-selected'))
+      );
+      expect(darkTokens.has('--color-selected')).toBe(false);
+      // The negative control: the named amethyst is what this replaced.
+      expect(contrastRatio(ink, '#806c7b')).toBeLessThan(4.5);
+      // And it is not lost — it is still the status hue.
+      expect(token(lightTokens, '--color-status-purple')).toBe('#806c7b');
+    });
+
+    it.each(GROUND_PAIRINGS)('%s: the info banner reads on %s', (theme, ground) => {
+      // §6.2 names five functional hues and the palette carried four; `Banner`'s
+      // `info` tone is the first consumer of the fifth. It joins as a trio like
+      // its siblings, so it is measured like them: the ink on the wash it is
+      // painted on, over the ground that wash is transparent to.
+      const scope = scopeFor(theme);
+      const wash = flattenOver(token(scope, '--color-status-blue-bg'), token(scope, ground));
+      expect(contrastRatio(token(scope, '--color-status-blue-ink'), wash)).toBeGreaterThanOrEqual(
+        4.5
+      );
+      // The base carries the dot and the edge, which are non-text (1.4.11).
+      expect(contrastOn(token(scope, '--color-status-blue'), token(scope, ground))).toBeGreaterThanOrEqual(3);
+    });
+
+    it('would fail if the info ink were left on §6.2\u2019s named blue', () => {
+      // `#497AA8` is the hue §6.2 names, and as INK on the lightest ground it
+      // is 3.99:1 — the reason the trio has a separate `-ink` at all.
+      expect(contrastRatio('#497aa8', token(lightTokens, '--color-background'))).toBeLessThan(4.5);
+    });
+
+    it('gives the lotus its own values rather than borrowing UI roles', () => {
+      // The bloom is a MARK. `--color-secondary` and `--color-status-green` are
+      // byte-identical to two of these today and are UI roles that can be
+      // re-tuned for contrast — t-18 moved `--color-ring` onto the teal, and a
+      // later pass could move the teal itself. This asserts the lotus does not
+      // follow it, which is the whole reason the group is separate.
+      expect(token(lightTokens, '--color-lotus-petal-outer')).toBe('#17718a');
+      expect(token(lightTokens, '--color-lotus-petal-mid')).toBe('#3e96ae');
+      expect(token(lightTokens, '--color-lotus-petal-inner')).toBe('#7cc0d6');
+      expect(token(lightTokens, '--color-lotus-core')).toBe('#c96f43');
+      // A mark does not change between modes, so none of them is restated.
+      const lotusInDark = [...darkTokens.keys()].filter((name) => name.startsWith('--color-lotus'));
+      expect(lotusInDark).toEqual([]);
     });
   });
 
