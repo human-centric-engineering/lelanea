@@ -132,8 +132,17 @@ describe('app/brand-theme.css', () => {
 
   describe('surface isolation — /admin must be untouched', () => {
     it('scopes every rule to the consumer surface', () => {
-      const escaped = RULES.filter((rule) => !rule.selector.startsWith(LIGHT_SCOPE));
-      expect(escaped.map((rule) => rule.selector)).toEqual([]);
+      // Split on `,` first. A grouped selector — `[data-surface='consumer'] .x,
+      // .brand-display { … }` — starts with the scope while its second half
+      // repaints /admin, which is precisely the escape this test exists to
+      // catch, and a `startsWith` on the whole string waves it through.
+      const escaped = RULES.flatMap((rule) =>
+        rule.selector
+          .split(',')
+          .map((compound) => compound.trim())
+          .filter((compound) => compound.length > 0 && !compound.startsWith(LIGHT_SCOPE))
+      );
+      expect(escaped).toEqual([]);
     });
 
     it('declares nothing at :root', () => {
@@ -178,14 +187,21 @@ describe('app/brand-theme.css', () => {
     // The four places secondary text actually lands: on the page ground and on
     // a card, in each theme. Meta lines, timestamps, hints and helper copy all
     // use it, so it is read constantly.
-    const pairings = [
-      ['light', lightTokens, '--color-background'],
-      ['light', lightTokens, '--color-card'],
-      ['dark', darkTokens, '--color-background'],
-      ['dark', darkTokens, '--color-card'],
-    ] as const;
+    // EVERY ground secondary text can land on, not just the two the plan named.
+    // `--color-popover` is the one that caught a real failure: <FieldHelp>
+    // renders its whole body as muted text on it, and CLAUDE.md mandates one on
+    // every non-trivial form field, so it is arguably the most-read of the four.
+    // Select and dropdown content share the ground.
+    const GROUNDS = ['--color-background', '--color-card', '--color-muted', '--color-popover'];
+    const pairings = GROUNDS.flatMap((ground) => [
+      ['light', ground] as const,
+      ['dark', ground] as const,
+    ]);
 
-    it.each(pairings)('%s: secondary text on %#', (_theme, scope, ground) => {
+    // `%s` twice — an earlier version used `%#`, which prints the CASE INDEX, so
+    // a failure read "light: secondary text on 0" and named no ground at all.
+    it.each(pairings)('%s: secondary text on %s', (theme, ground) => {
+      const scope = theme === 'light' ? lightTokens : darkTokens;
       const ratio = contrastRatio(token(scope, '--color-muted-foreground'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });

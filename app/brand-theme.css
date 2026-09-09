@@ -124,8 +124,17 @@
   --color-accent: rgba(111, 115, 118, 0.07);
   --color-accent-foreground: #282c2e;
 
-  /* shadcn's `destructive` is the status red; the four status hues below also
-   * double as tier and section tones, which is why they stay separate. */
+  /* shadcn's `destructive` is the danger terracotta, and it HOLDS ACROSS BOTH
+   * MODES — §6.2 says the functional colours do, exactly as `--color-primary`
+   * does above. It is deliberately not wired to `--color-status-red`, which
+   * looks like the same colour: the status hues are badge tints that lighten in
+   * dark mode for use behind `-bg`/`-ink` pairs, and taking that lighter value
+   * as a BUTTON FILL put oyster text on it at 2.99:1.
+   *
+   * KNOWN GAP, raised with the owner rather than patched here: at 3.93:1 this
+   * pairing sits below the design's own filled-button baseline (primary 4.54,
+   * teal 4.91). Closing it needs a darker terracotta than the `#B75D52` §6.2
+   * names, which is a palette decision, not a build one. */
   --color-destructive: #b75d52;
   --color-destructive-foreground: #f3f0ec;
 
@@ -178,9 +187,16 @@
    * Set on `<html>` so it reaches portaled overlays as well as the document.
    * Tailwind's preflight would resolve `--font-sans` here anyway; declaring it
    * outright means the page does not depend on that indirection holding.
+   *
+   * NO `font-size` HERE, deliberately. §6.3's "16px base" is the browser's own
+   * default, not a value to pin: this selector IS `<html>` and is unlayered, so
+   * `font-size: 16px` would override the size a reader has deliberately raised
+   * in their browser and nothing could beat it (WCAG 1.4.4). Tailwind's scale is
+   * rem-based, so it would shrink every size, space and radius with it — and
+   * `/admin`, which this file does not touch, would disagree on the same
+   * machine. Body size belongs to the reader; the RATIO (1.6) is ours.
    */
   font-family: var(--font-sans);
-  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -201,7 +217,13 @@
   --color-card-foreground: #e3dad1;
   --color-muted: #323638;
   --color-muted-foreground: #a8aeb1;
-  --color-popover: #3f4446;
+  /* One step darker than the prototype's #3F4446, which measured 4.40:1
+   * against `--color-muted-foreground` — the only ground of the four that
+   * missed D5's 4.5:1. At #3D4245 it is 4.53:1 and still reads lighter than
+   * the card, so the popover keeps its lift. Popovers are where secondary text
+   * lives most: `<FieldHelp>` renders its whole body as muted text on this
+   * ground, and CLAUDE.md mandates one on every non-trivial form field. */
+  --color-popover: #3d4245;
   --color-popover-foreground: #e3dad1;
 
   /* Hairline drops to 14%, and cards gain a border at 8% so they separate from
@@ -226,8 +248,6 @@
 
   --color-accent: rgba(227, 218, 209, 0.06);
   --color-accent-foreground: #e3dad1;
-
-  --color-destructive: #c97468;
 
   /* ---- Status and tone -------------------------------------------------- */
   --color-status-green: #5c9683;

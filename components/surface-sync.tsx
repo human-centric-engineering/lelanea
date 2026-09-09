@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { classifySurface } from '@/lib/app/surface';
@@ -17,23 +17,26 @@ import { classifySurface } from '@/lib/app/surface';
  * `/admin`. This re-derives the surface from the pathname after each navigation
  * and updates the attribute. Renders nothing.
  *
- * Timing: the update runs in `useEffect` (after paint), so a client-side nav
- * between two DIFFERENTLY-themed surfaces can show one frame of the old theme.
- * Vanilla Sunrise ships an empty `app/brand-theme.css`, so there is no theme
- * delta and no visible flash. A fork that fills brand-theme.css and wants the
- * flash gone can swap to a guarded layout-effect:
+ * Timing: the update must run BEFORE paint. Upstream uses `useEffect`, which
+ * runs after it, so a client-side nav between two differently-themed surfaces
+ * shows one frame of the old theme. That is invisible in vanilla Sunrise, whose
+ * `app/brand-theme.css` ships empty — but this is the fork that filled it, and
+ * `components/auth/user-button.tsx` puts a `<Link href="/admin">` in the site
+ * header, so an admin moving between the app and `/admin` gets a full frame of
+ * oyster white over the admin's white, and charcoal on the way back.
  *
- *     const useIsomorphicLayoutEffect =
- *       typeof window !== 'undefined' ? useLayoutEffect : useEffect;
- *     useIsomorphicLayoutEffect(() => { ... }, [pathname]);
+ * LELAÑEA divergence — see `.context/app/divergences.md`, row 3. The swap to a
+ * guarded layout-effect is the remedy upstream's own comment named for exactly
+ * this case; the guard avoids React's "useLayoutEffect does nothing on the
+ * server" warning during SSR.
  *
- * (The guard avoids React's "useLayoutEffect does nothing on the server" warning
- * during SSR.) See `.context/ui/surface-theming.md`.
+ * See `.context/ui/surface-theming.md` constraint 2.
  */
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 export function SurfaceSync(): null {
   const pathname = usePathname();
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     document.documentElement.dataset.surface = classifySurface(pathname);
   }, [pathname]);
 

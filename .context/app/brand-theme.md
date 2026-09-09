@@ -86,6 +86,25 @@ specify: the radius scale (8/12/20/28/999), `--shadow-bloom`, and `--ease-quick`
 Where the two disagree — `--shadow-rest` and `--shadow-lift` have different
 values in each — **the prototype wins**.
 
+Two values deviate from the prototype, both for measured contrast reasons and
+both recorded at the site:
+
+- **Dark `--color-popover` is `#3D4245`, one step darker than the prototype's
+  `#3F4446`.** At the prototype's value, secondary text measured 4.40:1 — the
+  only one of the four grounds that missed D5's bar. Popovers are where
+  secondary text lives most: `<FieldHelp>` renders its whole body as muted text
+  on that ground, and CLAUDE.md mandates one on every non-trivial form field.
+- **`--color-destructive` holds `#B75D52` across both modes** rather than
+  lightening in dark. §6.2 says the functional colours hold; the prototype's
+  `--color-status-red` lightens because it is a badge tint used behind a
+  `-bg`/`-ink` pair, and taking that lighter value as a button fill put oyster
+  text on it at 2.99:1.
+
+**One open gap, with the owner rather than in the build:** even at `#B75D52`,
+oyster text on a filled destructive button measures 3.93:1, below the design's
+own filled-button baseline (primary 4.54, teal 4.91). Closing it needs a darker
+terracotta than the `#B75D52` §6.2 names — a palette decision, not a build one.
+
 Secondary text is `#5A5F62` light and `#A8AEB1` dark (decision D5, already
 carried by the prototype). The kit's original `#6F7376` fails 4.5:1 in all four
 pairings and survives only as the base of the border and divider alphas, where
@@ -93,6 +112,11 @@ contrast carries no meaning. `tests/unit/app/brand-theme.test.ts` measures all
 four pairings rather than trusting the note.
 
 ## Theme resolution
+
+`<SurfaceSync>` rewrites `data-surface` in a layout effect rather than upstream's
+`useEffect`, so the surface swaps before paint — otherwise a client-side nav
+between the app and `/admin` shows one frame of the wrong palette
+([row 3](./divergences.md)).
 
 The system preference is the **default**; only the toggle persists a choice.
 Nothing is written to `localStorage` until someone uses the toggle, and until

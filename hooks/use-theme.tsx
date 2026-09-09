@@ -45,7 +45,9 @@ function readStoredTheme(): Theme | null {
 }
 
 function readSystemTheme(): Theme {
-  return window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light';
+  // Same defensiveness as the subscription below: without `matchMedia` this
+  // runs inside a state initializer, where a throw fails the render outright.
+  return window.matchMedia?.(DARK_QUERY).matches ? 'dark' : 'light';
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -66,7 +68,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // every event rather than captured, so the listener stops taking effect the
   // moment the toggle records a choice — including in another tab.
   useEffect(() => {
-    const media = window.matchMedia(DARK_QUERY);
+    // Upstream only ever reached `matchMedia` when nothing was stored. This
+    // subscription runs on every mount, so it must not assume the API exists:
+    // `MediaQueryList.addEventListener` is missing on Safari < 14, and throwing
+    // inside an effect takes down the tree via the nearest error boundary —
+    // including for users with an explicit choice, who never needed this path.
+    const media = window.matchMedia?.(DARK_QUERY);
+    if (!media?.addEventListener) return;
+
     const onChange = (event: MediaQueryListEvent) => {
       if (readStoredTheme() !== null) return;
       setThemeState(event.matches ? 'dark' : 'light');

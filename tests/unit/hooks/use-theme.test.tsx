@@ -165,6 +165,27 @@ describe('ThemeProvider', () => {
     expect(media.listenerCount).toBe(0);
   });
 
+  it('survives an environment with no matchMedia at all', () => {
+    // Upstream only reached `matchMedia` when nothing was stored; the OS-follow
+    // subscription reaches it on EVERY mount. Without a guard that throws inside
+    // render and an effect, taking the tree down through the nearest error
+    // boundary — for users with an explicit choice, who never needed this path.
+    // Safari < 14 has `matchMedia` but no `addEventListener` on the result.
+    // @ts-expect-error — deleting a DOM API is the condition under test.
+    delete window.matchMedia;
+    localStorage.setItem('theme', 'dark');
+
+    expect(() => renderProvider()).not.toThrow();
+    expect(currentTheme()).toBe('dark');
+  });
+
+  it('falls back to light when matchMedia is absent and nothing is stored', () => {
+    // @ts-expect-error — see above.
+    delete window.matchMedia;
+    expect(() => renderProvider()).not.toThrow();
+    expect(currentTheme()).toBe('light');
+  });
+
   it('ignores a junk value in storage rather than rendering it', () => {
     localStorage.setItem('theme', 'aubergine');
     installMatchMedia(true);
