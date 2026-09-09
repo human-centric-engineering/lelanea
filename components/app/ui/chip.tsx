@@ -44,7 +44,8 @@ const chipVariants = cva(
 );
 
 export interface ChipProps
-  extends Omit<React.ComponentPropsWithoutRef<'button'>, 'type'>,
+  extends
+    Omit<React.ComponentPropsWithoutRef<'button'>, 'type'>,
     VariantProps<typeof chipVariants> {}
 
 /**

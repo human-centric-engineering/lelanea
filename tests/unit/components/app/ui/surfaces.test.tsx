@@ -157,18 +157,21 @@ describe('Chip', () => {
 });
 
 describe('Banner', () => {
-  it.each(['success', 'error', 'warning', 'info'] as const)('%s reads its trio from tokens', (tone) => {
-    // The kit hard-codes twelve light-mode hexes here and has no dark values, so
-    // a banner on a charcoal page painted a pale wash with dark text on it.
-    // Routing each tone through a `-bg`/`-ink` trio makes the whole component
-    // mode-aware without knowing what a mode is.
-    render(<Banner tone={tone}>Something happened.</Banner>);
-    const banner = screen.getByText('Something happened.').closest('[data-tone]');
+  it.each(['success', 'error', 'warning', 'info'] as const)(
+    '%s reads its trio from tokens',
+    (tone) => {
+      // The kit hard-codes twelve light-mode hexes here and has no dark values, so
+      // a banner on a charcoal page painted a pale wash with dark text on it.
+      // Routing each tone through a `-bg`/`-ink` trio makes the whole component
+      // mode-aware without knowing what a mode is.
+      render(<Banner tone={tone}>Something happened.</Banner>);
+      const banner = screen.getByText('Something happened.').closest('[data-tone]');
 
-    expect(banner).toHaveAttribute('data-tone', tone);
-    expect(banner?.className).toContain(`bg-[var(--color-status-${bandFor(tone)}-bg)]`);
-    expect(banner?.className).toContain(`text-[var(--color-status-${bandFor(tone)}-ink)]`);
-  });
+      expect(banner).toHaveAttribute('data-tone', tone);
+      expect(banner?.className).toContain(`bg-[var(--color-status-${bandFor(tone)}-bg)]`);
+      expect(banner?.className).toContain(`text-[var(--color-status-${bandFor(tone)}-ink)]`);
+    }
+  );
 
   it('interrupts for an error and waits its turn for everything else', () => {
     // A banner appears after the page has been read, so a screen-reader user is

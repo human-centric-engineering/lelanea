@@ -84,7 +84,8 @@ export const appButtonVariants = cva(cn('rounded-full font-medium', FOCUS_RING, 
 });
 
 export interface AppButtonProps
-  extends Omit<React.ComponentPropsWithoutRef<typeof ShadcnButton>, 'variant' | 'size'>,
+  extends
+    Omit<React.ComponentPropsWithoutRef<typeof ShadcnButton>, 'variant' | 'size'>,
     VariantProps<typeof appButtonVariants> {}
 
 /**

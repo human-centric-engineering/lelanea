@@ -491,10 +491,13 @@ describe('app/brand-theme.css', () => {
       ],
     ] as const;
 
-    it.each(FILLED_VARIANTS)('%s carries its label on the hover fill', (_name, _rest, hover, ink) => {
-      const ratio = contrastRatio(token(lightTokens, ink), token(lightTokens, hover));
-      expect(ratio).toBeGreaterThanOrEqual(4.5);
-    });
+    it.each(FILLED_VARIANTS)(
+      '%s carries its label on the hover fill',
+      (_name, _rest, hover, ink) => {
+        const ratio = contrastRatio(token(lightTokens, ink), token(lightTokens, hover));
+        expect(ratio).toBeGreaterThanOrEqual(4.5);
+      }
+    );
 
     it.each(FILLED_VARIANTS)('%s hovers DARKER than it rests', (_name, rest, hover, ink) => {
       // The direction is the property, not the threshold. §6.5 asks a hover to
@@ -536,7 +539,9 @@ describe('app/brand-theme.css', () => {
       // hues LIGHTEN in dark mode for badge use — the exact trap that had
       // oyster on the status red at 2.99:1 before t-18.
       const ink = token(lightTokens, '--color-selected-foreground');
-      expect(contrastRatio(ink, token(lightTokens, '--color-selected'))).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(ink, token(lightTokens, '--color-selected'))).toBeGreaterThanOrEqual(
+        4.5
+      );
       expect(contrastRatio(ink, token(lightTokens, '--color-selected-hover'))).toBeGreaterThan(
         contrastRatio(ink, token(lightTokens, '--color-selected'))
       );
@@ -558,7 +563,9 @@ describe('app/brand-theme.css', () => {
         4.5
       );
       // The base carries the dot and the edge, which are non-text (1.4.11).
-      expect(contrastOn(token(scope, '--color-status-blue'), token(scope, ground))).toBeGreaterThanOrEqual(3);
+      expect(
+        contrastOn(token(scope, '--color-status-blue'), token(scope, ground))
+      ).toBeGreaterThanOrEqual(3);
     });
 
     it('would fail if the info ink were left on §6.2\u2019s named blue', () => {

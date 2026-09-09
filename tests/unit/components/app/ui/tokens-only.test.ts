@@ -76,7 +76,7 @@ describe('components/app/ui — colour comes from tokens, never from a literal',
       1
     );
     // A hex inside prose is stripped; a hex on a line of code beside prose is not.
-    expect(stripComments("/* #806C7B was 4.25:1 */").match(HEX_LITERAL) ?? []).toEqual([]);
+    expect(stripComments('/* #806C7B was 4.25:1 */').match(HEX_LITERAL) ?? []).toEqual([]);
     expect(stripComments("const x = '#806c7b'; // was 4.25:1").match(HEX_LITERAL)).toEqual([
       '#806c7b',
     ]);
