@@ -43,13 +43,25 @@ function loaderCall(family: string): string {
 }
 
 describe('app/fonts.ts', () => {
-  it('exports one handle per family and joins all three variables', () => {
+  it('exports one handle per family', () => {
     for (const handle of [brandDisplay, brandSans, brandQuote]) {
       expect(handle.variable).toBeTruthy();
     }
-    // Three entries, whatever the stub named them — the join is what <html> gets.
+  });
+
+  it('joins all three families into the class <html> receives', () => {
+    // Asserted from SOURCE, not from the handles. The stub answers every loader
+    // with the identical `{ variable: '--mock-font' }`, so a runtime check would
+    // pass just as happily if this listed `brandSans.variable` three times, or
+    // if `brandQuote` were wired to the Instrument_Serif loader — the two
+    // failures most worth catching here.
+    const joined = FONTS_SOURCE.match(/export const brandFontVariables = \[([\s\S]*?)\]/)?.[1];
+    expect(joined).toBeDefined();
+    for (const family of ['brandDisplay', 'brandSans', 'brandQuote']) {
+      expect(joined).toContain(`${family}.variable`);
+    }
+    // Still three at runtime, so the exported string shape is what <html> wants.
     expect(brandFontVariables.split(' ')).toHaveLength(3);
-    expect(brandFontVariables).toContain(brandSans.variable);
   });
 
   it('names each variable for its register, not its family', () => {

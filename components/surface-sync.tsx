@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 
 import { classifySurface } from '@/lib/app/surface';
 
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
 /**
  * Keeps `<html data-surface>` in sync with the current route on client-side
  * navigation.
@@ -32,7 +34,6 @@ import { classifySurface } from '@/lib/app/surface';
  *
  * See `.context/ui/surface-theming.md` constraint 2.
  */
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 export function SurfaceSync(): null {
   const pathname = usePathname();
 

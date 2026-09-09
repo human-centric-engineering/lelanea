@@ -26,7 +26,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { act, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ThemeProvider, useTheme } from '@/hooks/use-theme';
 
@@ -163,6 +163,33 @@ describe('ThemeProvider', () => {
     expect(media.listenerCount).toBe(1);
     unmount();
     expect(media.listenerCount).toBe(0);
+  });
+
+  it('keeps an explicit choice even when the write fails', () => {
+    // Safari's private window has historically thrown on `setItem` while
+    // `getItem` keeps working. The choice still applies for the session, so a
+    // later OS switch must NOT revert it — the guard cannot rely on reading
+    // back what it could not write.
+    const media = installMatchMedia(false);
+    // Spy on the INSTANCE: happy-dom's localStorage carries its own `setItem`,
+    // so replacing Storage.prototype's leaves the real one in place — the
+    // storage assertion below is what caught that.
+    const write = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError');
+    });
+    try {
+      renderProvider();
+      act(() => screen.getByTestId('probe').click());
+      expect(currentTheme()).toBe('dark');
+      expect(write).toHaveBeenCalledWith('theme', 'dark');
+      expect(localStorage.getItem('theme')).toBeNull(); // the write really did fail
+
+      media.switchTo(false); // macOS switches back to light at sunrise
+
+      expect(currentTheme()).toBe('dark'); // the choice survives
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it('survives an environment with no matchMedia at all', () => {

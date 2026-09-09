@@ -170,6 +170,13 @@
   --radius-md: 12px;
   --radius-lg: 20px;
   --radius-xl: 28px;
+  /* 2xl and 3xl are Tailwind's, not the design's — but leaving them at their
+   * defaults (16px, 24px) would make `rounded-xl` (28px) LARGER than both, so
+   * the first component reaching for `rounded-2xl` expecting a bigger corner
+   * would silently get a smaller one. Pinned to the top of the design's scale
+   * so the ramp stays monotonic; §6.4 names 28px as its largest non-pill. */
+  --radius-2xl: 28px;
+  --radius-3xl: 28px;
   --radius-pill: 999px;
 
   /* ---- Elevation (§6.4) -------------------------------------------------
@@ -311,7 +318,10 @@
  * the capital from Lelañea's name wherever an eyebrow carries it. Write the
  * label lowercase; the class supplies the tracking. */
 [data-surface='consumer'] .brand-eyebrow {
-  font-size: 12px;
+  /* rem, not px: this file refuses to pin `font-size` on <html> precisely so a
+   * reader's browser setting survives (see the header), and a px eyebrow would
+   * opt one register back out of that. 0.75rem is §6.3's 12px at the default. */
+  font-size: 0.75rem;
   line-height: 1.4;
   letter-spacing: 0.14em;
   color: var(--color-muted-foreground);

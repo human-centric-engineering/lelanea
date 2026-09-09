@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -51,6 +51,15 @@ function readSystemTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // A choice made in THIS session, held independently of whether the write
+  // landed. `setTheme` swallows a `setItem` throw so the choice still applies
+  // for the session — but the OS listener's guard reads storage back, and in
+  // that exact case reads `null`. Without this ref, a Safari private window
+  // (which throws on `setItem` while `getItem` works) would let the next
+  // macOS sunrise auto-switch revert a deliberate toggle, with no way to make
+  // it stick. Storage is still re-read on every event, so a choice made in
+  // another tab is honoured too; this only ADDS a reason to stop following.
+  const hasExplicitChoice = useRef(false);
   // Matches the no-flash script's resolution exactly: an explicit choice wins,
   // otherwise the system preference. Neither writes.
   const [theme, setThemeState] = useState<Theme>(() => {
@@ -77,7 +86,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!media?.addEventListener) return;
 
     const onChange = (event: MediaQueryListEvent) => {
-      if (readStoredTheme() !== null) return;
+      if (hasExplicitChoice.current || readStoredTheme() !== null) return;
       setThemeState(event.matches ? 'dark' : 'light');
     };
     media.addEventListener('change', onChange);
@@ -86,6 +95,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // The ONLY writer. Persisting here is what makes a choice explicit.
   const setTheme = useCallback((next: Theme) => {
+    // Recorded BEFORE the write, and regardless of whether it succeeds: this is
+    // what makes the choice explicit for the session even when nothing persists.
+    hasExplicitChoice.current = true;
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
