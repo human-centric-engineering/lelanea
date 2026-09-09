@@ -137,11 +137,24 @@ line that merely separates. So `--color-border`, `--color-divider` and
 `--color-card-border` keep §6.4's alphas untouched — cards, dividers and
 sections are exactly as they were — and only `--color-input` rose. In this
 component set that token is the edge of `<Input>`, `<Textarea>`,
-`<SelectTrigger>`, `<Checkbox>` and the outline `<Button>`, and the off-track
-fill of `<Switch>`; it measured ~1.33:1 light and ~1.45:1 dark. The kit's silver
-`#6F7376` cannot reach 3:1 by any alpha — opaque it is 3.85 on the card ground —
-so light is based on the heading ink instead. The two values clear 3:1 on all
-four grounds in both themes, with 3.24 the tightest.
+`<SelectTrigger>`, `<Checkbox>` and the outline `<Button>`; it measured ~1.33:1
+light and ~1.45:1 dark. The kit's silver `#6F7376` cannot reach 3:1 by any alpha
+— opaque it is 3.85 on the card ground — so light is based on the heading ink
+instead. The two values clear 3:1 on all four grounds in both themes, with 3.24
+the tightest.
+
+`--color-input` **is also a fill**, and that changes a live control. shadcn's
+`<Switch>` paints its off-track with `bg-input`, and `<Switch>` is on this
+surface today in the cookie-consent modal. Before, the off-track was `#D3D2D0`:
+1.33:1 against the ground, so invisible as a control, but 3.41:1 against the
+orange on-track. After, it is `#828483`: 3.24:1 against the ground, and 1.37:1
+against the on-track. **The trade is taken deliberately.** 1.4.11 governs the
+first number and it now passes; the second is 1.4.1's territory, which asks only
+that colour not be the _sole_ carrier of state — and the thumb slides, so it
+never was. What is left is grey-off against orange-on, the ordinary switch
+idiom, in place of a near-white track nobody could see. No value could have had
+both: 3:1 on an oyster ground caps lightness at 0.258 and 3:1 on the primary
+fill demands 0.561, and those ranges do not meet.
 
 **The focus ring left the ceremonial orange.** `--color-ring` was `#C96F43`,
 which measures 2.90 on the light card ground and 2.83 on the dark popover — a
@@ -153,11 +166,27 @@ active states, and the prototype's own `.input:focus` sets
 `border-color: var(--color-secondary)`. The orange keeps the primary action and
 the lotus, which is all §6.2 asked of it.
 
+**One thing this does not fix, and no colour could.** `components/ui/button.tsx`
+draws `ring-1` with no `ring-offset`, so a focused button's ring sits flush
+against its own fill. Its outer edge still meets the page ground at 4.91:1,
+which is what you perceive on the orange and terracotta fills — but `secondary`
+_is_ this teal, so a focused secondary button just grows a pixel in its own
+colour. The same arithmetic as the switch closes off every alternative:
+lightness at most 0.258 to clear the ground, at least 0.561 to clear a fill.
+This is a **missing mechanism — an offset — not a wrong value**, so it belongs
+to the component rather than to the palette. It is latent today, since nothing
+on this surface renders `<Button variant="secondary">`, and **t-2 builds our own
+Button under `components/app/`, which is where the offset should land.**
+
 Every number above is **measured from the stylesheet** by
 `tests/unit/app/brand-theme.test.ts`, which composites the `rgba()` boundary
 tokens over each ground rather than reading their channels raw — read raw, an
 invisible hairline measures as though it were opaque and every assertion passes
-while nothing is on screen.
+while nothing is on screen. The guards pair each token against a **page
+ground**, which is what 1.4.11 governs; the two adjacencies above — off-track
+against on-track, ring against fill — are deliberately not asserted, because
+neither is reachable by choosing a colour and a permanently failing assertion
+for an accepted trade is noise.
 
 Secondary text is `#5A5F62` light and `#A8AEB1` dark (decision D5, already
 carried by the prototype). The kit's original `#6F7376` fails 4.5:1 in all four

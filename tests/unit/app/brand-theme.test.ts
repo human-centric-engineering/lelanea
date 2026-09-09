@@ -267,11 +267,28 @@ describe('app/brand-theme.css', () => {
   });
 
   describe('controls are visible (t-18)', () => {
-    // t-1 shipped three measured gaps here and raised them with the owner
-    // rather than patching them, because closing them read as a palette
-    // decision. This is that decision, measured rather than restated: every
-    // number below is read out of the stylesheet, so a later edit that
-    // regresses one fails here and not in front of a person who cannot see it.
+    // t-1 shipped TWO measured gaps here and raised them with the owner rather
+    // than patching them, because closing either read as a palette decision.
+    // Auditing the second turned up the third, the focus ring. This is that
+    // decision, measured rather than restated: every number below is read out
+    // of the stylesheet, so a later edit that regresses one fails here and not
+    // in front of a person who cannot see it.
+    //
+    // WHAT THESE GUARDS COVER, and what they deliberately do not. Every
+    // assertion below pairs a token against a PAGE GROUND, because that is what
+    // WCAG 1.4.11 governs — the boundary or indicator against the surface
+    // behind it. Two adjacencies are knowingly outside them, both recorded at
+    // their site in the stylesheet with the arithmetic showing no value can
+    // satisfy both constraints at once:
+    //
+    //   `--color-input` against `--color-primary` (a <Switch>'s off-track
+    //   beside its on-track, 1.37:1), and `--color-ring` against a filled
+    //   button's own fill (1.00:1 on `secondary`).
+    //
+    // Neither is asserted, because neither is achievable by choosing a colour,
+    // and a failing assertion for an accepted trade is noise. If a future
+    // change adds a ring OFFSET to our own Button, the second becomes solvable
+    // and an assertion belongs here then.
 
     it('puts oyster on a filled destructive button at AA', () => {
       // 3.93:1 was the gap. `#A95146` is §6.2's terracotta darkened five points
@@ -295,9 +312,11 @@ describe('app/brand-theme.css', () => {
 
     it.each(GROUND_PAIRINGS)('%s: the control boundary on %s clears 1.4.11', (theme, ground) => {
       // `--color-input` is the edge of <Input>, <Textarea>, <SelectTrigger>,
-      // <Checkbox> and the outline <Button>, and the off-track fill of
-      // <Switch>. WCAG 1.4.11 asks 3:1 of anything needed to identify a
-      // control. It was ~1.33:1 light and ~1.45:1 dark.
+      // <Checkbox> and the outline <Button>, and the off-track FILL of
+      // <Switch> — which is live on this surface in the cookie-consent modal,
+      // so this token is not only ever a hairline. WCAG 1.4.11 asks 3:1 of
+      // anything needed to identify a control. It was ~1.33:1 light and
+      // ~1.45:1 dark.
       const scope = scopeFor(theme);
       const ratio = contrastOn(token(scope, '--color-input'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(3);
@@ -307,7 +326,10 @@ describe('app/brand-theme.css', () => {
       // The ring is a state indicator, so the same 3:1 applies — and it is the
       // one of the three that matters most, because a focus ring is the only
       // thing telling a keyboard user where they are. The ceremonial orange
-      // measured 2.90 on the light card and 2.83 on the dark popover.
+      // measured 2.90 on the light card and 2.83 on the dark popover. This is
+      // the ring against the GROUND it is drawn on; against a filled button's
+      // own fill it is a mechanism problem, not a colour one — see the block
+      // comment above.
       const scope = scopeFor(theme);
       const ratio = contrastOn(token(scope, '--color-ring'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(3);

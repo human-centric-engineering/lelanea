@@ -106,20 +106,38 @@
    * has its own token. `--color-border` above separates things — cards from
    * ground, a row from the next — and §6.4's 24% hairline is exactly right for
    * that. `--color-input` IDENTIFIES a control: it is the edge of <Input>,
-   * <Textarea>, <SelectTrigger>, <Checkbox>, the outline <Button>, and the
-   * off-track of <Switch> (which fills with `bg-input`). WCAG 1.4.11 asks 3:1
-   * of the second and nothing of the first, so only this one moves and the
-   * design's hairline character survives everywhere it was decorative.
+   * <Textarea>, <SelectTrigger>, <Checkbox> and the outline <Button>. WCAG
+   * 1.4.11 asks 3:1 of the second and nothing of the first, so only this one
+   * moves and the design's hairline character survives everywhere it was
+   * decorative.
    *
    * The kit's silver `#6F7376` cannot reach 3:1 by alpha at all — opaque, it
    * measures 3.85 on the card ground — so the base here is the heading ink
-   * instead. At 50% it composites to 3.31 / 3.24 / 3.27 / 3.35 against
+   * instead. At 50% it composites to 3.31 / 3.24 / 3.24 / 3.33 against
    * background, card, muted and popover; 0.48 lands at 3.07 and is too close to
    * survive a future ground moving a step.
    *
+   * IT IS ALSO A FILL, and that is not a detail — shadcn's <Switch> paints its
+   * OFF-TRACK with `bg-input` (`components/ui/switch.tsx`), and <Switch> is
+   * live on this surface today in the cookie-consent modal. So this token moving
+   * changes a switch, measured both ways:
+   *
+   *   before  off-track #D3D2D0 — 1.33:1 against the ground (invisible as a
+   *           control), 3.41:1 against the orange on-track
+   *   after   off-track #828483 — 3.24:1 against the ground (it is now a
+   *           control you can see), 1.37:1 against the on-track
+   *
+   * Taken deliberately. The off-track is what 1.4.11 governs and it now passes;
+   * the off-versus-on delta is governed by 1.4.1, which asks that colour not be
+   * the SOLE carrier of state — and the thumb slides, so it never was. What is
+   * left is grey-off against orange-on, which is the ordinary switch idiom, in
+   * place of a near-white track nobody could see. No single value could have
+   * both: 3:1 against an oyster ground caps lightness at 0.258, and 3:1 against
+   * the primary fill needs 0.561 or more. The ranges do not meet.
+   *
    * The prototype gives `.input` the same `var(--color-border)` as everything
-   * else, so this is a deliberate deviation from it, measured — the third of
-   * its kind, beside dark `--color-popover` and `--color-destructive`. */
+   * else, so this is a deliberate deviation from it, measured — one of four,
+   * beside dark `--color-popover`, `--color-destructive` and `--color-ring`. */
   --color-input: rgba(17, 24, 26, 0.5);
 
   /* The focus ring is a state indicator, so 1.4.11's 3:1 applies to it too —
@@ -131,7 +149,20 @@
    * (`border-color: var(--color-secondary)`). 4.91 / 4.49 / 4.62 / 5.12 across
    * the four grounds. Declared as a hex rather than `var(--color-secondary-ink)`
    * so the test measures the value that ships rather than a reference it would
-   * have to resolve. Keep the two in step. */
+   * have to resolve. Keep the two in step.
+   *
+   * WHAT THIS DOES NOT FIX, and cannot: a ring drawn flush against a FILLED
+   * button. `components/ui/button.tsx` uses `ring-1` with no `ring-offset`, so
+   * the ring's inner edge abuts the fill. Its outer edge still meets the page
+   * ground at 4.91:1, which is what you actually perceive on the orange and
+   * terracotta fills — but `secondary` IS this teal, so a focused secondary
+   * button merely grows by a pixel in its own colour. No ring colour repairs
+   * that: clearing 3:1 on an oyster ground caps lightness at 0.258, clearing it
+   * on a fill at 0.154 demands 0.561 or more, and the two ranges are disjoint.
+   * It is a missing MECHANISM (an offset), not a wrong value, so it belongs to
+   * the component and not to this file. Latent today — nothing on this surface
+   * renders `<Button variant="secondary">` — and t-2 builds our own Button,
+   * which is where the offset should land. */
   --color-ring: #17718a;
 
   /* ---- Actions ----------------------------------------------------------
@@ -274,18 +305,18 @@
   --color-card-border: rgba(227, 218, 209, 0.08);
 
   /* The control boundary again, on the warm stone rather than the ink — see the
-   * light block for why it is not the hairline. 0.52 composites to
-   * 3.91 / 3.33 / 3.61 / 3.24 against background, card, muted and popover; 0.50
-   * clears 3:1 too but only by 0.11 on the popover ground, and the popover is
-   * where <FieldHelp> puts a control most often. The two themes are two points
-   * apart because the grounds are: dark's four span a narrower range under a
-   * lighter mark. */
+   * light block for why it is not the hairline, and for the switch it also
+   * fills. 0.52 composites to 3.89 / 3.35 / 3.60 / 3.24 against background,
+   * card, muted and popover; 0.50 clears 3:1 too but only by 0.11 on the
+   * popover ground, and the popover is where <FieldHelp> puts a control most
+   * often. The two themes are two points apart because the grounds are: dark's
+   * four span a narrower range under a lighter mark. */
   --color-input: rgba(227, 218, 209, 0.52);
 
   /* Brand aqua — the dark half of the secondary ink, which is what carries the
-   * focus ring (light block). 6.96 / 5.26 / 6.03 / 5.02 across the four
-   * grounds. `--color-secondary-ink` below holds the same value; keep them in
-   * step. */
+   * focus ring (light block, which also records the filled-button case this
+   * cannot reach). 6.96 / 5.26 / 6.03 / 5.02 across the four grounds.
+   * `--color-secondary-ink` below holds the same value; keep them in step. */
   --color-ring: #7cc0d6;
 
   /* ---- Actions ----------------------------------------------------------
