@@ -168,6 +168,25 @@ active states, and the prototype's own `.input:focus` sets
 `border-color: var(--color-secondary)`. The orange keeps the primary action and
 the lotus, which is all §6.2 asked of it.
 
+### The resting fill is not the whole story
+
+**4.68:1 is the fill at rest.** `button.tsx` writes its hover as
+`hover:bg-destructive/90` — an alpha over whatever is behind it — so on a light
+ground the hover fill composites to `#B06157` and the label drops to **3.92:1**,
+which is the gap this token was moved to close. `<Badge variant="destructive">`'s
+`/80` is 3.26:1.
+
+**Darkening further does not fix it, and is not worth what it would cost.** The
+90% composite reaches 4.5:1 only at a lightness of 0.42 — `#97493F` — which puts
+the _resting_ fill at 5.53:1 and lands ten points below §6.2's terracotta: a
+palette shift visible on every surface, bought for a state that lasts as long as
+a pointer hovers, and the badge's `/80` would still fail at 3.70. The real
+mechanism is a hover **token**, which the accent already has
+(`--color-primary-hover`) and which shadcn's alpha-hover bypasses.
+`bg-primary/90` has the identical shape at 3.83:1 and is untouched here, so one
+fix serves both. **It lands with our own Button in t-2, beside the ring offset
+below.**
+
 **One thing this does not fix, and no colour could.** `components/ui/button.tsx`
 draws `ring-1` with no `ring-offset`, so a focused button's ring sits flush
 against its own fill. Its outer edge still meets the page ground at 4.91:1,
@@ -217,7 +236,16 @@ override of an existing utility** — its only one —
 ```
 
 which measures 5.92 / 5.42 / 5.57 / 6.18 light and 6.52 / 4.93 / 5.65 / 4.71 dark
-against the four grounds. All eight clear AA; six of the eight failed it before.
+against the four bare grounds. All eight clear AA; six of the eight failed it
+before.
+
+Against the `bg-destructive/10` **wash** the banners actually paint on — lighter
+than a dark ground, and therefore tighter — it measures 5.20 / 4.78 / 4.92 light
+and 6.01 / 4.65 / 5.25 dark over background, card and muted. A wash over the
+_dark popover_ would be 4.44, the tightest number in the palette; nothing renders
+an error banner inside a popover, so the test measures the three grounds a banner
+can reach and says why rather than lowering its threshold to cover a case that
+does not exist.
 
 It is a rule rather than a token because `text-destructive` is _generated from_
 `--color-destructive`, so separating the roles any other way means editing twenty

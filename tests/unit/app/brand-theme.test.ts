@@ -136,6 +136,19 @@ function contrastOn(value: string, ground: string): number {
 }
 
 /**
+ * The ground a Tailwind `bg-<token>/<n>` wash actually paints — the token at
+ * that alpha, over whatever is behind it. Every form's error banner is
+ * `bg-destructive/10 text-destructive`, so the ink there is read against this
+ * and not against the page ground.
+ */
+function washOver(hex: string, alpha: number, ground: string): string {
+  const [red, green, blue] = [0, 2, 4].map((offset) =>
+    Number.parseInt(hex.replace('#', '').slice(offset, offset + 2), 16)
+  );
+  return flattenOver(`rgba(${red}, ${green}, ${blue}, ${alpha})`, ground);
+}
+
+/**
  * Every opaque ground a control or a line can land on, in either theme. The
  * page ground, a card, a sunk surface, and a popover — <FieldHelp>, <Select>
  * and <DropdownMenu> all render onto the last of these, and it is the one that
@@ -302,18 +315,46 @@ describe('app/brand-theme.css', () => {
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
 
-    it.each(GROUND_PAIRINGS)('%s: destructive TEXT on %s clears AA', (theme, ground) => {
-      // `--color-destructive` has two roles and they pull opposite ways: a FILL
-      // dark enough to hold oyster, and INK light enough to read on charcoal.
-      // Darkening the fill for the button took the ink from 2.86:1 to 2.44:1 in
-      // dark mode on the `bg-destructive/10` wash every form error uses — so
-      // the ink role is sent to `--color-status-red-ink` by a rule after the
-      // dark block. This measures the colour that actually paints those twenty
-      // components, which is why it reads the status ink and not the token the
-      // utility is named after.
+    // `--color-destructive` has two roles pulling opposite ways: a FILL dark
+    // enough to hold oyster, and INK light enough to read on charcoal.
+    // Darkening the fill for the button took the ink from 2.86:1 to 2.44:1 in
+    // dark mode, so the ink role is sent to `--color-status-red-ink` by a rule
+    // after the dark block. Both guards below read the status ink rather than
+    // the token the utility is named after, because that is what paints.
+
+    it.each(GROUND_PAIRINGS)('%s: destructive TEXT on a bare %s', (theme, ground) => {
+      // A plain `text-destructive` line with no wash behind it —
+      // `components/forms/avatar-upload.tsx` renders exactly that on a card.
       const scope = scopeFor(theme);
       const ratio = contrastRatio(token(scope, '--color-status-red-ink'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // The grounds an error BANNER can appear on. Not `--color-popover`: no
+    // component renders `bg-destructive/10` inside a popover, and the wash over
+    // the dark popover is the tightest number in the palette at 4.44 — so
+    // asserting it would fail on a case that does not exist, while dropping the
+    // threshold to accommodate it would stop guarding the three that do.
+    const BANNER_GROUNDS = ['--color-background', '--color-card', '--color-muted'];
+
+    it.each(
+      BANNER_GROUNDS.flatMap((ground) => [['light', ground] as const, ['dark', ground] as const])
+    )('%s: destructive TEXT on a bg-destructive/10 wash over %s', (theme, ground) => {
+      // The measurement that matches what twelve form banners actually paint.
+      // The wash is lighter than a dark ground, so it eats margin the bare-
+      // ground guard above cannot see: dark card is 4.93 bare and 4.65 washed.
+      // A future palette nudge that keeps the bare numbers at 4.5 can still
+      // take the real banner under it, which is what this catches.
+      const scope = scopeFor(theme);
+      // The FILL is read from the light block in both themes, because it is
+      // declared only there — it holds across both modes by design, which the
+      // `holds the destructive fill across both themes` case below asserts.
+      // Reading it from `scope` throws in dark, and that throw is how this
+      // comment came to exist.
+      const wash = washOver(token(lightTokens, '--color-destructive'), 0.1, token(scope, ground));
+      expect(contrastRatio(token(scope, '--color-status-red-ink'), wash)).toBeGreaterThanOrEqual(
+        4.5
+      );
     });
 
     it('sends the destructive TEXT role away from the fill', () => {
@@ -415,6 +456,8 @@ describe('app/brand-theme.css', () => {
       expect(flattenOver('rgba(17, 24, 26, 0.5)', '#f3f0ec')).toBe('#828483');
       expect(flattenOver('#a95146', '#f3f0ec')).toBe('#a95146');
       expect(() => flattenOver('oklch(0.5 0 0)', '#f3f0ec')).toThrow(/cannot composite/);
+      // And the wash form, which is the same arithmetic reached from a hex.
+      expect(washOver('#a95146', 0.1, '#f3f0ec')).toBe('#ece0db');
     });
   });
 

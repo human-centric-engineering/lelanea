@@ -124,10 +124,12 @@
    * live on this surface today in the cookie-consent modal. So this token moving
    * changes a switch, measured both ways:
    *
-   *   before  off-track #D3D2D0 — 1.33:1 against the ground (invisible as a
-   *           control), 3.41:1 against the orange on-track
-   *   after   off-track #828483 — 3.24:1 against the ground (it is now a
-   *           control you can see), 1.37:1 against the on-track
+   *   before  off-track #D3D2D0 over the page ground — 1.33:1 against it
+   *           (invisible as a control), 3.41:1 against the orange on-track
+   *   after   off-track #828483 over the page ground — 3.31:1 against it, and
+   *           3.24:1 at its tightest (over a card, where it composites to
+   *           #7E7F7D). It is now a control you can see. 1.37:1 against the
+   *           on-track
    *
    * Taken deliberately. The off-track is what 1.4.11 governs and it now passes;
    * the off-versus-on delta is governed by 1.4.1, which asks that colour not be
@@ -211,7 +213,24 @@
    * One token cannot do both: the fill must be dark enough to carry oyster,
    * the ink light enough to be read on charcoal. See the `.text-destructive`
    * rule after the dark block, which sends the ink role to
-   * `--color-status-red-ink`. */
+   * `--color-status-red-ink`.
+   *
+   * AND 4.68:1 IS THE RESTING FILL ONLY. `button.tsx` writes its hover as
+   * `hover:bg-destructive/90` — an alpha over whatever is behind — so on a
+   * light ground the hover fill composites to #B06157 and the label drops to
+   * 3.92:1, which is the gap this token was moved to close. `<Badge>`'s
+   * `/80` is 3.26:1.
+   *
+   * NOT closed by darkening this further, deliberately. The 90% composite only
+   * reaches 4.5:1 at a lightness of 0.42 — #97493F — which would put the
+   * RESTING fill at 5.53:1 and land ten points below §6.2's terracotta, a
+   * palette shift visible on every surface to buy a state that lasts as long
+   * as a pointer hovers. The badge's `/80` would still fail at 3.70. The real
+   * mechanism is a hover TOKEN, which the accent already has
+   * (`--color-primary-hover`) and shadcn's alpha-hover bypasses — so it lands
+   * with our own Button in t-2, beside the ring offset. `bg-primary/90` has
+   * the same shape at 3.83:1 and is untouched here, so a fix for one is a fix
+   * for both. */
 
   /* ---- Status and tone -------------------------------------------------- */
   --color-status-green: #457b6a;
