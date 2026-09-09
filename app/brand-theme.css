@@ -1,58 +1,337 @@
 /* app/brand-theme.css
  *
- * Fork-owned per-surface theming. SHIPS EMPTY — vanilla Sunrise is byte-for-byte
- * unchanged: with no overrides here, every surface inherits app/globals.css's
- * `@theme` defaults. A fork fills this file to repaint one surface (e.g. its
- * consumer-facing pages) while leaving others (e.g. `/admin`) on the platform
- * defaults, including future upstream palette tweaks. No platform layout or page
- * is ever edited — that's the whole point of the seam.
+ * Lelañea's palette and type, scoped to the `consumer` surface.
  *
- * Imported once in app/layout.tsx AFTER globals.css. Keep these selectors
- * UNLAYERED (no `@layer`): Tailwind 4 emits its `@theme` tokens inside a layer at
- * `:root`, so an unlayered selector here beats them by layer order, and a
- * descendant subtree pin beats the `<html>`-level scope by specificity.
+ * Sunrise ships this file empty; it is a fork-owned seam, so what we put here
+ * merges cleanly on every upgrade and no platform layout or page is edited to
+ * get the brand onto the page. It is imported once in `app/layout.tsx` AFTER
+ * `globals.css`.
  *
  * MECHANISM
- *   proxy.ts classifies each request via `classifySurface(pathname)` and sets the
- *   `x-surface` request header; the root layout puts it on `<html data-surface>`;
- *   `<SurfaceSync>` keeps that attribute correct across client-side navigation.
- *   Because the marker is on `<html>`, body-portaled overlays (Radix dialog /
- *   dropdown / popover / toast, the cookie-consent modal) inherit it too — they
- *   mount at document.body, outside any route-group subtree, which is exactly why
- *   the marker must live at the root and not on a `(group)/layout.tsx`.
+ *   `proxy.ts` classifies each request through `classifySurface()`
+ *   (`lib/app/surface.ts`) and sets `x-surface`; the root layout puts it on
+ *   `<html data-surface>`; `<SurfaceSync>` keeps it correct across client-side
+ *   navigation. Because the marker is on `<html>`, body-portaled overlays
+ *   (Radix dialog / dropdown / popover / toast, the cookie banner) inherit the
+ *   brand too — they mount at `document.body`, outside every route subtree.
  *
- * The two surfaces vanilla Sunrise classifies are `admin` and `consumer`
- * (see lib/app/surface.ts — the policy seam). Redeclare only the tokens you
- * change; everything else inherits, so upstream palette changes flow through the
- * tokens you didn't touch.
+ *   `/admin` classifies as `admin` and matches nothing here, so the admin keeps
+ *   Sunrise's palette and fonts, including future upstream tweaks.
  *
- * --------------------------------------------------------------------------
- * EXAMPLE (commented out — uncomment and adjust to brand a surface). Note the
- * TWO dark-mode selector FORMS; they are NOT interchangeable (see the docs):
+ * FOUR THINGS THAT ARE LOAD-BEARING
  *
- *   [data-surface='consumer'] {                 // light, on <html>
- *     --color-primary: #0a1a3a;
- *     --color-background: #fbf6ec;
- *     --color-foreground: #16213d;
- *   }
- *   [data-surface='consumer'].dark {            // dark: `.dark` is on the SAME
- *     --color-primary: #ffc73a;                 // element (<html>) -> COMPOUND
- *     --color-background: #0a1a3a;
- *     --color-foreground: #f2eede;
- *   }
+ * 1. UNLAYERED. Tailwind 4 emits its `@theme` tokens at `:root` inside a layer,
+ *    and `globals.css` puts the `.dark` overrides in `@layer base`. Unlayered
+ *    beats layered whatever the specificity, which is the only reason these
+ *    win. Never wrap any of this in `@layer`.
+ *    (`.context/ui/surface-theming.md` constraint 6.)
  *
- * For a surface PINNED on a descendant element (a wrapper that sets its own
- * `data-surface`), the dark scope is a DESCENDANT selector instead, because the
- * pin sits below `<html>.dark`:
+ * 2. THE DARK SCOPE IS A COMPOUND SELECTOR. `.dark` is toggled on `<html>` —
+ *    the same element that carries `data-surface` — so it is
+ *    `[data-surface='consumer'].dark`, not a descendant selector. The
+ *    descendant form is for a surface pinned on a wrapper further down the
+ *    tree, and using it here would render light-on-light. (Constraint 4.)
  *
- *   .dark [data-surface='canvas'] { --color-background: #0a0a0a; ... }
+ * 3. THE LIGHT BLOCK ALSO MATCHES IN DARK MODE. `[data-surface='consumer']`
+ *    matches `<html class="dark" data-surface="consumer">` too; the dark block
+ *    simply wins for the tokens it restates. So anything that does not change
+ *    between themes — the fonts, the radii, the easings — is declared ONCE, in
+ *    the light block, and holds in both. A token declared only under `.dark`
+ *    would have no light value at all, which is what
+ *    `tests/unit/app/brand-theme.test.ts` checks for.
  *
- * And because a pin only re-tokenises its own subtree, an ANCESTOR that frames it
- * (e.g. a `<main>`) still shows the parent surface's background; paint it with
- * `:has()`:
+ * 4. THIS FILE OVERRIDES TOKENS; IT DOES NOT CREATE UTILITIES. Tailwind
+ *    generates utility classes from `@theme` at build time, and `@theme` lives
+ *    in `globals.css` (Sunrise's). Redeclaring `--color-primary` here re-skins
+ *    every existing `bg-primary`; declaring a NEW token like `--color-heading`
+ *    does NOT produce a `text-heading` utility. Consume the brand-only tokens
+ *    through `var(--color-heading)` — in a component's own CSS, or as a
+ *    Tailwind arbitrary value: `text-[var(--color-heading)]`.
  *
- *   main:has([data-surface='canvas']) { background-color: #ffffff; }
+ * SOURCES
+ *   Values are the approved prototype's token block
+ *   (`.context/app/planning/design/lelanea.html`, `:root` and
+ *   `:root[data-theme='dark']`), which §6.1 makes the authority on how the
+ *   product looks. Four tokens the prototype does not carry — the radius scale,
+ *   `--shadow-bloom` and `--ease-quick` — come from the design kit
+ *   (`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`),
+ *   which §6.4 and §6.5 specify. Where the kit and the prototype disagree
+ *   (`--shadow-rest`, `--shadow-lift`), the prototype wins, per §6.1.
  *
- * See .context/ui/surface-theming.md for all six design constraints.
- * --------------------------------------------------------------------------
+ *   The secondary-text values are decision D4/D5, already carried by the
+ *   prototype: `#5A5F62` light and `#A8AEB1` dark. `#6F7376` — the kit's
+ *   original, which fails 4.5:1 in all four pairings — survives only as the
+ *   base of the border and divider alphas, where contrast carries no meaning.
+ *
+ * See `.context/ui/surface-theming.md` for the full mechanism.
  */
+
+/* ============================================================ consumer: light
+ * Also the base for dark: everything not restated in the `.dark` block below
+ * holds in both themes (note 3 above).
+ */
+[data-surface='consumer'] {
+  color-scheme: light;
+
+  /* ---- Type -------------------------------------------------------------
+   * The `--font-brand-*` variables are declared by `next/font` on this same
+   * element (`app/fonts.ts`, applied in `app/layout.tsx`). Mapping them onto
+   * Tailwind's font tokens HERE rather than globally is what keeps `/admin` on
+   * the platform's fonts while the variables exist document-wide.
+   */
+  --font-sans: var(--font-brand-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-brand-display), Georgia, 'Times New Roman', serif;
+  --font-quote: var(--font-brand-quote), Georgia, serif;
+
+  /* ---- Grounds and ink ------------------------------------------------- */
+  --color-background: #f3f0ec;
+  --color-foreground: #282c2e;
+  --color-heading: #11181a;
+  --color-card: #ebe6df;
+  --color-card-foreground: #282c2e;
+  --color-muted: #eee9e2;
+  --color-muted-foreground: #5a5f62;
+  --color-popover: #f7f5f1;
+  --color-popover-foreground: #282c2e;
+
+  /* ---- Lines ------------------------------------------------------------
+   * Hairline 1px at 24% in light (§6.4). `--color-card-border` is transparent
+   * here on purpose: cards carry no border in light mode, only in dark.
+   */
+  --color-border: rgba(111, 115, 118, 0.24);
+  --color-divider: rgba(111, 115, 118, 0.16);
+  --color-card-border: rgba(111, 115, 118, 0);
+  --color-input: rgba(111, 115, 118, 0.24);
+  --color-ring: #c96f43;
+
+  /* ---- Actions ----------------------------------------------------------
+   * Burnt orange is the ceremonial accent: the lotus centre and the primary
+   * action, and very little else (§6.2). `--color-accent-ink` is the orange
+   * LINE colour and is deliberately NOT shadcn's `--color-accent`, which is a
+   * hover SURFACE — that role is filled by the pill wash below.
+   */
+  --color-accent-ink: #c96f43;
+  --color-primary: #a85732;
+  --color-primary-hover: #9c5130;
+  --color-primary-foreground: #f3f0ec;
+  --color-secondary: #17718a;
+  --color-secondary-foreground: #f3f0ec;
+  --color-secondary-ink: #17718a;
+  --color-secondary-wash: rgba(23, 113, 138, 0.11);
+  --color-user-bubble: #17718a;
+
+  /* shadcn's `accent` is a hover surface — the pill wash plays that part. */
+  --color-accent: rgba(111, 115, 118, 0.07);
+  --color-accent-foreground: #282c2e;
+
+  /* shadcn's `destructive` is the danger terracotta, and it HOLDS ACROSS BOTH
+   * MODES — §6.2 says the functional colours do, exactly as `--color-primary`
+   * does above. It is deliberately not wired to `--color-status-red`, which
+   * looks like the same colour: the status hues are badge tints that lighten in
+   * dark mode for use behind `-bg`/`-ink` pairs, and taking that lighter value
+   * as a BUTTON FILL put oyster text on it at 2.99:1.
+   *
+   * KNOWN GAP, raised with the owner rather than patched here: at 3.93:1 this
+   * pairing sits below the design's own filled-button baseline (primary 4.54,
+   * teal 4.91). Closing it needs a darker terracotta than the `#B75D52` §6.2
+   * names, which is a palette decision, not a build one. */
+  --color-destructive: #b75d52;
+  --color-destructive-foreground: #f3f0ec;
+
+  /* ---- Status and tone -------------------------------------------------- */
+  --color-status-green: #457b6a;
+  --color-status-green-bg: rgba(69, 123, 106, 0.13);
+  --color-status-green-ink: #35604f;
+  --color-status-yellow: #c9a65d;
+  --color-status-yellow-bg: rgba(201, 166, 93, 0.24);
+  --color-status-yellow-ink: #7e6224;
+  --color-status-red: #b75d52;
+  --color-status-red-bg: rgba(183, 93, 82, 0.13);
+  --color-status-red-ink: #94433a;
+  --color-status-purple: #806c7b;
+  --color-status-purple-bg: rgba(128, 108, 123, 0.17);
+  --color-status-purple-ink: #63515f;
+
+  /* ---- Washes and scrim ------------------------------------------------- */
+  --color-pill: rgba(111, 115, 118, 0.07);
+  --color-pill-hover: rgba(111, 115, 118, 0.13);
+  --color-scrim: rgba(17, 24, 26, 0.42);
+
+  /* ---- The one data hue, stepped for this ground ------------------------ */
+  --color-bar: #0b80a0;
+  --color-bar-idle: rgba(11, 128, 160, 0.16);
+
+  /* ---- Radii (§6.4) -----------------------------------------------------
+   * These restate Tailwind's own scale, so `rounded-md` / `rounded-lg` /
+   * `rounded-xl` come out at Lelañea's radii on consumer pages with no markup
+   * change. Pills use `rounded-full`; `--radius-pill` exists for `var()` use.
+   */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  /* 2xl and 3xl are Tailwind's, not the design's — but leaving them at their
+   * defaults (16px, 24px) would make `rounded-xl` (28px) LARGER than both, so
+   * the first component reaching for `rounded-2xl` expecting a bigger corner
+   * would silently get a smaller one. Pinned to the top of the design's scale
+   * so the ramp stays monotonic; §6.4 names 28px as its largest non-pill. */
+  --radius-2xl: 28px;
+  --radius-3xl: 28px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation (§6.4) -------------------------------------------------
+   * Two layers only, plus the lotus centre's orange bloom. No inner shadows.
+   */
+  --shadow-rest: 0 1px 2px rgba(17, 24, 26, 0.04), 0 8px 24px rgba(17, 24, 26, 0.06);
+  --shadow-lift: 0 2px 6px rgba(17, 24, 26, 0.06), 0 24px 60px rgba(17, 24, 26, 0.16);
+  --shadow-bloom: 0 0 64px rgba(201, 111, 67, 0.25);
+
+  /* ---- Motion (§6.5) ---------------------------------------------------- */
+  --ease-brand: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-quick: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Base type setting (§6.3) ----------------------------------------
+   * Set on `<html>` so it reaches portaled overlays as well as the document.
+   * Tailwind's preflight would resolve `--font-sans` here anyway; declaring it
+   * outright means the page does not depend on that indirection holding.
+   *
+   * NO `font-size` HERE, deliberately. §6.3's "16px base" is the browser's own
+   * default, not a value to pin: this selector IS `<html>` and is unlayered, so
+   * `font-size: 16px` would override the size a reader has deliberately raised
+   * in their browser and nothing could beat it (WCAG 1.4.4). Tailwind's scale is
+   * rem-based, so it would shrink every size, space and radius with it — and
+   * `/admin`, which this file does not touch, would disagree on the same
+   * machine. Body size belongs to the reader; the RATIO (1.6) is ours.
+   */
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ============================================================= consumer: dark
+ * `.dark` sits on `<html>` beside `data-surface`, so this is a COMPOUND
+ * selector (note 2 above). Only tokens that actually change are restated.
+ */
+[data-surface='consumer'].dark {
+  color-scheme: dark;
+
+  /* ---- Grounds and ink -------------------------------------------------- */
+  --color-background: #282c2e;
+  --color-foreground: #e3dad1;
+  --color-heading: #f3f0ec;
+  --color-card: #3a3f42;
+  --color-card-foreground: #e3dad1;
+  --color-muted: #323638;
+  --color-muted-foreground: #a8aeb1;
+  /* One step darker than the prototype's #3F4446, which measured 4.40:1
+   * against `--color-muted-foreground` — the only ground of the four that
+   * missed D5's 4.5:1. At #3D4245 it is 4.53:1 and still reads lighter than
+   * the card, so the popover keeps its lift. Popovers are where secondary text
+   * lives most: `<FieldHelp>` renders its whole body as muted text on this
+   * ground, and CLAUDE.md mandates one on every non-trivial form field. */
+  --color-popover: #3d4245;
+  --color-popover-foreground: #e3dad1;
+
+  /* Hairline drops to 14%, and cards gain a border at 8% so they separate from
+   * the near-black ground (§6.4). */
+  --color-border: rgba(227, 218, 209, 0.14);
+  --color-divider: rgba(227, 218, 209, 0.08);
+  --color-card-border: rgba(227, 218, 209, 0.08);
+  --color-input: rgba(227, 218, 209, 0.14);
+
+  /* ---- Actions ----------------------------------------------------------
+   * Only what CHANGES appears here. The orange itself, the teal fill and both
+   * their foregrounds hold across the two modes (§6.2) and are already declared
+   * in the light block above, which matches in dark mode too.
+   *
+   * What moves: the primary's hover step INVERTS — it dims in light and lifts in
+   * dark, never brightening on press (§6.5) — and the teal INK lightens to aqua
+   * so it still reads on charcoal.
+   */
+  --color-primary-hover: #b5633b;
+  --color-secondary-ink: #7cc0d6;
+  --color-secondary-wash: rgba(124, 192, 214, 0.13);
+
+  --color-accent: rgba(227, 218, 209, 0.06);
+  --color-accent-foreground: #e3dad1;
+
+  /* ---- Status and tone -------------------------------------------------- */
+  --color-status-green: #5c9683;
+  --color-status-green-bg: rgba(92, 150, 131, 0.18);
+  --color-status-green-ink: #9cc8b6;
+  --color-status-yellow: #d6b673;
+  --color-status-yellow-bg: rgba(214, 182, 115, 0.16);
+  --color-status-yellow-ink: #e3ca95;
+  --color-status-red: #c97468;
+  --color-status-red-bg: rgba(201, 116, 104, 0.17);
+  --color-status-red-ink: #e0a197;
+  --color-status-purple: #9c8595;
+  --color-status-purple-bg: rgba(156, 133, 149, 0.2);
+  --color-status-purple-ink: #c8b4c3;
+
+  /* ---- Washes and scrim ------------------------------------------------- */
+  --color-pill: rgba(227, 218, 209, 0.06);
+  --color-pill-hover: rgba(227, 218, 209, 0.12);
+  --color-scrim: rgba(8, 11, 12, 0.62);
+
+  /* ---- Data hue, restepped for the charcoal ground ---------------------- */
+  --color-bar: #289fc0;
+  --color-bar-idle: rgba(40, 159, 192, 0.18);
+
+  /* ---- Elevation: opaque black, since the warm shadow disappears here ---- */
+  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.32), 0 24px 60px rgba(0, 0, 0, 0.48);
+}
+
+/* ====================================================== typography utilities
+ * The four registers of §6.3, as classes, because the brand-only tokens they
+ * read cannot become Tailwind utilities (note 4 above). Scoped to the consumer
+ * surface so they are inert on `/admin`.
+ *
+ * THEY CARRY NO COLOUR, deliberately. These rules are unlayered, so they beat
+ * every Tailwind utility on the same element — and `@layer utilities` is where
+ * arbitrary values land too, so `text-[var(--color-heading)]` would lose just
+ * the same. A `color` here could therefore not be overridden by ANY class, and
+ * `<h2 class="brand-display text-secondary-ink">` would silently ignore the
+ * second half. Colour is the caller's, set with an ordinary utility.
+ *
+ * What each one DOES fix is its type: family, tracking, line-height, and (for
+ * the eyebrow, whose size is the register) font-size. Those are unoverridable
+ * by a utility for the same reason — if you need a different measure, write
+ * plain CSS on the element rather than a class that will lose.
+ */
+
+/* Display — Instrument Serif, set tight and given room to be large (40–72px). */
+[data-surface='consumer'] .brand-display {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* Her own voice on the page — pull quotes, session prompts, invocations. This
+ * face is never set upright. */
+[data-surface='consumer'] .brand-quote {
+  font-family: var(--font-quote);
+  font-style: italic;
+  line-height: 1.42;
+}
+
+/* Eyebrow — tracked out at 0.14em. Casing is deliberately NOT forced: §6.10
+ * says eyebrows MAY be lowercase, and `text-transform: lowercase` would strip
+ * the capital from Lelañea's name wherever an eyebrow carries it. Write the
+ * label lowercase; the class supplies the tracking. */
+[data-surface='consumer'] .brand-eyebrow {
+  /* rem, not px: this file refuses to pin `font-size` on <html> precisely so a
+   * reader's browser setting survives (see the header), and a px eyebrow would
+   * opt one register back out of that. 0.75rem is §6.3's 12px at the default. */
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+}
+
+/* Numerics, wherever alignment matters — meters, counts, spend. */
+[data-surface='consumer'] .brand-num {
+  font-variant-numeric: tabular-nums;
+}

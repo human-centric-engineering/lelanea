@@ -23,10 +23,12 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 
 ## Our docs
 
-| Doc                              | Covers                                                    |
-| -------------------------------- | --------------------------------------------------------- |
-| [`syncing.md`](./syncing.md)     | Pulling a Daybreak release, and the three traps around it |
-| [`local-dev.md`](./local-dev.md) | Running locally alongside a Daybreak checkout             |
+| Doc                                  | Covers                                                            |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| [`syncing.md`](./syncing.md)         | Pulling a Daybreak release, and the three traps around it         |
+| [`local-dev.md`](./local-dev.md)     | Running locally alongside a Daybreak checkout                     |
+| [`divergences.md`](./divergences.md) | Every edit we carry to a Daybreak- or Sunrise-owned file, and why |
+| [`brand-theme.md`](./brand-theme.md) | The palette, the three typefaces, and how a surface gets branded  |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 
