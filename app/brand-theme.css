@@ -101,8 +101,38 @@
   --color-border: rgba(111, 115, 118, 0.24);
   --color-divider: rgba(111, 115, 118, 0.16);
   --color-card-border: rgba(111, 115, 118, 0);
-  --color-input: rgba(111, 115, 118, 0.24);
-  --color-ring: #c96f43;
+
+  /* THE CONTROL BOUNDARY IS NOT THE HAIRLINE, and this is the whole reason it
+   * has its own token. `--color-border` above separates things — cards from
+   * ground, a row from the next — and §6.4's 24% hairline is exactly right for
+   * that. `--color-input` IDENTIFIES a control: it is the edge of <Input>,
+   * <Textarea>, <SelectTrigger>, <Checkbox>, the outline <Button>, and the
+   * off-track of <Switch> (which fills with `bg-input`). WCAG 1.4.11 asks 3:1
+   * of the second and nothing of the first, so only this one moves and the
+   * design's hairline character survives everywhere it was decorative.
+   *
+   * The kit's silver `#6F7376` cannot reach 3:1 by alpha at all — opaque, it
+   * measures 3.85 on the card ground — so the base here is the heading ink
+   * instead. At 50% it composites to 3.31 / 3.24 / 3.27 / 3.35 against
+   * background, card, muted and popover; 0.48 lands at 3.07 and is too close to
+   * survive a future ground moving a step.
+   *
+   * The prototype gives `.input` the same `var(--color-border)` as everything
+   * else, so this is a deliberate deviation from it, measured — the third of
+   * its kind, beside dark `--color-popover` and `--color-destructive`. */
+  --color-input: rgba(17, 24, 26, 0.5);
+
+  /* The focus ring is a state indicator, so 1.4.11's 3:1 applies to it too —
+   * and a focus ring nobody can see is worse than a resting border nobody can
+   * see. The ceremonial orange measured 2.90 on the card ground and 2.98 on
+   * muted, so it does not hold the job. This is the SECONDARY INK, which is
+   * where §6.2 puts active states ("teal and aqua carry navigation, active
+   * states") and what the prototype's own `.input:focus` uses
+   * (`border-color: var(--color-secondary)`). 4.91 / 4.49 / 4.62 / 5.12 across
+   * the four grounds. Declared as a hex rather than `var(--color-secondary-ink)`
+   * so the test measures the value that ships rather than a reference it would
+   * have to resolve. Keep the two in step. */
+  --color-ring: #17718a;
 
   /* ---- Actions ----------------------------------------------------------
    * Burnt orange is the ceremonial accent: the lotus centre and the primary
@@ -131,11 +161,15 @@
    * dark mode for use behind `-bg`/`-ink` pairs, and taking that lighter value
    * as a BUTTON FILL put oyster text on it at 2.99:1.
    *
-   * KNOWN GAP, raised with the owner rather than patched here: at 3.93:1 this
-   * pairing sits below the design's own filled-button baseline (primary 4.54,
-   * teal 4.91). Closing it needs a darker terracotta than the `#B75D52` §6.2
-   * names, which is a palette decision, not a build one. */
-  --color-destructive: #b75d52;
+   * NOR is it §6.2's `#B75D52` itself, which measured 3.93:1 under oyster —
+   * below the design's own filled-button baseline. This is that terracotta
+   * darkened by five points of lightness (H 6.5°, S 41.2%, L 52% → 47%), giving
+   * 4.68:1, and it is the SAME MOVE the orange already makes one block up:
+   * `--color-accent-ink` keeps §6.2's named `#C96F43` while `--color-primary`
+   * is the darker step that carries a fill. The named terracotta is not lost —
+   * it is still `--color-status-red` and its `-ink`, which is where §6.2's
+   * danger hue is actually read as a colour rather than sat on. */
+  --color-destructive: #a95146;
   --color-destructive-foreground: #f3f0ec;
 
   /* ---- Status and tone -------------------------------------------------- */
@@ -238,7 +272,21 @@
   --color-border: rgba(227, 218, 209, 0.14);
   --color-divider: rgba(227, 218, 209, 0.08);
   --color-card-border: rgba(227, 218, 209, 0.08);
-  --color-input: rgba(227, 218, 209, 0.14);
+
+  /* The control boundary again, on the warm stone rather than the ink — see the
+   * light block for why it is not the hairline. 0.52 composites to
+   * 3.91 / 3.33 / 3.61 / 3.24 against background, card, muted and popover; 0.50
+   * clears 3:1 too but only by 0.11 on the popover ground, and the popover is
+   * where <FieldHelp> puts a control most often. The two themes are two points
+   * apart because the grounds are: dark's four span a narrower range under a
+   * lighter mark. */
+  --color-input: rgba(227, 218, 209, 0.52);
+
+  /* Brand aqua — the dark half of the secondary ink, which is what carries the
+   * focus ring (light block). 6.96 / 5.26 / 6.03 / 5.02 across the four
+   * grounds. `--color-secondary-ink` below holds the same value; keep them in
+   * step. */
+  --color-ring: #7cc0d6;
 
   /* ---- Actions ----------------------------------------------------------
    * Only what CHANGES appears here. The orange itself, the teal fill and both

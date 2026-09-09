@@ -93,24 +93,71 @@ specify: the radius scale (8/12/20/28/999), `--shadow-bloom`, and `--ease-quick`
 Where the two disagree — `--shadow-rest` and `--shadow-lift` have different
 values in each — **the prototype wins**.
 
-Two values deviate from the prototype, both for measured contrast reasons and
-both recorded at the site:
+Four values deviate from the prototype, every one of them for a measured
+contrast reason and every one recorded at the site:
 
 - **Dark `--color-popover` is `#3D4245`, one step darker than the prototype's
   `#3F4446`.** At the prototype's value, secondary text measured 4.40:1 — the
   only one of the four grounds that missed D5's bar. Popovers are where
   secondary text lives most: `<FieldHelp>` renders its whole body as muted text
   on that ground, and CLAUDE.md mandates one on every non-trivial form field.
-- **`--color-destructive` holds `#B75D52` across both modes** rather than
-  lightening in dark. §6.2 says the functional colours hold; the prototype's
-  `--color-status-red` lightens because it is a badge tint used behind a
-  `-bg`/`-ink` pair, and taking that lighter value as a button fill put oyster
-  text on it at 2.99:1.
+- **`--color-destructive` is `#A95146` and holds across both modes.** It does
+  not lighten in dark, because §6.2 says the functional colours hold — the
+  prototype's `--color-status-red` lightens only because it is a badge tint used
+  behind a `-bg`/`-ink` pair, and that lighter value taken as a button fill put
+  oyster text on it at 2.99:1. And it is not §6.2's `#B75D52` either, which
+  measured 3.93:1 under oyster; see the ruling below.
+- **`--color-input` is `rgba(17, 24, 26, 0.50)` light and
+  `rgba(227, 218, 209, 0.52)` dark**, where the prototype gives `.input` the
+  same hairline as everything else. See the ruling below.
+- **`--color-ring` is the secondary ink** — `#17718A` light, `#7CC0D6` dark —
+  not the ceremonial orange. See the ruling below.
 
-**One open gap, with the owner rather than in the build:** even at `#B75D52`,
-oyster text on a filled destructive button measures 3.93:1, below the design's
-own filled-button baseline (primary 4.54, teal 4.91). Closing it needs a darker
-terracotta than the `#B75D52` §6.2 names — a palette decision, not a build one.
+## The three contrast rulings (t-18)
+
+t-1 shipped two measured gaps rather than patching them quietly, because closing
+either looked like a palette decision rather than a build one. The owner made
+it. Auditing the second turned up a third — the focus ring — which nobody had
+asked about and which mattered more than the boundary that led to it. The
+reasoning is here because none of it is recoverable from the values themselves.
+
+**A filled destructive button now uses a darker terracotta than §6.2 names.**
+`#B75D52` under oyster measures 3.93:1 — below the design's own filled-button
+baseline (primary 4.54, teal 4.91) and below AA. `--color-destructive` is
+therefore `#A95146`: the identical hue and saturation (6.5°, 41.2%) five points
+darker in lightness, giving 4.68:1. **This is the move the orange already
+makes** — `--color-accent-ink` keeps §6.2's named `#C96F43` while
+`--color-primary` is the darker `#A85732` that can carry a fill. Nothing is lost
+from the palette: the named terracotta is still `--color-status-red` and its
+`-ink`, which is where §6.2's danger hue is read as a colour rather than sat on.
+
+**The control boundary is not the hairline, and only the boundary moved.** WCAG
+1.4.11 asks 3:1 of anything needed to _identify_ a control, and nothing of a
+line that merely separates. So `--color-border`, `--color-divider` and
+`--color-card-border` keep §6.4's alphas untouched — cards, dividers and
+sections are exactly as they were — and only `--color-input` rose. In this
+component set that token is the edge of `<Input>`, `<Textarea>`,
+`<SelectTrigger>`, `<Checkbox>` and the outline `<Button>`, and the off-track
+fill of `<Switch>`; it measured ~1.33:1 light and ~1.45:1 dark. The kit's silver
+`#6F7376` cannot reach 3:1 by any alpha — opaque it is 3.85 on the card ground —
+so light is based on the heading ink instead. The two values clear 3:1 on all
+four grounds in both themes, with 3.24 the tightest.
+
+**The focus ring left the ceremonial orange.** `--color-ring` was `#C96F43`,
+which measures 2.90 on the light card ground and 2.83 on the dark popover — a
+_focus_ indicator below 1.4.11, which is worse than a resting border below it,
+because it is the only thing telling a keyboard user where they are. It is now
+the secondary ink, `#17718A` light and `#7CC0D6` dark, clearing 4.49 and 5.02 at
+their tightest. Both are §6.2-named brand colours, §6.2 gives teal and aqua the
+active states, and the prototype's own `.input:focus` sets
+`border-color: var(--color-secondary)`. The orange keeps the primary action and
+the lotus, which is all §6.2 asked of it.
+
+Every number above is **measured from the stylesheet** by
+`tests/unit/app/brand-theme.test.ts`, which composites the `rgba()` boundary
+tokens over each ground rather than reading their channels raw — read raw, an
+invisible hairline measures as though it were opaque and every assertion passes
+while nothing is on screen.
 
 Secondary text is `#5A5F62` light and `#A8AEB1` dark (decision D5, already
 carried by the prototype). The kit's original `#6F7376` fails 4.5:1 in all four

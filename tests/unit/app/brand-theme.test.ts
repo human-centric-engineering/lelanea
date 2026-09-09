@@ -104,6 +104,57 @@ function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * Composites a token over an opaque ground and returns the hex it PAINTS AS.
+ *
+ * Needed because the boundary tokens are `rgba()` — they are hairlines, and a
+ * hairline is an alpha by design — while `relativeLuminance` deliberately
+ * refuses anything but opaque hex, since a ratio measured against a colour with
+ * an alpha still in it is not a ratio of anything on screen. An opaque token is
+ * returned untouched, so a caller does not have to know which kind it has.
+ */
+function flattenOver(value: string, ground: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('#')) return trimmed;
+
+  const parts = trimmed.match(
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/
+  );
+  if (!parts) throw new Error(`cannot composite \`${value}\` — not a hex or rgb()/rgba()`);
+
+  const alpha = parts[4] === undefined ? 1 : Number.parseFloat(parts[4]);
+  const base = ground.trim().replace('#', '');
+  const blended = [1, 2, 3].map((channel, index) => {
+    const over = Number.parseInt(parts[channel], 10);
+    const under = Number.parseInt(base.slice(index * 2, index * 2 + 2), 16);
+    return Math.round(alpha * over + (1 - alpha) * under);
+  });
+  return `#${blended.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** A token's contrast against the ground it is painted on, alpha resolved. */
+function contrastOn(value: string, ground: string): number {
+  return contrastRatio(flattenOver(value, ground), ground);
+}
+
+/**
+ * Every opaque ground a control or a line can land on, in either theme. The
+ * page ground, a card, a sunk surface, and a popover — <FieldHelp>, <Select>
+ * and <DropdownMenu> all render onto the last of these, and it is the one that
+ * has twice turned out to be the tightest of the four.
+ */
+const GROUNDS = ['--color-background', '--color-card', '--color-muted', '--color-popover'];
+
+/** `[theme, ground]` for every combination, for `it.each`. */
+const GROUND_PAIRINGS = GROUNDS.flatMap((ground) => [
+  ['light', ground] as const,
+  ['dark', ground] as const,
+]);
+
+function scopeFor(theme: 'light' | 'dark'): Map<string, string> {
+  return theme === 'light' ? lightTokens : darkTokens;
+}
+
 /** Reads a token's value from the stylesheet, so the test measures what ships. */
 function token(scope: Map<string, string>, name: string): string {
   const value = scope.get(name);
@@ -192,16 +243,11 @@ describe('app/brand-theme.css', () => {
     // renders its whole body as muted text on it, and CLAUDE.md mandates one on
     // every non-trivial form field, so it is arguably the most-read of the four.
     // Select and dropdown content share the ground.
-    const GROUNDS = ['--color-background', '--color-card', '--color-muted', '--color-popover'];
-    const pairings = GROUNDS.flatMap((ground) => [
-      ['light', ground] as const,
-      ['dark', ground] as const,
-    ]);
 
     // `%s` twice — an earlier version used `%#`, which prints the CASE INDEX, so
     // a failure read "light: secondary text on 0" and named no ground at all.
-    it.each(pairings)('%s: secondary text on %s', (theme, ground) => {
-      const scope = theme === 'light' ? lightTokens : darkTokens;
+    it.each(GROUND_PAIRINGS)('%s: secondary text on %s', (theme, ground) => {
+      const scope = scopeFor(theme);
       const ratio = contrastRatio(token(scope, '--color-muted-foreground'), token(scope, ground));
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
@@ -219,6 +265,100 @@ describe('app/brand-theme.css', () => {
       // assertions pass for free if `token()` ever returned something inert.
       expect(contrastRatio('#6f7376', token(lightTokens, '--color-background'))).toBeLessThan(4.5);
       expect(contrastRatio('#6f7376', token(darkTokens, '--color-card'))).toBeLessThan(4.5);
+    });
+  });
+
+  describe('controls are visible (t-18)', () => {
+    // t-1 shipped three measured gaps here and raised them with the owner
+    // rather than patching them, because closing them read as a palette
+    // decision. This is that decision, measured rather than restated: every
+    // number below is read out of the stylesheet, so a later edit that
+    // regresses one fails here and not in front of a person who cannot see it.
+
+    it('puts oyster on a filled destructive button at AA', () => {
+      // 3.93:1 was the gap. `#A95146` is §6.2's terracotta darkened five points
+      // of lightness — the same move `--color-primary` makes on the accent —
+      // and measures 4.68:1. The foreground is read too: pinning only the fill
+      // would let the pairing regress from the other side.
+      const ratio = contrastRatio(
+        token(lightTokens, '--color-destructive-foreground'),
+        token(lightTokens, '--color-destructive')
+      );
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('holds the destructive fill across both themes', () => {
+      // §6.2: the functional colours do not change between modes. A dark-only
+      // restatement is also how the 2.99:1 pairing got in — the status red
+      // lightens for its badge, and that lighter value under oyster fails.
+      expect(darkTokens.has('--color-destructive')).toBe(false);
+      expect(darkTokens.has('--color-destructive-foreground')).toBe(false);
+    });
+
+    it.each(GROUND_PAIRINGS)('%s: the control boundary on %s clears 1.4.11', (theme, ground) => {
+      // `--color-input` is the edge of <Input>, <Textarea>, <SelectTrigger>,
+      // <Checkbox> and the outline <Button>, and the off-track fill of
+      // <Switch>. WCAG 1.4.11 asks 3:1 of anything needed to identify a
+      // control. It was ~1.33:1 light and ~1.45:1 dark.
+      const scope = scopeFor(theme);
+      const ratio = contrastOn(token(scope, '--color-input'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(GROUND_PAIRINGS)('%s: the focus ring on %s clears 1.4.11', (theme, ground) => {
+      // The ring is a state indicator, so the same 3:1 applies — and it is the
+      // one of the three that matters most, because a focus ring is the only
+      // thing telling a keyboard user where they are. The ceremonial orange
+      // measured 2.90 on the light card and 2.83 on the dark popover.
+      const scope = scopeFor(theme);
+      const ratio = contrastOn(token(scope, '--color-ring'), token(scope, ground));
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    });
+
+    it('keeps the focus ring on the secondary ink in both themes', () => {
+      // Not decoration: §6.2 gives teal and aqua the active states, and the
+      // prototype focuses a field with `border-color: var(--color-secondary)`.
+      // The ring is declared as a hex so this file can measure it, which means
+      // the two can drift — this is what notices.
+      expect(token(lightTokens, '--color-ring')).toBe(token(lightTokens, '--color-secondary-ink'));
+      expect(token(darkTokens, '--color-ring')).toBe(token(darkTokens, '--color-secondary-ink'));
+    });
+
+    it('leaves the decorative hairline at the design\u2019s alphas', () => {
+      // The whole point of moving `--color-input` alone was NOT to coarsen the
+      // rest. §6.4: hairline 1px at 24% in light, 14% in dark, cards bordered
+      // only in dark at 8%. A later "just make the borders 3:1 too" would
+      // repaint every card and divider in the product, so it fails here first.
+      expect(token(lightTokens, '--color-border')).toBe('rgba(111, 115, 118, 0.24)');
+      expect(token(lightTokens, '--color-divider')).toBe('rgba(111, 115, 118, 0.16)');
+      expect(token(lightTokens, '--color-card-border')).toBe('rgba(111, 115, 118, 0)');
+      expect(token(darkTokens, '--color-border')).toBe('rgba(227, 218, 209, 0.14)');
+      expect(token(darkTokens, '--color-divider')).toBe('rgba(227, 218, 209, 0.08)');
+      expect(token(darkTokens, '--color-card-border')).toBe('rgba(227, 218, 209, 0.08)');
+    });
+
+    it('would fail if any of the three regressed to what t-1 shipped', () => {
+      // Proves the four measurements above can actually fail. Without it they
+      // pass for free if `contrastOn` ever returned something inert — which is
+      // exactly what a new compositing helper is able to do.
+      expect(contrastRatio(token(lightTokens, '--color-destructive-foreground'), '#b75d52')).toBeLessThan(4.5);
+      expect(
+        contrastOn('rgba(111, 115, 118, 0.24)', token(lightTokens, '--color-background'))
+      ).toBeLessThan(3);
+      expect(
+        contrastOn('rgba(227, 218, 209, 0.14)', token(darkTokens, '--color-background'))
+      ).toBeLessThan(3);
+      expect(contrastOn('#c96f43', token(lightTokens, '--color-card'))).toBeLessThan(3);
+      expect(contrastOn('#c96f43', token(darkTokens, '--color-popover'))).toBeLessThan(3);
+    });
+
+    it('composites an alpha rather than measuring the channels raw', () => {
+      // The helper is the load-bearing new thing in this file: read raw, a
+      // hairline's channels measure as if it were opaque, and every boundary
+      // assertion above would pass while the line stayed invisible.
+      expect(flattenOver('rgba(17, 24, 26, 0.5)', '#f3f0ec')).toBe('#828483');
+      expect(flattenOver('#a95146', '#f3f0ec')).toBe('#a95146');
+      expect(() => flattenOver('oklch(0.5 0 0)', '#f3f0ec')).toThrow(/cannot composite/);
     });
   });
 
