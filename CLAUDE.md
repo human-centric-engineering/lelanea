@@ -131,6 +131,76 @@ package.json.version` parity case is **removed**, with the reasoning recorded
 > - `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
 >   **pinned** to our brand values rather than deleted, so every seam still left
 >   empty keeps its protection. Update it whenever `leaf-brand.ts` changes.
+>
+> ### The section immediately below this banner is also Lelañea's
+>
+> It is emitted by the Hub (`get_project_bootstrap`) and points at the process
+> HCE actually works to, which is served from the Hub rather than copied here.
+> Like this banner it sits **above** Sunrise's own documentation so an upstream
+> `CLAUDE.md` change merges cleanly beneath it. Regenerate it rather than
+> editing it by hand.
+
+<!-- hce-hub:bootstrap — regenerate with the Hub's `get_project_bootstrap` tool and replace everything between these markers -->
+
+## This project is coordinated through the HCE Hub
+
+**Lelañea** · slug `lelanea` · project id `cmtslgpak000e04l1ouvzna2z` · host platform: Daybreak
+
+The Hub is this project's **system of record** for planning and delivery.
+Claiming, planning, starting, completing and shipping are Hub tool calls over
+MCP — not files in this repo. If you do not already know what you are picking
+up, start with `next_task`. Your client's tool list is the current set;
+`model.verbs` in the core process groups them by what they are for.
+
+If those tools are not in your tool list at all, this repo's MCP config is
+missing or its key is wrong. Fix that before planning anything, rather than
+working around it.
+
+### Read the process from the Hub before you start work of any kind
+
+**This block is a pointer. It is not the process, and it is not a summary of
+one.** It carries this project's identity, where the process lives, and the
+little that has to survive the Hub being unreachable — nothing else. Working
+from this block alone means working without the rules it does not contain.
+
+So read the tiers below before you plan, size, **or start building** — most
+sessions do the last of those without doing the first two. What the Hub serves
+is the current version; this repo deliberately does not restate it, because a
+copy is the thing that goes stale.
+
+- `hub://process/core` · HCE process — core. **Read its `read.judgement` section first.**
+- `hub://process/daybreak-app` · HCE process — building on Daybreak.
+
+Every rule is addressable by the id printed beside its heading (`fp1`,
+`flow.gates`, `read.judgement`). Cite them by id rather than re-explaining
+them.
+
+### The shape, if the Hub is unreachable
+
+Five lines, duplicated here on purpose because they almost never change:
+
+1. **Claim** the feature before working it — ownership is a feature-level thing.
+2. **Reconcile** the plan against the actual tree before sizing anything.
+3. **Plan** it into tasks, each with a done-when provable _at merge_.
+4. **Build**, look at it yourself, then run the gates, and open the PR last.
+5. **Close out** the feature — decisions are recorded at each task's completion and at ship, never mid-build.
+
+### Gates
+
+In this order. Read **exit codes**, not piped output — a pipeline that swallows
+a failure reports success.
+
+1. `/pre-pr` — this repo's own checklist (`npm run validate` plus a scoped
+   test run and the anti-pattern scans).
+2. `/security-review`
+3. `/code-review`
+4. `npm run format`
+
+**The commands are here; the rules about running them are not.** What to do
+with a finding, when to stop reviewing, and what must never be amended are in
+`flow.gates` and `flow.review-rounds`.
+
+<!-- /hce-hub:bootstrap -->
 
 Instructions for Claude Code when working in this repository.
 

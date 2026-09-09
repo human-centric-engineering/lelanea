@@ -12,6 +12,8 @@ import { AnalyticsScripts, UserIdentifier, PageTracker } from '@/components/anal
 import { SurfaceSync } from '@/components/surface-sync';
 import { DEFAULT_SURFACE } from '@/lib/app/surface';
 import { BRAND } from '@/lib/brand';
+// LELAÑEA divergence — see .context/app/divergences.md, rows 1 and 2.
+import { brandFontVariables } from '@/app/fonts';
 
 // Root metadata, driven entirely by the BRAND seam (#519). The `template`
 // gives every page that sets only a plain string title consistent branding;
@@ -39,24 +41,31 @@ export default async function RootLayout({
   const surface = headersList.get('x-surface') ?? DEFAULT_SURFACE;
 
   return (
-    <html lang="en" data-surface={surface} suppressHydrationWarning>
+    // LELAÑEA divergence (row 1): the three `next/font` variable classes are
+    // declared on <html> so body-portaled overlays inherit them too. They are
+    // only MAPPED onto the font tokens for the consumer surface, in
+    // app/brand-theme.css, so /admin still renders in the platform's fonts.
+    <html lang="en" data-surface={surface} className={brandFontVariables} suppressHydrationWarning>
       <head>
         <script
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
+            // LELAÑEA divergence (row 2): upstream also WROTE the resolved
+            // system preference back to localStorage here, which made "no
+            // choice yet" indistinguishable from "chose light" from the second
+            // visit onward — so a later OS switch was never followed. Decision
+            // D4 wants the system preference as the default and only the toggle
+            // to persist. Reading without writing is the whole fix; the storage
+            // key and the class remain the platform's.
             __html: `
               (function() {
                 try {
                   const stored = localStorage.getItem('theme');
-                  if (stored === 'light' || stored === 'dark') {
-                    document.documentElement.classList.add(stored);
-                  } else {
-                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                    const theme = prefersDark ? 'dark' : 'light';
-                    document.documentElement.classList.add(theme);
-                    localStorage.setItem('theme', theme);
-                  }
+                  const theme = (stored === 'light' || stored === 'dark')
+                    ? stored
+                    : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                  document.documentElement.classList.add(theme);
                 } catch (e) {}
               })();
             `,
