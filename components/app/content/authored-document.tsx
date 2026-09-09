@@ -34,6 +34,15 @@ import { cn } from '@/lib/utils';
  * @see .context/app/content.md — block types, placeholders, decisions A2/A3/D7
  */
 
+/**
+ * The heading tags an authored level can become — indexed by `level - 2`.
+ *
+ * A lookup rather than `` `h${level}` as 'h2' | … ``: the element type then comes
+ * from the data instead of from an assertion, and there is nothing to keep in
+ * step with the clamp if the range ever moves.
+ */
+const HEADING_TAGS = ['h2', 'h3', 'h4', 'h5', 'h6'] as const;
+
 /** The four registers of §6.3 are classes, not Tailwind tokens — see app/brand-theme.css. */
 const HEADING_TYPE = 'brand-display text-[var(--color-heading)]';
 
@@ -240,8 +249,7 @@ function AuthoredBlock({
       // an input in the authored files today (every heading is level 2); the
       // clamp is here so a deeper outline degrades instead of emitting invalid
       // markup or a second h1.
-      const level = Math.min(6, Math.max(2, block.level));
-      const Heading = `h${level}` as 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+      const Heading = HEADING_TAGS[Math.min(6, Math.max(2, block.level)) - 2];
 
       return (
         <Heading className={cn(HEADING_TYPE, 'mt-10 mb-3 text-2xl first:mt-0')}>
