@@ -1,0 +1,1676 @@
+{
+  "module": {
+    "id": "values_module",
+    "slug": "know-your-values",
+    "title": "Know Your Values & Learn the Roadmap of You",
+    "shortTitle": "My Core Values",
+    "version": "2.0",
+    "locale": "en-US",
+    "author": {
+      "name": "Lelanea Fulton",
+      "titles": ["Transcendental Mindset Coach", "Unity-Consciousness Guide"]
+    },
+    "stepOrder": [
+      "lesson_psychological",
+      "lesson_spiritual",
+      "lesson_energetic",
+      "lesson_centered_living",
+      "exercise_value_selection",
+      "reflection_yellow",
+      "reflection_red",
+      "reflection_purple",
+      "reflection_core_values",
+      "closing_check_in_with_gratitude"
+    ],
+    "editorialNotes": [
+      "Copy has been corrected for spelling, capitalization and punctuation while preserving the author's voice.",
+      "Contact details, 'send me an email' invitations and 'use your journal' instructions have been removed; those are app functions.",
+      "Coach/facilitation guidance is kept but separated into facilitationNote fields so the app can show, adapt or hide it.",
+      "The values list is stored once as a flat, deduplicated array; the printed 8-column grid was layout only."
+    ]
+  },
+  "valueStates": {
+    "instruction": "Select the values that resonate with you the most, and mark each one.",
+    "states": [
+      {
+        "id": "green",
+        "label": "Confirmed",
+        "hex": "#3BA55D",
+        "meaning": "Values you have confirmed as authentically yours right now."
+      },
+      {
+        "id": "yellow",
+        "label": "Wavering",
+        "hex": "#E5B23B",
+        "meaning": "Values you are unsure about — they may be past values that once served you."
+      },
+      {
+        "id": "red",
+        "label": "Let Go Of",
+        "hex": "#D9433F",
+        "meaning": "Values to release — often adopted, inherited, generational or cultural."
+      },
+      {
+        "id": "purple",
+        "label": "Future Self",
+        "hex": "#8B5CF6",
+        "meaning": "Desired values representing your growth, your expansion of consciousness, and the life you are manifesting."
+      }
+    ]
+  },
+  "values": [
+    {
+      "id": "abundance",
+      "label": "Abundance"
+    },
+    {
+      "id": "acceptance",
+      "label": "Acceptance"
+    },
+    {
+      "id": "achievement",
+      "label": "Achievement"
+    },
+    {
+      "id": "accomplishment",
+      "label": "Accomplishment"
+    },
+    {
+      "id": "accountability",
+      "label": "Accountability"
+    },
+    {
+      "id": "accuracy",
+      "label": "Accuracy"
+    },
+    {
+      "id": "adaptability",
+      "label": "Adaptability"
+    },
+    {
+      "id": "authenticity",
+      "label": "Authenticity"
+    },
+    {
+      "id": "experiences",
+      "label": "Experiences"
+    },
+    {
+      "id": "affection",
+      "label": "Affection"
+    },
+    {
+      "id": "altruism",
+      "label": "Altruism"
+    },
+    {
+      "id": "ambition",
+      "label": "Ambition"
+    },
+    {
+      "id": "appreciation",
+      "label": "Appreciation"
+    },
+    {
+      "id": "assertiveness",
+      "label": "Assertiveness"
+    },
+    {
+      "id": "awareness",
+      "label": "Awareness"
+    },
+    {
+      "id": "adventure",
+      "label": "Adventure"
+    },
+    {
+      "id": "balance",
+      "label": "Balance"
+    },
+    {
+      "id": "beauty",
+      "label": "Beauty"
+    },
+    {
+      "id": "belonging",
+      "label": "Belonging"
+    },
+    {
+      "id": "benevolence",
+      "label": "Benevolence"
+    },
+    {
+      "id": "bravery",
+      "label": "Bravery"
+    },
+    {
+      "id": "calmness",
+      "label": "Calmness"
+    },
+    {
+      "id": "care",
+      "label": "Care"
+    },
+    {
+      "id": "charity",
+      "label": "Charity"
+    },
+    {
+      "id": "creativity",
+      "label": "Creativity"
+    },
+    {
+      "id": "chastity",
+      "label": "Chastity"
+    },
+    {
+      "id": "delight_of_being",
+      "label": "Delight of Being"
+    },
+    {
+      "id": "citizenship",
+      "label": "Citizenship"
+    },
+    {
+      "id": "clarity",
+      "label": "Clarity"
+    },
+    {
+      "id": "cleanliness",
+      "label": "Cleanliness"
+    },
+    {
+      "id": "connection",
+      "label": "Connection"
+    },
+    {
+      "id": "originality",
+      "label": "Originality"
+    },
+    {
+      "id": "commitment",
+      "label": "Commitment"
+    },
+    {
+      "id": "compassion",
+      "label": "Compassion"
+    },
+    {
+      "id": "competence",
+      "label": "Competence"
+    },
+    {
+      "id": "confidence",
+      "label": "Confidence"
+    },
+    {
+      "id": "synergistic_mindset",
+      "label": "Synergistic Mindset"
+    },
+    {
+      "id": "consistency",
+      "label": "Consistency"
+    },
+    {
+      "id": "contentment",
+      "label": "Contentment"
+    },
+    {
+      "id": "contribution",
+      "label": "Contribution"
+    },
+    {
+      "id": "cooperation",
+      "label": "Cooperation"
+    },
+    {
+      "id": "courage",
+      "label": "Courage"
+    },
+    {
+      "id": "courtesy",
+      "label": "Courtesy"
+    },
+    {
+      "id": "organization",
+      "label": "Organization"
+    },
+    {
+      "id": "credibility",
+      "label": "Credibility"
+    },
+    {
+      "id": "curiosity",
+      "label": "Curiosity"
+    },
+    {
+      "id": "community",
+      "label": "Community"
+    },
+    {
+      "id": "patience",
+      "label": "Patience"
+    },
+    {
+      "id": "collaboration",
+      "label": "Collaboration"
+    },
+    {
+      "id": "decisiveness",
+      "label": "Decisiveness"
+    },
+    {
+      "id": "dedication",
+      "label": "Dedication"
+    },
+    {
+      "id": "dependability",
+      "label": "Dependability"
+    },
+    {
+      "id": "determination",
+      "label": "Determination"
+    },
+    {
+      "id": "dignity",
+      "label": "Dignity"
+    },
+    {
+      "id": "discipline",
+      "label": "Discipline"
+    },
+    {
+      "id": "diversity",
+      "label": "Diversity"
+    },
+    {
+      "id": "duty",
+      "label": "Duty"
+    },
+    {
+      "id": "ease",
+      "label": "Ease"
+    },
+    {
+      "id": "education",
+      "label": "Education"
+    },
+    {
+      "id": "effectiveness",
+      "label": "Effectiveness"
+    },
+    {
+      "id": "efficiency",
+      "label": "Efficiency"
+    },
+    {
+      "id": "elegance",
+      "label": "Elegance"
+    },
+    {
+      "id": "empathy",
+      "label": "Empathy"
+    },
+    {
+      "id": "patriotism",
+      "label": "Patriotism"
+    },
+    {
+      "id": "empowerment",
+      "label": "Empowerment"
+    },
+    {
+      "id": "enthusiasm",
+      "label": "Enthusiasm"
+    },
+    {
+      "id": "equality",
+      "label": "Equality"
+    },
+    {
+      "id": "pause",
+      "label": "Pause"
+    },
+    {
+      "id": "ethics",
+      "label": "Ethics"
+    },
+    {
+      "id": "excellence",
+      "label": "Excellence"
+    },
+    {
+      "id": "fairness",
+      "label": "Fairness"
+    },
+    {
+      "id": "faith",
+      "label": "Faith"
+    },
+    {
+      "id": "family",
+      "label": "Family"
+    },
+    {
+      "id": "fidelity",
+      "label": "Fidelity"
+    },
+    {
+      "id": "flexibility",
+      "label": "Flexibility"
+    },
+    {
+      "id": "focus",
+      "label": "Focus"
+    },
+    {
+      "id": "forgiveness",
+      "label": "Forgiveness"
+    },
+    {
+      "id": "freedom",
+      "label": "Freedom"
+    },
+    {
+      "id": "friendship",
+      "label": "Friendship"
+    },
+    {
+      "id": "peace",
+      "label": "Peace"
+    },
+    {
+      "id": "generosity",
+      "label": "Generosity"
+    },
+    {
+      "id": "gentleness",
+      "label": "Gentleness"
+    },
+    {
+      "id": "expansion_mindset",
+      "label": "Expansion Mindset"
+    },
+    {
+      "id": "gratitude",
+      "label": "Gratitude"
+    },
+    {
+      "id": "growth_mindset",
+      "label": "Growth Mindset"
+    },
+    {
+      "id": "guidance",
+      "label": "Guidance"
+    },
+    {
+      "id": "harmony",
+      "label": "Harmony"
+    },
+    {
+      "id": "health",
+      "label": "Health"
+    },
+    {
+      "id": "honesty",
+      "label": "Honesty"
+    },
+    {
+      "id": "honor",
+      "label": "Honor"
+    },
+    {
+      "id": "hope",
+      "label": "Hope"
+    },
+    {
+      "id": "hospitality",
+      "label": "Hospitality"
+    },
+    {
+      "id": "humility",
+      "label": "Humility"
+    },
+    {
+      "id": "humor",
+      "label": "Humor"
+    },
+    {
+      "id": "inclusivity",
+      "label": "Inclusivity"
+    },
+    {
+      "id": "perseverance",
+      "label": "Perseverance"
+    },
+    {
+      "id": "independence",
+      "label": "Independence"
+    },
+    {
+      "id": "individuality",
+      "label": "Individuality"
+    },
+    {
+      "id": "grounded",
+      "label": "Grounded"
+    },
+    {
+      "id": "innovation",
+      "label": "Innovation"
+    },
+    {
+      "id": "integrity",
+      "label": "Integrity"
+    },
+    {
+      "id": "intellect",
+      "label": "Intellect"
+    },
+    {
+      "id": "intuition",
+      "label": "Intuition"
+    },
+    {
+      "id": "joy",
+      "label": "Joy"
+    },
+    {
+      "id": "justice",
+      "label": "Justice"
+    },
+    {
+      "id": "kindness",
+      "label": "Kindness"
+    },
+    {
+      "id": "knowledge",
+      "label": "Knowledge"
+    },
+    {
+      "id": "leadership",
+      "label": "Leadership"
+    },
+    {
+      "id": "learning",
+      "label": "Learning"
+    },
+    {
+      "id": "legacy",
+      "label": "Legacy"
+    },
+    {
+      "id": "sovereignty",
+      "label": "Sovereignty"
+    },
+    {
+      "id": "persistence",
+      "label": "Persistence"
+    },
+    {
+      "id": "listening",
+      "label": "Listening"
+    },
+    {
+      "id": "love",
+      "label": "Love"
+    },
+    {
+      "id": "loyalty",
+      "label": "Loyalty"
+    },
+    {
+      "id": "soulmate_type_love",
+      "label": "Soulmate Type Love"
+    },
+    {
+      "id": "mercy",
+      "label": "Mercy"
+    },
+    {
+      "id": "mindfulness",
+      "label": "Mindfulness"
+    },
+    {
+      "id": "moderation",
+      "label": "Moderation"
+    },
+    {
+      "id": "modesty",
+      "label": "Modesty"
+    },
+    {
+      "id": "morality",
+      "label": "Morality"
+    },
+    {
+      "id": "motivation",
+      "label": "Motivation"
+    },
+    {
+      "id": "nurturing",
+      "label": "Nurturing"
+    },
+    {
+      "id": "obedience",
+      "label": "Obedience"
+    },
+    {
+      "id": "open_mindedness",
+      "label": "Open-mindedness"
+    },
+    {
+      "id": "optimism",
+      "label": "Optimism"
+    },
+    {
+      "id": "orderliness",
+      "label": "Orderliness"
+    },
+    {
+      "id": "positivity",
+      "label": "Positivity"
+    },
+    {
+      "id": "practicality",
+      "label": "Practicality"
+    },
+    {
+      "id": "pragmatism",
+      "label": "Pragmatism"
+    },
+    {
+      "id": "precision",
+      "label": "Precision"
+    },
+    {
+      "id": "preparedness",
+      "label": "Preparedness"
+    },
+    {
+      "id": "presence",
+      "label": "Presence"
+    },
+    {
+      "id": "pride",
+      "label": "Pride"
+    },
+    {
+      "id": "privacy",
+      "label": "Privacy"
+    },
+    {
+      "id": "proactivity",
+      "label": "Proactivity"
+    },
+    {
+      "id": "professionalism",
+      "label": "Professionalism"
+    },
+    {
+      "id": "progress",
+      "label": "Progress"
+    },
+    {
+      "id": "prudence",
+      "label": "Prudence"
+    },
+    {
+      "id": "punctuality",
+      "label": "Punctuality"
+    },
+    {
+      "id": "purpose",
+      "label": "Purpose"
+    },
+    {
+      "id": "rationality",
+      "label": "Rationality"
+    },
+    {
+      "id": "realism",
+      "label": "Realism"
+    },
+    {
+      "id": "reason",
+      "label": "Reason"
+    },
+    {
+      "id": "recognition",
+      "label": "Recognition"
+    },
+    {
+      "id": "reliability",
+      "label": "Reliability"
+    },
+    {
+      "id": "resilience",
+      "label": "Resilience"
+    },
+    {
+      "id": "resourcefulness",
+      "label": "Resourcefulness"
+    },
+    {
+      "id": "respect",
+      "label": "Respect"
+    },
+    {
+      "id": "responsibility",
+      "label": "Responsibility"
+    },
+    {
+      "id": "reverence",
+      "label": "Reverence"
+    },
+    {
+      "id": "righteousness",
+      "label": "Righteousness"
+    },
+    {
+      "id": "sacrifice",
+      "label": "Sacrifice"
+    },
+    {
+      "id": "safety",
+      "label": "Safety"
+    },
+    {
+      "id": "security",
+      "label": "Security"
+    },
+    {
+      "id": "self_awareness",
+      "label": "Self-awareness"
+    },
+    {
+      "id": "self_love",
+      "label": "Self-love"
+    },
+    {
+      "id": "self_discipline",
+      "label": "Self-discipline"
+    },
+    {
+      "id": "self_expression",
+      "label": "Self-expression"
+    },
+    {
+      "id": "self_reliance",
+      "label": "Self-reliance"
+    },
+    {
+      "id": "sensitivity",
+      "label": "Sensitivity"
+    },
+    {
+      "id": "serenity",
+      "label": "Serenity"
+    },
+    {
+      "id": "service",
+      "label": "Service"
+    },
+    {
+      "id": "sharing",
+      "label": "Sharing"
+    },
+    {
+      "id": "simplicity",
+      "label": "Simplicity"
+    },
+    {
+      "id": "sincerity",
+      "label": "Sincerity"
+    },
+    {
+      "id": "sobriety",
+      "label": "Sobriety"
+    },
+    {
+      "id": "solidarity",
+      "label": "Solidarity"
+    },
+    {
+      "id": "solitude",
+      "label": "Solitude"
+    },
+    {
+      "id": "spirituality",
+      "label": "Spirituality"
+    },
+    {
+      "id": "spontaneity",
+      "label": "Spontaneity"
+    },
+    {
+      "id": "stability",
+      "label": "Stability"
+    },
+    {
+      "id": "stewardship",
+      "label": "Stewardship"
+    },
+    {
+      "id": "strength",
+      "label": "Strength"
+    },
+    {
+      "id": "success",
+      "label": "Success"
+    },
+    {
+      "id": "support",
+      "label": "Support"
+    },
+    {
+      "id": "sustainability",
+      "label": "Sustainability"
+    },
+    {
+      "id": "sympathy",
+      "label": "Sympathy"
+    },
+    {
+      "id": "synergy",
+      "label": "Synergy"
+    },
+    {
+      "id": "tact",
+      "label": "Tact"
+    },
+    {
+      "id": "teamwork",
+      "label": "Teamwork"
+    },
+    {
+      "id": "temperance",
+      "label": "Temperance"
+    },
+    {
+      "id": "tenacity",
+      "label": "Tenacity"
+    },
+    {
+      "id": "thankfulness",
+      "label": "Thankfulness"
+    },
+    {
+      "id": "thoughtfulness",
+      "label": "Thoughtfulness"
+    },
+    {
+      "id": "tolerance",
+      "label": "Tolerance"
+    },
+    {
+      "id": "tradition",
+      "label": "Tradition"
+    },
+    {
+      "id": "tranquility",
+      "label": "Tranquility"
+    },
+    {
+      "id": "transparency",
+      "label": "Transparency"
+    },
+    {
+      "id": "trust",
+      "label": "Trust"
+    },
+    {
+      "id": "truth",
+      "label": "Truth"
+    },
+    {
+      "id": "understanding",
+      "label": "Understanding"
+    },
+    {
+      "id": "uniqueness",
+      "label": "Uniqueness"
+    },
+    {
+      "id": "oneness",
+      "label": "Oneness"
+    },
+    {
+      "id": "nature",
+      "label": "Nature"
+    },
+    {
+      "id": "boundaries",
+      "label": "Boundaries"
+    },
+    {
+      "id": "vision",
+      "label": "Vision",
+      "aliases": ["Creative Freedom"]
+    },
+    {
+      "id": "vitality",
+      "label": "Vitality"
+    },
+    {
+      "id": "warmth",
+      "label": "Warmth"
+    },
+    {
+      "id": "wealth",
+      "label": "Wealth"
+    },
+    {
+      "id": "well_being",
+      "label": "Well-being"
+    },
+    {
+      "id": "wisdom",
+      "label": "Wisdom"
+    },
+    {
+      "id": "wonder",
+      "label": "Wonder"
+    },
+    {
+      "id": "worthiness",
+      "label": "Worthiness"
+    },
+    {
+      "id": "zeal",
+      "label": "Zeal"
+    },
+    {
+      "id": "ascension",
+      "label": "Ascension"
+    },
+    {
+      "id": "atonement",
+      "label": "Atonement"
+    },
+    {
+      "id": "growth",
+      "label": "Growth"
+    },
+    {
+      "id": "playfulness",
+      "label": "Playfulness"
+    },
+    {
+      "id": "self_respect",
+      "label": "Self Respect"
+    },
+    {
+      "id": "reciprocity",
+      "label": "Reciprocity"
+    },
+    {
+      "id": "devotion",
+      "label": "Devotion"
+    },
+    {
+      "id": "divine_love",
+      "label": "Divine Love"
+    },
+    {
+      "id": "enlightenment",
+      "label": "Enlightenment"
+    },
+    {
+      "id": "equanimity",
+      "label": "Equanimity"
+    },
+    {
+      "id": "vulnerability",
+      "label": "Vulnerability"
+    },
+    {
+      "id": "nonviolence",
+      "label": "Nonviolence"
+    },
+    {
+      "id": "centeredness",
+      "label": "Centeredness"
+    },
+    {
+      "id": "grace",
+      "label": "Grace"
+    },
+    {
+      "id": "spiritual",
+      "label": "Spiritual"
+    },
+    {
+      "id": "self_compassion",
+      "label": "Self-Compassion"
+    },
+    {
+      "id": "inspiration",
+      "label": "Inspiration"
+    },
+    {
+      "id": "interconnectedness",
+      "label": "Interconnectedness"
+    },
+    {
+      "id": "environmental_stewardship",
+      "label": "Environmental Stewardship"
+    },
+    {
+      "id": "mysticism",
+      "label": "Mysticism"
+    },
+    {
+      "id": "discernment",
+      "label": "Discernment"
+    },
+    {
+      "id": "psychological_safety",
+      "label": "Psychological Safety"
+    },
+    {
+      "id": "agency",
+      "label": "Agency"
+    },
+    {
+      "id": "purity",
+      "label": "Purity"
+    },
+    {
+      "id": "radiance",
+      "label": "Radiance"
+    },
+    {
+      "id": "redemption",
+      "label": "Redemption"
+    },
+    {
+      "id": "unconditional_love",
+      "label": "Unconditional Love"
+    },
+    {
+      "id": "unity_consciousness",
+      "label": "Unity Consciousness"
+    },
+    {
+      "id": "emotional_intelligence",
+      "label": "Emotional Intelligence"
+    },
+    {
+      "id": "family_feeling",
+      "label": "Family Feeling"
+    },
+    {
+      "id": "inner_peace",
+      "label": "Inner Peace"
+    },
+    {
+      "id": "attunement",
+      "label": "Attunement"
+    },
+    {
+      "id": "sacredness",
+      "label": "Sacredness"
+    },
+    {
+      "id": "sanctity",
+      "label": "Sanctity"
+    },
+    {
+      "id": "selflessness",
+      "label": "Selflessness"
+    },
+    {
+      "id": "magic",
+      "label": "Magic"
+    },
+    {
+      "id": "silence",
+      "label": "Silence",
+      "aliases": ["Quietude"]
+    },
+    {
+      "id": "surrender",
+      "label": "Surrender",
+      "aliases": ["Anti-Resistance"]
+    },
+    {
+      "id": "transcendence",
+      "label": "Transcendence"
+    },
+    {
+      "id": "non_reactionary",
+      "label": "Non-Reactionary"
+    },
+    {
+      "id": "stillness",
+      "label": "Stillness"
+    },
+    {
+      "id": "autonomy",
+      "label": "Autonomy"
+    },
+    {
+      "id": "detachment",
+      "label": "Detachment"
+    },
+    {
+      "id": "observation",
+      "label": "Observation"
+    },
+    {
+      "id": "village",
+      "label": "Village"
+    },
+    {
+      "id": "non_judgment",
+      "label": "Non-judgment"
+    },
+    {
+      "id": "humanitarianism",
+      "label": "Humanitarianism"
+    },
+    {
+      "id": "awe",
+      "label": "Awe"
+    },
+    {
+      "id": "prosperity",
+      "label": "Prosperity",
+      "aliases": ["Wealth"]
+    },
+    {
+      "id": "embodiment",
+      "label": "Embodiment"
+    },
+    {
+      "id": "unwavering_focus",
+      "label": "Unwavering Focus"
+    },
+    {
+      "id": "heart_centered",
+      "label": "Heart-Centered"
+    },
+    {
+      "id": "groundedness",
+      "label": "Groundedness"
+    },
+    {
+      "id": "inner_calm",
+      "label": "Inner Calm"
+    },
+    {
+      "id": "intentionality",
+      "label": "Intentionality"
+    },
+    {
+      "id": "letting_go",
+      "label": "Letting Go"
+    },
+    {
+      "id": "animals",
+      "label": "Animals"
+    },
+    {
+      "id": "activism",
+      "label": "Activism"
+    },
+    {
+      "id": "change",
+      "label": "Change"
+    },
+    {
+      "id": "money",
+      "label": "Money"
+    }
+  ],
+  "steps": [
+    {
+      "id": "lesson_psychological",
+      "order": 1,
+      "type": "lesson",
+      "sourceAsset": "1__Values_Explained.png",
+      "icon": "brain",
+      "title": "Psychological Space",
+      "lens": "Psychologically",
+      "definition": {
+        "question": "What are values psychologically?",
+        "body": "At their core, values are internalized beliefs about what is important, meaningful, and worthwhile. They act as a motivational compass, driving behavior, shaping identity, and directing long-term goals. They're not the same as goals (goals can be achieved; values are ongoing). Think: “creativity” vs. “write a book.”",
+        "emphasis": ["psychologically", "internalized beliefs"]
+      },
+      "howTheyShapeOurLives": {
+        "heading": "How do they shape our lives?",
+        "points": [
+          "They filter decisions: what you say yes or no to depends on what you value.",
+          "They affect emotional regulation: living in alignment tends to bring fulfillment and resilience, while dissonance creates anxiety, guilt, or apathy. Not being in alignment is where self-doubt and rumination can thrive.",
+          "They influence relationships, careers, lifestyle, even the narratives we tell ourselves about success and failure."
+        ]
+      },
+      "ifNotSculptedConsciously": {
+        "heading": "If not sculpted consciously?",
+        "intro": "You end up absorbing “default settings”:",
+        "points": [
+          {
+            "source": "From family systems",
+            "example": "Success means stability."
+          },
+          {
+            "source": "From media and pop culture",
+            "example": "Productivity is everything."
+          },
+          {
+            "source": "From trauma or social norms",
+            "example": "Being good means being liked."
+          }
+        ],
+        "closing": "Unless examined, these become operating systems running quietly in the background, shaping behavior without your consent."
+      }
+    },
+    {
+      "id": "lesson_spiritual",
+      "order": 2,
+      "type": "lesson",
+      "sourceAsset": "2__Values_Explained__2_.png",
+      "icon": "sparkles",
+      "title": "Spiritual Space",
+      "lens": "Spiritually",
+      "definition": {
+        "question": "What are values spiritually?",
+        "body": "From a spiritual perspective, values are soul-level truths. They're the language of the higher self — the inner whisper guiding you toward your dharma (purpose), sacred path, or alignment with Source, God, or the Universe.",
+        "emphasis": ["spiritually", "dharma (purpose)"]
+      },
+      "howTheyShapeOurLives": {
+        "heading": "How do they shape our lives?",
+        "points": [
+          "They act as soul GPS, aligning you with your divine path, even if it defies logic or societal norms.",
+          "Living by them generates spiritual coherence: inner peace, flow, and the feeling of being “on purpose.”",
+          "They strengthen intuition — the quieter your external noise, the clearer your inner knowing becomes."
+        ]
+      },
+      "ifNotSculptedConsciously": {
+        "heading": "If not sculpted consciously?",
+        "points": [
+          "You become spiritually disoriented. Lost. Seeking validation or signs outside yourself.",
+          "You may succeed in worldly terms, but feel empty, restless, or numb — a soul hunger that no achievement can fix."
+        ]
+      }
+    },
+    {
+      "id": "lesson_energetic",
+      "order": 3,
+      "type": "lesson",
+      "sourceAsset": "3__Values_Explained__3_.png",
+      "icon": "orb",
+      "title": "Energetic Space",
+      "lens": "Energetically",
+      "definition": {
+        "question": "What are values energetically?",
+        "body": "Energetically, values are vibrational frequencies we hold and express. They're like signatures that influence how we resonate with the world and what we attract into our field.",
+        "example": "Living in integrity has a different frequency than living for approval. The universe (or collective field) responds accordingly.",
+        "emphasis": ["energetically"]
+      },
+      "howTheyShapeOurLives": {
+        "heading": "How do they shape our lives?",
+        "points": [
+          "They dictate the quality of your presence: are you magnetic, scattered, grounded, reactive?",
+          "They influence your manifestation ability: your values act like tuning forks. If you're aligned, life synchronizes. If not, friction shows up as blocks or repeated lessons.",
+          "They regulate energetic boundaries — knowing your values makes it easier to say no, because you can feel the dissonance of misalignment."
+        ]
+      },
+      "ifNotSculptedConsciously": {
+        "heading": "If not sculpted consciously?",
+        "points": [
+          "You become energetically porous — taking on others' values, emotions, and identities.",
+          "You attract misaligned opportunities, people, or cycles.",
+          "Your energy may feel drained, erratic, or off, without knowing why."
+        ]
+      }
+    },
+    {
+      "id": "lesson_centered_living",
+      "order": 4,
+      "type": "lesson",
+      "sourceAsset": "4__Values_Explained__4_.png",
+      "title": "Centered Living & The Danger of Not Knowing",
+      "blocks": [
+        {
+          "id": "centered_living",
+          "icon": "seedling",
+          "title": "Centered Living Through Values",
+          "intro": "When you know your values deeply — not as nice words on a wall, but as lived principles — you become centered, congruent, and grounded in your being.",
+          "emphasis": ["centered", "congruent", "grounded"],
+          "listHeading": "You lead from:",
+          "points": [
+            "Clarity instead of confusion",
+            "Autonomy instead of compliance",
+            "Embodiment instead of performance",
+            "Alignment instead of hustle"
+          ],
+          "closing": "You are no longer a sponge soaking up the expectations of the world. You become an anchor."
+        },
+        {
+          "id": "danger_of_not_knowing",
+          "icon": "burst",
+          "title": "The Danger of Not Knowing Your Values",
+          "intro": "If you don't shape your values, the world will shape them for you.",
+          "listHeading": "You'll be driven by:",
+          "points": [
+            "Social media trends",
+            "Cultural scripts",
+            "Childhood conditioning",
+            "Advertising narratives",
+            "Fear of judgment",
+            "Wounded ego structures"
+          ],
+          "closing": "You'll be performing a life that isn't yours — beautifully, perhaps. But it will feel hollow."
+        }
+      ],
+      "facilitationNote": "This exercise is best done with a coach who can mirror back the limiting beliefs and patterns that are hidden from the self."
+    },
+    {
+      "id": "exercise_value_selection",
+      "order": 5,
+      "type": "value_selection",
+      "sourceAssets": ["5__Values.png", "6__Values_Work_Sheet.png", "7__Values_Work_Sheet__2_.png"],
+      "title": "My Core Values",
+      "instruction": "Select the values that resonate with you the most, and mark each one as Confirmed, Wavering, Let Go Of, or Future Self.",
+      "valueStatesRef": "valueStates",
+      "valuesRef": "values",
+      "config": {
+        "requiresAllFourStates": false,
+        "allowCustomValues": true,
+        "customValuePrompt": "Add a value of your own",
+        "minimumSelections": null,
+        "maximumSelections": null
+      },
+      "implementationNotes": [
+        "All four states are captured in this single step; later reflections depend on the yellow, red, purple and green sets existing.",
+        "The workbook told solo users to look each value up online for alternative perspectives — an in-app definition or 'other perspectives' panel per value replaces that instruction."
+      ]
+    },
+    {
+      "id": "reflection_yellow",
+      "order": 6,
+      "type": "reflection",
+      "sourceAsset": "7__Values_Work_Sheet__2_.png",
+      "title": "Reflection & Integration: Yellow Values",
+      "focusState": "yellow",
+      "intro": "Now let's put what you have learned about yourself into context. Our perspective of language is based on our “programming,” so this is where you challenge yourself and excavate what has been hidden deeply from the self.",
+      "prompt": "Let's look at your Yellow Values so that we can determine whether they support you now, or whether they are from your past and served you once but no longer.",
+      "facilitationNote": "A coach can reflect, witness, catch and mirror back. Otherwise, a member of your community who is not part of your family or core group of friends can support you through curiosity.",
+      "repeatPerValue": true,
+      "questions": [
+        {
+          "id": "q1",
+          "number": 1,
+          "text": "Are any of your values adopted, inherited, generational, or cultural to you?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q2",
+          "number": 2,
+          "text": "Did these values serve you in the past, and how?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q3",
+          "number": 3,
+          "text": "Do these yellow values serve you now? If so, in what ways?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q4",
+          "number": 4,
+          "text": "Do they restrict you? If so, in what ways?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q5",
+          "number": 5,
+          "text": "Is there a purple value that you would like to replace the yellow one with?",
+          "inputType": "value_picker",
+          "pickerSource": "purple"
+        },
+        {
+          "id": "q6",
+          "number": 6,
+          "text": "How would your life look different if you replaced the yellow with purple?",
+          "inputType": "long_text"
+        }
+      ]
+    },
+    {
+      "id": "reflection_red",
+      "order": 7,
+      "type": "reflection",
+      "sourceAsset": "8__Values_Reflection.png",
+      "title": "Reflection & Integration: Red Values",
+      "focusState": "red",
+      "prompt": "Let's look at your Red Values so that we can better understand where they came from, how they served your past self, and which purple values will replace them — or how to let them go altogether.",
+      "repeatPerValue": true,
+      "questions": [
+        {
+          "id": "q1",
+          "number": 1,
+          "text": "Are any of your values adopted, inherited, generational, or cultural to you?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q2",
+          "number": 2,
+          "text": "Did these values keep you safe, ensure love and connection, or ensure inclusion?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q3",
+          "number": 3,
+          "text": "Did these values serve you in the past, and how?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q4",
+          "number": 4,
+          "text": "Do these red values serve you now? If so, in what ways?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q5",
+          "number": 5,
+          "text": "Do they restrict you? If so, in what ways?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q6",
+          "number": 6,
+          "text": "Is there a purple value that you would like to replace the red one with?",
+          "inputType": "value_picker",
+          "pickerSource": "purple"
+        },
+        {
+          "id": "q7",
+          "number": 7,
+          "text": "How would your life look different if you replaced the red with a purple, or let it go altogether?",
+          "inputType": "long_text"
+        }
+      ]
+    },
+    {
+      "id": "reflection_purple",
+      "order": 8,
+      "type": "reflection",
+      "sourceAsset": "8__Values_Reflection.png",
+      "title": "Reflection & Integration: Purple Values",
+      "focusState": "purple",
+      "context": "Our values change as we change. We let go of those which no longer serve us, and we adopt those we see exhibited by others we feel attracted to and inspired by. Your purple values represent your growth, your expansion of consciousness, and your ability to manifest the life you want to live.",
+      "prompt": "Let's look at your Purple Values so that we can better understand how to integrate these desired values into your daily practice, and how they will serve you in this new and updated version of you. Let's discover who it is that you are becoming.",
+      "repeatPerValue": true,
+      "questions": [
+        {
+          "id": "q1",
+          "number": 1,
+          "text": "Are any of your values adopted, inherited, generational, or cultural to you?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q2",
+          "number": 2,
+          "text": "Do these values keep you safe, ensure love and connection, or ensure inclusion?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q3",
+          "number": 3,
+          "text": "Did these values once serve you in the past, and how?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q4",
+          "number": 4,
+          "text": "Have you applied these values at any point in your life? If so, how have they served you?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q5",
+          "number": 5,
+          "text": "Do they restrict you? If so, in what ways?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q6",
+          "number": 6,
+          "text": "If you were to describe the type of person who operated by these purple values, who would they be, and would you want to spend time with them?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q7",
+          "number": 7,
+          "text": "How would your life look different as you lean more into the purple values?",
+          "inputType": "long_text"
+        }
+      ]
+    },
+    {
+      "id": "reflection_core_values",
+      "order": 9,
+      "type": "reflection",
+      "sourceAsset": "9__Values_Reflection__2_.png",
+      "title": "Your Top 10 & Top 5 Core Values",
+      "focusState": ["green", "purple"],
+      "intro": "Alright, let's move this in a direction that will support you in manifesting your new life, and in recognizing the person you are no longer and the person you are becoming.",
+      "prompt": "From your remaining Green and Purple Values, let's identify your top 10 values, and from there your top 5 — your core values. We humans tend to operate from two to five core values in our daily lives. Knowing yours, and ensuring they represent your authentic self, will help you make decisions in alignment with the life you want to live.",
+      "questions": [
+        {
+          "id": "q1",
+          "number": 1,
+          "text": "What are your top 10 extended values?",
+          "inputType": "value_ranking",
+          "pickerSource": ["green", "purple"],
+          "expectedItems": 10
+        },
+        {
+          "id": "q2",
+          "number": 2,
+          "text": "What are your top 5 core values?",
+          "inputType": "value_ranking",
+          "pickerSource": "q1",
+          "expectedItems": 5
+        },
+        {
+          "id": "q3",
+          "number": 3,
+          "text": "How many of your top 10 and top 5 values are purple?",
+          "inputType": "number",
+          "autoCalculable": true
+        },
+        {
+          "id": "q4",
+          "number": 4,
+          "text": "Are you living in alignment with your core values in…",
+          "inputType": "sub_questions",
+          "subQuestions": [
+            {
+              "id": "q4a",
+              "text": "your relationships (romantic, platonic, business)?"
+            },
+            {
+              "id": "q4b",
+              "text": "your relationship with yourself?"
+            },
+            {
+              "id": "q4c",
+              "text": "your career or profession?"
+            },
+            {
+              "id": "q4d",
+              "text": "your environment (where you live)?"
+            },
+            {
+              "id": "q4e",
+              "text": "your family?"
+            }
+          ]
+        },
+        {
+          "id": "q5",
+          "number": 5,
+          "text": "Which values guide your decisions, especially in moments of challenge or uncertainty?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q6",
+          "number": 6,
+          "text": "Are any of your values adopted, inherited, generational, or cultural to you?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q7",
+          "number": 7,
+          "text": "Can you identify a recent situation where your actions did not align with your core values? What was the impact?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q8",
+          "number": 8,
+          "text": "What would it look like to make decisions purely based on your values, rather than external pressures or expectations?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q9",
+          "number": 9,
+          "text": "What daily practices or habits help you stay connected to your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q10",
+          "number": 10,
+          "text": "What small actions can you take today to live more fully in alignment with your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q11",
+          "number": 11,
+          "text": "What legacy do you want to leave behind that reflects your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q12",
+          "number": 12,
+          "text": "What would it mean for you to live a life where your values are your North Star?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q13",
+          "number": 13,
+          "text": "Is your relationship with yourself in alignment with your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q14",
+          "number": 14,
+          "text": "Are your belief systems allowing you to stay in alignment with your values? Which belief is causing conflict?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q15",
+          "number": 15,
+          "text": "Is how you spend your free time in alignment with your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q16",
+          "number": 16,
+          "text": "Are you choosing partners or professions that are not in alignment with your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q17",
+          "number": 17,
+          "text": "Are your food choices in alignment with your values?",
+          "inputType": "long_text"
+        },
+        {
+          "id": "q18",
+          "number": 18,
+          "text": "Is your romantic or sex life in alignment with your values?",
+          "inputType": "long_text"
+        }
+      ]
+    },
+    {
+      "id": "closing_check_in_with_gratitude",
+      "order": 10,
+      "type": "closing",
+      "sourceAsset": "10__Check-In_with_Gratitude.png",
+      "title": "Check In with Gratitude",
+      "blocks": [
+        {
+          "id": "coach_story",
+          "type": "narrative",
+          "attribution": "Lelanea Fulton",
+          "paragraphs": [
+            "I don't know about you, but after I learned my innate values and what truly drives me as an individual on this human and spiritual journey, I felt anger — and a form of resentment. I felt as though I had lost a good portion of my life carrying around the values and beliefs pushed upon me by my family and culture.",
+            "It turned out that I didn't actually value money or wealth. What I truly valued was security.",
+            "After a childhood of poverty, I had unconsciously viewed money and wealth as the cure. I spent two decades chasing money, and I obtained it — but I felt miserable, because it had been in service to a value that wasn't truly mine.",
+            "I could go on and on about what I've learned about myself, and how I spent so many years participating in values that didn't belong to me.",
+            "That is the nature of a world driven by marketing and consumerism — a world where outdated systems still shape our identities, even as our collective consciousness evolves beyond them."
+          ]
+        },
+        {
+          "id": "closing_reflection",
+          "type": "reflection",
+          "intro": "Now I'd love to hear from you.",
+          "questions": [
+            {
+              "id": "q1",
+              "number": 1,
+              "text": "What did you learn about yourself?",
+              "inputType": "long_text"
+            },
+            {
+              "id": "q2",
+              "number": 2,
+              "text": "Whose values have you been carrying around?",
+              "inputType": "long_text"
+            },
+            {
+              "id": "q3",
+              "number": 3,
+              "text": "What has been the effect of living by the values of others rather than your own?",
+              "inputType": "long_text"
+            },
+            {
+              "id": "q4",
+              "number": 4,
+              "text": "With this new understanding of your personal values, what have you discovered about your mindset, your humanitarian beliefs, your political views, your cultural frameworks, and your beliefs about your spiritual self?",
+              "inputType": "long_text"
+            }
+          ]
+        },
+        {
+          "id": "letting_go_meditation",
+          "type": "meditation",
+          "title": "Letting Go & Gratitude",
+          "durationMinutes": 12,
+          "guidance": {
+            "breaths": 15,
+            "breathInstruction": "Allow the exhale to be longer than the inhale. You can rest in the height of the inhale and the exhale.",
+            "gazePoint": "The space between the eyebrows",
+            "somaticPrompts": [
+              "What does the sensation of letting go feel like for you?",
+              "Where in your body do you feel it the most?"
+            ]
+          },
+          "script": [
+            "I would like to invite you to close your eyes for just 12 minutes. To take a pause. To explore the silence that permeates within you.",
+            "Often, this silence is overrun by the constant chatter of the mind — and if that's the case, take about 15 deep breaths, allowing the exhale to be longer than the inhale. You can rest in the height of the inhale and the exhale if you like. I like this space very much.",
+            "As you quiet the movement, allow your gaze to shift — not outward, but inward. Let it move gently away from the back of your eyelids and settle into the space between your eyebrows. Rest here for a bit.",
+            "Now, I invite you to let the sensation of letting go manifest throughout your body. This sensation is somatic. What does it feel like for you? Where in your body do you feel it the most?",
+            "What are you letting go of? Is it a belief that you've realized isn't yours? Is it a perspective you no longer share? Is it an expectation or idea that no longer resonates?",
+            "It's okay to outgrow these things. In fact, it would be strange if you didn't.",
+            "As you allow the sensation of letting go to fill you… can you also allow gratitude to overcome you?"
+          ]
+        }
+      ]
+    }
+  ]
+}

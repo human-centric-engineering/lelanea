@@ -329,9 +329,27 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/eslint.config.mjs',
     risk: 'a stray flat-config block would apply lint rules to every fork',
+    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads one
+    // block — the `content/*.json` import boundary that keeps authored content
+    // reachable only through `lib/app/content` — so the row is PINNED to that
+    // one block rather than deleted: deleting it would stop noticing the NEXT
+    // block, and a lint block added here applies to the whole repo.
+    //
+    // Pin the count and the rule, not the message text, so rewording a lint
+    // message is not a test change. `tests/unit/lib/app/content/eslint-boundary.test.ts`
+    // is what asserts the block actually behaves — this row only asserts that
+    // the seam still holds exactly what we think it holds.
+    //
     // The root eslint.config.mjs spreads this array last; that spread itself is
     // exercised by every `npm run lint` run.
-    assert: () => expect(appEslintConfig).toEqual([]),
+    assert: () => {
+      expect(appEslintConfig).toHaveLength(1);
+      expect(appEslintConfig[0]).toMatchObject({
+        name: 'lelanea/content-json-boundary',
+        ignores: ['lib/app/content/**'],
+        rules: { 'no-restricted-syntax': expect.arrayContaining(['error']) },
+      });
+    },
   },
   {
     seam: 'lib/app/jobs.ts',

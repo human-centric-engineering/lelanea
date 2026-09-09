@@ -1,0 +1,901 @@
+{
+  "framework": {
+    "id": "core_values_exploration_reference_framework",
+    "title": "Core Values Exploration Reference Framework",
+    "sourceFile": "CORE_VALUES_EXPLORATION_REFERENCE_FRAMEWORK.docx",
+    "version": "1.0",
+    "textFormat": "markdown-inline",
+    "purposeSummary": "The editorial brief the individual value write-ups are authored against. Not user-facing content.",
+    "notes": [
+      "Body text is verbatim from the source document. Inline emphasis is preserved as markdown.",
+      "explorationChecklist is the list of lenses at the head of the document.",
+      "standardStructure is the twenty-two point authoring spec.",
+      "lenses, discernmentQuestions and alignmentTest are structured extracts of material also present in the blocks."
+    ],
+    "locale": "en-US"
+  },
+  "explorationChecklist": [
+    {
+      "item": "Definition and essential meaning"
+    },
+    {
+      "item": "Etymology and linguistic evolution"
+    },
+    {
+      "item": "Historical origin and original usage"
+    },
+    {
+      "item": "Evolution of the concept"
+    },
+    {
+      "item": "Psychological meaning"
+    },
+    {
+      "item": "Transpersonal psychological meaning"
+    },
+    {
+      "item": "Trauma, conditioning, attachment, and the Maté lens"
+    },
+    {
+      "item": "Eastern philosophical parallels",
+      "qualifier": "where legitimately applicable"
+    },
+    {
+      "item": "Western mystical or philosophical parallels",
+      "qualifier": "where applicable"
+    },
+    {
+      "item": "Spiritual meaning"
+    },
+    {
+      "item": "Energetic and vibrational interpretation"
+    },
+    {
+      "item": "Hawkins / consciousness scale relationship",
+      "qualifier": "where applicable"
+    },
+    {
+      "item": "Consciousness first / Goswami perspective"
+    },
+    {
+      "item": "Chopra / mind body consciousness perspective",
+      "qualifier": "where relevant"
+    },
+    {
+      "item": "Metaphysical interpretation"
+    },
+    {
+      "item": "How the value manifests when embodied"
+    },
+    {
+      "item": "How it manifests when someone is misaligned"
+    },
+    {
+      "item": "The shadow or distorted expression of the value"
+    },
+    {
+      "item": "How trauma can masquerade as the value"
+    },
+    {
+      "item": "How to distinguish an inherited value from an authentic value"
+    },
+    {
+      "item": "Somatic signs and lived experience"
+    },
+    {
+      "item": "Relationships and interpersonal expression"
+    },
+    {
+      "item": "Relationship with self"
+    },
+    {
+      "item": "Questions for self inquiry"
+    },
+    {
+      "item": "A concise alignment test"
+    },
+    {
+      "item": "Important distinctions from neighboring values"
+    }
+  ],
+  "lenses": [
+    {
+      "lens": "Language",
+      "question": "What did the word originally mean?"
+    },
+    {
+      "lens": "History",
+      "question": "From what linguistic, philosophical, religious, or cultural tradition did the concept emerge?"
+    },
+    {
+      "lens": "Psychology",
+      "question": "What does the value represent as a motivational or behavioral orientation?"
+    },
+    {
+      "lens": "Spirituality",
+      "question": "How has the underlying principle been understood within contemplative, ethical, mystical, or wisdom traditions?"
+    },
+    {
+      "lens": "Metaphysics",
+      "question": "What might the value mean when understood through consciousness, relationship, interconnectedness, being, or one's orientation toward reality?"
+    },
+    {
+      "lens": "Embodiment",
+      "question": "What does this value actually look like when someone lives it?"
+    },
+    {
+      "lens": "Discernment",
+      "question": "How can someone distinguish genuine alignment from identification with the *idea* of the value?"
+    }
+  ],
+  "standardStructure": [
+    {
+      "number": 1,
+      "id": "value",
+      "title": "VALUE",
+      "blocks": ["The word being explored."]
+    },
+    {
+      "number": 2,
+      "id": "core_definition",
+      "title": "CORE DEFINITION",
+      "blocks": [
+        "A concise contemporary definition of the value.",
+        "This section establishes what the word generally means before examining the deeper layers surrounding it."
+      ]
+    },
+    {
+      "number": 3,
+      "id": "etymology",
+      "title": "ETYMOLOGY",
+      "blocks": [
+        "Explore:",
+        "**Root language:** Latin, Greek, Old English, Sanskrit, French, Germanic, or another linguistic origin.",
+        "**Original word:** The earliest relevant linguistic form.",
+        "**Literal meaning:** What the root originally communicated.",
+        "**Evolution:** How the word's meaning changed as it moved through languages, historical periods, religions, philosophies, or cultures.",
+        "Where useful, distinguish between the historical meaning and the way modern psychology or spirituality uses the term."
+      ]
+    },
+    {
+      "number": 4,
+      "id": "historical_and_conceptual_origin",
+      "title": "HISTORICAL AND CONCEPTUAL ORIGIN",
+      "blocks": [
+        "Explore the broader history of the *concept*, rather than merely the English word.",
+        "Questions include:",
+        "Where does this idea appear historically?",
+        "Did Greek philosophy discuss an equivalent virtue?",
+        "Does Hindu philosophy contain a related principle?",
+        "Does Buddhism approach the concept differently?",
+        "Does Taoism provide another interpretation?",
+        "Does Christianity, Judaism, Islam, Indigenous philosophy, Stoicism, or another tradition contain a related principle?",
+        "Did psychology later reinterpret the concept?",
+        "The English word and the human principle may have very different histories.",
+        "For example, the English word **equanimity** has a Latin linguistic history, while the cultivation of profound equanimity appears independently within Buddhist contemplative traditions through *upekkhā*.",
+        "These parallels should be explored without claiming that historically unrelated traditions necessarily borrowed from one another."
+      ]
+    },
+    {
+      "number": 5,
+      "id": "original_or_intended_use",
+      "title": "ORIGINAL OR INTENDED USE",
+      "blocks": [
+        "Examine how the word was originally used.",
+        "Was it primarily:",
+        "a moral virtue,",
+        "a religious principle,",
+        "a description of character,",
+        "a social expectation,",
+        "a philosophical concept,",
+        "a psychological quality,",
+        "a political concept,",
+        "an economic concept,",
+        "or something else?",
+        "Then compare this with contemporary usage.",
+        "This is particularly important for words whose meanings have shifted substantially."
+      ]
+    },
+    {
+      "number": 6,
+      "id": "psychological_meaning",
+      "title": "PSYCHOLOGICAL MEANING",
+      "blocks": [
+        "Examine the value as an organizing principle of human behavior.",
+        "Consider:",
+        "What psychological need might this value express?",
+        "What behaviors does it tend to motivate?",
+        "What emotional experiences accompany alignment with it?",
+        "How might the value influence decision making?",
+        "How might it affect relationships?",
+        "How might it influence identity?",
+        "How might childhood conditioning influence someone's relationship with this value?",
+        "Could the person have inherited this value from family, religion, culture, socioeconomic environment, trauma, or social expectations?",
+        "Is the value freely chosen, or merely internalized?",
+        "This distinction matters because an inherited rule can masquerade as a personal value."
+      ]
+    },
+    {
+      "number": 7,
+      "id": "spiritual_meaning",
+      "title": "SPIRITUAL MEANING",
+      "blocks": [
+        "Explore how the value can function as a principle of spiritual development.",
+        "Depending upon the particular value, relevant traditions may include:",
+        "Buddhism,",
+        "Hinduism,",
+        "Vedānta,",
+        "Yoga philosophy,",
+        "Taoism,",
+        "Jainism,",
+        "Christian mysticism,",
+        "Jewish mysticism,",
+        "Sufism,",
+        "Stoicism,",
+        "Neoplatonism,",
+        "Indigenous traditions,",
+        "and contemporary contemplative spirituality.",
+        "The objective is not to force every value into every spiritual tradition.",
+        "Instead, identify genuine conceptual parallels where they exist.",
+        "Questions may include:",
+        "How does this value affect one's relationship with self?",
+        "How does it affect one's relationship with other beings?",
+        "How does it affect one's relationship with suffering?",
+        "How does it affect one's relationship with ego?",
+        "How does it affect one's relationship with impermanence?",
+        "How does it affect one's relationship with the sacred?",
+        "Does the value encourage greater separation or greater recognition of interconnectedness?"
+      ]
+    },
+    {
+      "number": 8,
+      "id": "metaphysical_interpretation",
+      "title": "METAPHYSICAL INTERPRETATION",
+      "blocks": [
+        "This section explores the value philosophically rather than presenting metaphysical propositions as experimentally established facts.",
+        "Questions may include:",
+        "What does this value imply about the nature of self?",
+        "What does it imply about agency?",
+        "What does it imply about consciousness?",
+        "What does it imply about interconnectedness?",
+        "What does it imply about our relationship with reality?",
+        "What happens when consciousness organizes itself around this principle?",
+        "Does the value move someone toward contraction or expansion?",
+        "Toward separation or relationship?",
+        "Toward control or participation?",
+        "Toward identification or observation?",
+        "Toward resistance or acceptance?",
+        "Toward fragmentation or coherence?",
+        "The metaphysical interpretation should remain distinct from scientific claims.",
+        "For example:",
+        "Rather than:",
+        "“Integrity raises your vibrational frequency.”",
+        "A more epistemically careful exploration would be:",
+        "“Within energetic and metaphysical frameworks, integrity can be understood as a state of greater coherence because thought, speech, intention, and behavior are moving in the same direction.”",
+        "The second statement preserves the metaphysical framework without presenting an unmeasured physical frequency as established science."
+      ]
+    },
+    {
+      "number": 9,
+      "id": "the_embodied_expression",
+      "title": "THE EMBODIED EXPRESSION",
+      "blocks": [
+        "This section answers:",
+        "**What does this value look like when it becomes behavior?**",
+        "Identify concrete manifestations.",
+        "For example, someone who values **integrity** might:",
+        "keep commitments,",
+        "correct themselves when they are wrong,",
+        "tell difficult truths compassionately,",
+        "decline opportunities that violate their principles,",
+        "behave similarly when nobody is watching,",
+        "and accept consequences rather than manipulate reality to protect their image.",
+        "This transforms an abstract noun into observable behavior."
+      ]
+    },
+    {
+      "number": 10,
+      "id": "internal_experience_of_alignment",
+      "title": "INTERNAL EXPERIENCE OF ALIGNMENT",
+      "blocks": [
+        "Explore what alignment may feel like internally.",
+        "Possible experiences include:",
+        "congruence,",
+        "clarity,",
+        "steadiness,",
+        "peace,",
+        "vitality,",
+        "openness,",
+        "self respect,",
+        "groundedness,",
+        "reduced internal negotiation,",
+        "or willingness to tolerate discomfort in service of what matters.",
+        "Importantly, alignment should **not** automatically be equated with comfort.",
+        "Living according to a value may create discomfort.",
+        "Courage may involve fear.",
+        "Honesty may involve vulnerability.",
+        "Boundaries may produce guilt.",
+        "Justice may require confrontation.",
+        "Authenticity may create rejection.",
+        "Compassion may require grief.",
+        "Therefore:",
+        "**Discomfort does not necessarily indicate misalignment. Sometimes discomfort is the price of alignment.**"
+      ]
+    },
+    {
+      "number": 11,
+      "id": "behavioral_evidence_of_alignment",
+      "title": "BEHAVIORAL EVIDENCE OF ALIGNMENT",
+      "blocks": [
+        "This should become one of the strongest sections of every value exploration.",
+        "Ask:",
+        "Where can this value be observed in behavior?",
+        "What decisions demonstrate it?",
+        "What sacrifices demonstrate it?",
+        "What boundaries protect it?",
+        "Where does the person choose it when another option would be easier?",
+        "What happens when living this value costs them approval, comfort, money, status, convenience, or belonging?",
+        "A useful principle is:",
+        "**Values become visible under pressure.**",
+        "It is easy to value kindness when everyone is kind to us.",
+        "The deeper question is what happens to kindness when we encounter someone difficult.",
+        "It is easy to value integrity when honesty costs nothing.",
+        "The revealing moment comes when truth carries consequences."
+      ]
+    },
+    {
+      "number": 12,
+      "id": "signs_of_misalignment",
+      "title": "SIGNS OF MISALIGNMENT",
+      "blocks": [
+        "Identify behavioral contradictions.",
+        "These might include:",
+        "repeatedly acting contrary to the stated value,",
+        "resentment,",
+        "chronic self betrayal,",
+        "internal fragmentation,",
+        "rationalization,",
+        "performative identification,",
+        "outsourcing responsibility,",
+        "compulsive approval seeking,",
+        "avoidance,",
+        "or repeatedly choosing short term relief over the stated principle.",
+        "The important distinction is between occasional human inconsistency and persistent contradiction.",
+        "Alignment does not require perfection.",
+        "It requires a recognizable orientation."
+      ]
+    },
+    {
+      "number": 13,
+      "id": "the_shadow_expression",
+      "title": "THE SHADOW EXPRESSION",
+      "blocks": [
+        "Every value deserves this section.",
+        "A psychologically healthy value can become distorted when driven by fear, ego protection, trauma, social conditioning, or rigid identification.",
+        "Examples:",
+        "**Compassion → self abandonment**",
+        "**Strength → emotional suppression**",
+        "**Independence → inability to receive support**",
+        "**Peace → conflict avoidance**",
+        "**Service → martyrdom**",
+        "**Loyalty → tolerating abuse**",
+        "**Discipline → rigidity**",
+        "**Freedom → avoidance of commitment**",
+        "**Generosity → compulsive giving**",
+        "**Detachment → emotional disengagement**",
+        "**Spirituality → spiritual bypassing**",
+        "**Non judgment → unwillingness to exercise discernment**",
+        "**Surrender → passivity**",
+        "**Acceptance → resignation**",
+        "**Humility → self diminishment**",
+        "**Confidence → superiority**",
+        "**Boundaries → emotional walls**",
+        "**Selflessness → disappearance of self**",
+        "This distinction prevents the exercise from becoming simplistic.",
+        "A value is not automatically healthy merely because the word sounds virtuous."
+      ]
+    },
+    {
+      "number": 14,
+      "id": "value_versus_defense_mechanism",
+      "title": "VALUE VERSUS DEFENSE MECHANISM",
+      "blocks": [
+        "Ask:",
+        "**Am I moving toward something meaningful, or away from something frightening?**",
+        "Someone may call isolation **independence**.",
+        "Someone may call hypervigilance **discernment**.",
+        "Someone may call people pleasing **kindness**.",
+        "Someone may call emotional shutdown **detachment**.",
+        "Someone may call perfectionism **excellence**.",
+        "Someone may call control **responsibility**.",
+        "Someone may call avoidance **peace**.",
+        "Someone may call scarcity **prudence**.",
+        "Someone may call superiority **self respect**.",
+        "Someone may call dissociation **spiritual transcendence**.",
+        "The behavior alone cannot always reveal the value.",
+        "Its **function, motivation, flexibility, and consequences** must also be examined."
+      ]
+    },
+    {
+      "number": 15,
+      "id": "inherited_value_versus_chosen_value",
+      "title": "INHERITED VALUE VERSUS CHOSEN VALUE",
+      "blocks": [
+        "Explore whether the value originated through:",
+        "family,",
+        "religion,",
+        "culture,",
+        "gender expectations,",
+        "economic conditions,",
+        "schooling,",
+        "community,",
+        "trauma,",
+        "social class,",
+        "professional identity,",
+        "media,",
+        "or conscious personal examination.",
+        "Then ask:",
+        "**If nobody rewarded me for embodying this value, would I still choose it?**",
+        "**If nobody knew I lived according to it, would it still matter to me?**",
+        "**If this value caused someone to disapprove of me, would I still recognize it as mine?**",
+        "These questions help distinguish intrinsic valuation from social compliance."
+      ]
+    },
+    {
+      "number": 16,
+      "id": "value_conflicts",
+      "title": "VALUE CONFLICTS",
+      "blocks": [
+        "Values rarely operate independently.",
+        "They sometimes collide.",
+        "Freedom may conflict with commitment.",
+        "Honesty may conflict with kindness.",
+        "Security may conflict with adventure.",
+        "Individuality may conflict with belonging.",
+        "Peace may conflict with justice.",
+        "Loyalty may conflict with integrity.",
+        "Achievement may conflict with wellbeing.",
+        "Generosity may conflict with boundaries.",
+        "Tradition may conflict with innovation.",
+        "Self reliance may conflict with community.",
+        "The important question is therefore not merely:",
+        "**What do I value?**",
+        "It is also:",
+        "**Which value takes precedence when two of my values compete?**",
+        "Those moments reveal the actual hierarchy of someone's values."
+      ]
+    },
+    {
+      "number": 17,
+      "id": "relational_expression",
+      "title": "RELATIONAL EXPRESSION",
+      "blocks": [
+        "Explore how the value appears within relationships.",
+        "Ask:",
+        "How do I offer this value to others?",
+        "How do I allow others to offer it to me?",
+        "What boundaries arise from it?",
+        "What expectations arise from it?",
+        "Do I demand this value from others while exempting myself?",
+        "Do I extend it toward others while withholding it from myself?",
+        "What happens when someone I love does not share this value?"
+      ]
+    },
+    {
+      "number": 18,
+      "id": "self_relationship",
+      "title": "SELF RELATIONSHIP",
+      "blocks": [
+        "Turn the value inward.",
+        "Someone may value:",
+        "compassion toward others but not themselves,",
+        "forgiveness toward others but not themselves,",
+        "freedom for themselves but not others,",
+        "honesty from others but not themselves,",
+        "respect from others while engaging in self contempt,",
+        "or generosity toward others while chronically depriving themselves.",
+        "Therefore ask:",
+        "**Does my relationship with myself reflect this value too?**"
+      ]
+    },
+    {
+      "number": 19,
+      "id": "somatic_and_embodied_inquiry",
+      "title": "SOMATIC AND EMBODIED INQUIRY",
+      "blocks": [
+        "Without claiming that bodily sensations provide infallible truth, the body can be used as another source of information.",
+        "Explore:",
+        "What happens in the body when the person honors this value?",
+        "What happens when they violate it?",
+        "Does the body become tense?",
+        "Open?",
+        "Contracted?",
+        "Restless?",
+        "Grounded?",
+        "Activated?",
+        "Quiet?",
+        "What sensations arise when imagining choosing this value despite social consequences?",
+        "The objective is not to declare:",
+        "“My body says this is true.”",
+        "Instead:",
+        "**“What information is my body contributing to this inquiry?”**"
+      ]
+    },
+    {
+      "number": 20,
+      "id": "questions_for_discernment",
+      "title": "QUESTIONS FOR DISCERNMENT",
+      "blocks": [
+        "Each value can conclude with several inquiries.",
+        "**Recognition**",
+        "What does this value mean to me personally?",
+        "**Origin**",
+        "Where did I learn that this mattered?",
+        "**Choice**",
+        "Would I consciously choose this value today?",
+        "**Evidence**",
+        "Where does my behavior demonstrate this value?",
+        "**Contradiction**",
+        "Where does my behavior contradict it?",
+        "**Cost**",
+        "What am I willing to sacrifice to live according to it?",
+        "**Shadow**",
+        "What unhealthy behavior could masquerade as this value?",
+        "**Relationship**",
+        "How does this value influence the way I treat other beings?",
+        "**Self**",
+        "Do I extend this value toward myself?",
+        "**Future Self**",
+        "How would embodying this value more completely change the way I live?"
+      ]
+    },
+    {
+      "number": 21,
+      "id": "alignment_test",
+      "title": "ALIGNMENT TEST",
+      "blocks": [
+        "A useful final assessment for every value:",
+        "**I SAY I VALUE IT**",
+        "Is the value primarily conceptual?",
+        "**I FEEL DRAWN TOWARD IT**",
+        "Does it carry personal emotional significance?",
+        "**I CHOOSE ACCORDING TO IT**",
+        "Does it influence decisions?",
+        "**I BEHAVE ACCORDING TO IT**",
+        "Is there observable evidence?",
+        "**I PROTECT IT**",
+        "Do my boundaries preserve it?",
+        "**I ACCEPT ITS COST**",
+        "Am I willing to experience appropriate discomfort to remain aligned with it?",
+        "**I EXTEND IT CONSISTENTLY**",
+        "Does it appear across contexts rather than only when convenient?",
+        "**I CAN HOLD IT FLEXIBLY**",
+        "Can I embody it without turning it into rigidity, superiority, avoidance, or self punishment?",
+        "The final question becomes:",
+        "**Is this a word I admire, an identity I claim, or a principle I actually live?**"
+      ]
+    },
+    {
+      "number": 22,
+      "id": "future_self_expression",
+      "title": "FUTURE SELF EXPRESSION",
+      "blocks": [
+        "For values identified as aspirational rather than currently embodied:",
+        "What would this value look like if integrated?",
+        "What behaviors would change?",
+        "What boundaries would change?",
+        "What relationships might change?",
+        "What would the person stop tolerating?",
+        "What would they begin practicing?",
+        "What difficult conversation might become necessary?",
+        "What habit would become incompatible with the value?",
+        "What would become possible?",
+        "The purpose is not to imagine a perfect future identity.",
+        "It is to identify the **next observable expression of the value**.",
+        "A future value becomes embodied through present behavior."
+      ]
+    }
+  ],
+  "discernmentQuestions": [
+    {
+      "label": "Recognition",
+      "question": "What does this value mean to me personally?"
+    },
+    {
+      "label": "Origin",
+      "question": "Where did I learn that this mattered?"
+    },
+    {
+      "label": "Choice",
+      "question": "Would I consciously choose this value today?"
+    },
+    {
+      "label": "Evidence",
+      "question": "Where does my behavior demonstrate this value?"
+    },
+    {
+      "label": "Contradiction",
+      "question": "Where does my behavior contradict it?"
+    },
+    {
+      "label": "Cost",
+      "question": "What am I willing to sacrifice to live according to it?"
+    },
+    {
+      "label": "Shadow",
+      "question": "What unhealthy behavior could masquerade as this value?"
+    },
+    {
+      "label": "Relationship",
+      "question": "How does this value influence the way I treat other beings?"
+    },
+    {
+      "label": "Self",
+      "question": "Do I extend this value toward myself?"
+    },
+    {
+      "label": "Future Self",
+      "question": "How would embodying this value more completely change the way I live?"
+    }
+  ],
+  "alignmentTest": [
+    {
+      "label": "I SAY I VALUE IT",
+      "question": "Is the value primarily conceptual?"
+    },
+    {
+      "label": "I FEEL DRAWN TOWARD IT",
+      "question": "Does it carry personal emotional significance?"
+    },
+    {
+      "label": "I CHOOSE ACCORDING TO IT",
+      "question": "Does it influence decisions?"
+    },
+    {
+      "label": "I BEHAVE ACCORDING TO IT",
+      "question": "Is there observable evidence?"
+    },
+    {
+      "label": "I PROTECT IT",
+      "question": "Do my boundaries preserve it?"
+    },
+    {
+      "label": "I ACCEPT ITS COST",
+      "question": "Am I willing to experience appropriate discomfort to remain aligned with it?"
+    },
+    {
+      "label": "I EXTEND IT CONSISTENTLY",
+      "question": "Does it appear across contexts rather than only when convenient?"
+    },
+    {
+      "label": "I CAN HOLD IT FLEXIBLY",
+      "question": "Can I embody it without turning it into rigidity, superiority, avoidance, or self punishment?"
+    }
+  ],
+  "parts": [
+    {
+      "id": "purpose_of_the_reference_material",
+      "title": "Purpose of the Reference Material",
+      "blocks": [
+        "Each value should be explored as more than a definition.",
+        "The purpose is to investigate the word through several distinct lenses:",
+        "**Language:** What did the word originally mean?",
+        "**History:** From what linguistic, philosophical, religious, or cultural tradition did the concept emerge?",
+        "**Psychology:** What does the value represent as a motivational or behavioral orientation?",
+        "**Spirituality:** How has the underlying principle been understood within contemplative, ethical, mystical, or wisdom traditions?",
+        "**Metaphysics:** What might the value mean when understood through consciousness, relationship, interconnectedness, being, or one's orientation toward reality?",
+        "**Embodiment:** What does this value actually look like when someone lives it?",
+        "**Discernment:** How can someone distinguish genuine alignment from identification with the *idea* of the value?",
+        "This final distinction is essential.",
+        "A person may sincerely say, “I value compassion,” while repeatedly treating themselves with contempt.",
+        "Someone may value freedom while controlling everyone around them.",
+        "Someone may value peace while avoiding every necessary conflict.",
+        "Someone may value spirituality while using spiritual beliefs to avoid grief, anger, accountability, or material reality.",
+        "Therefore, stated values and enacted values are not necessarily the same.",
+        "The central inquiry becomes:",
+        "**If this is truly one of my values, where is the evidence of it in the way I live?**"
+      ]
+    },
+    {
+      "id": "standard_structure_for_each_value",
+      "title": "STANDARD STRUCTURE FOR EACH VALUE",
+      "blocks": []
+    },
+    {
+      "id": "polarity_and_transcendence",
+      "title": "POLARITY AND TRANSCENDENCE",
+      "blocks": [
+        "Every value exists within a larger field of human experience. Many values have an apparent opposite, shadow, tension, or contrasting state through which we come to understand the value more deeply.",
+        "We may recognize peace because we have experienced conflict.",
+        "We understand freedom partly through experiences of restriction.",
+        "We discover authenticity through noticing where we perform.",
+        "We recognize connection through experiences of separation.",
+        "We understand courage because fear exists.",
+        "We recognize abundance partly because we know the experience of scarcity.",
+        "From a nondual and transcendental perspective, however, these polarities do not need to be divided into categories of **good and bad**.",
+        "The unwanted pole is not necessarily evidence that something has gone wrong.",
+        "It is not punishment.",
+        "It is not spiritual failure.",
+        "It does not necessarily mean that we are misaligned, vibrating incorrectly, manifesting badly, or failing at consciousness.",
+        "Sometimes it is simply an experience arising within the totality of human consciousness.",
+        "The polarity can become a point of contrast through which awareness discovers itself, its preferences, its conditioning, and the direction in which it consciously desires to move."
+      ]
+    },
+    {
+      "id": "polarity_as_contrast",
+      "title": "POLARITY AS CONTRAST",
+      "blocks": [
+        "Contrast gives definition to experience.",
+        "Without darkness, our conceptual understanding of light would be incomplete. Without contraction, expansion becomes difficult to recognize. Without separation, we may never consciously contemplate unity.",
+        "The purpose of exploring polarity is therefore not to reject one side and cling to the other.",
+        "It is to become conscious of the relationship between them.",
+        "For each value, we can ask:",
+        "**What is the apparent polarity of this value?**",
+        "**What does experiencing that polarity reveal?**",
+        "**What becomes visible through the contrast?**",
+        "**What does the experience help me recognize that I desire to create, embody, or move toward?**",
+        "**Can I receive the information contained within the experience without condemning the experience itself?**"
+      ]
+    },
+    {
+      "id": "polarity_is_not_punishment",
+      "title": "POLARITY IS NOT PUNISHMENT",
+      "blocks": [
+        "When an experience is painful, uncomfortable, unwanted, or disruptive, the human mind often moves immediately into interpretation:",
+        "**This should not be happening.**",
+        "**Something has gone wrong.**",
+        "**I have failed.**",
+        "**I attracted something bad.**",
+        "**I am out of alignment.**",
+        "**The universe is punishing me.**",
+        "**I need to get back into a higher state.**",
+        "A transcendental perspective invites another possibility:",
+        "**The experience is already here. Before deciding what it means, can we allow it to be what it is?**",
+        "Pain may be present.",
+        "Fear may be present.",
+        "Anger may be present.",
+        "Loss may be present.",
+        "Uncertainty may be present.",
+        "Contraction may be present.",
+        "None of these experiences requires us to construct an identity or cosmology around their existence.",
+        "The experience itself and our interpretation of the experience are not necessarily the same thing.",
+        "We can therefore distinguish:",
+        "**What happened.**",
+        "**What I experienced.**",
+        "**What I felt.**",
+        "**What I decided it meant.**",
+        "**What I now choose to create in relationship to it.**",
+        "This creates space between experience and interpretation.",
+        "And within that space, consciousness gains choice."
+      ]
+    },
+    {
+      "id": "discomfort_as_information",
+      "title": "DISCOMFORT AS INFORMATION",
+      "blocks": [
+        "Discomfort is not inherently evidence of misalignment.",
+        "Sometimes discomfort reveals misalignment.",
+        "Sometimes discomfort accompanies profound alignment.",
+        "Setting a boundary can feel uncomfortable.",
+        "Leaving an unhealthy relationship can feel terrifying.",
+        "Telling the truth can produce anxiety.",
+        "Choosing authenticity can threaten belonging.",
+        "Grieving can feel unbearable while simultaneously representing deep love.",
+        "Changing an inherited belief can destabilize identity.",
+        "Standing for justice can create conflict.",
+        "Surrender can initially feel like losing control.",
+        "Detachment can feel frightening to a mind accustomed to securing itself through attachment.",
+        "Therefore, the question is not simply:",
+        "**Does this feel good or bad?**",
+        "A deeper inquiry is:",
+        "**What is this experience revealing?**"
+      ]
+    },
+    {
+      "id": "the_nondual_inquiry",
+      "title": "THE NONDUAL INQUIRY",
+      "blocks": [
+        "At the level of ordinary human experience, distinctions matter.",
+        "We experience pleasure and pain, expansion and contraction, connection and separation, safety and threat.",
+        "At the level of nondual inquiry, however, we can ask what contains all of these experiences.",
+        "What is aware of fear?",
+        "What is aware of peace?",
+        "What notices contraction?",
+        "What notices expansion?",
+        "What remains present while experiences change?",
+        "From this perspective, the work is not necessarily to destroy one polarity so that we can permanently inhabit another.",
+        "It is to become increasingly conscious of the awareness within which both poles arise.",
+        "We can still consciously choose peace.",
+        "We can choose compassion.",
+        "We can choose integrity.",
+        "We can choose freedom.",
+        "We can choose love.",
+        "But our choice no longer requires us to condemn everything that is not peace, compassion, integrity, freedom, or love.",
+        "We can move toward what we desire without declaring war against what revealed the desire."
+      ]
+    },
+    {
+      "id": "transcending_the_polarity",
+      "title": "TRANSCENDING THE POLARITY",
+      "blocks": [
+        "Transcendence does not necessarily mean escaping the human experience.",
+        "Nor does it require becoming indifferent to suffering, injustice, harm, or consequence.",
+        "Transcendence can instead mean developing the capacity to **hold the polarity without becoming completely identified with either side of it**.",
+        "We can experience fear without becoming Fear.",
+        "We can experience anger without becoming Anger.",
+        "We can experience scarcity without constructing scarcity as our identity.",
+        "We can experience separation while remembering interconnectedness.",
+        "We can encounter uncertainty without demanding that reality immediately resolve itself.",
+        "We can recognize an unwanted experience without needing to call the experience morally bad simply because we would not consciously choose more of it.",
+        "The experience becomes something consciousness can witness, learn through, respond to, and integrate."
+      ]
+    },
+    {
+      "id": "polarity_as_a_creative_compass",
+      "title": "POLARITY AS A CREATIVE COMPASS",
+      "blocks": [
+        "The unwanted experience can clarify desire.",
+        "**Restriction may reveal our longing for freedom.**",
+        "**Chaos may reveal our desire for groundedness.**",
+        "**Dishonesty may illuminate the importance of truth.**",
+        "**Disconnection may awaken our longing for intimacy.**",
+        "**Control may reveal our desire for surrender.**",
+        "**Judgment may reveal our desire for compassion.**",
+        "**Scarcity may clarify our relationship with abundance.**",
+        "**Noise may reveal our longing for stillness.**",
+        "**Fragmentation may awaken our remembrance of wholeness.**",
+        "In this way, polarity does not merely tell us what to escape.",
+        "It can show us where consciousness desires to move.",
+        "The inquiry becomes:",
+        "**Now that I have experienced this, what has it helped me know more clearly?**",
+        "And then:",
+        "**What do I consciously choose to create more of?**"
+      ]
+    },
+    {
+      "id": "the_transcendental_distinction",
+      "title": "THE TRANSCENDENTAL DISTINCTION",
+      "blocks": [
+        "There is an important difference between **preference** and **judgment**.",
+        "We can prefer one experience without condemning its opposite.",
+        "We can choose peace without declaring conflict cosmically wrong.",
+        "We can choose abundance without shaming ourselves for experiencing scarcity.",
+        "We can choose connection without making periods of solitude or separation evidence of spiritual failure.",
+        "We can choose courage while allowing fear to exist.",
+        "We can choose joy without requiring ourselves to remain joyful.",
+        "We can choose love without denying anger, grief, disappointment, or pain.",
+        "This allows values to become **directions of conscious creation rather than instruments of self judgment**."
+      ]
+    },
+    {
+      "id": "questions_for_each_value",
+      "title": "QUESTIONS FOR EACH VALUE",
+      "blocks": [
+        "When exploring the polarity of a particular value, consider:",
+        "**What is the apparent opposite or polarity of this value?**",
+        "**Have I labeled one side good and the other bad?**",
+        "**What experiences taught me that distinction?**",
+        "**What does the unwanted polarity allow me to recognize about what I desire?**",
+        "**What does my discomfort reveal without requiring me to make the discomfort wrong?**",
+        "**Am I moving toward this value because I genuinely desire it, or because I am running away from its opposite?**",
+        "**Can I allow the unwanted pole to exist without allowing it to unconsciously govern my behavior?**",
+        "**What changes when I stop asking, “Why is this happening to me?” and begin asking, “What is this showing me?”**",
+        "**Can I consciously choose one direction without rejecting the totality of my human experience?**",
+        "**What would it mean to transcend identification with both poles while still consciously choosing how I want to live?**"
+      ]
+    },
+    {
+      "id": "core_principle",
+      "title": "CORE PRINCIPLE",
+      "blocks": [
+        "**Polarity gives us contrast. Contrast gives us information. Information creates the possibility of conscious choice.**",
+        "The objective is not to eradicate every experience we do not prefer.",
+        "It is to become conscious enough to recognize what the experience reveals, compassionate enough not to condemn ourselves for having it, and intentional enough to choose what we desire to embody next.",
+        "The polarity is not necessarily the enemy of the value.",
+        "Sometimes it is the very experience through which the value becomes visible.",
+        "And transcendence is not the rejection of either side.",
+        "It is the widening of consciousness until both can be seen from a place spacious enough to choose without condemnation."
+      ]
+    }
+  ]
+}

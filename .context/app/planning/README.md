@@ -9,12 +9,6 @@ sections refer to it.
     lelanea-product-description.md     the product description, editable source
     lelanea-product-description.pdf    the same, typeset for reading
 
-    content/     six authored JSON files: the foundational documents, the module
-                 structure, the discovery questions, the Values module, the value
-                 exploration framework, and the value explorations themselves.
-                 Transcribed from Lelanea Fulton's own material and corrected only
-                 for typography. Not a draft for the build to improve on.
-
     design/      the approved prototype (lelanea.html), the note on how to read it,
                  and the starter design system. The prototype governs layout,
                  theming, and behaviour; its app copy is deliberate placeholder.
@@ -22,6 +16,19 @@ sections refer to it.
     reference/   the inputs the product description condenses: the technical
                  grounding brief and the framework overview. Context rather than
                  specification.
+
+The six authored JSON files this bundle is built around live at `content/` in the
+repo root, where the build can reach them: the foundational documents, the module
+structure, the discovery questions, the Values module, the value exploration
+framework, and the value explorations themselves. Transcribed from Lelanea
+Fulton's own material and corrected only for typography. Not a draft for the
+build to improve on.
+
+Nothing reads those files directly. They are validated against Zod schemas and
+served through `lib/app/content` and `/api/v1/app/content/*`, so that a native
+client later renders the same copy through the same API rather than growing a
+second pipeline; an ESLint rule fails any import of `content/*.json` from
+outside `lib/app/content/`.
 
 Where these disagree: the product description governs what the product is, what it
 says, and its vocabulary. The prototype governs how it looks and behaves. The design

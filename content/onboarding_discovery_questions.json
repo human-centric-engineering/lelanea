@@ -1,0 +1,241 @@
+{
+  "content": {
+    "id": "onboarding_discovery_questions",
+    "title": "Discovery Questions",
+    "chartTitle": "‘Lelañea’ Coach App Discovery Onboarding Questions",
+    "module": "module_00_onboarding",
+    "phase": 8,
+    "sourceFile": "Lelanea_Coach_App_Discovery_Onboarding_Questions.docx",
+    "version": "1.0",
+    "textFormat": "plain",
+    "questionCount": 30,
+    "notes": [
+      "Transcribed from the source document, with typos and punctuation corrected. No question has been reworded, cut, added or reordered.",
+      "Italic parentheticals in the source are held separately as hint, so the app can render them as helper text under the question.",
+      "Two questions branch on a yes or no answer; those follow-ups are held in conditionalFollowUp.",
+      "Several questions are deliberately multi-part. They are kept whole rather than split, since the sequence of sub-questions is part of the prompt."
+    ],
+    "locale": "en-US"
+  },
+  "preamble": {
+    "style": "italic",
+    "text": "These questions are not meant to be rushed. Please take your time to sit in each one and deepen into the experience of self-examination. The only “correct” answer is the one that comes from a clear lens of self-awareness and accountability. These answers are from you and for you."
+  },
+  "pacing": {
+    "rushDiscouraged": true,
+    "allowPartialCompletion": true,
+    "note": "The preamble explicitly asks the user not to rush. A single sitting of thirty long-form questions runs against that; the set should be resumable."
+  },
+  "questions": [
+    {
+      "id": "q01",
+      "number": 1,
+      "text": "In your experience, who or what is your ego, and are you able to differentiate between the Higher Self and the lower self, or ego?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q02",
+      "number": 2,
+      "text": "How does your ego express itself?",
+      "hint": "i.e. behaviors, thoughts, beliefs, stories?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q03",
+      "number": 3,
+      "text": "How does your Higher Self express itself?",
+      "hint": "i.e. behaviors, thoughts, beliefs, stories?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q04",
+      "number": 4,
+      "text": "Are there times that you feel connected to everyone and everything around you?",
+      "conditionalFollowUp": {
+        "ifYes": "Please describe these experiences.",
+        "ifNo": "How do you imagine it would feel if you did have such experiences?"
+      },
+      "inputType": "long_text"
+    },
+    {
+      "id": "q05",
+      "number": 5,
+      "text": "What does “individuality” mean to you, and in what ways are you an individual?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q06",
+      "number": 6,
+      "text": "What does your “individual self” have in common with other individuals? What makes you completely and utterly unique? In what ways are you not unique?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q07",
+      "number": 7,
+      "text": "What does it mean to “have a purpose”? What does “purpose” look like? Are there examples of purpose?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q08",
+      "number": 8,
+      "text": "Please list any “limiting beliefs” that you recognize are stopping you from a full and expansive human experience.",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q09",
+      "number": 9,
+      "text": "What “spiritual” practices do you have that serve as a connection to that which is beyond the self? A higher power, a universal consciousness, to nature and the heartbeat of the planet?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q10",
+      "number": 10,
+      "text": "What do you like or enjoy most about being a living, breathing human having a material experience?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q11",
+      "number": 11,
+      "text": "What have you disliked most about being a living, breathing human having a material experience?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q12",
+      "number": 12,
+      "text": "What’s the hardest part about being you in this lifetime?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q13",
+      "number": 13,
+      "text": "What would you like to change or experience in this lifetime?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q14",
+      "number": 14,
+      "text": "Does societal and cultural content influence how you see or experience yourself? What story does each of these tell you about yourself?",
+      "hint": "i.e. social media content, Hollywood, pop culture, music, political affiliations, religious affiliations, your family of origin, your profession, your relationships.",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q15",
+      "number": 15,
+      "text": "How does your body feel when you are on social media platforms?",
+      "hint": "If you are unsure, go three days with no social media and then log on and explore what feelings occur in your body, and what stories your mind begins to express.",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q16",
+      "number": 16,
+      "text": "Do you know what personal values are directing you in how you move through the world? Are these your values or learned values? How did you come upon these values?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q17",
+      "number": 17,
+      "text": "What is your earliest childhood memory?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q18",
+      "number": 18,
+      "text": "What is your favorite childhood memory? Has this memory impacted or influenced how you experience the world?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q19",
+      "number": 19,
+      "text": "If you could change one thing about your life that would create a massive ripple effect impacting all areas of your life, what would it be? What is keeping you from making this change now?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q20",
+      "number": 20,
+      "text": "What does it mean to “be Love”? How does Love move through the world? What times in your life are you moving from a place of Love, and how does it affect those you interact with? What times in your life are you not moving through the world as Love, and how has it impacted those around you?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q21",
+      "number": 21,
+      "text": "What does the word “prayer” mean to you? Is it only affiliated with religion? What does it mean to move through the world from a place of prayer?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q22",
+      "number": 22,
+      "text": "Let’s pretend you will have another life after this one, as another human. How would you like that life to look and feel? What would you like to have access to in this next life? Who would you be? What purpose would you have?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q23",
+      "number": 23,
+      "text": "What does “material world” mean to you? What does “spiritual world” mean to you?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q24",
+      "number": 24,
+      "text": "What are examples of a “material experience”?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q25",
+      "number": 25,
+      "text": "Have you had an experience where you were able to distance yourself from the material human experience and recognize something greater and grander?",
+      "conditionalFollowUp": {
+        "ifYes": "Please describe this.",
+        "ifNo": "What do you imagine this would feel and look like?"
+      },
+      "inputType": "long_text"
+    },
+    {
+      "id": "q26",
+      "number": 26,
+      "text": "Who do you want to be by the end of your journey via this Inner Work App?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q27",
+      "number": 27,
+      "text": "What does it mean to “transcend” the self?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q28",
+      "number": 28,
+      "text": "What parts of your ego or self are you most willing to let go of, and why?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q29",
+      "number": 29,
+      "text": "What parts of your ego or self would you like to explore and refine?",
+      "inputType": "long_text"
+    },
+    {
+      "id": "q30",
+      "number": 30,
+      "text": "What parts of your ego or self are absolutely perfect and deserve to be celebrated?",
+      "inputType": "long_text"
+    }
+  ],
+  "reviewNotes": [
+    {
+      "scope": "q03",
+      "note": "Source reads “How does your Higher Self express?” with no object. “express itself” added for parallelism with q02. Revert if the shorter phrasing was deliberate."
+    },
+    {
+      "scope": "q16",
+      "note": "This question asks directly about personal values and overlaps Module 01. Consider whether it belongs here as a baseline to compare against later, or should be cut to avoid pre-empting the module."
+    },
+    {
+      "scope": "q26",
+      "note": "Refers to “this Inner Work App” rather than to Lelañea by name. Left as written; worth confirming."
+    },
+    {
+      "scope": "set",
+      "note": "Thirty long-form questions is a heavy ask before a user has seen any module. Consider splitting into a required core and an optional deeper set, or allowing them to be answered over time."
+    }
+  ]
+}
