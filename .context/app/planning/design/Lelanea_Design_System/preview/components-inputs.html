@@ -1,0 +1,18 @@
+<!-- @dsCard group="Components" viewport="700x240" name="Inputs" subtitle="Text field plus chat capsule" -->
+<!doctype html>
+<!-- @dsCard group="Components" name="Inputs" subtitle="Text field + chat capsule" viewport="700x240" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_preview.css">
+<style>
+  body { padding: 24px 28px; display:flex; flex-direction:column; gap: 14px; max-width: 640px;}
+  .field { display:flex; flex-direction:column; gap:6px;}
+  label { font-size: 12px; color: var(--fg-secondary); letter-spacing: .1em; text-transform: lowercase;}
+  input, textarea { font-family: var(--font-body); font-size: 15px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(111,115,118,.24); background:#F3F0EC; color: #11181A; outline: none;}
+  input:focus { border-color:#17718A; box-shadow: 0 0 0 3px rgba(23,113,138,.15);}
+  .cap { background:#EBE6DF; border-radius: 999px; padding: 10px 16px; display:flex; align-items:center; gap:10px; box-shadow: 0 1px 2px rgba(17,24,26,.04), 0 2px 6px rgba(17,24,26,.04);}
+  .cap input { border:none; background:transparent; flex:1; padding: 4px 0;}
+  .send { width: 34px; height: 34px; border-radius: 999px; background:#C96F43; color:#F3F0EC; display:grid; place-items:center; border:none; cursor:pointer; font-size:16px;}
+</style></head><body>
+<div class="field"><label>your name</label><input placeholder="How should we greet you?"></div>
+<div class="field"><label>chat input (capsule)</label>
+<div class="cap"><input placeholder="What would you like to bring in today?"><button class="send">↑</button></div>
+</div>
+</body></html>

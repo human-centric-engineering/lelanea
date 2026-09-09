@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 102" width="400" height="102" role="img" aria-label="Lelanea">
+<defs>
+<radialGradient id="wm-core" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="#F0A078"></stop><stop offset="55%" stop-color="#C96F43"></stop><stop offset="100%" stop-color="#9C5530"></stop></radialGradient>
+</defs>
+<g transform="translate(-29 -36) scale(0.5)">
+<g fill="none" stroke-linecap="round">
+<ellipse cx="160" cy="188" rx="50" ry="6" stroke="#457B6A" stroke-opacity="0.55" stroke-width="3"></ellipse>
+<ellipse cx="160" cy="188" rx="74" ry="9" stroke="#457B6A" stroke-opacity="0.34" stroke-width="2.6"></ellipse>
+<ellipse cx="160" cy="188" rx="97" ry="12" stroke="#6FA88F" stroke-opacity="0.2" stroke-width="2.2"></ellipse>
+</g>
+<g fill="#17718A" stroke="#0E5064" stroke-width="3" stroke-linejoin="round">
+<path transform="rotate(-66 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+<path transform="rotate(66 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+<path transform="rotate(-46 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+<path transform="rotate(46 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+<path transform="rotate(-25 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+<path transform="rotate(25 160 175)" d="M160 175C187.8 157.6,183.5 131.2,160 115C136.5 131.2,132.2 157.6,160 175Z"></path>
+</g>
+<g fill="#3E96AE" stroke="#17718A" stroke-width="3" stroke-linejoin="round">
+<path transform="rotate(-42 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+<path transform="rotate(42 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+<path transform="rotate(-26 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+<path transform="rotate(26 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+<path transform="rotate(-11 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+<path transform="rotate(11 160 175)" d="M160 175C189.0 152.4,184.5 118.1,160 97C135.5 118.1,131.0 152.4,160 175Z"></path>
+</g>
+<g fill="#7CC0D6" stroke="#2E8BA5" stroke-width="3" stroke-linejoin="round">
+<path transform="rotate(-30 160 175)" d="M160 175C190.2 146.6,185.5 103.5,160 77C134.5 103.5,129.8 146.6,160 175Z"></path>
+<path transform="rotate(30 160 175)" d="M160 175C190.2 146.6,185.5 103.5,160 77C134.5 103.5,129.8 146.6,160 175Z"></path>
+<path transform="rotate(-15 160 175)" d="M160 175C190.2 146.6,185.5 103.5,160 77C134.5 103.5,129.8 146.6,160 175Z"></path>
+<path transform="rotate(15 160 175)" d="M160 175C190.2 146.6,185.5 103.5,160 77C134.5 103.5,129.8 146.6,160 175Z"></path>
+<path d="M160 175C190.2 146.6,185.5 103.5,160 77C134.5 103.5,129.8 146.6,160 175Z"></path>
+</g>
+<ellipse cx="160" cy="172" rx="8" ry="10" fill="url(#wm-core)"></ellipse>
+</g>
+<text x="124" y="66" font-family="Instrument Serif, Cormorant Garamond, Georgia, serif" font-size="46" fill="#11181A" letter-spacing="0.01em">Lelanea</text>
+</svg>

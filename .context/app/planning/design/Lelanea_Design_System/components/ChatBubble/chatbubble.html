@@ -1,0 +1,20 @@
+<!-- @dsCard group="Components" viewport="700x250" name="ChatBubble" subtitle="AI turn in stone, user turn in deep teal" -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>html,body{margin:0;background:#F3F0EC}body{padding:22px 28px}</style>
+</head><body>
+<div id="root" style="display:flex;flex-direction:column;gap:14px;max-width:560px"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script>
+const { ChatBubble } = window.LelaneaDesignSystem_a15360;
+const e = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(
+  e(React.Fragment, null,
+    e(ChatBubble, { from: 'ai' }, 'What would you like to bring in today?'),
+    e(ChatBubble, { from: 'user' }, 'Something keeps tightening in my chest when I think about Sunday.'),
+    e(ChatBubble, { from: 'ai' }, "Let's sit with that. What's underneath the tightening — before you name it?")
+  )
+);
+</script>
+</body></html>

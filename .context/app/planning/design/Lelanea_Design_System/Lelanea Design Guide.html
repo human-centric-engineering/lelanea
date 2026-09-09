@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lelanea Design System — Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Hanken+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+doc-page:not(:defined){visibility:hidden}
+doc-page{--ink:#11181A;--body:#282C2E;--muted:#6F7376;--rule:rgba(111,115,118,.24);--surface:#EBE6DF}
+doc-page{font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:10.5pt;line-height:1.6;color:var(--body)}
+h1,h2,h3,h4{font-family:'Instrument Serif',Georgia,serif;font-weight:400;color:var(--ink);letter-spacing:-.01em;line-height:1.15}
+h1{font-size:31pt;line-height:1.05;letter-spacing:-.02em;margin:0 0 6pt}
+h2{font-size:19pt;margin:22pt 0 7pt;padding-bottom:4pt;border-bottom:1px solid var(--rule)}
+h3{font-size:13.5pt;margin:14pt 0 4pt}
+h4{font-size:11pt;margin:11pt 0 3pt;font-family:'Hanken Grotesk',sans-serif;font-weight:600;letter-spacing:0}
+p{margin:0 0 7pt;text-wrap:pretty}
+ul{margin:0 0 7pt;padding-left:15pt}
+li{margin-bottom:2.5pt}
+a{color:#497AA8;text-decoration:none;text-underline-offset:2px}
+a:hover{text-decoration:underline}
+code{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:8.8pt;background:var(--surface);padding:1px 4px;border-radius:3px;color:#11181A}
+.lede{font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-size:14pt;line-height:1.4;color:var(--ink);margin:0 0 4pt}
+.byline{font-size:8pt;letter-spacing:.14em;text-transform:lowercase;color:var(--muted);margin-bottom:18pt}
+.eyebrow{font-size:8pt;letter-spacing:.14em;text-transform:lowercase;color:var(--muted);font-weight:500}
+
+table{width:100%;border-collapse:collapse;margin:6pt 0 9pt;font-size:9.2pt}
+th{text-align:left;font-weight:600;font-size:8pt;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule);padding:4pt 6pt 4pt 0}
+td{padding:4.5pt 6pt 4.5pt 0;border-bottom:1px solid rgba(111,115,118,.12);vertical-align:top}
+td code{font-size:8.4pt}
+.sw{display:inline-block;width:11pt;height:11pt;border-radius:2.5pt;border:1px solid var(--rule);vertical-align:-2pt;margin-right:5pt}
+
+.swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:7pt;margin:7pt 0 10pt;break-inside:avoid}
+.chip{break-inside:avoid}
+.chip .box{height:38pt;border-radius:4pt;border:1px solid var(--rule)}
+.chip .nm{font-size:8pt;font-weight:500;color:var(--ink);margin-top:3pt;line-height:1.25}
+.chip .hx{font-family:ui-monospace,Menlo,monospace;font-size:7pt;color:var(--muted)}
+
+.note{background:var(--surface);border-radius:5pt;padding:9pt 11pt;margin:9pt 0;break-inside:avoid;orphans:3;widows:3}
+.note .eyebrow{margin-bottom:3pt}
+.note p:last-child{margin-bottom:0}
+
+.two{column-count:2;column-gap:20pt}
+.two h3{margin-top:0}
+.spans{column-span:all}
+
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:9pt;margin:8pt 0 10pt;break-inside:avoid}
+.mode{border-radius:6pt;padding:11pt 13pt;border:1px solid var(--rule)}
+.mode.l{background:#F3F0EC}
+.mode.d{background:#282C2E;border-color:rgba(227,218,209,.14)}
+.mode .t{font-family:'Instrument Serif',serif;font-size:15pt;line-height:1.1;margin:3pt 0 3pt}
+.mode .b{font-size:9pt;line-height:1.45}
+.mode.l .t{color:#11181A}.mode.l .b{color:#282C2E}
+.mode.d .t{color:#F3F0EC}.mode.d .b{color:#E3DAD1}
+
+.btnrow{display:flex;flex-wrap:wrap;gap:6pt;align-items:center;margin:6pt 0 9pt;break-inside:avoid}
+.btn{font-size:9pt;font-weight:500;padding:6pt 12pt;border-radius:99pt;border:1px solid transparent;line-height:1}
+.btn.p{background:#C96F43;color:#F3F0EC}
+.btn.s{background:#EBE6DF;color:#11181A;border-color:var(--rule)}
+.btn.g{color:#11181A}
+.btn.d{background:#B75D52;color:#F3F0EC}
+
+.radii{display:flex;gap:11pt;margin:6pt 0 9pt;break-inside:avoid}
+.radii div{flex:1;height:34pt;background:var(--surface);border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:7.5pt;color:var(--muted)}
+
+.scale{display:flex;align-items:flex-end;gap:6pt;margin:6pt 0 9pt;break-inside:avoid}
+.scale div{flex:1;text-align:center}
+.scale .bar{background:#17718A;border-radius:2pt 2pt 0 0}
+.scale .lb{font-family:ui-monospace,Menlo,monospace;font-size:6.5pt;color:var(--muted);margin-top:3pt}
+
+.spec{border-left:2pt solid #C96F43;padding-left:10pt;margin:8pt 0 10pt;break-inside:avoid}
+.spec .d{font-family:'Instrument Serif',serif;font-size:24pt;line-height:1.05;letter-spacing:-.02em;color:var(--ink)}
+.spec .q{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14pt;color:var(--ink);line-height:1.3}
+.spec .m{font-size:7.5pt;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-top:2pt}
+
+.dodont{display:grid;grid-template-columns:1fr 1fr;gap:11pt;margin:7pt 0 10pt;break-inside:avoid}
+.dodont h4{margin-top:0}
+.dodont ul{padding-left:13pt;font-size:9pt}
+.do h4{color:#457B6A}
+.dont h4{color:#B75D52}
+
+footer .ft{font-size:7.5pt;color:var(--muted);display:flex;justify-content:space-between;border-top:1px solid var(--rule);padding-top:4pt}
+</style>
+</head>
+<body>
+<doc-page margin="0.8in">
+
+<div slot="footer" class="ft"><span>Lelanea Design System — Guide</span><span>Unity Consciousness coaching app</span></div>
+
+<h1>Lelanea Design System</h1>
+<p class="lede">A coaching app where clients sit with an AI trained on Lelanea's Unity Consciousness work.</p>
+<p class="byline">design guide · colour · type · motion · components</p>
+
+<p>This guide documents the visual and verbal patterns of Lelanea's App. The product should feel like a warm room, not a dashboard — contemplative, grounded, and quiet. Every rule below exists to protect that feeling.</p>
+
+<div class="note">
+<div class="eyebrow">the one thing to remember</div>
+<p>Warm earthy neutrals hold the space; meditative teals carry the brand; burnt orange is ceremonial and used almost nowhere. When in doubt, remove something and add space.</p>
+</div>
+
+<h2>Colour</h2>
+
+<p>The palette pairs warm, earthy neutrals with meditative blues. Backgrounds are never pure white or pure black — oyster white in light mode, near-black charcoal in dark. The burnt orange is the ceremonial accent: it marks the lotus core and the single primary action on a screen, and appears nowhere else.</p>
+
+<h3>Brand</h3>
+<div class="swatches">
+<div class="chip"><div class="box" style="background:#C96F43"></div><div class="nm">Rustic Burnt Orange</div><div class="hx">#C96F43</div></div>
+<div class="chip"><div class="box" style="background:#17718A"></div><div class="nm">Deep Teal</div><div class="hx">#17718A</div></div>
+<div class="chip"><div class="box" style="background:#3E96AE"></div><div class="nm">Mid Teal</div><div class="hx">#3E96AE</div></div>
+<div class="chip"><div class="box" style="background:#7CC0D6"></div><div class="nm">Light Aqua</div><div class="hx">#7CC0D6</div></div>
+<div class="chip"><div class="box" style="background:#457B6A"></div><div class="nm">Sage Forest</div><div class="hx">#457B6A</div></div>
+</div>
+
+<h3>Neutrals</h3>
+<div class="swatches">
+<div class="chip"><div class="box" style="background:#F3F0EC"></div><div class="nm">Oyster White</div><div class="hx">#F3F0EC</div></div>
+<div class="chip"><div class="box" style="background:#EBE6DF"></div><div class="nm">Dusted Stone</div><div class="hx">#EBE6DF</div></div>
+<div class="chip"><div class="box" style="background:#E3DAD1"></div><div class="nm">Warm Soft Stone</div><div class="hx">#E3DAD1</div></div>
+<div class="chip"><div class="box" style="background:#6F7376"></div><div class="nm">Silver-Ash</div><div class="hx">#6F7376</div></div>
+<div class="chip"><div class="box" style="background:#3A3F42"></div><div class="nm">Mid-Dark Steel</div><div class="hx">#3A3F42</div></div>
+</div>
+
+<h3>Functional &amp; accent</h3>
+<div class="swatches">
+<div class="chip"><div class="box" style="background:#B75D52"></div><div class="nm">Terracotta Red</div><div class="hx">#B75D52</div></div>
+<div class="chip"><div class="box" style="background:#C9A65D"></div><div class="nm">Dusted Ochre</div><div class="hx">#C9A65D</div></div>
+<div class="chip"><div class="box" style="background:#497AA8"></div><div class="nm">Steel Slate Blue</div><div class="hx">#497AA8</div></div>
+<div class="chip"><div class="box" style="background:#806C7B"></div><div class="nm">Heather Amethyst</div><div class="hx">#806C7B</div></div>
+<div class="chip"><div class="box" style="background:#BC8A76"></div><div class="nm">Dusted Coral</div><div class="hx">#BC8A76</div></div>
+</div>
+
+<h3>Semantic roles</h3>
+<table>
+<thead><tr><th>Token</th><th>Light</th><th>Dark</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>--bg</code></td><td><span class="sw" style="background:#F3F0EC"></span>#F3F0EC</td><td><span class="sw" style="background:#282C2E"></span>#282C2E</td><td>Page background</td></tr>
+<tr><td><code>--surface</code></td><td><span class="sw" style="background:#EBE6DF"></span>#EBE6DF</td><td><span class="sw" style="background:#3A3F42"></span>#3A3F42</td><td>Cards, capsules, inputs</td></tr>
+<tr><td><code>--fg-heading</code></td><td><span class="sw" style="background:#11181A"></span>#11181A</td><td><span class="sw" style="background:#F3F0EC"></span>#F3F0EC</td><td>Serif headings</td></tr>
+<tr><td><code>--fg-primary</code></td><td><span class="sw" style="background:#282C2E"></span>#282C2E</td><td><span class="sw" style="background:#E3DAD1"></span>#E3DAD1</td><td>Body copy</td></tr>
+<tr><td><code>--fg-secondary</code></td><td colspan="2"><span class="sw" style="background:#6F7376"></span>#6F7376 — both modes</td><td>Meta, captions, icon rest</td></tr>
+<tr><td><code>--accent</code></td><td colspan="2"><span class="sw" style="background:#C96F43"></span>#C96F43 · pressed #B5633B</td><td>Primary CTA, lotus core</td></tr>
+<tr><td><code>--success</code> / <code>--danger</code></td><td colspan="2"><span class="sw" style="background:#457B6A"></span>#457B6A · <span class="sw" style="background:#B75D52"></span>#B75D52</td><td>Confirmation / destructive</td></tr>
+<tr><td><code>--warning</code> / <code>--info</code></td><td colspan="2"><span class="sw" style="background:#C9A65D"></span>#C9A65D · <span class="sw" style="background:#497AA8"></span>#497AA8</td><td>Caution / links</td></tr>
+<tr><td><code>--selected</code></td><td colspan="2"><span class="sw" style="background:#806C7B"></span>#806C7B</td><td>Active toggles, chips</td></tr>
+</tbody>
+</table>
+
+<h3>Light and dark mode</h3>
+<p>Both modes are first-class. Dark mode is not an inversion — the warm neutrals stay warm, and body text shifts to warm soft stone rather than white. Borders flip from 24% dark ash to 12% warm stone. Cards gain a hairline border in dark mode only, to separate them from the near-black background.</p>
+
+<div class="modes">
+<div class="mode l"><div class="eyebrow">light mode</div><div class="t">Welcome.</div><div class="b">Take a slow breath. When you're ready, the lotus will open.</div></div>
+<div class="mode d"><div class="eyebrow" style="color:#6F7376">dark mode</div><div class="t">Welcome.</div><div class="b">Take a slow breath. When you're ready, the lotus will open.</div></div>
+</div>
+
+<div class="note">
+<div class="eyebrow">contrast caution</div>
+<p>Silver-ash <code>#6F7376</code> is the one token shared across both modes. It passes on oyster white but is marginal on charcoal — for meta text in dark mode, lift to warm soft stone <code>#E3DAD1</code> or muted lavender <code>#C4B3BE</code> rather than leaving it at ash.</p>
+</div>
+
+<h2>Typography</h2>
+
+<p>Three faces, each with one job. Instrument Serif carries every heading and hero line — it is what makes the product feel literary rather than clinical. Hanken Grotesk handles all body and UI text. Cormorant Garamond italic appears only for pull quotes and reflection prompts, where it reads as Lelanea's own voice.</p>
+
+<div class="spec">
+<div class="d">Return.</div>
+<div class="m">Instrument Serif · display · 72/72 · -0.02em</div>
+</div>
+
+<div class="spec">
+<div class="q">What's here, underneath the thinking?</div>
+<div class="m">Cormorant Garamond italic · quote · 24-28 / 1.35</div>
+</div>
+
+<table>
+<thead><tr><th>Role</th><th>Face</th><th>Size</th><th>Line height</th><th>Tracking</th></tr></thead>
+<tbody>
+<tr><td>Display XL</td><td>Instrument Serif</td><td>72px</td><td>1.05</td><td>-0.02em</td></tr>
+<tr><td>Display M</td><td>Instrument Serif</td><td>40px</td><td>1.2</td><td>-0.02em</td></tr>
+<tr><td>H2 / H3</td><td>Instrument Serif</td><td>32 / 26px</td><td>1.2</td><td>-0.01em</td></tr>
+<tr><td>Body L / Body</td><td>Hanken Grotesk</td><td>18 / 16px</td><td>1.6</td><td>0</td></tr>
+<tr><td>Body S</td><td>Hanken Grotesk</td><td>14px</td><td>1.5</td><td>0</td></tr>
+<tr><td>Meta</td><td>Hanken Grotesk</td><td>12px</td><td>1.4</td><td>0</td></tr>
+<tr><td>Eyebrow</td><td>Hanken Grotesk 500</td><td>11-12px</td><td>1.4</td><td>0.14em, lowercase</td></tr>
+<tr><td>Quote</td><td>Cormorant Garamond italic</td><td>24px</td><td>1.35</td><td>0</td></tr>
+</tbody>
+</table>
+
+<p>Body weight never exceeds 600. Headings are always regular weight — the serif carries the emphasis, not the weight. Minimum type size in-product is 12px, and never below 24px on any presentation surface.</p>
+
+<div class="note">
+<div class="eyebrow">substitution — please review</div>
+<p>No font files were supplied for this brand. All three faces are Google Fonts chosen to carry the intended mood. If Lelanea has a real type specification, swap it in and re-tune the scale; the token names will not need to change.</p>
+</div>
+
+<h2>Space, shape and elevation</h2>
+
+<div class="two">
+<h3>Spacing</h3>
+<p>An 8-point scale, used from the generous end. Phone gutters are 24px minimum; 16px is reserved for tight inline groupings like an icon beside a label. Card padding is 20–24px.</p>
+<h3>Radii</h3>
+<p>Nothing in the product has a hard corner except full-bleed sections, which have no corners at all. Pills are used for every button and floating control.</p>
+</div>
+
+<div class="scale">
+<div><div class="bar" style="height:4pt"></div><div class="lb">4</div></div>
+<div><div class="bar" style="height:8pt"></div><div class="lb">8</div></div>
+<div><div class="bar" style="height:12pt"></div><div class="lb">12</div></div>
+<div><div class="bar" style="height:16pt"></div><div class="lb">16</div></div>
+<div><div class="bar" style="height:22pt"></div><div class="lb">24</div></div>
+<div><div class="bar" style="height:28pt"></div><div class="lb">32</div></div>
+<div><div class="bar" style="height:38pt"></div><div class="lb">48</div></div>
+<div><div class="bar" style="height:48pt"></div><div class="lb">64</div></div>
+<div><div class="bar" style="height:60pt"></div><div class="lb">96</div></div>
+</div>
+
+<div class="radii">
+<div style="border-radius:4pt">8 · inputs</div>
+<div style="border-radius:6pt">12 · default</div>
+<div style="border-radius:10pt">20 · cards</div>
+<div style="border-radius:14pt">28 · sheets</div>
+<div style="border-radius:99pt">pill · buttons</div>
+</div>
+
+<h3>Elevation</h3>
+<p>Two layers only. <code>--shadow-rest</code> for resting cards; <code>--shadow-lift</code> for modals and the active lotus halo. Inner shadows are never used. The single coloured shadow in the system is the orange bloom behind the lotus core and the primary CTA.</p>
+
+<table>
+<thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>--shadow-rest</code></td><td>0 1px 2px rgba(17,24,26,.04), 0 2px 6px rgba(17,24,26,.04)</td><td>Cards, capsules</td></tr>
+<tr><td><code>--shadow-lift</code></td><td>0 8px 24px rgba(17,24,26,.08), 0 2px 8px rgba(17,24,26,.04)</td><td>Modals, tab bar</td></tr>
+<tr><td><code>--shadow-bloom</code></td><td>0 0 64px rgba(201,111,67,.25)</td><td>Lotus core, primary CTA</td></tr>
+</tbody>
+</table>
+
+<h2>Motion</h2>
+
+<p>The product breathes; it does not perform. There are no bounces, no springs, and no overshoot anywhere in the system. Fades are preferred to slides, and where translation is used it is 4–8px at most.</p>
+
+<table>
+<thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>--ease-breath</code></td><td>cubic-bezier(0.22, 0.61, 0.36, 1)</td><td>Everything expressive</td></tr>
+<tr><td><code>--dur-micro</code></td><td>200ms</td><td>Taps, hovers, presses</td></tr>
+<tr><td><code>--dur-base</code></td><td>420ms</td><td>Screen and state transitions</td></tr>
+<tr><td><code>--dur-cer</code></td><td>2200-2400ms</td><td>Ceremonial — the lotus opening</td></tr>
+</tbody>
+</table>
+
+<h4>Interaction states</h4>
+<ul>
+<li><strong>Hover</strong> — background deepens roughly 6%; never shifts hue and never brightens. Text links gain a 1px underline at 3px offset with no colour change.</li>
+<li><strong>Press</strong> — <code>scale(0.98)</code> over 120ms on the breath easing. Background flattens one step; no colour shift.</li>
+<li><strong>Focus</strong> — 1px deep-teal border plus a 3px teal glow at 15% opacity.</li>
+<li><strong>Disabled</strong> — 45% opacity, no colour change.</li>
+</ul>
+
+<h2>The lotus</h2>
+
+<p>The lotus is the only illustration in the system and the only decorative mark. It opens once when the app launches, then settles into an ambient breath — a 4s cycle scaling between 1.0 and 1.015. Navigating away and back does not retrigger the opening.</p>
+
+<p>Its geometry is three tiers of broad pointed petals radiating from a single base point, drawn so the bloom is slightly wider than tall (measured 134 × 118, aspect 1.14). All three tiers fan out broadly, which is what keeps it reading as a full flower rather than a tall spike.</p>
+
+<table>
+<thead><tr><th>Tier</th><th>Colour</th><th>Length × width</th><th>Angles</th></tr></thead>
+<tbody>
+<tr><td>Outer</td><td><span class="sw" style="background:#17718A"></span>Deep teal</td><td>60 × 48</td><td>±66°, ±46°, ±25°</td></tr>
+<tr><td>Mid</td><td><span class="sw" style="background:#3E96AE"></span>Mid teal</td><td>78 × 50</td><td>±42°, ±26°, ±11°</td></tr>
+<tr><td>Inner</td><td><span class="sw" style="background:#7CC0D6"></span>Light aqua</td><td>98 × 52</td><td>±30°, ±15°, 0°</td></tr>
+<tr><td>Core</td><td><span class="sw" style="background:#C96F43"></span>Burnt orange</td><td>8 × 10 ellipse</td><td>—</td></tr>
+<tr><td>Ripples</td><td><span class="sw" style="background:#457B6A"></span>Sage</td><td>rx 50 / 74 / 97</td><td>—</td></tr>
+</tbody>
+</table>
+
+<p>Three concentric sage ripples sit beneath the bloom, fading outward. They read as stillness on water and expand into place as the flower opens. Earlier drafts used lily pads; those were dropped as too heavy and too literal for a contemplative setting.</p>
+
+<div class="note">
+<div class="eyebrow">sizing</div>
+<p>On both <code>Lotus</code> and <code>LotusMark</code>, the <code>size</code> prop is the rendered width of the <em>bloom</em>, not of the SVG frame — so the two are interchangeable at the same size. Pass <code>water={false}</code> for marks under about 40px; it crops the frame tight to the petals so the flower stays legible at avatar scale.</p>
+</div>
+
+<h2>Components</h2>
+
+<p>Seven components ship on the <code>window.LelaneaDesignSystem_a15360</code> namespace. Each lives in its own folder with a TypeScript declaration and a preview card.</p>
+
+<div class="btnrow">
+<span class="btn p">Begin a sit</span>
+<span class="btn s">Return</span>
+<span class="btn g">Skip</span>
+<span class="btn d">Delete session</span>
+</div>
+
+<table>
+<thead><tr><th>Component</th><th>Key props</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>Lotus</code></td><td>size, open, autoOpen, idle, water, delay, onOpened</td><td>The animated bloom. Pass <code>open</code> to control it externally.</td></tr>
+<tr><td><code>LotusMark</code></td><td>size, water</td><td>Static glyph for avatars and favicons.</td></tr>
+<tr><td><code>Button</code></td><td>variant, size, block, disabled</td><td>primary · secondary · ghost · destructive. One primary per screen.</td></tr>
+<tr><td><code>Card</code></td><td>eyebrow, title, meta, dark</td><td>Stone surface, 20px radius, resting shadow.</td></tr>
+<tr><td><code>ChatBubble</code></td><td>from, avatar</td><td><code>ai</code> is stone with the lotus avatar; <code>user</code> is deep teal, right aligned.</td></tr>
+<tr><td><code>Chip</code></td><td>selected, tone</td><td>Theme tags. Selected is amethyst; <code>tone="teal"</code> marks an active teaching.</td></tr>
+<tr><td><code>Banner</code></td><td>tone, lead</td><td>success · error · warning · info.</td></tr>
+</tbody>
+</table>
+
+<h4>Layout conventions</h4>
+<ul>
+<li>Single column on mobile; content caps at 560px on wider surfaces.</li>
+<li>Fixed elements are limited to the status bar, the chat composer, and the tab bar. Everything else scrolls.</li>
+<li>Backdrop blur appears on exactly two surfaces: the status bar over scrolling content, and the chat capsule. There are no frosted-glass cards.</li>
+<li>Floating controls sit in solid capsules, not gradient scrims. The one exception is a 64px protection gradient above the chat composer.</li>
+<li>Tap targets are never smaller than 44px.</li>
+</ul>
+
+<h2>Voice</h2>
+
+<p>Copy should read like a soft voice in a quiet room. It speaks to the client as "you", asks more than it tells, and never performs mysticism. The AI does not refer to itself as an AI; it says "let's sit with that", not "I think".</p>
+
+<div class="dodont">
+<div class="do">
+<h4>Do</h4>
+<ul>
+<li>Sentence case everywhere, including buttons.</li>
+<li>Questions over answers.</li>
+<li>Em dashes for breath; ellipses sparingly.</li>
+<li>Words like presence, witness, arrive, return.</li>
+<li>Lowercase tracked-out eyebrows: <em>a place to return to</em>.</li>
+</ul>
+</div>
+<div class="dont">
+<h4>Don't</h4>
+<ul>
+<li>No exclamation points. None, ever.</li>
+<li>No emoji. The lotus is the only ornament.</li>
+<li>No Title Case on buttons or labels.</li>
+<li>No stacked mystical vocabulary.</li>
+<li>Never "the user" — always "you".</li>
+</ul>
+</div>
+</div>
+
+<table>
+<thead><tr><th>Instead of</th><th>Write</th></tr></thead>
+<tbody>
+<tr><td>Welcome to Lelanea's App! Let's get started!</td><td>Welcome. Take a slow breath.</td></tr>
+<tr><td>What topic would you like to discuss with the AI?</td><td>What would you like to bring in today?</td></tr>
+<tr><td>End Session / Return to Dashboard</td><td>Rest here for a moment before you go.</td></tr>
+<tr><td>Error: submission failed</td><td>Something didn't land. Try that once more.</td></tr>
+<tr><td>Start Now</td><td>Begin</td></tr>
+</tbody>
+</table>
+
+<h2>Iconography</h2>
+
+<p>Icons should feel like small drawings, not wayfinding glyphs. The system uses Lucide as its baseline family — 1.5px stroke, rounded caps, open geometry. Icons are never filled and never bicolour. They inherit text colour, sitting at silver-ash when at rest and deep teal when active. Sizes are 16, 20 and 24, with 24 the default.</p>
+
+<p>The lotus mark is the only custom glyph, used as the app icon, the AI's avatar in chat, and a small mark above pull quotes. Emoji are never used. The one permitted unicode ornament is a thin bullet in meta text — <em>4 min · yesterday</em>.</p>
+
+<div class="note">
+<div class="eyebrow">substitution — please review</div>
+<p>Lucide was chosen as the closest available match to the intended tone. If Lelanea has a custom icon set, it should replace Lucide wholesale rather than being mixed with it.</p>
+</div>
+
+<h2>Sharing this system</h2>
+
+<p>The system is a folder of plain files, so it travels as-is. There are three routes, depending on what the other project needs.</p>
+
+<h4>1. Attach it as a design system</h4>
+<p>Any other project in this workspace can bind this project directly as its design system. It then gets the tokens, the seven components, and every preview card without copying anything. This is the best option for ongoing design work.</p>
+
+<h4>2. Hand over the folder as a skill</h4>
+<p>Download the whole project as a zip. It contains a <code>SKILL.md</code> written to the Agent Skills format, so dropping the folder into another Claude project — or into a <code>.claude/skills/</code> directory for Claude Code — makes it invocable as <code>lelanea-design</code>. That agent reads <code>README.md</code> and works from the same rules as this guide.</p>
+
+<h4>3. Send this document</h4>
+<p>For a human collaborator — a developer, a contractor, a founder — export this guide to PDF and send it. It carries every value needed to build correctly without any tooling.</p>
+
+<h4>What is in the folder</h4>
+<table>
+<thead><tr><th>Path</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td><code>README.md</code></td><td>Full written system: context, content fundamentals, visual foundations, iconography.</td></tr>
+<tr><td><code>SKILL.md</code></td><td>Agent Skills front matter, so the folder is invocable as a skill.</td></tr>
+<tr><td><code>styles.css</code> · <code>colors_and_type.css</code></td><td>All tokens as CSS variables, plus light and dark themes.</td></tr>
+<tr><td><code>components/</code></td><td>Seven React components, each with a <code>.d.ts</code> and a preview card.</td></tr>
+<tr><td><code>assets/</code></td><td>Lotus mark, wordmark lockup, standalone lotus animation.</td></tr>
+<tr><td><code>ui_kits/lelanea_app/</code></td><td>Clickable recreation of the app: onboarding, lotus home, chat, journal, practices, profile.</td></tr>
+<tr><td><code>preview/</code></td><td>The cards shown in the Design System tab.</td></tr>
+<tr><td><code>thumbnail.html</code></td><td>The system's homepage tile.</td></tr>
+</tbody>
+</table>
+
+<h4>Open questions</h4>
+<ul>
+<li>Real font files, to replace the three Google Fonts substitutions.</li>
+<li>A custom icon set, if one exists, to replace Lucide.</li>
+<li>Photography direction. The system currently allows only the lotus; if imagery is wanted, the intended treatment is warm natural light, linen and clay, desaturated 10–15%, no grain.</li>
+<li>Whether surfaces beyond the mobile app need covering — a marketing site, a coach-facing view, or session-summary email.</li>
+</ul>
+
+</doc-page>
+<script src="./doc-page.js"></script>
+</body>
+</html>
