@@ -27,6 +27,51 @@ process.
 
 ### Added
 
+- **`lib/app/leaf-ci.ts` — a leaf declares its own coverage exclusions and
+  always-run tests.** Adopted from Sunrise #762 (`lib/app/ci.ts`), which Daybreak
+  asked for as #759 and which is on `upstream/main` ahead of a Sunrise release.
+  Two lists, both shipped empty for you:
+
+  ```ts
+  // lib/app/leaf-ci.ts
+  export const leafCoverageExclusions: AppCoverageExclusion[] = [
+    { pattern: 'scripts/my-cli.ts', reason: 'a tsx entry point nothing imports, so a scoped run forces it in at 0%' },
+  ];
+  export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
+    { path: 'tests/unit/my-tree-invariant.test.ts', reason: 'globs the repo; no import chain reaches it' },
+  ];
+  ```
+
+  The cases these exist for: a **`tsx` CLI script of your own** is structurally 0%
+  and fails the per-file 80% floor the first time anyone edits it, and a **test whose
+  subject is the repository** is reached by no import chain, so `--changed` never
+  selects it. Before the seam, declaring either meant editing a platform file.
+
+  - **`lib/app/ci.ts` is Daybreak's fifth bridge — do not fill it.** Sunrise's seam
+    is built for two tiers and hands "the fork" one file; Daybreak is the middle of
+    three, so it declares the framework tier's entries there and spreads your lists
+    after them. Filling the bridge directly re-creates, one tier down, exactly the
+    conflict #759 removed one tier up.
+  - **Both lists append**, so the tiers compose — unlike `leaf-brand.ts`, which
+    overrides.
+  - **Your entries are guarded, not merely typed.** Every check Sunrise wrote over
+    the core lists judges yours in your checkout: a `reason` under 20 characters or
+    a duplicate fails either list; an always-run path must additionally exist, be
+    passable to `vitest` as an argument, and sit in a directory `vitest.config.ts`
+    collects — `tests/e2e/**` is excluded there, so a spec declared inside it would
+    pass every other check and then silently never run.
+  - **Mind the extglob.** `scripts/x/!(*-assertions).ts` spares a sibling only when
+    the extracted half is *named* `*-assertions.ts`. Daybreak's own split is
+    `check.ts`/`lib.ts`, so it names the wrapper directly — the pattern would have
+    taken the tested half with it. Prefer naming the file unless you follow the
+    convention.
+  - **Filling `leaf-ci.ts` will break two `defaults.test.ts` rows**, its own and the
+    bridge's. Pin both; don't delete either (#234).
+
+  Daybreak's own three keep-mine edits — `vitest.config.ts`,
+  `scripts/ci/missing-tests.ts` and `scripts/ci/scoped-tests.ts` — are **deleted**,
+  so those files now carry no Daybreak content and merge clean on the next sync.
+
 - **`recordNodeProgress(viewer, key, nodeKey, patch, scope?)`** — the writer for
   `UserNodeState.progress` (`lib/framework/facilitation/journey/progress.ts`,
   barrel-exported) (#168). The column is declared module-owned and opaque to the
