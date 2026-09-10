@@ -223,6 +223,18 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'stylesheet would not select it, which is exactly when a token ' +
       'disappears out from under a component that still references it.',
   },
+  {
+    path: 'tests/unit/app/public/authored-provenance.test.ts',
+    reason:
+      'reads every file under `app/(public)/` and `components/app/site/` off ' +
+      "disk and fails if any of Lelañea Fulton's authored sentences — or a " +
+      'trimmed cut of one — appears in the source. It imports only the ' +
+      'content loader, so the module graph connects it to NOTHING it scans: a ' +
+      'branch that retypes a sentence into a page edits that page and selects ' +
+      'every test that imports it, which is not this one. That is the whole ' +
+      'blind spot, and it is the exact change the guard exists to catch. It ' +
+      'found four such violations already shipped when it was added.',
+  },
 ];
 
 /** Just the paths, for argv building and set arithmetic. */

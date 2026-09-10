@@ -25,9 +25,10 @@ export const metadata: Metadata = {
  * The owner ruled (t-6) that the authored documents win outright where the two
  * differ. So the prototype contributes the layout, the eyebrow and the rules;
  * it contributes no prose. Not one sentence on this page is typed into this
- * file, and `tests/unit/app/public/authored-provenance.test.tsx` is what keeps
- * that true — it renders every public page and fails if a sentinel phrase from
- * a document turns up in component source.
+ * file, and `tests/unit/app/public/authored-provenance.test.ts` is what keeps
+ * that true — it reads every file under `app/(public)/` and
+ * `components/app/site/` as text and fails if a six-word run of any authored
+ * paragraph turns up in one.
  *
  * That costs the prototype's punchier `h1`, and the trade is deliberate: a
  * headline retyped from her prose is a second copy of her words that no longer

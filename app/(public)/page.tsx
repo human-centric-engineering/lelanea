@@ -85,7 +85,7 @@ export default function HomePage() {
   // read rather than retyped. t-5 shipped all four of these sentences as string
   // literals in this file; t-6 made "the authored documents win outright" the
   // rule for the whole public site, and a rule the front page breaks is not a
-  // rule. `authored-provenance.test.tsx` is what holds it.
+  // rule. `authored-provenance.test.ts` is what holds it.
   const philosophy = requireDocument('the_heart_behind_lelanea');
   const openingLine = paragraphAt(philosophy, 0);
   const openingPurpose = paragraphAt(philosophy, 1);

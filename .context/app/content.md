@@ -273,7 +273,7 @@ and no headings at all. Where a position is unavoidable, pin both ends of it.
 is fine, because a drifted heading throws. Rendering that same constant as the
 visible heading is not: pass `includeHeading` and let the words come from the
 document. The distinction is enforced by
-`tests/unit/app/public/authored-provenance.test.tsx`, which scans paragraph and
+`tests/unit/app/public/authored-provenance.test.ts`, which scans paragraph and
 list text only, for exactly this reason.
 
 ## No authored sentence is typed into the public site
@@ -283,7 +283,7 @@ supplies layout, section labels, eyebrows and rules; every sentence a visitor
 reads is rendered from the JSON at run time. Where the two disagree — and they
 do, often — the document is right.
 
-`tests/unit/app/public/authored-provenance.test.tsx` enforces it across
+`tests/unit/app/public/authored-provenance.test.ts` enforces it across
 `app/(public)/**` and `components/app/site/**`. Every run of six consecutive
 words in every authored paragraph is a sentinel, and none may appear in source
 with comments stripped and punctuation normalised. Six words catches a **re-cut**

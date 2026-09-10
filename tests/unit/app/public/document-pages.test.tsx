@@ -13,7 +13,7 @@
  *
  * ## What this file does NOT do
  *
- * It does not check that the words are hers — `authored-provenance.test.tsx`
+ * It does not check that the words are hers — `authored-provenance.test.ts`
  * does that, from the other direction, by proving they are in no source file.
  * It does not check that the selectors resolve — `sections.test.ts` does that
  * against the content. What is left for here is what only rendering can show:
