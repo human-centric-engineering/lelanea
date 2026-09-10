@@ -1,10 +1,13 @@
+import { Fragment } from 'react';
 import type { Metadata } from 'next';
 
+import { InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content';
+import { paragraphAt, paragraphRange, requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/home.module.css';
 
 export const metadata: Metadata = {
@@ -18,29 +21,43 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-/** §6.4's three "what this is" cards, in the prototype's order and words. */
+/**
+ * §6.4's three "what this is" cards.
+ *
+ * ## The titles are the prototype's; the bodies are hers
+ *
+ * t-5 shipped all three bodies as string literals here, and every one of them
+ * turned out to be a re-cut of an authored passage — the first two from
+ * `the_initiation`, the third from the disclaimer's "Our Commitment". The
+ * provenance test added with t-6 is what surfaced that; nothing else in the
+ * tree could have.
+ *
+ * They are now the passages themselves, which is the owner's t-6 ruling and is
+ * also simply better copy. Two things the prototype's version had lost come
+ * back: the "magnificent intelligence" that its paraphrase trimmed to
+ * "intelligence", and the cadence — `the_initiation` carries
+ * `renderStyle: 'cadence'` and a note saying "render each as its own line or
+ * beat; do not merge them into flowing prose", and merging them into flowing
+ * prose is exactly what the three literals did.
+ *
+ * The card TITLES stay literals. They are the prototype's own labels, they
+ * appear in no document, and a label is not prose.
+ *
+ * ## Ranges, and why the indices are safe to write down
+ *
+ * `the_initiation` has no headings, so `paragraphRange` is the only handle. The
+ * ranges are pinned by their first and last beat in
+ * `tests/unit/lib/app/content/sections.test.ts`, so a beat inserted upstream of
+ * one fails the suite instead of shifting a card to start mid-sentence.
+ */
 const WHAT_THIS_IS = [
-  {
-    title: 'An invitation',
-    body:
-      'This is not simply an app. It is an invitation to explore the relationship you have with ' +
-      'yourself, your consciousness, and the intelligence that has always existed beneath the ' +
-      'noise of the human experience.',
-  },
-  {
-    title: 'A guide who walks beside you',
-    body:
-      'Her role is not to tell you who you are. It is to walk beside you as you begin to ' +
-      'remember. She offers perspectives, practices, questions, ancient wisdom, and modern ' +
-      'understanding. There is nothing you are required to believe.',
-  },
-  {
-    title: 'Coaching, not healthcare',
-    body:
-      'Lelañea was created with deep respect for both contemplative wisdom and modern ' +
-      'healthcare. It is intended to complement — never to replace — the work of licensed ' +
-      'professionals.',
-  },
+  { title: 'An invitation', source: 'the_initiation', from: 7, to: 10 },
+  { title: 'A guide who walks beside you', source: 'the_initiation', from: 51, to: 60 },
+  // 72–73, not 65–66: `paragraphRange` counts PARAGRAPHS, and the disclaimer
+  // has two list blocks whose items flatten into the sequence. Block index and
+  // paragraph index agree in `the_initiation`, which has neither headings nor
+  // lists, and diverge by seven here.
+  { title: 'Coaching, not healthcare', source: 'disclaimer', from: 72, to: 74 },
 ] as const;
 
 /**
@@ -64,6 +81,19 @@ const WHAT_THIS_IS = [
 export default function HomePage() {
   const { tiers, modules } = getJourneyStructure();
 
+  // The hero and the quote band are the two ends of `the_heart_behind_lelanea`,
+  // read rather than retyped. t-5 shipped all four of these sentences as string
+  // literals in this file; t-6 made "the authored documents win outright" the
+  // rule for the whole public site, and a rule the front page breaks is not a
+  // rule. `authored-provenance.test.tsx` is what holds it.
+  const philosophy = requireDocument('the_heart_behind_lelanea');
+  const openingLine = paragraphAt(philosophy, 0);
+  const openingPurpose = paragraphAt(philosophy, 1);
+  // Two paragraphs, not one sentence: she authored the closing thought as two
+  // beats and the band sets them as one line, so they are joined with a space
+  // here rather than merged in the source.
+  const closingBeats = [paragraphAt(philosophy, -2), paragraphAt(philosophy, -1)];
+
   const moduleTitle = new Map(modules.map((m) => [m.id, m.title]));
   // By IDENTITY, not by ordinal. `order > 0` was the first shape and it leans
   // on onboarding being exactly 0, which the schema does not promise — it only
@@ -79,12 +109,10 @@ export default function HomePage() {
         <div>
           <Eyebrow as="p">transcendental coaching, at your own pace</Eyebrow>
           <h1 className="brand-display">
-            Lelañea was created as an invitation into conscious living.
+            <InlineText text={openingLine} />
           </h1>
           <p className={styles.lede}>
-            Its purpose is not simply to help individuals improve themselves, but to support them in
-            remembering who they are beneath conditioning, inherited beliefs, unconscious patterns,
-            and the countless identities accumulated throughout life.
+            <InlineText text={openingPurpose} />
           </p>
 
           <WaitlistForm />
@@ -101,8 +129,12 @@ export default function HomePage() {
 
       <section className={styles.band} style={{ marginTop: 'clamp(56px,7vw,88px)' }}>
         <p className="brand-quote">
-          Transformation is not viewed as becoming someone new. It is the continual remembrance of
-          who we have always been.
+          {closingBeats.map((beat, index) => (
+            <Fragment key={index}>
+              {index === 0 ? null : ' '}
+              <InlineText text={beat} />
+            </Fragment>
+          ))}
         </p>
         <Eyebrow as="p" className="mt-5">
           lelañea fulton
@@ -119,7 +151,17 @@ export default function HomePage() {
         <div className={styles.cards}>
           {WHAT_THIS_IS.map((card) => (
             <Card key={card.title} title={card.title}>
-              {card.body}
+              {paragraphRange(requireDocument(card.source), card.from, card.to).map(
+                (beat, index) => (
+                  // One `<p>` per beat, which IS the cadence note honoured —
+                  // "render each as its own line or beat". `mb-2` on all but
+                  // the last keeps them reading as beats of one thought rather
+                  // than as separate paragraphs.
+                  <p key={index} className="last:mb-0 mb-2">
+                    <InlineText text={beat} />
+                  </p>
+                )
+              )}
             </Card>
           ))}
         </div>

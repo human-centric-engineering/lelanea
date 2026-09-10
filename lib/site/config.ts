@@ -53,6 +53,21 @@ export const LAUNCH_WINDOW = '[LAUNCH WINDOW]';
 export const SITE_DOMAIN = 'lelanea.com';
 
 /**
+ * The photograph of Lelañea Fulton on `/lelanea`, or `null` while there is none.
+ *
+ * The same shape as `SITE_LINKS` and for the same reason (D3): an asset that
+ * does not exist renders as nothing deliberate rather than as a broken image,
+ * and filling this constant is the whole change needed to make it appear. A
+ * path under `public/lelanea/` — `/lelanea/creator.jpg` — once the file lands;
+ * `next/image` needs the intrinsic size, which the page passes.
+ *
+ * Her video sits behind this and is a todo for her, not for us. It is
+ * deliberately NOT stubbed: there is no design for the slot yet, and B31's
+ * "deliberate stub" needs something to be a stub of.
+ */
+export const CREATOR_PORTRAIT: string | null = null;
+
+/**
  * Where the site says she can be found. `null` means "no URL yet" and renders
  * nothing at all — not a disabled link, not a `#`, not an empty `<a>`.
  */

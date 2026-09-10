@@ -233,6 +233,78 @@ type: it would pass on such a page. Layout — measure, page chrome, the
 descriptive eyebrow the prototype uses per section — belongs to the page that
 mounts this, and so does setting the surface.
 
+## Selecting part of a document
+
+`lib/app/content/sections.ts`. A **designed page** shows one part of a document
+inside the site's own chrome — `/data` lifts the disclaimer's "what it is",
+"what it is not", crisis guidance and coaching-versus-therapy sections into
+columns, cards and a red box, and links to `/disclaimer` for the whole thing.
+
+The alternative was retyping those into a `const` beside the layout, which is the
+drift this whole pipeline exists to stop — and worst on the page a visitor
+looking for therapy reads before deciding.
+
+| Function                                | Returns                                             |
+| --------------------------------------- | --------------------------------------------------- |
+| `requireDocument(id)`                   | a document, throwing rather than returning `null`   |
+| `selectSection(doc, heading, opts?)`    | the blocks under a heading; `includeHeading` adds it |
+| `selectSectionText(doc, heading)`       | that section's paragraphs and list items as strings  |
+| `paragraphAt(doc, n)`                   | one paragraph; negative counts from the end          |
+| `paragraphRange(doc, from, to)`         | a half-open run of paragraphs                        |
+| `listSectionHeadings(doc)`              | every heading, in authored order                     |
+
+**Everything here throws rather than degrading, and that is the design.** An
+empty result is a page that renders its "it is not" column as a blank box under
+a green tick and says nothing at all — silently, on the most legally sensitive
+surface in the site. A 500 on a content-integrity failure is loud and correct.
+
+Nothing reaches production either way: `tests/unit/lib/app/content/sections.test.ts`
+pins **every handle a page selects by** — the four disclaimer headings, the three
+paragraph ranges the home page's cards use, the four positions its hero and quote
+band read. A renamed heading or a beat inserted upstream of a range fails there,
+naming it.
+
+**Prefer a heading to a position.** `selectSection` is stable under editing;
+`paragraphRange` is not, and exists for `the_initiation`, which has seventy beats
+and no headings at all. Where a position is unavoidable, pin both ends of it.
+
+**A selector string may be a literal; a rendered string may not.** `/data` holds
+`'What Lelañea Is Not'` in its source as the argument to `selectSection` — that
+is fine, because a drifted heading throws. Rendering that same constant as the
+visible heading is not: pass `includeHeading` and let the words come from the
+document. The distinction is enforced by
+`tests/unit/app/public/authored-provenance.test.tsx`, which scans paragraph and
+list text only, for exactly this reason.
+
+## No authored sentence is typed into the public site
+
+The owner's t-6 ruling: **the authored documents win outright.** The prototype
+supplies layout, section labels, eyebrows and rules; every sentence a visitor
+reads is rendered from the JSON at run time. Where the two disagree — and they
+do, often — the document is right.
+
+`tests/unit/app/public/authored-provenance.test.tsx` enforces it across
+`app/(public)/**` and `components/app/site/**`. Every run of six consecutive
+words in every authored paragraph is a sentinel, and none may appear in source
+with comments stripped and punctuation normalised. Six words catches a **re-cut**
+— a sentence with a clause trimmed off the front, which is the failure that
+actually happens and which comparing whole strings would miss.
+
+It is not theoretical. Adding it surfaced four separate violations that had
+shipped in t-5 and that nothing else in the tree could have seen:
+
+- the home page's `h1` and lede — blocks 0 and 1 of `the_heart_behind_lelanea`
+- its quote band — that document's closing two beats
+- all three "what this is" card bodies — re-cuts of `the_initiation` and the
+  disclaimer, with `the_initiation`'s cadence merged into flowing prose against
+  its own `renderNote`, and "magnificent intelligence" trimmed to "intelligence"
+- the footer's standing disclaimer — the crisis instruction with two of its
+  three actions silently dropped
+
+**Headings are deliberately outside the scan** (see above). So is everything
+outside the public site: a future authoring or admin surface handling this text
+is a different rule.
+
 ## Referential integrity
 
 Beyond shape, the schemas assert four things structure alone cannot, each of

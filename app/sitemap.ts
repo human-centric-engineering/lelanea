@@ -15,17 +15,23 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   // Public pages - add new public pages here.
   //
-  // Lelañea (t-5): the starter's /about and /contact are gone with the pages
-  // themselves; the three the site actually has took their place. They are
-  // listed while they are still placeholders (t-6 writes them) because the
-  // header and footer link to them, so a crawler reaches them regardless — the
-  // sitemap agreeing with the nav is the honest state, not a claim they are
-  // finished.
+  // Lelañea (t-5, extended t-6; divergence row 11): the starter's /about and
+  // /contact are gone with the pages themselves, and the routes the site
+  // actually has took their place.
+  //
+  // /disclaimer arrived with t-6 and is listed like any other page. /privacy is
+  // listed but carries `robots: { index: false }` on the page itself while its
+  // body is still the starter's template — the sitemap offering a URL and the
+  // page declining to be indexed is not a contradiction, it is how a crawler is
+  // told the route exists and is not ready. The three that WERE noindexed for
+  // the same reason (/lelanea, /mission, /data) had that removed with this
+  // task, because they now carry her words.
   const publicPages = [
     { path: '', priority: 1.0, changeFrequency: 'weekly' as const },
     { path: '/lelanea', priority: 0.8, changeFrequency: 'monthly' as const },
     { path: '/mission', priority: 0.8, changeFrequency: 'monthly' as const },
     { path: '/data', priority: 0.8, changeFrequency: 'monthly' as const },
+    { path: '/disclaimer', priority: 0.5, changeFrequency: 'yearly' as const },
     { path: '/privacy', priority: 0.3, changeFrequency: 'yearly' as const },
     { path: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
   ];

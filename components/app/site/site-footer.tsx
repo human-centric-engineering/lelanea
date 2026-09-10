@@ -93,6 +93,12 @@ export function SiteFooter() {
             </Link>
           ))}
           <Link href="/data">What it is, what it is not</Link>
+          {/* t-6. `/data` shows three sections of the disclosure document in
+              the site's own chrome; this is the document itself. Without a link
+              here it would be an orphan route — reachable only from a sentence
+              at the bottom of `/data`, which is the page a reader who wants the
+              full disclosures has already decided not to stop at. */}
+          <Link href="/disclaimer">Disclosures</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           {outbound.map((link) => (
@@ -106,11 +112,28 @@ export function SiteFooter() {
         </nav>
       </div>
 
+      {/*
+        The standing disclaimer, on every public page.
+
+        Its closing clause used to be "contact your local emergency services or
+        a licensed crisis service in your area without delay" — which is the
+        disclaimer document's own crisis instruction with two clauses trimmed
+        out of the middle of it. t-6's provenance test found it. Safety copy is
+        the worst possible place for a second copy of a sentence: the authored
+        version tells a reader to stop using the app, to go to an emergency
+        department, AND to contact a crisis service, and the footer's re-cut had
+        quietly dropped two of the three.
+
+        A footer strip cannot carry the whole passage, and paraphrasing it again
+        would only re-make the same mistake. So the footer states the shortest
+        true thing and sends the reader to where the passage is complete — set
+        out in full on `/data`, and in its document context on `/disclaimer`.
+      */}
       <p className={styles.footNote}>
         Lelañea is an educational and contemplative application. It is not a medical application,
         not a mental health application, not psychotherapy, not counseling, and not a crisis
-        service. If you are at immediate risk, contact your local emergency services or a licensed
-        crisis service in your area without delay.
+        service. If you are at immediate risk, contact your local emergency services now — and see{' '}
+        <Link href="/data">what to do in a crisis</Link>.
       </p>
 
       {/* Both names come from the brand seam: the trademark is the PRODUCT,
