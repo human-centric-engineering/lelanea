@@ -1,0 +1,202 @@
+'use client';
+
+import { X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+
+import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { FOCUSABLE } from '@/components/app/shell/focusable';
+import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { cn } from '@/lib/utils';
+
+/**
+ * An ordered list, not a record keyed by id.
+ *
+ * `Object.keys()` returns `string[]`, so a record needed an assertion back to
+ * the id union at the one place that iterates it — and it left the render order
+ * as whatever the object literal happened to give. A list states both.
+ */
+const DRAWERS: { id: DrawerId; title: string; note: string }[] = [
+  {
+    id: 'map',
+    title: 'Your map',
+    note: 'The sixteen modules, and where you are among them. This arrives with the journey.',
+  },
+  {
+    id: 'resources',
+    title: 'Resources',
+    note: 'Films and reading, in her own words. These arrive later in the programme.',
+  },
+];
+
+/**
+ * The map and resources drawers: panels that ride over the panes.
+ *
+ * Both are stubs in this task (D6) — the map needs §05's modules and the
+ * resources need phase 3 — so each says what it will hold rather than showing an
+ * empty list, which reads as broken. What is real here is the MECHANISM: the
+ * slide, the scrim, the focus handling and the Escape rung, all of which §05 and
+ * f-resources then fill rather than build.
+ *
+ * ## Why both render, and only one is open
+ *
+ * `translateX` off-canvas rather than unmounting, because a panel that mounts on
+ * open cannot animate in — the browser has nothing to transition from. `hidden`
+ * on the closed one keeps it out of the accessibility tree and out of the tab
+ * order, which `aria-hidden` alone would not do.
+ */
+export function Drawers() {
+  const { drawer, closeDrawer } = useShellLayout();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
+
+  /**
+   * Focus moves in, and comes back to the control that opened it.
+   *
+   * Without the return half, closing a drawer with Escape drops focus onto
+   * `<body>` and a keyboard reader is back at the top of the document — which is
+   * the quiet way a panel becomes unusable without a pointer.
+   */
+  useEffect(() => {
+    if (drawer) {
+      // ONLY on the way in from nothing. Switching map → resources used to
+      // overwrite this with the outgoing panel — which is `inert` by the time
+      // the second one closes — so focus silently fell to `<body>`.
+      if (returnTo.current === null) {
+        // `activeElement` is `Element | null`, and only an `HTMLElement` is
+        // guaranteed `focus()`. Narrowing rather than asserting means a focus
+        // that lands somewhere unexpected simply is not returned to.
+        returnTo.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
+      panelRef.current?.focus();
+      return;
+    }
+    returnTo.current?.focus();
+    returnTo.current = null;
+  }, [drawer]);
+
+  /**
+   * Keep Tab inside the open panel.
+   *
+   * `aria-modal="true"` is a promise that the rest of the page is unavailable,
+   * and moving focus in once does not keep it there: the panel is the last
+   * focusable subtree in the document, so a single Tab left it and landed in the
+   * nav, topbar or rail *underneath the scrim* — controls a sighted reader
+   * cannot see and a screen-reader reader has been told do not exist.
+   *
+   * A cycle rather than marking the rest of the shell `inert`: the shell is not
+   * one element, and `inert` on each of its parts would have to be applied and
+   * unwound in the right order every time a drawer opened.
+   */
+  useEffect(() => {
+    if (!drawer) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        // Nothing to land on — keep focus on the panel rather than letting it
+        // escape to whatever is behind the scrim.
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+
+      const active = document.activeElement;
+      if (!event.shiftKey && (active === last || active === panel)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || active === panel)) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [drawer]);
+
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        onClick={closeDrawer}
+        className={cn(
+          // Above the nav and the rail (both `z-50`), not below them. A dialog
+          // claiming `aria-modal` while the column beside it stays undimmed and
+          // clickable is telling the reader something untrue.
+          'fixed inset-0 z-[70] bg-[var(--color-scrim)]',
+          'transition-opacity duration-[340ms] ease-[var(--ease-brand)]',
+          'motion-reduce:transition-none',
+          drawer ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+      />
+      {DRAWERS.map(({ id, title, note }) => {
+        const open = drawer === id;
+        return (
+          <div
+            key={id}
+            ref={open ? panelRef : undefined}
+            data-drawer={id}
+            role="dialog"
+            aria-label={title}
+            aria-modal="true"
+            /*
+             * `inert` and `invisible`, NOT `hidden`.
+             *
+             * `hidden` is `display: none`, so opening changed display and
+             * transform in the same commit: there is no starting style for the
+             * browser to transition from, and the panel popped. That is exactly
+             * the failure this component translates off-canvas to avoid — the
+             * mechanism was built and then undone one attribute later.
+             *
+             * `visibility` does transition, so the closed panel still leaves the
+             * accessibility tree and the tab order (via `inert`) without taking
+             * the slide with it. `ShellNav`'s drawer already does this.
+             */
+            inert={!open}
+            tabIndex={-1}
+            className={cn(
+              'bg-card fixed top-0 right-0 bottom-0 z-[75] flex w-[min(420px,88vw)] flex-col',
+              'border-l border-[var(--color-border)] shadow-[var(--shadow-lift)]',
+              'transition-[transform,visibility] duration-[340ms] ease-[var(--ease-brand)]',
+              'motion-reduce:transition-none',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
+              'focus-visible:outline-[var(--color-ring)]',
+              open ? 'visible translate-x-0' : 'invisible translate-x-full'
+            )}
+          >
+            <header
+              className={cn(
+                'flex flex-none items-center gap-3 border-b border-[var(--color-divider)] px-5 py-4'
+              )}
+            >
+              <Eyebrow className="min-w-0 flex-1">{title}</Eyebrow>
+              <button
+                type="button"
+                onClick={closeDrawer}
+                aria-label={`Close ${title.toLowerCase()}`}
+                className={cn(
+                  'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
+                  'items-center justify-center rounded-full hover:bg-[var(--color-pill-hover)]',
+                  'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                  'motion-reduce:transition-none',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                  'focus-visible:outline-[var(--color-ring)]'
+                )}
+              >
+                <X size={16} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              <p className="text-muted-foreground text-sm leading-relaxed">{note}</p>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}

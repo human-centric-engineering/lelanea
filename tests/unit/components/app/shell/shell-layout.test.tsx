@@ -50,7 +50,8 @@ vi.mock('@/lib/auth/clear-session', () => ({
     throw new Error('redirected');
   }),
 }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/app' }));
+const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -107,10 +108,21 @@ beforeEach(() => {
   };
   window.localStorage.clear();
   window.sessionStorage.setItem('lelanea.bloom.seen', '1');
+  // STATE THE WIDTH. happy-dom defaults to 1024, which is below the 1100
+  // auto-slim threshold — so without this the account footer's name and email
+  // are hidden and these cases fail for a reason that has nothing to do with
+  // what they are testing.
+  Object.defineProperty(window, 'innerWidth', {
+    value: 1400,
+    writable: true,
+    configurable: true,
+  });
 });
 
 describe('the shell layout serves the product', () => {
   it('renders the frame and its children when maintenance is off', async () => {
+    // A workspace route, because that is where a route's children go: on `/app`
+    // itself the conversation pane IS the view and the page renders nothing.
     await renderLayout();
     expect(screen.getByText('the panes')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
@@ -127,6 +139,32 @@ describe('the shell layout serves the product', () => {
     session.current = { user: { id: 'u1', name: null, email: 'zoe@example.com', role: 'USER' } };
     await renderLayout();
     expect(screen.getAllByText('zoe@example.com').length).toBeGreaterThan(0);
+  });
+});
+
+describe('the frame stacks below 900px', () => {
+  it('is a row that becomes a column, and never wraps', async () => {
+    // The rail is full-width at ≤900 so it can be a footer. On a WRAPPING row
+    // that put it on its own flex line, where the default `align-content`
+    // stretched it to fill — the rail taking over the entire screen. Stacking
+    // is the fix; `flex-wrap` is the thing that must not come back.
+    //
+    // A media variant, not the provider's width: the frame is a server
+    // component and this is pure layout, so it must be right on the first paint
+    // rather than after a client effect resolves.
+    const { container } = await renderLayout();
+    const frame = container.querySelector('div.h-dvh')!;
+
+    expect(frame.className).toContain('max-[900px]:flex-col');
+    expect(frame.className).not.toContain('flex-wrap');
+  });
+
+  it('keeps the rail out of the flow of the pane column', async () => {
+    // Whatever the direction, the rail is `flex-none`: a rail that can grow is
+    // a rail that will, given a spare axis.
+    await renderLayout();
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(rail.className).toContain('flex-none');
   });
 });
 

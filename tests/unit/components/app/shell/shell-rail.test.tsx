@@ -16,49 +16,67 @@
  * @see components/app/shell/shell-rail.tsx
  */
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ShellRail } from '@/components/app/shell/shell-rail';
 
+import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
+
+vi.mock('next/navigation', () => ({ usePathname: () => '/app' }));
+
 describe('ShellRail', () => {
   it('is the fourth column, present and labelled', () => {
-    render(<ShellRail />);
+    renderInShell(<ShellRail />);
     expect(screen.getByRole('navigation', { name: 'Panels' })).toBeTruthy();
   });
 
   it('offers the map and the resources', () => {
-    render(<ShellRail />);
+    renderInShell(<ShellRail />);
     expect(screen.getByRole('button', { name: /Your map/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Resources/ })).toBeTruthy();
   });
 
-  it('leaves neither button clickable while it opens nothing', () => {
-    render(<ShellRail />);
-    for (const button of screen.getAllByRole('button')) {
-      expect(button).toBeDisabled();
-    }
+  it('opens the drawer it names, and says so', async () => {
+    // t-9 shipped these `disabled` because the drawers were t-10's. They are
+    // live now, and `aria-expanded` is what tells a screen reader that a panel
+    // appeared somewhere else on the page.
+    renderInShell(<ShellRail />);
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.getAttribute('aria-expanded')).toBe('false');
+
+    await userEvent.click(map);
+    expect(map.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('says why somewhere a person can actually reach', () => {
-    // The explanation used to be a `title` on the button itself, which renders
-    // NOWHERE: browsers suppress pointer events on a disabled control, so the
-    // tooltip never fired on hover, and a disabled button is out of the tab
-    // order, so assistive technology never reached it either. The stub's claim
-    // to be honest rather than broken rested on a string nobody could read.
-    //
-    // So both routes are asserted: the hover tooltip on the enabled wrapper,
-    // and the reason inside the button's own accessible name.
-    render(<ShellRail />);
+  it('closes the drawer when its own button is pressed again', async () => {
+    renderInShell(<ShellRail />);
+    const map = screen.getByRole('button', { name: /Your map/ });
 
-    for (const button of screen.getAllByRole('button')) {
-      expect(button.getAttribute('aria-label')).toMatch(/arrives with the drawers/);
+    await userEvent.click(map);
+    await userEvent.click(map);
+    expect(map.getAttribute('aria-expanded')).toBe('false');
+  });
 
-      const wrapper = button.parentElement;
-      expect(wrapper?.getAttribute('title')).toMatch(/arrives with the drawers/);
-      // The wrapper must NOT be disabled, or it swallows the hover exactly as
-      // the button did.
-      expect(wrapper?.hasAttribute('disabled')).toBe(false);
-    }
+  it('opens one at a time, so the second replaces the first', async () => {
+    renderInShell(<ShellRail />);
+    const map = screen.getByRole('button', { name: /Your map/ });
+    const resources = screen.getByRole('button', { name: /Resources/ });
+
+    await userEvent.click(map);
+    await userEvent.click(resources);
+    expect(map.getAttribute('aria-expanded')).toBe('false');
+    expect(resources.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('becomes a footer on a phone, within reach of a thumb', () => {
+    renderInShell(<ShellRail />, 'small');
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+
+    expect(rail.className).toContain('order-last');
+    expect(rail.className).toContain('w-full');
+    // Safe-area padding, or the last row sits under a phone's home indicator.
+    expect(rail.className).toContain('env(safe-area-inset-bottom)');
   });
 });

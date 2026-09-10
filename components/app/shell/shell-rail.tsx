@@ -1,73 +1,70 @@
+'use client';
+
 import { BookOpen, Map } from 'lucide-react';
 
+import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
-const RAIL_ITEMS = [
+const RAIL_ITEMS: { id: DrawerId; label: string; tip: string; icon: typeof Map }[] = [
   { id: 'map', label: 'Map', tip: 'Your map — the sixteen modules', icon: Map },
   { id: 'resources', label: 'Resources', tip: 'Resources — films and reading', icon: BookOpen },
-] as const;
+];
 
 /**
  * The right rail: 70px, and the fourth column of the four-column shell.
  *
- * ## Why the buttons ship disabled
+ * `t-9` shipped its two buttons `disabled` with the reason in their accessible
+ * name, because the rail is a column and the shell is four columns or it is not
+ * the shell — but the drawers they open belonged to this task. They are live
+ * now, and the panels behind them are themselves honest stubs: the map needs
+ * §05's modules and the resources need phase 3, so each says what it will hold
+ * rather than showing an empty list.
  *
- * Each opens a drawer that `t-10` builds. Between this merge and that one the
- * rail is a column with two controls and nothing behind them, and `B31` gives
- * three honest ways to hold that: omit it, ship a deliberate stub that says what
- * it is, or build the mechanism. Omitting the rail is out — it is a column, and
- * the shell is four columns or it is not the shell. Building the drawers here is
- * `t-10`'s work, sized as its own task because the drawer choreography is the
- * review surface that matters.
- *
- * So: a deliberate stub. The buttons render at full size so the column measures
- * correctly against the prototype, and `disabled` rather than live buttons that
- * swallow a click, which is the dishonest fourth option `B31` names.
- *
- * ## Why the explanation is on a wrapper, and in the accessible name
- *
- * It was a `title` on the button itself, which renders nowhere: browsers
- * suppress pointer events on a disabled form control, so the tooltip never
- * appeared on hover — and a disabled button is out of the tab order, so keyboard
- * and screen-reader users had no explanation either. The stub's whole claim to
- * being honest rather than broken rested on a string nobody could read.
- *
- * The `title` therefore sits on a wrapping span, which is not disabled and does
- * receive the hover; and the reason is folded into the button's own
- * `aria-label`, so it reaches assistive technology navigating by element rather
- * than by tab.
- *
- * A server component: nothing here is interactive yet, and `t-10` promotes it to
- * a client island when the drawer state arrives.
+ * Below 900px the rail leaves the right edge and becomes a footer, where the two
+ * panels are within reach of a thumb.
  */
 export function ShellRail() {
+  const { drawer, openDrawer, closeDrawer, width } = useShellLayout();
+  const small = width === 'small';
+
   return (
     <nav
       aria-label="Panels"
       className={cn(
-        'bg-card relative z-50 flex w-[70px] flex-none flex-col items-center gap-1.5',
-        'border-l border-[var(--color-divider)] py-3.5'
+        'bg-card relative z-50 flex flex-none gap-1.5 border-[var(--color-divider)]',
+        small
+          ? // A footer, with safe-area padding so the last row clears a phone's
+            // home indicator rather than sitting under it.
+            'order-last w-full flex-row items-stretch justify-center border-t py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+          : 'w-[70px] flex-col items-center border-l py-3.5'
       )}
     >
       {RAIL_ITEMS.map((item) => {
         const Icon = item.icon;
-        const explanation = `${item.tip} — arrives with the drawers`;
+        const open = drawer === item.id;
         return (
-          <span key={item.id} title={explanation} className="flex-none">
-            <button
-              type="button"
-              disabled
-              aria-label={explanation}
-              className={cn(
-                'text-muted-foreground flex w-[62px] flex-col items-center justify-center gap-1.5',
-                'rounded-xl px-0 pt-2.5 pb-2 text-[8.5px] leading-none tracking-[0.05em]',
-                'whitespace-nowrap uppercase disabled:opacity-50'
-              )}
-            >
-              <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
-              <span>{item.label}</span>
-            </button>
-          </span>
+          <button
+            key={item.id}
+            type="button"
+            title={item.tip}
+            aria-label={item.tip}
+            aria-expanded={open}
+            onClick={() => (open ? closeDrawer() : openDrawer(item.id))}
+            className={cn(
+              'text-muted-foreground flex w-[62px] flex-none flex-col items-center',
+              'justify-center gap-1.5 rounded-xl px-0 pt-2.5 pb-2 text-[8.5px]',
+              'leading-none tracking-[0.05em] whitespace-nowrap uppercase',
+              'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+              'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+              'motion-reduce:transition-none',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+              'focus-visible:outline-[var(--color-ring)]',
+              open && 'bg-[var(--color-secondary-wash)] text-[var(--color-secondary-ink)]'
+            )}
+          >
+            <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
         );
       })}
     </nav>

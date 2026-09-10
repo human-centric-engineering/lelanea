@@ -16,11 +16,14 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
+import { ShellTopbar } from '@/components/app/shell/shell-topbar';
+
+import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 
@@ -28,11 +31,22 @@ vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
 }));
 
+// `ShellTopbar` renders alongside the nav in the drawer cases below — the burger
+// is the only thing that opens the drawer, so the two have to be tested together.
+vi.mock('@/hooks/use-theme', () => ({
+  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+}));
+
 const USER = { name: 'Maya Reyes', email: 'maya@example.com' };
 
-function renderAt(pathname: string) {
+/**
+ * `large` by default, and stated deliberately: at happy-dom's own 1024px default
+ * the provider auto-slims the nav, so every label and tooltip case below would
+ * be silently asserting against a collapsed menu.
+ */
+function renderAt(pathname: string, width: WidthName = 'large') {
   mockPathname.current = pathname;
-  return render(<ShellNav user={USER} />);
+  return renderInShell(<ShellNav user={USER} />, width);
 }
 
 /** The nav item whose `aria-current` is set, by accessible name. */
@@ -282,6 +296,86 @@ describe('ShellNav — the column survives a short window', () => {
   });
 });
 
+describe('ShellNav — the drawer is the full menu', () => {
+  it('offers no collapse control below 900px', async () => {
+    // `slim` is ignored inside the drawer, so the toggle would flip a stored
+    // preference and change nothing on screen — a dead control, which is what
+    // the rail and the topbar both refused. The burger is the affordance here.
+    renderAt('/app', 'small');
+    // The COLLAPSE control specifically. The drawer does carry a "Close the
+    // menu" button — deliberately, sitting where the burger that opened it was —
+    // so a loose /the menu/ match would now pass for the wrong reason.
+    expect(screen.queryByRole('button', { name: /Collapse the menu|Expand the menu/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Close the menu' })).toBeTruthy();
+  });
+
+  it('shows full labels in the drawer, never the icon rail', () => {
+    // Even with the slim preference stored: a drawer you deliberately opened
+    // showing icons instead of names would be the worst of both.
+    window.localStorage.setItem('lelanea.nav.slim', 'true');
+    renderAt('/app', 'small');
+
+    expect(screen.getByRole('link', { name: /Life situations/ })).toBeTruthy();
+    expect(screen.getByText('Lelañea')).toBeTruthy();
+  });
+
+  it('still offers the collapse control above 900px, and no close button', () => {
+    renderAt('/app', 'large');
+    expect(screen.getByRole('button', { name: /Collapse the menu/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close the menu' })).toBeNull();
+  });
+
+  it('puts the close control where the burger was, not a link off the app', async () => {
+    // Opening the drawer put the wordmark under the cursor at exactly the
+    // coordinates just pressed, so pressing again left the app for the public
+    // site. The first thing in the drawer's brand row must be the way out of it.
+    renderAt('/app/journey', 'small');
+    const brandRow = document.querySelector('nav[aria-label="Main"] > div')!;
+    const first = brandRow.firstElementChild!;
+
+    expect(first.tagName).toBe('BUTTON');
+    expect(first.getAttribute('aria-label')).toBe('Close the menu');
+  });
+});
+
+describe('the drawer keeps its own geometry (twMerge)', () => {
+  it('is min(320px,88vw) wide, not the desktop column width', async () => {
+    // `cn` is `twMerge`: the desktop `w-[234px]` was emitted after the drawer's
+    // own width and replaced it, so every phone got a 234px panel.
+    renderAt('/app', 'small');
+    const nav = document.querySelector('nav[aria-label="Main"]')!;
+
+    expect(nav.className).toContain('w-[min(320px,88vw)]');
+    expect(nav.className).not.toContain('w-[234px]');
+  });
+
+  it('slides rather than resizing, even after the collapse control has been used', async () => {
+    // `readerToggled` is state and survives a resize, so a reader who had ever
+    // collapsed the nav on a desktop carried a `transition-[width]` down to the
+    // phone, where it replaced the drawer's `transition-[transform,visibility]`
+    // and the panel popped instead of sliding.
+    renderAt('/app', 'large');
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+
+    // RESIZE the live component; do not remount it. `readerToggled` is component
+    // state, so a fresh mount resets the very thing the defect depends on — the
+    // first version of this test did exactly that and passed against the broken
+    // code.
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    const nav = document.querySelector('nav[aria-label="Main"]')!;
+    expect(nav.className).toContain('transition-[transform,visibility]');
+    expect(nav.className).not.toContain('transition-[width]');
+  });
+});
+
 describe('initialsFor', () => {
   it.each([
     ['Maya Reyes', 'maya@example.com', 'MR'],
@@ -306,5 +400,71 @@ describe('initialsFor', () => {
     // `charAt(0)` here returns a lone high surrogate, which renders as a
     // replacement glyph in the avatar.
     expect(initialsFor('😀 Smith', 'a@example.com')).toBe('😀S');
+  });
+});
+
+describe('the phone drawer, once it is open', () => {
+  /** Nav plus the burger that opens it — the drawer has no opener of its own. */
+  function renderPhoneShell(pathname = '/app/journey') {
+    mockPathname.current = pathname;
+    return renderInShell(
+      <>
+        <ShellNav user={USER} />
+        <ShellTopbar />
+      </>,
+      'small'
+    );
+  }
+
+  const navEl = () => document.querySelector('nav[aria-label="Main"]')!;
+  const openBurger = () => userEvent.click(screen.getByRole('button', { name: 'Open the menu' }));
+
+  it('is focusable, so opening it can move focus into it', () => {
+    // The round-2 fix for this was a NO-OP: the ref was declared and read but
+    // never attached to anything, so `.focus()` ran against null while the
+    // comment above it described a repair that had not happened. Assert what is
+    // in the DOM, not what the code intended.
+    renderPhoneShell();
+    expect(navEl().getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('takes focus when the burger opens it', async () => {
+    renderPhoneShell();
+    await openBurger();
+    expect(document.activeElement).toBe(navEl());
+  });
+
+  it('closes when a nav item is tapped', async () => {
+    renderPhoneShell();
+    await openBurger();
+    expect(navEl().className).toContain('visible');
+
+    await userEvent.click(screen.getByRole('link', { name: /Life situations/ }));
+    expect(navEl().className).toContain('invisible');
+  });
+
+  it('closes even for the route already showing, where nothing navigates', async () => {
+    // No pathname change, so the route effect never fires — the drawer and its
+    // scrim stayed over the page the reader was already on, with Escape or the
+    // scrim the only way out.
+    renderPhoneShell('/app/journey');
+    await openBurger();
+
+    await userEvent.click(screen.getByRole('link', { name: /Your journey/ }));
+    expect(navEl().className).toContain('invisible');
+  });
+
+  it('keeps Tab inside itself while it is open', async () => {
+    // The shell behind a scrim is meant to be unavailable, and this panel is not
+    // the last focusable subtree in the document — so without a cycle, one Tab
+    // walked out into the topbar and the panes underneath.
+    renderPhoneShell();
+    await openBurger();
+
+    const links = navEl().querySelectorAll('a[href]');
+    (links[links.length - 1] as HTMLElement).focus();
+    await userEvent.tab();
+
+    expect(navEl().contains(document.activeElement)).toBe(true);
   });
 });
