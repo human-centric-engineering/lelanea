@@ -34,10 +34,18 @@
  * - `lib/app/data-export.ts` → the framework tier's Art. 15 manifest
  * - `lib/app/brand.ts`       → Daybreak's product name and legal entity
  *
- * Each delegates to a reserved-empty leaf seam (`leaf-bootstrap.ts`,
- * `leaf-admin-nav.ts`, `leaf-data-export.ts`, `leaf-brand.ts`) which carries the
- * no-op contract forward for leaf forks — those rows are here too. See the
- * Daybreak banner in CLAUDE.md.
+ * Each delegates to a leaf seam (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+ * `leaf-data-export.ts`, `leaf-brand.ts`) which carries the no-op contract
+ * forward for leaf forks — those rows are here too. See the Daybreak banner in
+ * CLAUDE.md.
+ *
+ * ---------------------------------------------------------------------------
+ * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
+ * ---------------------------------------------------------------------------
+ * `leaf-bootstrap.ts` (the waitlist's erasure hook) and `leaf-data-export.ts`
+ * (the waitlist's Art. 15 declaration and collector) assert the FILLED value.
+ * Pinning is what keeps the protection for every seam still empty, and turns
+ * each row into a guard on the thing we filled it with — see `HB2`.
  *
  * @see lib/app/ · CUSTOMIZATION.md §4
  */
@@ -45,12 +53,35 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
+
+/**
+ * LELAÑEA — the leaf's filled seams reach Prisma, so the client is stubbed.
+ *
+ * `leaf-bootstrap.ts` and `leaf-data-export.ts` both import
+ * `lib/app/waitlist/service.ts`, which imports `@/lib/db/client`. Importing that
+ * module for real builds a `pg.Pool` from `env.DATABASE_URL`, which is undefined
+ * in this harness — so the stub is what keeps these rows exercising the REAL
+ * seams rather than forcing them into `UNASSERTED_SEAMS`.
+ *
+ * It is a stub, not a fixture: the rows below assert what the seams REGISTER,
+ * and the one that reaches a query asserts only the shape of the section key.
+ * What the collector's query actually selects is asserted against a stubbed
+ * client in `tests/unit/lib/app/waitlist/service.test.ts`.
+ */
+vi.mock('@/lib/db/client', () => ({
+  prisma: { appWaitlistEntry: { findMany: vi.fn(async () => []) } },
+}));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
 import { initAppCapabilities } from '@/lib/app/capabilities';
 import { initAppContextContributors } from '@/lib/app/context-contributors';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+import { WAITLIST_ERASURE_HOOK } from '@/lib/app/waitlist/service';
+import {
+  getErasureCleanupHooks,
+  __resetErasureCleanupHooksForTests,
+} from '@/lib/privacy/erasure-hooks';
 import { publicNavItems, footerNavItems, footerLegalItems } from '@/lib/app/public-nav';
 import { protectedNavItems } from '@/lib/app/protected-nav';
 import { appAuthLandingRoute, appAuthLandingLabel } from '@/lib/app/auth-landing';
@@ -127,10 +158,31 @@ const UNASSERTED_SEAMS = new Set([
   // A bridge Daybreak FILLS, and the only one whose body issues real database
   // queries — running it here would need a full Prisma stub for the whole file.
   // Asserted behaviourally instead, against a stubbed client, in
-  // tests/unit/lib/framework/privacy/export.test.ts. Its reserved-empty leaf
-  // seam (`leaf-data-export.ts`) still carries the no-op contract in a row below.
+  // tests/unit/lib/framework/privacy/export.test.ts. Its leaf seam
+  // (`leaf-data-export.ts`) is pinned to this fork's own declaration in a row
+  // below.
   'lib/app/data-export.ts',
 ]);
+
+/**
+ * Every `model X {` declared in the schema files matching `predicate`.
+ *
+ * Two rows below diff the subject-source registry against the schema on disk —
+ * the framework bridge against `framework-*.prisma`, this leaf against
+ * `app.prisma`. Reading the schema, rather than a manifest constant, is what
+ * makes each assertion say "every table is accounted for" instead of "the
+ * manifest agrees with itself".
+ */
+function modelsInSchemaFiles(predicate: (file: string) => boolean): string[] {
+  const schemaDir = path.join(process.cwd(), 'prisma', 'schema');
+  return readdirSync(schemaDir)
+    .filter((file) => file.endsWith('.prisma') && predicate(file))
+    .flatMap((file) => [
+      ...readFileSync(path.join(schemaDir, file), 'utf8').matchAll(/^model\s+(\w+)\s*\{/gm),
+    ])
+    .map((match) => match[1])
+    .sort();
+}
 
 const SEAM_DEFAULTS: SeamDefault[] = [
   {
@@ -241,25 +293,61 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(emailOverrides).toEqual({}),
   },
   {
+    // PINNED, not deleted (`HB2`). §03 t-7 fills this seam with the waitlist.
+    // Upstream this row asserts the seam contributes NOTHING; here it asserts it
+    // contributes EXACTLY the waitlist and nothing else, which keeps every
+    // property the empty version protected: a second table declared without a
+    // decision, a section name colliding with the framework tier's, or a
+    // collector returning a key nothing declared all still fail here.
+    //
+    // The two halves are pinned together on purpose. A declared section MUST
+    // appear in what the collector returns — `exportUserData()` throws if one is
+    // missing — so asserting the declaration alone would leave the half that
+    // actually reaches the data subject unguarded.
     seam: 'lib/app/leaf-data-export.ts',
-    risk: 'a stray collector would leak leaf rows into every Daybreak leaf’s subject-access export, and a stray declaration would pre-account for a table nobody decided about',
+    risk: 'a stray collector would leak leaf rows into every subject-access export, and a stray declaration would pre-account for a table nobody decided about',
     assert: async () => {
-      expect(await collectLeafSubjectData({ userId: 'user-1', email: 'user@example.com' })).toEqual(
-        {}
-      );
-      // The declaration half (#533), asserted as "this seam changes nothing"
-      // rather than "the registry is empty". Reading the registry TRIGGERS the
-      // lazy init, which runs the framework tier as well — so an emptiness
-      // assertion here would be asserting Daybreak's declarations are absent,
-      // which is false and is not the property this row holds. What a leaf fork
-      // needs pinned is that `initLeafSubjectSources()` itself contributes
-      // nothing, and that survives whatever the tier above it declared.
+      // Derived from `prisma/schema/app.prisma` on disk rather than written out,
+      // so this says "EVERY leaf table is accounted for" — the property core's
+      // coverage guard enforces — and a table added without a decision fails
+      // here rather than only in that guard.
+      const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
+      expect(appModels).toEqual(['AppWaitlistEntry']);
+
+      // Reading the registry triggers the lazy init, which runs the bridge:
+      // framework tier first, then this seam. `initLeafSubjectSources()` is
+      // idempotent by model, so it cannot be measured as a delta after that —
+      // what is asserted instead is the state it is responsible for producing.
       __resetAppSubjectSourceRegistryForTests();
-      const sourcesBefore = getAppSubjectSources();
-      const excludedBefore = getAppExcludedSubjectSources();
       initLeafSubjectSources();
-      expect(getAppSubjectSources()).toEqual(sourcesBefore);
-      expect(getAppExcludedSubjectSources()).toEqual(excludedBefore);
+      const sources = getAppSubjectSources();
+      const excluded = getAppExcludedSubjectSources();
+
+      const accounted = new Set([
+        ...sources.map((entry) => entry.model),
+        ...excluded.map((entry) => entry.model),
+      ]);
+      expect(appModels.filter((model) => !accounted.has(model))).toEqual([]);
+
+      const waitlist = sources.find((entry) => entry.model === 'AppWaitlistEntry');
+      expect(waitlist).toMatchObject({ section: 'waitlist', disposition: 'export' });
+      // Nothing of ours is excluded: the one table holds personal data.
+      expect(excluded.map((entry) => entry.model)).not.toContain('AppWaitlistEntry');
+
+      // The collector's half of the same contract: every section this seam
+      // DECLARES must appear in what it RETURNS, as an array, even when the
+      // subject has no rows. `undefined` counts as missing — `JSON.stringify`
+      // drops the key — so the assertion is on the key set, not on truthiness.
+      const collected = await collectLeafSubjectData({
+        userId: 'user-1',
+        email: 'user@example.com',
+      });
+      const leafSections = sources
+        .filter((entry) => appModels.includes(entry.model))
+        .map((entry) => entry.section)
+        .sort();
+      expect(Object.keys(collected).sort()).toEqual(leafSections);
+      expect(collected.waitlist).toEqual([]);
     },
   },
   {
@@ -281,14 +369,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // which is the property core's coverage guard enforces, rather than that it
     // agrees with a constant it derives from anyway.
     assert: () => {
-      const schemaDir = path.join(process.cwd(), 'prisma', 'schema');
-      const frameworkModels = readdirSync(schemaDir)
-        .filter((file) => file.startsWith('framework-') && file.endsWith('.prisma'))
-        .flatMap((file) => [
-          ...readFileSync(path.join(schemaDir, file), 'utf8').matchAll(/^model\s+(\w+)\s*\{/gm),
-        ])
-        .map((match) => match[1])
-        .sort();
+      const frameworkModels = modelsInSchemaFiles((file) => file.startsWith('framework-'));
+      // LELAÑEA: the bridge accounts for BOTH tiers — it calls the framework's
+      // declaration and then the leaf's. Upstream this row compares against the
+      // framework models alone; a leaf that filled `leaf-data-export.ts` has to
+      // add its own schema file to the expected side rather than loosening the
+      // comparison, or the row stops noticing an unaccounted framework table.
+      const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
+      const expected = [...frameworkModels, ...appModels].sort();
 
       // A regex that quietly stopped matching would make the comparison below
       // vacuously true on both sides.
@@ -301,7 +389,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ...getAppExcludedSubjectSources().map((entry) => entry.model),
       ].sort();
 
-      expect(accounted).toEqual(frameworkModels);
+      expect(accounted).toEqual(expected);
     },
   },
   {
@@ -319,10 +407,27 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §03 t-7 fills this seam: the waitlist's
+    // Art. 17 erasure hook is registered here, because `app_waitlist_entry` is
+    // keyed by email and the FK cascade cannot reach the rows of anyone who
+    // joined before signing up.
+    //
+    // The count is pinned as well as the name. A hook registered TWICE under
+    // different names would run the same delete twice inside the erasure
+    // transaction, and a second hook added here without a decision is exactly
+    // what this row exists to notice.
     seam: 'lib/app/leaf-bootstrap.ts',
-    risk: 'a stray default would run one-time work on every Daybreak leaf’s boot',
+    risk: 'a stray registration would run one-time work on every boot; a MISSING one would leave an erased user’s email on the waitlist table',
     assert: async () => {
+      __resetErasureCleanupHooksForTests();
       await expect(initLeafApp()).resolves.toBeUndefined();
+
+      const hooks = getErasureCleanupHooks();
+      expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
+      // In-transaction phase, not the best-effort external one: a throw must
+      // roll the erasure back rather than being logged and swallowed.
+      expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
+      expect(hooks[0]?.cleanupExternal).toBeUndefined();
     },
   },
   {

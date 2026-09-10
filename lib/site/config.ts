@@ -13,11 +13,14 @@
  *
  * ## Why constants rather than environment variables
  *
- * `SITE_LINKS` and `SITE_NAV` are read by `SiteFooter` and `SiteHeader`, both
- * client components. (`WaitlistForm`, which reads `LAUNCH_WINDOW`, is a SERVER
- * component and could have taken a server env var — an earlier version of this
- * comment had that wrong. The argument still holds, because the footer and
- * header do not.) A client-readable env var has to be `NEXT_PUBLIC_*`, and
+ * Every consumer here is a client component: `SiteFooter` and `SiteHeader` read
+ * `SITE_LINKS` and `SITE_NAV`, and `WaitlistForm` — which reads `LAUNCH_WINDOW`
+ * — became one in §03 t-7 when the form went live. **There is no server-only
+ * value in this file**, so do not reach for a server env var on the strength of
+ * an exception that used to be here: an earlier version of this comment said
+ * `WaitlistForm` was a server component and could have taken one, which was
+ * true when written and stopped being true without anything failing.
+ * A client-readable env var has to be `NEXT_PUBLIC_*`, and
  * Sunrise #661 removed the last three of those from this codebase for a reason
  * worth not re-learning: `NEXT_PUBLIC_*` is inlined at **build** time and
  * `.dockerignore` excludes `.env*`, so a container build shipped none of them
