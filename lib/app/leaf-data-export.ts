@@ -1,11 +1,13 @@
 /**
- * Leaf-app subject-data export seam (GDPR Art. 15) — RESERVED, empty by default.
+ * Leaf-app subject-data export seam (GDPR Art. 15) — FILLED by Lelañea.
  *
  * A leaf app (a fork of Daybreak) fills `collectLeafSubjectData()` with its own
- * `app_*` tables holding data about a person. Daybreak keeps it empty: this is
+ * `app_*` tables holding data about a person. Daybreak ships it empty: this is
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
- * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`.
+ * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
+ * `AppWaitlistEntry` here; the guidance below is upstream's and still applies to
+ * every table added after it.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
  * framework tier's own collector. Whatever you return lands under `app.<section>`
@@ -38,10 +40,11 @@
  */
 
 import type { AppSubjectData, AppSubjectQuery } from '@/lib/app/data-export';
+import { registerAppSubjectSources } from '@/lib/privacy/subject-source-registry';
+import { findWaitlistEntriesForSubject } from '@/lib/app/waitlist/service';
 
 /**
- * Declare the leaf app's own models to core's subject-source registry —
- * RESERVED, empty by default.
+ * Declare the leaf app's own models to core's subject-source registry.
  *
  * Called (synchronously) by `lib/app/data-export.ts`'s `initAppSubjectSources()`
  * after the framework tier declares, so both tiers land in the same registry
@@ -67,19 +70,35 @@ import type { AppSubjectData, AppSubjectQuery } from '@/lib/app/data-export';
  * ```
  */
 export function initLeafSubjectSources(): void {
-  // No leaf subject sources by default.
+  registerAppSubjectSources({
+    tier: 'app',
+    sources: [
+      {
+        model: 'AppWaitlistEntry',
+        section: 'waitlist',
+        disposition: 'export',
+        description:
+          'Your waitlist entry — the email address you gave, and anything you told us about where you heard about Lelañea and what you would want to achieve.',
+      },
+    ],
+  });
 }
 
 /**
- * Collect this leaf app's data about one subject. Ships empty — Daybreak has no
- * leaf tables, so a vanilla Daybreak export contributes nothing here.
+ * Collect Lelañea's own data about one subject.
+ *
+ * One section today: `waitlist`. It is returned whether or not the subject has
+ * an entry — an empty array, never an omitted key. A declared section missing
+ * from this object makes `exportUserData()` throw, and a key set to `undefined`
+ * counts as missing because `JSON.stringify` drops it.
+ *
+ * The rows are matched by EMAIL as well as by user id, because the waitlist is
+ * the one thing a stranger can do before there is an account: for everyone on
+ * it today there is no user id to match on. That makes it the same case as
+ * core's `ContactSubmission`, and the same reason the coverage guard could
+ * never have found this table for us.
  */
-/*
- * `async` is the seam's contract, not an implementation detail: every real
- * collector awaits its queries, and the empty default must not force a leaf to
- * change the signature just to add one.
- */
-// eslint-disable-next-line @typescript-eslint/require-await
-export async function collectLeafSubjectData(_subject: AppSubjectQuery): Promise<AppSubjectData> {
-  return {};
+export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
+  const waitlist = await findWaitlistEntriesForSubject(subject);
+  return { waitlist };
 }

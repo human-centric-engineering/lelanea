@@ -10,3 +10,67 @@
 //
 // See CUSTOMIZATION.md §5 for the FK/onDelete rules a model with a `userId`
 // must follow (GDPR erasure depends on them).
+
+/// Where a waitlist entry came from.
+///
+/// `form` is the public home page's card, and is the only value anything writes
+/// today. `conversation` is reserved for the path the product description
+/// describes — someone asking to be told when a place opens, in a conversation
+/// with the agent — which has no code behind it yet. It is vocabulary rather
+/// than a shipped write path, and it is here now because adding an enum value
+/// later is a migration on a table that will by then hold real people.
+enum AppWaitlistSource {
+  form
+  conversation
+
+  @@map("app_waitlist_source")
+}
+
+/// Someone who asked to be told when a place opens.
+///
+/// The app is not open, so this is the only thing a visitor can actually do —
+/// and what they said while doing it is the point, not a by-product. `intent`
+/// ("what would you want to achieve") and `heardFrom` are read by Lelañea
+/// herself while there are still few enough entries to read one by one, and
+/// `intent` is meant to seed that person's profile if they later sign up, so
+/// what someone said they wanted before signing up is not thrown away at the
+/// point they do.
+///
+/// **`userId` is a plain scalar with no Prisma `@relation`** — a fork table must
+/// not add a reverse field to the Sunrise-owned `User` model (CUSTOMIZATION.md
+/// §5). The foreign key is hand-written in the `app_waitlist_entry` migration
+/// with `ON DELETE SET NULL`, and pinned by a drift probe in
+/// `lib/app/leaf-db-drift.ts` so a future `migrate dev` cannot quietly drop it.
+///
+/// `SET NULL` — not `Cascade` — because the row survives the account: the
+/// waitlist is a record of who asked, and erasing an account should not silently
+/// re-open a place. What it must NOT do is retain the person's email and their
+/// answers, so the erasure hook registered from `lib/app/leaf-bootstrap.ts`
+/// deletes the row outright inside the erasure transaction. The FK's `SET NULL`
+/// is the backstop for a row the hook cannot match, not the policy.
+model AppWaitlistEntry {
+  id          String            @id @default(cuid())
+  /// Lower-cased on write, which is what makes `@unique` mean one person.
+  email       String            @unique
+  name        String?
+  /// "Where did you hear about this?" — optional (D2).
+  heardFrom   String?
+  /// "What would you want to achieve?" — optional (D2).
+  intent      String?
+  source      AppWaitlistSource @default(form)
+  /// The language tag the joiner's browser asked for, so a later locale can
+  /// tell who joined in which. Falls back to the authored collection's locale.
+  locale      String
+  /// When they submitted under the card's "used to tell you when a place opens,
+  /// and for nothing else" notice. Server-set; there is no separate checkbox.
+  consentedAt DateTime
+  /// Set if and when this entry is linked to an account. Hand-written FK — see
+  /// the note above.
+  userId      String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("app_waitlist_entry")
+}
