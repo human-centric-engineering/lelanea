@@ -14,7 +14,26 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { isRecord } from '@/lib/utils';
 import { registerErasureCleanupHook } from '@/lib/privacy/erasure-hooks';
+
+/**
+ * Whether a rejected write is the unique-index violation on `email`.
+ *
+ * Duck-typed on the code rather than `instanceof
+ * Prisma.PrismaClientKnownRequestError`, because that needs a VALUE import of
+ * `@prisma/client` and the ESLint boundary forbids one from `lib/app/**` —
+ * "the extension surface stays storage-agnostic", and a type-only import is
+ * explicitly allowed while a runtime one is not. The code string is the part
+ * that carries the meaning; `lib/api/errors.ts` keys on the same one.
+ *
+ * P2002 means somebody is already at that address — whether from last week or
+ * from a request that beat this one by a millisecond. Every other code is a
+ * real failure and belongs to the caller.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  return isRecord(error) && error.code === 'P2002';
+}
 
 /** What a caller supplies to join. Email is already normalised by the schema. */
 export interface JoinWaitlistInput {
@@ -71,6 +90,11 @@ export interface JoinWaitlistResult {
  * written to — and the honest fix is a signed confirmation link, which is the
  * same mechanism the first waitlist email will need anyway.
  *
+ * **The rule is enforced in the WRITE, not by a read that precedes it.** That
+ * distinction is the whole of it: a rule this one holds under concurrency and
+ * a check-then-act version does not, and "never overwrite" with a race in it is
+ * not a weaker control, it is the absence of one. See the numbered steps below.
+ *
  * `createdAt` and `locale` are untouched on an update for the same reason:
  * they are provenance about the join, and a stranger's browser is not it.
  *
@@ -83,59 +107,69 @@ export interface JoinWaitlistResult {
  */
 export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitlistResult> {
   const { email, name, heardFrom, intent, locale } = input;
-  const now = new Date();
 
-  // The stored answers are read first, because the update below is built from
-  // them: a field that already holds something is not offered to the update at
-  // all. Reading also answers "insert or update?", which Prisma's upsert does
-  // not report.
+  // 1. Try the INSERT first, and let the unique index arbitrate.
   //
-  // The race — two submissions of the same address arriving together — resolves
-  // correctly either way: the unique index makes one of them the insert and
-  // `upsert` turns the loser into an update. The worst outcome is that both see
-  // the row as absent and the second one's answers fill fields the first had
-  // just filled, which is the same shape as two honest people typing at once.
-  const existing = await prisma.appWaitlistEntry.findUnique({
-    where: { email },
-    select: { id: true, name: true, heardFrom: true, intent: true },
+  //    An earlier version read the row, then decided, then upserted — and the
+  //    "never overwrite" rule above is a security control, so a check-then-act
+  //    gap in it is the whole rule. Two POSTs for the same fresh address could
+  //    both read `null`, both conclude every column was empty, and the loser's
+  //    `ON CONFLICT DO UPDATE` would then overwrite the winner's answers: the
+  //    exact write this function exists to refuse, reachable by racing it.
+  try {
+    const created = await prisma.appWaitlistEntry.create({
+      data: {
+        email,
+        // A blank is stored as NULL rather than as an empty string, so
+        // `heardFrom IS NOT NULL` counts people who answered.
+        name: name ?? null,
+        heardFrom: heardFrom ?? null,
+        intent: intent ?? null,
+        locale,
+        consentedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    return { created: true, entryId: created.id };
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+
+  // 2. The row exists. Fill only the columns that are still NULL — and put that
+  //    condition in the WHERE, so Postgres evaluates it while holding the row
+  //    lock rather than this process evaluating it a round trip earlier.
+  //
+  //    `locale` and `consentedAt` are absent on purpose: both are provenance
+  //    about the join, and an unverified repeat is not evidence about it.
+  //    `updatedAt` still moves, which is what records that something touched
+  //    the row.
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.appWaitlistEntry.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    // Erased between the failed insert and this read. Vanishingly unlikely, and
+    // reporting a made-up id would be worse than saying so.
+    if (!existing) {
+      throw new Error('Waitlist entry disappeared between insert conflict and update');
+    }
+
+    if (name !== undefined) {
+      await tx.appWaitlistEntry.updateMany({ where: { email, name: null }, data: { name } });
+    }
+    if (heardFrom !== undefined) {
+      await tx.appWaitlistEntry.updateMany({
+        where: { email, heardFrom: null },
+        data: { heardFrom },
+      });
+    }
+    if (intent !== undefined) {
+      await tx.appWaitlistEntry.updateMany({ where: { email, intent: null }, data: { intent } });
+    }
+
+    return { created: false, entryId: existing.id };
   });
-
-  /**
-   * Offer a value to the update ONLY when the caller supplied one and the column
-   * is still empty. See the note above: without the second half this is an
-   * unauthenticated overwrite of somebody else's words.
-   */
-  const fillIfEmpty = (
-    field: 'name' | 'heardFrom' | 'intent',
-    value: string | undefined
-  ): Record<string, string> =>
-    value !== undefined && (existing?.[field] ?? null) === null ? { [field]: value } : {};
-
-  const entry = await prisma.appWaitlistEntry.upsert({
-    where: { email },
-    create: {
-      email,
-      // On a CREATE a blank is stored as NULL rather than as an empty string,
-      // so `heardFrom IS NOT NULL` counts people who answered.
-      name: name ?? null,
-      heardFrom: heardFrom ?? null,
-      intent: intent ?? null,
-      locale,
-      consentedAt: now,
-    },
-    update: {
-      ...fillIfEmpty('name', name),
-      ...fillIfEmpty('heardFrom', heardFrom),
-      ...fillIfEmpty('intent', intent),
-      // `locale` and `consentedAt` are absent on purpose, not by oversight —
-      // both are provenance about the join, and an unverified repeat is not
-      // evidence about it. `updatedAt` still moves, which is what records that
-      // something touched the row.
-    },
-    select: { id: true },
-  });
-
-  return { created: existing === null, entryId: entry.id };
 }
 
 /**

@@ -11,17 +11,40 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { findUnique, upsert, findMany, deleteMany, userFindUnique, mockLogger } = vi.hoisted(() => ({
-  findUnique: vi.fn(),
-  upsert: vi.fn(),
-  findMany: vi.fn(),
-  deleteMany: vi.fn(),
-  userFindUnique: vi.fn(),
-  mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+const {
+  create,
+  findUnique,
+  updateMany,
+  findMany,
+  deleteMany,
+  userFindUnique,
+  transaction,
+  mockLogger,
+} = vi.hoisted(() => {
+  const create = vi.fn();
+  const findUnique = vi.fn();
+  const updateMany = vi.fn();
+  const findMany = vi.fn();
+  const tx = { appWaitlistEntry: { findUnique, updateMany } };
+  return {
+    create,
+    findUnique,
+    updateMany,
+    findMany,
+    deleteMany: vi.fn(),
+    userFindUnique: vi.fn(),
+    // Forwards to the same delegates, so `tx.X === prisma.X` and the
+    // assertions below are about the real calls rather than about a no-op.
+    transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  };
+});
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appWaitlistEntry: { findUnique, upsert, findMany } },
+  prisma: {
+    appWaitlistEntry: { create, findUnique, updateMany, findMany },
+    $transaction: transaction,
+  },
 }));
 vi.mock('@/lib/logging', () => ({ logger: mockLogger }));
 
@@ -48,10 +71,32 @@ function txContext() {
   };
 }
 
+/**
+ * The `P2002` Prisma throws when the unique index on `email` rejects an insert.
+ *
+ * Shaped by hand rather than constructed from `Prisma.PrismaClientKnownRequestError`:
+ * the service duck-types on `.code` because the ESLint boundary forbids
+ * `lib/app/**` a runtime import of `@prisma/client`, so building a real one here
+ * would test a stricter contract than the code has.
+ */
+function uniqueViolation(): unknown {
+  return Object.assign(new Error('Unique constraint failed'), {
+    code: 'P2002',
+    meta: { target: ['email'] },
+  });
+}
+
+/** Arrange the "row already exists" path: the insert loses, the update runs. */
+function entryExists(): void {
+  create.mockRejectedValue(uniqueViolation());
+  findUnique.mockResolvedValue({ id: 'entry-1' });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  findUnique.mockResolvedValue(null);
-  upsert.mockResolvedValue({ id: 'entry-1' });
+  create.mockResolvedValue({ id: 'entry-1' });
+  findUnique.mockResolvedValue({ id: 'entry-1' });
+  updateMany.mockResolvedValue({ count: 1 });
   findMany.mockResolvedValue([]);
   deleteMany.mockResolvedValue({ count: 0 });
   userFindUnique.mockResolvedValue({ email: 'Someone@Example.com' });
@@ -59,19 +104,18 @@ beforeEach(() => {
 
 describe('joinWaitlist', () => {
   it('reports a first join as created', async () => {
-    findUnique.mockResolvedValue(null);
-
     await expect(joinWaitlist({ email: 'a@example.com', locale: 'en-GB' })).resolves.toMatchObject({
       created: true,
       entryId: 'entry-1',
     });
   });
 
-  it('reports a repeat as NOT created, so the route can answer 200 rather than 201', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: null, heardFrom: null, intent: null });
+  it('reports a repeat as NOT created', async () => {
+    entryExists();
 
     await expect(joinWaitlist({ email: 'a@example.com', locale: 'en' })).resolves.toMatchObject({
       created: false,
+      entryId: 'entry-1',
     });
   });
 
@@ -84,151 +128,133 @@ describe('joinWaitlist', () => {
       locale: 'en-GB',
     });
 
-    const args = upsert.mock.calls[0]?.[0] as {
-      where: { email: string };
-      create: Record<string, unknown>;
-    };
-    expect(args.where).toEqual({ email: 'a@example.com' });
-    expect(args.create).toMatchObject({
+    const args = create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(args.data).toMatchObject({
       email: 'a@example.com',
       name: 'Ada',
       heardFrom: 'a friend',
       intent: 'to slow down',
       locale: 'en-GB',
     });
-    expect(args.create.consentedAt).toBeInstanceOf(Date);
+    expect(args.data.consentedAt).toBeInstanceOf(Date);
   });
 
   it('writes an absent optional answer as NULL, not as an empty string', async () => {
     await joinWaitlist({ email: 'a@example.com', locale: 'en' });
 
-    const args = upsert.mock.calls[0]?.[0] as { create: Record<string, unknown> };
+    const args = create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     // `heardFrom IS NOT NULL` must count people who answered, and an empty
     // string in a nullable column reads exactly like an answer.
-    expect(args.create).toMatchObject({ name: null, heardFrom: null, intent: null });
+    expect(args.data).toMatchObject({ name: null, heardFrom: null, intent: null });
   });
 
-  it('fills an answer the visitor had left empty', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: 'Ada', heardFrom: null, intent: null });
-
-    await joinWaitlist({ email: 'a@example.com', intent: 'to slow down', locale: 'en' });
-
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    expect(args.update).toMatchObject({ intent: 'to slow down' });
-  });
-
-  it('REFUSES to overwrite an answer that is already stored', async () => {
-    findUnique.mockResolvedValue({
-      id: 'entry-1',
-      name: 'Ada',
-      heardFrom: 'a friend',
-      intent: 'what she actually wrote',
-    });
-
-    // Nothing on this route proves the submitter owns the address — there is no
-    // confirmation email this phase and no token. With overwrite allowed, anyone
-    // who knows someone's address can replace up to 2000 characters that Lelañea
-    // reads herself, attributed to that person, with nothing on screen for them
-    // to notice by.
-    await joinWaitlist({
-      email: 'a@example.com',
-      name: 'Not Ada',
-      heardFrom: 'somewhere else',
-      intent: 'something a stranger typed',
-      locale: 'en',
-    });
-
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    expect(args.update).toEqual({});
-  });
-
-  it('leaves a blank answer alone rather than nulling what is stored', async () => {
-    findUnique.mockResolvedValue({
-      id: 'entry-1',
-      name: 'Ada',
-      heardFrom: 'a friend',
-      intent: 'to slow down',
-    });
-
-    // The form always renders empty, so a returning visitor who re-submits just
-    // their email — because they are not sure the first one landed — must not
-    // silently lose what they gave the first time.
-    await joinWaitlist({ email: 'a@example.com', locale: 'en' });
-
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    // Omitted, not `null`: Prisma leaves an omitted column untouched, and `null`
-    // would erase it.
-    expect(args.update).toEqual({});
-  });
-
-  it('still writes NULL for a blank answer on a FIRST join', async () => {
-    findUnique.mockResolvedValue(null);
-
-    await joinWaitlist({ email: 'a@example.com', locale: 'en' });
-
-    // The create half keeps `null` on purpose — there is nothing to preserve,
-    // and an empty string in a nullable column reads exactly like an answer.
-    const args = upsert.mock.calls[0]?.[0] as { create: Record<string, unknown> };
-    expect(args.create).toMatchObject({ name: null, heardFrom: null, intent: null });
-  });
-
-  it('does NOT move `consentedAt` on a repeat', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: null, heardFrom: null, intent: null });
-
+  it('does not run the update path at all when the insert succeeds', async () => {
     await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'en' });
 
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    // It records that THIS PERSON agreed to the notice above the button, and a
-    // third party's POST is not that act. Moving it would write a consent that
-    // did not happen into the one field whose whole job is to be true.
-    expect(args.update).not.toHaveProperty('consentedAt');
-    expect(args.update).toEqual({ name: 'Ada' });
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
-  it('does NOT move `locale` on a repeat', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: null, heardFrom: null, intent: null });
+  describe('a repeat, where nothing proves the caller owns the address', () => {
+    it('GUARDS every fill in the WHERE, so the rule holds under a race', async () => {
+      entryExists();
 
-    await joinWaitlist({ email: 'a@example.com', locale: 'pt-BR' });
+      await joinWaitlist({
+        email: 'a@example.com',
+        name: 'Ada',
+        heardFrom: 'a friend',
+        intent: 'to slow down',
+        locale: 'en',
+      });
 
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    // Provenance about the join. A stranger's browser is not evidence about it.
-    expect(args.update).not.toHaveProperty('locale');
+      // THE finding this shape exists for. Read-then-decide-then-write let two
+      // POSTs for the same fresh address both see "empty" and the loser
+      // overwrite the winner — the exact write the rule refuses, reached by
+      // racing it. `name: null` in the WHERE is evaluated by Postgres while it
+      // holds the row lock, so it cannot be stale.
+      const wheres = updateMany.mock.calls.map(
+        (call) => (call[0] as { where: Record<string, unknown> }).where
+      );
+      expect(wheres).toEqual([
+        { email: 'a@example.com', name: null },
+        { email: 'a@example.com', heardFrom: null },
+        { email: 'a@example.com', intent: null },
+      ]);
+    });
+
+    it('issues no update for a field the caller left blank', async () => {
+      entryExists();
+
+      await joinWaitlist({ email: 'a@example.com', intent: 'to slow down', locale: 'en' });
+
+      // The form always renders empty, so a returning visitor re-submitting just
+      // their email must not touch what they wrote before.
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(updateMany.mock.calls[0]?.[0]).toMatchObject({ data: { intent: 'to slow down' } });
+    });
+
+    it('issues no update at all when the caller supplied only an email', async () => {
+      entryExists();
+
+      await joinWaitlist({ email: 'a@example.com', locale: 'en' });
+
+      expect(updateMany).not.toHaveBeenCalled();
+    });
+
+    it('never writes `consentedAt`, `locale`, `userId` or `source`', async () => {
+      entryExists();
+
+      await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'pt-BR' });
+
+      for (const call of updateMany.mock.calls) {
+        const { data } = call[0] as { data: Record<string, unknown> };
+        // `consentedAt` records that THIS PERSON agreed to the notice above the
+        // button; a third party's POST is not that act. `locale` is provenance
+        // about the join. `userId`/`source` must not be relinked or relabelled.
+        expect(Object.keys(data)).not.toContain('consentedAt');
+        expect(Object.keys(data)).not.toContain('locale');
+        expect(Object.keys(data)).not.toContain('userId');
+        expect(Object.keys(data)).not.toContain('source');
+      }
+    });
+
+    it('runs the reads and the fills in ONE transaction', async () => {
+      entryExists();
+
+      await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'en' });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+    });
   });
 
-  it('sets `consentedAt` and `locale` on the FIRST join, where they are evidence', async () => {
+  it('rethrows a Prisma failure that is not the unique violation', async () => {
+    // Only P2002 means "somebody is already there". Swallowing anything else
+    // would turn a real write failure into a reported success.
+    create.mockRejectedValue(Object.assign(new Error('deadlock'), { code: 'P2034' }));
+
+    await expect(joinWaitlist({ email: 'a@example.com', locale: 'en' })).rejects.toThrow(
+      'deadlock'
+    );
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rethrows a non-Prisma failure untouched', async () => {
+    create.mockRejectedValue(new Error('connection terminated'));
+
+    await expect(joinWaitlist({ email: 'a@example.com', locale: 'en' })).rejects.toThrow(
+      'connection terminated'
+    );
+  });
+
+  it('refuses to invent an id when the row vanished after the conflict', async () => {
+    create.mockRejectedValue(uniqueViolation());
     findUnique.mockResolvedValue(null);
 
-    await joinWaitlist({ email: 'a@example.com', locale: 'pt-BR' });
-
-    const args = upsert.mock.calls[0]?.[0] as { create: Record<string, unknown> };
-    expect(args.create.consentedAt).toBeInstanceOf(Date);
-    expect(args.create).toMatchObject({ locale: 'pt-BR' });
-  });
-
-  it('never touches `userId` or `source` on a repeat', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: null, heardFrom: null, intent: null });
-
-    await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'en' });
-
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    // A public-form resubmission must not unlink an entry that has been attached
-    // to an account, nor relabel one that arrived some other way.
-    expect(args.update).not.toHaveProperty('userId');
-    expect(args.update).not.toHaveProperty('source');
-  });
-
-  it('reads the stored answers it needs to decide, and nothing more', async () => {
-    findUnique.mockResolvedValue({ id: 'entry-1', name: null, heardFrom: null, intent: null });
-
-    await joinWaitlist({ email: 'a@example.com', locale: 'en' });
-
-    // The `select` is what makes "fill only what is empty" possible. Narrowed
-    // back to `{ id: true }` by a tidy-up, `fillIfEmpty` would read `undefined`
-    // for every field, treat every column as empty, and restore the overwrite.
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { email: 'a@example.com' },
-      select: { id: true, name: true, heardFrom: true, intent: true },
-    });
+    // Erased between the failed insert and the read. Reporting a made-up id
+    // would put a wrong entry id in the log and a success in the response.
+    await expect(joinWaitlist({ email: 'a@example.com', locale: 'en' })).rejects.toThrow(
+      /disappeared/i
+    );
   });
 });
 

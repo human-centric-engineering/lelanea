@@ -31,11 +31,53 @@ describe('resolveJoinLocale', () => {
     expect(resolveJoinLocale(header)).toBe(expected);
   });
 
-  it('takes the first tag, because the header is already in preference order', () => {
+  it('takes the highest-weighted tag, not the first one', () => {
     expect(resolveJoinLocale('en-GB,en;q=0.9,fr;q=0.8')).toBe('en-GB');
   });
 
-  it('drops the q-weight from a single weighted tag', () => {
+  it('does NOT take the first tag when a later one outranks it', () => {
+    // The case the earlier implementation got wrong, and the reason it survived
+    // review: browsers emit list order and q-order in agreement, so a
+    // first-tag shortcut looks right against every real browser and records
+    // `fr` for this. RFC 9110 gives list order no meaning; `q` carries it.
+    expect(resolveJoinLocale('fr;q=0.1,en-GB;q=0.9')).toBe('en-GB');
+    expect(resolveJoinLocale('de;q=0.2,es;q=0.4,it;q=0.9,nl;q=0.3')).toBe('it');
+  });
+
+  it('treats a missing q as 1, which is what outranks an explicit 0.9', () => {
+    expect(resolveJoinLocale('fr;q=0.9,en-GB')).toBe('en-GB');
+  });
+
+  it('keeps list order as the tie-break, and only as that', () => {
+    expect(resolveJoinLocale('en-GB;q=0.5,fr;q=0.5')).toBe('en-GB');
+    expect(resolveJoinLocale('fr;q=0.5,en-GB;q=0.5')).toBe('fr');
+  });
+
+  it('skips a tag the client explicitly refused with q=0', () => {
+    // `q=0` means "not this one". Reading it as a preference would record the
+    // one language the visitor said they did not want.
+    expect(resolveJoinLocale('fr;q=0')).toBe(FALLBACK);
+    expect(resolveJoinLocale('fr;q=0,en-GB;q=0.3')).toBe('en-GB');
+  });
+
+  it('does not let a malformed weight outrank a real preference', () => {
+    // `q=banana` parsed as the DEFAULT would score 1 and beat everything. A
+    // client that sent nonsense has not expressed a preference.
+    expect(resolveJoinLocale('fr;q=banana,en-GB;q=0.4')).toBe('en-GB');
+    expect(resolveJoinLocale('fr;q=99,en-GB;q=0.4')).toBe('en-GB');
+  });
+
+  it('ignores parameters that are not q', () => {
+    expect(resolveJoinLocale('en-GB;charset=utf-8')).toBe('en-GB');
+  });
+
+  it('skips a junk tag rather than letting it win on weight', () => {
+    // A high-q value on something that is not a language tag must not beat a
+    // low-q value on something that is.
+    expect(resolveJoinLocale('<script>;q=1.0,en-GB;q=0.1')).toBe('en-GB');
+  });
+
+  it('returns a single weighted tag without its q', () => {
     expect(resolveJoinLocale('fr;q=0.7')).toBe('fr');
   });
 

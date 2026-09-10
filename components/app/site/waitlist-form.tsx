@@ -281,9 +281,19 @@ export function WaitlistForm() {
         </Button>
       </fieldset>
 
+      {/* The closing promise, and the one line here that is NOT the prototype's.
+          It read "you can remove yourself in one click", which was decorative
+          while the card was inert and became a claim the moment the card went
+          live: this paragraph is the notice `consentedAt` records agreement to,
+          and there is no removal mechanism — no unsubscribe route, no token, no
+          email (A8), and no contact page (divergence row 7). A consent record
+          asserting the subject was told something untrue is worse than a
+          slightly weaker promise, so the promise moves to the email that will
+          carry it, where it is true when it is read and binds whoever ships it.
+          Owner ruling, 10 September 2026. */}
       <p className="text-muted-foreground mt-4 text-[13px] leading-[1.55]">
         Your email is used to tell you when a place opens, and for nothing else. No newsletter
-        unless you ask for one, and you can remove yourself in one click.
+        unless you ask for one, and every email we send will have a one-click way off the list.
       </p>
     </form>
   );

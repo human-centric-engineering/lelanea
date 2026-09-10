@@ -326,10 +326,23 @@ describe('WaitlistForm', () => {
     });
   });
 
-  it('promises only what the privacy copy promises', () => {
+  it('promises only what the product can actually do', () => {
     render(<WaitlistForm />);
 
     expect(screen.getByText(/No newsletter unless you ask for one/)).toBeTruthy();
-    expect(screen.getByText(/remove yourself in one click/)).toBeTruthy();
+    expect(
+      screen.getByText(/every email we send will have a one-click way off the list/)
+    ).toBeTruthy();
+  });
+
+  it('does NOT claim a removal that exists nowhere', () => {
+    render(<WaitlistForm />);
+
+    // This paragraph is the notice `consentedAt` records agreement to. The
+    // prototype's "you can remove yourself in one click" was decorative while
+    // the card was inert and became a false claim the moment it went live —
+    // there is no unsubscribe route, no token, no email (A8) and no contact
+    // page. The promise now attaches to the email that will carry it.
+    expect(screen.queryByText(/remove yourself in one click/)).toBeNull();
   });
 });

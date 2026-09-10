@@ -180,10 +180,14 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
 
 ## Known gaps
 
-- **"You can remove yourself in one click" is a promise with nothing behind it
-  yet.** The card's closing sentence is the prototype's, and it is forward-
-  looking — the first waitlist email is where a one-click removal would live,
-  and A8 defers that email. Whatever ships that email owes the link.
+- **There is no removal mechanism**, and the card no longer claims one. The
+  prototype's closing line was "you can remove yourself in one click", which was
+  decorative while the card was inert and became a false claim the moment it
+  went live — that paragraph is the notice `consentedAt` records agreement to,
+  and there is no unsubscribe route, no token, no email (A8) and no contact page
+  (divergence row 7). It now reads "every email we send will have a one-click
+  way off the list": true when it is read, and binding on whoever ships that
+  email. Owner ruling, 10 September 2026.
 - **`userId` is never written.** The column and its FK exist for the
   profile-seeding link, which is later work; nothing sets it today.
 - **An answer cannot be corrected through this route**, only added to, and a
