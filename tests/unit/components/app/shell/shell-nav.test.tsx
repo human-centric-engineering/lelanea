@@ -17,6 +17,7 @@
  */
 
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
@@ -104,6 +105,77 @@ describe('ShellNav — the account footer is the real person', () => {
     const footer = screen.getByRole('link', { name: /Maya Reyes/ });
     expect(footer.textContent).not.toMatch(/\d/);
     expect(container.querySelector('[href="/app/account"]')).toBeTruthy();
+  });
+});
+
+describe('ShellNav — slim mode', () => {
+  const toggle = () => screen.getByRole('button', { name: /the menu/ });
+
+  it('starts labelled', () => {
+    renderAt('/app');
+    expect(screen.getByText('Lelañea')).toBeTruthy();
+    expect(toggle().getAttribute('aria-label')).toBe('Collapse the menu');
+  });
+
+  it('hides the labels and keeps the destinations reachable', async () => {
+    renderAt('/app');
+    await userEvent.click(toggle());
+
+    // The wordmark and the visible labels go; the accessible names must not,
+    // or a screen-reader user loses the nav entirely at 64px.
+    expect(screen.queryByText('Lelañea')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Life situations' })).toBeTruthy();
+    // Seven destinations, the account footer, and the wordmark — which keeps
+    // its own `aria-label` when its text is hidden, so it stays a link.
+    expect(screen.getAllByRole('link')).toHaveLength(9);
+    expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();
+  });
+
+  it('gives every item a tooltip carrying its hint', async () => {
+    // In slim mode the label is hidden, so `label — hint` on the title is the
+    // only thing telling two icons apart.
+    renderAt('/app');
+    await userEvent.click(toggle());
+
+    expect(screen.getByRole('link', { name: 'Life situations' }).getAttribute('title')).toBe(
+      'Life situations — What you are living through'
+    );
+  });
+
+  it('drops the tooltips again when labelled, so they are not doubled', async () => {
+    renderAt('/app');
+    const item = screen.getByRole('link', { name: /Life situations/ });
+    expect(item.getAttribute('title')).toBeNull();
+  });
+
+  it('offers the way back', async () => {
+    renderAt('/app');
+    await userEvent.click(toggle());
+    expect(toggle().getAttribute('aria-label')).toBe('Expand the menu');
+
+    await userEvent.click(toggle());
+    expect(screen.getByText('Lelañea')).toBeTruthy();
+  });
+
+  it('remembers the choice for this browser', async () => {
+    renderAt('/app');
+    await userEvent.click(toggle());
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
+  });
+
+  it('keeps the account footer reachable at 64px', async () => {
+    renderAt('/app');
+    await userEvent.click(toggle());
+
+    const account = screen.getByRole('link', { name: /Your account/ });
+    expect(account.getAttribute('href')).toBe('/app/account');
+    expect(screen.getByText('MR')).toBeTruthy();
+  });
+
+  it('still marks the current item', async () => {
+    renderAt('/app/situations');
+    await userEvent.click(toggle());
+    expect(currentItems()).toEqual(['Life situations']);
   });
 });
 

@@ -17,10 +17,11 @@
  * @see components/app/shell/entry-bloom.tsx
  */
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntryBloom } from '@/components/app/shell/entry-bloom';
+import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus';
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -93,6 +94,35 @@ describe('EntryBloom — once per session', () => {
     expect(() => render(<EntryBloom />)).not.toThrow();
     expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
     vi.restoreAllMocks();
+  });
+
+  it('fades out and unmounts once the last petal settles', async () => {
+    // The overlay is `fixed inset-0` over the whole shell. If the leave path
+    // never completes it is not a cosmetic bug: the shell is covered and,
+    // without `pointer-events-none`, would be unusable for the session.
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+
+      // `Lotus` calls `onOpened` when it settles; drive its timer, then ours.
+      await act(async () => {
+        vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.queryByTestId('entry-bloom')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never blocks a click on the shell beneath it', () => {
+    render(<EntryBloom />);
+    expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
   });
 
   it('is hidden from assistive technology', () => {
