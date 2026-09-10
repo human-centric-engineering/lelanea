@@ -233,7 +233,10 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'branch that retypes a sentence into a page edits that page and selects ' +
       'every test that imports it, which is not this one. That is the whole ' +
       'blind spot, and it is the exact change the guard exists to catch. It ' +
-      'found four such violations already shipped when it was added.',
+      'found four such violations already shipped when it was added. Named ' +
+      '`.test.ts` rather than `.test.tsx` because `validateAlwaysRun` rejects ' +
+      'the latter outright — sunrise#763; the file has no JSX, so the rename ' +
+      'is the correct name rather than a workaround.',
   },
 ];
 
