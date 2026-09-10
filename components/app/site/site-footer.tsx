@@ -6,7 +6,7 @@ import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useConsent } from '@/lib/consent';
 import { BRAND } from '@/lib/brand';
 import { resolveFooterCopyright } from '@/lib/footer/copyright';
-import { SITE_DOMAIN, SITE_LINKS, SITE_NAV } from '@/lib/site/config';
+import { CRISIS_ANCHOR, SITE_DOMAIN, SITE_LINKS, SITE_NAV } from '@/lib/site/config';
 import styles from '@/components/app/site/site.module.css';
 
 /**
@@ -133,7 +133,7 @@ export function SiteFooter() {
         Lelañea is an educational and contemplative application. It is not a medical application,
         not a mental health application, not psychotherapy, not counseling, and not a crisis
         service. If you are at immediate risk, contact your local emergency services now — and see{' '}
-        <Link href="/data">what to do in a crisis</Link>.
+        <Link href={`/data#${CRISIS_ANCHOR}`}>what to do in a crisis</Link>.
       </p>
 
       {/* Both names come from the brand seam: the trademark is the PRODUCT,

@@ -105,11 +105,20 @@
   margin-top: 3px;
 }
 
-.portrait {
-  overflow: hidden;
-  border-radius: 20px;
+/*
+ * The portrait and its stand-in share their box on purpose — see
+ * `.portraitPending`. Anything that changes the shape belongs here, not in one
+ * of them.
+ */
+.portrait,
+.portraitPending {
   margin: 0;
   aspect-ratio: 4 / 5;
+  border-radius: 20px;
+}
+
+.portrait {
+  overflow: hidden;
   background: var(--color-accent);
 }
 
@@ -124,8 +133,16 @@
 
 /*
  * The portrait's stand-in until a photograph arrives. Not an empty box and not
- * a broken `<img>` — a quiet tinted panel that reads as deliberate, the same
- * call `SITE_LINKS` makes for a URL that does not exist yet (D3).
+ * a broken `<img>` — a quiet panel that reads as deliberate, the same call
+ * `SITE_LINKS` makes for a URL that does not exist yet (D3).
+ *
+ * It takes `.portrait`'s aspect ratio and radius (above) rather than sizing to
+ * its caption, and that is the whole point of sharing the rule. Without the
+ * ratio it collapsed to one line of text plus padding — a thin dashed strip
+ * beside a column of prose, which reads as a broken element rather than a
+ * deliberate one, and which would have made the section's layout jump from a
+ * 40px strip to a 4:5 panel on the day the photograph landed. `/code-review`
+ * caught it.
  */
 .portraitPending {
   display: grid;

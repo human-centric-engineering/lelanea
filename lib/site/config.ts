@@ -89,3 +89,15 @@ export const SITE_NAV = [
  * the button and its target cannot drift apart.
  */
 export const WAITLIST_ANCHOR = 'waitlist-form';
+
+/**
+ * The id of the crisis disclosure on `/data`, which the site footer links to
+ * from every page.
+ *
+ * A constant for the same reason `WAITLIST_ANCHOR` is one, with more riding on
+ * it: a fragment that no longer matches an element does not error, it silently
+ * lands the reader at the top of the page — and the reader following this
+ * particular link is the one the whole disclaimer exists for.
+ * `site-footer.test.tsx` pins the two ends together.
+ */
+export const CRISIS_ANCHOR = 'crisis';

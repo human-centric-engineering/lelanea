@@ -5,6 +5,7 @@ import { AuthoredBlocks, InlineText } from '@/components/app/content/authored-do
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { requireDocument, selectSection, selectSectionText } from '@/lib/app/content/sections';
+import { CRISIS_ANCHOR } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
 
 export const metadata: Metadata = {
@@ -216,7 +217,11 @@ export default function DataPage() {
             <p className="brand-eyebrow mb-2 text-[var(--color-status-green-ink)]">
               it is designed to support
             </p>
-            <AuthoredBlocks blocks={purpose} className={styles.measure} />
+            <AuthoredBlocks
+              blocks={purpose}
+              renderStyle={disclaimer.renderStyle}
+              className={styles.measure}
+            />
           </div>
 
           <div>
@@ -243,7 +248,11 @@ export default function DataPage() {
             belongs inside a column — the first contradicts its label, the
             second qualifies a list rather than being an item in it. */}
         <div className={`${styles.measure} mt-8`}>
-          <AuthoredBlocks blocks={purposeTurn} className="text-[17px] leading-[1.7]" />
+          <AuthoredBlocks
+            blocks={purposeTurn}
+            renderStyle={disclaimer.renderStyle}
+            className="text-[17px] leading-[1.7]"
+          />
           <div className="text-muted-foreground mt-3 text-[15px]">
             {isNotNote.map((line, index) => (
               <p key={index} className="mb-3 last:mb-0">
@@ -266,8 +275,21 @@ export default function DataPage() {
           a screen reader was saying on arrival. It is also `text-sm`, and this
           is the paragraph on the site that most needs to be read.
         */}
-        <section className="mt-10 rounded-[18px] border border-[var(--color-status-red)] bg-[var(--color-status-red-bg)] p-6">
-          <AuthoredBlocks blocks={crisis} baseLevel={3} className={styles.measure} />
+        <section
+          // The footer links here from every page in the site, so this is a
+          // navigation target and not just a box. Without the fragment a reader
+          // following "what to do in a crisis" lands at the top of `/data` and
+          // has to scroll past the data-rights cards and both columns to find
+          // the thing they clicked for.
+          id={CRISIS_ANCHOR}
+          className="mt-10 scroll-mt-24 rounded-[18px] border border-[var(--color-status-red)] bg-[var(--color-status-red-bg)] p-6"
+        >
+          <AuthoredBlocks
+            blocks={crisis}
+            renderStyle={disclaimer.renderStyle}
+            baseLevel={3}
+            className={styles.measure}
+          />
         </section>
       </section>
 
@@ -277,7 +299,11 @@ export default function DataPage() {
             <Eyebrow as="p">coaching and therapy</Eyebrow>
             <h2 className="brand-display mt-[14px] text-[clamp(28px,3.1vw,38px)]">{COACHING}</h2>
           </div>
-          <AuthoredBlocks blocks={coaching} className={`${styles.measure} ${styles.lede}`} />
+          <AuthoredBlocks
+            blocks={coaching}
+            renderStyle={disclaimer.renderStyle}
+            className={`${styles.measure} ${styles.lede}`}
+          />
         </div>
 
         <p className="text-muted-foreground mt-10 text-[15px]">

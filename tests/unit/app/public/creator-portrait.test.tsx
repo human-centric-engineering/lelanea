@@ -42,10 +42,22 @@ describe('/lelanea with a portrait', () => {
     expect(screen.queryByText(/portrait of Lelañea Fulton will appear here/i)).toBeNull();
   });
 
-  it('names her in the alt text rather than describing the photograph', () => {
-    // The image IS her, on the page about her, so the alt text is her name.
-    // "Portrait of a woman smiling" would be a description of a picture where
-    // an identification is wanted.
+  it('names her in the alt text rather than describing the photograph', async () => {
+    // This case had no `render()` for one round and passed anyway — RTL's
+    // auto-cleanup empties the DOM between cases, so `queryByRole(...)` was
+    // `null` unconditionally and the assertion held whatever the alt text said.
+    // `/code-review` caught it. It is the exact shape `fp6` warns about: an
+    // assertion that something is ABSENT passes for free on an empty result
+    // set, so the population has to be established first.
+    //
+    // Hence the positive assertion as well as the negative one. Together they
+    // fail if the alt text goes missing, and fail if it becomes a description
+    // of a photograph — the image IS her, on the page about her, so what the
+    // reader needs is an identification, not "portrait of a woman smiling".
+    const { default: LelaneaPage } = await import('@/app/(public)/lelanea/page');
+    render(<LelaneaPage />);
+
+    expect(screen.getByRole('img', { name: 'Lelañea Fulton' })).toBeTruthy();
     expect(screen.queryByRole('img', { name: /photo|portrait of a/i })).toBeNull();
   });
 });
