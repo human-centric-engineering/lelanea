@@ -83,7 +83,7 @@ describe('WaitlistForm', () => {
       render(<WaitlistForm />);
 
       expect(screen.getByText(new RegExp(`opening in small groups from`))).toBeTruthy();
-      expect(screen.getByText(new RegExp(LAUNCH_WINDOW.replace(/[[\]]/g, '\\$&')))).toBeTruthy();
+      expect(screen.getByText(new RegExp(LAUNCH_WINDOW.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeTruthy();
     });
 
     it('tells assistive technology the group is unavailable, which `disabled` alone does not', () => {
