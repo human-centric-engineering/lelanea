@@ -7,16 +7,25 @@ import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
-const DRAWERS: Record<DrawerId, { title: string; note: string }> = {
-  map: {
+/**
+ * An ordered list, not a record keyed by id.
+ *
+ * `Object.keys()` returns `string[]`, so a record needed an assertion back to
+ * the id union at the one place that iterates it — and it left the render order
+ * as whatever the object literal happened to give. A list states both.
+ */
+const DRAWERS: { id: DrawerId; title: string; note: string }[] = [
+  {
+    id: 'map',
     title: 'Your map',
     note: 'The sixteen modules, and where you are among them. This arrives with the journey.',
   },
-  resources: {
+  {
+    id: 'resources',
     title: 'Resources',
     note: 'Films and reading, in her own words. These arrive later in the programme.',
   },
-};
+];
 
 /**
  * The map and resources drawers: panels that ride over the panes.
@@ -48,7 +57,11 @@ export function Drawers() {
    */
   useEffect(() => {
     if (drawer) {
-      returnTo.current = document.activeElement as HTMLElement | null;
+      // `activeElement` is `Element | null`, and only an `HTMLElement` is
+      // guaranteed to have `focus()`. Narrowing rather than asserting means a
+      // focus that lands somewhere unexpected simply is not returned to.
+      returnTo.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       panelRef.current?.focus();
       return;
     }
@@ -68,9 +81,8 @@ export function Drawers() {
           drawer ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
       />
-      {(Object.keys(DRAWERS) as DrawerId[]).map((id) => {
+      {DRAWERS.map(({ id, title, note }) => {
         const open = drawer === id;
-        const { title, note } = DRAWERS[id];
         return (
           <div
             key={id}

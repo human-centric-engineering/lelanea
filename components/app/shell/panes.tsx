@@ -33,7 +33,11 @@ export function Panes({ children }: { children: React.ReactNode }) {
         // it is fighting the cursor.
         if (!carousel || (event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
         if (drawer) return; // the drawer is the thing on top; it owns the gesture
-        const target = event.target as HTMLElement;
+        // `instanceof` rather than a cast: `event.target` is an `EventTarget`,
+        // and `.closest` exists only on `Element`. A cast would compile and then
+        // throw on any target that is not one.
+        const target = event.target;
+        if (!(target instanceof Element)) return;
         if (target.closest('input, textarea, [contenteditable="true"]')) return;
         start.current = { x: event.clientX, y: event.clientY };
       }}
