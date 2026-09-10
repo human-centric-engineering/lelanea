@@ -18,8 +18,15 @@ import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 export const WIDTHS = {
   /** Above 1240: both panes side by side, nav at the reader's preference. */
   large: 1400,
-  /** 901–1240: the conversation parks as a slide-over; nav auto-slims below 1100. */
-  medium: 1100,
+  /**
+   * 901–1240: the conversation parks as a slide-over, and the nav is slim.
+   *
+   * 1000, not 1100. The auto-slim threshold is `w < 1100`, so 1100 itself does
+   * NOT slim — a fixture named `medium` that leaves the nav expanded, while its
+   * own comment says the nav slims here, is a trap for whoever writes the next
+   * case. One test already worked around it with a bare literal and a note.
+   */
+  medium: 1000,
   /** ≤900: nav is a drawer, the panes are a carousel. */
   small: 800,
 } as const;

@@ -21,6 +21,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
+import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -28,6 +29,12 @@ const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
+}));
+
+// `ShellTopbar` renders alongside the nav in the drawer cases below — the burger
+// is the only thing that opens the drawer, so the two have to be tested together.
+vi.mock('@/hooks/use-theme', () => ({
+  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
 
 const USER = { name: 'Maya Reyes', email: 'maya@example.com' };
@@ -376,5 +383,71 @@ describe('initialsFor', () => {
     // `charAt(0)` here returns a lone high surrogate, which renders as a
     // replacement glyph in the avatar.
     expect(initialsFor('😀 Smith', 'a@example.com')).toBe('😀S');
+  });
+});
+
+describe('the phone drawer, once it is open', () => {
+  /** Nav plus the burger that opens it — the drawer has no opener of its own. */
+  function renderPhoneShell(pathname = '/app/journey') {
+    mockPathname.current = pathname;
+    return renderInShell(
+      <>
+        <ShellNav user={USER} />
+        <ShellTopbar />
+      </>,
+      'small'
+    );
+  }
+
+  const navEl = () => document.querySelector('nav[aria-label="Main"]')!;
+  const openBurger = () => userEvent.click(screen.getByRole('button', { name: 'Open the menu' }));
+
+  it('is focusable, so opening it can move focus into it', () => {
+    // The round-2 fix for this was a NO-OP: the ref was declared and read but
+    // never attached to anything, so `.focus()` ran against null while the
+    // comment above it described a repair that had not happened. Assert what is
+    // in the DOM, not what the code intended.
+    renderPhoneShell();
+    expect(navEl().getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('takes focus when the burger opens it', async () => {
+    renderPhoneShell();
+    await openBurger();
+    expect(document.activeElement).toBe(navEl());
+  });
+
+  it('closes when a nav item is tapped', async () => {
+    renderPhoneShell();
+    await openBurger();
+    expect(navEl().className).toContain('visible');
+
+    await userEvent.click(screen.getByRole('link', { name: /Life situations/ }));
+    expect(navEl().className).toContain('invisible');
+  });
+
+  it('closes even for the route already showing, where nothing navigates', async () => {
+    // No pathname change, so the route effect never fires — the drawer and its
+    // scrim stayed over the page the reader was already on, with Escape or the
+    // scrim the only way out.
+    renderPhoneShell('/app/journey');
+    await openBurger();
+
+    await userEvent.click(screen.getByRole('link', { name: /Your journey/ }));
+    expect(navEl().className).toContain('invisible');
+  });
+
+  it('keeps Tab inside itself while it is open', async () => {
+    // The shell behind a scrim is meant to be unavailable, and this panel is not
+    // the last focusable subtree in the document — so without a cycle, one Tab
+    // walked out into the topbar and the panes underneath.
+    renderPhoneShell();
+    await openBurger();
+
+    const links = navEl().querySelectorAll('a[href]');
+    (links[links.length - 1] as HTMLElement).focus();
+    await userEvent.tab();
+
+    expect(navEl().contains(document.activeElement)).toBe(true);
   });
 });

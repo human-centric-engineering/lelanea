@@ -53,6 +53,8 @@ export interface ShellLayout {
   pane: Pane;
   toggleNavSlim: () => void;
   setNavOpen: (open: boolean) => void;
+  /** Close the ≤900px drawer regardless of whether the route changed. */
+  closeNav: () => void;
   /** `commit: false` while a drag is in flight — see the implementation. */
   setChatWidth: (px: number, commit?: boolean) => void;
   setChatSlim: (slim: boolean) => void;
@@ -214,12 +216,17 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setChatSlimState(false);
       return;
     }
+    // Keyed on `pathname`, NOT on `wsOpen`. `wsOpen` is a boolean derived from
+    // the route, so it does not change between two module routes — and a phone
+    // reader who had swiped the conversation in, then tapped a different module
+    // from the drawer, got that module rendered off-screen and inert. Same
+    // defect as arriving with `pane` on 'chat', one navigation later.
     // And the other direction: asking for a module should SHOW it. On a phone
     // the panes are a carousel, so opening one while `pane` was still `'chat'`
     // rendered the thing the reader had just tapped off-screen and `inert` —
     // they had to swipe or use the switch to reach what they had asked for.
     setPaneState('ws');
-  }, [wsOpen]);
+  }, [wsOpen, pathname]);
 
   /**
    * Below 900px the nav is a drawer over the content, so following a link inside
@@ -230,6 +237,9 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     setNavOpenState(false);
   }, [pathname]);
+  // `pathname` covers a navigation, and nothing else does: tapping the item for
+  // the route already showing produces no change, so the drawer and its scrim
+  // stayed over the page. `closeNav` is what the nav items call directly.
 
   /**
    * `commit` separates "show me this width" from "remember this width".
@@ -258,6 +268,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
 
   const setChatSlim = useCallback((slim: boolean) => setChatSlimState(slim), []);
   const setNavOpen = useCallback((open: boolean) => setNavOpenState(open), []);
+  const closeNav = useCallback(() => setNavOpenState(false), []);
   const openDrawer = useCallback((id: DrawerId) => setDrawer(id), []);
   const closeDrawer = useCallback(() => setDrawer(null), []);
   const setPane = useCallback((p: Pane) => setPaneState(p), []);
@@ -301,6 +312,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       pane,
       toggleNavSlim,
       setNavOpen,
+      closeNav,
       setChatWidth,
       setChatSlim,
       openDrawer,
@@ -318,6 +330,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       pane,
       toggleNavSlim,
       setNavOpen,
+      closeNav,
       setChatWidth,
       setChatSlim,
       openDrawer,

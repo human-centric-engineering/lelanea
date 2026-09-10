@@ -83,7 +83,29 @@ export function Panes({ children }: { children: React.ReactNode }) {
         boundary cases — the ones with something to say — that were being
         swallowed.
       */}
-      {wsOpen ? <Workspace>{children}</Workspace> : children}
+      {wsOpen ? (
+        <Workspace>{children}</Workspace>
+      ) : (
+        /*
+         * Its own scroll container, and its own full width.
+         *
+         * On `/app` these children are `error.tsx` or `loading.tsx`, and
+         * `RouteErrorBoundary`'s root is `min-h-[400px]`. As a bare flex sibling
+         * it was clipped by the shell's `h-dvh overflow-hidden` with nothing
+         * able to scroll to "Try again" — the SAME regression t-9 fixed and this
+         * branch's own layout comment claims is covered. It was covered for
+         * `/app/*`, by the surface body, and nowhere for `/app`.
+         *
+         * `absolute inset-0` rather than a flex child, because at large width a
+         * sibling was laid out beside the `flex-1` conversation and squeezed
+         * into the right half. An error is the whole view, not half of it.
+         *
+         * `empty:hidden` keeps the ordinary case honest: on `/app` the page
+         * renders nothing, and an empty overlay would sit over the conversation
+         * swallowing every click.
+         */
+        <div className="absolute inset-0 z-10 overflow-y-auto empty:hidden">{children}</div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { cn } from '@/lib/utils';
 
 export interface ShellNavProps {
@@ -52,7 +53,7 @@ export function initialsFor(name: string, email: string): string {
  * invented (D6, `B31`).
  */
 export function ShellNav({ user }: ShellNavProps) {
-  const { navSlim, navOpen, setNavOpen, toggleNavSlim, width } = useShellLayout();
+  const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, width } = useShellLayout();
   const pathname = usePathname();
 
   /*
@@ -74,6 +75,39 @@ export function ShellNav({ user }: ShellNavProps) {
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (navOpen) navRef.current?.focus();
+  }, [navOpen]);
+
+  /**
+   * Keep Tab inside the open drawer, as `Drawers` does and for the same reason.
+   *
+   * Below 900px this is a fixed panel over a scrim, so the shell behind it is
+   * meant to be unavailable — but it is not the last focusable subtree in the
+   * document, so a reader who reached it walked straight out into the topbar and
+   * the panes underneath on the next Tab.
+   */
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const panel = navRef.current;
+      if (!panel) return;
+
+      const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      const active = document.activeElement;
+      if (!event.shiftKey && (active === last || active === panel)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || active === panel)) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [navOpen]);
 
   const [readerToggled, setReaderToggled] = useState(false);
@@ -102,6 +136,8 @@ export function ShellNav({ user }: ShellNavProps) {
         />
       ) : null}
       <nav
+        ref={navRef}
+        tabIndex={-1}
         aria-label="Main"
         data-slim={slim ? 'true' : 'false'}
         className={cn(
@@ -207,6 +243,10 @@ export function ShellNav({ user }: ShellNavProps) {
               <Link
                 key={entry.href}
                 href={entry.href}
+                // Closes the drawer even when the route does not change —
+                // tapping the item for the page already showing otherwise
+                // left the panel and its scrim sitting over it.
+                onClick={width === 'small' ? closeNav : undefined}
                 aria-current={current ? 'page' : undefined}
                 title={slim ? `${entry.label} — ${entry.hint}` : undefined}
                 className={cn(
@@ -281,6 +321,7 @@ export function ShellNav({ user }: ShellNavProps) {
 
           <Link
             href="/app/account"
+            onClick={width === 'small' ? closeNav : undefined}
             title={slim ? `Your account — ${user.name}` : undefined}
             className={cn(
               'flex h-12 flex-none items-center gap-[11px] rounded-xl text-left',

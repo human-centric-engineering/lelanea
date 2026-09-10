@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
@@ -94,9 +95,7 @@ export function Drawers() {
       const panel = panelRef.current;
       if (!panel) return;
 
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (!first || !last) {

@@ -266,3 +266,48 @@ describe('the swipe, and what must NOT trigger it', () => {
     expect(chat()?.getAttribute('aria-hidden')).toBeNull();
   });
 });
+
+describe('moving between two modules on a phone', () => {
+  it('shows the module just asked for, even with the conversation in front', () => {
+    // `wsOpen` is a BOOLEAN derived from the route, so it does not change
+    // between two module routes and an effect keyed on it never re-runs. A
+    // reader who had swiped the conversation in, then picked a different module
+    // from the drawer, got that module rendered off-screen and inert — the same
+    // defect as arriving with the wrong pane, one navigation later.
+    mockPathname.current = '/app/journey';
+    const { rerender } = renderInShell(
+      <>
+        <ShellTopbar />
+        <Panes>the module</Panes>
+      </>,
+      'small'
+    );
+
+    // Bring her in, so the pane is on 'chat' when the route changes.
+    const surface = document.querySelector('[data-pane="chat"]')!.parentElement!;
+    fireEvent.pointerDown(surface, {
+      clientX: 200,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: 320,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 1,
+    });
+    expect(chat()?.getAttribute('aria-hidden')).toBeNull();
+
+    mockPathname.current = '/app/situations';
+    rerender(
+      <>
+        <ShellTopbar />
+        <Panes>another module</Panes>
+      </>
+    );
+
+    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
+    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
+  });
+});

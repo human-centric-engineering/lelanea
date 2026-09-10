@@ -62,7 +62,19 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       // On a tablet, clicking the surface re-parks the conversation — the
       // prototype's own gesture. Above and below that width the two panes are
       // both genuinely on screen, so there is nothing to re-park.
-      onClick={width === 'medium' && !chatSlim ? () => setChatSlim(true) : undefined}
+      onClick={
+        width === 'medium' && !chatSlim
+          ? (event) => {
+              // Only a click on the surface ITSELF. Without this the handler
+              // fires for anything that bubbles out of the body — and from t-11
+              // that body is full of buttons, links and checkboxes, every one of
+              // which would collapse the conversation as a side effect of being
+              // used.
+              if (event.target !== event.currentTarget) return;
+              setChatSlim(true);
+            }
+          : undefined
+      }
       className={cn(
         'relative flex min-w-0 flex-1 flex-col overflow-hidden',
         // TRANSPARENT when a view sets no tone, which is the prototype's own

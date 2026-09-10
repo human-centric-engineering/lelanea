@@ -278,6 +278,14 @@ function Composer() {
  */
 function ResizeHandle({ onFold }: { onFold: () => void }) {
   const { chatW, setChatWidth } = useShellLayout();
+  const pendingDetach = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      pendingDetach.current?.();
+      pendingDetach.current = null;
+    },
+    []
+  );
 
   /*
    * `chatW`, with no folded branch.
@@ -313,28 +321,45 @@ function ResizeHandle({ onFold }: { onFold: () => void }) {
         const startX = event.clientX;
         const startW = startFrom();
         const el = event.currentTarget;
+        let captured = true;
         try {
           el.setPointerCapture(event.pointerId);
         } catch {
-          // No capture available; the move handler still tracks the pointer.
+          // The comment here used to claim the move handler still tracked the
+          // pointer without capture. It does not: `el` is 6px wide, so it stops
+          // receiving events the instant the cursor leaves it, the drag freezes
+          // at the last in-bounds x, and `stop` never runs. Fall back to the
+          // document, which does see the whole gesture.
+          captured = false;
         }
+        const host: HTMLElement | Document = captured ? el : document;
         // `commit: false` — a drag persists once, on release, not per frame.
         const move = (e: PointerEvent) => setChatWidth(startW + (e.clientX - startX), false);
         const stop = (e: PointerEvent) => {
           // The settled value is the one worth remembering.
           setChatWidth(startW + (e.clientX - startX));
-          el.removeEventListener('pointermove', move);
-          el.removeEventListener('pointerup', stop);
-          el.removeEventListener('pointercancel', stop);
+          detach();
+          if (!captured) return;
           try {
             el.releasePointerCapture(e.pointerId);
           } catch {
-            // Already released with the capture that was never taken.
+            // Already released, or the element has gone.
           }
         };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', stop);
-        el.addEventListener('pointercancel', stop);
+        const detach = () => {
+          host.removeEventListener('pointermove', move as EventListener);
+          host.removeEventListener('pointerup', stop as EventListener);
+          host.removeEventListener('pointercancel', stop as EventListener);
+        };
+        host.addEventListener('pointermove', move as EventListener);
+        host.addEventListener('pointerup', stop as EventListener);
+        host.addEventListener('pointercancel', stop as EventListener);
+        // The handle can be UNMOUNTED mid-drag: squeezing past the fold makes the
+        // pane take its `Strip` early return and this element goes with it, so
+        // `stop` never fires — three listeners stay attached and the width is
+        // never committed, leaving storage holding the pre-drag value for the
+        // next reload. `pendingDetach` lets the unmount finish the job.
+        pendingDetach.current = detach;
       }}
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
