@@ -474,7 +474,10 @@ small and conflict-free.)
 | `lib/app/leaf-brand.ts`                    | product name, legal entity, meta description (leaf)  | `lib/app/brand.ts` → `lib/brand.ts` (server + client)                           |
 | `lib/app/reserved-tiers.ts`                | which reserved tiers THIS checkout occupies          | `tests/unit/reserved-fork-tiers.test.ts` + the metadata guard (test)            |
 
-> **Filling a seam is expected to fail one row of a core test.**
+> **Filling a seam is expected to fail a row of a core test — and a `leaf-*` seam
+> fails TWO: its own, and the row for the BRIDGE above it**, a file you never
+> touched. The bridge reads your seam, so your value changes the bridge's resolved
+> value. Pin both.
 > `tests/unit/lib/app/defaults.test.ts` asserts every seam ships empty — that
 > contract is what stops a stray default from applying to every install. When you
 > fill a seam, **pin the new value** in that file's `SEAM_DEFAULTS` table rather

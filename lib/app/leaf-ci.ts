@@ -16,7 +16,8 @@
  * file a leaf is invited to edit, and the two would collide on every upgrade —
  * precisely the conflict #759 removed one tier up.
  *
- * So `lib/app/ci.ts` becomes Daybreak's **fifth bridge**: it declares the
+ * So `lib/app/ci.ts` becomes one of Daybreak's `lib/app/*` **bridges** (rostered
+ * in CLAUDE.md's banner): it declares the
  * framework tier's entries and spreads these two lists after them. Both lists
  * are append-shaped, so the tiers compose rather than override — unlike
  * `lib/app/brand.ts`, where a leaf replaces Daybreak's value because brand

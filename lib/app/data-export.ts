@@ -14,7 +14,9 @@
  * to the reserved **leaf** seam — the subject-access analogue of the boot bridge
  * (`bootstrap.ts` → `initFramework()` → `leaf-bootstrap.ts`) and the nav bridge
  * (`admin-nav.ts` → `initFrameworkNav()` → `leaf-admin-nav.ts`). This is the
- * THIRD `lib/app/*` file Daybreak fills; `lib/app/**` is the sanctioned
+ * one of the `lib/app/*` bridges Daybreak fills (the roster is in CLAUDE.md's
+ * banner — do not count them from a docblock; this line used to say "THIRD", as
+ * did `db-drift.ts`); `lib/app/**` is the sanctioned
  * core→framework bridge (the ESLint boundary exempts it).
  *
  * Core covers its own tables via `lib/privacy/export-sources.ts` and cannot see

@@ -47,7 +47,7 @@ process.
   subject is the repository** is reached by no import chain, so `--changed` never
   selects it. Before the seam, declaring either meant editing a platform file.
 
-  - **`lib/app/ci.ts` is Daybreak's fifth bridge — do not fill it.** Sunrise's seam
+  - **`lib/app/ci.ts` is one of Daybreak's bridges — do not fill it.** Sunrise's seam
     is built for two tiers and hands "the fork" one file; Daybreak is the middle of
     three, so it declares the framework tier's entries there and spreads your lists
     after them. Filling the bridge directly re-creates, one tier down, exactly the
