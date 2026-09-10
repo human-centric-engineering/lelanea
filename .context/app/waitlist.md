@@ -48,16 +48,23 @@ source of provenance available, with the collection locale as the fallback.
 
 ## Joining
 
-`POST /api/v1/app/waitlist` answers **201** on a first join and **200** on a
-repeat, with **the same body either way**. The fixed body is deliberate: a
-message that differed for "already on the list" would hand anyone a yes/no
-answer straight out of the response.
+`POST /api/v1/app/waitlist` answers **200 to every accepted request** — a first
+join, a repeat, or a bot in the honeypot — with the same body and the same
+headers.
 
-**The status code does disclose that, and it is worth saying so rather than
-glossing it.** 201-vs-200 tells a caller whether the address was already on the
-list. The disclosure is narrow and self-defeating — the only way to ask is to
-_join_, so probing an address enrols it — and the sub-cap allows five questions
-an hour per IP. The task's contract asks for the split; this is the cost.
+**That uniformity is the design, and three separate things had to agree for it
+to hold.** The body is one fixed sentence. The status is a single 200: the task
+specified 201-on-first / 200-on-repeat, which is REST-correct and is a
+membership oracle — post an address, read the status, learn whether that person
+is on a pre-launch list — and it bought nothing observable, since the form
+treats both codes identically, so the owner collapsed it (ruling, 10 September
+2026). And the headers match, which is the one that nearly got away: an earlier
+version answered the honeypot from a `catch` block that could not see the
+rate-limit headers, so header _presence_ was a perfectly reliable tell for which
+field was the trap.
+
+`created` is still computed — it is in the log line, where it is useful — and
+never travels back out.
 
 **A repeat updates rather than conflicting, and the update is strictly
 additive**: it fills a field that is still empty and never overwrites one that
@@ -110,14 +117,18 @@ join. Handlers never call a section limiter themselves — see
 `website` must be empty. The **client** schema accepts any value and the
 **server** schema rejects a filled one — the same split as
 `lib/validations/contact.ts`, and for the reason a honeypot exists: a client
-that rejected it would tell the bot which field it is. A filled honeypot gets
-the same sentence as a real join and writes nothing. So does a honeypot that
-fails _validation_, which would otherwise return a 400 naming the field.
+that rejected it would tell the bot which field it is.
 
-Both answer **201**, not 200 — the code a _first_ join gets. A honeypot has to
-answer the way a real submission of the same shape would, or the difference is
-itself the tell: with 200, a bot could find the field by submitting one fresh
-address twice, once with it filled, and watching the codes disagree.
+**The rejection happens in the schema, not in the handler.**
+`website: z.string().max(0)` means a filled honeypot never reaches the handler
+body at all — it arrives as a `ValidationError` whose details name `website`,
+and the `catch` answers it exactly as a success. An in-handler `if (body.website
+…)` check was there first, mirroring the contact route; it is unreachable for
+that reason and was deleted, because dead code that reads like the real path is
+worse than no code.
+
+A non-string `website` (say `12345`) fails `z.string()` rather than `.max(0)`
+and takes the same path.
 
 ## The two GDPR duties
 
@@ -179,7 +190,9 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
   stranger can still seed an empty field — see above. A signed confirmation link
   would close both, and would also be what an ownership-proving unsubscribe
   needs.
-- **201-vs-200 says whether an address was already on the list.** The task's
-  contract asks for the split; the probe is self-defeating and capped. Raised
-  with the owner rather than settled quietly.
+- **Detecting the honeypot depends on an error's `details.errors[].path`
+  string.** That is the platform's existing shape (`app/api/v1/contact/route.ts`
+  does the same), and `tests/unit/lib/validations/app-waitlist.test.ts` pins the
+  path name for exactly this reason — if it ever stopped being `website`, the
+  route would quietly start returning a 400 that names the field.
 - **`source: conversation` is vocabulary, not a shipped path.** See above.

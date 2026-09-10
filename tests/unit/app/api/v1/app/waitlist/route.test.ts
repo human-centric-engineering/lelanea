@@ -1,11 +1,17 @@
 /**
  * POST /api/v1/app/waitlist — the leaf's first unauthenticated write route.
  *
- * The done-when cases: 201 on a first join, 200 on a repeat, 400 on a bad
- * email, 429 past the sub-cap, honeypot swallowed with a 200 and no row. Plus
- * the two that would not be noticed by looking at the page — that the response
- * body cannot be used to ask whether an address is already on the list, and
+ * The done-when cases: a join accepted, a repeat accepted, 400 on a bad email,
+ * 429 past the sub-cap, honeypot swallowed with no row. Plus the ones nobody
+ * would notice by looking at the page — that NOTHING in the response tells a
+ * caller whether the address was already listed or which field is the trap, and
  * that the address never reaches the application log.
+ *
+ * The task specified 201-on-first / 200-on-repeat and the owner collapsed it to
+ * a single 200 on 10 September 2026: the split was a membership oracle and the
+ * form treated both codes identically. The cases below hold the collapse, and
+ * hold it on the headers as well as the status — an earlier version leaked the
+ * honeypot through header presence alone.
  *
  * @see app/api/v1/app/waitlist/route.ts
  */
@@ -48,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/v1/app/waitlist', () => {
-  it('answers 201 on a first join and records the answers', async () => {
+  it('accepts a first join and records the answers', async () => {
     const response = await POST(
       request({
         email: 'Ada@Example.com',
@@ -58,7 +64,7 @@ describe('POST /api/v1/app/waitlist', () => {
       })
     );
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: { message: ACCEPTED },
@@ -75,23 +81,27 @@ describe('POST /api/v1/app/waitlist', () => {
     );
   });
 
-  it('answers 200 when the entry already existed', async () => {
-    joinWaitlistMock.mockResolvedValue({ created: false, entryId: 'entry-1' });
-
-    const response = await POST(request({ email: 'ada@example.com' }));
-
-    expect(response.status).toBe(200);
-  });
-
-  it('says exactly the same thing whether it created or updated', async () => {
+  it('is INDISTINGUISHABLE between a first join and a repeat', async () => {
     const first = await POST(request({ email: 'ada@example.com' }));
     joinWaitlistMock.mockResolvedValue({ created: false, entryId: 'entry-1' });
     const repeat = await POST(request({ email: 'ada@example.com' }));
 
-    // A different message for "already on the list" turns this endpoint into an
-    // oracle: anyone could ask it whether a given address had signed up.
+    // The whole finding, in one case. Anything that differs here — the status,
+    // the body, or a header — lets anyone post an address and read back whether
+    // that person is on a pre-launch waitlist.
+    expect(repeat.status).toBe(first.status);
+    expect(repeat.status).toBe(200);
     const [a, b] = await Promise.all([first.json(), repeat.json()]);
     expect(a).toEqual(b);
+    expect([...repeat.headers.keys()].sort()).toEqual([...first.headers.keys()].sort());
+  });
+
+  it('does not leak `created` into the response body', async () => {
+    const response = await POST(request({ email: 'ada@example.com' }));
+
+    // It is logged, deliberately, and must not travel back out. A `created`
+    // field would restore the oracle the status collapse just closed.
+    expect(await response.text()).not.toContain('created');
   });
 
   it('sends the visitor’s language through as the locale', async () => {
@@ -132,7 +142,7 @@ describe('POST /api/v1/app/waitlist', () => {
     expect(checkMock).toHaveBeenCalledWith('203.0.113.7');
   });
 
-  it('swallows a filled honeypot, and no row', async () => {
+  it('swallows a filled honeypot, and writes no row', async () => {
     const response = await POST(
       request({ email: 'bot@example.com', website: 'http://spam.example' })
     );
@@ -142,28 +152,30 @@ describe('POST /api/v1/app/waitlist', () => {
     expect(joinWaitlistMock).not.toHaveBeenCalled();
   });
 
-  it('answers a honeypot with the code a FIRST JOIN would have got, not a repeat', async () => {
-    const swallowed = await POST(
+  it('answers a honeypot with the SAME status, body AND headers as a real join', async () => {
+    const trapped = await POST(
       request({ email: 'bot@example.com', website: 'http://spam.example' })
     );
-    // The real path for an address never seen before.
-    joinWaitlistMock.mockResolvedValue({ created: true, entryId: 'entry-1' });
     const genuine = await POST(request({ email: 'someone@example.com' }));
 
-    // 200 here would be the tell: a bot submitting one fresh address with the
-    // field filled and once without would see the codes disagree, and that is
-    // exactly how you find a honeypot field.
-    expect(swallowed.status).toBe(genuine.status);
-    expect(swallowed.status).toBe(201);
+    // The headers half is not decoration. An earlier version answered the
+    // honeypot from a `catch` block that could not see the rate-limit headers,
+    // so only the genuine response carried `X-RateLimit-Remaining` — and header
+    // PRESENCE is a perfectly reliable oracle for which field is the trap, which
+    // is the one thing a honeypot must never reveal.
+    expect(trapped.status).toBe(genuine.status);
+    expect(await trapped.text()).toBe(await genuine.text());
+    expect([...trapped.headers.keys()].sort()).toEqual([...genuine.headers.keys()].sort());
+    expect(trapped.headers.get('X-RateLimit-Remaining')).toBe('4');
   });
 
-  it('does not name the honeypot field when it fails validation', async () => {
-    // A non-string `website` fails the schema before the handler's own check,
-    // and the default 400 would carry `path: "website"` — telling the bot
-    // exactly which input to leave alone next time.
+  it('does not name the honeypot field when a non-string value fails the schema', async () => {
+    // `website: 12345` fails `z.string()` rather than `.max(0)`, so it takes the
+    // same catch path by a different route. The default 400 would carry
+    // `path: "website"` — telling the bot exactly which input to leave alone.
     const response = await POST(request({ email: 'bot@example.com', website: 12345 }));
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect(await response.text()).not.toContain('website');
     expect(joinWaitlistMock).not.toHaveBeenCalled();
   });
