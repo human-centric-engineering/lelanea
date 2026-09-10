@@ -30,8 +30,18 @@
  * Full guide: CUSTOMIZATION.md §4 · lib/auth-landing/route.ts
  */
 
-/** Where an authenticated user lands. `null` = platform default (`/dashboard`). */
-export const appAuthLandingRoute: string | null = null;
+/**
+ * The shell (§04). Every door into the authenticated app follows this: login,
+ * OAuth, signup, invite acceptance, email verification, the header brand link,
+ * the "back to app" links out of admin, the error-page escape hatches, and the
+ * proxy's redirect of a signed-in user off an auth page.
+ *
+ * Paired with `/app` in `lib/app/protected-routes.ts`, without which the edge
+ * would never bounce a signed-out visitor here, and with the `/app` entry in
+ * `lib/app/protected-nav.ts`, without which the platform header on `/profile`
+ * and `/settings` would still point at the abandoned `/dashboard`.
+ */
+export const appAuthLandingRoute: string | null = '/app';
 
 /**
  * What that destination is called in user-visible copy — the admin "Back to …"
@@ -42,5 +52,10 @@ export const appAuthLandingRoute: string | null = null;
  * mismatch as the route itself, only quieter.
  *
  * `null` = platform default (`Dashboard`).
+ *
+ * "Your journey" is the product's own name for the destination — the nav item
+ * §04 pins at the top of the shell — so the admin's "Back to …" link and the
+ * error pages' escape hatch read in the user's vocabulary rather than the
+ * platform's.
  */
-export const appAuthLandingLabel: string | null = null;
+export const appAuthLandingLabel: string | null = 'Your journey';

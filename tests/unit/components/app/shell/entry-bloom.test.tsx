@@ -1,0 +1,103 @@
+// @vitest-environment happy-dom
+
+/**
+ * The entry bloom's session gate — the part of it that is ours.
+ *
+ * `Lotus` already owns the animation and is covered by its own suite. What is
+ * new here is the once-per-session rule, and it needs its own test for a
+ * specific reason: **the prototype has no `sessionStorage` at all.** It blooms
+ * on every render of its `#app` view, so the screenshot comparison in this
+ * task's done-when cannot sign this behaviour off — there is nothing on the
+ * other side to compare against.
+ *
+ * The failure it guards is also silent in the direction that matters. A gate
+ * that never writes its flag looks perfect on a first visit and wrong only on
+ * the second, which is the visit nobody screenshots.
+ *
+ * @see components/app/shell/entry-bloom.tsx
+ */
+
+import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { EntryBloom } from '@/components/app/shell/entry-bloom';
+
+beforeEach(() => {
+  window.sessionStorage.clear();
+  // The bloom is decorative and would otherwise animate for real in every case.
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('EntryBloom — once per session', () => {
+  it('blooms on the first view of a session', () => {
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+  });
+
+  it('does not bloom on the second view of the same session', () => {
+    const first = render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    first.unmount();
+
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+  });
+
+  it('records the flag rather than relying on a module-level variable', () => {
+    // A module flag would pass the case above and fail on a full page load,
+    // which is the real second visit. Assert the durable record directly.
+    render(<EntryBloom />);
+    expect(window.sessionStorage.getItem('lelanea.bloom.seen')).toBe('1');
+  });
+
+  it('blooms again once the session ends', () => {
+    const first = render(<EntryBloom />);
+    first.unmount();
+    window.sessionStorage.clear(); // a new tab, or a new visit
+
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+  });
+
+  it('renders nothing rather than an empty overlay once seen', () => {
+    // A returning visitor must not get a fixed, full-screen element over the
+    // shell — even a transparent one, which would eat every click.
+    const first = render(<EntryBloom />);
+    first.unmount();
+
+    const { container } = render(<EntryBloom />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('still blooms when sessionStorage throws', () => {
+    // Private mode, or storage disabled by policy. Showing the opening gesture
+    // twice is a far smaller cost than throwing on mount and taking the shell
+    // down with it.
+    const denied = () => {
+      throw new Error('storage disabled');
+    };
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(denied);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(denied);
+
+    expect(() => render(<EntryBloom />)).not.toThrow();
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('is hidden from assistive technology', () => {
+    // It is decorative, briefly covers everything, and cannot be dismissed.
+    render(<EntryBloom />);
+    expect(screen.getByTestId('entry-bloom').getAttribute('aria-hidden')).toBe('true');
+  });
+});

@@ -187,16 +187,43 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §04 t-9 fills this so the platform header on
+    // `/profile` and `/settings` stops pointing at the abandoned `/dashboard`.
+    // The row still guards the shape: an accidental extra entry, a dropped
+    // `adminOnly`, or a re-introduced `/dashboard` all fail here.
     seam: 'lib/app/protected-nav.ts',
     risk: 'a stray non-null list would silently REPLACE the authenticated nav',
-    assert: () => expect(protectedNavItems).toBeNull(),
+    assert: () => {
+      expect(protectedNavItems?.map((item) => item.href)).toEqual([
+        '/app',
+        '/profile',
+        '/settings',
+        '/admin',
+      ]);
+      expect(protectedNavItems?.map((item) => item.label)).toEqual([
+        'Your journey',
+        'Profile',
+        'Settings',
+        'Admin',
+      ]);
+      // The product has no `/dashboard`. This is the defect the row was pinned
+      // for, so it is asserted directly rather than implied by the list above.
+      expect(protectedNavItems?.some((item) => item.href === '/dashboard')).toBe(false);
+      expect(protectedNavItems?.filter((item) => item.adminOnly).map((i) => i.href)).toEqual([
+        '/admin',
+      ]);
+    },
   },
   {
+    // PINNED, not deleted (`HB2`). §04 t-9 lands every door into the app at the
+    // shell. Route and label are pinned together: a route without its label is
+    // how a fork ends up sending users to `/app` behind a button still saying
+    // "Dashboard", which is the same mismatch, only quieter.
     seam: 'lib/app/auth-landing.ts',
     risk: 'a stray value would send every install somewhere else after login',
     assert: () => {
-      expect(appAuthLandingRoute).toBeNull();
-      expect(appAuthLandingLabel).toBeNull();
+      expect(appAuthLandingRoute).toBe('/app');
+      expect(appAuthLandingLabel).toBe('Your journey');
     },
   },
   {
@@ -316,9 +343,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(appAgentFields).toEqual([]),
   },
   {
+    // PINNED, not deleted (`HB2`). §04 t-9 puts the shell behind the edge gate.
+    // Exactly one entry: `/profile` and `/settings` are core protected routes
+    // that the platform merges in, and re-listing them here would read as this
+    // fork owning them.
     seam: 'lib/app/protected-routes.ts',
     risk: 'a stray path would put a public route behind auth on every install',
-    assert: () => expect(appProtectedRoutes).toEqual([]),
+    assert: () => expect(appProtectedRoutes).toEqual(['/app']),
   },
   {
     seam: 'lib/app/env.ts',
