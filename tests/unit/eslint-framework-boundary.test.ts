@@ -154,10 +154,23 @@ describe('exempting a path must not cost it the LEAF ban too', () => {
   // framework-tier block's `files`.
   it.each([
     ['the framework itself', 'lib/framework/facilitation/journey/create.ts'],
-    ['a framework boot seed', 'prisma/seeds/_framework/000-framework-boot.ts'],
     ['a framework seed', 'prisma/seeds/framework/001-framework-rubric-judge.ts'],
   ])('keeps the leaf ban on %s (framework tier)', async (_label, filePath) => {
     expect(await bannedGroupsFor(filePath)).toContain(LEAF_BAN);
+  });
+
+  it('exempts the boot seed from the leaf ban — it is a BRIDGE, not framework code', async () => {
+    // `prisma/seeds/_framework/000-framework-boot.ts` composes the two tiers: it
+    // calls the framework's boot sequence with the leaf's `initLeafApp` passed in.
+    // That is the seed-time twin of `lib/app/bootstrap.ts`, and like that file it
+    // has to see both sides — `leafBan` would forbid the one import it exists to
+    // make. Distinct from `prisma/seeds/framework/**` above, which is ordinary
+    // framework code and keeps the ban.
+    const groups = await bannedGroupsFor('prisma/seeds/_framework/000-framework-boot.ts');
+    expect(groups).not.toContain(LEAF_BAN);
+    expect(groups).not.toContain(FRAMEWORK_BAN);
+    // …but the alias ban still applies, as everywhere.
+    expect(groups).toContain(ALIAS_BAN);
   });
 
   it.each([

@@ -153,6 +153,64 @@ a leaf can make this call.
 > inherit it — it silently turns relative-import enforcement off for those paths.
 > Restate the whole rule per glob.
 
+## Seeding framework configuration
+
+Your seeds can activate a module, bind an agent, or publish a map that references
+one — all of which need the `Module` rows, their slot definitions and the framework
+capability rows to exist. Those are created at **server boot**, and a standalone
+`db:seed` never boots the app.
+
+**Daybreak handles this for you.** `prisma/seeds/_framework/000-framework-boot.ts`
+runs the framework boot sequence against the database, and it sorts after the core
+seeds and before any `app-…` directory, so by the time your seeds run the rows are
+there. `db:reset` and CI need no action from you at all.
+
+### The one case you have to handle yourself
+
+The seed runner **skips a unit whose source hash is unchanged**, so the boot seed
+runs once and then not again. That is fine for a fresh database, `db:reset` and CI.
+It is not fine here:
+
+> You add a new module to your leaf, and a new seed that configures it. You run
+> `db:seed` against your existing dev database. The boot seed is skipped — its
+> source did not change — so your new module never gets its `Module` row, and your
+> new seed fails.
+
+Call the seam at the top of your own seed's `run()`. Your unit's hash _does_ change
+when you edit it, so the sync happens exactly when it is needed:
+
+```ts
+import type { SeedUnit } from '@/prisma/runner';
+import { syncFrameworkForSeed } from '@/lib/framework/seed';
+import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+
+const unit: SeedUnit = {
+  name: 'my-module-config',
+  async run({ prisma }) {
+    await syncFrameworkForSeed({ registerLeaf: initLeafApp });
+    // ...your module's rows now exist; configure them.
+  },
+};
+export default unit;
+```
+
+It is idempotent, so calling it when the boot seed already ran is safe. It is not
+free of noise, though: re-registering a framework capability logs
+`registerFrameworkCapability: duplicate slug — last registration wins` per
+capability, and the registry is `globalThis`-backed, so it persists across seed
+units in one process. Call it from the seeds that need it rather than from all of
+them, or those warnings will outnumber your actual output. They are harmless — the
+last registration is identical to the first.
+
+**Pass `registerLeaf`.** It runs between framework registration and the database
+reconcile, which is the only correct position: the reconcile does not just write
+what it finds, it treats modules missing from the registry as **removed**. Omit the
+hook in a process that has leaf modules and the sync will do exactly that.
+
+`syncFrameworkForSeed()` throws where the server-boot bridge logs and continues —
+deliberately. A seed that silently failed to establish the framework would be
+recorded as applied, and the next seed would fail a long way from the cause.
+
 ### Seeds are exempt, but core seeds are not
 
 Seed files run via `tsx` and are never part of `next build`, so the build-time

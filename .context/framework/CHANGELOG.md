@@ -27,6 +27,30 @@ process.
 
 ### Added
 
+- **Seeds can materialise framework rows without booting the app** (#158). A
+  standalone `db:seed` — what `db:reset` and CI run — never runs
+  `initFramework() → initLeafApp() → syncFramework()`, so the `Module` rows, their
+  slot definitions and the framework capability rows did not exist and a leaf
+  seeding framework *configuration* had nothing to operate on.
+  - **`prisma/seeds/_framework/000-framework-boot.ts`** now runs that sequence.
+    It sorts after every core seed and before any `app-…` directory, so a leaf's
+    own seeds find the rows already in place. **No leaf action needed** for
+    `db:reset` or CI.
+  - **`syncFrameworkForSeed(options?)`** in `lib/framework/seed.ts` is the same
+    sequence as a callable seam, for smoke scripts and for the case the boot seed
+    cannot cover. Pass `registerLeaf: initLeafApp` — it runs *between* framework
+    registration and the database reconcile, the only correct position, because
+    the reconcile treats modules missing from the registry as removed. It
+    **throws** where `initApp()` logs and continues: a seed that silently failed
+    to establish the framework would be recorded as applied.
+
+  **The case you must handle:** the runner skips a unit whose source hash is
+  unchanged, so the boot seed runs once and then not again. Add a module and a
+  seed for it, run `db:seed` on an existing database, and the boot seed is skipped
+  — your new module never gets its row. Call `syncFrameworkForSeed()` at the top of
+  your own seed's `run()`; that unit's hash changes when you edit it. See
+  [`building-on-daybreak.md`](./building-on-daybreak.md).
+
 - **A leaf can now import `@/lib/framework` from the reserved namespaces and from
   its own seeds, with no configuration.** The core → framework import ban exempts
   three more groups (#157):

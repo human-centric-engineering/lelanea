@@ -208,6 +208,15 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'own version of the guard, rather than carry a red suite about a file it ' +
       'no longer shares.',
   },
+  {
+    path: 'tests/unit/prisma/framework-boot-seed.test.ts',
+    reason:
+      'reads `prisma/seeds/` off disk to assert the framework boot seed still ' +
+      'sorts after the core seeds and before any leaf directory. Nothing ' +
+      'imports a seed file, so adding or renaming one — the change that breaks ' +
+      'the ordering, silently — connects to this test by no import chain. ' +
+      '(Daybreak keep-mine; see Sunrise #759 for the fork-tail ask.)',
+  },
 ];
 
 /** Just the paths, for argv building and set arithmetic. */
