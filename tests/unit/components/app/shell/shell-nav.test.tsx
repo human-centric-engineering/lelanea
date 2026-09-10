@@ -302,7 +302,11 @@ describe('ShellNav — the drawer is the full menu', () => {
     // preference and change nothing on screen — a dead control, which is what
     // the rail and the topbar both refused. The burger is the affordance here.
     renderAt('/app', 'small');
-    expect(screen.queryByRole('button', { name: /the menu/ })).toBeNull();
+    // The COLLAPSE control specifically. The drawer does carry a "Close the
+    // menu" button — deliberately, sitting where the burger that opened it was —
+    // so a loose /the menu/ match would now pass for the wrong reason.
+    expect(screen.queryByRole('button', { name: /Collapse the menu|Expand the menu/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Close the menu' })).toBeTruthy();
   });
 
   it('shows full labels in the drawer, never the icon rail', () => {
@@ -315,9 +319,22 @@ describe('ShellNav — the drawer is the full menu', () => {
     expect(screen.getByText('Lelañea')).toBeTruthy();
   });
 
-  it('still offers the control above 900px', () => {
+  it('still offers the collapse control above 900px, and no close button', () => {
     renderAt('/app', 'large');
-    expect(screen.getByRole('button', { name: /the menu/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Collapse the menu/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close the menu' })).toBeNull();
+  });
+
+  it('puts the close control where the burger was, not a link off the app', async () => {
+    // Opening the drawer put the wordmark under the cursor at exactly the
+    // coordinates just pressed, so pressing again left the app for the public
+    // site. The first thing in the drawer's brand row must be the way out of it.
+    renderAt('/app/journey', 'small');
+    const brandRow = document.querySelector('nav[aria-label="Main"] > div')!;
+    const first = brandRow.firstElementChild!;
+
+    expect(first.tagName).toBe('BUTTON');
+    expect(first.getAttribute('aria-label')).toBe('Close the menu');
   });
 });
 

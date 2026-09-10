@@ -103,11 +103,11 @@ describe('the tablet re-parks the conversation', () => {
     expect(chat().className).toContain('-translate-x-[364px]');
   });
 
-  it('does not park when something INSIDE the surface is clicked', async () => {
-    // The handler sits on the whole section, so without a target check it fires
-    // for anything that bubbles out of the body. From t-11 that body is full of
-    // buttons, links and checkboxes — every one of which would have collapsed
-    // the conversation as a side effect of being used.
+  it('parks on a click anywhere in the body that is not a control', async () => {
+    // The guard has to be "not from something interactive", not "only the
+    // section itself": the body FILLS the surface, so a tighter rule meant
+    // almost every click landed on a child and the gesture stopped working
+    // altogether — leaving Escape as the only way to park the conversation.
     renderWorkspace('medium');
     const chat = () => document.querySelector('[data-pane="chat"]')!;
 
@@ -115,6 +115,27 @@ describe('the tablet re-parks the conversation', () => {
     expect(chat().className).toContain('translate-x-0');
 
     await userEvent.click(screen.getByText('the module'));
+    expect(chat().className).toContain('-translate-x-[364px]');
+  });
+
+  it('does not park when a CONTROL inside the surface is used', async () => {
+    // What the guard is actually for: from t-11 the body is full of buttons and
+    // links, and using one should do that thing without also collapsing a pane
+    // on the other side of the screen.
+    mockPathname.current = '/app/journey';
+    renderInShell(
+      <>
+        <ConversationPane />
+        <Workspace>
+          <button type="button">a control in a view</button>
+        </Workspace>
+      </>,
+      'medium'
+    );
+    const chat = () => document.querySelector('[data-pane="chat"]')!;
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+    await userEvent.click(screen.getByRole('button', { name: 'a control in a view' }));
     expect(chat().className).toContain('translate-x-0');
   });
 

@@ -70,7 +70,21 @@ export function Workspace({ children }: { children: React.ReactNode }) {
               // that body is full of buttons, links and checkboxes, every one of
               // which would collapse the conversation as a side effect of being
               // used.
-              if (event.target !== event.currentTarget) return;
+              // "Not from something interactive", NOT "only the section
+              // itself". The tighter guard I added last round was wrong in the
+              // direction that matters: the body fills the surface, so almost
+              // every click lands on a child and the gesture stopped working —
+              // leaving Escape as the only way to park the conversation.
+              //
+              // What the guard is actually for is t-11's views, where a click on
+              // a button or a link should do that thing and not also collapse a
+              // pane on the other side of the screen.
+              if (
+                event.target instanceof Element &&
+                event.target.closest('a, button, input, select, textarea, [role="button"]')
+              ) {
+                return;
+              }
               setChatSlim(true);
             }
           : undefined

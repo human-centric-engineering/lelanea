@@ -1,6 +1,6 @@
 'use client';
 
-import { Mic, SendHorizontal } from 'lucide-react';
+import { Mic, PanelLeftClose, SendHorizontal } from 'lucide-react';
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
@@ -10,6 +10,7 @@ import {
   CHAT_MIN,
   useShellLayout,
 } from '@/components/app/shell/use-shell-layout';
+import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
@@ -120,6 +121,40 @@ export function ConversationPane() {
     >
       {overlay && chatSlim ? null : (
         <>
+          {/*
+            The chat head, and the collapse control the prototype puts in it
+            (`#chat-collapse`), shown whenever there is a workspace to give the
+            width back to — `#app.no-ws` hides it, and so does the small block,
+            where the pane switch does this job instead.
+
+            It was missing entirely, which left Escape as the ONLY way to park
+            the conversation on a tablet: the surface click is a fallback, not an
+            affordance, and nothing on screen said the pane could collapse at
+            all. The strip is how it comes back; this is how it goes away.
+          */}
+          {wsOpen && width !== 'small' ? (
+            <div className="flex flex-none items-center gap-2 px-6 pt-3.5">
+              <button
+                type="button"
+                onClick={() => setChatSlim(true)}
+                aria-label="Collapse the conversation"
+                title="Collapse the conversation"
+                className={cn(
+                  'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
+                  'items-center justify-center rounded-[10px]',
+                  'hover:bg-[var(--color-pill-hover)]',
+                  'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                  'motion-reduce:transition-none',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                  'focus-visible:outline-[var(--color-ring)]'
+                )}
+              >
+                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+              <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+            </div>
+          ) : null}
+
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
             <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
               This is where you and Lelañea will talk. The conversation arrives in a later phase.

@@ -12,6 +12,7 @@
  */
 
 import { fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
@@ -109,5 +110,33 @@ describe('the strip', () => {
 
     const strip = screen.getByRole('button', { name: 'Open the conversation' });
     expect(strip.textContent).toContain('Ask Lelañea');
+  });
+});
+
+describe('collapsing the conversation', () => {
+  it('offers a control to do it, not only the Escape key', () => {
+    // There was NO affordance at all: the surface click is a fallback, and
+    // nothing on screen said the pane could collapse. Escape was the only way,
+    // which is not a thing anyone discovers.
+    renderInShell(<ConversationPane />, 'large');
+    expect(screen.getByRole('button', { name: 'Collapse the conversation' })).toBeTruthy();
+  });
+
+  it('collapses to the strip when it is pressed', async () => {
+    renderInShell(<ConversationPane />, 'large');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+
+    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
+  });
+
+  it('offers none on the clean view, where there is nothing to give the width to', () => {
+    mockPathname.current = '/app';
+    renderInShell(<ConversationPane />, 'large');
+    expect(screen.queryByRole('button', { name: 'Collapse the conversation' })).toBeNull();
+  });
+
+  it('offers none on a phone, where the pane switch does this job', () => {
+    renderInShell(<ConversationPane />, 'small');
+    expect(screen.queryByRole('button', { name: 'Collapse the conversation' })).toBeNull();
   });
 });

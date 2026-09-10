@@ -1,6 +1,6 @@
 'use client';
 
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -192,6 +192,35 @@ export function ShellNav({ user }: ShellNavProps) {
             slim ? 'justify-center px-0' : 'px-[3px]'
           )}
         >
+          {/*
+          In the drawer the close control sits FIRST — where the burger that
+          opened it was.
+
+          Opening the drawer put the wordmark under the reader's cursor at
+          exactly the coordinates they had just pressed, so the obvious "press it
+          again to close" landed on a link to the public site and took them out
+          of the app entirely. A control that moves out from under the gesture
+          that summoned it, and leaves a trapdoor there, is worse than none.
+        */}
+          {width === 'small' ? (
+            <button
+              type="button"
+              onClick={closeNav}
+              aria-label="Close the menu"
+              title="Close the menu"
+              className={cn(
+                'text-muted-foreground hover:text-foreground flex h-9 w-9 flex-none',
+                'items-center justify-center rounded-full',
+                'hover:bg-[var(--color-pill-hover)]',
+                'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                'motion-reduce:transition-none',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                'focus-visible:outline-[var(--color-ring)]'
+              )}
+            >
+              <Menu size={19} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          ) : null}
           <Link
             href="/"
             aria-label="Lelañea, back to the site"
