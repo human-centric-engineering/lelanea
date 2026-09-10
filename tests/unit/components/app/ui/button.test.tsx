@@ -21,6 +21,14 @@
  *      here is that the component reaches for them, because a token nothing uses
  *      passes every measurement in that file.
  *
+ *   3. **The hover LABEL**, which is the same failure one group over and was
+ *      missed for a while by this file itself. `tailwind-merge` only resolves a
+ *      group we have a member in; the base's `hover:text-accent-foreground` had
+ *      no competitor, so it survived and turned every filled button's label
+ *      near-black on hover at roughly 2:1. The alpha-hover case below greps for
+ *      a slashed `hover:bg-` and could never have seen it — a guard shaped
+ *      around the defect that was already known.
+ *
  * The assertions are on the resolved `class` attribute rather than on computed
  * style, deliberately: happy-dom has no Tailwind, so `getComputedStyle` would
  * report nothing for every one of these utilities and each case would pass
@@ -114,6 +122,32 @@ describe('Button', () => {
       // a composite nobody measured.
       const alphaHovers = classes.filter((name) => /^hover:bg-\S+\/\d+$/.test(name));
       expect(alphaHovers).toEqual([]);
+    });
+
+    it.each([
+      ['primary', 'hover:text-primary-foreground'],
+      ['secondary', 'hover:text-secondary-foreground'],
+      ['ghost', 'hover:text-[var(--color-heading)]'],
+      ['destructive', 'hover:text-destructive-foreground'],
+    ] as const)('%s keeps its LABEL colour on hover, at %s', (variant, hoverLabel) => {
+      // The other half of the hover, and the half that was missing. The base
+      // component is shadcn's `ghost`, whose class string is `hover:bg-accent
+      // hover:text-accent-foreground`. `tailwind-merge` drops the background
+      // because a `hover:bg-*` of ours is in the same group and comes later —
+      // but with no `hover:text-*` of ours there was no conflict to resolve, so
+      // the inherited LABEL colour survived every merge. `--color-accent-
+      // foreground` is near-black on the consumer surface: a hovered primary
+      // button put it on terracotta at 2.35:1, and secondary and destructive at
+      // about 2:1. Every resting value in this component clears AA and the
+      // hovered one did not, which is the reverse of what its header claims.
+      render(<Button variant={variant}>Begin</Button>);
+      const classes = classesFor('Begin');
+
+      expect(classes).toContain(hoverLabel);
+      expect(classes).not.toContain('hover:text-accent-foreground');
+      // Exactly one, so a future inherited `hover:text-*` cannot ride along
+      // beside ours and let stylesheet order decide the label.
+      expect(classes.filter((name) => name.startsWith('hover:text-'))).toEqual([hoverLabel]);
     });
 
     it('leaves ghost on a wash, which is a surface and not a label ground', () => {

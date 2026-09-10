@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -26,13 +26,33 @@ import styles from '@/components/app/ui/lotus.module.css';
 const PETAL_ORIGIN = `${LOTUS_ORIGIN.x}px ${LOTUS_ORIGIN.y}px`;
 
 /**
+ * The ripple group's timing, named because `LOTUS_OPENED_MS` is derived from it.
+ * A literal in the JSX below and a literal in that arithmetic would drift apart
+ * silently — the callback would simply start firing early again.
+ */
+const LOTUS_RIPPLE_DELAY_MS = 300;
+const LOTUS_RIPPLE_MS = 2600;
+
+/**
  * How long after the petals start moving `onOpened` fires.
  *
- * Longer than `LOTUS_OPEN_MS` because the last petal does not START until its
- * tier's delay has elapsed: the outer tier waits 340ms and then staggers six
- * petals at 70ms each. 2400ms is the kit's figure and covers the whole cascade.
+ * DERIVED, not chosen. The last petal does not START until its tier's delay and
+ * its own stagger have elapsed, and then it runs for `LOTUS_OPEN_MS`: the outer
+ * tier waits 340ms and staggers six petals at 70ms, so it begins at 690ms and
+ * settles at 2890ms — and the ripples, at 300 + 2600, at 2900ms.
+ *
+ * The kit's figure is 2400ms, and it was taken at its word here. That is 490ms
+ * before the bloom stops moving, so a caller sequencing a screen transition
+ * behind `onOpened` cut the gesture off mid-flight — the one thing §6.9 asks
+ * this component not to feel like. Computing it from the geometry also means a
+ * tier gaining a petal cannot reopen the gap.
  */
-const LOTUS_OPENED_MS = 2400;
+const LOTUS_OPENED_MS = Math.max(
+  LOTUS_RIPPLE_DELAY_MS + LOTUS_RIPPLE_MS,
+  ...LOTUS_TIERS.map(
+    (tier) => tier.base + (tier.angles.length - 1) * LOTUS_PETAL_STAGGER + LOTUS_OPEN_MS
+  )
+);
 
 export interface LotusProps {
   /** Rendered width of the bloom in pixels — see `LotusMark`'s note on `size`. */
@@ -83,6 +103,11 @@ export interface LotusProps {
  * `useReducedMotion()` rather than a media query because the per-petal delays
  * are computed and therefore inline — see that hook's header.
  *
+ * The one thing the preference does NOT do is open a bloom a caller is holding
+ * closed. Skipping an animation is the accessibility promise; deciding the state
+ * the animation was going to arrive at is not, and a controlled `open={false}`
+ * means the caller has a reason. See `settled`.
+ *
  * @see .context/app/planning/lelanea-product-description.md §6.5, §6.9
  */
 export function Lotus({
@@ -100,6 +125,22 @@ export function Lotus({
   const [selfOpen, setSelfOpen] = useState(false);
   const open = controlled ? openProp : selfOpen;
 
+  /**
+   * `onOpened` is held in a ref and kept OUT of the dependency arrays below.
+   *
+   * It used to be a dependency, which starved the callback in the ordinary call
+   * shape: `onOpened={() => …}` is a new function on every render, so the effect
+   * re-ran, its cleanup cleared the pending timer, and the wait restarted from
+   * zero. One extra render doubled it; a parent that re-renders more often than
+   * `LOTUS_OPENED_MS` — a ticking clock, a form, a resize handler — cancelled
+   * and rescheduled it forever and `onOpened` never fired at all. The ref is
+   * written during commit, so a timer that fires later calls the latest one.
+   */
+  const onOpenedRef = useRef(onOpened);
+  useEffect(() => {
+    onOpenedRef.current = onOpened;
+  });
+
   useEffect(() => {
     if (controlled || !autoOpen) return;
 
@@ -108,28 +149,75 @@ export function Lotus({
     // pending this effect re-runs and the cleanup below clears that timer.
     if (reducedMotion) {
       setSelfOpen(true);
-      onOpened?.();
+      onOpenedRef.current?.();
       return;
     }
 
     let openedTimer: ReturnType<typeof setTimeout> | undefined;
     const openTimer = setTimeout(() => {
       setSelfOpen(true);
-      if (onOpened) openedTimer = setTimeout(onOpened, LOTUS_OPENED_MS);
+      openedTimer = setTimeout(() => onOpenedRef.current?.(), LOTUS_OPENED_MS);
     }, delay);
 
     return () => {
       clearTimeout(openTimer);
       clearTimeout(openedTimer);
     };
-  }, [controlled, autoOpen, delay, onOpened, reducedMotion]);
+  }, [controlled, autoOpen, delay, reducedMotion]);
+
+  /**
+   * The controlled path's half of the same promise.
+   *
+   * `onOpened` documents itself as firing once the last petal has come to rest,
+   * and the effect above returns on its first line when a caller supplies
+   * `open` — so `<Lotus open={ready} onOpened={next} />`, which is exactly the
+   * shape the `open` prop's own doc recommends, never called back and a caller
+   * gating on it waited for the session. It fires on the rising edge only, and
+   * `openedFired` is set where it actually fires rather than where it is
+   * scheduled: if the preference flips mid-flight the cleanup clears the timer,
+   * this re-runs, and the reduced-motion branch tells the caller immediately.
+   */
+  const openedFired = useRef(false);
+  useEffect(() => {
+    if (!controlled) return;
+
+    if (!openProp) {
+      openedFired.current = false;
+      return;
+    }
+    if (openedFired.current) return;
+
+    if (reducedMotion) {
+      openedFired.current = true;
+      onOpenedRef.current?.();
+      return;
+    }
+
+    const openedTimer = setTimeout(() => {
+      openedFired.current = true;
+      onOpenedRef.current?.();
+    }, LOTUS_OPENED_MS);
+
+    return () => clearTimeout(openedTimer);
+  }, [controlled, openProp, reducedMotion]);
 
   const frame = water ? LOTUS_FRAMES.water : LOTUS_FRAMES.tight;
   const { width, height } = lotusFrameSize(size, frame);
   const gradientId = `lotus-core-${useId().replace(/:/g, '')}`;
 
-  /** With motion reduced every element is painted at its resting value. */
-  const settled = open || reducedMotion;
+  /**
+   * With motion reduced every element is painted at its resting value — where
+   * the resting value is ours to choose.
+   *
+   * It was `open || reducedMotion` unconditionally, which quietly overruled a
+   * controlled caller: a reader with the OS preference set saw a fully open
+   * lotus, and `data-open="true"`, from a `<Lotus open={false} />`. The
+   * resting-state-is-the-default reasoning in this file's header is about the
+   * paths where nobody said — an uncontrolled bloom whose transition never ran.
+   * When somebody did say, they are obeyed, and the reduced-motion reader gets
+   * the closed state with no transitions rather than no closed state.
+   */
+  const settled = controlled ? open : open || reducedMotion;
   const ease = (property: string, ms: number, delayMs = 0) =>
     reducedMotion ? 'none' : `${property} ${ms}ms ${LOTUS_EASE} ${delayMs}ms`;
 
@@ -183,7 +271,8 @@ export function Lotus({
               opacity: settled ? 1 : 0,
               transition: reducedMotion
                 ? 'none'
-                : `${ease('transform', 2600, 300)}, ${ease('opacity', 2000, 300)}`,
+                : `${ease('transform', LOTUS_RIPPLE_MS, LOTUS_RIPPLE_DELAY_MS)}, ` +
+                  `${ease('opacity', 2000, LOTUS_RIPPLE_DELAY_MS)}`,
             }}
           >
             {LOTUS_RIPPLES.map((ripple) => (

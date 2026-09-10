@@ -54,8 +54,18 @@ describe('Card', () => {
     const classes = screen.getByText('Anything').parentElement?.className ?? '';
 
     expect(classes).toContain('border');
-    expect(classes).toContain('border-card-border');
+    expect(classes).toContain('border-[var(--color-card-border)]');
     expect(classes).not.toContain('dark:');
+
+    // Written as a `var()` and NOT as `border-card-border`, which is what this
+    // case used to assert. That class compiled to nothing — the token lives in
+    // `app/brand-theme.css`, which is unlayered and generates no utilities — so
+    // the border colour fell through to the global `*` rule and every card wore
+    // a 24% hairline in light mode, the one thing §6.4 rules out. A class-name
+    // assertion cannot tell a utility that exists from one that does not, which
+    // is why the general rule lives in `tokens-only.test.ts` and this line only
+    // pins the shape.
+    expect(classes).not.toMatch(/(^|\s)border-card-border(\s|$)/);
   });
 
   it('takes §6.4 radius and elevation from the scale, not from a literal', () => {

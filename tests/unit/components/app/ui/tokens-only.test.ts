@@ -82,6 +82,56 @@ describe('components/app/ui — colour comes from tokens, never from a literal',
     ]);
   });
 
+  it('never names a brand token as a bare utility, which compiles to nothing', () => {
+    // The `card.tsx` defect, as a rule. Tailwind 4 generates colour utilities
+    // from `@theme` ONLY, and `app/brand-theme.css` is unlayered on purpose —
+    // its tokens are real CSS variables and produce no classes at all. So
+    // `border-card-border` emitted no rule: `border` still applied its 1px, the
+    // colour fell through to the global `*` border, and every card wore a
+    // hairline §6.4 forbids. Nothing failed. The class was in the source and in
+    // the DOM, and only the compiled stylesheet knew it meant nothing — which is
+    // why a class-name assertion in `surfaces.test.tsx` passed throughout.
+    //
+    // These tokens have to be reached through `var()`. That is what the rest of
+    // this directory already does, and this case is what keeps it true.
+    const themeBlock = /@theme[^{]*\{([\s\S]*?)\n\}/.exec(
+      readFileSync(path.join(process.cwd(), 'app', 'globals.css'), 'utf8')
+    );
+    expect(themeBlock).not.toBeNull();
+    const generated = new Set(
+      [...themeBlock![1].matchAll(/--color-([\w-]+)\s*:/g)].map((match) => match[1])
+    );
+    expect(generated.size).toBeGreaterThan(10);
+
+    const brandOnly = [
+      ...new Set(
+        [
+          ...readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 'utf8').matchAll(
+            /--color-([\w-]+)\s*:/g
+          ),
+        ].map((match) => match[1])
+      ),
+    ].filter((name) => !generated.has(name));
+    // If this ever empties, the case below is vacuous rather than passing.
+    expect(brandOnly).toContain('card-border');
+
+    const UTILITY = new RegExp(
+      String.raw`(?<![\w:[-])(?:[a-z-]+:)*(?:bg|text|border|ring|outline|fill|stroke|shadow|from|via|to|decoration|divide|accent|caret|placeholder)-(?:${brandOnly.join('|')})(?![\w-])`,
+      'g'
+    );
+
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      const code = stripComments(readFileSync(path.join(UI_DIR, file), 'utf8'));
+      for (const match of code.matchAll(UTILITY)) offenders.push(`${file}: ${match[0]}`);
+    }
+    expect(offenders).toEqual([]);
+
+    // The negative control — the pattern is proved to fire on the real defect.
+    expect('border-card-border'.match(UTILITY)).toEqual(['border-card-border']);
+    expect('border-[var(--color-card-border)]'.match(UTILITY) ?? []).toEqual([]);
+  });
+
   it('reads the tokens it relies on out of the stylesheet', () => {
     // The other half of the rule, and the half a grep cannot express: a
     // `var(--color-…)` that names a token nothing declares resolves to nothing

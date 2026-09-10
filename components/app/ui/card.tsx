@@ -27,6 +27,17 @@ export interface CardProps extends Omit<React.ComponentPropsWithoutRef<'div'>, '
  * theme it is in and cannot be rendered into the wrong one. It also means a card
  * inside a dark island on a light page is correct, which a prop could not be.
  *
+ * The colour is written as `border-[var(--color-card-border)]` and NOT as
+ * `border-card-border`. Tailwind 4 generates colour utilities from `@theme`
+ * only, and this token is declared in `app/brand-theme.css`, which is unlayered
+ * on purpose and produces no utilities — see note 4 in that file's header. So
+ * `border-card-border` compiled to nothing at all: `border` still applied its
+ * 1px, the colour fell through to `globals.css`'s `* { border-color:
+ * var(--color-border) }`, and every card carried a 24% hairline in light mode —
+ * the one thing §6.4 says it must not have — while the 8% dark value was never
+ * used. The class name looked right in the source and in the DOM; only the
+ * compiled stylesheet knew.
+ *
  * ## `rounded-lg` is 20px here
  *
  * `app/brand-theme.css` restates Tailwind's radius scale at §6.4's values, so
@@ -53,7 +64,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={ref}
       className={cn(
-        'bg-card text-card-foreground border-card-border rounded-lg border p-6',
+        'bg-card text-card-foreground rounded-lg border border-[var(--color-card-border)] p-6',
         'shadow-[var(--shadow-rest)]',
         className
       )}

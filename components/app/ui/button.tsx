@@ -61,13 +61,32 @@ export const appButtonVariants = cva(cn('rounded-full font-medium', FOCUS_RING, 
      * rest. A token is a known colour, so the hover state is
      * measurable and the test measures it: 5.09, 5.65 and 5.15 against oyster,
      * every one of them ABOVE its resting value rather than below.
+     *
+     * EVERY VARIANT ALSO RESTATES ITS LABEL COLOUR UNDER `hover:`, which looks
+     * redundant and is not. The base below is shadcn's `ghost`, whose class
+     * string is `hover:bg-accent hover:text-accent-foreground`. `tailwind-merge`
+     * drops the first — a `hover:bg-*` of ours is in the same group and comes
+     * later — but a group with no member of ours in it is not a conflict, so
+     * with only a resting `text-*` here the inherited `hover:text-accent-
+     * foreground` SURVIVES. It is `#282c2e` on the consumer surface: hovering a
+     * primary button swapped the oyster label for near-black on terracotta at
+     * 2.35:1, and secondary and destructive for about 2:1. Restating the label
+     * gives the group a later member and the inherited class is dropped with the
+     * background it came in with.
      */
     variant: {
-      primary: 'bg-primary text-primary-foreground hover:bg-[var(--color-primary-hover)]',
-      secondary: 'bg-secondary text-secondary-foreground hover:bg-[var(--color-secondary-hover)]',
-      ghost: 'bg-transparent text-[var(--color-heading)] hover:bg-[var(--color-pill-hover)]',
+      primary:
+        'bg-primary text-primary-foreground ' +
+        'hover:bg-[var(--color-primary-hover)] hover:text-primary-foreground',
+      secondary:
+        'bg-secondary text-secondary-foreground ' +
+        'hover:bg-[var(--color-secondary-hover)] hover:text-secondary-foreground',
+      ghost:
+        'bg-transparent text-[var(--color-heading)] ' +
+        'hover:bg-[var(--color-pill-hover)] hover:text-[var(--color-heading)]',
       destructive:
-        'bg-destructive text-destructive-foreground hover:bg-[var(--color-destructive-hover)]',
+        'bg-destructive text-destructive-foreground ' +
+        'hover:bg-[var(--color-destructive-hover)] hover:text-destructive-foreground',
     },
     /** The kit's three, whose padding is generous per §6.4's 8-point scale. */
     size: {
@@ -97,9 +116,11 @@ export interface AppButtonProps
  * — the focus indicator and the hover fill — plus the pill radius and §6.5's
  * press.
  *
- * That composition leans on `tailwind-merge` resolving four conflicts in our
+ * That composition leans on `tailwind-merge` resolving five conflicts in our
  * favour, which is a real dependency on a library's behaviour and therefore
- * asserted rather than assumed. See `FOCUS_RING`.
+ * asserted rather than assumed. See `FOCUS_RING`, and the hover-label note on
+ * `appButtonVariants` for the one that is only a conflict because we made it
+ * one.
  *
  * `variant="link"` is deliberately absent. §6.5 gives a text link "a 1px
  * underline at 3px offset with no colour change", which is a link's treatment

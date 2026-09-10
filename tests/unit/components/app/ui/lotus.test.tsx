@@ -32,7 +32,7 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Lotus } from '@/components/app/ui/lotus';
+import { LOTUS_OPENED_MS, Lotus } from '@/components/app/ui/lotus';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { LOTUS_FRAMES, LOTUS_TIERS, LOTUS_VEIN_ANGLES } from '@/components/app/ui/lotus-geometry';
 
@@ -95,6 +95,27 @@ function petals(): SVGPathElement[] {
 /** Petals and veins together — what the whole bloom draws as paths. */
 function allPaths(): SVGPathElement[] {
   return [...document.querySelectorAll<SVGPathElement>('svg g[fill] path')];
+}
+
+/**
+ * When every inline transition on the rendered bloom has finished, in ms.
+ *
+ * Read off the DOM rather than recomputed from the constants, because a test
+ * that redoes the component's arithmetic agrees with it by construction and
+ * would have shipped the same 490ms gap. Each declaration is
+ * `<property> <duration>ms <easing> <delay>ms`, and the easing is a
+ * `cubic-bezier(…)` with commas inside it — hence the split that ignores a
+ * comma with an unclosed paren behind it.
+ */
+function lastMovementMs(): number {
+  const ends: number[] = [];
+  for (const node of document.querySelectorAll<HTMLElement>('[style*="transition"]')) {
+    for (const declaration of node.style.transition.split(/,(?![^(]*\))/)) {
+      const times = [...declaration.matchAll(/([\d.]+)ms/g)].map((match) => Number(match[1]));
+      if (times.length > 0) ends.push(times[0] + (times[1] ?? 0));
+    }
+  }
+  return Math.max(0, ...ends);
 }
 
 describe('Lotus', () => {
@@ -190,10 +211,92 @@ describe('Lotus', () => {
       act(() => void vi.advanceTimersByTime(0));
       expect(onOpened).not.toHaveBeenCalled();
 
-      // Longer than the 2200ms opening, because the outer tier waits 340ms and
-      // then staggers six petals before its own transition starts.
-      act(() => void vi.advanceTimersByTime(2400));
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS - 1));
+      expect(onOpened).not.toHaveBeenCalled();
+
+      act(() => void vi.advanceTimersByTime(1));
       expect(onOpened).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for the bloom to STOP, not for the design kit figure', () => {
+      // The bug this replaces: `LOTUS_OPENED_MS` was the kit's 2400ms, taken at
+      // its word. The last outer petal does not start until 340 + 5×70 = 690ms
+      // and then runs 2200ms, so it settles at 2890ms, and the ripples at 2900 —
+      // ~490ms after the caller had been told the gesture was over. A screen
+      // transition sequenced behind it cut the bloom off mid-flight, which is
+      // visible to a person and to nothing else.
+      //
+      // Asserted against every transition actually rendered, so an element added
+      // later with a longer tail fails here rather than shortening the gesture.
+      render(<Lotus open />);
+
+      const lastMovement = lastMovementMs();
+      expect(lastMovement).toBeGreaterThan(2400);
+      expect(LOTUS_OPENED_MS).toBeGreaterThanOrEqual(lastMovement);
+    });
+
+    it('fires an inline callback however often the parent re-renders', () => {
+      // `onOpened={() => …}` is a new function on every render and is the
+      // ordinary call shape. It used to be an effect dependency, so each render
+      // cleared the pending timer and rescheduled from zero: one extra render
+      // doubled the wait, and a parent that re-renders faster than the gesture —
+      // a ticking clock, a form, a resize handler — starved the callback for the
+      // whole session. Nothing threw, and the bloom looked perfect throughout.
+      //
+      // The renders are committed BETWEEN advances rather than inside one, which
+      // is the whole point: a single `act()` around the full advance flushes
+      // effects once at the end, so the interleaving that causes this never
+      // happens and the case passes against the defect it is meant to catch.
+      vi.useFakeTimers();
+      const opened = vi.fn();
+      const { rerender } = render(<Lotus onOpened={() => opened()} />);
+
+      for (let elapsed = 0; elapsed < LOTUS_OPENED_MS + 1_000; elapsed += 100) {
+        act(() => void vi.advanceTimersByTime(100));
+        rerender(<Lotus onOpened={() => opened()} />);
+      }
+
+      expect(opened).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells a caller who drives it, which is the shape the prop doc recommends', () => {
+      // `<Lotus open={ready} onOpened={next} />` never called back at all: the
+      // auto-open effect returned on its first line for a controlled bloom, and
+      // it was the only place `onOpened` was reached from. A caller gating a
+      // screen on it waited for the session, and the prop's own doc promised
+      // otherwise.
+      vi.useFakeTimers();
+      const onOpened = vi.fn();
+      const { rerender } = render(<Lotus open={false} onOpened={onOpened} />);
+
+      act(() => void vi.advanceTimersByTime(10_000));
+      expect(onOpened).not.toHaveBeenCalled();
+
+      rerender(<Lotus open onOpened={onOpened} />);
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS - 1));
+      expect(onOpened).not.toHaveBeenCalled();
+
+      act(() => void vi.advanceTimersByTime(1));
+      expect(onOpened).toHaveBeenCalledTimes(1);
+
+      // Once per opening, not once per render while open.
+      rerender(<Lotus open onOpened={onOpened} />);
+      act(() => void vi.advanceTimersByTime(10_000));
+      expect(onOpened).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells a caller again if the bloom is closed and reopened', () => {
+      vi.useFakeTimers();
+      const onOpened = vi.fn();
+      const { rerender } = render(<Lotus open onOpened={onOpened} />);
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
+      expect(onOpened).toHaveBeenCalledTimes(1);
+
+      rerender(<Lotus open={false} onOpened={onOpened} />);
+      rerender(<Lotus open onOpened={onOpened} />);
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
+
+      expect(onOpened).toHaveBeenCalledTimes(2);
     });
 
     it('does not open on its own when told not to', () => {
@@ -265,6 +368,30 @@ describe('Lotus', () => {
       prefersReduced = true;
       const onOpened = vi.fn();
       render(<Lotus onOpened={onOpened} delay={5_000} />);
+
+      expect(onOpened).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open a bloom the caller is holding closed', () => {
+      // `settled` was `open || reducedMotion` for every path, so a reader with
+      // the OS preference set saw a fully open lotus — and `data-open="true"` —
+      // from a `<Lotus open={false} />`. Skipping an animation is the promise a
+      // motion preference makes; choosing the state it was going to arrive at is
+      // not, and the caller had a reason.
+      prefersReduced = true;
+      render(<Lotus open={false} />);
+
+      expect(bloom()).toHaveAttribute('data-open', 'false');
+      expect(bloom()).toHaveAttribute('data-reduced-motion', 'true');
+      for (const petal of petals()) {
+        expect(petal.style.transition).toBe('none');
+      }
+    });
+
+    it('tells a controlled caller on the same tick, too', () => {
+      prefersReduced = true;
+      const onOpened = vi.fn();
+      render(<Lotus open onOpened={onOpened} />);
 
       expect(onOpened).toHaveBeenCalledTimes(1);
     });
