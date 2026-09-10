@@ -27,7 +27,7 @@ export const metadata: Metadata = {
  * Phase 3.5: Landing Page & Marketing
  * Phase 4.4: Added maintenance mode support
  *
- * ## Lelañea: the frame is the leaf's (t-5)
+ * ## Lelañea: the frame is the leaf's (t-5, divergence row 6)
  *
  * The three swapped components are the ONLY change to this Sunrise-owned file,
  * kept to imports and two elements so the next upstream merge is a one-line

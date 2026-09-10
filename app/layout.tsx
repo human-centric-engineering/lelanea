@@ -22,7 +22,7 @@ import { brandFontVariables } from '@/app/fonts';
 // double-branding. Previously this hardcoded "- Next.js Starter" and the
 // starter blurb, which every fork inherited on any un-templated page.
 export const metadata: Metadata = {
-  // LELAÑEA divergence (row 7): without `metadataBase`, Next resolves a
+  // LELAÑEA divergence (row 8): without `metadataBase`, Next resolves a
   // relative `og:image` against `VERCEL_URL` → `VERCEL_PROJECT_PRODUCTION_URL`
   // → `http://localhost:3000`. This app deploys via Docker, so none of the
   // Vercel variables exist and every shared link would have unfurled against

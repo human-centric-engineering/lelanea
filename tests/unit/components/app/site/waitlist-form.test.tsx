@@ -83,7 +83,14 @@ describe('WaitlistForm', () => {
       render(<WaitlistForm />);
 
       expect(screen.getByText(new RegExp(`opening in small groups from`))).toBeTruthy();
-      expect(screen.getByText(new RegExp(LAUNCH_WINDOW.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeTruthy();
+      // EVERY regex metacharacter is escaped, not just the brackets
+      // `[LAUNCH WINDOW]` happens to contain today. CodeQL flagged the narrow
+      // version as incomplete escaping and was right: the whole point of this
+      // constant is that it changes, and the first value containing a `.` or a
+      // `?` would turn this assertion into a looser match that still passed.
+      expect(
+        screen.getByText(new RegExp(LAUNCH_WINDOW.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      ).toBeTruthy();
     });
 
     it('tells assistive technology the group is unavailable, which `disabled` alone does not', () => {
