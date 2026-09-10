@@ -367,22 +367,31 @@ describe('app/global-error', () => {
       expect(screen.queryByText('abc123')).not.toBeInTheDocument();
     });
 
-    it('should show contact support link in production mode', () => {
+    // LELAÑEA divergence (t-5) — ADJUSTED, NOT DELETED.
+    //
+    // Upstream, these two cases assert that production shows a "contact
+    // support" link pointing at `/contact`. This fork deleted that page: it was
+    // Sunrise's placeholder, it hardcoded "Have a question about Sunrise?", and
+    // the design has no contact route. D3's ruling for f-public is nothing
+    // rather than a dead link, and an internal 404 is a dead link.
+    //
+    // Inverted rather than removed, because the protection is worth keeping in
+    // the opposite direction: what must never come back is a link to a route
+    // that does not exist, on the one page a user reaches when everything else
+    // has already failed. Restore the upstream form together with a real
+    // support destination.
+    it('offers no link to the deleted contact page in production', () => {
       // Arrange & Act
       render(<GlobalError error={mockError} reset={mockReset} />);
 
-      // Assert
-      expect(screen.getByText(/If this problem persists, please/i)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /contact support/i })).toBeInTheDocument();
-    });
-
-    it('should have correct href for contact support link', () => {
-      // Arrange & Act
-      render(<GlobalError error={mockError} reset={mockReset} />);
-
-      // Assert
-      const contactLink = screen.getByRole('link', { name: /contact support/i });
-      expect(contactLink).toHaveAttribute('href', '/contact');
+      // Assert: the page still renders its own controls, so this is not an
+      // absence asserted against an empty render.
+      expect(screen.getByRole('button', { name: /go home/i })).toBeInTheDocument();
+      expect(screen.queryByText(/If this problem persists, please/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /contact support/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryAllByRole('link').filter((l) => l.getAttribute('href') === '/contact')
+      ).toHaveLength(0);
     });
   });
 
@@ -457,7 +466,10 @@ describe('app/global-error', () => {
       expect(screen.getByRole('button', { name: /go home/i })).toBeInTheDocument();
     });
 
-    it('should have accessible contact support link in production', () => {
+    // LELAÑEA divergence (t-5) — see the production-mode block above. The
+    // accessible route out of a fatal error is now the two buttons; there is no
+    // third destination to name until a support channel exists.
+    it('leaves the visitor two working ways out, and no dead third', () => {
       // Arrange: Set production environment
       (process.env as { NODE_ENV: string }).NODE_ENV = 'production';
 
@@ -465,9 +477,9 @@ describe('app/global-error', () => {
       render(<GlobalError error={mockError} reset={mockReset} />);
 
       // Assert
-      const contactLink = screen.getByRole('link', { name: /contact support/i });
-      expect(contactLink).toBeInTheDocument();
-      expect(contactLink).toHaveAttribute('href', '/contact');
+      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /go home/i })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /contact support/i })).not.toBeInTheDocument();
     });
   });
 

@@ -1,0 +1,208 @@
+/*
+ * The public site's frame — header and footer.
+ *
+ * ## Why a CSS module and not Tailwind utilities
+ *
+ * Two reasons, both structural rather than taste.
+ *
+ * 1. **The breakpoints are the prototype's, not Tailwind's.** The design
+ *    reflows at 1180px, 880px and 620px; Tailwind's scale is 640/768/1024/1280.
+ *    Every rule below would be an arbitrary variant (`max-[880px]:`) repeated on
+ *    six elements, which is the same media query written six times with no
+ *    single place to read it.
+ *
+ * 2. **The narrow header reflow is a `flex` `order` dance with a zero-height
+ *    `::after` to break the row.** There is no utility for a pseudo-element used
+ *    as a line break, and expressing it inline would put the mechanism in six
+ *    class attributes instead of one commented block.
+ *
+ * Colours are tokens from `app/brand-theme.css` throughout — no hex literals,
+ * which the colour-literal CI guard enforces on every branch anyway.
+ *
+ * @see .context/app/planning/design/lelanea.html — `.site-nav`, `.site-foot`
+ */
+
+/* ---------------------------------------------------------------- header */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  height: 78px;
+  padding: 0 clamp(20px, 5vw, 72px);
+  /* 88% ground plus a blur, so the page reads through the bar as it scrolls
+     under it rather than sliding behind an opaque slab. */
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.wordmark > svg {
+  flex: none;
+}
+
+.wordmarkText {
+  font-family: var(--font-serif);
+  font-size: 25px;
+  color: var(--color-heading);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.navlink {
+  font-size: 15px;
+  color: var(--color-muted-foreground);
+  padding: 6px 2px;
+  border-bottom: 1px solid transparent;
+  transition: color 200ms var(--ease-brand);
+}
+
+.navlink:hover {
+  color: var(--color-foreground);
+  text-decoration: none;
+}
+
+/* `aria-current` is the styling hook as well as the announcement, so the
+   underline cannot be present while the assistive-technology state is absent. */
+.navlink[aria-current='page'] {
+  color: var(--color-heading);
+  border-bottom-color: var(--color-accent-ink);
+}
+
+/* The way back in sits with the page links but reads as an action. */
+.navLogin {
+  font-size: 15px;
+  padding: 6px 2px;
+  color: var(--color-foreground);
+  transition: color 200ms var(--ease-brand);
+}
+
+.navLogin:hover {
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+/*
+ * The narrow header keeps the wordmark and the one thing you came to do on the
+ * first row, and lets the page links wrap underneath.
+ */
+@media (max-width: 880px) {
+  .nav {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 12px 22px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .wordmark {
+    order: 1;
+  }
+  .spacer {
+    order: 2;
+  }
+  .navLogin,
+  .themeSlot {
+    order: 3;
+  }
+  .cta {
+    order: 4;
+  }
+
+  /* A zero-height flex item, purely to break the row before the page links. */
+  .nav::after {
+    content: '';
+    order: 5;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .navlink {
+    order: 6;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .wordmarkText {
+    font-size: 22px;
+  }
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.foot {
+  margin-top: auto;
+  padding: 44px clamp(20px, 5vw, 72px) 40px;
+  background: var(--color-card);
+  border-top: 1px solid var(--color-divider);
+}
+
+.footTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px 34px;
+}
+
+.footDomain {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.footLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+  font-size: 14px;
+}
+
+.footLinks a,
+.footLinks button {
+  color: var(--color-muted-foreground);
+  transition: color 200ms var(--ease-brand);
+}
+
+.footLinks a:hover,
+.footLinks button:hover {
+  color: var(--color-foreground);
+}
+
+/*
+ * The disclaimer. It is site-wide rather than per-page on purpose: "not a
+ * crisis service" has to be true of every page someone can land on, and a
+ * paragraph that lives on the home page only is absent from exactly the pages
+ * a worried person reads next.
+ */
+.footNote {
+  max-width: 76ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+  margin-top: 26px;
+}
+
+.footLegal {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  margin-top: 18px;
+}
+
+@media (max-width: 620px) {
+  .foot {
+    padding: 32px 20px 30px;
+  }
+}
