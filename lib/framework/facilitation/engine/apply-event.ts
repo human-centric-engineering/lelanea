@@ -1,7 +1,13 @@
 /**
- * `applyEvent` (f-engine t-3) — the **sole writer** of journey state (spec §5.3,
- * F11). Agents and APIs *request* a transition; the engine is the only thing that
- * mutates state, and only through a validated transition.
+ * `applyEvent` (f-engine t-3) — the **sole writer** of journey *lifecycle* state
+ * (spec §5.3, F11): node `status`, `timesCompleted`, the timestamps, and the event
+ * log. Agents and APIs *request* a transition; the engine is the only thing that
+ * mutates that state, and only through a validated transition.
+ *
+ * The one field on `UserNodeState` it does **not** own is `progress` — the schema
+ * declares that payload module-owned and opaque to the engine, and #168 gave it its
+ * own writer (`journey/progress.ts`). A module records its own facts there without
+ * going through a transition; nothing it writes can reach the fields above.
  *
  * Contract:
  * - **Entry requires availability** (decision 7): an `enter` is validated against the

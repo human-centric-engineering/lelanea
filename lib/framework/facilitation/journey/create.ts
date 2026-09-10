@@ -12,7 +12,9 @@
  *
  * This is the counterpart to `applyJourneyTransition`: **create the journey, then
  * transition it.** It writes the `UserJourney` row and nothing else — no node
- * states, no events. `applyEvent` remains the sole writer of state.
+ * states, no events. `applyEvent` remains the sole writer of journey *lifecycle*
+ * state; the one `UserNodeState` field it does not own, the module-defined
+ * `progress` payload, got its own writer in #168 (`progress.ts`).
  *
  * ## The four decisions behind the signature
  *

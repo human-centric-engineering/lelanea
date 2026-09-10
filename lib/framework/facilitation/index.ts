@@ -1,6 +1,6 @@
 /**
  * Facilitation domain — the versioned map, per-user journey state, the
- * deterministic engine (sole writer of state), the advisory guidance layer, and
+ * deterministic engine (sole writer of lifecycle state), the advisory guidance layer, and
  * governance.
  *
  * The authored **map** (schema, referential validator, and version service —

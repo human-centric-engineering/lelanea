@@ -13,11 +13,13 @@
  * rows — the access decision and the row filter agree.
  *
  * This *file* ships no writer — these reads are the consumer side of the tables t-1
- * shipped. The two writers live elsewhere and are split on purpose: **state
- * transitions** are `applyEvent` (`f-engine`, F11), the sole writer of node
- * projections and the event log; **journey creation** is `createJourney`
- * (`create.ts`, #159). f-journey-state's own note said creation was
- * `f-engine`'s too, which turned out to be nobody's — see #159.
+ * shipped. The three writers live elsewhere and are split on purpose: **state
+ * transitions** are `applyEvent` (`f-engine`, F11), the sole writer of the node
+ * lifecycle projection and the event log; **journey creation** is `createJourney`
+ * (`create.ts`, #159); and the module-owned `UserNodeState.progress` payload — which
+ * the engine treats as opaque — is `recordNodeProgress` (`progress.ts`, #168).
+ * f-journey-state's own note said creation was `f-engine`'s too, which turned out to
+ * be nobody's — see #159.
  */
 
 import { Prisma } from '@prisma/client';

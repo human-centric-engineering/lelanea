@@ -27,6 +27,55 @@ process.
 
 ### Added
 
+- **`recordNodeProgress(viewer, key, nodeKey, patch, scope?)`** — the writer for
+  `UserNodeState.progress` (`lib/framework/facilitation/journey/progress.ts`,
+  barrel-exported) (#168). The column is declared module-owned and opaque to the
+  engine, and until now no module could reach it: `applyEvent` writes only the
+  lifecycle projection, `TransitionRequest` carries no payload, and `JourneyEvent`
+  is written inside the engine's own transaction. The one field the framework set
+  aside *for* a module was the one field a module could not write.
+
+  Use it for a beat that must happen **exactly once per node** — showing someone a
+  chart of their own week for the first time, presenting a gap analysis — where
+  re-firing replays a moment the person has already had.
+
+  ```ts
+  const result = await recordNodeProgress(viewer, key, 'week-chart', { chartShown: true });
+  if (!result.ok) {
+    // 'journey_not_started' — start it first; 'node_not_entered' — enter the node first.
+  }
+  ```
+
+  - **It merges, and the database does the merging.** Postgres `jsonb ||` in a
+    single statement, so two beats landing together cannot lose each other's keys —
+    the read-modify-write a leaf would otherwise write itself has exactly that bug,
+    in the one field whose job is "this must not happen twice". Merging the same
+    patch twice is a no-op, so a failed call is safe to retry.
+  - **The merge is shallow.** A nested object in `patch` replaces the one it lands
+    on rather than merging into it. Keep ledger keys flat. A key set to `null` is
+    stored as JSON `null`, not removed — `||` cannot delete.
+  - **It will not create a `UserNodeState`.** A node that was never entered is
+    refused (`node_not_entered`), because creating the row would mean inventing a
+    `status` — the field `applyEvent` is the sole writer of. Enter the node, then
+    record against it.
+  - **Structured refusals, not `null`.** The rest of the journey family returns
+    `null` for "nothing to do"; this one does not, because a write that silently did
+    not happen leaves the beat firing forever, and the two reasons want different
+    fixes. It mirrors `applyEvent`'s `ok`-discriminated result.
+  - **Guarded by `canWrite`**, the pinned self-or-admin-support grant — not the
+    `canRead` that Sunrise #367 will widen to cohorts. Same reasoning as
+    `createJourney`.
+
+  **`TransitionRequest` deliberately did *not* gain a `progress` field**, the
+  alternative the issue offered for "the beat coincides with a transition". It would
+  give the framework two ways to write one field and put module-owned data inside the
+  pure engine, to buy an atomicity that idempotence already covers. Additive if a
+  real case needs it.
+
+  **If you added a bespoke column for this** — as Daybreak's first leaf did — you can
+  now move that ledger onto `UserNodeState.progress` and drop the column and its
+  migration.
+
 - **Seeds can materialise framework rows without booting the app** (#158). A
   standalone `db:seed` — what `db:reset` and CI run — never runs
   `initFramework() → initLeafApp() → syncFramework()`, so the `Module` rows, their
