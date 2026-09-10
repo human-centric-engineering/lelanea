@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isCoreSource,
   checkMigrationHygiene,
   extractTables,
   isFrameworkMigration,
@@ -217,5 +218,63 @@ describe('scanForFrameworkVocab', () => {
       { path: 'lib/a.ts', token: 'nodeKey', line: 2 },
       { path: 'lib/b.ts', token: 'dataSlot', line: 1 },
     ]);
+  });
+});
+
+describe('isCoreSource', () => {
+  // The vocab scan runs over `lib`, `app`, `components`, `prisma/schema`. Anything
+  // this returns true for is held to the zero-framework-vocabulary ban, so a path
+  // wrongly classified as core fails CI for using the vocabulary it is entitled to.
+  it.each([
+    ['a core lib module', 'lib/orchestration/chat/handler.ts'],
+    ['a core route', 'app/api/v1/admin/orchestration/agents/route.ts'],
+    ['a core component', 'components/admin/orchestration/agents-table.tsx'],
+    ['a core page', 'app/(protected)/dashboard/page.tsx'],
+    ['the platform schema', 'prisma/schema/platform.prisma'],
+    // A leaf's OWN vocabulary is not a reserved namespace — it is core as far as
+    // this scan is concerned, and the leaf overrides via its own ESLint seam.
+    ['a leaf route outside the reserved namespace', 'app/(protected)/programme/page.tsx'],
+  ])('classifies %s as core', (_label, rel) => {
+    expect(isCoreSource(rel)).toBe(true);
+  });
+
+  it.each([
+    ['the framework itself', 'lib/framework/facilitation/journey/create.ts'],
+    ['framework admin pages', 'app/admin/framework/modules/page.tsx'],
+    ['framework admin components', 'components/admin/framework/journey-canvas.tsx'],
+    ['framework admin routes', 'app/api/v1/admin/framework/modules/route.ts'],
+    ['framework consumer routes', 'app/api/v1/framework/surface/route.ts'],
+    ['a framework schema file', 'prisma/schema/framework-facilitation.prisma'],
+  ])('exempts %s (framework tier)', (_label, rel) => {
+    expect(isCoreSource(rel)).toBe(false);
+  });
+
+  it.each([
+    ['the leaf lib surface', 'lib/app/leaf-bootstrap.ts'],
+    ['the leaf schema', 'prisma/schema/app.prisma'],
+    // #157: these three MIRROR the reserved-namespace exemptions in
+    // lib/framework/eslint.config.mjs. Exempting a leaf route from the import ban
+    // without exempting it here just moves the failure to this scan.
+    ['leaf consumer routes', 'app/api/v1/app/runs/route.ts'],
+    ['leaf authenticated pages', 'app/(protected)/app/dashboard/page.tsx'],
+    ['leaf public pages', 'app/(public)/app/landing/page.tsx'],
+    ['leaf auth-flow pages', 'app/(auth)/app/onboarding/page.tsx'],
+    ['leaf admin pages', 'app/admin/app/settings/page.tsx'],
+    ['leaf components', 'components/app/run-card.tsx'],
+  ])('exempts %s (leaf tier)', (_label, rel) => {
+    expect(isCoreSource(rel)).toBe(false);
+  });
+
+  it('exempts test files wherever they live', () => {
+    expect(isCoreSource('lib/orchestration/handler.test.ts')).toBe(false);
+    expect(isCoreSource('components/foo.spec.tsx')).toBe(false);
+  });
+
+  it('does not exempt a path that merely CONTAINS a reserved segment', () => {
+    // Prefix matching, not substring: a core route about "apps" is still core.
+    expect(isCoreSource('app/api/v1/admin/apps/route.ts')).toBe(true);
+    expect(isCoreSource('lib/apps/registry.ts')).toBe(true);
+    // ...and a file NAMED like the leaf schema elsewhere is not the leaf schema.
+    expect(isCoreSource('lib/framework-adjacent.ts')).toBe(true);
   });
 });

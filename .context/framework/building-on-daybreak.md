@@ -89,6 +89,80 @@ the registry refuses a section another tier claimed.
 
 ---
 
+## Importing `@/lib/framework` from your own code
+
+Daybreak bans `@/lib/framework` imports from core and app-shell code. The reason is
+not hygiene: a static `@/lib/framework` specifier resolves at **build** time, so
+upstream Sunrise — or a sibling fork with no `lib/framework/` folder — would fail
+`next build`. In **your** repo that folder always exists, so the ban is not
+protecting you from anything; it is protecting the tiers above you. You have two
+ways through it, and the first is free.
+
+### 1. Use the reserved namespaces (no configuration)
+
+Sunrise and Daybreak both keep these empty for you, and they are already exempt:
+
+| Your code                | Reserved path            |
+| ------------------------ | ------------------------ |
+| Consumer API routes      | `app/api/v1/app/**`      |
+| Authenticated pages      | `app/(protected)/app/**` |
+| Public pages             | `app/(public)/app/**`    |
+| Auth-flow pages          | `app/(auth)/app/**`      |
+| Admin pages              | `app/admin/app/**`       |
+| React components         | `components/app/**`      |
+| Server-side registration | `lib/app/**`             |
+| Your seeds               | `prisma/seeds/app-*/**`  |
+
+Put a route that calls `applyJourneyTransition` or `resolveModuleSurface` at
+`app/api/v1/app/runs/route.ts` and it just works — no override, and nothing to
+re-do on a Daybreak upgrade.
+
+### 2. Use your own vocabulary, and re-permit it yourself
+
+If you would rather your URLs read `programme` or `journal` than `app`, that is a
+perfectly good reason to leave the reserved namespaces — Daybreak cannot exempt your
+words, because the next leaf has different ones and they would accumulate in a
+framework-owned config forever. Re-permit them in your own
+`lib/app/eslint.config.mjs`, which the root config spreads **last** so your block
+wins for your files:
+
+```js
+export default [
+  {
+    files: ['app/(protected)/programme/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            // RESTATE the alias ban — see the footgun below.
+            { group: ['./*', '../*'], message: 'Use the @/ path alias.' },
+          ],
+        },
+      ],
+    },
+  },
+];
+```
+
+**This is the supported mechanism, not a workaround.** The seam exists precisely so
+a leaf can make this call.
+
+> **The flat-config footgun.** `no-restricted-imports` **replaces** rather than
+> merges across matching blocks. A block that omits the `@/`-alias ban does not
+> inherit it — it silently turns relative-import enforcement off for those paths.
+> Restate the whole rule per glob.
+
+### Seeds are exempt, but core seeds are not
+
+Seed files run via `tsx` and are never part of `next build`, so the build-time
+argument does not reach them — `prisma/seeds/app-*/**` may import the framework
+freely. That is _not_ a blanket exemption for `prisma/seeds/`: the numbered core
+seeds at the top level (`prisma/seeds/001-system-owner.ts`, …) are Sunrise's and
+stay banned, because they exist upstream and in forks with no framework tier.
+
+---
+
 ## Syncing a Daybreak release
 
 ```bash

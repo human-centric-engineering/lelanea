@@ -195,6 +195,21 @@ export default defineConfig({
         // hand against a real database, that vitest never executes. Structurally
         // 0%, so the per-file gate would fail on any edit to it.
         'scripts/spikes/**',
+        // Third instance of the same shape, and the #671 story exactly: a `tsx`
+        // CLI entry point (`main()` at module scope, `process.exit()`) that
+        // nothing imports, so it is absent from a full coverage run and only
+        // materialises at 0% when a scoped run forces it in — which is what
+        // happened the first time anyone edited it (#157).
+        //
+        // Its behaviour is not unverified: `npm run framework:boundary` runs it in
+        // CI's lint job, which is a stronger proof than a mocked unit test of a
+        // wrapper whose whole job is filesystem and ESLint I/O.
+        //
+        // `scripts/boundary/lib.ts` is deliberately NOT excluded — it is the pure,
+        // unit-tested half this wrapper's own header describes, the same split as
+        // `*-assertions.ts` above. Keep pure logic on that side of the line: when
+        // `isCoreSource` moved there it gained 20 test cases, having had none.
+        'scripts/boundary/check.ts',
         '**/types/**',
         '.next/',
         'coverage/',

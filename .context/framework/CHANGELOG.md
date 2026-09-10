@@ -27,6 +27,33 @@ process.
 
 ### Added
 
+- **A leaf can now import `@/lib/framework` from the reserved namespaces and from
+  its own seeds, with no configuration.** The core → framework import ban exempts
+  three more groups (#157):
+  - **Reserved leaf surfaces** — `app/api/v1/app/**`, `app/(protected)/app/**`,
+    `app/(public)/app/**`, `app/(auth)/app/**`, `app/admin/app/**`, and
+    `components/app/**`. These *do* ship in a build, but the ban's build-time
+    rationale is about a fork with **no** `lib/framework/` folder, and these paths
+    exist only in a leaf — which always has a framework tier beneath it. Same
+    reasoning that already exempts `lib/app/**`.
+  - **Framework- and leaf-tier seeds** — `prisma/seeds/app-*/**`,
+    `prisma/seeds/framework/**`, `prisma/seeds/_framework/**`. Seeds run via `tsx`
+    and are never part of `next build`, the same profile as the already-exempt
+    `scripts/smoke/**`.
+
+  **The numbered core seeds at `prisma/seeds/NNN-*.ts` are deliberately still
+  banned.** "Ships in no build" is not on its own a licence to cross tiers: those
+  files exist in upstream Sunrise and in sibling forks with no framework tier.
+
+  **If you use your own route vocabulary** (`programme/**`, `journal/**`, …) rather
+  than the reserved namespaces, re-permit it in your own
+  `lib/app/eslint.config.mjs`, which is spread last and wins for your files. That is
+  the supported mechanism — Daybreak cannot take one leaf's vocabulary into a
+  framework-owned config. Mind the flat-config footgun: `no-restricted-imports`
+  replaces rather than merges, so restate the `@/`-alias ban in your block.
+  See [`building-on-daybreak.md`](./building-on-daybreak.md).
+
+
 - **`createJourney(viewer, key, scope?)`** — the seam that starts a journey
   (`lib/framework/facilitation/journey/create.ts`, barrel-exported). Until now
   nothing in the framework created a `UserJourney`: `applyEvent` is the sole writer
