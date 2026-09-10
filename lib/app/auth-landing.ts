@@ -30,8 +30,18 @@
  * Full guide: CUSTOMIZATION.md §4 · lib/auth-landing/route.ts
  */
 
-/** Where an authenticated user lands. `null` = platform default (`/dashboard`). */
-export const appAuthLandingRoute: string | null = null;
+/**
+ * The shell (§04). Every door into the authenticated app follows this: login,
+ * OAuth, signup, invite acceptance, email verification, the header brand link,
+ * the "back to app" links out of admin, the error-page escape hatches, and the
+ * proxy's redirect of a signed-in user off an auth page.
+ *
+ * Paired with `/app` in `lib/app/protected-routes.ts`, without which the edge
+ * would never bounce a signed-out visitor here, and with the `/app` entry in
+ * `lib/app/protected-nav.ts`, without which the platform header on `/profile`
+ * and `/settings` would still point at the abandoned `/dashboard`.
+ */
+export const appAuthLandingRoute: string | null = '/app';
 
 /**
  * What that destination is called in user-visible copy — the admin "Back to …"
@@ -42,5 +52,18 @@ export const appAuthLandingRoute: string | null = null;
  * mismatch as the route itself, only quieter.
  *
  * `null` = platform default (`Dashboard`).
+ *
+ * The product's name, not a view's.
+ *
+ * This was "Your journey", which §04's plan specified — but the shell's nav
+ * (from the prototype) calls `/app` "The conversation" and gives "Your journey"
+ * to `/app/journey`. So the platform header on `/profile` offered "Your journey"
+ * → the conversation, a click away from a nav item with the same words pointing
+ * somewhere else.
+ *
+ * Every consumer of this label means "the app you came from" rather than any one
+ * view — the admin's "Back to …", the error pages' escape hatch, the
+ * verify-email notice — so the product's name is what belongs here, and it
+ * collides with nothing. Owner ruling, 10 September 2026.
  */
-export const appAuthLandingLabel: string | null = null;
+export const appAuthLandingLabel: string | null = 'Lelañea';

@@ -21,4 +21,13 @@
  * Boundary-clean: a plain string array (no imports), safe to import at the
  * proxy runtime.
  */
-export const appProtectedRoutes: string[] = [];
+/**
+ * `/app` is Lelañea's product — the four-column shell and every view inside it
+ * (§04). It sits outside the platform's own protected trio, so without this
+ * entry the proxy never bounces a signed-out visitor to login and each page
+ * under it would have to guard itself.
+ *
+ * `/profile` and `/settings` are NOT listed: they are core protected routes
+ * already, and the platform merges those in.
+ */
+export const appProtectedRoutes: string[] = ['/app'];
