@@ -1,4 +1,14 @@
+import type { Metadata } from 'next';
+
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+
+/**
+ * "The conversation", matching the nav — not "Your journey", which the nav uses
+ * for a different destination. Without this the layout's `%s` template had no
+ * page supplying a title, so it never fired and every one of the eight
+ * destinations shared a single tab label.
+ */
+export const metadata: Metadata = { title: 'The conversation' };
 
 /**
  * The shell's landing view: what fills the panes area before `t-10` builds it.

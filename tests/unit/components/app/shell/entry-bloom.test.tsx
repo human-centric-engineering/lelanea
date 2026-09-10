@@ -158,9 +158,27 @@ describe('EntryBloom — once per session', () => {
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
-  it('never blocks a click on the shell beneath it', () => {
-    render(<EntryBloom />);
-    expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
+  it('blocks clicks while it is opaque, and releases them for the fade', async () => {
+    // This case previously asserted `pointer-events-none` THROUGHOUT, which was
+    // the defect rather than the requirement: the cover is `bg-background`, so
+    // for the ~2.9s the bloom takes to settle a click went through to a nav item
+    // or the theme toggle nobody could see. Worst on a deep link, where what is
+    // under the cursor is not what the last page had there.
+    //
+    // Solid while opaque; released as it fades, so the shell is live when it
+    // appears rather than 420ms later.
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-auto');
+
+      await act(async () => {
+        vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('is hidden from assistive technology', () => {

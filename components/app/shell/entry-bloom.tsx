@@ -98,7 +98,15 @@ export function EntryBloom() {
       // should hear the shell, not an unnamed overlay it cannot dismiss.
       aria-hidden="true"
       className={cn(
-        'bg-background pointer-events-none fixed inset-0 z-[100] flex items-center justify-center',
+        'bg-background fixed inset-0 z-[100] flex items-center justify-center',
+        // While it is OPAQUE it must also be solid to the pointer. It was
+        // `pointer-events-none` throughout, which meant that for the ~2.9s the
+        // bloom takes to settle a click went through to a nav item or the theme
+        // toggle the reader could not see — worst on a deep link into a nested
+        // view, where the thing under the cursor is not what the last page had
+        // there. Released for the fade, so the shell is live as it appears
+        // rather than 420ms later.
+        phase === 'leaving' ? 'pointer-events-none' : 'pointer-events-auto',
         // The duration is an inline style, not a class: Tailwind extracts class
         // names statically, so `duration-[${FADE_MS}ms]` would compile to
         // nothing and the fade would snap. One source for the number either way.

@@ -3,7 +3,7 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
@@ -59,19 +59,31 @@ export function ShellNav({ user }: ShellNavProps) {
   const pathname = usePathname();
 
   /**
-   * Animate the width only after the stored preference has been applied.
+   * Animate a width the READER changed. Never animate the hydration correction.
    *
-   * `useLocalStorage` deliberately returns its `initial` on the first render —
-   * the server could not read storage, so anything else is a hydration
-   * mismatch — and adopts the stored value in a post-mount effect. With the
-   * 260ms width transition always live, a reader who had chosen the slim nav
-   * watched it render at 234px and slide closed on every single page load.
+   * `useLocalStorage` returns its `initial` on the first render — the server
+   * could not read storage, so anything else is a hydration mismatch — and
+   * adopts the stored value in a post-mount effect. With the 260ms width
+   * transition always live, a reader who had chosen the slim nav watched it
+   * render at 234px and slide closed on every single page load.
    *
-   * So the first paint is untransitioned and the correction is instant; every
-   * width change after that is a real one, and animates.
+   * The obvious guard does NOT work, and it is worth saying why: arming the
+   * transition from its own mount effect batches with `useLocalStorage`'s, so
+   * React commits ONE re-render carrying both the corrected width and the newly
+   * armed transition. CSS starts a transition by comparing the before- and
+   * after-change styles using the AFTER-change `transition-property`, so the
+   * slide plays anyway. Measured — the render sequence is
+   * `slim=false settled=false` then `slim=true settled=true`, one style change.
+   *
+   * Keying on intent instead of on time sidesteps the race entirely: only the
+   * toggle sets this, so the hydration correction can never be animated however
+   * the effects happen to batch, and a real toggle always is.
    */
-  const [settled, setSettled] = useState(false);
-  useEffect(() => setSettled(true), []);
+  const [readerToggled, setReaderToggled] = useState(false);
+  const toggleSlim = () => {
+    setReaderToggled(true);
+    setSlim((v) => !v);
+  };
 
   return (
     <nav
@@ -80,7 +92,7 @@ export function ShellNav({ user }: ShellNavProps) {
       className={cn(
         'bg-card relative z-50 flex flex-none flex-col border-r',
         'border-[var(--color-divider)] pt-3.5 pb-13',
-        settled &&
+        readerToggled &&
           'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
         slim ? 'w-16 px-2.5' : 'w-[234px] px-2.5'
       )}
@@ -101,7 +113,7 @@ export function ShellNav({ user }: ShellNavProps) {
         {slim ? null : <span className="flex-1" />}
         <button
           type="button"
-          onClick={() => setSlim((v) => !v)}
+          onClick={toggleSlim}
           aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
           title={slim ? 'Expand the menu' : 'Collapse the menu'}
           className={cn(

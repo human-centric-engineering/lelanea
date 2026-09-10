@@ -17,7 +17,6 @@
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
-import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -195,28 +194,38 @@ describe('ShellNav — the column survives a short window', () => {
     expect(list?.className).toContain('min-h-0');
   });
 
-  it('does not animate the width on the first paint', () => {
-    // `useLocalStorage` returns its `initial` on the first render by design —
-    // the server could not read storage — and adopts the stored value in a
-    // post-mount effect. With the transition always live, a reader who chose the
-    // slim nav watched it render at 234px and slide closed on EVERY page load.
+  it('does not animate the width when the stored preference is applied', async () => {
+    // THE CASE THE FIRST FIX FAILED. `useLocalStorage` returns its `initial` on
+    // the first render and adopts the stored value in a mount effect, so a
+    // reader who had chosen the slim nav watched it render at 234px and slide
+    // closed on every page load.
     //
-    // Asserted against the SERVER render, because that is literally the first
-    // paint and it is the only place the claim can be checked: `render()` from
-    // Testing Library flushes effects, so by the time it returns the transition
-    // is correctly armed and a DOM assertion would pass with or without the fix.
-    const firstPaint = renderToString(<ShellNav user={USER} />);
+    // Arming the transition from a mount effect does NOT fix that: React
+    // batches both effects into one re-render, so the corrected width and the
+    // armed transition land in the same style change and CSS plays it anyway.
+    // The first version of this test asserted only the SERVER render and its own
+    // comment admitted a DOM assertion would pass either way — so it could not
+    // see the bug it was written for.
+    //
+    // This one waits for the correction to actually land in the DOM and then
+    // checks the transition is still absent, which is the moment that matters.
+    window.localStorage.setItem('lelanea.nav.slim', 'true');
+    renderAt('/app');
+    const nav = document.querySelector('nav');
 
-    expect(firstPaint).toContain('w-[234px]');
-    expect(firstPaint).not.toContain('transition-[width]');
+    await waitFor(() => expect(nav?.className).toContain('w-16'));
+    expect(nav?.className).not.toContain('transition-[width]');
   });
 
-  it('arms the transition once mounted, so a real toggle still animates', async () => {
-    // The other half — suppressing it forever would be a different bug.
+  it('does animate a width the reader asked for', async () => {
+    // Suppressing it forever would be a different bug.
     renderAt('/app');
-    await waitFor(() =>
-      expect(document.querySelector('nav')?.className).toContain('transition-[width]')
-    );
+    const nav = document.querySelector('nav');
+    expect(nav?.className).not.toContain('transition-[width]');
+
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    expect(nav?.className).toContain('transition-[width]');
+    expect(nav?.className).toContain('w-16');
   });
 });
 

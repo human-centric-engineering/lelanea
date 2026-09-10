@@ -1,7 +1,23 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+
+/**
+ * The destination a path names, or `null` if the nav does not offer it.
+ *
+ * Shared by `generateMetadata` and the page body so the tab and the heading are
+ * resolved once and cannot disagree. Derived from `SHELL_NAV`, so a destination
+ * added to the nav is covered here on arrival.
+ */
+function destinationFor(pathname: string): { title: string; hint: string } | null {
+  const item = SHELL_NAV.filter(isNavItem).find((entry) => entry.href === pathname);
+  if (item) return { title: item.label, hint: item.hint };
+  // The account footer is a destination too, and it is not in `SHELL_NAV`.
+  if (pathname === '/app/account') return { title: 'Your account', hint: 'Who you are here' };
+  return null;
+}
 
 /**
  * The placeholder every nav destination resolves to until t-11 builds it.
@@ -31,20 +47,34 @@ import { Eyebrow } from '@/components/app/ui/eyebrow';
  * 404 — a catch-all that swallowed every URL under `/app` would turn every typo
  * and every stale link into a page that looks deliberate.
  */
+/**
+ * The tab has to name the destination too, or browser history and tab switching
+ * cannot tell seven placeholders apart — before this, the layout's `%s` template
+ * had no page supplying a title, so it never fired and all eight destinations
+ * shared one label.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const found = destinationFor(`/app/${slug.join('/')}`);
+  // A path with no destination 404s in the page below; the layout's `default`
+  // covers the title in that case.
+  return found ? { title: found.title } : {};
+}
+
 export default async function ShellPlaceholderPage({
   params,
 }: {
   params: Promise<{ slug: string[] }>;
 }) {
   const { slug } = await params;
-  const pathname = `/app/${slug.join('/')}`;
+  const found = destinationFor(`/app/${slug.join('/')}`);
 
-  const destination = SHELL_NAV.filter(isNavItem).find((item) => item.href === pathname);
-  // The account footer is a destination too, and it is not in `SHELL_NAV`.
-  const title = destination?.label ?? (pathname === '/app/account' ? 'Your account' : null);
-  const hint = destination?.hint ?? (pathname === '/app/account' ? 'Who you are here' : null);
-
-  if (title === null) notFound();
+  if (!found) notFound();
+  const { title, hint } = found;
 
   return (
     <main className="flex min-h-0 flex-1 items-center justify-center px-6">

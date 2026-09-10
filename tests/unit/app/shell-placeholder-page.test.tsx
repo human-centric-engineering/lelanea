@@ -26,7 +26,7 @@ const notFound = vi.hoisted(() =>
 );
 vi.mock('next/navigation', () => ({ notFound }));
 
-import ShellPlaceholderPage from '@/app/(lelanea)/app/[...slug]/page';
+import ShellPlaceholderPage, { generateMetadata } from '@/app/(lelanea)/app/[...slug]/page';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 
 async function renderAt(pathname: string) {
@@ -73,6 +73,38 @@ describe('every destination the nav offers resolves', () => {
     const { container } = await renderAt('/app/usage');
     // Usage and billing is the one most likely to grow a fake number.
     expect(container.textContent ?? '').not.toMatch(/\d/);
+  });
+});
+
+describe('every destination names itself in the tab', () => {
+  it('gives each one its own title', async () => {
+    // Without a page-level title the layout's `%s` template never fires, so all
+    // eight destinations shared one tab label and browser history could not
+    // tell them apart. Derived from `SHELL_NAV`, so this covers a destination
+    // added later too.
+    const seen = new Set<string>();
+    for (const href of OFFERED) {
+      const slug = href.replace(/^\/app\//, '').split('/');
+      const meta = await generateMetadata({ params: Promise.resolve({ slug }) });
+      // `Metadata['title']` also admits `{ absolute }` / `{ template }` objects,
+      // and either would defeat the layout's `%s` template. Assert the plain
+      // string rather than coercing, so the wrong SHAPE fails here too.
+      expect(typeof meta.title, `${href} has no plain-string title`).toBe('string');
+      seen.add(meta.title as string);
+    }
+    expect(seen.size).toBe(OFFERED.length);
+  });
+
+  it('uses the same words as the nav item that led here', async () => {
+    const meta = await generateMetadata({
+      params: Promise.resolve({ slug: ['situations'] }),
+    });
+    expect(meta.title).toBe('Life situations');
+  });
+
+  it('leaves the title to the layout on a path that 404s', async () => {
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: ['nonsense'] }) });
+    expect(meta.title).toBeUndefined();
   });
 });
 
