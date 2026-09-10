@@ -3,6 +3,7 @@ import Image from 'next/image';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { requireDocument } from '@/lib/app/content/sections';
 import { CREATOR_PORTRAIT } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
@@ -95,9 +96,14 @@ export default function LelaneaPage() {
         <div className={styles.split}>
           <figure className={CREATOR_PORTRAIT === null ? styles.portraitPending : styles.portrait}>
             {CREATOR_PORTRAIT === null ? (
-              <figcaption className="text-sm">
-                A portrait of Lelañea Fulton will appear here.
-              </figcaption>
+              <>
+                {/* Decorative: the caption below says what this is, and the
+                    mark is the brand's, not a depiction of her. */}
+                <LotusMark size={120} water={false} />
+                <figcaption className="text-sm">
+                  A portrait of Lelañea Fulton will appear here.
+                </figcaption>
+              </>
             ) : (
               <Image
                 src={CREATOR_PORTRAIT}

@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { AuthoredBlocks, InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
-import { requireDocument, selectSection, selectSectionText } from '@/lib/app/content/sections';
+import {
+  requireDocument,
+  selectSection,
+  selectSectionHeading,
+  selectSectionText,
+} from '@/lib/app/content/sections';
 import { CRISIS_ANCHOR } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
 
@@ -16,12 +21,13 @@ export const metadata: Metadata = {
 };
 
 /**
- * The four data-rights cards.
+ * The three data-rights cards.
  *
  * These are the PROTOTYPE's copy, not Lelañea Fulton's — no authored document
  * describes what the app holds or what you can do with it — so unlike every
  * other string on this page they are a `const` here, exactly as the home page's
- * "what this is" cards are.
+ * "what this is" cards are. The prototype's fourth card became the GDPR
+ * footing below them — see `GDPR_RIGHTS`.
  *
  * ## The deletion card promises something that does not exist yet
  *
@@ -30,7 +36,7 @@ export const metadata: Metadata = {
  * record (`GET /api/v1/users/me/export`) and erase an account (`eraseUser()`),
  * and nothing finer.
  *
- * This was raised at build and the owner ruled (t-6) that the prototype's four
+ * This was raised at build and the owner ruled (t-6) that the prototype's claims
  * ship as written: it is a forward-looking marketing page and the capability is
  * planned and owned. The cost accepted is the one `B31` names — a promise that
  * reads as done, whose gap surfaces later as a defect in something else — so it
@@ -77,7 +83,9 @@ const DATA_RIGHTS = [
  * was visibly shorter and emptier than the others.
  *
  * So it sits below them, under a hairline rule, as the footing it is. The claim
- * is the prototype's own sentence, unchanged.
+ * is the prototype's own — the same five rights, and the same assertion that
+ * all of them are supported — re-set as a labelled list rather than as a
+ * sentence inside a card.
  */
 const GDPR_RIGHTS = [
   'Access',
@@ -195,6 +203,12 @@ export default function DataPage() {
 
   const crisis = selectSection(disclaimer, CRISIS, { includeHeading: true });
   const coaching = selectSection(disclaimer, COACHING);
+  // Read back from the document rather than rendering `COACHING`. The constant
+  // is the selector; displaying it would be the second copy this module exists
+  // to prevent, which this file already says about the crisis box below.
+  // `selectSectionHeading` is how a heading reaches a column that sits BESIDE
+  // the prose rather than above it.
+  const coachingHeading = selectSectionHeading(disclaimer, COACHING);
 
   // The "What Lelañea Is Not" section is EIGHT paragraphs, not seven: the seven
   // "Lelañea is **not** a…" lines, then a qualifying paragraph about concepts
@@ -320,8 +334,14 @@ export default function DataPage() {
           // following "what to do in a crisis" lands at the top of `/data` and
           // has to scroll past the data-rights cards and both columns to find
           // the thing they clicked for.
+          //
+          // 104px, the value `waitlist-form.tsx` already justified as "78px of
+          // bar plus room to breathe". `scroll-mt-24` (96px) was the first
+          // guess and it is too small: below 880px the header wraps its links
+          // onto a second row and stands 100px or more, so the box's top edge —
+          // and on a narrower wrap, the heading itself — landed behind the bar.
           id={CRISIS_ANCHOR}
-          className="mt-10 scroll-mt-24 rounded-[18px] border border-[var(--color-status-red)] bg-[var(--color-status-red-bg)] p-6"
+          className="mt-10 scroll-mt-[104px] rounded-[18px] border border-[var(--color-status-red)] bg-[var(--color-status-red-bg)] p-6"
         >
           <AuthoredBlocks
             blocks={crisis}
@@ -336,7 +356,9 @@ export default function DataPage() {
         <div className={styles.split}>
           <div>
             <Eyebrow as="p">coaching and therapy</Eyebrow>
-            <h2 className="brand-display mt-[14px] text-[clamp(28px,3.1vw,38px)]">{COACHING}</h2>
+            <h2 className="brand-display mt-[14px] text-[clamp(28px,3.1vw,38px)]">
+              {coachingHeading}
+            </h2>
           </div>
           <AuthoredBlocks
             blocks={coaching}

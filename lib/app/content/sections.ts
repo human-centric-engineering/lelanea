@@ -120,7 +120,8 @@ export function listSectionHeadings(document: FoundationalDocumentDetail): strin
  * already in the page as the SELECTOR, and rendering that constant instead is
  * how an authored heading quietly becomes a second copy of itself. Selecting by
  * a string and displaying a string are different acts, and only the first one
- * may take a literal.
+ * may take a literal. Where the heading is wanted on screen but not inside the
+ * block flow, `selectSectionHeading` is the other way to satisfy that.
  *
  * Matching is exact and case-sensitive. A looser match would let a heading
  * drift by a word and keep passing, which is the failure this module is here
@@ -231,6 +232,39 @@ export function paragraphRange(
   }
 
   return all.slice(from, to);
+}
+
+/**
+ * One section's heading, as the document authored it.
+ *
+ * Exists so a page that wants the heading on screen but NOT inside the block
+ * flow — `/data` sets the coaching heading in its own column, beside the prose
+ * rather than above it — still takes the words from the document. The
+ * alternative is rendering the selector constant, which is the one thing
+ * `selectSection` says a page may not do.
+ *
+ * It returns the same string that was passed in, and that is the point rather
+ * than an objection: the value is identical, but the PROVENANCE is not. Reading
+ * it back from the document means the page displays what it selected, so the
+ * rule holds without depending on a reader noticing that the two happen to
+ * agree.
+ *
+ * @throws MissingSectionError when no heading matches.
+ */
+export function selectSectionHeading(
+  document: FoundationalDocumentDetail,
+  heading: string
+): string {
+  const [block] = selectSection(document, heading, { includeHeading: true });
+
+  // Unreachable: `selectSection` with `includeHeading` puts the matched heading
+  // first or throws. Narrowed rather than cast, so the invariant is checked
+  // rather than asserted.
+  if (block === undefined || block.type !== 'heading') {
+    throw new MissingSectionError(document.id, heading, listSectionHeadings(document));
+  }
+
+  return block.text;
 }
 
 /**

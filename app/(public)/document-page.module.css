@@ -32,6 +32,21 @@
   padding-top: clamp(44px, 6vw, 72px);
 }
 
+/*
+ * The last block on a page, where no `.section` follows to supply the gap.
+ *
+ * `/mission` is the whole reason this exists: it is the one page whose entire
+ * body is a single `.opening`, so with only a `padding-top` its final paragraph
+ * sat about 16px above the footer — the `mb-4` on the authored `<p>` and
+ * nothing else. Every other page either ends in a `.section` (which pads top
+ * and bottom) or is a document page that adds its own. The stub this replaced
+ * had `py-[clamp(56px,7vw,92px)]`, so it was a regression rather than an
+ * oversight from the start.
+ */
+.closing {
+  padding-bottom: clamp(56px, 7vw, 92px);
+}
+
 .section {
   padding: clamp(56px, 7vw, 92px) 0;
 }
@@ -87,7 +102,7 @@
 }
 
 /*
- * `/data`'s four data-rights cards, in a row that reflows to two and then one.
+ * `/data`'s three data-rights cards, in a row that reflows to two and then one.
  *
  * `auto-fit` rather than a fixed `repeat(4, 1fr)`: the cards carry two or three
  * lines of body each, and four columns at 260px minimum is the point where they
@@ -128,10 +143,15 @@
 }
 
 /*
- * A real `<ul>`, so the five rights are announced as a list of five. The
- * separators are `::after` content and therefore CSS rather than DOM text —
- * the list semantics carry the separation for a screen reader, and a middot
- * typed between items would be read out.
+ * A real `<ul>`, so the five rights are announced as a list of five.
+ *
+ * The separators are `::after` content, and the empty alt text after the slash
+ * is what keeps them silent. Generated content being "CSS rather than DOM text"
+ * is NOT enough on its own — an earlier version of this comment claimed it was,
+ * and it is wrong: NVDA, JAWS and VoiceOver all expose `content` in the
+ * accessibility tree, so a reader would hear "Access middle dot Rectification
+ * middle dot". `content: '·' / ''` gives the generated text an explicit empty
+ * alternative, which is the one thing that removes it from that tree.
  */
 .rightsList {
   display: flex;
@@ -151,7 +171,7 @@
 }
 
 .rightsList li:not(:last-child)::after {
-  content: '·';
+  content: '·' / '';
   color: var(--color-muted-foreground);
 }
 
@@ -201,25 +221,40 @@
 }
 
 /*
- * The portrait's stand-in until a photograph arrives. Not an empty box and not
- * a broken `<img>` — a quiet panel that reads as deliberate, the same call
- * `SITE_LINKS` makes for a URL that does not exist yet (D3).
+ * The portrait's stand-in until a photograph arrives — the same call
+ * `SITE_LINKS` makes for a URL that does not exist yet (D3): render something
+ * deliberate, never a broken `<img>`.
  *
- * It takes `.portrait`'s aspect ratio and radius (above) rather than sizing to
- * its caption, and that is the whole point of sharing the rule. Without the
- * ratio it collapsed to one line of text plus padding — a thin dashed strip
- * beside a column of prose, which reads as a broken element rather than a
- * deliberate one, and which would have made the section's layout jump from a
- * 40px strip to a 4:5 panel on the day the photograph landed. `/code-review`
- * caught it.
+ * It went through both wrong shapes before this one, which is worth recording
+ * because they are opposite errors.
+ *
+ * With no aspect ratio it sized to its caption and became a thin dashed strip
+ * beside a column of prose — which reads as a broken element, and which would
+ * have made the section jump from a 40px strip to a 4:5 panel the day the
+ * photograph landed. Taking `.portrait`'s ratio fixed that and produced the
+ * other error: a ~675px empty dashed box, correct in structure and worse to
+ * look at, sitting on a live page for however many months.
+ *
+ * So it reserves the full 4:5 — the layout must not move later — and fills it
+ * the way a designed placeholder does: the brand's own mark, on the same tinted
+ * ground the photograph will sit on, with the caption beneath. No dashed
+ * border; a dashed border is the visual language of a missing asset, and this
+ * is not missing so much as not yet taken.
  */
 .portraitPending {
   display: grid;
   place-items: center;
-  padding: 24px;
+  align-content: center;
+  gap: 18px;
+  padding: 32px;
   text-align: center;
   color: var(--color-muted-foreground);
-  border: 1px dashed var(--color-divider);
+  background: var(--color-accent);
+}
+
+/* Quiet enough to be a ground rather than an illustration competing with her. */
+.portraitPending svg {
+  opacity: 0.35;
 }
 
 @media (max-width: 1180px) {

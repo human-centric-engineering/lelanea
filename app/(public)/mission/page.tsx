@@ -51,7 +51,7 @@ export default function MissionPage() {
 
   return (
     <div className={styles.page}>
-      <section className={styles.opening}>
+      <section className={`${styles.opening} ${styles.closing}`}>
         {/* The category, not the prototype's "the mission" — the document is
             titled "The Mission", so the prototype's eyebrow would print the
             same three words directly above it in a smaller face. */}
