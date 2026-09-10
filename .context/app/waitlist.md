@@ -177,6 +177,14 @@ the unique index, `ILIKE` cannot.
 match starts silently missing rows — which on the erasure path means retaining
 data after reporting it erased.
 
+The clause came from core's `ContactSubmission` source
+(`lib/privacy/export-sources.ts`), which is the only precedent in the manifest
+for a table with no FK to `User` — and which still carries it. Filed as
+[`sunrise#766`](https://github.com/human-centric-engineering/sunrise/issues/766):
+export-only there, so it discloses a third party's submission rather than
+deleting it, but the manifest invites forks to copy the shape and a fork that
+copies it into an erasure hook gets the destructive version.
+
 ### Art. 15 — subject access
 
 `lib/app/leaf-data-export.ts` declares `AppWaitlistEntry` → the `waitlist`
