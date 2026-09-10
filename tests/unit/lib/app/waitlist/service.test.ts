@@ -108,13 +108,42 @@ describe('joinWaitlist', () => {
     expect(args.create).toMatchObject({ name: null, heardFrom: null, intent: null });
   });
 
-  it('OVERWRITES the answers on a repeat — a resubmission is usually a correction', async () => {
+  it('overwrites an answer the visitor actually retyped', async () => {
     findUnique.mockResolvedValue({ id: 'entry-1' });
 
     await joinWaitlist({ email: 'a@example.com', intent: 'a better answer', locale: 'en' });
 
     const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
     expect(args.update).toMatchObject({ intent: 'a better answer' });
+  });
+
+  it('LEAVES a blank answer alone on a repeat rather than nulling what is stored', async () => {
+    findUnique.mockResolvedValue({ id: 'entry-1' });
+
+    // The form always renders empty, so a returning visitor who re-submits just
+    // their email — because they are not sure the first one landed — must not
+    // silently lose the name and the paragraph they gave the first time. They
+    // cannot see the stored value, so they could never know it had gone.
+    await joinWaitlist({ email: 'a@example.com', intent: 'a better answer', locale: 'en' });
+
+    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    // Omitted, not `null`: Prisma leaves an omitted column untouched, and `null`
+    // would erase it. `toMatchObject` passes on an extra key, so this is asserted
+    // on the key set.
+    expect(Object.keys(args.update).sort()).toEqual(['consentedAt', 'intent', 'locale']);
+    expect(args.update).not.toHaveProperty('name');
+    expect(args.update).not.toHaveProperty('heardFrom');
+  });
+
+  it('still writes NULL for a blank answer on a FIRST join', async () => {
+    findUnique.mockResolvedValue(null);
+
+    await joinWaitlist({ email: 'a@example.com', locale: 'en' });
+
+    // The create half keeps `null` on purpose — there is nothing to preserve,
+    // and an empty string in a nullable column reads exactly like an answer.
+    const args = upsert.mock.calls[0]?.[0] as { create: Record<string, unknown> };
+    expect(args.create).toMatchObject({ name: null, heardFrom: null, intent: null });
   });
 
   it('refreshes consent on a repeat but leaves the queue position alone', async () => {

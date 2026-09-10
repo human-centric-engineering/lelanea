@@ -42,7 +42,25 @@ export interface JoinWaitlistResult {
  * wanted to change or add an answer, or who is not sure the first one landed.
  * Telling them "you are already on the list" in an error register would be
  * accurate and unkind, and it would throw away the better answer they just
- * typed. So the answers are overwritten and the caller is told it existed.
+ * typed. So the answers are updated and the caller is told it existed.
+ *
+ * ## A BLANK optional field on a repeat leaves the stored answer alone
+ *
+ * This is the correction that a smoke run against a real database produced, and
+ * it is not obvious from the code that caused it. The first shape wrote every
+ * optional field on the update, so a blank one wrote `NULL`.
+ *
+ * The form always renders empty. So someone who joined with their name and a
+ * paragraph about what they wanted, then came back and re-submitted just their
+ * email — because they were not sure the first one landed, which is the single
+ * commonest reason anyone re-submits anything — silently lost both. They could
+ * not see what they had said, so they could not know it had gone, and Lelañea
+ * reads these herself: the answer is simply not there any more.
+ *
+ * So a blank leaves the stored value untouched, and only a value actually typed
+ * overwrites one. The cost is that this route cannot CLEAR an answer, which is
+ * a thing nobody can currently ask for — the form shows no existing value to
+ * clear, and erasure removes the whole row.
  *
  * **`consentedAt` is refreshed on the update, `createdAt` is not.** They record
  * different facts: when this person first asked to be told, and when they most
@@ -76,6 +94,8 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
     where: { email },
     create: {
       email,
+      // On a CREATE a blank is stored as NULL rather than as an empty string,
+      // so `heardFrom IS NOT NULL` counts people who answered.
       name: name ?? null,
       heardFrom: heardFrom ?? null,
       intent: intent ?? null,
@@ -83,9 +103,13 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       consentedAt: now,
     },
     update: {
-      name: name ?? null,
-      heardFrom: heardFrom ?? null,
-      intent: intent ?? null,
+      // Spread, not `?? null` — an absent answer is OMITTED from the update, so
+      // Prisma leaves the column alone. See the note above: writing null here
+      // means a returning visitor re-submitting just their email loses what
+      // they told her the first time, with nothing on screen to show it went.
+      ...(name === undefined ? {} : { name }),
+      ...(heardFrom === undefined ? {} : { heardFrom }),
+      ...(intent === undefined ? {} : { intent }),
       locale,
       consentedAt: now,
     },
