@@ -289,6 +289,31 @@ describe('ShellNav — the column survives a short window', () => {
   });
 });
 
+describe('ShellNav — the drawer is the full menu', () => {
+  it('offers no collapse control below 900px', async () => {
+    // `slim` is ignored inside the drawer, so the toggle would flip a stored
+    // preference and change nothing on screen — a dead control, which is what
+    // the rail and the topbar both refused. The burger is the affordance here.
+    renderAt('/app', 'small');
+    expect(screen.queryByRole('button', { name: /the menu/ })).toBeNull();
+  });
+
+  it('shows full labels in the drawer, never the icon rail', () => {
+    // Even with the slim preference stored: a drawer you deliberately opened
+    // showing icons instead of names would be the worst of both.
+    window.localStorage.setItem('lelanea.nav.slim', 'true');
+    renderAt('/app', 'small');
+
+    expect(screen.getByRole('link', { name: /Life situations/ })).toBeTruthy();
+    expect(screen.getByText('Lelañea')).toBeTruthy();
+  });
+
+  it('still offers the control above 900px', () => {
+    renderAt('/app', 'large');
+    expect(screen.getByRole('button', { name: /the menu/ })).toBeTruthy();
+  });
+});
+
 describe('initialsFor', () => {
   it.each([
     ['Maya Reyes', 'maya@example.com', 'MR'],

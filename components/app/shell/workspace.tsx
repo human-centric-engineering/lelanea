@@ -55,7 +55,17 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       onClick={width === 'medium' && !chatSlim ? () => setChatSlim(true) : undefined}
       className={cn(
         'relative flex min-w-0 flex-1 flex-col overflow-hidden',
-        'border-t-[3px] border-[var(--tone,var(--color-secondary-ink))]',
+        // TRANSPARENT when a view sets no tone, which is the prototype's own
+        // fallback for this band (`.surface-head`). A visible default was mine,
+        // and wrong: with no view setting `--tone` — every view, until t-11 —
+        // it painted a solid teal rule across the top of the workspace at every
+        // width. Below 900px it lands beside the pane switch's accent underline
+        // and the two read as one broken two-colour line, which is how it was
+        // spotted; above 900px it was simply a stray line nobody asked for.
+        //
+        // The tablet slide-over keeps an inked fallback on purpose: there it is
+        // a panel edge over other content, not a band inside a surface.
+        'border-t-[3px] border-t-[var(--tone,transparent)]',
         overlay && 'ml-14',
         carousel && 'absolute inset-0 w-full flex-none',
         carousel && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',

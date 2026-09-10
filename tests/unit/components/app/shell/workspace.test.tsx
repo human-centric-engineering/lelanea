@@ -109,6 +109,28 @@ describe('the tablet re-parks the conversation', () => {
   });
 });
 
+describe('the tone band', () => {
+  it('is transparent until a view sets a tone', () => {
+    // The prototype's own fallback for this band. A visible default was mine,
+    // and it painted a teal rule across the top of the workspace at every
+    // width — spotted below 900px, where it lands beside the pane switch's
+    // accent underline and the two read as one broken two-colour line.
+    renderWorkspace();
+    expect(document.querySelector('[data-pane="ws"]')?.className).toContain(
+      'border-t-[var(--tone,transparent)]'
+    );
+  });
+
+  it('keeps an inked fallback on the tablet panel, which is an edge not a band', async () => {
+    renderWorkspace('medium');
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+
+    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
+      'border-t-[var(--tone,var(--color-secondary-ink))]'
+    );
+  });
+});
+
 describe('the tablet panel rides over the surface', () => {
   it('never reflows the workspace when the conversation opens or closes', async () => {
     // The reason the prototype uses a transform rather than a width: with the

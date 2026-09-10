@@ -223,27 +223,37 @@ export function ShellNav({ user }: ShellNavProps) {
         the nav itself should not scroll away with the nav's contents.
       */}
         <div className="-mx-1 flex flex-none flex-col gap-0.5 px-1 pt-1">
-          <button
-            type="button"
-            onClick={toggleSlim}
-            aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
-            title={slim ? 'Expand the menu' : 'Collapse the menu'}
-            className={cn(
-              'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-              'flex h-8 flex-none items-center rounded-[10px]',
-              'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-              'motion-reduce:transition-none',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-              'focus-visible:outline-[var(--color-ring)]',
-              slim ? 'w-11 justify-center px-0' : 'w-full justify-end px-2'
-            )}
-          >
-            {slim ? (
-              <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
-            )}
-          </button>
+          {/*
+          No collapse control inside the drawer. Below 900px the menu is always
+          its full self — `slim` is ignored there, which the prototype's small
+          block states outright — so this button would flip a preference with no
+          visible effect. A control that does nothing is what this shell has
+          refused twice already; the burger opens and closes the nav at this
+          width.
+        */}
+          {width === 'small' ? null : (
+            <button
+              type="button"
+              onClick={toggleSlim}
+              aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
+              title={slim ? 'Expand the menu' : 'Collapse the menu'}
+              className={cn(
+                'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+                'flex h-8 flex-none items-center rounded-[10px]',
+                'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                'motion-reduce:transition-none',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                'focus-visible:outline-[var(--color-ring)]',
+                slim ? 'w-11 justify-center px-0' : 'w-full justify-end px-2'
+              )}
+            >
+              {slim ? (
+                <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+              ) : (
+                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+              )}
+            </button>
+          )}
 
           <Link
             href="/app/account"
