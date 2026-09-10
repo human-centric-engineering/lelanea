@@ -20,12 +20,26 @@
  * without stripping, every one of those explanations would read as the defect it
  * is explaining.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const UI_DIR = path.join(process.cwd(), 'components', 'app', 'ui');
+/**
+ * SCANNED RECURSIVELY FROM `components/app/`, not just `components/app/ui/`.
+ *
+ * The rule below was written for the kit, but nothing in its reasoning is about
+ * the kit: a literal cannot follow the theme, and a literal is invisible to
+ * `tests/unit/app/brand-theme.test.ts`, wherever it is written. §04 added
+ * `components/app/shell/` — the largest brand surface in the product, four
+ * columns of it — and a directory-scoped guard would have watched the eight
+ * files that already comply while the shell went unwatched.
+ *
+ * Recursive rather than a second literal path, so `components/app/views/` (§04
+ * t-11) and everything after it are covered on arrival rather than when someone
+ * remembers to add them.
+ */
+const APP_DIR = path.join(process.cwd(), 'components', 'app');
 
 /** `#abc`, `#abcdef`, `#abcdef12` — anything a browser reads as a colour. */
 const HEX_LITERAL = /#[0-9a-f]{3,8}\b/gi;
@@ -43,25 +57,37 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-function sourceFiles(): string[] {
-  return readdirSync(UI_DIR)
-    .filter((name) => /\.(tsx?|css)$/.test(name))
-    .sort();
+/** Paths relative to `components/app/`, so a failure names `shell/shell-nav.tsx`. */
+function sourceFiles(dir: string = APP_DIR, prefix = ''): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      found.push(...sourceFiles(path.join(dir, entry.name), rel));
+    } else if (/\.(tsx?|css)$/.test(entry.name)) {
+      found.push(rel);
+    }
+  }
+  return found.sort();
 }
 
-describe('components/app/ui — colour comes from tokens, never from a literal', () => {
+describe('components/app — colour comes from tokens, never from a literal', () => {
   it('has files to scan', () => {
     // Without this the whole suite passes on an empty directory, which is
     // exactly what it would do if the folder were ever renamed. `.every` over
     // nothing is `true`.
     const files = sourceFiles();
     expect(files.length).toBeGreaterThanOrEqual(8);
-    expect(files).toContain('lotus.tsx');
-    expect(files).toContain('button.tsx');
+    expect(files).toContain('ui/lotus.tsx');
+    expect(files).toContain('ui/button.tsx');
+    // The shell is the reason this scan went recursive; if it ever stops being
+    // found, the widening has silently come undone and the kit alone would keep
+    // this suite green.
+    expect(files.some((name) => name.startsWith('shell/'))).toBe(true);
   });
 
   it.each(sourceFiles())('%s declares no colour of its own', (file) => {
-    const code = stripComments(readFileSync(path.join(UI_DIR, file), 'utf8'));
+    const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
     expect(code.match(HEX_LITERAL) ?? []).toEqual([]);
     expect(code.match(FUNCTIONAL_COLOUR) ?? []).toEqual([]);
   });
@@ -122,7 +148,7 @@ describe('components/app/ui — colour comes from tokens, never from a literal',
 
     const offenders: string[] = [];
     for (const file of sourceFiles()) {
-      const code = stripComments(readFileSync(path.join(UI_DIR, file), 'utf8'));
+      const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
       for (const match of code.matchAll(UTILITY)) offenders.push(`${file}: ${match[0]}`);
     }
     expect(offenders).toEqual([]);
@@ -145,7 +171,7 @@ describe('components/app/ui — colour comes from tokens, never from a literal',
 
     const referenced = new Set<string>();
     for (const file of sourceFiles()) {
-      const code = stripComments(readFileSync(path.join(UI_DIR, file), 'utf8'));
+      const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
       for (const match of code.matchAll(/var\((--[\w-]+)\)/g)) referenced.add(match[1]);
     }
 
