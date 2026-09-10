@@ -131,6 +131,34 @@ describe('the tone band', () => {
   });
 });
 
+describe('the classes survive twMerge', () => {
+  /*
+   * `cn` is `twMerge(clsx(...))`, so a later class in the same group REPLACES an
+   * earlier one — and three of this branch's conditional blocks were being
+   * silently deleted that way. Class-name assertions are usually a weak test;
+   * here the resolved class list IS the behaviour, because the thing that went
+   * wrong was invisible in the source and only appeared after the merge.
+   */
+  it('keeps the tablet panel transitioning its transform, not its flex-basis', async () => {
+    // The worst of the three: this component is built around riding a transform
+    // so the workspace never reflows, and the unconditional
+    // `transition-[flex-basis]` after it deleted exactly that. The panel popped.
+    renderWorkspace('medium');
+    const chat = document.querySelector('[data-pane="chat"]')!;
+
+    expect(chat.className).toContain('transition-transform');
+    expect(chat.className).not.toContain('transition-[flex-basis]');
+  });
+
+  it('keeps the flex-basis transition where it IS the animation', () => {
+    renderWorkspace('large');
+    const chat = document.querySelector('[data-pane="chat"]')!;
+
+    expect(chat.className).toContain('transition-[flex-basis]');
+    expect(chat.className).not.toContain('transition-transform');
+  });
+});
+
 describe('the tablet panel rides over the surface', () => {
   it('never reflows the workspace when the conversation opens or closes', async () => {
     // The reason the prototype uses a transform rather than a width: with the

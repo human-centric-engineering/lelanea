@@ -16,7 +16,7 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -311,6 +311,44 @@ describe('ShellNav — the drawer is the full menu', () => {
   it('still offers the control above 900px', () => {
     renderAt('/app', 'large');
     expect(screen.getByRole('button', { name: /the menu/ })).toBeTruthy();
+  });
+});
+
+describe('the drawer keeps its own geometry (twMerge)', () => {
+  it('is min(320px,88vw) wide, not the desktop column width', async () => {
+    // `cn` is `twMerge`: the desktop `w-[234px]` was emitted after the drawer's
+    // own width and replaced it, so every phone got a 234px panel.
+    renderAt('/app', 'small');
+    const nav = document.querySelector('nav[aria-label="Main"]')!;
+
+    expect(nav.className).toContain('w-[min(320px,88vw)]');
+    expect(nav.className).not.toContain('w-[234px]');
+  });
+
+  it('slides rather than resizing, even after the collapse control has been used', async () => {
+    // `readerToggled` is state and survives a resize, so a reader who had ever
+    // collapsed the nav on a desktop carried a `transition-[width]` down to the
+    // phone, where it replaced the drawer's `transition-[transform,visibility]`
+    // and the panel popped instead of sliding.
+    renderAt('/app', 'large');
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+
+    // RESIZE the live component; do not remount it. `readerToggled` is component
+    // state, so a fresh mount resets the very thing the defect depends on — the
+    // first version of this test did exactly that and passed against the broken
+    // code.
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    const nav = document.querySelector('nav[aria-label="Main"]')!;
+    expect(nav.className).toContain('transition-[transform,visibility]');
+    expect(nav.className).not.toContain('transition-[width]');
   });
 });
 

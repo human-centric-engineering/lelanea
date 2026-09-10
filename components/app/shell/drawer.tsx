@@ -57,16 +57,67 @@ export function Drawers() {
    */
   useEffect(() => {
     if (drawer) {
-      // `activeElement` is `Element | null`, and only an `HTMLElement` is
-      // guaranteed to have `focus()`. Narrowing rather than asserting means a
-      // focus that lands somewhere unexpected simply is not returned to.
-      returnTo.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      // ONLY on the way in from nothing. Switching map → resources used to
+      // overwrite this with the outgoing panel — which is `inert` by the time
+      // the second one closes — so focus silently fell to `<body>`.
+      if (returnTo.current === null) {
+        // `activeElement` is `Element | null`, and only an `HTMLElement` is
+        // guaranteed `focus()`. Narrowing rather than asserting means a focus
+        // that lands somewhere unexpected simply is not returned to.
+        returnTo.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
       panelRef.current?.focus();
       return;
     }
     returnTo.current?.focus();
     returnTo.current = null;
+  }, [drawer]);
+
+  /**
+   * Keep Tab inside the open panel.
+   *
+   * `aria-modal="true"` is a promise that the rest of the page is unavailable,
+   * and moving focus in once does not keep it there: the panel is the last
+   * focusable subtree in the document, so a single Tab left it and landed in the
+   * nav, topbar or rail *underneath the scrim* — controls a sighted reader
+   * cannot see and a screen-reader reader has been told do not exist.
+   *
+   * A cycle rather than marking the rest of the shell `inert`: the shell is not
+   * one element, and `inert` on each of its parts would have to be applied and
+   * unwound in the right order every time a drawer opened.
+   */
+  useEffect(() => {
+    if (!drawer) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        // Nothing to land on — keep focus on the panel rather than letting it
+        // escape to whatever is behind the scrim.
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+
+      const active = document.activeElement;
+      if (!event.shiftKey && (active === last || active === panel)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || active === panel)) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [drawer]);
 
   return (

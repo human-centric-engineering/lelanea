@@ -3,7 +3,7 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
@@ -63,6 +63,19 @@ export function ShellNav({ user }: ShellNavProps) {
    */
   const slim = navSlim && width !== 'small';
 
+  /**
+   * Focus follows the drawer open.
+   *
+   * `ShellNav` precedes the topbar in the DOM, so a reader who pressed the
+   * burger and then tabbed went FORWARD into the theme toggle and the panes —
+   * behind the scrim — rather than into the menu they had just asked for. It was
+   * reachable only by shift-tabbing backwards, which nobody does.
+   */
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (navOpen) navRef.current?.focus();
+  }, [navOpen]);
+
   const [readerToggled, setReaderToggled] = useState(false);
   const toggleSlim = () => {
     setReaderToggled(true);
@@ -104,13 +117,24 @@ export function ShellNav({ user }: ShellNavProps) {
             'motion-reduce:transition-none',
             navOpen ? 'visible translate-x-0' : 'invisible -translate-x-[102%]',
           ],
-          readerToggled &&
+          // Above 900px only, for the same twMerge reason: below it the nav is a
+          // drawer that SLIDES, and a width transition here replaced the
+          // `transition-[transform,visibility]` it needs — so once a reader had ever
+          // used the collapse control, the phone drawer stopped animating and
+          // `visibility` snapped. `readerToggled` is state, so it survived the resize
+          // that took them there.
+          width !== 'small' &&
+            readerToggled &&
             'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
           // 9px when slim, not 10px, and the difference is load-bearing: the item
           // is `w-11` (44px), so at 10px the inner box is exactly 44px and the
           // active item's border sits flush against the clip edge of the scroll
           // container below. The prototype uses 9px for the same reason.
-          slim ? 'w-16 px-[9px]' : 'w-[234px] px-2.5'
+          // Above 900px ONLY. `cn` is `twMerge`, so emitting a width here
+          // unconditionally replaced the drawer's own `w-[min(320px,88vw)]` above —
+          // measured — and every phone got a 234px panel instead of the one the
+          // prototype's small block specifies.
+          width !== 'small' && (slim ? 'w-16 px-[9px]' : 'w-[234px] px-2.5')
         )}
       >
         {/*

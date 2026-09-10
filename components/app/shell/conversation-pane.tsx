@@ -1,8 +1,15 @@
 'use client';
 
 import { Mic, SendHorizontal } from 'lucide-react';
+import * as React from 'react';
+import { useEffect, useRef } from 'react';
 
-import { CHAT_MAX, CHAT_MIN, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import {
+  CHAT_FOLD,
+  CHAT_MAX,
+  CHAT_MIN,
+  useShellLayout,
+} from '@/components/app/shell/use-shell-layout';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +38,14 @@ export function ConversationPane() {
   const { chatW, chatSlim, setChatSlim, width, wsOpen, pane } = useShellLayout();
   const reducedMotion = useReducedMotion();
   const carousel = width === 'small' && wsOpen;
+  const stripRef = useRef<HTMLButtonElement>(null);
+  const foldByKeyboard = useRef(false);
+
+  useEffect(() => {
+    if (!chatSlim || !foldByKeyboard.current) return;
+    foldByKeyboard.current = false;
+    stripRef.current?.focus();
+  }, [chatSlim]);
 
   /**
    * On a tablet the conversation stops being a column and becomes a panel.
@@ -46,7 +61,7 @@ export function ConversationPane() {
    */
   const overlay = width === 'medium' && wsOpen;
 
-  if (chatSlim && !overlay) return <Strip onOpen={() => setChatSlim(false)} />;
+  if (chatSlim && !overlay) return <Strip ref={stripRef} onOpen={() => setChatSlim(false)} />;
 
   return (
     <section
@@ -83,7 +98,16 @@ export function ConversationPane() {
                 'border-t-[3px] border-t-[var(--tone,var(--color-secondary-ink))]',
               ],
         ],
-        !reducedMotion && 'transition-[flex-basis] duration-[280ms] ease-[var(--ease-brand)]',
+        // `!overlay && !carousel`, and this is not belt-and-braces: `cn` is
+        // `twMerge`, so a later class in the same group REPLACES an earlier one.
+        // Emitted unconditionally, this deleted the overlay's
+        // `transition-transform duration-[340ms]` — measured — and the tablet
+        // panel popped in and out instead of riding the transform it is built
+        // around. The carousel's transform transition went the same way.
+        !reducedMotion &&
+          !overlay &&
+          !carousel &&
+          'transition-[flex-basis] duration-[280ms] ease-[var(--ease-brand)]',
         // The carousel lays both panes over each other and slides them, so the
         // switch and the swipe read as one movement. `pointer-events-none` on
         // the off-screen one because a transform does not stop it taking a tap.
@@ -128,7 +152,13 @@ export function ConversationPane() {
         from; with the conversation filling the frame there is nothing to size
         it against. The prototype hides it the same way (`#app.no-ws`).
       */}
-      {wsOpen && width === 'large' ? <ResizeHandle /> : null}
+      {wsOpen && width === 'large' ? (
+        <ResizeHandle
+          onFold={() => {
+            foldByKeyboard.current = true;
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -139,42 +169,49 @@ export function ConversationPane() {
  * The WHOLE strip is the button, so bringing her back is one target rather than
  * a small control hidden on a dead pane.
  */
-function Strip({ onOpen, className }: { onOpen: () => void; className?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Open the conversation"
-      className={cn(
-        'text-muted-foreground flex flex-none flex-col items-center gap-4',
-        'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
-        'w-14 py-4 max-[640px]:w-11',
-        'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
-        'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-        'motion-reduce:transition-none',
-        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
-        'focus-visible:outline-[var(--color-ring)]',
-        className
-      )}
-    >
-      <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
-        Ask Lelañea
-      </span>
-      <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
-        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-      </span>
-    </button>
-  );
-}
+const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void; className?: string }>(
+  function Strip({ onOpen, className }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        onClick={onOpen}
+        aria-label="Open the conversation"
+        className={cn(
+          'text-muted-foreground flex flex-none flex-col items-center gap-4',
+          'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
+          'w-14 py-4 max-[640px]:w-11',
+          'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
+          'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+          'motion-reduce:transition-none',
+          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
+          'focus-visible:outline-[var(--color-ring)]',
+          className
+        )}
+      >
+        <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
+          Ask Lelañea
+        </span>
+        <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
+          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+        </span>
+      </button>
+    );
+  }
+);
 
 /**
- * The composer: real textarea, real growth, everything disabled.
+ * The composer: a real textarea, and everything disabled.
  *
- * It grows to 160px and then scrolls, which is the prototype's behaviour and
- * worth having now — it is what makes the pane's bottom edge move, and the
- * layout has to survive that before anything real is typed into it.
+ * The auto-grow is wired but CANNOT RUN yet, and the comment here used to claim
+ * otherwise — a disabled control fires no `input` event, so the handler never
+ * fires and the layout case it was said to prove is not being proved. It is kept
+ * rather than deleted because it is the behaviour phase 2 needs the moment the
+ * control is enabled, and removing it would mean rediscovering the 160px cap
+ * then. What it is not is evidence that the frame survives a growing composer;
+ * that is still owed.
  */
 function Composer() {
   return (
@@ -239,7 +276,7 @@ function Composer() {
  * padding: a browser that refuses capture still tracks the pointer through the
  * move handler, so the drag degrades rather than dying.
  */
-function ResizeHandle() {
+function ResizeHandle({ onFold }: { onFold: () => void }) {
   const { chatW, setChatWidth } = useShellLayout();
 
   /*
@@ -281,8 +318,11 @@ function ResizeHandle() {
         } catch {
           // No capture available; the move handler still tracks the pointer.
         }
-        const move = (e: PointerEvent) => setChatWidth(startW + (e.clientX - startX));
+        // `commit: false` — a drag persists once, on release, not per frame.
+        const move = (e: PointerEvent) => setChatWidth(startW + (e.clientX - startX), false);
         const stop = (e: PointerEvent) => {
+          // The settled value is the one worth remembering.
+          setChatWidth(startW + (e.clientX - startX));
           el.removeEventListener('pointermove', move);
           el.removeEventListener('pointerup', stop);
           el.removeEventListener('pointercancel', stop);
@@ -301,7 +341,15 @@ function ResizeHandle() {
         event.preventDefault();
         const step = event.shiftKey ? STEP_SHIFT : STEP;
         const delta = event.key === 'ArrowLeft' ? -step : step;
-        setChatWidth(startFrom() + delta);
+        const target = startFrom() + delta;
+
+        // Squeezing past the fold unmounts this very element — the pane takes
+        // its folded early return and the separator goes with it — so focus
+        // would land on `<body>` and a keyboard reader would be back at the top
+        // of the document with no idea the pane had collapsed. Hand focus to the
+        // strip, which is the control that brings it back.
+        if (target < CHAT_FOLD) onFold();
+        setChatWidth(target);
       }}
       className={cn(
         'absolute top-0 -right-[3px] bottom-0 z-30 w-1.5 cursor-col-resize',

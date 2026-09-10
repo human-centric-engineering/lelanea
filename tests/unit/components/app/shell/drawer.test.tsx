@@ -143,3 +143,45 @@ describe('what the stubs say', () => {
     for (const p of panels) expect(p.textContent ?? '').not.toMatch(/\d/);
   });
 });
+
+describe('focus stays inside an open drawer', () => {
+  it('cycles Tab back to the first control rather than out to the page', async () => {
+    // `aria-modal="true"` is a promise that the rest of the page is unavailable.
+    // Moving focus in once does not keep it there: the panel is the LAST
+    // focusable subtree in the document, so a single Tab left it and landed in
+    // the nav or rail underneath the scrim — controls a sighted reader cannot
+    // see and a screen-reader reader has been told do not exist.
+    renderDrawers();
+    await userEvent.click(mapButton());
+
+    const close = screen.getByRole('button', { name: 'Close your map' });
+    close.focus();
+    await userEvent.tab();
+
+    expect(panel('map')?.contains(document.activeElement)).toBe(true);
+  });
+
+  it('cycles Shift+Tab backwards inside the panel too', async () => {
+    renderDrawers();
+    await userEvent.click(mapButton());
+
+    screen.getByRole('button', { name: 'Close your map' }).focus();
+    await userEvent.tab({ shift: true });
+
+    expect(panel('map')?.contains(document.activeElement)).toBe(true);
+  });
+
+  it('returns focus to the control that opened the FIRST drawer, after switching', async () => {
+    // Switching map → resources used to overwrite the return target with the
+    // outgoing panel — which is `inert` by the time the second one closes — so
+    // focus silently fell to `<body>`.
+    renderDrawers();
+    const trigger = mapButton();
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('button', { name: /Resources/ }));
+    await userEvent.keyboard('{Escape}');
+
+    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+});

@@ -113,25 +113,28 @@ describe('large — the two panes share the width', () => {
 });
 
 describe('small — the panes take turns', () => {
-  it('hides the off-screen pane from assistive technology', () => {
+  it('opens on the module the reader asked for, not on the conversation', () => {
+    // Arriving at `/app/journey` on a phone should SHOW the journey. It used to
+    // render it off-screen and `inert` behind the conversation, so the reader
+    // had to swipe or use the switch to reach the thing they had just tapped.
     renderPanes('small');
-    expect(chat()?.getAttribute('aria-hidden')).toBeNull();
-    expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
+    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
+    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('stops the off-screen pane taking a tap it cannot be seen to take', () => {
     // A transform moves a pane out of view without making it inert; without
     // this, a tap near the edge lands on a control the reader cannot see.
     renderPanes('small');
-    expect(workspace()?.className).toContain('pointer-events-none');
+    expect(chat()?.className).toContain('pointer-events-none');
   });
 
   it('swaps which pane is hidden when the switch moves', async () => {
     renderPanes('small');
-    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Conversation' }));
 
-    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
-    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
+    expect(chat()?.getAttribute('aria-hidden')).toBeNull();
+    expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('drops the resize handle, because the panes no longer share width', () => {
@@ -154,48 +157,106 @@ describe('the swipe, and what must NOT trigger it', () => {
     });
   }
 
-  it('moves to the workspace on a swipe left', () => {
-    renderPanes('small');
-    swipe(-120);
-    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
-  });
-
-  it('brings the conversation back on a swipe right', () => {
+  it('brings the conversation in on a swipe right', () => {
     // The conversation is on the LEFT in every layout, so the direction means
     // the same thing at every width — that is the whole reason it is worth a
-    // gesture rather than only a control.
+    // gesture rather than only a control. A module route opens on the module,
+    // so right is the way back to her.
     renderPanes('small');
-    swipe(-120);
     swipe(120);
     expect(chat()?.getAttribute('aria-hidden')).toBeNull();
   });
 
+  it('sends her away again on a swipe left', () => {
+    renderPanes('small');
+    swipe(120);
+    swipe(-120);
+    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
+  });
+
   it('ignores a drag too short to be a swipe', () => {
     renderPanes('small');
-    swipe(-40);
-    expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
+    swipe(40);
+    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('ignores a mostly-vertical drag, which is a scroll', () => {
     // Comparing the two axes rather than thresholding x alone is what stops a
     // scrolling thumb changing panes underneath itself.
     renderPanes('small');
-    swipe(-80, 200);
-    expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
+    swipe(80, 200);
+    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('ignores a mouse drag, which is a text selection', () => {
     renderPanes('small');
-    swipe(-120, 0, 'mouse');
-    expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
+    swipe(120, 0, 'mouse');
+    expect(chat()?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('ignores a drag that starts in the composer', () => {
     // Dragging to select what you typed must not navigate away from it.
     renderPanes('small');
+    // Bring her in first: on a module route the conversation starts off-screen
+    // and `inert`, so its composer is not in the accessibility tree at all.
+    swipe(120);
+    expect(chat()?.getAttribute('aria-hidden')).toBeNull();
+
+    // Now drag LEFT from inside the composer — the direction that WOULD move to
+    // the workspace if the guard were not there. The conversation must stay.
     const composer = screen.getByRole('textbox', { name: 'Message Lelañea' });
     swipe(-120, 0, 'touch', composer);
+    expect(chat()?.getAttribute('aria-hidden')).toBeNull();
     expect(workspace()?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('forgets a cancelled gesture, so the next tap is not measured against it', () => {
+    // `start.current` was cleared only on `pointerup`. Release outside the
+    // container — over the topbar or the rail — or let the browser cancel the
+    // gesture, and the origin survived: the NEXT `pointerup` to reach this
+    // element measured against it, including taps whose `pointerdown` the guards
+    // had deliberately ignored.
+    renderPanes('small');
+    const surface = document.querySelector('[data-pane="chat"]')!.parentElement!;
+
+    fireEvent.pointerDown(surface, {
+      clientX: 400,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 1,
+    });
+    fireEvent.pointerCancel(surface, { pointerId: 1 });
+    // A plain tap, far from where the cancelled drag began.
+    fireEvent.pointerUp(surface, {
+      clientX: 100,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 1,
+    });
+
+    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('ignores a release whose press it never saw', () => {
+    // Different pointer id — a second finger, or a release that belongs to a
+    // gesture this element never started.
+    renderPanes('small');
+    const surface = document.querySelector('[data-pane="chat"]')!.parentElement!;
+
+    fireEvent.pointerDown(surface, {
+      clientX: 400,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: 100,
+      clientY: 300,
+      pointerType: 'touch',
+      pointerId: 2,
+    });
+
+    expect(workspace()?.getAttribute('aria-hidden')).toBeNull();
   });
 
   it('does not swipe at all above 900px, where both panes are on screen', () => {

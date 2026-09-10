@@ -53,7 +53,8 @@ export interface ShellLayout {
   pane: Pane;
   toggleNavSlim: () => void;
   setNavOpen: (open: boolean) => void;
-  setChatWidth: (px: number) => void;
+  /** `commit: false` while a drag is in flight — see the implementation. */
+  setChatWidth: (px: number, commit?: boolean) => void;
   setChatSlim: (slim: boolean) => void;
   openDrawer: (id: DrawerId) => void;
   closeDrawer: () => void;
@@ -101,19 +102,6 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [drawer, setDrawer] = useState<DrawerId | null>(null);
   const [pane, setPaneState] = useState<Pane>('chat');
 
-  /**
-   * The stored preference and the live value are DIFFERENT THINGS, and keeping
-   * them apart is the whole of this block.
-   *
-   * `fitToWidth()` slims the nav below 1100px. If that write persisted, resizing
-   * a window — or opening the app on a laptop once — would silently rewrite a
-   * choice the reader made deliberately, and they would never get it back.
-   *
-   * So: the viewport may set the live value and never the stored one; only the
-   * toggle writes storage. This is decision D4's ruling on the theme applied
-   * unchanged — the system preference is a default, an explicit choice is a
-   * choice — and it is already carried in this repo as divergence Row 2.
-   */
   /**
    * The stored preference and the live value are DIFFERENT THINGS, and keeping
    * them apart is the whole of this block.
@@ -168,12 +156,18 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       const w = window.innerWidth;
       const previous = lastWidth.current;
       lastWidth.current = w;
+
       const next = classify(w);
       setWidth(next);
 
       if (next === 'small') {
         // No sliver on a phone — the pane switch does that job.
         setChatSlimState(false);
+        // `previous` is cleared so that widening OUT of small counts as a fresh
+        // approach to 1100. Otherwise 800 → 1000 saw `previous = 800`, found no
+        // inward crossing, and left the nav expanded at a width where a direct
+        // load at 1000 slims it — a rotation and a reload disagreeing.
+        lastWidth.current = null;
         return;
       }
 
@@ -215,9 +209,16 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * width to the work"; with no work there is nothing to give it to.
    */
   useEffect(() => {
-    if (wsOpen) return;
-    setPaneState('chat');
-    setChatSlimState(false);
+    if (!wsOpen) {
+      setPaneState('chat');
+      setChatSlimState(false);
+      return;
+    }
+    // And the other direction: asking for a module should SHOW it. On a phone
+    // the panes are a carousel, so opening one while `pane` was still `'chat'`
+    // rendered the thing the reader had just tapped off-screen and `inert` —
+    // they had to swipe or use the switch to reach what they had asked for.
+    setPaneState('ws');
   }, [wsOpen]);
 
   /**
@@ -230,8 +231,18 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     setNavOpenState(false);
   }, [pathname]);
 
+  /**
+   * `commit` separates "show me this width" from "remember this width".
+   *
+   * A drag calls this on every `pointermove`, and persisting there meant a
+   * synchronous `JSON.stringify` + `setItem` + `dispatchEvent` — plus the
+   * same-tab listener's own `setState` — on the main thread every frame, for the
+   * whole drag. Only the value the reader settles on is worth storing, so the
+   * pointer path commits on `pointerup` and the keyboard path commits per press
+   * (where each press already IS a settled value).
+   */
   const setChatWidth = useCallback(
-    (px: number) => {
+    (px: number, commit = true) => {
       // Dragging it narrow enough is a way of asking for it gone.
       if (px < CHAT_FOLD) {
         setChatSlimState(true);
@@ -240,7 +251,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setChatSlimState(false);
       const clamped = Math.max(CHAT_MIN, Math.min(CHAT_MAX, px));
       setChatW(clamped);
-      setStoredChatW(clamped);
+      if (commit) setStoredChatW(clamped);
     },
     [setStoredChatW]
   );

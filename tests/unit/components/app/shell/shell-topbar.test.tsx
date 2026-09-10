@@ -144,10 +144,12 @@ describe('ShellTopbar — what it must not invent', () => {
 
     const conversation = screen.getByRole('button', { name: 'Conversation' });
     const workspace = screen.getByRole('button', { name: 'Workspace' });
-    expect(conversation.getAttribute('aria-pressed')).toBe('true');
-
-    await userEvent.click(workspace);
+    // A module route opens ON the module — asking for one and being shown the
+    // conversation instead was the defect this state now encodes.
     expect(workspace.getAttribute('aria-pressed')).toBe('true');
-    expect(conversation.getAttribute('aria-pressed')).toBe('false');
+
+    await userEvent.click(conversation);
+    expect(conversation.getAttribute('aria-pressed')).toBe('true');
+    expect(workspace.getAttribute('aria-pressed')).toBe('false');
   });
 });
