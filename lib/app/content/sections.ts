@@ -141,9 +141,13 @@ export function selectSection(
     throw new MissingSectionError(document.id, heading, listSectionHeadings(document));
   }
 
-  // Non-null: `start` came from `findIndex` on this array, and the predicate
-  // above already narrowed the block at that index to a heading.
-  const startBlock = document.blocks[start]!;
+  // `start` came from `findIndex` on this array with a predicate that already
+  // required a heading, so this block IS one — but the index access does not
+  // carry that through, hence the `type` re-check rather than a cast. The `2`
+  // branch is unreachable; it is the shallowest authored level, so if the
+  // narrowing ever did fail the section would end at the next `h2` rather than
+  // swallowing the rest of the document.
+  const startBlock = document.blocks[start];
   const level = startBlock.type === 'heading' ? startBlock.level : 2;
 
   const rest = document.blocks.slice(start + 1);

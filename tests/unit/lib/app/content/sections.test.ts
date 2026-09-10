@@ -19,6 +19,26 @@
  * loader rather than a synthetic document. A fixture would test the functions
  * and prove nothing about the coupling — which is the entire point of the
  * second half of this file.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE
+ * ---------------------------------------------------------------------------
+ * This reads the REAL `@/lib/app/content` seam and cannot usefully be mocked.
+ * Half of it exists to assert facts about the content itself — that the
+ * disclaimer still has a section headed "Crisis Situations", that
+ * `the_initiation`'s beat 51 is still where the home page thinks it is — and a
+ * fixture would assert those about a document nobody ships.
+ *
+ * A fork with its own authored content should expect the second `describe`
+ * block ("the handles the public pages select by") to fail wholesale, and that
+ * is the file working: those cases are the fork's own page-to-content
+ * couplings, and they need rewriting to name the fork's headings and ranges,
+ * not deleting. The first half — `selectSection`, `paragraphAt`,
+ * `paragraphRange` behaviour — is generic apart from the strings it happens to
+ * assert on, and is worth keeping with those swapped.
+ *
+ * A fork that dropped the authored-content pipeline should delete this file
+ * along with `lib/app/content/sections.ts`, which has no other consumer.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -142,8 +162,7 @@ describe('selectSectionText', () => {
 });
 
 describe('paragraphAt', () => {
-  const philosophy = (): FoundationalDocumentDetail =>
-    requireDocument('the_heart_behind_lelanea');
+  const philosophy = (): FoundationalDocumentDetail => requireDocument('the_heart_behind_lelanea');
 
   it('counts from the start', () => {
     expect(paragraphAt(philosophy(), 0)).toBe(
@@ -167,11 +186,7 @@ describe('paragraphRange', () => {
   it('returns a half-open range', () => {
     const beats = paragraphRange(requireDocument('the_initiation'), 7, 10);
 
-    expect(beats).toEqual([
-      'This is not simply an app.',
-      'It is an invitation.',
-      beats[2],
-    ]);
+    expect(beats).toEqual(['This is not simply an app.', 'It is an invitation.', beats[2]]);
     expect(beats).toHaveLength(3);
   });
 

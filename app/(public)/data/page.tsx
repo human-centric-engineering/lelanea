@@ -246,7 +246,7 @@ export default function DataPage() {
           <AuthoredBlocks blocks={purposeTurn} className="text-[17px] leading-[1.7]" />
           <div className="text-muted-foreground mt-3 text-[15px]">
             {isNotNote.map((line, index) => (
-              <p key={index} className="last:mb-0 mb-3">
+              <p key={index} className="mb-3 last:mb-0">
                 <InlineText text={line} />
               </p>
             ))}

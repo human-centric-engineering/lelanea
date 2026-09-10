@@ -244,14 +244,14 @@ The alternative was retyping those into a `const` beside the layout, which is th
 drift this whole pipeline exists to stop — and worst on the page a visitor
 looking for therapy reads before deciding.
 
-| Function                                | Returns                                             |
-| --------------------------------------- | --------------------------------------------------- |
-| `requireDocument(id)`                   | a document, throwing rather than returning `null`   |
-| `selectSection(doc, heading, opts?)`    | the blocks under a heading; `includeHeading` adds it |
-| `selectSectionText(doc, heading)`       | that section's paragraphs and list items as strings  |
-| `paragraphAt(doc, n)`                   | one paragraph; negative counts from the end          |
-| `paragraphRange(doc, from, to)`         | a half-open run of paragraphs                        |
-| `listSectionHeadings(doc)`              | every heading, in authored order                     |
+| Function                             | Returns                                              |
+| ------------------------------------ | ---------------------------------------------------- |
+| `requireDocument(id)`                | a document, throwing rather than returning `null`    |
+| `selectSection(doc, heading, opts?)` | the blocks under a heading; `includeHeading` adds it |
+| `selectSectionText(doc, heading)`    | that section's paragraphs and list items as strings  |
+| `paragraphAt(doc, n)`                | one paragraph; negative counts from the end          |
+| `paragraphRange(doc, from, to)`      | a half-open run of paragraphs                        |
+| `listSectionHeadings(doc)`           | every heading, in authored order                     |
 
 **Everything here throws rather than degrading, and that is the design.** An
 empty result is a page that renders its "it is not" column as a blank box under

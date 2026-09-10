@@ -157,7 +157,7 @@ export default function HomePage() {
                   // "render each as its own line or beat". `mb-2` on all but
                   // the last keeps them reading as beats of one thought rather
                   // than as separate paragraphs.
-                  <p key={index} className="last:mb-0 mb-2">
+                  <p key={index} className="mb-2 last:mb-0">
                     <InlineText text={beat} />
                   </p>
                 )

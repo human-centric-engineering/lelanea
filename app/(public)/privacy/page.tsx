@@ -57,7 +57,7 @@ export default function PrivacyPolicyPage() {
         <h1 className="mb-8 text-4xl font-bold tracking-tight">Privacy Policy</h1>
 
         {/* LELAÑEA (t-6, divergence row 10) — the interim notice D8 requires. */}
-        <div className="border-[var(--color-status-yellow)] bg-[var(--color-status-yellow-bg)] mb-10 rounded-md border p-5 text-sm leading-relaxed">
+        <div className="mb-10 rounded-md border border-[var(--color-status-yellow)] bg-[var(--color-status-yellow-bg)] p-5 text-sm leading-relaxed">
           <strong className="font-medium">This is an interim policy.</strong> Lelañea&rsquo;s own
           privacy policy is being written and will replace the template below. In the meantime,{' '}
           <Link href="/data" className="underline underline-offset-4">

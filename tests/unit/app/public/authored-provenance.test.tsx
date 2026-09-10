@@ -46,6 +46,30 @@
  * **Everything outside the public site.** The scan is the public surface, which
  * is where her documents are published. A future authoring or admin surface
  * that legitimately handles this text would be a different rule.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE
+ * ---------------------------------------------------------------------------
+ * This reads the REAL `@/lib/app/content` seam, deliberately and unavoidably:
+ * the whole assertion is "this tree's source does not contain this tree's
+ * authored prose", and a mocked document would compare two things that were
+ * never at risk of being the same.
+ *
+ * A fork arriving here has one of two shapes. If it kept `content/*.json` and
+ * the pages, this passes as written and is worth keeping — it is what stops
+ * the fork's own edits from reintroducing an inlined sentence. If the fork
+ * replaced the content with its own, this still works unchanged: the pool is
+ * derived from whatever `listFoundationalDocuments()` returns, so it guards the
+ * new copy on arrival with nothing to update.
+ *
+ * A fork that removed the authored-content pipeline entirely should DELETE this
+ * file rather than gut it. The "has sentinels to look for" case will fail first
+ * and say so — its `> 200` and `> 2000` floors are this tree's numbers, and a
+ * fork with a smaller corpus should lower them rather than remove them, since
+ * a pool that has quietly emptied is the failure they exist to catch.
+ *
+ * What NOT to do is add a `vi.mock` of the loader. It would turn a real
+ * invariant into a tautology while leaving the file looking like a guard.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
