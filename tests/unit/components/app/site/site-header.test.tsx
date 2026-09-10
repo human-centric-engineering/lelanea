@@ -31,6 +31,7 @@ import { usePathname } from 'next/navigation';
 import { SiteHeader } from '@/components/app/site/site-header';
 import { WAITLIST_ANCHOR } from '@/lib/site/config';
 import { ThemeProvider } from '@/hooks/use-theme';
+import { BRAND } from '@/lib/brand';
 
 const mockUsePathname = vi.mocked(usePathname);
 
@@ -125,7 +126,11 @@ describe('SiteHeader', () => {
     renderHeader();
 
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
-    // The mark inside is decorative, so the LINK is what carries the name.
-    expect(screen.getByRole('link', { name: 'Lelañea, home' })).toHaveAttribute('href', '/');
+    // The mark inside is decorative, so the LINK is what carries the name. Read
+    // from `BRAND` rather than written out: tests/setup.ts pins the seam to the
+    // platform default suite-wide, so a literal here would assert the value of
+    // an unconfigured install. That the wordmark tracks the seam AT ALL is the
+    // separate question, pinned in site-brand.test.tsx with the seam filled.
+    expect(screen.getByRole('link', { name: `${BRAND.name}, home` })).toHaveAttribute('href', '/');
   });
 });

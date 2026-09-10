@@ -96,6 +96,14 @@
 /*
  * The narrow header keeps the wordmark and the one thing you came to do on the
  * first row, and lets the page links wrap underneath.
+ *
+ * EVERY `order` RULE BELOW IS SCOPED TO `.nav`, and that is load-bearing rather
+ * than tidiness. `.wordmark` and `.spacer` are shared with `SiteFooter`, whose
+ * `.footTop` is also a wrapping flex container — so an unscoped
+ * `.wordmark { order: 1 }` reorders the FOOTER at every viewport ≤880px too,
+ * floating the domain and the link list above the lotus. The prototype scopes
+ * these under `.site-nav` for the same reason; the first port of this block
+ * dropped the ancestor.
  */
 @media (max-width: 880px) {
   .nav {
@@ -106,17 +114,17 @@
     padding-bottom: 14px;
   }
 
-  .wordmark {
+  .nav .wordmark {
     order: 1;
   }
-  .spacer {
+  .nav .spacer {
     order: 2;
   }
-  .navLogin,
-  .themeSlot {
+  .nav .navLogin,
+  .nav .themeSlot {
     order: 3;
   }
-  .cta {
+  .nav .cta {
     order: 4;
   }
 
@@ -128,7 +136,7 @@
     height: 0;
   }
 
-  .navlink {
+  .nav .navlink {
     order: 6;
     padding-top: 0;
     padding-bottom: 0;
@@ -136,7 +144,9 @@
 }
 
 @media (max-width: 620px) {
-  .wordmarkText {
+  /* Scoped for the same reason as the `order` block above — the footer sets
+     its own wordmark size inline and must not inherit the header's. */
+  .nav .wordmarkText {
     font-size: 22px;
   }
 }

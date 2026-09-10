@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { Button } from '@/components/app/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { BRAND } from '@/lib/brand';
 import { SITE_NAV, WAITLIST_ANCHOR } from '@/lib/site/config';
 import styles from '@/components/app/site/site.module.css';
 
@@ -34,6 +35,13 @@ import styles from '@/components/app/site/site.module.css';
  * The sticky bar would otherwise cover what it scrolled to; `scroll-margin-top`
  * on the form itself is what keeps the heading clear of it.
  *
+ * ## The wordmark comes from the brand seam
+ *
+ * Both the visible text and the link's accessible name read `BRAND.name`, for
+ * the reason the footer's legal line gives: a literal here would be a second
+ * place to change the product's name from, and the one nobody would think to
+ * look at. Pinned in `site-brand.test.tsx`.
+ *
  * @see .context/app/planning/design/lelanea.html — `header.site-nav`
  */
 export function SiteHeader() {
@@ -43,9 +51,9 @@ export function SiteHeader() {
     <header className={styles.nav}>
       {/* The mark is decorative (`aria-hidden` inside `LotusMark`), so the LINK
           carries the accessible name — one component, one a11y job. */}
-      <Link href="/" className={styles.wordmark} aria-label="Lelañea, home">
+      <Link href="/" className={styles.wordmark} aria-label={`${BRAND.name}, home`}>
         <LotusMark size={30} water={false} />
-        <span className={styles.wordmarkText}>Lelañea</span>
+        <span className={styles.wordmarkText}>{BRAND.name}</span>
       </Link>
 
       <span className={styles.spacer} />

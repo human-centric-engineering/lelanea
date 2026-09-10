@@ -58,13 +58,20 @@ const WHAT_THIS_IS = [
  * first time one is renamed — is guarded either way.
  *
  * The onboarding tier is skipped, as the prototype skips it: it is how you get
- * in, not part of the path being described.
+ * in, not part of the path being described. It is excluded by id rather than by
+ * ordinal — see the filter.
  */
 export default function HomePage() {
   const { tiers, modules } = getJourneyStructure();
 
   const moduleTitle = new Map(modules.map((m) => [m.id, m.title]));
-  const pathTiers = tiers.filter((tier) => tier.order > 0).toSorted((a, b) => a.order - b.order);
+  // By IDENTITY, not by ordinal. `order > 0` was the first shape and it leans
+  // on onboarding being exactly 0, which the schema does not promise — it only
+  // requires nonnegative. Renumbering the tiers 1–5 would publish onboarding on
+  // the marketing page, and a future tier authored at 0 would vanish from it.
+  const pathTiers = tiers
+    .filter((tier) => tier.id !== 'onboarding')
+    .toSorted((a, b) => a.order - b.order);
 
   return (
     <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)]">

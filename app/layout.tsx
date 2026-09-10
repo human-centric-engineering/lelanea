@@ -12,6 +12,7 @@ import { AnalyticsScripts, UserIdentifier, PageTracker } from '@/components/anal
 import { SurfaceSync } from '@/components/surface-sync';
 import { DEFAULT_SURFACE } from '@/lib/app/surface';
 import { BRAND } from '@/lib/brand';
+import { resolveMetadataBase } from '@/lib/site/metadata-base';
 // LELAÑEA divergence — see .context/app/divergences.md, rows 1 and 2.
 import { brandFontVariables } from '@/app/fonts';
 
@@ -28,7 +29,9 @@ export const metadata: Metadata = {
   // localhost — a grey box on Slack, X and LinkedIn, with nothing failing
   // anywhere and no way to see it from inside the app. It became load-bearing
   // the moment `app/opengraph-image.tsx` gave the site a card at all (t-5).
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
+  // The resolution — including the empty string Docker's `ENV X=$ARG`
+  // produces — lives in `lib/site/metadata-base.ts`, where it is tested.
+  metadataBase: resolveMetadataBase(process.env.NEXT_PUBLIC_APP_URL),
   title: {
     default: BRAND.name,
     template: `%s - ${BRAND.name}`,

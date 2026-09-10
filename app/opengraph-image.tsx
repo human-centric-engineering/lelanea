@@ -30,7 +30,30 @@ export const contentType = 'image/png';
  * correct in palette, mark and words meanwhile.
  *
  * Everything else is the brand: the oyster ground, the ink, and the lotus.
+ *
+ * ## The three colours are the light-mode token VALUES, copied by hand
+ *
+ * Satori resolves no CSS variables — there is no stylesheet in this renderer —
+ * so `var(--color-background)` would render as nothing. The literals below are
+ * therefore the only place in the app where a brand colour is written out, and
+ * they are exported so a test can compare them against
+ * `app/brand-theme.css` rather than trusting a comment. The first version of
+ * this file claimed to track the tokens and did not: the ground was an invented
+ * `#F7F3EE`, and the ink was `--color-foreground` under a comment saying
+ * `--color-heading`.
  */
+
+/**
+ * `:root` values from `app/brand-theme.css`, light mode. Pinned by
+ * `tests/unit/app/opengraph-image.test.tsx`, which parses the stylesheet — so
+ * a palette change fails there rather than shipping a card that no longer
+ * matches the site.
+ */
+export const OG_COLORS = {
+  background: '#f3f0ec',
+  heading: '#11181a',
+  mutedForeground: '#5a5f62',
+} as const;
 export default async function OpengraphImage() {
   const lotus = await readFile(join(process.cwd(), 'public', 'lotus-mark.svg'));
   const lotusSrc = `data:image/svg+xml;base64,${lotus.toString('base64')}`;
@@ -45,18 +68,15 @@ export default async function OpengraphImage() {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 24,
-        // The consumer surface's light ground and heading ink, as literals
-        // because Satori resolves no CSS variables — there is no stylesheet
-        // in this renderer. Kept in step with `app/brand-theme.css` by hand.
-        backgroundColor: '#F7F3EE',
-        color: '#282C2E',
+        backgroundColor: OG_COLORS.background,
+        color: OG_COLORS.heading,
       }}
     >
       {/* A bare <img> is what Satori renders; next/image does not exist
             inside ImageResponse. Decorative — the name is the next element. */}
       <img src={lotusSrc} alt="" width={300} height={194} />
       <div style={{ fontSize: 76, letterSpacing: -1 }}>{BRAND.name}</div>
-      <div style={{ fontSize: 30, color: '#5A5F62', letterSpacing: 4 }}>
+      <div style={{ fontSize: 30, color: OG_COLORS.mutedForeground, letterSpacing: 4 }}>
         transcendental coaching, at your own pace
       </div>
     </div>,

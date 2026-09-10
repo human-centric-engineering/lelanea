@@ -12,10 +12,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import OpengraphImage, { alt, size, contentType } from '@/app/opengraph-image';
+import OpengraphImage, { alt, size, contentType, OG_COLORS } from '@/app/opengraph-image';
 import { metadata as rootMetadata } from '@/app/layout';
 
 describe('app/opengraph-image', () => {
@@ -35,6 +35,38 @@ describe('app/opengraph-image', () => {
     // The route reads this path at render. `.context/` — where the design kit
     // keeps the original — is documentation and is not guaranteed to ship.
     expect(existsSync(path.join(process.cwd(), 'public', 'lotus-mark.svg'))).toBe(true);
+  });
+
+  describe('the palette', () => {
+    // Satori resolves no CSS variables, so this file holds the only written-out
+    // brand colours in the app. That is a drift surface with nothing watching
+    // it — `tokens-only.test.ts` scans `components/app/ui/` and never sees this
+    // file. The first version invented `#F7F3EE` for the ground and labelled
+    // `--color-foreground` as `--color-heading`; the card simply did not match
+    // the site, and no check said so.
+    const stylesheet = readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 'utf8');
+
+    /** The light-mode value of a token, read from the stylesheet's first block. */
+    function lightToken(name: string): string {
+      const match = stylesheet.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`));
+      if (!match) throw new Error(`--${name} not found as a hex value in app/brand-theme.css`);
+      return match[1].toLowerCase();
+    }
+
+    it.each([
+      ['background', 'color-background'],
+      ['heading', 'color-heading'],
+      ['mutedForeground', 'color-muted-foreground'],
+    ])('uses the real --%s token value', (key, token) => {
+      expect(OG_COLORS[key as keyof typeof OG_COLORS].toLowerCase()).toBe(lightToken(token));
+    });
+
+    it('reads real values from the stylesheet, so the comparison is not vacuous', () => {
+      // If `lightToken` silently returned '' the cases above would compare two
+      // empty strings and pass.
+      expect(lightToken('color-background')).toMatch(/^#[0-9a-f]{3,8}$/);
+      expect(lightToken('color-heading')).not.toBe(lightToken('color-background'));
+    });
   });
 
   describe('the URL the card is served from', () => {
@@ -58,7 +90,9 @@ describe('app/opengraph-image', () => {
       } else {
         // No app URL configured in this environment, so localhost IS correct
         // here — what must hold is that the value tracks the variable rather
-        // than being hardcoded.
+        // than being hardcoded. Which inputs produce which output is exercised
+        // properly in `tests/unit/lib/site/metadata-base.test.ts`; this only
+        // checks the layout is wired to that resolver.
         expect(base.origin).toBe('http://localhost:3000');
       }
     });
