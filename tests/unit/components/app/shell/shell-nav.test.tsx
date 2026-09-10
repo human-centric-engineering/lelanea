@@ -179,6 +179,59 @@ describe('ShellNav — slim mode', () => {
   });
 });
 
+describe('ShellNav — collapsing changes the width and nothing else', () => {
+  /** The nav's three regions, in order: brand, scrolling items, pinned footer. */
+  const regions = () => Array.from(document.querySelectorAll('nav > div'));
+
+  it('keeps the brand row the same height in both states', async () => {
+    // The defect this guards: the prototype stacks the mark above the collapse
+    // control when slim, which made the top area taller in one state than the
+    // other — so every nav icon below it shifted down as the menu collapsed.
+    // Collapsing should move the right edge and nothing else.
+    renderAt('/app');
+    const expanded = regions()[0].className;
+
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    const slim = regions()[0].className;
+
+    expect(slim).toContain('h-8');
+    expect(expanded).toContain('h-8');
+    // A column direction is what made it taller; height alone would not catch
+    // a future `flex-col` whose children happen to fit.
+    expect(slim).not.toContain('flex-col');
+    expect(expanded).not.toContain('flex-col');
+  });
+
+  it('keeps the toggle out of the brand row, so it cannot push the items down', () => {
+    renderAt('/app');
+    const [brand, , footer] = regions();
+
+    expect(brand.querySelector('button')).toBeNull();
+    expect(footer.querySelector('button')).not.toBeNull();
+    expect(footer.textContent).toContain(USER.name);
+  });
+
+  it('leaves room for the active border and the focus ring when slim', async () => {
+    // The active item is `w-11` (44px). At `px-2.5` the slim nav's inner box is
+    // exactly 44px, so the border sat flush against the scroll container's clip
+    // edge and the `outline-offset-2` focus ring was cut off entirely. 9px is
+    // what the prototype uses, and the scroll container carries `-mx-1 px-1` so
+    // an outline has somewhere to go.
+    renderAt('/app');
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+
+    const nav = document.querySelector('nav');
+    expect(nav?.className).toContain('px-[9px]');
+    expect(nav?.className).not.toContain('px-2.5');
+
+    const [, body] = regions();
+    expect(body.className).toContain('-mx-1');
+    expect(body.className).toContain('px-1');
+    // `overflow-x-hidden` would clip the ring however much padding it had.
+    expect(body.className).not.toContain('overflow-x-hidden');
+  });
+});
+
 describe('ShellNav — the column survives a short window', () => {
   it('scrolls rather than clipping its last items', () => {
     // The shell is `h-dvh overflow-hidden` and every nav child is `flex-none`,

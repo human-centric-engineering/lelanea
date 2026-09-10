@@ -94,11 +94,31 @@ export function ShellNav({ user }: ShellNavProps) {
         'border-[var(--color-divider)] pt-3.5 pb-13',
         readerToggled &&
           'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
-        slim ? 'w-16 px-2.5' : 'w-[234px] px-2.5'
+        // 9px when slim, not 10px, and the difference is load-bearing: the item
+        // is `w-11` (44px), so at 10px the inner box is exactly 44px and the
+        // active item's border sits flush against the clip edge of the scroll
+        // container below. The prototype uses 9px for the same reason.
+        slim ? 'w-16 px-[9px]' : 'w-[234px] px-2.5'
       )}
     >
+      {/*
+        ONE ROW IN BOTH STATES, and that is the whole point of it.
+
+        The prototype stacks the mark above the collapse control when slim
+        (`.lnav.slim .lnav-top { flex-direction: column }`), which makes the top
+        area taller in one state than the other — so every nav icon below it
+        shifted down as the menu collapsed. Collapsing a menu should change its
+        width and nothing else; icons that jump make the two states read as two
+        different navs. Owner ruling, 10 September 2026.
+
+        The toggle therefore lives in the footer below, where it holds one
+        position in both states rather than trading places with the wordmark.
+      */}
       <div
-        className={cn('flex items-center gap-2.5 pt-0.5 pb-3', slim ? 'flex-col px-0' : 'px-[3px]')}
+        className={cn(
+          'flex h-8 flex-none items-center gap-2.5 pt-0.5',
+          slim ? 'justify-center px-0' : 'px-[3px]'
+        )}
       >
         <Link
           href="/"
@@ -110,25 +130,6 @@ export function ShellNav({ user }: ShellNavProps) {
             <span className="brand-display text-[22px] whitespace-nowrap">Lelañea</span>
           )}
         </Link>
-        {slim ? null : <span className="flex-1" />}
-        <button
-          type="button"
-          onClick={toggleSlim}
-          aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
-          title={slim ? 'Expand the menu' : 'Collapse the menu'}
-          className={cn(
-            'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-            'flex h-8 w-8 flex-none items-center justify-center rounded-[10px]',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-            'focus-visible:outline-[var(--color-ring)]'
-          )}
-        >
-          {slim ? (
-            <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
-          ) : (
-            <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
-          )}
-        </button>
       </div>
 
       {/*
@@ -142,7 +143,7 @@ export function ShellNav({ user }: ShellNavProps) {
         `scrollbar-none` keeps the chrome out of a 64px column; the content is
         still reachable by wheel, trackpad, touch and keyboard focus.
       */}
-      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-0.5 overflow-x-hidden overflow-y-auto">
+      <div className="-mx-1 mt-3 flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-0.5 overflow-y-auto px-1">
         {SHELL_NAV.map((entry, i) => {
           if (!isNavItem(entry)) {
             return entry.kind === 'separator' ? (
@@ -202,6 +203,35 @@ export function ShellNav({ user }: ShellNavProps) {
             </Link>
           );
         })}
+      </div>
+
+      {/*
+        The pinned footer: the collapse toggle and the account, in one position
+        in both states. Outside the scroll container on purpose — a control for
+        the nav itself should not scroll away with the nav's contents.
+      */}
+      <div className="-mx-1 flex flex-none flex-col gap-0.5 px-1 pt-1">
+        <button
+          type="button"
+          onClick={toggleSlim}
+          aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
+          title={slim ? 'Expand the menu' : 'Collapse the menu'}
+          className={cn(
+            'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+            'flex h-8 flex-none items-center rounded-[10px]',
+            'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+            'motion-reduce:transition-none',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-[var(--color-ring)]',
+            slim ? 'w-11 justify-center px-0' : 'w-full justify-end px-2'
+          )}
+        >
+          {slim ? (
+            <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+          )}
+        </button>
 
         <Link
           href="/app/account"
