@@ -204,18 +204,35 @@ describe('reserved fork tiers', () => {
     expect(filesUnder(dir).length).toBeGreaterThan(0);
   });
 
-  it('prisma/schema/app.prisma declares no models', () => {
+  it('prisma/schema/app.prisma declares only what this fork decided on', () => {
     // The same promise, in the file the docs single out as "ships empty".
+    //
+    // LELAÑEA — PINNED, not deleted. Upstream this asserts `[]`, and §03 t-7 put
+    // the first leaf model in the file, so a leaf necessarily violates it. Two
+    // things are worth noticing about that:
+    //
+    // 1. `lib/app/reserved-tiers.ts` is the seam that lets a fork declare an
+    //    occupied tier and have the TIER rows subtract it — but its accepted
+    //    values are the five reserved DIRECTORIES, and this row reads a FILE.
+    //    So this is the one case in the file a fork cannot answer through the
+    //    seam provided, and every leaf with a model of its own meets it. Filed
+    //    against `sunrise` (blobs identical on sunrise/main and daybreak/main,
+    //    so Daybreak could not fix it) — see `.context/app/divergences.md`.
+    // 2. Pinning keeps the row doing real work here: a model or enum landing in
+    //    this file without anyone deciding on it still fails, and so does one
+    //    that skipped the Art. 15 accounting `leaf-data-export.ts` owes it.
     const src = readFileSync(join(REPO_ROOT, 'prisma/schema/app.prisma'), 'utf8');
     const declarations = src
       .split('\n')
-      .filter((line) => /^\s*(model|enum|type|view)\s+\w+/.test(line));
+      .filter((line) => /^\s*(model|enum|type|view)\s+\w+/.test(line))
+      .map((line) => line.trim());
 
     expect(
       declarations,
-      'prisma/schema/app.prisma is fork-reserved and ships empty; platform ' +
-        'app-domain models belong in prisma/schema/platform.prisma.'
-    ).toEqual([]);
+      'prisma/schema/app.prisma declares something this fork has not decided on. ' +
+        'Add it here AND to initLeafSubjectSources() in lib/app/leaf-data-export.ts ' +
+        '(GDPR Art. 15), or move it out.'
+    ).toEqual(['enum AppWaitlistSource {', 'model AppWaitlistEntry {']);
   });
 
   it('the reservation is documented in both places a fork would look', () => {

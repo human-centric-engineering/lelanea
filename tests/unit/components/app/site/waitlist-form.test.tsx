@@ -185,6 +185,36 @@ describe('WaitlistForm', () => {
       expect(screen.queryByText(/Something didn't land/)).toBeNull();
     });
 
+    it('flags an over-long optional answer on the field itself', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistForm />);
+
+      await user.type(screen.getByLabelText('Your email'), 'ada@example.com');
+      // Pasted rather than typed: `user.type` would fire 201 change events.
+      await user.click(screen.getByLabelText('Where did you hear about this?'));
+      await user.paste('x'.repeat(201));
+      await user.click(screen.getByRole('button', { name: 'Join the waitlist' }));
+
+      const field = screen.getByLabelText('Where did you hear about this?');
+      expect(await screen.findByText(/Please keep this under 200 characters/)).toBeTruthy();
+      // The message alone is not enough: without `aria-invalid` and the
+      // `aria-describedby` link, a screen-reader user reaches the field, is told
+      // nothing is wrong, and never hears the sentence sitting under it.
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      expect(field.getAttribute('aria-describedby')).toBe('wl-source-error');
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it('leaves an untouched field unmarked, so the attributes mean something', () => {
+      render(<WaitlistForm />);
+
+      // The other half of the case above. `aria-invalid` permanently set would
+      // announce every field as broken, which is the same as announcing none.
+      const field = screen.getByLabelText('Where did you hear about this?');
+      expect(field.getAttribute('aria-invalid')).toBeNull();
+      expect(field.getAttribute('aria-describedby')).toBeNull();
+    });
+
     it('shows the submission-failed banner when the request fails', async () => {
       const user = userEvent.setup();
       post.mockRejectedValue(new Error('offline'));
@@ -248,7 +278,7 @@ describe('WaitlistForm', () => {
     it('is hidden from sight, from the keyboard and from assistive technology', () => {
       const { container } = render(<WaitlistForm />);
 
-      const honeypot = container.querySelector('input[name="website"]') as HTMLInputElement | null;
+      const honeypot = container.querySelector<HTMLInputElement>('input[name="website"]');
       expect(honeypot).not.toBeNull();
       expect(honeypot?.tabIndex).toBe(-1);
       expect(honeypot?.closest('[aria-hidden="true"]')).not.toBeNull();

@@ -33,17 +33,30 @@ const FREE_TEXT_MAX = 2000;
 const SHORT_TEXT_MAX = 200;
 
 /**
- * A blank optional field is absent, not empty.
+ * An optional free-text answer: trimmed, capped, and `undefined` when blank.
  *
  * `''` is what an untouched `<input>` submits. Stored as-is it becomes an empty
  * string in a nullable column, which is indistinguishable in a query from
  * someone who typed a space — and it makes `heardFrom IS NOT NULL` count people
  * who answered nothing.
+ *
+ * **`.transform()` on an optional string, not `z.preprocess()`.** Preprocess was
+ * the first shape and it types its INPUT as `unknown`, so `zodResolver` inferred
+ * `{ name: unknown }` for the form and could not be assigned to the field values
+ * `useForm` was declared with. This shape keeps input and output both
+ * `string | undefined`, which is what the resolver needs and is also the honest
+ * description of what the field is.
+ *
+ * `.trim()` comes BEFORE `.max()` so trailing whitespace cannot push a
+ * legitimate answer over the cap.
  */
-function blankToUndefined(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+function optionalText(max: number) {
+  return z
+    .string()
+    .trim()
+    .max(max, `Please keep this under ${max} characters.`)
+    .optional()
+    .transform((value) => (value === undefined || value === '' ? undefined : value));
 }
 
 /** The email, lower-cased so the table's `@unique` means one person. */
@@ -58,24 +71,9 @@ export const waitlistEmailSchema = z
 /** What the visitor sends, before the honeypot is considered. */
 export const waitlistSchema = z.object({
   email: waitlistEmailSchema,
-  name: z.preprocess(
-    blankToUndefined,
-    z
-      .string()
-      .max(SHORT_TEXT_MAX, `Please keep this under ${SHORT_TEXT_MAX} characters.`)
-      .optional()
-  ),
-  heardFrom: z.preprocess(
-    blankToUndefined,
-    z
-      .string()
-      .max(SHORT_TEXT_MAX, `Please keep this under ${SHORT_TEXT_MAX} characters.`)
-      .optional()
-  ),
-  intent: z.preprocess(
-    blankToUndefined,
-    z.string().max(FREE_TEXT_MAX, `Please keep this under ${FREE_TEXT_MAX} characters.`).optional()
-  ),
+  name: optionalText(SHORT_TEXT_MAX),
+  heardFrom: optionalText(SHORT_TEXT_MAX),
+  intent: optionalText(FREE_TEXT_MAX),
 });
 
 /**
@@ -98,3 +96,18 @@ export const waitlistWithHoneypotSchema = waitlistSchema.extend({
 export type WaitlistInput = z.infer<typeof waitlistSchema>;
 export type WaitlistClientInput = z.infer<typeof waitlistClientSchema>;
 export type WaitlistWithHoneypotInput = z.infer<typeof waitlistWithHoneypotSchema>;
+
+/**
+ * What the FORM holds, as distinct from what the schema produces.
+ *
+ * `optionalText` transforms, so the schema's input and output types differ: a
+ * blank field is `name?: string` going in and `name: string | undefined` coming
+ * out. `useForm` is generic over the values it HOLDS — the input side — and
+ * hands the output side to the submit handler, so the two are named separately
+ * rather than both being `z.infer`, which is the output type only.
+ *
+ * Collapsing them is what the type error says, at some length: the resolver's
+ * `Resolver<In, ctx, Out>` cannot be assigned where `Resolver<Out, ctx, Out>` is
+ * wanted.
+ */
+export type WaitlistFormValues = z.input<typeof waitlistClientSchema>;

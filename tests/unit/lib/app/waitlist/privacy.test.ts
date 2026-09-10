@@ -12,12 +12,26 @@
  * `eraseUser()` reaches the hook `initLeafApp()` registers. Only Prisma and the
  * object store are stubs.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads `lib/app/leaf-bootstrap.ts` and
+ * `lib/app/leaf-data-export.ts` for real, not through a mock
+ * ---------------------------------------------------------------------------
+ * That is the whole point of the file: mocking either seam would leave the
+ * wiring — the thing that silently fails — untested, and would turn every case
+ * below into an assertion about a mock.
+ *
+ * **What a fork should expect.** Upstream, both seams are empty: `initLeafApp()`
+ * registers no erasure hook and `collectLeafSubjectData()` returns `{}`, so
+ * every case here would fail against a vanilla Daybreak. This file is Lelañea's
+ * and exists only because Lelañea filled them; a fork inheriting it should
+ * expect to rewrite it around its own tables rather than to pin ours.
+ *
  * @see lib/app/leaf-data-export.ts · lib/app/leaf-bootstrap.ts
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, txPrisma, prisma } =
+const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, prisma } =
   vi.hoisted(() => {
     interface Delegate {
       findMany: ReturnType<typeof vi.fn>;
@@ -226,7 +240,7 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
     });
 
     const deleteOrder = delegateFor('appWaitlistEntry').deleteMany.mock.invocationCallOrder[0];
-    expect(deleteOrder).toBeLessThan(userDelete.mock.invocationCallOrder[0]!);
+    expect(deleteOrder).toBeLessThan(userDelete.mock.invocationCallOrder[0]);
   });
 
   it('does NOT reach the waitlist when the leaf boot hook never ran', async () => {

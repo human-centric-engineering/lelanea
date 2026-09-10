@@ -13,7 +13,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api/client';
 import { WAITLIST_ENDPOINT } from '@/lib/app/waitlist/endpoint';
 import { LAUNCH_WINDOW, WAITLIST_ANCHOR } from '@/lib/site/config';
-import { waitlistClientSchema, type WaitlistClientInput } from '@/lib/validations/app-waitlist';
+import {
+  waitlistClientSchema,
+  type WaitlistClientInput,
+  type WaitlistFormValues,
+} from '@/lib/validations/app-waitlist';
 
 /** The prototype's field label row: label, optional ⓘ, optional "optional". */
 const LABEL_ROW = 'flex items-center gap-[7px] text-sm text-foreground';
@@ -93,11 +97,16 @@ export function WaitlistForm() {
   const [submitFailed, setSubmitFailed] = useState(false);
   const confirmationRef = useRef<HTMLDivElement>(null);
 
+  // Three generics, not one: the values the form HOLDS, the context, and the
+  // values the resolver PRODUCES. `optionalText` transforms a blank to
+  // `undefined`, so the schema's input and output types differ, and collapsing
+  // them into a single `z.infer` is a resolver assignment error rather than a
+  // convenience — see `WaitlistFormValues`.
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<WaitlistClientInput>({
+  } = useForm<WaitlistFormValues, unknown, WaitlistClientInput>({
     resolver: zodResolver(waitlistClientSchema),
     mode: 'onTouched',
     defaultValues: { email: '', name: '', heardFrom: '', intent: '', website: '' },

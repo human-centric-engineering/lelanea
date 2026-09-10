@@ -23,6 +23,24 @@
  * YOUR behalf, so PIN it: assert your sections alongside the framework's.
  * Deleting either case loses the guarantee that one tier cannot shadow the
  * other's section, which is the failure mode that costs a data subject rows.
+ *
+ * ---------------------------------------------------------------------------
+ * LELAÑEA — the seam is filled, and these cases are pinned exactly as told
+ * ---------------------------------------------------------------------------
+ * §03 t-7 fills `leaf-data-export.ts` with `AppWaitlistEntry` → the `waitlist`
+ * section. Three consequences, all handled below rather than by deleting a case:
+ *
+ * 1. The Prisma stub gains `appWaitlistEntry`, because the real leaf collector
+ *    now runs and queries it. Without it every bridge case fails on
+ *    "Cannot read properties of undefined" — which looks like a framework bug
+ *    and is not one.
+ * 2. The two key-counting cases assert the framework sections PLUS `waitlist`.
+ *    The property they still hold, and the one that matters, is that neither
+ *    tier shadows the other's section.
+ * 3. The declaration case expects the framework models plus ours.
+ *
+ * A future leaf table adds one entry to `LEAF_SECTIONS` / `LEAF_MODELS` below
+ * and nothing else here changes.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -46,6 +64,8 @@ const findMany = {
   // The eval source reaches the subject by JOIN: conversations first, then evals.
   aiConversation: vi.fn(),
   frameworkConversationEval: vi.fn(),
+  // LELAÑEA — the leaf tier's own table, reached through the real leaf seam.
+  appWaitlistEntry: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -68,6 +88,7 @@ vi.mock('@/lib/db/client', () => ({
     frameworkConversationEval: {
       findMany: (...a: unknown[]) => findMany.frameworkConversationEval(...a),
     },
+    appWaitlistEntry: { findMany: (...a: unknown[]) => findMany.appWaitlistEntry(...a) },
   },
 }));
 
@@ -77,9 +98,18 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
+/** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
+const LEAF_SECTIONS = ['waitlist'];
+const LEAF_MODELS = ['AppWaitlistEntry'];
+
 const NOW = new Date('2026-01-01T00:00:00.000Z');
 
 beforeEach(() => {
+  // LELAÑEA — the leaf collector runs for real, so its query needs an answer.
+  // Empty rather than a marker row: what the bridge cases below assert is the
+  // section KEY, and a leaf row here would only prove the stub returned it.
+  findMany.appWaitlistEntry.mockResolvedValue([]);
+
   // Personal-data sources return rows verbatim.
   findMany.userJourney.mockResolvedValue([{ id: 'j1', graphSlug: 'onboarding' }]);
   findMany.journeyEvent.mockResolvedValue([
@@ -340,20 +370,31 @@ describe('collectAppSubjectData bridge', () => {
     const result = await collectAppSubjectData(SUBJECT);
 
     expect(result).not.toHaveProperty('framework');
+    // LELAÑEA: framework sections PLUS the leaf's, flat and side by side. The
+    // property this holds either way is that neither tier shadows the other.
     expect(Object.keys(result).sort()).toEqual(
-      FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.section).sort()
+      [...FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.section), ...LEAF_SECTIONS].sort()
     );
     expect(result.slotValues).toEqual([{ id: 's1', value: 'a captured fact' }]);
     expect(result.facilitationMaps).toEqual([{ id: 'g1', label: 'Onboarding', createdAt: NOW }]);
   });
 
-  it('contributes nothing leaf-owned by default', async () => {
-    // Daybreak keeps `leaf-data-export.ts` reserved-empty; a vanilla Daybreak
-    // export must carry the framework sections and nothing else.
+  it('contributes exactly the leaf sections this fork declares, and no others', async () => {
+    // PINNED, not deleted. Upstream this reads "contributes nothing leaf-owned
+    // by default", because Daybreak keeps `leaf-data-export.ts` reserved-empty.
+    // Lelañea filled it, so emptiness is no longer the property — what is still
+    // worth holding is that the leaf adds ONLY what it declared, and that a
+    // stray section cannot appear without someone deciding on it.
     const result = await collectAppSubjectData(SUBJECT);
 
+    // The doc's own example key, still absent: nothing arrives by accident.
     expect(Object.keys(result)).not.toContain('bookings');
-    expect(Object.keys(result)).toHaveLength(FRAMEWORK_SUBJECT_DATA_SOURCES.length);
+    expect(Object.keys(result)).toHaveLength(
+      FRAMEWORK_SUBJECT_DATA_SOURCES.length + LEAF_SECTIONS.length
+    );
+    for (const section of LEAF_SECTIONS) {
+      expect(Object.keys(result)).toContain(section);
+    }
   });
 
   it('declares every framework model to core’s registry — as a source or an exclusion', async () => {
@@ -378,7 +419,9 @@ describe('collectAppSubjectData bridge', () => {
       getAppSubjectSources()
         .map((entry) => entry.model)
         .sort()
-    ).toEqual(FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.model).sort());
+    ).toEqual(
+      [...FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.model), ...LEAF_MODELS].sort()
+    );
     expect(getAppExcludedSubjectSources()).toEqual(FRAMEWORK_EXCLUDED_SOURCES);
 
     __resetAppSubjectSourceRegistryForTests();
