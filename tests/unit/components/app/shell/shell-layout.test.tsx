@@ -133,6 +133,32 @@ describe('the shell layout serves the product', () => {
   });
 });
 
+describe('the frame stacks below 900px', () => {
+  it('is a row that becomes a column, and never wraps', async () => {
+    // The rail is full-width at ≤900 so it can be a footer. On a WRAPPING row
+    // that put it on its own flex line, where the default `align-content`
+    // stretched it to fill — the rail taking over the entire screen. Stacking
+    // is the fix; `flex-wrap` is the thing that must not come back.
+    //
+    // A media variant, not the provider's width: the frame is a server
+    // component and this is pure layout, so it must be right on the first paint
+    // rather than after a client effect resolves.
+    const { container } = await renderLayout();
+    const frame = container.querySelector('div.h-dvh')!;
+
+    expect(frame.className).toContain('max-[900px]:flex-col');
+    expect(frame.className).not.toContain('flex-wrap');
+  });
+
+  it('keeps the rail out of the flow of the pane column', async () => {
+    // Whatever the direction, the rail is `flex-none`: a rail that can grow is
+    // a rail that will, given a spare axis.
+    await renderLayout();
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(rail.className).toContain('flex-none');
+  });
+});
+
 describe('maintenance mode reaches the shell', () => {
   it('replaces the product with the maintenance page for a signed-in user', async () => {
     flag.enabled = true;

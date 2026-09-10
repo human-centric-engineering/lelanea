@@ -148,6 +148,19 @@ describe('the tablet panel rides over the surface', () => {
     expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
   });
 
+  it('takes the strip away once the panel is open, rather than laying it over the copy', async () => {
+    // The strip is pinned to the panel's RIGHT edge. Left rendered while the
+    // panel is open it covers the panel's own last 56px — the end of the line
+    // and the send button — which is what it was doing. Parked, it is the only
+    // thing showing; open, it should be gone.
+    renderWorkspace('medium');
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+
+    expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
+    // And the content it was covering is back.
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
   it('is an in-flow column at large, not a panel', () => {
     renderWorkspace('large');
     const chat = document.querySelector('[data-pane="chat"]')!;

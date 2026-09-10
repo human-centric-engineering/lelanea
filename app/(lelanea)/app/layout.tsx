@@ -11,6 +11,7 @@ import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrap
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
 import { BRAND } from '@/lib/brand';
+import { cn } from '@/lib/utils';
 
 /**
  * The `default` is what a page WITHOUT its own title gets, and every page here
@@ -96,7 +97,19 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   return (
     <MaintenanceWrapperWithAdminNotice>
       <ShellLayoutProvider>
-        <div className="bg-background relative flex h-dvh flex-wrap overflow-hidden">
+        <div
+          className={cn(
+            'bg-background relative flex h-dvh overflow-hidden',
+            // Below 900px the frame stacks: the nav has left the flow to become
+            // a drawer, so what remains is the pane column above the rail's
+            // footer. It was `flex-wrap` on a row, which let the full-width rail
+            // wrap onto its own line and then STRETCH to fill it — the rail
+            // taking over the whole screen. A media variant rather than the
+            // provider's width, because the frame is a server component and this
+            // is pure layout: no client state has to resolve before first paint.
+            'max-[900px]:flex-col'
+          )}
+        >
           <ShellNav
             user={{
               // A user can exist without a name — an OAuth provider that

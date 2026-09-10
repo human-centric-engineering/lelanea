@@ -99,9 +99,17 @@ export function ConversationPane() {
         </>
       )}
 
-      {/* On the tablet the strip rides on the panel's right edge, so that it
-          lands at the screen edge when the panel is parked. */}
-      {overlay ? (
+      {/*
+        The strip belongs to the PARKED panel only.
+        
+        It rides on the panel's right edge so that it lands at the screen edge
+        when the panel is translated away. Rendered while the panel is open, it
+        sits on top of the panel's own right-hand 56px instead — covering the end
+        of the copy and the send button, which is what it was doing. The
+        prototype hides it the same way: the base rule is `display: none`, and
+        only `.chat.slim .chat-slim` brings it back.
+      */}
+      {overlay && chatSlim ? (
         <Strip
           onOpen={() => setChatSlim(false)}
           className="absolute top-0 right-0 bottom-0 h-auto"
