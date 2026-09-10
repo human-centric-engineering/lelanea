@@ -85,6 +85,13 @@ ownership — she reads these by hand — and the honest fix is a signed
 confirmation link, which is the same mechanism the first waitlist email needs
 anyway.
 
+**What additive still leaves open, stated rather than implied.** A stranger can
+_seed_ a field the person left empty, and it will read as theirs. That is a
+smaller surface than the one it replaces — append into a gap, never replacement
+or destruction — and closing it entirely would mean a repeat changed nothing at
+all, which breaks the ordinary case of someone coming back to add the answer
+they skipped. It closes properly with the same confirmation link.
+
 **No email is sent** (A8, owner). The response is the only acknowledgement, and
 the card says so in place.
 
@@ -168,7 +175,11 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
   and A8 defers that email. Whatever ships that email owes the link.
 - **`userId` is never written.** The column and its FK exist for the
   profile-seeding link, which is later work; nothing sets it today.
-- **An answer cannot be corrected through this route**, only added to — see
-  above. A signed confirmation link would close it, and would also be what an
-  ownership-proving unsubscribe needs.
+- **An answer cannot be corrected through this route**, only added to, and a
+  stranger can still seed an empty field — see above. A signed confirmation link
+  would close both, and would also be what an ownership-proving unsubscribe
+  needs.
+- **201-vs-200 says whether an address was already on the list.** The task's
+  contract asks for the split; the probe is self-defeating and capped. Raised
+  with the owner rather than settled quietly.
 - **`source: conversation` is vocabulary, not a shipped path.** See above.
