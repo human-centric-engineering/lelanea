@@ -35,6 +35,14 @@ export function Workspace({ children }: { children: React.ReactNode }) {
 
   const carousel = width === 'small';
   const carouselHidden = carousel && pane !== 'ws';
+  /*
+   * On a tablet the conversation is an absolutely-positioned panel over this
+   * surface, so the surface has to clear the strip that stays visible when the
+   * panel is parked — a fixed margin, never a width that changes. The whole
+   * point of the transform over there is that nothing here reflows when the
+   * conversation opens and closes.
+   */
+  const overlay = width === 'medium';
 
   return (
     <section
@@ -48,6 +56,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       className={cn(
         'relative flex min-w-0 flex-1 flex-col overflow-hidden',
         'border-t-[3px] border-[var(--tone,var(--color-secondary-ink))]',
+        overlay && 'ml-14',
         carousel && 'absolute inset-0 w-full flex-none',
         carousel && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
         carousel && 'motion-reduce:transition-none',

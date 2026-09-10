@@ -92,18 +92,66 @@ describe('the surface body scrolls, not the frame', () => {
 describe('the tablet re-parks the conversation', () => {
   it('parks it when the surface is clicked at medium', async () => {
     renderWorkspace('medium');
-    // Medium with the workspace open parks it already, so un-park first — that
-    // is what makes this a test of the click rather than of the initial state.
+    const chat = () => document.querySelector('[data-pane="chat"]')!;
+
+    // Un-park first, so this tests the click rather than the initial state.
     await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
+    expect(chat().className).toContain('translate-x-0');
 
     await userEvent.click(screen.getByText('the module'));
-    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
+    expect(chat().className).toContain('-translate-x-[364px]');
   });
 
   it('does nothing on a click at large, where both panes are on screen', async () => {
     renderWorkspace('large');
     await userEvent.click(screen.getByText('the module'));
     expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
+  });
+});
+
+describe('the tablet panel rides over the surface', () => {
+  it('never reflows the workspace when the conversation opens or closes', async () => {
+    // The reason the prototype uses a transform rather than a width: with the
+    // conversation in the flow, the surface shunts sideways every time it opens.
+    // So the assertion is that the surface's own geometry does NOT change.
+    renderWorkspace('medium');
+    const surface = document.querySelector('[data-pane="ws"]')!;
+    const parked = surface.className;
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+    expect(surface.className).toBe(parked);
+  });
+
+  it('clears the strip with a fixed margin, not a changing width', () => {
+    renderWorkspace('medium');
+    expect(document.querySelector('[data-pane="ws"]')?.className).toContain('ml-14');
+  });
+
+  it('makes the conversation a fixed-width panel, moved by transform', async () => {
+    renderWorkspace('medium');
+    const chat = document.querySelector('[data-pane="chat"]')!;
+
+    expect(chat.className).toContain('w-[420px]');
+    expect(chat.className).toContain('absolute');
+    // Parked: translated left by its width less the visible strip.
+    expect(chat.className).toContain('-translate-x-[364px]');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+    expect(chat.className).toContain('translate-x-0');
+    expect(chat.className).toContain('w-[420px]');
+  });
+
+  it('keeps the strip reachable while the panel is parked', () => {
+    // The strip rides on the panel's right edge so it lands at the screen edge;
+    // if it were a separate pane it would be translated off with everything else.
+    renderWorkspace('medium');
+    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
+  });
+
+  it('is an in-flow column at large, not a panel', () => {
+    renderWorkspace('large');
+    const chat = document.querySelector('[data-pane="chat"]')!;
+    expect(chat.className).not.toContain('absolute');
+    expect(chat.className).not.toContain('w-[420px]');
   });
 });

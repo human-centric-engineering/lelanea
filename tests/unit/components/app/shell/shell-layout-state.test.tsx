@@ -122,14 +122,17 @@ describe('the Escape chain', () => {
   });
 
   it('parks the conversation on a tablet before it touches anything else', async () => {
-    // Medium with the workspace open already parks it, so un-parking first is
-    // what makes this a test of the rung rather than of the initial state.
+    // At medium the strip is ALWAYS present — it rides on the panel's right
+    // edge — so parked-ness is the panel's transform, not the strip's presence.
     renderShell('medium');
+    const chat = () => document.querySelector('[data-pane="chat"]')!;
+    expect(chat().className).toContain('-translate-x-[364px]');
+
     await userEvent.click(strip()!);
-    expect(strip()).toBeNull();
+    expect(chat().className).toContain('translate-x-0');
 
     await userEvent.keyboard('{Escape}');
-    expect(strip()).not.toBeNull();
+    expect(chat().className).toContain('-translate-x-[364px]');
   });
 
   it('un-folds the conversation when there is nothing else left to close', async () => {
@@ -161,12 +164,16 @@ describe('the Escape chain', () => {
 describe('the tablet parks the conversation when a module opens', () => {
   it('folds it as soon as the workspace is open at medium', () => {
     renderShell('medium');
-    expect(strip()).not.toBeNull();
+    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
+      '-translate-x-[364px]'
+    );
   });
 
   it('leaves it alone on the clean view', () => {
+    // No workspace, so nothing to park against and no panel at all.
     mockPathname.current = '/app';
     renderShell('medium');
     expect(strip()).toBeNull();
+    expect(document.querySelector('[data-pane="chat"]')?.className).not.toContain('absolute');
   });
 });

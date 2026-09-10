@@ -32,34 +32,21 @@ export function ConversationPane() {
   const reducedMotion = useReducedMotion();
   const carousel = width === 'small' && wsOpen;
 
-  if (chatSlim) {
-    return (
-      <button
-        type="button"
-        onClick={() => setChatSlim(false)}
-        aria-label="Open the conversation"
-        className={cn(
-          'text-muted-foreground flex flex-none flex-col items-center gap-4',
-          'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
-          'w-14 py-4 max-[640px]:w-11',
-          'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
-          'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-          'motion-reduce:transition-none',
-          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
-          'focus-visible:outline-[var(--color-ring)]'
-        )}
-      >
-        <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
-          Ask Lelañea
-        </span>
-        <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-        </span>
-      </button>
-    );
-  }
+  /**
+   * On a tablet the conversation stops being a column and becomes a panel.
+   *
+   * The prototype's medium block is emphatic about why: the panel is ALWAYS its
+   * full 420px and rides in and out on a transform, so nothing animates a layout
+   * property and the workspace never reflows. Parked, it is translated left by
+   * its own width less the strip, so only that strip clears the viewport — which
+   * is why the strip is pinned to the panel's right edge rather than being a
+   * separate narrow pane. Built as an in-flow pane instead, the surface shunts
+   * sideways every time the conversation opens, which is the reflow the design
+   * spent a transform avoiding.
+   */
+  const overlay = width === 'medium' && wsOpen;
+
+  if (chatSlim && !overlay) return <Strip onOpen={() => setChatSlim(false)} />;
 
   return (
     <section
@@ -68,10 +55,27 @@ export function ConversationPane() {
       // 900px both panes are genuinely on screen together.
       aria-hidden={carousel && pane !== 'chat' ? 'true' : undefined}
       data-pane="chat"
-      style={wsOpen && !carousel ? { flexBasis: `${chatW}px` } : undefined}
+      style={wsOpen && !carousel && !overlay ? { flexBasis: `${chatW}px` } : undefined}
       className={cn(
         'relative flex min-w-0 flex-col bg-[var(--color-background)]',
-        wsOpen && !carousel ? 'flex-none border-r border-[var(--color-divider)]' : 'flex-1',
+        wsOpen && !carousel && !overlay
+          ? 'flex-none border-r border-[var(--color-divider)]'
+          : 'flex-1',
+        // The tablet panel: fixed width, moved with a transform, never reflowing
+        // what is behind it. `-translate-x-[364px]` is 420 less the 56px strip.
+        overlay && [
+          'absolute top-0 bottom-0 left-0 z-[38] w-[420px] flex-none',
+          'border-r border-[var(--color-divider)]',
+          !reducedMotion && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
+          chatSlim
+            ? '-translate-x-[364px]'
+            : [
+                'translate-x-0 shadow-[var(--shadow-lift)]',
+                // Slid open it is a panel like the drawers beside it, so it
+                // carries the same tone band rather than arriving as a grey edge.
+                'border-t-[3px] border-t-[var(--tone,var(--color-secondary-ink))]',
+              ],
+        ],
         !reducedMotion && 'transition-[flex-basis] duration-[280ms] ease-[var(--ease-brand)]',
         // The carousel lays both panes over each other and slides them, so the
         // switch and the swipe read as one movement. `pointer-events-none` on
@@ -83,13 +87,26 @@ export function ConversationPane() {
         carousel && (pane === 'chat' ? 'translate-x-0' : 'pointer-events-none -translate-x-full')
       )}
     >
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-          This is where you and Lelañea will talk. The conversation arrives in a later phase.
-        </p>
-      </div>
+      {overlay && chatSlim ? null : (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+              This is where you and Lelañea will talk. The conversation arrives in a later phase.
+            </p>
+          </div>
 
-      <Composer />
+          <Composer />
+        </>
+      )}
+
+      {/* On the tablet the strip rides on the panel's right edge, so that it
+          lands at the screen edge when the panel is parked. */}
+      {overlay ? (
+        <Strip
+          onOpen={() => setChatSlim(false)}
+          className="absolute top-0 right-0 bottom-0 h-auto"
+        />
+      ) : null}
 
       {/*
         The handle is only meaningful when there is a workspace to take width
@@ -98,6 +115,42 @@ export function ConversationPane() {
       */}
       {wsOpen && width === 'large' ? <ResizeHandle /> : null}
     </section>
+  );
+}
+
+/**
+ * The collapsed conversation: a drawer pull, not a disabled state.
+ *
+ * The WHOLE strip is the button, so bringing her back is one target rather than
+ * a small control hidden on a dead pane.
+ */
+function Strip({ onOpen, className }: { onOpen: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Open the conversation"
+      className={cn(
+        'text-muted-foreground flex flex-none flex-col items-center gap-4',
+        'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
+        'w-14 py-4 max-[640px]:w-11',
+        'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
+        'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+        'motion-reduce:transition-none',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
+        'focus-visible:outline-[var(--color-ring)]',
+        className
+      )}
+    >
+      <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
+        Ask Lelañea
+      </span>
+      <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+      </span>
+    </button>
   );
 }
 
