@@ -1,287 +1,154 @@
 import type { Metadata } from 'next';
-import {
-  Zap,
-  Shield,
-  Mail,
-  Database,
-  Settings,
-  Code,
-  Package,
-  Rocket,
-  FileCode,
-  Brain,
-  Search,
-} from 'lucide-react';
-import { Hero, Section, Features, Pricing, FAQ, CTA } from '@/components/marketing';
-import { BRAND } from '@/lib/brand';
 
-// Placeholder copy, like the rest of this page — you are expected to rewrite or
-// delete it. It reads `BRAND.name` rather than naming the product, so a fork
-// that has set `appBrandName` in lib/app/brand.ts but not yet rewritten this
-// file still advertises itself rather than Sunrise (#519). A full sentence rather than
-// `BRAND.description`, whose fallback is the bare product name: that is the
-// right trade for the root layout and the wrong one here, where this string is
-// the search-result snippet and the shared-link card.
-const homeDescription = `Build production-ready applications faster with ${BRAND.name}.`;
+import { Card } from '@/components/app/ui/card';
+import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { LotusMark } from '@/components/app/ui/lotus-mark';
+import { WaitlistForm } from '@/components/app/site/waitlist-form';
+import { getJourneyStructure } from '@/lib/app/content';
+import styles from '@/app/(public)/home.module.css';
 
 export const metadata: Metadata = {
-  // `(public)/layout.tsx` supplies the template `%s - ${BRAND.name}`, so this
-  // declares the bare segment and the brand is appended once. The cards below
-  // set no title of their own, so Next copies the resolved "Home - <brand>"
-  // into both — one string to keep correct rather than three.
-  title: 'Home',
-  description: homeDescription,
-  openGraph: {
-    description: homeDescription,
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    description: homeDescription,
-  },
+  // The group layout's template appends " - Lelañea", which would read
+  // "Lelañea - Lelañea" on the one page whose title is the name. `absolute`
+  // opts this page out of the template rather than the whole group.
+  title: { absolute: 'Lelañea — an invitation into conscious living' },
+  description:
+    'Transcendental coaching, at your own pace. Lelañea supports you in remembering who you ' +
+    'are beneath conditioning, inherited beliefs, and the identities accumulated through life.',
+  alternates: { canonical: '/' },
 };
 
-const features = [
+/** §6.4's three "what this is" cards, in the prototype's order and words. */
+const WHAT_THIS_IS = [
   {
-    icon: Zap,
-    title: 'Next.js 16',
-    description:
-      'Built with the latest App Router and React Server Components for optimal performance.',
+    title: 'An invitation',
+    body:
+      'This is not simply an app. It is an invitation to explore the relationship you have with ' +
+      'yourself, your consciousness, and the intelligence that has always existed beneath the ' +
+      'noise of the human experience.',
   },
   {
-    icon: FileCode,
-    title: 'TypeScript',
-    description: 'Full type safety with strict mode enabled throughout the entire codebase.',
+    title: 'A guide who walks beside you',
+    body:
+      'Her role is not to tell you who you are. It is to walk beside you as you begin to ' +
+      'remember. She offers perspectives, practices, questions, ancient wisdom, and modern ' +
+      'understanding. There is nothing you are required to believe.',
   },
   {
-    icon: Shield,
-    title: 'Authentication',
-    description:
-      'Secure authentication with better-auth, supporting email/password and OAuth providers.',
+    title: 'Coaching, not healthcare',
+    body:
+      'Lelañea was created with deep respect for both contemplative wisdom and modern ' +
+      'healthcare. It is intended to complement — never to replace — the work of licensed ' +
+      'professionals.',
   },
-  {
-    icon: Database,
-    title: 'PostgreSQL + Prisma',
-    description: 'Production-ready database setup with Prisma ORM for type-safe data access.',
-  },
-  {
-    icon: Mail,
-    title: 'Email System',
-    description: 'Transactional email support with React Email templates and Resend integration.',
-  },
-  {
-    icon: Package,
-    title: 'Docker-Ready',
-    description: 'Multi-stage Docker builds for optimized production deployments anywhere.',
-  },
-  {
-    icon: Brain,
-    title: 'Agent Orchestration',
-    description:
-      'Design, deploy, and monitor AI agents with capabilities, workflows, and provider fallback — all admin-configured.',
-  },
-  {
-    icon: Search,
-    title: 'Knowledge Base & RAG',
-    description:
-      'Upload documents, chunk, embed (pgvector), and let agents answer grounded questions via semantic search.',
-  },
-];
-
-const howItWorks = [
-  {
-    icon: Code,
-    title: 'Fork & Clone',
-    description: 'Start by forking the repository and cloning it to your local machine.',
-  },
-  {
-    icon: Settings,
-    title: 'Configure',
-    description: 'Set up your environment variables and customize to your needs.',
-  },
-  {
-    icon: Rocket,
-    title: 'Deploy',
-    description: 'Deploy with Docker, Vercel, or your preferred platform.',
-  },
-];
-
-const pricingTiers = [
-  {
-    name: 'Open Source',
-    description: 'Free forever for everyone',
-    price: '$0',
-    priceDetail: 'forever',
-    features: [
-      'Full source code access',
-      'All core features included',
-      'MIT License',
-      'Community support via GitHub',
-      'Regular updates',
-    ],
-    ctaText: 'Get Started',
-    ctaHref: 'https://github.com/human-centric-engineering/sunrise',
-  },
-  {
-    name: 'Pro Support',
-    description: 'For teams that need extra help',
-    price: '$499',
-    priceDetail: 'one-time',
-    features: [
-      'Everything in Open Source',
-      '3 months email support',
-      'Priority bug fixes',
-      'Architecture review session',
-      'Custom feature guidance',
-    ],
-    ctaText: 'Contact Us',
-    ctaHref: '/contact',
-    featured: true,
-    badge: 'Popular',
-  },
-  {
-    name: 'Enterprise',
-    description: 'For large-scale deployments',
-    price: 'Custom',
-    features: [
-      'Everything in Pro Support',
-      'Dedicated support channel',
-      'Custom feature development',
-      'On-boarding assistance',
-      'SLA guarantee',
-    ],
-    ctaText: 'Contact Sales',
-    ctaHref: '/contact',
-  },
-];
-
-const faqItems = [
-  {
-    question: 'What is Sunrise?',
-    answer:
-      'Sunrise is a production-ready Next.js starter template designed for rapid application development. It includes authentication, database setup, email integration, Docker deployment, and follows best practices for AI-assisted development.',
-  },
-  {
-    question: 'Is Sunrise really free?',
-    answer:
-      'Yes! Sunrise is open source under the MIT License. You can use it for personal and commercial projects without any restrictions. We offer paid support packages for teams that want additional assistance.',
-  },
-  {
-    question: 'What technologies does Sunrise use?',
-    answer:
-      'Sunrise is built with Next.js 16, TypeScript, PostgreSQL with Prisma ORM, better-auth for authentication, Tailwind CSS with shadcn/ui components, React Email with Resend, and Docker for deployment.',
-  },
-  {
-    question: 'How is Sunrise optimized for AI development?',
-    answer:
-      'Two ways. First, AI-assisted development: comprehensive documentation in CLAUDE.md and the .context/ substrate helps AI assistants understand the codebase and follow established patterns when generating code. Second, AI agent capabilities for the apps you build: a complete orchestration layer for designing, deploying, and monitoring AI agents.',
-  },
-  {
-    question: 'Can I build AI agents with Sunrise?',
-    answer:
-      'Yes. Sunrise ships with a full agent orchestration layer at /admin/orchestration: configure LLM providers, define agents with system instructions and budgets, create custom capabilities (tools), build multi-step workflows as DAGs, ingest documents into pgvector-backed knowledge bases for RAG, expose agents via an MCP server or embed widget, and monitor everything with execution tracing, evaluations, and an audit log. Built on the 21 agentic design patterns from Antonio Gullí.',
-  },
-  {
-    question: 'Can I use Sunrise for commercial projects?',
-    answer:
-      'Absolutely! Sunrise is released under the MIT License, which allows commercial use, modification, and distribution. You just need to include the original license in any copies of the software.',
-  },
-  {
-    question: 'How do I get support?',
-    answer:
-      'For free support, you can open issues on GitHub or participate in community discussions. For priority support, architecture reviews, or custom development, check out our Pro Support and Enterprise packages.',
-  },
-];
+] as const;
 
 /**
- * Landing Page
+ * The home page.
  *
- * Public landing page showcasing Sunrise features and encouraging adoption.
- * Uses reusable marketing components for consistent styling.
+ * ## The journey tiers are read, never written here
  *
- * **Fork-owned placeholder.** Every fork rewrites or deletes this page, so
- * Sunrise deliberately ships **no test asserting its content** — section ids,
- * copy, pricing tiers and FAQ items are all a fork's to change, and a core test
- * pinning them is a core test a fork cannot satisfy (the #480 / #525 / #530 /
- * #533 class). Do not add one.
+ * The tier names and the modules inside them come from
+ * `getJourneyStructure()` — the same authored content `GET
+ * /api/v1/app/content/journey-structure` serves, which is literally what that
+ * route calls. The task names the endpoint; a server component fetching its own
+ * HTTP route would need an absolute URL, cost a second round trip, and buy
+ * nothing, so this reads the source the endpoint reads. What the task was
+ * guarding against — the seventeen modules retyped into a page and drifting the
+ * first time one is renamed — is guarded either way.
  *
- * That leaves one real exposure, and it has bitten: this file was once
- * overwritten wholesale with `about/page.tsx`, and `/` served the About page
- * through a release. Nothing content-shaped could have caught that without
- * becoming a fork's problem, so the guard is structural instead —
- * `tests/unit/app/route-module-distinctness.test.ts` fails when any two route
- * modules under `app/` are byte-identical, which needs no opinion about what
- * this page says.
- *
- * Phase 3.5: Landing Page & Marketing
+ * The onboarding tier is skipped, as the prototype skips it: it is how you get
+ * in, not part of the path being described. It is excluded by id rather than by
+ * ordinal — see the filter.
  */
-export default function LandingPage() {
+export default function HomePage() {
+  const { tiers, modules } = getJourneyStructure();
+
+  const moduleTitle = new Map(modules.map((m) => [m.id, m.title]));
+  // By IDENTITY, not by ordinal. `order > 0` was the first shape and it leans
+  // on onboarding being exactly 0, which the schema does not promise — it only
+  // requires nonnegative. Renumbering the tiers 1–5 would publish onboarding on
+  // the marketing page, and a future tier authored at 0 would vanish from it.
+  const pathTiers = tiers
+    .filter((tier) => tier.id !== 'onboarding')
+    .toSorted((a, b) => a.order - b.order);
+
   return (
-    <>
-      {/* Hero Section */}
-      <Hero
-        badge="Next.js 16 Ready"
-        title="Build Production Apps Faster"
-        description="Sunrise is a production-ready Next.js starter template designed for rapid application development. Authentication, database, email, Docker — all pre-configured and ready to go, plus a production AI agent orchestration layer for building agents, workflows, and knowledge bases."
-        primaryAction={{ label: 'Get Started', href: '/signup' }}
-        secondaryAction={{
-          label: 'View on GitHub',
-          href: 'https://github.com/human-centric-engineering/sunrise',
-          variant: 'outline',
-        }}
-      />
+    <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)]">
+      <section className={styles.hero}>
+        <div>
+          <Eyebrow as="p">transcendental coaching, at your own pace</Eyebrow>
+          <h1 className="brand-display">
+            Lelañea was created as an invitation into conscious living.
+          </h1>
+          <p className={styles.lede}>
+            Its purpose is not simply to help individuals improve themselves, but to support them in
+            remembering who they are beneath conditioning, inherited beliefs, unconscious patterns,
+            and the countless identities accumulated throughout life.
+          </p>
 
-      {/* Features Section */}
-      <Section
-        id="features"
-        title="Everything You Need"
-        description="Sunrise comes with all the essential features pre-configured so you can focus on building your application."
-        variant="muted"
-      >
-        <Features features={features} columns={3} variant="card" />
-      </Section>
+          <WaitlistForm />
+        </div>
 
-      {/* How It Works Section */}
-      <Section
-        id="how-it-works"
-        title="Get Started in Minutes"
-        description="Three simple steps to go from zero to production-ready."
-      >
-        <Features features={howItWorks} columns={3} variant="icon-top" />
-      </Section>
+        <div className={styles.bloom}>
+          {/* Decorative: the page's name is its `h1` a column away, so
+              announcing the flower would only repeat it. */}
+          <div className={styles.bloomArt}>
+            <LotusMark size={300} water />
+          </div>
+        </div>
+      </section>
 
-      {/* Pricing Section */}
-      <Section
-        id="pricing"
-        title="Simple, Transparent Pricing"
-        description="Start for free with open source. Upgrade for priority support and custom development."
-        variant="muted"
-      >
-        <Pricing tiers={pricingTiers} />
-      </Section>
+      <section className={styles.band} style={{ marginTop: 'clamp(56px,7vw,88px)' }}>
+        <p className="brand-quote">
+          Transformation is not viewed as becoming someone new. It is the continual remembrance of
+          who we have always been.
+        </p>
+        <Eyebrow as="p" className="mt-5">
+          lelañea fulton
+        </Eyebrow>
+      </section>
 
-      {/* FAQ Section */}
-      <Section
-        id="faq"
-        title="Frequently Asked Questions"
-        description="Got questions? We have answers."
-      >
-        <FAQ items={faqItems} />
-      </Section>
+      <section className={styles.section}>
+        {/* An `h2`, not a `p`. `Card` renders its title as a `<div>` — a card
+            title is not necessarily a document heading — so with this as a
+            paragraph the whole section was absent from the outline and the
+            page read h1 → (nothing) → h2, skipping all three cards for anyone
+            navigating by heading. The type is identical either way. */}
+        <Eyebrow as="h2">what this is</Eyebrow>
+        <div className={styles.cards}>
+          {WHAT_THIS_IS.map((card) => (
+            <Card key={card.title} title={card.title}>
+              {card.body}
+            </Card>
+          ))}
+        </div>
+      </section>
 
-      {/* CTA Section */}
-      <CTA
-        title="Ready to Build Something Great?"
-        description="Join developers who are building production applications faster with Sunrise."
-        primaryAction={{ label: 'Get Started Free', href: '/signup' }}
-        secondaryAction={{
-          label: 'View Documentation',
-          href: 'https://github.com/human-centric-engineering/sunrise',
-          variant: 'outline',
-        }}
-        variant="gradient"
-        className="border-t"
-      />
-    </>
+      <section className={`${styles.section} ${styles.rule}`}>
+        <Eyebrow as="p">the journey</Eyebrow>
+        <h2 className="brand-display my-[14px] mb-[26px] max-w-[20ch] text-[clamp(32px,3.4vw,40px)]">
+          A guided path from inner foundations to expanded consciousness
+        </h2>
+
+        {/* A description list, not a stack of divs: each row is a term (the
+            tier) and its definition (the modules in it), which is what the
+            markup should say. */}
+        <dl>
+          {pathTiers.map((tier) => (
+            <div key={tier.id} className={styles.tierRow}>
+              <dt className="brand-eyebrow">{tier.label}</dt>
+              <dd>
+                {tier.modules
+                  .map((id) => moduleTitle.get(id))
+                  .filter(Boolean)
+                  .join(' · ')}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <div className={styles.rule} />
+      </section>
+    </div>
   );
 }

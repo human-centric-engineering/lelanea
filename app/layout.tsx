@@ -12,6 +12,7 @@ import { AnalyticsScripts, UserIdentifier, PageTracker } from '@/components/anal
 import { SurfaceSync } from '@/components/surface-sync';
 import { DEFAULT_SURFACE } from '@/lib/app/surface';
 import { BRAND } from '@/lib/brand';
+import { resolveMetadataBase } from '@/lib/site/metadata-base';
 // LELAÑEA divergence — see .context/app/divergences.md, rows 1 and 2.
 import { brandFontVariables } from '@/app/fonts';
 
@@ -21,6 +22,16 @@ import { brandFontVariables } from '@/app/fonts';
 // double-branding. Previously this hardcoded "- Next.js Starter" and the
 // starter blurb, which every fork inherited on any un-templated page.
 export const metadata: Metadata = {
+  // LELAÑEA divergence (row 8): without `metadataBase`, Next resolves a
+  // relative `og:image` against `VERCEL_URL` → `VERCEL_PROJECT_PRODUCTION_URL`
+  // → `http://localhost:3000`. This app deploys via Docker, so none of the
+  // Vercel variables exist and every shared link would have unfurled against
+  // localhost — a grey box on Slack, X and LinkedIn, with nothing failing
+  // anywhere and no way to see it from inside the app. It became load-bearing
+  // the moment `app/opengraph-image.tsx` gave the site a card at all (t-5).
+  // The resolution — including the empty string Docker's `ENV X=$ARG`
+  // produces — lives in `lib/site/metadata-base.ts`, where it is tested.
+  metadataBase: resolveMetadataBase(process.env.NEXT_PUBLIC_APP_URL),
   title: {
     default: BRAND.name,
     template: `%s - ${BRAND.name}`,

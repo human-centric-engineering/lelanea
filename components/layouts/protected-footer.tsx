@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useConsent } from '@/lib/consent';
 import { BRAND } from '@/lib/brand';
 import { resolveFooterCopyright } from '@/lib/footer/copyright';
@@ -29,9 +28,9 @@ export function ProtectedFooter() {
             <button onClick={openPreferences} className="hover:text-foreground transition-colors">
               Cookie Preferences
             </button>
-            <Link href="/contact" className="hover:text-foreground transition-colors">
-              Help & Support
-            </Link>
+            {/* LELAÑEA divergence (t-5): "Help & Support" linked to
+                `/contact`, Sunrise's placeholder page, which this feature
+                deleted. Nothing rather than a dead link (D3). */}
           </div>
         </div>
       </div>

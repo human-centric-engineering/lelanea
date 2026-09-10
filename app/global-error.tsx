@@ -94,18 +94,11 @@ export default function GlobalError({
               </button>
             </div>
 
-            {process.env.NODE_ENV === 'production' && (
-              <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                If this problem persists, please{' '}
-                <a
-                  href="/contact"
-                  className="underline hover:text-gray-900 dark:hover:text-gray-200"
-                >
-                  contact support
-                </a>
-                .
-              </p>
-            )}
+            {/* LELAÑEA divergence (t-5): the production block here offered
+                "contact support" at `/contact`. That page was Sunrise's
+                placeholder and is gone; the design has no contact route and
+                there is no support channel to name yet. D3 — nothing rather
+                than a dead link. Restore it with a real destination. */}
           </div>
         </div>
       </body>

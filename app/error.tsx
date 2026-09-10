@@ -35,17 +35,13 @@ export default function Error({
         navigate: 'reload',
         icon: <Home className="mr-2 h-4 w-4" />,
       }}
-      footer={
-        process.env.NODE_ENV === 'production' ? (
-          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-            If this problem persists, please{' '}
-            <a href="/contact" className="underline hover:text-gray-900 dark:hover:text-gray-200">
-              contact support
-            </a>
-            .
-          </p>
-        ) : undefined
-      }
+      // LELAÑEA divergence (t-5): the production footer offered "contact
+      // support", linking to `/contact`. That page was Sunrise's placeholder
+      // and is gone — the design has no contact route, and pre-launch there is
+      // no support channel to point at, only the waitlist. D3's ruling for this
+      // feature is nothing rather than a dead link, and it applies to an
+      // internal 404 exactly as it does to an outbound one. Restore the footer
+      // with a real destination when one exists.
     />
   );
 }
