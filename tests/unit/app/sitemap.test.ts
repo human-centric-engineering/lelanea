@@ -44,9 +44,10 @@ describe('app/sitemap', () => {
 
     it('uses the configured app URL', () => {
       process.env.NEXT_PUBLIC_APP_URL = 'https://lelanea.com';
+      const expectedOrigin = new URL('https://lelanea.com').origin;
 
       for (const entry of sitemap()) {
-        expect(entry.url.startsWith('https://lelanea.com')).toBe(true);
+        expect(new URL(entry.url).origin).toBe(expectedOrigin);
       }
     });
 
