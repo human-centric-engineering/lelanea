@@ -57,7 +57,11 @@
   translate: -50% 0;
   width: 560px;
   height: 560px;
-  max-width: 140%;
+  /* 100%, not 140%: below 1180px the hero is one column, so this box is the
+     content width. At 140% a 350px container produced a 490px glow centred
+     195px from the viewport edge — ~50px past it, and nothing clips it, so
+     the page gained a horizontal scrollbar on a phone. */
+  max-width: 100%;
   border-radius: 999px;
   pointer-events: none;
   background: radial-gradient(
@@ -84,7 +88,15 @@
   text-align: center;
 }
 
-.band .quote {
+/*
+ * `:global` is load-bearing. The paragraph carries `brand-quote`, a GLOBAL
+ * class from `app/brand-theme.css` that deliberately sets family, style and
+ * line-height but no size or measure. Written as a bare `.quote` here, CSS
+ * modules hash it to a local name that nothing renders — the rule compiles,
+ * the class exists in the stylesheet, and the quote silently falls back to
+ * body size across the full 1180px band instead of reading as a pull quote.
+ */
+.band :global(.brand-quote) {
   max-width: 46ch;
   margin: 0 auto;
   font-size: clamp(26px, 3vw, 34px);
@@ -156,7 +168,7 @@
 }
 
 @media (max-width: 880px) {
-  .band .quote {
+  .band :global(.brand-quote) {
     max-width: none;
   }
 }

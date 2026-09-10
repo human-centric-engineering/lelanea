@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import OpengraphImage, { alt, size, contentType } from '@/app/opengraph-image';
+import { metadata as rootMetadata } from '@/app/layout';
 
 describe('app/opengraph-image', () => {
   it('declares the metadata Next writes into the <head>', () => {
@@ -34,6 +35,33 @@ describe('app/opengraph-image', () => {
     // The route reads this path at render. `.context/` — where the design kit
     // keeps the original — is documentation and is not guaranteed to ship.
     expect(existsSync(path.join(process.cwd(), 'public', 'lotus-mark.svg'))).toBe(true);
+  });
+
+  describe('the URL the card is served from', () => {
+    // Rendering the image proves the route works. It says NOTHING about the
+    // `og:image` URL Next writes into the <head>, and that is the half that
+    // actually breaks: with no `metadataBase`, Next resolves a relative
+    // `og:image` against VERCEL_URL → VERCEL_PROJECT_PRODUCTION_URL →
+    // `http://localhost:3000`. This app deploys via Docker, so all three
+    // Vercel variables are absent and every shared link unfurls against
+    // localhost. Nothing throws, no test fails, and it is invisible from
+    // inside the app — the first anyone hears is a grey box in Slack.
+    it('declares a metadataBase, so og:image resolves to an absolute URL', () => {
+      expect(rootMetadata.metadataBase).toBeInstanceOf(URL);
+    });
+
+    it('does not fall back to localhost when an app URL is configured', () => {
+      const base = rootMetadata.metadataBase as URL;
+
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        expect(base.origin).toBe(new URL(process.env.NEXT_PUBLIC_APP_URL).origin);
+      } else {
+        // No app URL configured in this environment, so localhost IS correct
+        // here — what must hold is that the value tracks the variable rather
+        // than being hardcoded.
+        expect(base.origin).toBe('http://localhost:3000');
+      }
+    });
   });
 
   it('renders a PNG of the declared size', async () => {

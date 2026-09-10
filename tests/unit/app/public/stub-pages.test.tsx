@@ -70,6 +70,33 @@ describe('the placeholder public pages', () => {
     expect(new Set(titles).size).toBe(PAGES.length);
   });
 
+  it('never renders the brand name twice in a resolved title', () => {
+    // The group layout's template is `%s - Lelañea`. A stub titled 'Lelañea'
+    // resolves to "Lelañea - Lelañea" in the tab and in search results, which
+    // is why that one page opts out with `{ absolute }`. Nothing else in the
+    // tree checks these three.
+    for (const [route, , meta] of PAGES) {
+      const title = meta.title;
+
+      // `Metadata['title']` is a union: a bare string goes through the group
+      // template, an `{ absolute }` object opts out of it. Narrowed rather
+      // than stringified, so a `{ template }` or `{ default }` form added
+      // later fails the type-check here instead of resolving to
+      // "[object Object]" and passing.
+      let resolved: string;
+      if (typeof title === 'string') {
+        resolved = `${title} - Lelañea`;
+      } else if (title && typeof title === 'object' && 'absolute' in title) {
+        resolved = String(title.absolute);
+      } else {
+        throw new Error(`${route} has a title shape this check does not model`);
+      }
+
+      const occurrences = resolved.split('Lelañea').length - 1;
+      expect(occurrences, `${route} resolves to "${resolved}"`).toBeLessThanOrEqual(1);
+    }
+  });
+
   it('gives each page a canonical matching its own route', () => {
     // The copy-paste this catches: three files from one template, one of which
     // kept the template's canonical and now tells crawlers it is a duplicate of

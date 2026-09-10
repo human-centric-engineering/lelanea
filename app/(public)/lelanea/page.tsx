@@ -3,7 +3,11 @@ import type { Metadata } from 'next';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 
 export const metadata: Metadata = {
-  title: 'Lelañea',
+  // `absolute` opts out of the group template `%s - Lelañea`, which would
+  // otherwise render this page's tab and search result as "Lelañea - Lelañea".
+  // The other two stubs need no such escape: "The mission - Lelañea" reads
+  // correctly.
+  title: { absolute: 'Lelañea' },
   description: 'Her philosophy, the lineage she draws on, and the person behind the work.',
   alternates: { canonical: '/lelanea' },
 };
