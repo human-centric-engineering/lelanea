@@ -27,6 +27,7 @@
 
 import { prisma } from '@/lib/db/client';
 import { eraseUser } from '@/lib/privacy/erase-user';
+import { createJourney } from '@/lib/framework/facilitation/journey/create';
 
 const PREFIX = 'smoke-test-erasure';
 const stamp = Date.now();
@@ -118,9 +119,12 @@ async function main(): Promise<void> {
     // `UserNodeState` cascades via its journey. We seed TWO events — one linked to
     // the journey, one a non-journey engagement event (journeyId null, reachable
     // only via the userId FK) — to prove BOTH erasure paths.
-    const journey = await prisma.userJourney.create({
-      data: { userId: subject.id, graphSlug: `${PREFIX}-graph-${stamp}` },
-    });
+    // Started through the framework seam (#159), not `prisma.userJourney.create` —
+    // which also proves the row the seam mints is erasable by the FKs below.
+    const journey = await createJourney(
+      { userId: subject.id },
+      { userId: subject.id, graphSlug: `${PREFIX}-graph-${stamp}` }
+    );
     journeyId = journey.id;
     const nodeState = await prisma.userNodeState.create({
       data: { journeyId: journey.id, nodeKey: `${PREFIX}-node`, status: 'active' },

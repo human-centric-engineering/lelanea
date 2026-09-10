@@ -12,8 +12,12 @@
  * `journeyId` with the wrong `subject` gets an empty result, never another user's
  * rows — the access decision and the row filter agree.
  *
- * This feature ships **no writer** — journey creation and state transitions are
- * `f-engine` (F11). These reads are the consumer side of the tables t-1 shipped.
+ * This *file* ships no writer — these reads are the consumer side of the tables t-1
+ * shipped. The two writers live elsewhere and are split on purpose: **state
+ * transitions** are `applyEvent` (`f-engine`, F11), the sole writer of node
+ * projections and the event log; **journey creation** is `createJourney`
+ * (`create.ts`, #159). f-journey-state's own note said creation was
+ * `f-engine`'s too, which turned out to be nobody's — see #159.
  */
 
 import { Prisma } from '@prisma/client';
@@ -60,8 +64,8 @@ export interface JourneyTimelineOptions {
 
 /**
  * One user's journey on a map, by its natural key — or `null` if they have not
- * started it (no writer yet; a fresh fork has none). The viewer is gated against
- * the journey's owner (`key.userId`) before any query runs.
+ * started it (`createJourney` is what starts one; a fresh fork has none). The viewer
+ * is gated against the journey's owner (`key.userId`) before any query runs.
  */
 export async function getJourney(
   viewer: JourneyViewer,

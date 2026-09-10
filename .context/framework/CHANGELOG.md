@@ -25,6 +25,42 @@ process.
 
 ## [Unreleased]
 
+### Added
+
+- **`createJourney(viewer, key, scope?)`** — the seam that starts a journey
+  (`lib/framework/facilitation/journey/create.ts`, barrel-exported). Until now
+  nothing in the framework created a `UserJourney`: `applyEvent` is the sole writer
+  of journey *state* and requires an existing `journeyId`, and `getJourney` returned
+  `null` for a journey nobody could start — so a leaf beginning a run had to write
+  the `framework_user_journey` row itself. It is the counterpart to
+  `applyJourneyTransition`: **create the journey, then transition it.**
+  - **Idempotent** on the natural key `(userId, graphSlug, contextKey)` — a second
+    start returns the existing row with its original `startedAt`, including under a
+    concurrent race.
+  - **`canWrite`-guarded** against the journey's owner before any write (see the
+    new export below) — deliberately narrower than the `canRead` guarding the
+    journey reads.
+  - The **caller supplies `contextKey`** (`''` is the default, context-free
+    journey); the framework never mints one. This is also the `contextKey` ↔ run
+    identity that per-run slot provenance will resolve against.
+  - It deliberately does **not** validate `graphSlug` against a published map —
+    `graphSlug` is a plain label by design, and the engine takes its graph as an
+    input. A journey started against an unpublished slug is inert rather than
+    rejected, so publish the map first.
+
+- **`canWrite(viewer, subject, scope?)`** in `lib/framework/shared/access.ts` — the
+  write face of the journey access seam. Today it is value-identical to `canRead`
+  (self, or the explicit admin-support override), and it exists so it stays that
+  way: `canRead` is documented as widening `own → team → all` when Sunrise #367's
+  ownership resolver lands, and that widening is about *reading* a cohort. Without
+  a separate predicate, every future cohort-reader would silently gain the right to
+  create journeys for those subjects. It composes with `canRead` rather than
+  replacing it, so a future *narrowing* of reads also refuses the write.
+
+  **A leaf writing its own framework-tier writes should guard on this, not
+  `canRead`.** Note `applyJourneyTransition` still authorizes through `canRead`
+  (#242) — that path is unchanged by this release.
+
 ## [0.2.0] — 2026-09-07
 
 > **Second tagged Daybreak release, and the first a leaf actually merges** — 0.1.0

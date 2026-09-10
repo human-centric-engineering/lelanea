@@ -114,6 +114,47 @@ export async function canRead(
 }
 
 /**
+ * May `viewer` **write** `subject`'s journey data under `scope`? Default-deny.
+ *
+ * Today this is value-identical to {@link canRead} — self, or the explicit
+ * admin-support override. It exists anyway, and the duplication is the point.
+ *
+ * **Why a separate predicate.** `canRead` is documented above as delegating to
+ * Sunrise #367's ownership resolver when it lands, widening `own → team → all`.
+ * That widening is about **reading**: the `f-ops-views` analytics and coach scopes
+ * exist so someone can see a cohort's journeys. If creation guarded on `canRead`,
+ * the day that resolver is wired every viewer who could merely *read* a cohort
+ * would silently gain the right to *create* `framework_user_journey` rows for
+ * those subjects — with no diff to the write path and no test in the suite
+ * failing. A capability should widen because someone decided to widen it, not by
+ * omission.
+ *
+ * So the write grant is **pinned** here to the narrow set, and widening it is a
+ * deliberate edit to this function that a reviewer will see.
+ *
+ * **It composes rather than replaces:** a write requires `canRead` to pass *and*
+ * the pinned grant. That ordering matters in the other direction — if #367 ever
+ * makes `canRead` **narrower** for a subject (a tenancy deny, say), the write is
+ * refused too, instead of a stale write grant outliving the read it depends on.
+ *
+ * **Not yet the only write guard.** `applyJourneyTransition` still reaches its
+ * write authorization through `assembleJourneyContext` → `getJourney` → `canRead`,
+ * so the state-transition path carries the widening risk this function pins for
+ * creation. Routing it through here is filed as #242; it is a change to
+ * `f-guidance`, not to this seam.
+ */
+export async function canWrite(
+  viewer: JourneyViewer,
+  subject: string,
+  scope: AccessScope = {}
+): Promise<boolean> {
+  // A write requires the read (see "composes rather than replaces" above).
+  if (!(await canRead(viewer, subject, scope))) return false;
+  // …plus the pinned narrow grant, which #367's widening deliberately cannot reach.
+  return viewer.userId === subject || viewer.isAdminSupport === true;
+}
+
+/**
  * The list/analytics face of {@link canRead}: the Prisma `where` fragment naming
  * the subjects `viewer` may see under `scope`. `f-ops-views` (15) `AND`s this into
  * its journey aggregations so analytics inherits the same access discipline as the
