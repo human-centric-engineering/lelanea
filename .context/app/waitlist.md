@@ -119,16 +119,28 @@ join. Handlers never call a section limiter themselves — see
 `lib/validations/contact.ts`, and for the reason a honeypot exists: a client
 that rejected it would tell the bot which field it is.
 
-**The rejection happens in the schema, not in the handler.**
-`website: z.string().max(0)` means a filled honeypot never reaches the handler
-body at all — it arrives as a `ValidationError` whose details name `website`,
-and the `catch` answers it exactly as a success. An in-handler `if (body.website
-…)` check was there first, mirroring the contact route; it is unreachable for
-that reason and was deleted, because dead code that reads like the real path is
-worse than no code.
+**The decision is made on the VALUE, in the handler — not on a validation
+error.** `website` is `z.unknown().optional()` and never fails validation;
+`isHoneypotFilled()` decides, and the swallow is built on the same line as a
+genuine answer so status, body and headers match by construction.
 
-A non-string `website` (say `12345`) fails `z.string()` rather than `.max(0)`
-and takes the same path.
+Two earlier shapes were wrong in opposite directions, and both are worth knowing
+about because each reads like the careful choice:
+
+- **`z.string().max(0)` in the schema.** The route could then only recognise a
+  hit by the thrown error's field _path_ — which matches on the FIELD, not on
+  what was in it. `{"email":"ada@example.com","website":null}` fails as
+  "expected string", takes the honeypot branch, writes nothing, and answers
+  "You are on the list". A real person told they joined when no row exists is
+  the precise failure t-5 shipped the card inert to prevent, reintroduced by an
+  over-eager trap.
+- **Answering from the `catch`.** That block could not see the rate-limit
+  headers, so only a genuine response carried `X-RateLimit-Remaining` — and
+  header presence is a perfectly reliable tell for which field is the trap.
+
+`undefined`, `null` and blank strings are what honest clients send and none of
+them counts as filled. A non-string (a number, an object) does: the real form
+cannot produce one.
 
 ## The two GDPR duties
 
@@ -138,13 +150,40 @@ that matches on `userId` reaches them. This is the same case as core's
 `ContactSubmission`, and the same reason no coverage guard could have found the
 table for us.
 
+### How a subject's own rows are matched — the line to be careful with
+
+Both paths use `subjectMatch()`: `userId` **or** a **lower-cased exact** email.
+
+**Never `{ equals, mode: 'insensitive' }`.** On the Prisma Postgres connector
+that compiles to `ILIKE`, and Prisma does not escape the compared value — so
+`_` and `%`, both legal in an email local part, become wildcards. Measured
+against the development database:
+
+```
+equals 'john_doe@example.com' insensitive  ->  john_doe@…  AND  johnxdoe@…
+equals 'a%@example.com'       insensitive  ->  a%@…        AND  ab@…
+```
+
+On the export that hands the subject a stranger's address, name and stated
+intent. On the erasure it silently **deletes** that stranger's row, inside the
+transaction, reporting only a larger `count`. Neither surfaces as an error.
+
+The exact match is available because `email` is lower-cased on write, so only
+the comparison side needs normalising — the subject's account address is
+whatever they typed at signup. It is also the faster query: exact equality uses
+the unique index, `ILIKE` cannot.
+
+**Anything that writes this table must keep the address lower-cased**, or the
+match starts silently missing rows — which on the erasure path means retaining
+data after reporting it erased.
+
 ### Art. 15 — subject access
 
 `lib/app/leaf-data-export.ts` declares `AppWaitlistEntry` → the `waitlist`
-section, and its collector returns the rows matched on **email or `userId`**,
-case-insensitively. Declaring a section is a promise: `exportUserData()` throws
-if a declared section is missing from what the collector returns, so the key is
-returned as an empty array rather than omitted.
+section, and its collector returns the rows `subjectMatch()` selects. Declaring
+a section is a promise: `exportUserData()` throws if a declared section is
+missing from what the collector returns, so the key is returned as an empty
+array rather than omitted.
 
 ### Art. 17 — erasure
 
@@ -156,9 +195,9 @@ hand-written in the `app_waitlist_entry` migration with `ON DELETE SET NULL`.
 **`SET NULL` is not the erasure policy on its own.** It keeps the row, holding
 the person's email, name and answers, pointed at by nothing. So
 `lib/app/leaf-bootstrap.ts` registers an erasure cleanup hook that **deletes**
-the matching rows inside the erasure transaction, matching on `userId` _and_ on
-the subject's email — which it reads from the transaction, before
-`tx.user.delete()` removes the row it would have read it from. A throw there
+the matching rows inside the erasure transaction, using the same
+`subjectMatch()` as the export — reading the address from the transaction,
+before `tx.user.delete()` removes the row it would have read it from. A throw there
 rolls the whole erasure back, which is the right failure.
 
 The FK action is the backstop for a row the hook cannot match, not the policy.

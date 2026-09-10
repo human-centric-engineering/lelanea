@@ -169,14 +169,47 @@ describe('POST /api/v1/app/waitlist', () => {
     expect(trapped.headers.get('X-RateLimit-Remaining')).toBe('4');
   });
 
-  it('does not name the honeypot field when a non-string value fails the schema', async () => {
-    // `website: 12345` fails `z.string()` rather than `.max(0)`, so it takes the
-    // same catch path by a different route. The default 400 would carry
-    // `path: "website"` — telling the bot exactly which input to leave alone.
+  it('never names the honeypot field in a response', async () => {
+    const trapped = await POST(
+      request({ email: 'bot@example.com', website: 'http://spam.example' })
+    );
+    const badEmail = await POST(request({ email: 'nope', website: 'http://spam.example' }));
+
+    // The 400 for a bad email must not carry `path: "website"` either — that
+    // would tell the bot exactly which input to leave alone.
+    expect(await trapped.text()).not.toContain('website');
+    expect(await badEmail.text()).not.toContain('website');
+  });
+
+  it('treats a non-string honeypot as filled — the real form cannot send one', async () => {
     const response = await POST(request({ email: 'bot@example.com', website: 12345 }));
 
     expect(response.status).toBe(200);
-    expect(await response.text()).not.toContain('website');
+    expect(joinWaitlistMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an explicit null from a hand-rolled client', null],
+    ['the empty string the real form sends', ''],
+    ['whitespace', '   '],
+    ['an absent field', undefined],
+  ])('JOINS a real person whose honeypot is %s', async (_why, website) => {
+    // The finding this case exists for. `website` used to be
+    // `z.string().max(0)`, so `null` failed validation as "expected string",
+    // matched the honeypot branch BY FIELD NAME, and returned "You are on the
+    // list" having written nothing. A person believing they joined when no row
+    // exists is exactly what t-5 shipped the card inert to prevent.
+    const response = await POST(request({ email: 'ada@example.com', website }));
+
+    expect(response.status).toBe(200);
+    expect(joinWaitlistMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still rejects a bad email when the honeypot is empty', async () => {
+    // The swallow must not have widened into "any validation error is a bot".
+    const response = await POST(request({ email: 'nope', website: '' }));
+
+    expect(response.status).toBe(400);
     expect(joinWaitlistMock).not.toHaveBeenCalled();
   });
 

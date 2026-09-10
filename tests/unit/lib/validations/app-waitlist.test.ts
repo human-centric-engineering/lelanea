@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  isHoneypotFilled,
   waitlistSchema,
   waitlistClientSchema,
   waitlistWithHoneypotSchema,
@@ -92,8 +93,22 @@ describe('waitlistSchema', () => {
   });
 });
 
-describe('the honeypot split', () => {
-  it('lets the CLIENT schema accept a filled honeypot', () => {
+describe('the honeypot', () => {
+  it('never fails validation, so the route decides on the VALUE', () => {
+    // It carried `z.string().max(0)` first, which reads stricter and put the
+    // decision in the wrong place: the route could then only recognise a hit by
+    // the thrown error's FIELD path, so `website: null` failed as "expected
+    // string" and a real person was told they had joined when nothing was
+    // written. Every shape below must parse.
+    for (const website of ['', '   ', 'http://spam.example', null, 12345, {}, undefined]) {
+      expect(
+        waitlistWithHoneypotSchema.safeParse({ email: 'ada@example.com', website }).success,
+        `website: ${JSON.stringify(website)} failed validation`
+      ).toBe(true);
+    }
+  });
+
+  it('lets the CLIENT schema accept a filled honeypot too', () => {
     // Rejecting it client-side would tell the bot which field it is, which is
     // the one thing a honeypot must never do.
     expect(
@@ -101,35 +116,27 @@ describe('the honeypot split', () => {
         .success
     ).toBe(true);
   });
+});
 
-  it('makes the SERVER schema reject one', () => {
-    expect(
-      waitlistWithHoneypotSchema.safeParse({
-        email: 'ada@example.com',
-        website: 'http://spam.example',
-      }).success
-    ).toBe(false);
+describe('isHoneypotFilled', () => {
+  it.each([
+    ['a URL a bot would paste', 'http://spam.example'],
+    ['any text at all', 'x'],
+    ['a number, which the real form cannot produce', 12345],
+    ['an object', { a: 1 }],
+  ])('counts %s as filled', (_why, value) => {
+    expect(isHoneypotFilled(value)).toBe(true);
   });
 
-  it('lets the server schema through when the honeypot is empty or absent', () => {
-    expect(
-      waitlistWithHoneypotSchema.safeParse({ email: 'ada@example.com', website: '' }).success
-    ).toBe(true);
-    expect(waitlistWithHoneypotSchema.safeParse({ email: 'ada@example.com' }).success).toBe(true);
-  });
-
-  it('names the honeypot field on the issue, which is what the route keys off', () => {
-    const result = waitlistWithHoneypotSchema.safeParse({
-      email: 'ada@example.com',
-      website: 'spam',
-    });
-
-    expect(result.success).toBe(false);
-    // The route answers a honeypot validation failure with a 200 rather than a
-    // 400, and it recognises one by this path. If the path ever stopped being
-    // `website` the route would silently start returning a 400 that names the
-    // field — the exact disclosure the honeypot exists to avoid.
-    const paths = result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
-    expect(paths).toContain('website');
+  it.each([
+    ['an absent field', undefined],
+    ['an explicit null from a hand-rolled client', null],
+    ['the empty string the real form sends', ''],
+    ['whitespace', '   '],
+  ])('does NOT count %s as filled', (_why, value) => {
+    // Each of these is what an HONEST client sends. Counting any of them as a
+    // bot drops a real join and answers "you are on the list" — the failure the
+    // t-5 stub existed to prevent, reintroduced by an over-eager trap.
+    expect(isHoneypotFilled(value)).toBe(false);
   });
 });

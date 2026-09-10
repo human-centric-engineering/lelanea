@@ -88,10 +88,45 @@ export const waitlistClientSchema = waitlistSchema.extend({
   website: z.string().optional(),
 });
 
-/** The server's schema: the honeypot must be empty. */
+/**
+ * The server's schema. The honeypot is `unknown` and **never fails validation**.
+ *
+ * It carried `z.string().max(0)` first, which reads like the stricter choice and
+ * is the wrong place for the check. The rejection then happened inside
+ * `validateRequestBody`, so the route could only recognise a honeypot hit by
+ * inspecting the thrown error's `details.errors[].path` — and that matches on
+ * the FIELD, not on what was in it. `{"email":"ada@example.com","website":null}`
+ * fails with "Expected string, received null", takes the honeypot branch, writes
+ * nothing, and answers "You are on the list": a real person told they joined
+ * when no row exists, which is the exact failure `B31` and the t-5 stub were
+ * written to prevent.
+ *
+ * Letting the value through unvalidated moves the decision to the handler, which
+ * can see the value itself and can tell "a bot filled the trap" from "a client
+ * sent a null". See `app/api/v1/app/waitlist/route.ts`.
+ */
 export const waitlistWithHoneypotSchema = waitlistSchema.extend({
-  website: z.string().max(0, 'Invalid submission').optional(),
+  website: z.unknown().optional(),
 });
+
+/**
+ * Whether the honeypot was filled in — the check the route makes.
+ *
+ * Exported so the rule lives beside the schema that carries the field, and so
+ * it can be tested without a request. Deliberately narrow: only actual CONTENT
+ * counts. `undefined`, `null` and blank strings are what honest clients send.
+ */
+export function isHoneypotFilled(value: unknown): boolean {
+  // What an honest client sends: the field absent, an explicit null from a
+  // hand-rolled caller, or the empty string the real form always submits.
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  // Anything that is neither absent nor a string — a number, an object — is not
+  // something the real form can produce, so it counts as filled. Not
+  // stringified to decide that: `String({})` is `[object Object]`, which would
+  // be "filled" by accident rather than on purpose.
+  return true;
+}
 
 export type WaitlistInput = z.infer<typeof waitlistSchema>;
 export type WaitlistClientInput = z.infer<typeof waitlistClientSchema>;

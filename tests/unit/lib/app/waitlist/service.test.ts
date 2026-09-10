@@ -259,17 +259,30 @@ describe('joinWaitlist', () => {
 });
 
 describe('findWaitlistEntriesForSubject (GDPR Art. 15)', () => {
-  it('matches on email as well as user id, case-insensitively', async () => {
+  it('matches on email as well as user id', async () => {
     await findWaitlistEntriesForSubject({ userId: 'user-1', email: 'Someone@Example.com' });
 
     const args = findMany.mock.calls[0]?.[0] as { where: { OR: unknown[] } };
     // Everyone on the list today joined before there was an account, so `userId`
     // is null for all of them — matching on it alone would return nothing and
     // the bundle would look like a complete answer saying "we hold none".
-    expect(args.where.OR).toEqual([
-      { userId: 'user-1' },
-      { email: { equals: 'Someone@Example.com', mode: 'insensitive' } },
-    ]);
+    expect(args.where.OR).toEqual([{ userId: 'user-1' }, { email: 'someone@example.com' }]);
+  });
+
+  it('matches by LOWER-CASED EXACT equality, never `mode: insensitive`', async () => {
+    await findWaitlistEntriesForSubject({ userId: 'user-1', email: 'John_Doe@Example.com' });
+
+    const args = findMany.mock.calls[0]?.[0] as { where: { OR: Record<string, unknown>[] } };
+    const emailClause = args.where.OR.find((clause) => 'email' in clause)?.email;
+
+    // Measured against the development database: `{ equals, mode: 'insensitive' }`
+    // compiles to ILIKE and Prisma does not escape the value, so `_` and `%` —
+    // both legal in an email local part — are wildcards. `john_doe@example.com`
+    // then matches `johnxdoe@example.com`, and this clause is on the Art. 15
+    // path: the subject's own export would contain a stranger's address, name
+    // and stated intent.
+    expect(emailClause).toBe('john_doe@example.com');
+    expect(emailClause).not.toMatchObject({ mode: 'insensitive' });
   });
 
   it('returns the rows it was given, in the order the query asked for', async () => {
@@ -289,13 +302,23 @@ describe('eraseWaitlistEntriesForUser (GDPR Art. 17)', () => {
     await eraseWaitlistEntriesForUser(txContext());
 
     expect(deleteMany).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { userId: 'user-1' },
-          { email: { equals: 'Someone@Example.com', mode: 'insensitive' } },
-        ],
-      },
+      where: { OR: [{ userId: 'user-1' }, { email: 'someone@example.com' }] },
     });
+  });
+
+  it('deletes by LOWER-CASED EXACT equality, never `mode: insensitive`', async () => {
+    userFindUnique.mockResolvedValue({ email: 'John_Doe@Example.com' });
+
+    await eraseWaitlistEntriesForUser(txContext());
+
+    const args = deleteMany.mock.calls[0]?.[0] as { where: { OR: Record<string, unknown>[] } };
+    const emailClause = args.where.OR.find((clause) => 'email' in clause)?.email;
+
+    // The same ILIKE wildcard as the export clause, behind a `deleteMany`: this
+    // one destroys a third party's row inside the erasure transaction and
+    // reports it as a larger `count`, with no error anywhere.
+    expect(emailClause).toBe('john_doe@example.com');
+    expect(emailClause).not.toMatchObject({ mode: 'insensitive' });
   });
 
   it('reads the subject email from the TRANSACTION client, not the global one', async () => {

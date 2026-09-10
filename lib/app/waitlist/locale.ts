@@ -31,6 +31,9 @@
  * language tag is discarded rather than stored — the header is
  * caller-controlled input, and a column that will one day be compared against a
  * real locale should not accumulate whatever a scanner sends.
+ *
+ * The bound on the work is a COUNT of entries, never a slice of the string —
+ * see `MAX_ENTRIES` for what truncating a header manufactures.
  */
 
 import { getFoundationalCollectionMeta } from '@/lib/app/content';
@@ -42,8 +45,25 @@ import { getFoundationalCollectionMeta } from '@/lib/app/content';
  */
 const LANGUAGE_TAG = /^[a-z]{2,3}(-[a-z0-9]{2,8}){0,2}$/i;
 
-/** Longest header we will look at, so a pathological value costs nothing. */
-const MAX_HEADER_LENGTH = 200;
+/**
+ * How many entries we will consider, so a pathological header costs nothing.
+ *
+ * A COUNT, not a character budget. `slice(0, 200)` was the first shape and it
+ * cuts at a byte offset rather than an entry boundary, so it can invent a tag
+ * the client never sent: a boundary landing inside `zh-Hant-TW` yields
+ * `zh-Hant`, which passes the tag test and is stored as if it had been asked
+ * for. A boundary inside `;q=0.85` yields `q=0.`, which `parseFloat` reads as
+ * `0` — so the client's STRONGEST preference is scored as an explicit refusal
+ * and the row falls back to the collection locale. Both are wrong answers in
+ * the one column whose job is provenance, and nothing downstream could notice.
+ *
+ * Splitting first and capping the count gives the same protection without
+ * inventing anything: every entry considered is one the client actually sent.
+ */
+const MAX_ENTRIES = 24;
+
+/** Longest single entry worth parsing — a real one is a tag plus `;q=0.x`. */
+const MAX_ENTRY_LENGTH = 64;
 
 /**
  * The locale to record for a request: the client's highest-weighted well-formed
@@ -56,8 +76,12 @@ export function resolveJoinLocale(acceptLanguage: string | null): string {
   let best: string | null = null;
   let bestQ = -1;
 
-  const entries = acceptLanguage.slice(0, MAX_HEADER_LENGTH).split(',');
+  const entries = acceptLanguage.split(',', MAX_ENTRIES);
   for (const entry of entries) {
+    // A single entry longer than any real one is skipped whole rather than
+    // truncated — truncating is what manufactures a tag nobody sent.
+    if (entry.length > MAX_ENTRY_LENGTH) continue;
+
     const [rawTag, ...params] = entry.split(';');
     const tag = rawTag?.trim() ?? '';
 

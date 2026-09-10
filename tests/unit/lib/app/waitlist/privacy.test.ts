@@ -176,9 +176,10 @@ describe('subject access (Art. 15) reaches the waitlist', () => {
     const args = delegateFor('appWaitlistEntry').findMany.mock.calls[0]?.[0] as {
       where: { OR: unknown[] };
     };
-    expect(args.where.OR).toContainEqual({
-      email: { equals: 'Ada@Example.com', mode: 'insensitive' },
-    });
+    // Lower-cased exact, not `mode: 'insensitive'` — that compiles to ILIKE and
+    // `_`/`%` in an address are wildcards, so the bundle would carry a
+    // stranger's rows. See `subjectMatch` in the service.
+    expect(args.where.OR).toContainEqual({ email: 'ada@example.com' });
   });
 
   it('still carries the section, empty, for a subject with no entry', async () => {
@@ -223,9 +224,7 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
     });
 
     expect(delegateFor('appWaitlistEntry').deleteMany).toHaveBeenCalledWith({
-      where: {
-        OR: [{ userId: 'user-1' }, { email: { equals: 'Ada@Example.com', mode: 'insensitive' } }],
-      },
+      where: { OR: [{ userId: 'user-1' }, { email: 'ada@example.com' }] },
     });
   });
 

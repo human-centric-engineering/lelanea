@@ -34,6 +34,10 @@
  *    them, which made header PRESENCE a perfectly reliable tell for which field
  *    was the trap — the exact disclosure the fixed body and status were for.
  *
+ * All three now hold by construction rather than by care: the honeypot answer
+ * is built on the same line as a genuine one, in the same scope, from the same
+ * `headers`.
+ *
  * Rate limiting: TWO layers. `proxy.ts` has already applied the `'api'` section
  * cap (100/min) before this handler runs, keyed on `ip:<addr>` for an anonymous
  * caller. This handler adds the per-flow sub-cap — 5 per hour per IP — which is
@@ -48,13 +52,12 @@
 
 import type { NextRequest } from 'next/server';
 import { successResponse } from '@/lib/api/responses';
-import { ValidationError, handleAPIError } from '@/lib/api/errors';
+import { handleAPIError } from '@/lib/api/errors';
 import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { getClientIP } from '@/lib/security/ip';
 import { createRateLimitResponse, getRateLimitHeaders } from '@/lib/security/rate-limit';
-import { isRecord } from '@/lib/utils';
-import { waitlistWithHoneypotSchema } from '@/lib/validations/app-waitlist';
+import { isHoneypotFilled, waitlistWithHoneypotSchema } from '@/lib/validations/app-waitlist';
 import { waitlistLimiter } from '@/lib/app/waitlist/rate-limit';
 import { resolveJoinLocale } from '@/lib/app/waitlist/locale';
 import { joinWaitlist } from '@/lib/app/waitlist/service';
@@ -66,14 +69,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   const log = await getRouteLogger(request);
   const clientIP = getClientIP(request);
 
-  /**
-   * Declared out here so the honeypot answer in `catch` carries exactly the
-   * headers a genuine answer does. Scoped inside the `try`, it did not — and a
-   * bot could then find the trap field by submitting one address twice and
-   * noticing that only one response had `X-RateLimit-Remaining` on it.
-   */
-  let headers: Record<string, string> | undefined;
-
   try {
     // 1. Per-flow sub-cap, before anything is read or written.
     const rateLimit = waitlistLimiter.check(clientIP);
@@ -82,17 +77,29 @@ export async function POST(request: NextRequest): Promise<Response> {
       return createRateLimitResponse(rateLimit);
     }
 
-    headers = getRateLimitHeaders(rateLimit);
+    const headers = getRateLimitHeaders(rateLimit);
 
-    // 2. Validate. The honeypot is rejected HERE, by the schema's
-    //    `website: z.string().max(0)`, so it arrives in `catch` below as a
-    //    ValidationError rather than as a value this function ever sees. An
-    //    earlier version also checked `body.website` after this line, mirroring
-    //    `app/api/v1/contact/route.ts` — that branch is unreachable for exactly
-    //    this reason and is gone; it was dead code that read like the real path.
+    // 2. Validate. The honeypot is `z.unknown()` and never fails here.
     const body = await validateRequestBody(request, waitlistWithHoneypotSchema);
 
-    // 3. Record it. A repeat fills what is still empty and overwrites nothing —
+    // 3. The honeypot, decided on the VALUE rather than on a validation error.
+    //
+    //    Two earlier shapes were wrong in opposite directions. Rejecting it in
+    //    the schema (`z.string().max(0)`) meant recognising a hit by the thrown
+    //    error's field path — which matches on the FIELD, so `website: null`
+    //    failed as "expected string" and a real person was told they had joined
+    //    when nothing was written. Answering from the `catch` also lost the
+    //    rate-limit headers, and header PRESENCE is a perfectly reliable tell
+    //    for which field is the trap.
+    //
+    //    Here the answer is built on the same line as a genuine one, so status,
+    //    body and headers match by construction rather than by care.
+    if (isHoneypotFilled(body.website)) {
+      log.warn('Waitlist honeypot triggered', { ip: clientIP });
+      return successResponse({ message: ACCEPTED }, undefined, { headers });
+    }
+
+    // 4. Record it. A repeat fills what is still empty and overwrites nothing —
     //    see the service for why an unverified write must be additive.
     const { created, entryId } = await joinWaitlist({
       email: body.email,
@@ -122,20 +129,10 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     return successResponse({ message: ACCEPTED }, undefined, { headers });
   } catch (error) {
-    // A filled honeypot lands here, and must answer like a success: the default
-    // 400 names `website` in its details, which tells the bot exactly which
-    // input to leave alone next time.
-    if (error instanceof ValidationError && error.details) {
-      const { errors } = error.details;
-      if (
-        Array.isArray(errors) &&
-        errors.some((issue: unknown) => isRecord(issue) && issue.path === 'website')
-      ) {
-        log.warn('Waitlist honeypot triggered', { ip: clientIP });
-        return successResponse({ message: ACCEPTED }, undefined, { headers });
-      }
-    }
-
+    // Nothing honeypot-shaped reaches here any more: `website` is `z.unknown()`,
+    // so it cannot fail validation and cannot put its own name in a 400. What is
+    // left is a real failure — a bad email, malformed JSON, a database error —
+    // and it belongs to the caller.
     return handleAPIError(error);
   }
 }

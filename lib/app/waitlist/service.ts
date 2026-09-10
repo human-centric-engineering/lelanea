@@ -173,23 +173,51 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
 }
 
 /**
- * Every waitlist entry belonging to a data subject.
+ * How a subject's own rows are matched, on both the Art. 15 and Art. 17 paths.
  *
- * Matched on email — the table has no user id for anyone who joined before
- * signing up, which is everyone today. Case-insensitively, because the stored
- * value is lower-cased on write and the subject's account email may not be.
+ * The table has no user id for anyone who joined before signing up — which is
+ * everyone today — so email is the real handle, and `userId` is matched as well
+ * so an entry that was linked to an account and then had its address changed
+ * still reaches its owner.
  *
- * `userId` is matched too, so an entry that was linked to the account and then
- * had its address changed still reaches its owner.
+ * ## Lower-cased exact match, NOT `mode: 'insensitive'`
+ *
+ * This is the important line in the file. `{ equals, mode: 'insensitive' }`
+ * compiles to Postgres `ILIKE` on the Prisma Postgres connector, and Prisma does
+ * not escape the value — so `_` and `%`, both legal in an email local part,
+ * become wildcards. Measured against the development database:
+ *
+ *     equals 'john_doe@example.com' insensitive  ->  john_doe@…  AND  johnxdoe@…
+ *     equals 'a%@example.com'       insensitive  ->  a%@…        AND  ab@…
+ *
+ * On the export that hands the subject a stranger's address, name and stated
+ * intent. On the erasure it silently DELETES that stranger's row, inside the
+ * transaction, reporting only `count: 2`. Neither surfaces as an error.
+ *
+ * An exact match is available because `email` is lower-cased on write by
+ * `waitlistEmailSchema`, so the stored value is already normalised and only the
+ * comparison side needs it — the subject's account address is whatever they
+ * typed at signup. It is also the faster query: exact equality uses the unique
+ * index, `ILIKE` cannot.
+ *
+ * **Anything that writes this table must keep the address lower-cased**, or this
+ * match silently starts missing rows — which on the erasure path means retaining
+ * data after reporting it erased.
  */
+function subjectMatch(subject: {
+  userId: string;
+  email: string;
+}): Prisma.AppWaitlistEntryWhereInput {
+  return { OR: [{ userId: subject.userId }, { email: subject.email.trim().toLowerCase() }] };
+}
+
+/** Every waitlist entry belonging to a data subject (GDPR Art. 15). */
 export function findWaitlistEntriesForSubject(subject: {
   userId: string;
   email: string;
 }): Promise<unknown[]> {
   return prisma.appWaitlistEntry.findMany({
-    where: {
-      OR: [{ userId: subject.userId }, { email: { equals: subject.email, mode: 'insensitive' } }],
-    },
+    where: subjectMatch(subject),
     orderBy: { createdAt: 'asc' },
   });
 }
@@ -228,8 +256,11 @@ export async function eraseWaitlistEntriesForUser(ctx: {
 
   const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
 
+  // The same matcher the export uses, for the same reason — see `subjectMatch`.
+  // A `mode: 'insensitive'` clause here is an `ILIKE` behind a `deleteMany`,
+  // which destroys a third party's row and reports it as a larger `count`.
   const match: Prisma.AppWaitlistEntryWhereInput = user?.email
-    ? { OR: [{ userId }, { email: { equals: user.email, mode: 'insensitive' } }] }
+    ? subjectMatch({ userId, email: user.email })
     : { userId };
 
   const { count } = await tx.appWaitlistEntry.deleteMany({ where: match });

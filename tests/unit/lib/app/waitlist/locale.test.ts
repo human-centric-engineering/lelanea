@@ -106,9 +106,32 @@ describe('resolveJoinLocale', () => {
     expect(resolveJoinLocale(header)).toBe(FALLBACK);
   });
 
-  it('does not read past its length cap, so a pathological header costs nothing', () => {
-    // 10k of `a` followed by a valid tag: the cap truncates mid-run, the
-    // truncated value is not a language tag, and the fallback answers.
-    expect(resolveJoinLocale(`${'a'.repeat(10_000)},en-GB`)).toBe(FALLBACK);
+  it('bounds the work by ENTRY COUNT, not by slicing the header', () => {
+    // 10k of `a` in one entry: skipped whole as over-long, and the next entry
+    // is still read. Slicing the string would have cut mid-entry instead.
+    expect(resolveJoinLocale(`${'a'.repeat(10_000)},en-GB`)).toBe('en-GB');
+  });
+
+  it('never invents a tag by truncating one the client did send', () => {
+    // THE finding. `slice(0, 200)` cuts at a byte offset: a boundary inside
+    // `zh-Hant-TW` yields `zh-Hant`, which passes the tag test and is stored as
+    // if it had been asked for. Padding puts a real tag across where that
+    // boundary used to fall.
+    const padding = Array.from({ length: 8 }, (_, i) => `x${i}-AA;q=0.1`).join(',');
+    expect(resolveJoinLocale(`${padding},zh-Hant-TW;q=0.9`)).toBe('zh-Hant-TW');
+  });
+
+  it('never turns a q-weight into a refusal by cutting it in half', () => {
+    // The other half of the same bug: a boundary inside `;q=0.85` yields `q=0.`,
+    // which `parseFloat` reads as 0 — scoring the client's STRONGEST preference
+    // as "explicitly not this one".
+    const padding = Array.from({ length: 8 }, (_, i) => `y${i}-BB;q=0.1`).join(',');
+    expect(resolveJoinLocale(`${padding},pt-BR;q=0.85`)).toBe('pt-BR');
+  });
+
+  it('stops after a sane number of entries', () => {
+    // The real bound. A tag beyond the cap is not considered at all.
+    const many = Array.from({ length: 40 }, (_, i) => `z${i}-CC;q=0.1`).join(',');
+    expect(resolveJoinLocale(`${many},en-GB;q=0.9`)).toBe(FALLBACK);
   });
 });
