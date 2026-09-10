@@ -3,6 +3,7 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
@@ -57,6 +58,21 @@ export function ShellNav({ user }: ShellNavProps) {
   const [slim, setSlim] = useLocalStorage<boolean>(SLIM_KEY, false);
   const pathname = usePathname();
 
+  /**
+   * Animate the width only after the stored preference has been applied.
+   *
+   * `useLocalStorage` deliberately returns its `initial` on the first render —
+   * the server could not read storage, so anything else is a hydration
+   * mismatch — and adopts the stored value in a post-mount effect. With the
+   * 260ms width transition always live, a reader who had chosen the slim nav
+   * watched it render at 234px and slide closed on every single page load.
+   *
+   * So the first paint is untransitioned and the correction is instant; every
+   * width change after that is a real one, and animates.
+   */
+  const [settled, setSettled] = useState(false);
+  useEffect(() => setSettled(true), []);
+
   return (
     <nav
       aria-label="Main"
@@ -64,7 +80,8 @@ export function ShellNav({ user }: ShellNavProps) {
       className={cn(
         'bg-card relative z-50 flex flex-none flex-col border-r',
         'border-[var(--color-divider)] pt-3.5 pb-13',
-        'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
+        settled &&
+          'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
         slim ? 'w-16 px-2.5' : 'w-[234px] px-2.5'
       )}
     >
@@ -102,7 +119,18 @@ export function ShellNav({ user }: ShellNavProps) {
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-0.5">
+      {/*
+        `overflow-y-auto`, because the shell is `h-dvh overflow-hidden` and every
+        child here is `flex-none`: the seven destinations, the brand row and the
+        account footer come to roughly 460px, so below about 500px of viewport
+        height — a phone in landscape, a short desktop window — "Usage and
+        billing", "Settings" and the account footer were cut off with nothing on
+        the page able to scroll to them.
+
+        `scrollbar-none` keeps the chrome out of a 64px column; the content is
+        still reachable by wheel, trackpad, touch and keyboard focus.
+      */}
+      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-0.5 overflow-x-hidden overflow-y-auto">
         {SHELL_NAV.map((entry, i) => {
           if (!isNavItem(entry)) {
             return entry.kind === 'separator' ? (

@@ -43,6 +43,19 @@ export const metadata: Metadata = {
  * resolves to a user. Reading it here rather than per-page means the account
  * footer is server-rendered with the real name on first paint.
  *
+ * KNOWN LIMITATION: the `'/app'` passed to `clearInvalidSession` is hardcoded,
+ * so a visitor who opens `/app/journey` with a cookie that no longer resolves
+ * loses the deep link and lands at `/app` after signing back in. The proxy's own
+ * path preserves `callbackUrl`; this one cannot, because a layout has no access
+ * to the pathname and nothing upstream puts it on a header. Left as is rather
+ * than diverging `proxy.ts` to add one for a case that costs a redirect and
+ * never a session.
+ *
+ * A layout is also not re-rendered when the router moves between sibling pages
+ * inside it, so this check is a gate on entry rather than on every view. That is
+ * fine while the pages under it hold no data — but `t-10` and `t-11` add views
+ * that do, and those should guard where they fetch rather than inherit this.
+ *
  * ## `h-dvh`, not `h-screen`
  *
  * `100vh` on mobile Safari is the viewport *without* the browser chrome

@@ -25,9 +25,31 @@ import { cn } from '@/lib/utils';
  * an unfinished one. `t-10` adds them beside the toggle when the state they
  * drive arrives.
  */
+/**
+ * Both faces are always in the DOM, and CSS picks one. This is not a style
+ * preference — it is what keeps the button hydration-safe.
+ *
+ * `ThemeProvider` resolves to `'light'` on the server (it cannot read storage
+ * or the OS) and to the real value on the client's first render. Branching on
+ * `theme` in the returned markup therefore emits a moon and "Switch to the dark
+ * theme" from the server and wants a sun and "…light theme" on the client, for
+ * every reader in dark mode. `<body suppressHydrationWarning>` covers body's own
+ * attributes, not its descendants, so React logs a hydration error and re-renders
+ * the tree.
+ *
+ * The `dark:` variant keys on `.dark` on `<html>`, which the root layout's
+ * no-flash script sets BEFORE first paint — so the correct face is showing from
+ * the first frame, and the server and client agree on the markup because both
+ * faces are in it either way. `components/theme-toggle.tsx` solves it the same
+ * way, for the same reason.
+ *
+ * The accessible name gets the same treatment rather than a static "Toggle
+ * theme": a label that says where the click takes you is worth keeping, and
+ * `hidden` removes an element from the accessibility tree, so exactly one of
+ * these is ever the button's name.
+ */
 export function ShellTopbar() {
   const { theme, setTheme } = useTheme();
-  const next = theme === 'dark' ? 'light' : 'dark';
 
   return (
     <header
@@ -39,9 +61,9 @@ export function ShellTopbar() {
       <span className="flex-1" />
       <button
         type="button"
-        onClick={() => setTheme(next)}
-        aria-label={`Switch to the ${next} theme`}
-        title={`Switch to the ${next} theme`}
+        // `theme` is safe to read in a HANDLER — it runs after hydration, when
+        // the value is correct. Only the returned markup has to be agnostic.
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         className={cn(
           'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none items-center',
           'justify-center rounded-full border border-[var(--color-border)]',
@@ -52,11 +74,10 @@ export function ShellTopbar() {
           'focus-visible:outline-[var(--color-ring)]'
         )}
       >
-        {theme === 'dark' ? (
-          <Sun size={16} strokeWidth={1.5} aria-hidden="true" />
-        ) : (
-          <Moon size={16} strokeWidth={1.5} aria-hidden="true" />
-        )}
+        <Moon size={16} strokeWidth={1.5} aria-hidden="true" className="dark:hidden" />
+        <Sun size={16} strokeWidth={1.5} aria-hidden="true" className="hidden dark:block" />
+        <span className="sr-only dark:hidden">Switch to the dark theme</span>
+        <span className="sr-only hidden dark:inline">Switch to the light theme</span>
       </button>
     </header>
   );

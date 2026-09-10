@@ -31,30 +31,51 @@ beforeEach(() => {
 });
 
 describe('ShellTopbar — the theme toggle', () => {
-  it('offers dark when the reader is in light', async () => {
-    render(<ShellTopbar />);
-    const toggle = screen.getByRole('button', { name: 'Switch to the dark theme' });
+  it('renders identical markup whichever theme is current', () => {
+    // THE HYDRATION TEST, and the reason both faces sit in the DOM at once.
+    //
+    // `ThemeProvider` resolves to `'light'` on the server and to the real value
+    // on the client's first render. Any branch on `theme` in the returned
+    // markup therefore makes server and client disagree for every reader in
+    // dark mode, and React tears the tree down and re-renders it. Asserting the
+    // two renders are byte-identical is that same claim, stated so it fails the
+    // moment somebody reintroduces a ternary.
+    theme.current = 'light';
+    const light = render(<ShellTopbar />);
+    const lightHtml = light.container.innerHTML;
+    light.unmount();
 
-    await userEvent.click(toggle);
+    theme.current = 'dark';
+    const dark = render(<ShellTopbar />);
+    expect(dark.container.innerHTML).toBe(lightHtml);
+  });
+
+  it('carries both faces and both names, for CSS to choose between', () => {
+    // The corollary of the case above: if the markup cannot branch, the theme
+    // has to be readable from it some other way. `dark:` keys on `.dark` on
+    // `<html>`, which the root layout's no-flash script sets before first paint.
+    const { container } = render(<ShellTopbar />);
+
+    expect(container.querySelector('.dark\\:hidden')).not.toBeNull();
+    expect(container.querySelector('.hidden.dark\\:block')).not.toBeNull();
+    expect(container.textContent).toContain('Switch to the dark theme');
+    expect(container.textContent).toContain('Switch to the light theme');
+  });
+
+  it('switches away from light', async () => {
+    theme.current = 'light';
+    render(<ShellTopbar />);
+    await userEvent.click(screen.getByRole('button'));
     expect(theme.setTheme).toHaveBeenCalledWith('dark');
   });
 
-  it('offers light when the reader is in dark', async () => {
+  it('switches away from dark', async () => {
+    // `theme` is read in the HANDLER, which runs after hydration — the one
+    // place it is safe. This proves the handler still reads it.
     theme.current = 'dark';
     render(<ShellTopbar />);
-    const toggle = screen.getByRole('button', { name: 'Switch to the light theme' });
-
-    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button'));
     expect(theme.setTheme).toHaveBeenCalledWith('light');
-  });
-
-  it('names the destination theme, not the current one', () => {
-    // The classic off-by-one on a toggle label: a moon icon captioned "dark
-    // theme" while you are already in dark. The label has to say where the
-    // click takes you.
-    theme.current = 'dark';
-    render(<ShellTopbar />);
-    expect(screen.queryByRole('button', { name: /dark/ })).toBeNull();
   });
 });
 

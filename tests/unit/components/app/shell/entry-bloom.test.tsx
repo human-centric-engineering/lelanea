@@ -18,6 +18,7 @@
  */
 
 import { act, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntryBloom } from '@/components/app/shell/entry-bloom';
@@ -118,6 +119,43 @@ describe('EntryBloom — once per session', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('still blooms under StrictMode, which is how development runs it', () => {
+    // `next.config.js` sets `reactStrictMode: true`, so React mounts, tears
+    // down and remounts the same instance in development. With the flag written
+    // and read in the same effect, the first run wrote `'1'` and the second read
+    // it back and concluded the bloom had already been seen — so the opening
+    // gesture never appeared in development at ALL, the only environment anyone
+    // would be checking it in. Fast Refresh remounts did the same.
+    //
+    // This case has to render under `StrictMode` explicitly: Testing Library
+    // does not, so every other case in this file passes with or without the
+    // guard and none of them can see this.
+    render(
+      <StrictMode>
+        <EntryBloom />
+      </StrictMode>
+    );
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+  });
+
+  it('still blooms only once per session under StrictMode', () => {
+    // The guard must not have bought the first bloom by breaking the rule.
+    const first = render(
+      <StrictMode>
+        <EntryBloom />
+      </StrictMode>
+    );
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    first.unmount();
+
+    render(
+      <StrictMode>
+        <EntryBloom />
+      </StrictMode>
+    );
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
   it('never blocks a click on the shell beneath it', () => {

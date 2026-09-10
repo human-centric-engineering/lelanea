@@ -16,7 +16,8 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -176,6 +177,46 @@ describe('ShellNav — slim mode', () => {
     renderAt('/app/situations');
     await userEvent.click(toggle());
     expect(currentItems()).toEqual(['Life situations']);
+  });
+});
+
+describe('ShellNav — the column survives a short window', () => {
+  it('scrolls rather than clipping its last items', () => {
+    // The shell is `h-dvh overflow-hidden` and every nav child is `flex-none`,
+    // so at roughly 460px of content there is nothing on the page able to
+    // reach "Usage and billing", "Settings" or the account footer once the
+    // viewport drops below about 500px — a phone in landscape, or a short
+    // desktop window. The scroll container is the only thing that fixes it,
+    // and jsdom cannot measure layout, so the container is what is asserted.
+    const { container } = renderAt('/app');
+    const list = container.querySelector('nav > div:nth-of-type(2)');
+
+    expect(list?.className).toContain('overflow-y-auto');
+    expect(list?.className).toContain('min-h-0');
+  });
+
+  it('does not animate the width on the first paint', () => {
+    // `useLocalStorage` returns its `initial` on the first render by design —
+    // the server could not read storage — and adopts the stored value in a
+    // post-mount effect. With the transition always live, a reader who chose the
+    // slim nav watched it render at 234px and slide closed on EVERY page load.
+    //
+    // Asserted against the SERVER render, because that is literally the first
+    // paint and it is the only place the claim can be checked: `render()` from
+    // Testing Library flushes effects, so by the time it returns the transition
+    // is correctly armed and a DOM assertion would pass with or without the fix.
+    const firstPaint = renderToString(<ShellNav user={USER} />);
+
+    expect(firstPaint).toContain('w-[234px]');
+    expect(firstPaint).not.toContain('transition-[width]');
+  });
+
+  it('arms the transition once mounted, so a real toggle still animates', async () => {
+    // The other half — suppressing it forever would be a different bug.
+    renderAt('/app');
+    await waitFor(() =>
+      expect(document.querySelector('nav')?.className).toContain('transition-[width]')
+    );
   });
 });
 

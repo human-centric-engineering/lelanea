@@ -29,7 +29,7 @@ describe('ShellRail', () => {
 
   it('offers the map and the resources', () => {
     render(<ShellRail />);
-    expect(screen.getByRole('button', { name: /Map/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Your map/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Resources/ })).toBeTruthy();
   });
 
@@ -40,11 +40,25 @@ describe('ShellRail', () => {
     }
   });
 
-  it('says why, rather than failing silently under the cursor', () => {
-    // A disabled control with no explanation is its own small dead end.
+  it('says why somewhere a person can actually reach', () => {
+    // The explanation used to be a `title` on the button itself, which renders
+    // NOWHERE: browsers suppress pointer events on a disabled control, so the
+    // tooltip never fired on hover, and a disabled button is out of the tab
+    // order, so assistive technology never reached it either. The stub's claim
+    // to be honest rather than broken rested on a string nobody could read.
+    //
+    // So both routes are asserted: the hover tooltip on the enabled wrapper,
+    // and the reason inside the button's own accessible name.
     render(<ShellRail />);
+
     for (const button of screen.getAllByRole('button')) {
-      expect(button.getAttribute('title')).toMatch(/arrives with the drawers/);
+      expect(button.getAttribute('aria-label')).toMatch(/arrives with the drawers/);
+
+      const wrapper = button.parentElement;
+      expect(wrapper?.getAttribute('title')).toMatch(/arrives with the drawers/);
+      // The wrapper must NOT be disabled, or it swallows the hover exactly as
+      // the button did.
+      expect(wrapper?.hasAttribute('disabled')).toBe(false);
     }
   });
 });

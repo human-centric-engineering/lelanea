@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Lotus } from '@/components/app/ui/lotus';
 import { cn } from '@/lib/utils';
@@ -43,7 +43,25 @@ const FADE_MS = 420;
 export function EntryBloom() {
   const [phase, setPhase] = useState<'idle' | 'showing' | 'leaving' | 'done'>('idle');
 
+  /**
+   * One decision per mounted component, not per effect run.
+   *
+   * `reactStrictMode` is on, so in development React runs this effect, tears it
+   * down, and runs it again on the same instance. Without this guard the first
+   * run writes the flag and the second run reads it back and concludes the
+   * bloom has already been seen — so the opening gesture never appeared in
+   * development at all, which is the only place anyone would be checking it.
+   * Fast Refresh remounts did the same thing in the same way.
+   *
+   * A ref rather than state: refs survive Strict Mode's simulated remount,
+   * which is exactly the property needed, and writing one does not re-render.
+   */
+  const decided = useRef(false);
+
   useEffect(() => {
+    if (decided.current) return;
+    decided.current = true;
+
     let seen = false;
     try {
       seen = window.sessionStorage.getItem(SEEN_KEY) === '1';

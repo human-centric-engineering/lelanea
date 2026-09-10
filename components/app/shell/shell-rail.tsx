@@ -21,9 +21,21 @@ const RAIL_ITEMS = [
  * review surface that matters.
  *
  * So: a deliberate stub. The buttons render at full size so the column measures
- * correctly against the prototype, and `disabled` with a title that says the
- * drawers are still to come — rather than live buttons that swallow a click,
- * which is the dishonest fourth option `B31` names.
+ * correctly against the prototype, and `disabled` rather than live buttons that
+ * swallow a click, which is the dishonest fourth option `B31` names.
+ *
+ * ## Why the explanation is on a wrapper, and in the accessible name
+ *
+ * It was a `title` on the button itself, which renders nowhere: browsers
+ * suppress pointer events on a disabled form control, so the tooltip never
+ * appeared on hover — and a disabled button is out of the tab order, so keyboard
+ * and screen-reader users had no explanation either. The stub's whole claim to
+ * being honest rather than broken rested on a string nobody could read.
+ *
+ * The `title` therefore sits on a wrapping span, which is not disabled and does
+ * receive the hover; and the reason is folded into the button's own
+ * `aria-label`, so it reaches assistive technology navigating by element rather
+ * than by tab.
  *
  * A server component: nothing here is interactive yet, and `t-10` promotes it to
  * a client island when the drawer state arrives.
@@ -39,21 +51,23 @@ export function ShellRail() {
     >
       {RAIL_ITEMS.map((item) => {
         const Icon = item.icon;
+        const explanation = `${item.tip} — arrives with the drawers`;
         return (
-          <button
-            key={item.id}
-            type="button"
-            disabled
-            title={`${item.tip} — arrives with the drawers`}
-            className={cn(
-              'text-muted-foreground flex w-[62px] flex-col items-center justify-center gap-1.5',
-              'rounded-xl px-0 pt-2.5 pb-2 text-[8.5px] leading-none tracking-[0.05em]',
-              'whitespace-nowrap uppercase disabled:opacity-50'
-            )}
-          >
-            <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
-            <span>{item.label}</span>
-          </button>
+          <span key={item.id} title={explanation} className="flex-none">
+            <button
+              type="button"
+              disabled
+              aria-label={explanation}
+              className={cn(
+                'text-muted-foreground flex w-[62px] flex-col items-center justify-center gap-1.5',
+                'rounded-xl px-0 pt-2.5 pb-2 text-[8.5px] leading-none tracking-[0.05em]',
+                'whitespace-nowrap uppercase disabled:opacity-50'
+              )}
+            >
+              <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          </span>
         );
       })}
     </nav>
