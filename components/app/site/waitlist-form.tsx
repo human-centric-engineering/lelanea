@@ -17,9 +17,24 @@ const FIELD = 'h-12 rounded-md px-4 text-[15px]';
  * The route it will post to, the model behind it, and the admin view of what it
  * collects are t-7 and t-8. Shipping a form that looks live and drops what
  * someone typed would be worse than shipping none: they would believe they had
- * joined. So the whole field group is `disabled`, the card carries the
+ * joined. So every entry control is `disabled`, the card carries the
  * prototype's own "opening in small groups" line, and there is no `action` and
  * no `onSubmit` to mislead whoever reads the source either.
+ *
+ * ## The ⓘ buttons stay live, and that is the whole reason they are not in a
+ * disabled `<fieldset>`
+ *
+ * `<fieldset disabled>` was the first shape here, and it is the tidier one: one
+ * attribute, and the browser disables everything inside. It also disables the
+ * two help popovers, because they are `<button>`s and a disabled fieldset
+ * disables its descendants. That would have hidden the explanation of WHY we
+ * ask for someone's reason for coming — from exactly the person deciding
+ * whether to trust us with it, during the whole period before the form opens.
+ * Nothing would have failed; the ⓘ would simply not have responded.
+ *
+ * So the `<fieldset>` stays for the grouping and the legend, and `disabled`
+ * goes on each entry control instead. The trade is five attributes for a
+ * readable promise.
  *
  * B31's three honest options for an affordance whose mechanism does not exist
  * are omit, deliberate stub, or build the mechanism. This is the stub, and the
@@ -61,7 +76,7 @@ export function WaitlistForm() {
         We are opening in small groups from {LAUNCH_WINDOW}. You will hear before anyone else.
       </p>
 
-      <fieldset className="mt-[22px] flex flex-col gap-4" disabled>
+      <fieldset className="mt-[22px] flex flex-col gap-4">
         {/* What tells a screen-reader user the whole group is unavailable and
             why. `disabled` on its own announces nothing about the reason. */}
         <legend className="sr-only">
@@ -79,6 +94,7 @@ export function WaitlistForm() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            disabled
           />
         </div>
 
@@ -87,7 +103,14 @@ export function WaitlistForm() {
             <label htmlFor="wl-name">Your name</label>
             <span className="text-muted-foreground text-[13px]">optional</span>
           </span>
-          <Input className={FIELD} id="wl-name" name="name" type="text" autoComplete="name" />
+          <Input
+            className={FIELD}
+            id="wl-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            disabled
+          />
         </div>
 
         <div className="flex flex-col gap-[7px]">
@@ -100,7 +123,7 @@ export function WaitlistForm() {
             </FieldHelp>
             <span className="text-muted-foreground text-[13px]">optional</span>
           </span>
-          <Input className={FIELD} id="wl-source" name="source" type="text" />
+          <Input className={FIELD} id="wl-source" name="source" type="text" disabled />
         </div>
 
         <div className="flex flex-col gap-[7px]">
@@ -118,10 +141,11 @@ export function WaitlistForm() {
             id="wl-why"
             name="why"
             placeholder="A sentence is enough."
+            disabled
           />
         </div>
 
-        <Button type="submit" size="lg" block>
+        <Button type="submit" size="lg" block disabled>
           Join the waitlist
         </Button>
       </fieldset>
