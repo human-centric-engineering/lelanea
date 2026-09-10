@@ -49,20 +49,41 @@ source of provenance available, with the collection locale as the fallback.
 ## Joining
 
 `POST /api/v1/app/waitlist` answers **201** on a first join and **200** on a
-repeat, with **the same body either way**. That is deliberate: a different
-message for "already on the list" would let anyone ask the endpoint whether a
-given address had signed up.
+repeat, with **the same body either way**. The fixed body is deliberate: a
+message that differed for "already on the list" would hand anyone a yes/no
+answer straight out of the response.
 
-**A repeat updates rather than conflicting**, and a **blank optional field on a
-repeat leaves the stored answer alone.** The form always renders empty, so a
-returning visitor re-submitting just their email — because they are not sure the
-first one landed — must not silently lose the paragraph they wrote the first
-time. They cannot see the stored value, so they could never know it had gone.
-Only a value actually typed overwrites one; the create path still writes `NULL`
-for a blank, where there is nothing to preserve.
+**The status code does disclose that, and it is worth saying so rather than
+glossing it.** 201-vs-200 tells a caller whether the address was already on the
+list. The disclosure is narrow and self-defeating — the only way to ask is to
+_join_, so probing an address enrols it — and the sub-cap allows five questions
+an hour per IP. The task's contract asks for the split; this is the cost.
 
-`consentedAt` moves on a repeat and `createdAt` does not: when they first asked
-and when they most recently agreed to the notice are different facts.
+**A repeat updates rather than conflicting, and the update is strictly
+additive**: it fills a field that is still empty and never overwrites one that
+is not, never moves `consentedAt`, and never moves `locale`.
+
+That is not squeamishness about lost text. **Nothing on this route proves the
+submitter owns the address** — no confirmation email this phase (A8), no token —
+so `email` is a string a stranger typed. With overwrite allowed, anyone who
+knows someone's address can replace up to 2000 characters of `intent`, which
+Lelañea reads herself and which is meant to seed that person's profile, with
+whatever they like. The victim cannot tell: the form never shows a stored value.
+And `consentedAt` records that _this person_ agreed to the notice above the
+button, so a third party's POST moving it would write a consent that did not
+happen into the one field whose whole job is to be true (Art. 7(1)).
+
+The blank-field half of the same rule covers the honest case: the form always
+renders empty, so a returning visitor re-submitting just their email — because
+they are not sure the first one landed — must not lose what they wrote before.
+The create path still writes `NULL` for a blank, where there is nothing to
+preserve.
+
+**The cost is the correction case.** Someone who wants to _change_ an answer
+cannot do it here. That is the right way round while there is no proof of
+ownership — she reads these by hand — and the honest fix is a signed
+confirmation link, which is the same mechanism the first waitlist email needs
+anyway.
 
 **No email is sent** (A8, owner). The response is the only acknowledgement, and
 the card says so in place.
@@ -82,10 +103,14 @@ join. Handlers never call a section limiter themselves — see
 `website` must be empty. The **client** schema accepts any value and the
 **server** schema rejects a filled one — the same split as
 `lib/validations/contact.ts`, and for the reason a honeypot exists: a client
-that rejected it would tell the bot which field it is. A filled honeypot gets a
-200 and the same sentence as a real join, and writes nothing. So does a
-honeypot that fails _validation_, which would otherwise return a 400 naming the
-field.
+that rejected it would tell the bot which field it is. A filled honeypot gets
+the same sentence as a real join and writes nothing. So does a honeypot that
+fails _validation_, which would otherwise return a 400 naming the field.
+
+Both answer **201**, not 200 — the code a _first_ join gets. A honeypot has to
+answer the way a real submission of the same shape would, or the difference is
+itself the tell: with 200, a bot could find the field by submitting one fresh
+address twice, once with it filled, and watching the codes disagree.
 
 ## The two GDPR duties
 
@@ -143,4 +168,7 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
   and A8 defers that email. Whatever ships that email owes the link.
 - **`userId` is never written.** The column and its FK exist for the
   profile-seeding link, which is later work; nothing sets it today.
+- **An answer cannot be corrected through this route**, only added to — see
+  above. A signed confirmation link would close it, and would also be what an
+  ownership-proving unsubscribe needs.
 - **`source: conversation` is vocabulary, not a shipped path.** See above.

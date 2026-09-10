@@ -35,60 +35,81 @@ export interface JoinWaitlistResult {
 /**
  * Record a join, or update the answers on one that already exists.
  *
- * ## A repeat is an update, not a conflict
+ * ## A repeat is an update, not a conflict — but a strictly ADDITIVE one
  *
  * `email` is unique, so a second submission from the same address could have
  * been a 409. It is not: someone re-submitting is almost always someone who
- * wanted to change or add an answer, or who is not sure the first one landed.
- * Telling them "you are already on the list" in an error register would be
- * accurate and unkind, and it would throw away the better answer they just
- * typed. So the answers are updated and the caller is told it existed.
+ * wanted to add an answer, or who is not sure the first one landed. Telling
+ * them "you are already on the list" in an error register would be accurate and
+ * unkind. So a repeat fills in what is still empty and the caller is told the
+ * entry existed.
  *
- * ## A BLANK optional field on a repeat leaves the stored answer alone
+ * **An update never overwrites a stored answer, and never moves `consentedAt`.**
+ * That is not squeamishness about lost text — it is the only defence this route
+ * has, because **nothing here proves the submitter owns the address.** There is
+ * no confirmation email this phase (A8) and no token, so `email` is simply a
+ * string a stranger typed. Two things follow, and the security review of this
+ * task named both:
  *
- * This is the correction that a smoke run against a real database produced, and
- * it is not obvious from the code that caused it. The first shape wrote every
- * optional field on the update, so a blank one wrote `NULL`.
+ * - **An overwrite is a write primitive aimed at someone else.** `intent` is up
+ *   to 2000 characters that Lelañea reads herself, and that are meant to seed
+ *   that person's profile. With overwrite allowed, anyone who knows a victim's
+ *   address can replace what they said with anything they like — abuse, a fake
+ *   request, a misleading claim — attributed to the victim, in her own reading
+ *   queue. The victim cannot tell: the form never shows a stored value.
+ * - **`consentedAt` is an audit fact, not a heartbeat.** It records that *this
+ *   person* agreed to the notice above the button. A third party's POST is not
+ *   that act, so moving the timestamp would record a consent that did not
+ *   happen — under Art. 7(1) the one field whose entire job is to be true.
+ *   An earlier version of this function refreshed it on every repeat, reasoning
+ *   that a resubmission is a fresh act of consent. It is, when it is the same
+ *   person. Nothing here can tell.
  *
- * The form always renders empty. So someone who joined with their name and a
- * paragraph about what they wanted, then came back and re-submitted just their
- * email — because they were not sure the first one landed, which is the single
- * commonest reason anyone re-submits anything — silently lost both. They could
- * not see what they had said, so they could not know it had gone, and Lelañea
- * reads these herself: the answer is simply not there any more.
+ * The cost is the correction case: someone who wants to CHANGE an answer they
+ * already gave cannot do it through this route. That is the right way round
+ * while there is no proof of ownership — she reads these by hand and can be
+ * written to — and the honest fix is a signed confirmation link, which is the
+ * same mechanism the first waitlist email will need anyway.
  *
- * So a blank leaves the stored value untouched, and only a value actually typed
- * overwrites one. The cost is that this route cannot CLEAR an answer, which is
- * a thing nobody can currently ask for — the form shows no existing value to
- * clear, and erasure removes the whole row.
- *
- * **`consentedAt` is refreshed on the update, `createdAt` is not.** They record
- * different facts: when this person first asked to be told, and when they most
- * recently agreed to the notice printed above the button. A resubmission is a
- * fresh act of consent under the same notice, so the consent timestamp moves;
- * their place in the queue does not.
+ * `createdAt` and `locale` are untouched on an update for the same reason:
+ * they are provenance about the join, and a stranger's browser is not it.
  *
  * ## What an update deliberately does NOT touch
  *
- * `userId` and `source` are left alone. A repeat submission through the public
- * form must not unlink an entry that has been attached to an account, and must
- * not relabel an entry that arrived some other way — `upsert`'s update clause
- * names only the fields the form owns.
+ * `userId` and `source` are left alone as well. A repeat submission through the
+ * public form must not unlink an entry that has been attached to an account, and
+ * must not relabel an entry that arrived some other way — `upsert`'s update
+ * clause names only the fields the form owns and only where they are empty.
  */
 export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitlistResult> {
   const { email, name, heardFrom, intent, locale } = input;
   const now = new Date();
 
-  // Prisma has no "did this upsert insert or update?" flag, so the row is read
-  // first. The race — two submissions of the same address arriving together —
-  // resolves correctly either way: the unique index makes one of them the
-  // insert, `upsert` turns the loser into an update, and the only thing that can
-  // be wrong is the 201-vs-200 on the response. Paying for a transaction to make
-  // a status code exact would be the wrong trade.
+  // The stored answers are read first, because the update below is built from
+  // them: a field that already holds something is not offered to the update at
+  // all. Reading also answers "insert or update?", which Prisma's upsert does
+  // not report.
+  //
+  // The race — two submissions of the same address arriving together — resolves
+  // correctly either way: the unique index makes one of them the insert and
+  // `upsert` turns the loser into an update. The worst outcome is that both see
+  // the row as absent and the second one's answers fill fields the first had
+  // just filled, which is the same shape as two honest people typing at once.
   const existing = await prisma.appWaitlistEntry.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, name: true, heardFrom: true, intent: true },
   });
+
+  /**
+   * Offer a value to the update ONLY when the caller supplied one and the column
+   * is still empty. See the note above: without the second half this is an
+   * unauthenticated overwrite of somebody else's words.
+   */
+  const fillIfEmpty = (
+    field: 'name' | 'heardFrom' | 'intent',
+    value: string | undefined
+  ): Record<string, string> =>
+    value !== undefined && (existing?.[field] ?? null) === null ? { [field]: value } : {};
 
   const entry = await prisma.appWaitlistEntry.upsert({
     where: { email },
@@ -103,15 +124,13 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       consentedAt: now,
     },
     update: {
-      // Spread, not `?? null` — an absent answer is OMITTED from the update, so
-      // Prisma leaves the column alone. See the note above: writing null here
-      // means a returning visitor re-submitting just their email loses what
-      // they told her the first time, with nothing on screen to show it went.
-      ...(name === undefined ? {} : { name }),
-      ...(heardFrom === undefined ? {} : { heardFrom }),
-      ...(intent === undefined ? {} : { intent }),
-      locale,
-      consentedAt: now,
+      ...fillIfEmpty('name', name),
+      ...fillIfEmpty('heardFrom', heardFrom),
+      ...fillIfEmpty('intent', intent),
+      // `locale` and `consentedAt` are absent on purpose, not by oversight —
+      // both are provenance about the join, and an unverified repeat is not
+      // evidence about it. `updatedAt` still moves, which is what records that
+      // something touched the row.
     },
     select: { id: true },
   });

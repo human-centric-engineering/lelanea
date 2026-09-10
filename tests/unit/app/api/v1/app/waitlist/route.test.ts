@@ -132,15 +132,29 @@ describe('POST /api/v1/app/waitlist', () => {
     expect(checkMock).toHaveBeenCalledWith('203.0.113.7');
   });
 
-  it('swallows a filled honeypot: 200, and no row', async () => {
+  it('swallows a filled honeypot, and no row', async () => {
     const response = await POST(
       request({ email: 'bot@example.com', website: 'http://spam.example' })
     );
 
-    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ data: { message: ACCEPTED } });
     // The whole value of a honeypot is that the bot cannot tell it was caught.
     expect(joinWaitlistMock).not.toHaveBeenCalled();
+  });
+
+  it('answers a honeypot with the code a FIRST JOIN would have got, not a repeat', async () => {
+    const swallowed = await POST(
+      request({ email: 'bot@example.com', website: 'http://spam.example' })
+    );
+    // The real path for an address never seen before.
+    joinWaitlistMock.mockResolvedValue({ created: true, entryId: 'entry-1' });
+    const genuine = await POST(request({ email: 'someone@example.com' }));
+
+    // 200 here would be the tell: a bot submitting one fresh address with the
+    // field filled and once without would see the codes disagree, and that is
+    // exactly how you find a honeypot field.
+    expect(swallowed.status).toBe(genuine.status);
+    expect(swallowed.status).toBe(201);
   });
 
   it('does not name the honeypot field when it fails validation', async () => {
@@ -149,7 +163,7 @@ describe('POST /api/v1/app/waitlist', () => {
     // exactly which input to leave alone next time.
     const response = await POST(request({ email: 'bot@example.com', website: 12345 }));
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(await response.text()).not.toContain('website');
     expect(joinWaitlistMock).not.toHaveBeenCalled();
   });
