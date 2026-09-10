@@ -185,6 +185,42 @@ describe('/data', () => {
     expect(items.some((item) => item.startsWith('Although some concepts'))).toBe(false);
   });
 
+  it('shows the GDPR rights as a footing to the cards, not as a fourth card', () => {
+    render(<DataPage />);
+
+    // Three cards, not four. The prototype's fourth ("GDPR rights") is a legal
+    // standing rather than a thing you can do, and as a peer it both read as a
+    // fourth feature and orphaned onto its own row at the page's own width.
+    const cardTitles = ['See what is held', 'Delete any part of it', 'Export a full copy'];
+    for (const title of cardTitles) {
+      expect(screen.getByText(title)).toBeTruthy();
+    }
+    expect(screen.queryByText('GDPR rights')).toBeNull();
+
+    // All five rights still reach the reader — the claim is unchanged, only its
+    // presentation. Asserted by name, because "the strip renders" would pass on
+    // a strip that had quietly lost two of them.
+    for (const right of [
+      'Access',
+      'Rectification',
+      'Erasure',
+      'Portability',
+      'Restriction of processing',
+    ]) {
+      expect(screen.getByText(right)).toBeTruthy();
+    }
+  });
+
+  it('separates the rights visually without putting the separator in the text', () => {
+    // The middots are `::after` content, so the list semantics carry the
+    // separation for a screen reader. A middot typed between the items would be
+    // announced — "Access middot Rectification" — and would also break the
+    // by-name assertions above.
+    render(<DataPage />);
+
+    expect(document.body.textContent).not.toContain('·');
+  });
+
   it('links to the full disclosures rather than claiming to be them', () => {
     render(<DataPage />);
 

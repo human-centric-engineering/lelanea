@@ -56,10 +56,35 @@ const DATA_RIGHTS = [
       'A readable file containing everything held about you, available whether or not you have ' +
       'an active subscription.',
   },
-  {
-    title: 'GDPR rights',
-    body: 'Access, rectification, erasure, portability, and restriction of processing are all supported.',
-  },
+] as const;
+
+/**
+ * The five GDPR rights, as a footing to the three cards rather than a fourth.
+ *
+ * The prototype makes this a fourth card and it does not work, for two reasons
+ * that turned out to be the same reason.
+ *
+ * Visually, four cards do not fit: at the page's 1180px the grid takes three
+ * across and the fourth drops to a row of its own, sitting alone at a third of
+ * the width under three that are full. That is a layout that only looks
+ * deliberate at exactly two viewport widths.
+ *
+ * But the fix is not to force four abreast. The first three are things you can
+ * DO — see what is held, delete part of it, export it — each with a sentence
+ * describing the mechanism. "GDPR rights" is not one of those; it is the legal
+ * standing underneath all three, and a list of five nouns. Set as a peer it
+ * reads as a fourth feature, which is both a category error and why its card
+ * was visibly shorter and emptier than the others.
+ *
+ * So it sits below them, under a hairline rule, as the footing it is. The claim
+ * is the prototype's own sentence, unchanged.
+ */
+const GDPR_RIGHTS = [
+  'Access',
+  'Rectification',
+  'Erasure',
+  'Portability',
+  'Restriction of processing',
 ] as const;
 
 /**
@@ -202,6 +227,20 @@ export default function DataPage() {
               {right.body}
             </Card>
           ))}
+        </div>
+
+        {/* A `p`, not a heading: the page's next heading is the `h2` on "what
+            it is, what it is not", and a heading here would be an `h3` under
+            an `h1` with no `h2` between them. `Eyebrow` renders identical type
+            either way. */}
+        <div className={styles.rightsStrip}>
+          <Eyebrow as="p">your rights under gdpr</Eyebrow>
+          <ul className={styles.rightsList}>
+            {GDPR_RIGHTS.map((right) => (
+              <li key={right}>{right}</li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground text-[15px]">All supported.</p>
         </div>
       </section>
 
