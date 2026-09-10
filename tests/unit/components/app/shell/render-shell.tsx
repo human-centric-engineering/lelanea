@@ -38,5 +38,18 @@ export function renderInShell(
   width: WidthName | number = 'large'
 ): RenderResult {
   setViewport(width);
-  return render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+  const result = render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+  return {
+    ...result,
+    /*
+     * Re-wrap on rerender, or the provider is dropped and every consumer throws.
+     *
+     * This is the only way to test a client-side NAVIGATION: the route changes
+     * while the provider instance lives on, which is exactly the case that hid
+     * a real defect — state left over from the route you came from.
+     * Re-rendering into a fresh provider resets that state and proves nothing.
+     */
+    rerender: (next: React.ReactNode) =>
+      result.rerender(<ShellLayoutProvider>{next}</ShellLayoutProvider>),
+  };
 }

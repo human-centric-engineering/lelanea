@@ -54,6 +54,13 @@ export function ConversationPane() {
       // The carousel hides the off-screen pane from assistive technology; above
       // 900px both panes are genuinely on screen together.
       aria-hidden={carousel && pane !== 'chat' ? 'true' : undefined}
+      /*
+       * As on the workspace: `aria-hidden` does not remove focusability. This
+       * pane escapes the bug today only because every control in the composer is
+       * `disabled` — which is an accident of it being a stub, and stops being
+       * true the moment phase 2 makes the composer real.
+       */
+      inert={carousel && pane !== 'chat'}
       data-pane="chat"
       style={wsOpen && !carousel && !overlay ? { flexBasis: `${chatW}px` } : undefined}
       className={cn(
@@ -233,9 +240,18 @@ function Composer() {
  * move handler, so the drag degrades rather than dying.
  */
 function ResizeHandle() {
-  const { chatW, chatSlim, setChatWidth } = useShellLayout();
+  const { chatW, setChatWidth } = useShellLayout();
 
-  const startFrom = () => (chatSlim ? 56 : chatW);
+  /*
+   * `chatW`, with no folded branch.
+   *
+   * There was a `chatSlim ? 56 : chatW`, ported from the prototype, and it was
+   * dead: the handle renders only at `large`, where a folded pane has already
+   * taken its early return and rendered the strip instead. It was also wrong if
+   * it ever became reachable — 56 + 48 is still under `CHAT_FOLD`, so the arrow
+   * keys could never have un-folded the pane they were resizing.
+   */
+  const startFrom = () => chatW;
 
   /*
    * A FOCUSABLE separator is the ARIA window-splitter pattern, not a mislabelled
@@ -252,7 +268,7 @@ function ResizeHandle() {
       aria-label="Resize the conversation"
       aria-valuemin={CHAT_MIN}
       aria-valuemax={CHAT_MAX}
-      aria-valuenow={chatSlim ? CHAT_MIN : chatW}
+      aria-valuenow={chatW}
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       onPointerDown={(event) => {

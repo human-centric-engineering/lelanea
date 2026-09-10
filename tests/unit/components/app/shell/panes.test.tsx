@@ -57,6 +57,29 @@ beforeEach(() => {
   mockPathname.current = '/app/journey';
 });
 
+describe("the route's own output always reaches the screen", () => {
+  it('renders children on /app, where there is no workspace', () => {
+    // THE ONE THAT MATTERED. `Workspace` returns null on `/app`, so rendering
+    // children only inside it dropped the route's output there — and in App
+    // Router `error.tsx` and `loading.tsx` ARE that output. An error thrown on
+    // `/app`, the route every signed-in visitor lands on, painted a blank pane
+    // with no message and no way back but the browser's own button.
+    renderPanes('large', '/app');
+    expect(screen.getByText('the module')).toBeTruthy();
+  });
+
+  it('renders children on a module route, inside the surface', () => {
+    renderPanes('large', '/app/journey');
+    const body = screen.getByText('the module');
+    expect(body.closest('[data-pane="ws"]')).not.toBeNull();
+  });
+
+  it('puts them outside the surface on the clean view, since there is none', () => {
+    renderPanes('large', '/app');
+    expect(screen.getByText('the module').closest('[data-pane="ws"]')).toBeNull();
+  });
+});
+
 describe('the clean view — /app', () => {
   it('is the conversation, filling the frame', () => {
     renderPanes('large', '/app');

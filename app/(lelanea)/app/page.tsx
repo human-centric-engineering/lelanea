@@ -1,3 +1,16 @@
+import type { Metadata } from 'next';
+
+/**
+ * "The conversation", matching the nav.
+ *
+ * A page that renders nothing still names itself: without this the layout's
+ * `%s` template has nothing to fill and `/app` falls back to the bare brand,
+ * while the other seven destinations each carry their own. That inconsistency
+ * arrived by accident when this page stopped rendering — the title never
+ * depended on there being markup.
+ */
+export const metadata: Metadata = { title: 'The conversation' };
+
 /**
  * The shell's clean view — and it renders nothing, on purpose.
  *

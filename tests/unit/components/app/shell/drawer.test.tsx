@@ -42,6 +42,11 @@ const mapButton = () => screen.getByRole('button', { name: /Your map/ });
  * `hidden: true`.
  */
 const panel = (id: 'map' | 'resources') => document.querySelector(`[data-drawer="${id}"]`);
+/** The scrim: the one fixed, inset overlay that is not a drawer panel. */
+const scrimEl = () =>
+  Array.from(document.querySelectorAll('div.fixed.inset-0')).find(
+    (el) => !el.hasAttribute('data-drawer')
+  )!;
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -49,13 +54,27 @@ beforeEach(() => {
 
 describe('opening and closing', () => {
   it('keeps the closed panel out of the tab order, not merely off-screen', async () => {
-    // `hidden` and not just a transform: a panel parked off-canvas that is still
-    // focusable means tabbing walks into a panel nobody can see.
+    // A panel parked off-canvas that is still focusable means tabbing walks into
+    // a panel nobody can see.
     renderDrawers();
-    expect(panel('map')?.hasAttribute('hidden')).toBe(true);
+    expect(panel('map')?.hasAttribute('inert')).toBe(true);
 
     await userEvent.click(mapButton());
-    expect(panel('map')?.hasAttribute('hidden')).toBe(false);
+    expect(panel('map')?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('does it WITHOUT display:none, which would kill the slide', () => {
+    // `hidden` was the first answer and it defeated the whole mechanism: display
+    // and transform change in the same commit, so there is no starting style to
+    // transition from and the panel pops. This component translates off-canvas
+    // precisely to avoid that, so `hidden` undid the thing it was built for.
+    // `visibility` transitions; `display` does not.
+    renderDrawers();
+    const closed = panel('map')!;
+
+    expect(closed.hasAttribute('hidden')).toBe(false);
+    expect(closed.className).toContain('invisible');
+    expect(closed.className).toContain('transition-[transform,visibility]');
   });
 
   it('closes on its own ✕', async () => {
@@ -63,22 +82,29 @@ describe('opening and closing', () => {
     await userEvent.click(mapButton());
     await userEvent.click(screen.getByRole('button', { name: 'Close your map' }));
 
-    expect(panel('map')?.hasAttribute('hidden')).toBe(true);
+    expect(panel('map')?.hasAttribute('inert')).toBe(true);
   });
 
   it('closes on the scrim', async () => {
     renderDrawers();
     await userEvent.click(mapButton());
 
-    const scrim = document.querySelector('.fixed.inset-0.z-40')!;
+    const scrim = scrimEl();
     await userEvent.click(scrim);
-    expect(panel('map')?.hasAttribute('hidden')).toBe(true);
+    expect(panel('map')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('puts the scrim above the nav and the rail, not beneath them', async () => {
+    // Both are `z-50`. A dialog claiming `aria-modal` while the column beside it
+    // stays undimmed and clickable is telling the reader something untrue.
+    renderDrawers();
+    await userEvent.click(mapButton());
+    expect(scrimEl().className).toContain('z-[70]');
   });
 
   it('leaves the scrim inert when nothing is open, so it cannot eat a click', async () => {
     renderDrawers();
-    const scrim = document.querySelector('.fixed.inset-0.z-40')!;
-    expect(scrim.className).toContain('pointer-events-none');
+    expect(scrimEl().className).toContain('pointer-events-none');
   });
 });
 

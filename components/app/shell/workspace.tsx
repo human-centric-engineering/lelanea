@@ -48,6 +48,16 @@ export function Workspace({ children }: { children: React.ReactNode }) {
     <section
       aria-label="Workspace"
       aria-hidden={carouselHidden ? 'true' : undefined}
+      /*
+       * `inert` alongside it, because `aria-hidden` and `pointer-events-none`
+       * between them do NOT remove descendants from the tab order: a keyboard
+       * reader could tab into the off-screen pane — the "Return to the
+       * conversation" link, and anything a view renders — while assistive
+       * technology had been told the subtree does not exist. `inert` is the one
+       * thing that removes focusability, and it makes the `aria-hidden` honest
+       * rather than a claim the DOM contradicts.
+       */
+      inert={carouselHidden}
       data-pane="ws"
       // On a tablet, clicking the surface re-parks the conversation — the
       // prototype's own gesture. Above and below that width the two panes are

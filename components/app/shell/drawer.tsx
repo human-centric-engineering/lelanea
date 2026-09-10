@@ -75,7 +75,10 @@ export function Drawers() {
         aria-hidden="true"
         onClick={closeDrawer}
         className={cn(
-          'fixed inset-0 z-40 bg-[var(--color-scrim)]',
+          // Above the nav and the rail (both `z-50`), not below them. A dialog
+          // claiming `aria-modal` while the column beside it stays undimmed and
+          // clickable is telling the reader something untrue.
+          'fixed inset-0 z-[70] bg-[var(--color-scrim)]',
           'transition-opacity duration-[340ms] ease-[var(--ease-brand)]',
           'motion-reduce:transition-none',
           drawer ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -91,16 +94,29 @@ export function Drawers() {
             role="dialog"
             aria-label={title}
             aria-modal="true"
-            hidden={!open}
+            /*
+             * `inert` and `invisible`, NOT `hidden`.
+             *
+             * `hidden` is `display: none`, so opening changed display and
+             * transform in the same commit: there is no starting style for the
+             * browser to transition from, and the panel popped. That is exactly
+             * the failure this component translates off-canvas to avoid — the
+             * mechanism was built and then undone one attribute later.
+             *
+             * `visibility` does transition, so the closed panel still leaves the
+             * accessibility tree and the tab order (via `inert`) without taking
+             * the slide with it. `ShellNav`'s drawer already does this.
+             */
+            inert={!open}
             tabIndex={-1}
             className={cn(
-              'bg-card fixed top-0 right-0 bottom-0 z-50 flex w-[min(420px,88vw)] flex-col',
+              'bg-card fixed top-0 right-0 bottom-0 z-[75] flex w-[min(420px,88vw)] flex-col',
               'border-l border-[var(--color-border)] shadow-[var(--shadow-lift)]',
-              'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
+              'transition-[transform,visibility] duration-[340ms] ease-[var(--ease-brand)]',
               'motion-reduce:transition-none',
               'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
               'focus-visible:outline-[var(--color-ring)]',
-              open ? 'translate-x-0' : 'translate-x-full'
+              open ? 'visible translate-x-0' : 'invisible translate-x-full'
             )}
           >
             <header

@@ -12,11 +12,12 @@
  * @see components/app/shell/use-shell-layout.tsx · conversation-pane.tsx
  */
 
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Panes } from '@/components/app/shell/panes';
+import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { CHAT_MAX, CHAT_MIN } from '@/components/app/shell/use-shell-layout';
 
@@ -26,9 +27,10 @@ const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 
-function renderShell(width: WidthName = 'large') {
+function renderShell(width: WidthName | number = 'large') {
   return renderInShell(
     <>
+      <ShellNav user={{ name: 'Simon H', email: 'simon@example.com' }} />
       <ShellRail />
       <Panes>the module</Panes>
     </>,
@@ -175,5 +177,78 @@ describe('the tablet parks the conversation when a module opens', () => {
     renderShell('medium');
     expect(strip()).toBeNull();
     expect(document.querySelector('[data-pane="chat"]')?.className).not.toContain('absolute');
+  });
+});
+
+describe('leaving a module', () => {
+  /** Same provider instance, route changes — what a client navigation does. */
+  function navigate(to: string, rerender: (ui: React.ReactElement) => void) {
+    mockPathname.current = to;
+    rerender(
+      <>
+        <ShellRail />
+        <Panes>the module</Panes>
+      </>
+    );
+  }
+
+  it('un-folds the conversation, because there is nothing left to fold against', () => {
+    // At medium the workspace parks the conversation. Resetting only `pane` on
+    // the way out left `chatSlim` set — so "Return to the conversation" produced
+    // a screen with no conversation on it: the workspace unmounts, the panel
+    // stops being an overlay, and the pane takes its folded early return. A
+    // 56px strip beside empty space.
+    const { rerender } = renderShell('medium');
+    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
+      '-translate-x-[364px]'
+    );
+
+    navigate('/app', rerender);
+    expect(document.querySelector('[data-pane="chat"]')).not.toBeNull();
+    expect(strip()).toBeNull();
+  });
+
+  it('un-folds a conversation the reader folded themselves, too', async () => {
+    // Not only the automatic park: with no work to give the width to, a fold
+    // means nothing whoever asked for it.
+    const { rerender } = renderShell('large');
+    handle().focus();
+    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+    expect(strip()).not.toBeNull();
+
+    navigate('/app', rerender);
+    expect(strip()).toBeNull();
+  });
+});
+
+describe('the auto-slim fires on crossing, not on every resize', () => {
+  function resizeTo(px: number) {
+    Object.defineProperty(window, 'innerWidth', { value: px, writable: true, configurable: true });
+    fireEvent(window, new Event('resize'));
+  }
+
+  it('does not undo an explicit expand on the next resize event', () => {
+    // `resize` fires continuously while a window is dragged. Re-asserting the
+    // slim on each one meant that between 901 and 1099 an expand was undone by
+    // the very next event, and the toggle appeared not to work at all.
+    // 1050, not 1100: the threshold is `< 1100`, so 1100 itself is outside it.
+    renderShell(1050);
+    const nav = () => document.querySelector('nav[aria-label="Main"]');
+    expect(nav()?.getAttribute('data-slim')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
+
+    resizeTo(1050); // still inside the band — must not re-slim
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
+  });
+
+  it('still slims when the threshold is actually crossed', () => {
+    renderShell('large');
+    const nav = () => document.querySelector('nav[aria-label="Main"]');
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
+
+    resizeTo(1000);
+    expect(nav()?.getAttribute('data-slim')).toBe('true');
   });
 });

@@ -20,7 +20,7 @@ const SWIPE_MIN = 56;
  */
 export function Panes({ children }: { children: React.ReactNode }) {
   const { width, wsOpen, setPane, drawer } = useShellLayout();
-  const start = useRef<{ x: number; y: number } | null>(null);
+  const start = useRef<{ x: number; y: number; id: number } | null>(null);
 
   const carousel = width === 'small' && wsOpen;
 
@@ -39,12 +39,24 @@ export function Panes({ children }: { children: React.ReactNode }) {
         const target = event.target;
         if (!(target instanceof Element)) return;
         if (target.closest('input, textarea, [contenteditable="true"]')) return;
-        start.current = { x: event.clientX, y: event.clientY };
+        start.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+      }}
+      // A gesture that ends anywhere but here — released over the topbar or the
+      // rail, or cancelled by the browser — otherwise leaves the origin set, and
+      // the NEXT `pointerup` to reach this element measures against it. That
+      // included taps whose `pointerdown` these guards had deliberately ignored,
+      // so tapping into the composer could slide the workspace in.
+      onPointerCancel={() => {
+        start.current = null;
+      }}
+      onPointerLeave={() => {
+        start.current = null;
       }}
       onPointerUp={(event) => {
         const from = start.current;
         start.current = null;
-        if (!from) return;
+        // Same pointer, or it is not the gesture we started measuring.
+        if (!from || from.id !== event.pointerId) return;
         const dx = event.clientX - from.x;
         // A mostly-vertical drag is a scroll. Comparing the two axes rather than
         // thresholding x alone is what stops a scrolling thumb changing panes.
@@ -55,7 +67,23 @@ export function Panes({ children }: { children: React.ReactNode }) {
       }}
     >
       <ConversationPane />
-      <Workspace>{children}</Workspace>
+      {/*
+        `children` renders whether or not the workspace is open, and that is not
+        a detail.
+
+        `Workspace` returns null on `/app`, so rendering children only inside it
+        meant the route's own output was DROPPED there — and in App Router
+        `error.tsx` and `loading.tsx` are exactly that output. An error thrown on
+        `/app`, the route every signed-in visitor lands on, painted a blank pane
+        with no message and no "Try again": the back button was the only way out.
+        The layout's comment claimed the opposite, and was true only of `/app/*`.
+
+        On `/app` the page itself renders nothing, so in the ordinary case this
+        adds no element and the conversation still fills the frame. It is the
+        boundary cases — the ones with something to say — that were being
+        swallowed.
+      */}
+      {wsOpen ? <Workspace>{children}</Workspace> : children}
     </div>
   );
 }

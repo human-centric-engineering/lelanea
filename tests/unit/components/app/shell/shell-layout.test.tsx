@@ -108,6 +108,15 @@ beforeEach(() => {
   };
   window.localStorage.clear();
   window.sessionStorage.setItem('lelanea.bloom.seen', '1');
+  // STATE THE WIDTH. happy-dom defaults to 1024, which is below the 1100
+  // auto-slim threshold — so without this the account footer's name and email
+  // are hidden and these cases fail for a reason that has nothing to do with
+  // what they are testing.
+  Object.defineProperty(window, 'innerWidth', {
+    value: 1400,
+    writable: true,
+    configurable: true,
+  });
 });
 
 describe('the shell layout serves the product', () => {
