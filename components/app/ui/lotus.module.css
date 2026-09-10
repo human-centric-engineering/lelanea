@@ -1,0 +1,41 @@
+/* The lotus's idle breath.
+ *
+ * The only part of the mark that is not an inline style, because it is the only
+ * part that is a keyframed animation rather than a transition — and it cannot
+ * live in `app/brand-theme.css`: `@keyframes` is a nested at-rule, and that file
+ * is asserted flat and fully scoped to `[data-surface='consumer']` by
+ * `tests/unit/app/brand-theme.test.ts`. A CSS module keeps the keyframes local
+ * to the component that owns them and out of the global namespace.
+ *
+ * §6.9: a 4s breath, scaling between 1.0 and 1.015. §6.5 bans bounce and
+ * overshoot, which is why this is a two-stop ease-in-out and not a spring.
+ */
+
+.breath {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+}
+
+/* The belt to the component's braces.
+ *
+ * `useReducedMotion()` already withholds this class from a reader who has asked
+ * for less motion, and that is the mechanism the tests exercise. This block
+ * covers the window that hook cannot: between hydration and its first effect,
+ * and any path where the class is applied by something other than the hook. A
+ * breath that never stops is the one animation on the page where a few hundred
+ * milliseconds of it is still worth preventing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .breath {
+    animation: none;
+  }
+}

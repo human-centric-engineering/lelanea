@@ -208,6 +208,21 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'own version of the guard, rather than carry a red suite about a file it ' +
       'no longer shares.',
   },
+  // LELAÑEA — a leaf entry, appended per this file's own fork note. Upstream
+  // removes nothing from this list, so the merge is additive; on a conflict
+  // with an upstream append, keep both — order carries no meaning here.
+  {
+    path: 'tests/unit/components/app/ui/tokens-only.test.ts',
+    reason:
+      'walks `components/app/ui/` off disk and fails on any colour literal, ' +
+      'and separately checks that every `var(--color-…)` those components ' +
+      'name is actually declared in a stylesheet. Both inputs are files, not ' +
+      'modules: the change it exists to catch is a NEW component with a hex ' +
+      'in it, or a token deleted from `app/brand-theme.css` — and neither ' +
+      'reaches this test through any import chain. A branch touching only the ' +
+      'stylesheet would not select it, which is exactly when a token ' +
+      'disappears out from under a component that still references it.',
+  },
 ];
 
 /** Just the paths, for argv building and set arithmetic. */

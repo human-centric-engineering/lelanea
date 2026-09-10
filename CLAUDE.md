@@ -96,6 +96,24 @@
 >
 > ### Syncing Daybreak
 >
+> **Three remotes, and only `origin` accepts a push.** `daybreak` and `sunrise`
+> are read-only upstreams — their push URLs are deliberately set to an invalid
+> string, so a mistyped `git push daybreak` fails loudly instead of trying. The
+> `sunrise` one is for reading, ancestry checks and **ownership checks** (below);
+> it is never a merge source.
+>
+> If a fresh clone is missing them, restore with:
+>
+> ```bash
+> git remote add daybreak git@github.com:human-centric-engineering/daybreak.git
+> git remote add sunrise  git@github.com:human-centric-engineering/sunrise.git
+> git remote set-url --push daybreak DISABLED_read_only_upstream
+> git remote set-url --push sunrise  DISABLED_read_only_upstream
+> git fetch daybreak --tags && git fetch sunrise --tags
+> ```
+>
+> The sync itself:
+>
 > ```bash
 > git fetch daybreak --tags
 > git merge daybreak-v0.3.0        # tags are prefixed `daybreak-v`
@@ -119,6 +137,59 @@
 > sync replays the whole range and re-conflicts everything already resolved by
 > hand. Nothing errors and nothing logs; the bill arrives months later.
 > `Fork Sync Integrity` watches for it on push to `main`.
+>
+> ### Filing an issue: work out which tier OWNS the file first
+>
+> **An issue goes to the repo that can actually change the file — not the repo
+> you are standing in, and not the nearest tier up.** A Sunrise-owned file
+> reported on Daybreak is a ticket Daybreak cannot action: fixing it would mean
+> editing a file Daybreak does not own, which is the same rule that binds us. It
+> sits open, the real owner never sees it, and the defect ships to every fork.
+>
+> All three tiers now have remote-tracking refs, so ownership is a lookup rather
+> than a guess. Compare the blob at one path across all three — **brace the
+> variable; a bare `$r:path` is a zsh modifier, not a path, and silently
+> resolves to nothing:**
+>
+> ```bash
+> git fetch daybreak sunrise --quiet
+> F=hooks/use-theme.tsx
+> for r in sunrise/main daybreak/main HEAD; do
+>   printf '%-16s %s\n' "$r" \
+>     "$(git rev-parse --verify --short "${r}:$F" 2>/dev/null || echo '(absent)')"
+> done
+> ```
+>
+> | What you see                                                     | Owner                                      | File it on            |
+> | ---------------------------------------------------------------- | ------------------------------------------ | --------------------- |
+> | Sunrise and Daybreak blobs **match**                             | Sunrise                                    | `sunrise`             |
+> | Blobs differ, but the defect is in **Sunrise's copy too**        | Sunrise — note the divergence in the issue | `sunrise`             |
+> | Blobs differ and the defect is **only** in Daybreak's divergence | Daybreak                                   | `daybreak`            |
+> | Absent from Sunrise, present in Daybreak                         | Daybreak                                   | `daybreak`            |
+> | Absent from both                                                 | ours                                       | nothing — fix it here |
+>
+> A third blob for `HEAD` that differs from both usually means we already carry a
+> fix; check `.context/app/divergences.md` before writing the issue, and say so
+> in it.
+>
+> **Downstream divergence does not transfer ownership.** _"Daybreak carries its
+> own copy of this file, so I'll file it there"_ is the trap. If the defect is in
+> Sunrise's copy as well, the fix has to land in Sunrise or every other fork
+> keeps it — and Daybreak's next sync re-conflicts with whatever it patched
+> locally.
+>
+> **Search the target repo before filing.** These are found by whoever merges
+> next, so the same defect is often already open a tier up. If it is, add your
+> evidence as a comment there rather than filing a duplicate.
+>
+> Sunrise labels this class `upstream-gap` ("Gap surfaced building a fork").
+> When re-routing, cross-reference both ways: link the new issue from the old,
+> and name the original in the new one.
+>
+> Worked example, both mis-filed on Daybreak and re-routed: `daybreak#236` →
+> `sunrise#756` (blobs identical, so Daybreak could not have fixed it), and
+> `daybreak#237` → already open as `sunrise#702` (Daybreak had diverged, but the
+> defect was in Sunrise's copy too).
 >
 > ### Two tests that are adjusted here on purpose
 >
