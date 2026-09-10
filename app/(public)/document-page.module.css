@@ -13,9 +13,10 @@
  * ship the flower's radial gradient to five pages that never render it.
  *
  * Tailwind carries anything that is one property on one element. What lands
- * here is the reflows, the pseudo-elements and the multi-element relationships
- * that a utility cannot express. Colours are tokens from `app/brand-theme.css`;
- * there are no literals.
+ * here is the reflows and the multi-element relationships a utility cannot
+ * express — chiefly the measure, which has to reach paragraphs this page never
+ * touches because `AuthoredBlocks` emits the whole block list at once. Colours
+ * are tokens from `app/brand-theme.css`; there are no literals.
  *
  * @see .context/app/planning/design/lelanea.html — `#pg-lelanea`, `#pg-mission`, `#pg-data`
  */
@@ -40,24 +41,29 @@
 }
 
 /*
- * The prototype's two column shapes. `.split` is even; `.splitNarrow` gives the
- * running text the wider half. Both collapse at the design's own 1180px, which
- * is also where the page runs out of gutter.
+ * The prototype's even two-column shape, for a section whose heading sits
+ * beside its prose. It collapses at the design's own 1180px, which is also
+ * where the page runs out of gutter.
+ *
+ * The prototype's second shape, `.split-narrow` (1.05fr / 0.95fr), is
+ * deliberately absent: the pages that used it now render a document into a
+ * single measured column, so it would be a rule nothing selects.
  */
-.split,
-.splitNarrow {
+.split {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(28px, 4.5vw, 64px);
   align-items: start;
 }
 
-.split {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.splitNarrow {
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-}
+/*
+ * NOTE FOR ANYTHING ADDED HERE: `:global` is load-bearing wherever a `brand-*`
+ * class appears in a selector. Those are global classes from
+ * `app/brand-theme.css`; written bare, CSS modules hash them to a local name
+ * that nothing renders — the rule compiles, the class exists, and the type
+ * silently falls back to body size. `home.module.css` documents the same trap
+ * at `.band`, where it actually bit.
+ */
 
 /*
  * Running text stops at 62ch. Not a Tailwind `max-w-*`: the value applies to
@@ -78,55 +84,6 @@
 .lede :global(p:first-child) {
   font-size: 18px;
   line-height: 1.72;
-}
-
-/*
- * `:global` is load-bearing wherever a `brand-*` class appears in a selector.
- * Those are global classes from `app/brand-theme.css`; written bare, CSS
- * modules hash them to a local name that nothing renders — the rule compiles,
- * the class exists, and the quote silently falls back to body size. The same
- * trap `home.module.css` documents at `.band`.
- */
-.band {
-  padding: 44px 0;
-  border-top: 1px solid var(--color-divider);
-  border-bottom: 1px solid var(--color-divider);
-  text-align: center;
-}
-
-.band :global(.brand-quote) {
-  max-width: 46ch;
-  margin: 0 auto;
-  font-size: clamp(26px, 3vw, 34px);
-}
-
-/* An inset quote in the flow of a column, marked by a rule rather than a box. */
-.pull {
-  margin-top: 26px;
-  padding-left: 20px;
-  border-left: 2px solid var(--color-accent-ink);
-}
-
-.pull :global(.brand-quote) {
-  font-size: 24px;
-}
-
-.aside :global(.brand-quote) {
-  font-size: 26px;
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
-  margin-top: 26px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 22px;
 }
 
 /*
@@ -180,14 +137,7 @@
 }
 
 @media (max-width: 1180px) {
-  .split,
-  .splitNarrow {
+  .split {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 880px) {
-  .band :global(.brand-quote) {
-    max-width: none;
   }
 }
