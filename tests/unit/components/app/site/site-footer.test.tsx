@@ -110,6 +110,47 @@ describe('SiteFooter', () => {
     expect(screen.getByText(/contact your local emergency services/)).toBeTruthy();
   });
 
+  describe('the lib/app/footer.ts seam', () => {
+    // The copyright half was written out inline at first, which took this
+    // footer OUT of the seam while `ProtectedFooter` stayed in it. Setting
+    // `footerCopyright = false` — its documented white-label use — would then
+    // have dropped the line from the authenticated footer and left it standing
+    // on the marketing one. That is the split `lib/footer/copyright.ts` says
+    // #561 existed to close, and the protected footer's own suite covers only
+    // its own side, so nothing would have failed.
+    it('renders no legal line at all when the seam says false', async () => {
+      vi.resetModules();
+      vi.doMock('@/lib/app/footer', () => ({ footerCopyright: false }));
+      const { SiteFooter } = await import('@/components/app/site/site-footer');
+      render(<SiteFooter />);
+
+      // Population first — the rest of the footer is there.
+      expect(screen.getByRole('button', { name: 'Cookie Preferences' })).toBeTruthy();
+      expect(screen.queryByText(/©/)).toBeNull();
+      // And no orphaned trademark with nothing after it.
+      expect(screen.queryByText(/™/)).toBeNull();
+
+      vi.doMock('@/lib/app/footer', () => ({ footerCopyright: null }));
+      vi.resetModules();
+    });
+
+    it('renders a fork’s own string verbatim, after the trademark', async () => {
+      vi.resetModules();
+      vi.doMock('@/lib/app/footer', () => ({
+        footerCopyright: 'An All Too Human production',
+      }));
+      const { SiteFooter } = await import('@/components/app/site/site-footer');
+      render(<SiteFooter />);
+
+      const legal = screen.getByText(/An All Too Human production/);
+      expect(legal.textContent).toContain('™ · An All Too Human production');
+      expect(legal.textContent).not.toContain('©');
+
+      vi.doMock('@/lib/app/footer', () => ({ footerCopyright: null }));
+      vi.resetModules();
+    });
+  });
+
   it('prints the trademark and the copyright year on the legal line', async () => {
     await renderWithLinks([]);
 

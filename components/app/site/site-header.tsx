@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { Button } from '@/components/app/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { UserButton } from '@/components/auth/user-button';
+import { useSession } from '@/lib/auth/client';
 import { BRAND } from '@/lib/brand';
 import { SITE_NAV, WAITLIST_ANCHOR } from '@/lib/site/config';
 import styles from '@/components/app/site/site.module.css';
@@ -35,6 +37,26 @@ import styles from '@/components/app/site/site.module.css';
  * The sticky bar would otherwise cover what it scrolled to; `scroll-margin-top`
  * on the form itself is what keeps the heading clear of it.
  *
+ * ## A signed-in visitor keeps their user menu
+ *
+ * `AppHeader` closed with `HeaderActions` — `ThemeToggle` AND `UserButton` —
+ * and the first version of this bar replaced that pair with the toggle plus a
+ * static "Log in" link, because that is what the design shows. The design has
+ * no auth state to show, so it could not have raised the question.
+ *
+ * The consequence was concrete: a signed-in member clicking the wordmark from
+ * `/dashboard` landed here and was told to log in, with no avatar, no way to
+ * sign out, and no route back into the app from ANY public page. `UserButton`'s
+ * own sign-out handler redirects to `/`, so it deposited every user on exactly
+ * the page that had lost the menu.
+ *
+ * So the design's plain "Log in" link is kept for the visitor the page is
+ * written for — a stranger, who should not meet an avatar icon — and
+ * `UserButton` renders in its place once there is a session. `isPending` shows
+ * the link rather than a skeleton: it is a link, not an action, so the
+ * worst case is a moment of offering the way in to someone already in, and
+ * this is the marketing surface where signed-out is overwhelmingly the norm.
+ *
  * ## The wordmark comes from the brand seam
  *
  * Both the visible text and the link's accessible name read `BRAND.name`, for
@@ -46,6 +68,7 @@ import styles from '@/components/app/site/site.module.css';
  */
 export function SiteHeader() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <header className={styles.nav}>
@@ -58,20 +81,33 @@ export function SiteHeader() {
 
       <span className={styles.spacer} />
 
-      {SITE_NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={styles.navlink}
-          aria-current={pathname === item.href ? 'page' : undefined}
-        >
-          {item.label}
-        </Link>
-      ))}
+      {/* A real landmark. `PublicNav` wrapped these in a `<nav>`; the first
+          version of this bar put the links straight into the `<header>`, which
+          left the site with a footer navigation landmark and no primary one —
+          a screen-reader user browsing by landmark could reach the footer nav
+          and not this. Labelled, because there are two navs on the page. */}
+      <nav className={styles.navlinks} aria-label="Main">
+        {SITE_NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={styles.navlink}
+            aria-current={pathname === item.href ? 'page' : undefined}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
-      <Link href="/login" className={styles.navLogin}>
-        Log in
-      </Link>
+      {session ? (
+        <span className={styles.userSlot}>
+          <UserButton />
+        </span>
+      ) : (
+        <Link href="/login" className={styles.navLogin}>
+          Log in
+        </Link>
+      )}
 
       <span className={styles.themeSlot}>
         <ThemeToggle />

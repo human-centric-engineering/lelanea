@@ -61,6 +61,36 @@ describe('app/opengraph-image', () => {
       expect(OG_COLORS[key as keyof typeof OG_COLORS].toLowerCase()).toBe(lightToken(token));
     });
 
+    it('keeps the card’s lotus on the same palette as the site’s', () => {
+      // `public/lotus-mark.svg` is a FIFTH copy of the bloom — the reason
+      // `components/app/ui/lotus-geometry.ts` exists is that "four copies of a
+      // bezier is four chances to drift". This one has to be a static file
+      // (Satori takes an image source, not a React tree), so the geometry
+      // duplication is accepted; the COLOURS are not. `tokens-only.test.ts`
+      // scans `components/app/ui/` and never sees this file, so retinting the
+      // bloom in `brand-theme.css` would change the site's lotus and leave the
+      // social card on the old palette with nothing failing.
+      const svg = readFileSync(
+        path.join(process.cwd(), 'public', 'lotus-mark.svg'),
+        'utf8'
+      ).toLowerCase();
+
+      const lotusTokens = [
+        ...stylesheet.matchAll(/--(color-lotus-[a-z-]+):\s*(#[0-9a-fA-F]{3,8})/g),
+      ];
+      // Light mode is declared first, so the first occurrence of each token is
+      // the light value — dedupe keeping the first.
+      const light = new Map<string, string>();
+      for (const [, name, value] of lotusTokens) {
+        if (!light.has(name)) light.set(name, value.toLowerCase());
+      }
+
+      expect(light.size).toBeGreaterThan(5);
+      for (const [name, value] of light) {
+        expect(svg, `${name} (${value}) is not in public/lotus-mark.svg`).toContain(value);
+      }
+    });
+
     it('reads real values from the stylesheet, so the comparison is not vacuous', () => {
       // If `lightToken` silently returned '' the cases above would compare two
       // empty strings and pass.

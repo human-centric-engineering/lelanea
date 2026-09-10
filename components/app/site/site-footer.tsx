@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useConsent } from '@/lib/consent';
 import { BRAND } from '@/lib/brand';
+import { resolveFooterCopyright } from '@/lib/footer/copyright';
 import { SITE_DOMAIN, SITE_LINKS, SITE_NAV } from '@/lib/site/config';
 import styles from '@/components/app/site/site.module.css';
 
@@ -43,11 +44,27 @@ import styles from '@/components/app/site/site.module.css';
  * puts the trademark on the same line. Its wiring is pinned in
  * `site-footer-brand.test.tsx` instead, with the same hoisted-mock technique.
  *
+ * ## The copyright half goes through `resolveFooterCopyright`, not around it
+ *
+ * It was written out inline at first, which quietly took this footer out of the
+ * `lib/app/footer.ts` seam. `ProtectedFooter` honours that seam, so setting
+ * `footerCopyright = false` — its documented white-label use — would have
+ * dropped the line from the authenticated footer and left it standing on the
+ * marketing one. That is the same split `lib/footer/copyright.ts` says #561
+ * existed to close, and no test would have caught it: the protected footer's
+ * suite covers only its own side.
+ *
+ * The trademark is ours and sits outside the seam, since the seam governs an
+ * attribution line rather than a mark. When the seam yields nothing, the whole
+ * paragraph goes — a bare `Lelañea™` with no year and no entity is not a line
+ * anybody chose.
+ *
  * @see .context/app/planning/design/lelanea.html — `footer.site-foot`
  */
 export function SiteFooter() {
   const { openPreferences } = useConsent();
   const year = new Date().getFullYear();
+  const copyright = resolveFooterCopyright(year, BRAND.legalName);
 
   // D3: nothing rather than a dead link. A destination with no URL yet is not
   // rendered at all — not disabled, not `#`.
@@ -96,12 +113,14 @@ export function SiteFooter() {
         crisis service in your area without delay.
       </p>
 
-      {/* Both halves come from the brand seam: the trademark is the PRODUCT,
+      {/* Both names come from the brand seam: the trademark is the PRODUCT,
           the copyright is the LEGAL ENTITY, and they differ here. Hardcoding
           either would be a second place to change the name from. */}
-      <p className={styles.footLegal}>
-        {BRAND.name}™ · © {year} {BRAND.legalName}
-      </p>
+      {copyright && (
+        <p className={styles.footLegal}>
+          {BRAND.name}™ · {copyright}
+        </p>
+      )}
     </footer>
   );
 }

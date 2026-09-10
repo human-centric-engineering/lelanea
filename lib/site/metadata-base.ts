@@ -3,21 +3,23 @@
  *
  * ## Why this is a function and not one expression in the root layout
  *
- * It was an expression, inline in `app/layout.tsx`'s `metadata` object. Two
- * things went wrong with that shape, and both are the kind that only surface in
- * production:
- *
- * 1. **It ran at module scope in the ROOT layout**, so a bad value throws while
- *    the layout is still evaluating — every page down, with a stack trace that
- *    names neither the variable nor the Dockerfile.
- * 2. **It could not be tested.** The only assertion available was that the
- *    already-evaluated `metadata.metadataBase` was a `URL`, which says nothing
- *    about which inputs produce which output. The empty-string case below was
- *    written as `new URL('' || fallback)` — a test of JavaScript's `||`, not of
- *    this app, and TypeScript rightly flagged it as always-falsy.
+ * It was an expression, inline in `app/layout.tsx`'s `metadata` object, and it
+ * **could not be tested**. The only assertion available was that the
+ * already-evaluated `metadata.metadataBase` was a `URL`, which says nothing
+ * about which inputs produce which output — the empty-string case was written
+ * as `new URL('' || fallback)`, a test of JavaScript's `||` rather than of this
+ * app, and TypeScript rightly flagged it as always-falsy. That is what exposed
+ * the real bug.
  *
  * Extracted, the resolution is ordinary code with ordinary tests, and the
  * layout keeps a one-line call.
+ *
+ * **This does NOT move the evaluation off root-layout module scope**, and an
+ * earlier draft of this comment claimed it did. `app/layout.tsx` still calls
+ * this while the layout is evaluating, and the unparseable branch below still
+ * throws there, deliberately. What changed is which inputs reach that branch:
+ * the values a build can actually produce — unset, empty, whitespace — now
+ * resolve instead of throwing, and are pinned by tests.
  *
  * ## The empty string is the case that matters
  *

@@ -25,19 +25,42 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+
+// Not mocked suite-wide, and the bar now branches on it. Hoisted so the header
+// is BUILT against the stub rather than re-imported around one.
+vi.mock('@/lib/auth/client', () => ({
+  useSession: vi.fn(),
+  authClient: { signOut: vi.fn() },
+}));
+import { render, screen, within } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 
 import { SiteHeader } from '@/components/app/site/site-header';
 import { WAITLIST_ANCHOR } from '@/lib/site/config';
 import { ThemeProvider } from '@/hooks/use-theme';
 import { BRAND } from '@/lib/brand';
+import { useSession } from '@/lib/auth/client';
 
 const mockUsePathname = vi.mocked(usePathname);
+const mockUseSession = vi.mocked(useSession);
 
 beforeEach(() => {
   mockUsePathname.mockReturnValue('/');
+  signedOut();
 });
+
+/** No session — the stranger the marketing page is written for. */
+function signedOut() {
+  mockUseSession.mockReturnValue({ data: null, isPending: false } as ReturnType<typeof useSession>);
+}
+
+/** A member who has wandered onto a public page. */
+function signedIn() {
+  mockUseSession.mockReturnValue({
+    data: { user: { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com' } },
+    isPending: false,
+  } as unknown as ReturnType<typeof useSession>);
+}
 
 /**
  * The bar embeds the platform's `ThemeToggle`, which throws outside a
@@ -54,6 +77,50 @@ function renderHeader() {
 }
 
 describe('SiteHeader', () => {
+  describe('the way in, and the way back', () => {
+    // The regression this pins: `AppHeader` rendered `UserButton`, and the
+    // first version of this bar replaced it with a static "Log in" link
+    // because that is what the design shows — the design having no auth state
+    // to show. A signed-in member clicking the wordmark from /dashboard was
+    // then told to log in, with no avatar, no sign-out and no route back into
+    // the app from any public page. `UserButton`'s sign-out redirects to `/`,
+    // so it deposited every user on exactly the page that had lost the menu.
+    it('offers a stranger the design’s plain Log in link', () => {
+      signedOut();
+      renderHeader();
+
+      expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
+    });
+
+    it('gives a signed-in visitor their user menu instead', () => {
+      signedIn();
+      renderHeader();
+
+      // `UserButton`'s authenticated trigger is the avatar, whose accessible
+      // name is the user's initials. (That it is only initials is upstream's
+      // choice and not this branch's to change.)
+      expect(screen.getByRole('button', { name: 'AL' })).toBeTruthy();
+      // And does NOT invite someone already signed in to sign in again.
+      expect(screen.queryByRole('link', { name: 'Log in' })).toBeNull();
+    });
+  });
+
+  describe('landmarks', () => {
+    it('puts the page links in a labelled navigation landmark', () => {
+      renderHeader();
+
+      // `PublicNav` provided this; putting the links straight into the
+      // `<header>` left the site with a footer nav landmark and no primary
+      // one, so landmark navigation could reach the footer and not the bar.
+      const nav = screen.getByRole('navigation', { name: 'Main' });
+      expect(nav).toBeTruthy();
+
+      for (const label of ['Lelañea', 'The mission', 'Your data']) {
+        expect(within(nav).getByRole('link', { name: label })).toBeTruthy();
+      }
+    });
+  });
+
   describe('the waitlist CTA', () => {
     it('points at the home route AND the anchor when the visitor is on another page', () => {
       mockUsePathname.mockReturnValue('/mission');
