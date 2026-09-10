@@ -53,9 +53,17 @@ export const appAuthLandingRoute: string | null = '/app';
  *
  * `null` = platform default (`Dashboard`).
  *
- * "Your journey" is the product's own name for the destination — the nav item
- * §04 pins at the top of the shell — so the admin's "Back to …" link and the
- * error pages' escape hatch read in the user's vocabulary rather than the
- * platform's.
+ * The product's name, not a view's.
+ *
+ * This was "Your journey", which §04's plan specified — but the shell's nav
+ * (from the prototype) calls `/app` "The conversation" and gives "Your journey"
+ * to `/app/journey`. So the platform header on `/profile` offered "Your journey"
+ * → the conversation, a click away from a nav item with the same words pointing
+ * somewhere else.
+ *
+ * Every consumer of this label means "the app you came from" rather than any one
+ * view — the admin's "Back to …", the error pages' escape hatch, the
+ * verify-email notice — so the product's name is what belongs here, and it
+ * collides with nothing. Owner ruling, 10 September 2026.
  */
-export const appAuthLandingLabel: string | null = 'Your journey';
+export const appAuthLandingLabel: string | null = 'Lelañea';

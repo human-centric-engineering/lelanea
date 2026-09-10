@@ -71,6 +71,10 @@ describe('ProtectedNav', () => {
   // every entry, and gets the hrefs right. Deleting it would lose that for the
   // sake of a value that moved. Update the three literals when the nav changes.
   //
+  // `/app` is labelled with the PRODUCT name, not "Your journey" — that phrase
+  // is a shell-nav item pointing at `/app/journey`, and using it here too made
+  // one phrase mean two destinations. Owner ruling, 10 September 2026.
+  //
   // The platform-default path is unreachable here once the seam is filled, and
   // the case below (`replaces the default wholesale…`) mocks the seam and still
   // covers the replacement mechanism generically.
@@ -80,7 +84,7 @@ describe('ProtectedNav', () => {
     const { ProtectedNav } = await import('@/components/layouts/protected-nav');
     render(React.createElement(ProtectedNav));
 
-    expect(screen.getByRole('link', { name: /your journey/i })).toHaveAttribute('href', '/app');
+    expect(screen.getByRole('link', { name: /lelañea/i })).toHaveAttribute('href', '/app');
     expect(screen.getByRole('link', { name: /profile/i })).toHaveAttribute('href', '/profile');
     expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/settings');
     // The reason the seam was filled: the header must not offer a way out of

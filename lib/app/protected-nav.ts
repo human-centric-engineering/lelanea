@@ -57,7 +57,11 @@ import type { ProtectedNavItem } from '@/lib/protected-nav/types';
  * `/dashboard` here.
  */
 export const protectedNavItems: ProtectedNavItem[] | null = [
-  { href: '/app', label: 'Your journey', icon: Sparkles },
+  // "Lelañea", not "Your journey" — the same ruling as `auth-landing.ts`'s
+  // label, and for the same reason: this item points at `/app`, while the
+  // shell's own nav gives "Your journey" to `/app/journey`. One phrase, two
+  // destinations, a click apart. Owner ruling, 10 September 2026.
+  { href: '/app', label: 'Lelañea', icon: Sparkles },
   { href: '/profile', label: 'Profile', icon: User },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },

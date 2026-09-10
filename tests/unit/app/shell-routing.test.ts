@@ -55,6 +55,7 @@ vi.mock('@/lib/security/rate-limit-middleware', () => ({
 vi.mock('@/lib/auth/signup-mode', () => ({ isInviteOnly: vi.fn(() => false) }));
 
 import { AUTH_LANDING_LABEL, AUTH_LANDING_ROUTE } from '@/lib/auth-landing/route';
+import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { protectedNavItems } from '@/lib/app/protected-nav';
 import { proxy } from '@/proxy';
 
@@ -139,7 +140,23 @@ describe('every door into the app lands at the shell', () => {
   it('names the destination in the product’s own words', () => {
     // A route without its label is how users end up at `/app` behind a button
     // still reading "Dashboard".
-    expect(AUTH_LANDING_LABEL).toBe('Your journey');
+    expect(AUTH_LANDING_LABEL).toBe('Lelañea');
+  });
+
+  it('does not reuse a label the shell nav already means differently', () => {
+    // "Your journey" is a nav item pointing at `/app/journey`. Using it here too
+    // made one phrase mean two destinations, on pages that sit a click apart.
+    const navLabels = new Set(SHELL_NAV.filter(isNavItem).map((item) => item.label));
+    expect(navLabels).toContain('Your journey');
+    expect(navLabels.has(AUTH_LANDING_LABEL)).toBe(false);
+
+    // The platform header names `/app` too, and it had the same collision —
+    // found only by sweeping for the phrase after fixing the landing label.
+    // Both places that name `/app` must agree with each other and differ from
+    // every shell-nav item.
+    const headerLabel = protectedNavItems?.find((item) => item.href === '/app')?.label;
+    expect(headerLabel).toBe(AUTH_LANDING_LABEL);
+    expect(navLabels.has(headerLabel ?? '')).toBe(false);
   });
 
   it.each(['/login', '/signup', '/reset-password'])(

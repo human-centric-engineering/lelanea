@@ -201,7 +201,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin',
       ]);
       expect(protectedNavItems?.map((item) => item.label)).toEqual([
-        'Your journey',
+        'Lelañea',
         'Profile',
         'Settings',
         'Admin',
@@ -223,7 +223,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     risk: 'a stray value would send every install somewhere else after login',
     assert: () => {
       expect(appAuthLandingRoute).toBe('/app');
-      expect(appAuthLandingLabel).toBe('Your journey');
+      expect(appAuthLandingLabel).toBe('Lelañea');
+      // The label names the PRODUCT, not a view. "Your journey" is a nav item
+      // pointing at `/app/journey`, so using it here made one phrase mean two
+      // destinations. Owner ruling, 10 September 2026.
+      expect(appAuthLandingLabel).not.toBe('Your journey');
     },
   },
   {
