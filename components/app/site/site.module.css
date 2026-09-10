@@ -247,6 +247,36 @@
   margin-top: 26px;
 }
 
+/*
+ * The crisis link, and it needs its own rule for a reason worth stating.
+ *
+ * Nothing in this codebase styles a bare `<a>` — not `globals.css`, not
+ * `brand-theme.css` — and Tailwind's preflight sets `color: inherit;
+ * text-decoration: inherit`. So a link dropped into this paragraph inherits the
+ * muted grey of the sentence around it and renders as ordinary text: no colour
+ * difference, no underline, no hover. `.footLinks a` above does not reach it,
+ * being scoped to the link row.
+ *
+ * t-6 shipped exactly that for one round. It replaced the note's inline crisis
+ * instruction with a pointer to the full guidance, and the pointer was
+ * invisible — a reader at immediate risk saw a plain sentence and no way to know
+ * anything was there. `/code-review` caught it.
+ *
+ * Underlined rather than coloured alone, because colour alone would fail WCAG
+ * 1.4.1 the same way; the ink is lifted to `--color-foreground` so it also
+ * reads as the emphasised clause it is.
+ */
+.footNote a {
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 200ms var(--ease-brand);
+}
+
+.footNote a:hover {
+  color: var(--color-accent-ink);
+}
+
 .footLegal {
   font-variant-numeric: tabular-nums;
   font-size: 12px;

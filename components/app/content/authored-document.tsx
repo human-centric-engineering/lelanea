@@ -43,6 +43,17 @@ import { cn } from '@/lib/utils';
  */
 const HEADING_TAGS = ['h2', 'h3', 'h4', 'h5', 'h6'] as const;
 
+/**
+ * Where in the page's outline a document's own headings start.
+ *
+ * A page rendering ONE document lets its title be the `h1` and leaves this at
+ * 2. A page hosting several — `/lelanea` carries the philosophy, the creator
+ * and the lineage — gives each document an `h2` of its own and passes 3, so the
+ * outline nests instead of emitting three sibling `h2` runs that read as one
+ * flat document.
+ */
+export type HeadingLevel = 2 | 3 | 4 | 5 | 6;
+
 /** The four registers of §6.3 are classes, not Tailwind tokens — see app/brand-theme.css. */
 const HEADING_TYPE = 'brand-display text-[var(--color-heading)]';
 
@@ -50,8 +61,15 @@ const HEADING_TYPE = 'brand-display text-[var(--color-heading)]';
  * Category eyebrow copy. Lowercase because §6.10 allows it and the prototype
  * sets every eyebrow that way; the `.brand-eyebrow` class supplies the tracking
  * and deliberately does not force casing.
+ *
+ * Exported because the designed pages label their opening section the same way
+ * and must not disagree with the document header on what a category is called.
+ * The prototype's own eyebrows — "the heart behind lelañea", "the mission" —
+ * could not be kept: each document is titled after the section it fills, so the
+ * prototype's label and the authored title say the same words twice in two
+ * sizes. The category is the one label that adds something.
  */
-const CATEGORY_LABEL: Record<FoundationalDocumentDetail['category'], string> = {
+export const CATEGORY_LABEL: Record<FoundationalDocumentDetail['category'], string> = {
   onboarding: 'welcome',
   about: 'about lelañea',
   legal: 'important disclosures',
@@ -227,13 +245,22 @@ function groupByEmphasis(tokens: InlineToken[]): { bold: boolean; tokens: Inline
 /**
  * Authored text as React children.
  *
+ * Exported for a page that renders authored strings OUTSIDE a block — `/data`
+ * sets the seven "Lelañea is **not** a…" lines as list rows with an icon
+ * beside each, a shape no block type produces. Reaching for
+ * `text.replaceAll('**', '')` there was the first version and it is the bug
+ * this export exists to prevent: it strips the emphasis the author put on the
+ * word "not", on the page whose entire job is that word, and it leaves an
+ * unresolved placeholder unmarked. Anything rendering an authored string comes
+ * through here.
+ *
  * An unresolved placeholder is marked outside production and plain inside it.
  * The marking is a build-time aid — `[Month Day, Year]` and `[Support Email]`
  * are launch blockers (`.context/app/content.md`), and a highlight is how they
  * stay visible to whoever is looking at the page. In production the words are
  * the words: a reader is shown the copy, not our editorial state.
  */
-function InlineText({ text }: { text: string }): React.ReactNode {
+export function InlineText({ text }: { text: string }): React.ReactNode {
   const marked = env.NODE_ENV !== 'production';
 
   const renderToken = (token: InlineToken, index: number): React.ReactNode =>
@@ -285,19 +312,28 @@ function AuthoredBlock({
   block,
   cadence,
   firstName,
+  baseLevel,
 }: {
   block: FoundationalDocumentDetail['blocks'][number];
   cadence: boolean;
   firstName: string | null | undefined;
+  baseLevel: HeadingLevel;
 }): React.ReactNode {
   switch (block.type) {
     case 'heading': {
-      // Clamped to h2 at the top because the document title is the page's only
-      // h1, and to h6 at the bottom because there is no h7. Neither bound has
-      // an input in the authored files today (every heading is level 2); the
-      // clamp is here so a deeper outline degrades instead of emitting invalid
-      // markup or a second h1.
-      const Heading = HEADING_TAGS[Math.min(6, Math.max(2, block.level)) - 2];
+      // Clamped to `baseLevel` at the top because nothing inside a document may
+      // outrank the heading the page gave it, and to h6 at the bottom because
+      // there is no h7. Neither bound has an input in the authored files today
+      // (every heading is level 2); the clamp is here so a deeper outline
+      // degrades instead of emitting invalid markup or jumping the outline.
+      //
+      // `block.level - 2` is the depth WITHIN the document, since 2 is the
+      // shallowest level the authored files use. Adding `baseLevel` re-roots
+      // that depth wherever the page has placed the document: at the default
+      // of 2 this is the identity, and at 3 a document's own `h2`s become
+      // `h3`s beneath the page's `h2`.
+      const Heading =
+        HEADING_TAGS[Math.min(6, Math.max(baseLevel, baseLevel + block.level - 2)) - 2];
 
       return (
         <Heading className={cn(HEADING_TYPE, 'mt-10 mb-3 text-2xl first:mt-0')}>
@@ -329,6 +365,91 @@ function AuthoredBlock({
   }
 }
 
+/**
+ * The block list itself, with no element of its own.
+ *
+ * A fragment rather than a wrapper, and that is not a detail: `AuthoredDocument`
+ * renders these as direct children of its `<article>`, and an intervening
+ * `<div>` would change the DOM shape of every page and test that already
+ * depends on it. The two public components differ only in what they wrap this
+ * in — nothing, and a `<div>` carrying the page's measure.
+ */
+function BlockList({
+  blocks,
+  cadence,
+  firstName,
+  baseLevel,
+}: {
+  blocks: FoundationalDocumentDetail['blocks'];
+  cadence: boolean;
+  firstName: string | null | undefined;
+  baseLevel: HeadingLevel;
+}): React.ReactNode {
+  return (
+    <>
+      {blocks.map((block, index) => (
+        <AuthoredBlock
+          key={index}
+          block={block}
+          cadence={cadence}
+          firstName={firstName}
+          baseLevel={baseLevel}
+        />
+      ))}
+    </>
+  );
+}
+
+export interface AuthoredBlocksProps {
+  /**
+   * The blocks to render — a whole document's, or one section of it from
+   * `selectSection()`. Blocks rather than a document, because a page section is
+   * a slice and there is no such thing as a partial document.
+   */
+  blocks: FoundationalDocumentDetail['blocks'];
+  /**
+   * `'cadence'` documents keep their line breaks. Pass the document's own
+   * `renderStyle`; it is not a caller's preference (see `AuthoredBlock`).
+   */
+  renderStyle?: string | null;
+  /** The reader's first name for `{{first_name}}` — decision D7. */
+  firstName?: string | null;
+  /** Where the document's own headings sit in the page outline. Default 2. */
+  baseLevel?: HeadingLevel;
+  className?: string;
+}
+
+/**
+ * Authored blocks, with no document header around them.
+ *
+ * The half of `AuthoredDocument` that a designed page wants. `/data` renders
+ * three sections of the disclaimer under the site's own chrome, and `/lelanea`
+ * renders three whole documents as sections of one page — neither can use the
+ * document header, because it carries an `h1` and a page has one of those.
+ *
+ * Every consideration in this file still applies: no HTML parser, `**bold**`
+ * and nothing else, placeholders marked outside production, and the frozen
+ * document only ever read.
+ */
+export function AuthoredBlocks({
+  blocks,
+  renderStyle = null,
+  firstName = null,
+  baseLevel = 2,
+  className,
+}: AuthoredBlocksProps): React.ReactNode {
+  return (
+    <div className={className}>
+      <BlockList
+        blocks={blocks}
+        cadence={renderStyle === 'cadence'}
+        firstName={firstName}
+        baseLevel={baseLevel}
+      />
+    </div>
+  );
+}
+
 export interface AuthoredDocumentProps {
   /** A document from `getFoundationalDocument()` — blocks in authored order. */
   document: FoundationalDocumentDetail;
@@ -351,8 +472,6 @@ export function AuthoredDocument({
   firstName = null,
   className,
 }: AuthoredDocumentProps): React.ReactNode {
-  const cadence = doc.renderStyle === 'cadence';
-
   return (
     <article className={cn('text-foreground', className)}>
       <header className="mb-8">
@@ -363,9 +482,12 @@ export function AuthoredDocument({
         )}
       </header>
 
-      {doc.blocks.map((block, index) => (
-        <AuthoredBlock key={index} block={block} cadence={cadence} firstName={firstName} />
-      ))}
+      <BlockList
+        blocks={doc.blocks}
+        cadence={doc.renderStyle === 'cadence'}
+        firstName={firstName}
+        baseLevel={2}
+      />
     </article>
   );
 }

@@ -36,6 +36,8 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
+import { CRISIS_ANCHOR } from '@/lib/site/config';
+
 const openPreferences = vi.fn();
 
 vi.mock('@/lib/consent', () => ({
@@ -108,6 +110,30 @@ describe('SiteFooter', () => {
 
     expect(screen.getByText(/not a crisis service/)).toBeTruthy();
     expect(screen.getByText(/contact your local emergency services/)).toBeTruthy();
+  });
+
+  it('points the crisis link at the section of /data that carries the guidance', async () => {
+    // t-6 replaced the note's inline crisis instruction — which had silently
+    // lost two of the authored version's three actions — with a link to the
+    // full passage. Two things then have to hold, and neither errors when it
+    // stops holding:
+    //
+    // The fragment must match the section's id. `CRISIS_ANCHOR` is one constant
+    // shared by both ends precisely so it cannot drift, and this asserts the
+    // footer actually uses it: a fragment matching nothing does not fail, it
+    // quietly lands the reader at the top of /data with the guidance several
+    // screens down.
+    //
+    // And it must be a LINK, not a plain sentence. Nothing in this codebase
+    // styles a bare `<a>` and Tailwind preflight inherits colour and
+    // decoration, so the first version of this rendered as ordinary muted text
+    // with no affordance at all — invisible to the one reader it is for.
+    // `.footNote a` in site.module.css is what makes it visible; this case is
+    // what makes it a link in the first place.
+    await renderWithLinks([]);
+
+    const crisis = screen.getByRole('link', { name: /what to do in a crisis/i });
+    expect(crisis.getAttribute('href')).toBe(`/data#${CRISIS_ANCHOR}`);
   });
 
   describe('the lib/app/footer.ts seam', () => {

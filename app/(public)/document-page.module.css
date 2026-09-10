@@ -1,0 +1,264 @@
+/*
+ * The inner public pages — `/lelanea`, `/mission`, `/data`, `/disclaimer`,
+ * `/terms`, `/privacy`.
+ *
+ * One module rather than five, because these pages are one editorial system:
+ * the same measure, the same section rhythm, the same hairline rules between
+ * bands. Five copies of `.section { padding: clamp(56px,7vw,92px) 0 }` is five
+ * places for the rhythm to drift, and the prototype sets these as shared
+ * classes for exactly that reason.
+ *
+ * `home.module.css` stays separate. The home page's hero, bloom glow and tier
+ * rows are its own layout and are used nowhere else; folding them in here would
+ * ship the flower's radial gradient to five pages that never render it.
+ *
+ * Tailwind carries anything that is one property on one element. What lands
+ * here is the reflows and the multi-element relationships a utility cannot
+ * express — chiefly the measure, which has to reach paragraphs this page never
+ * touches because `AuthoredBlocks` emits the whole block list at once. Colours
+ * are tokens from `app/brand-theme.css`; there are no literals.
+ *
+ * @see .context/app/planning/design/lelanea.html — `#pg-lelanea`, `#pg-mission`, `#pg-data`
+ */
+
+.page {
+  margin-inline: auto;
+  max-width: 1180px;
+  padding-inline: clamp(20px, 5vw, 72px);
+}
+
+/* The opening block of a page, before the first rule. */
+.opening {
+  padding-top: clamp(44px, 6vw, 72px);
+}
+
+/*
+ * The last block on a page, where no `.section` follows to supply the gap.
+ *
+ * `/mission` is the whole reason this exists: it is the one page whose entire
+ * body is a single `.opening`, so with only a `padding-top` its final paragraph
+ * sat about 16px above the footer — the `mb-4` on the authored `<p>` and
+ * nothing else. Every other page either ends in a `.section` (which pads top
+ * and bottom) or is a document page that adds its own. The stub this replaced
+ * had `py-[clamp(56px,7vw,92px)]`, so it was a regression rather than an
+ * oversight from the start.
+ */
+.closing {
+  padding-bottom: clamp(56px, 7vw, 92px);
+}
+
+.section {
+  padding: clamp(56px, 7vw, 92px) 0;
+}
+
+.rule {
+  border-top: 1px solid var(--color-divider);
+}
+
+/*
+ * The prototype's even two-column shape, for a section whose heading sits
+ * beside its prose. It collapses at the design's own 1180px, which is also
+ * where the page runs out of gutter.
+ *
+ * The prototype's second shape, `.split-narrow` (1.05fr / 0.95fr), is
+ * deliberately absent: the pages that used it now render a document into a
+ * single measured column, so it would be a rule nothing selects.
+ */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(28px, 4.5vw, 64px);
+  align-items: start;
+}
+
+/*
+ * NOTE FOR ANYTHING ADDED HERE: `:global` is load-bearing wherever a `brand-*`
+ * class appears in a selector. Those are global classes from
+ * `app/brand-theme.css`; written bare, CSS modules hash them to a local name
+ * that nothing renders — the rule compiles, the class exists, and the type
+ * silently falls back to body size. `home.module.css` documents the same trap
+ * at `.band`, where it actually bit.
+ */
+
+/*
+ * Running text stops at 62ch. Not a Tailwind `max-w-*`: the value applies to
+ * the paragraphs INSIDE an authored document, which this page does not render
+ * one at a time — `AuthoredBlocks` emits the whole block list, so the measure
+ * has to reach them through the container.
+ */
+.measure {
+  max-width: 62ch;
+}
+
+.measure p,
+.measure li {
+  max-width: 62ch;
+}
+
+/* The first paragraph of a document, set one step up. */
+.lede :global(p:first-child) {
+  font-size: 18px;
+  line-height: 1.72;
+}
+
+/*
+ * `/data`'s three data-rights cards, in a row that reflows to two and then one.
+ *
+ * `auto-fit` rather than a fixed `repeat(4, 1fr)`: the cards carry two or three
+ * lines of body each, and four columns at 260px minimum is the point where they
+ * stop being readable — below that the track collapses and the grid rewraps on
+ * its own, with no breakpoint to keep in step with `.page`'s max-width.
+ *
+ * This rule was deleted by mistake and the page shipped one round with the
+ * cards stacked full-width, one per row. `styles.cards` resolving to
+ * `undefined` is not an error in CSS modules, in TypeScript or in React — the
+ * `className` is simply absent and the div falls back to block layout — so
+ * nothing failed anywhere. `public-page-styles.test.ts` now asserts that every
+ * class these pages name exists here.
+ */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 26px;
+}
+
+/*
+ * The GDPR footing beneath the three cards — see `GDPR_RIGHTS` in `/data` for
+ * why it is a footing and not a fourth card.
+ *
+ * A hairline above rather than a box around: it belongs to the cards it sits
+ * under, and a second bordered surface directly beneath three bordered surfaces
+ * reads as a fourth one however it is laid out. The rule is the same
+ * `--color-divider` the section rules use.
+ */
+.rightsStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 22px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-divider);
+}
+
+/*
+ * A real `<ul>`, so the five rights are announced as a list of five.
+ *
+ * The separators are `::after` content, and the empty alt text after the slash
+ * is what keeps them silent. Generated content being "CSS rather than DOM text"
+ * is NOT enough on its own — an earlier version of this comment claimed it was,
+ * and it is wrong: NVDA, JAWS and VoiceOver all expose `content` in the
+ * accessibility tree, so a reader would hear "Access middle dot Rectification
+ * middle dot". `content: '·' / ''` gives the generated text an explicit empty
+ * alternative, which is the one thing that removes it from that tree.
+ */
+.rightsList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+
+.rightsList li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.rightsList li:not(:last-child)::after {
+  content: '·' / '';
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * The "it is / it is not" columns. A row is an icon and a line of text, with
+ * the text block starting at one consistent left edge however tall the line
+ * wraps — hence `align-items: start` and a fixed icon column rather than a
+ * float.
+ */
+.listRow {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 9px 0;
+  line-height: 1.6;
+}
+
+.listRow svg {
+  margin-top: 3px;
+}
+
+/*
+ * The portrait and its stand-in share their box on purpose — see
+ * `.portraitPending`. Anything that changes the shape belongs here, not in one
+ * of them.
+ */
+.portrait,
+.portraitPending {
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: 20px;
+}
+
+.portrait {
+  overflow: hidden;
+  background: var(--color-accent);
+}
+
+.portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The prototype's framing: the face sits right of centre and high. */
+  object-position: 58% 26%;
+}
+
+/*
+ * The portrait's stand-in until a photograph arrives — the same call
+ * `SITE_LINKS` makes for a URL that does not exist yet (D3): render something
+ * deliberate, never a broken `<img>`.
+ *
+ * It went through both wrong shapes before this one, which is worth recording
+ * because they are opposite errors.
+ *
+ * With no aspect ratio it sized to its caption and became a thin dashed strip
+ * beside a column of prose — which reads as a broken element, and which would
+ * have made the section jump from a 40px strip to a 4:5 panel the day the
+ * photograph landed. Taking `.portrait`'s ratio fixed that and produced the
+ * other error: a ~675px empty dashed box, correct in structure and worse to
+ * look at, sitting on a live page for however many months.
+ *
+ * So it reserves the full 4:5 — the layout must not move later — and fills it
+ * the way a designed placeholder does: the brand's own mark, on the same tinted
+ * ground the photograph will sit on, with the caption beneath. No dashed
+ * border; a dashed border is the visual language of a missing asset, and this
+ * is not missing so much as not yet taken.
+ */
+.portraitPending {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  padding: 32px;
+  text-align: center;
+  color: var(--color-muted-foreground);
+  background: var(--color-accent);
+}
+
+/* Quiet enough to be a ground rather than an illustration competing with her. */
+.portraitPending svg {
+  opacity: 0.35;
+}
+
+@media (max-width: 1180px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}

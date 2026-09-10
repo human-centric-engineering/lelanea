@@ -1,46 +1,71 @@
 import type { Metadata } from 'next';
 
+import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { requireDocument } from '@/lib/app/content/sections';
+import styles from '@/app/(public)/document-page.module.css';
 
 export const metadata: Metadata = {
   title: 'The mission',
   description: 'Why this exists, who it is for, and what it is trying to change.',
   alternates: { canonical: '/mission' },
-  // REMOVE THIS WITH THE PLACEHOLDER COPY (t-6).
-  //
-  // All three stubs render the same sentence word for word, `robots.ts` allows
-  // everything outside /api and /admin, and the sitemap submits them. Left
-  // indexable, Google's first impression of the site is three near-duplicate
-  // thin pages — and `lastModified` says "changed just now" on every
-  // regeneration, so it keeps re-crawling them. `noindex` costs nothing while
-  // there is nothing to read and comes off with the real copy.
-  robots: { index: false },
 };
 
 /**
- * `/mission` — a deliberate placeholder (B31).
+ * `/mission` — the mission statement, as she wrote it.
  *
- * The authored copy for this page is t-6's, and t-6 replaces this file whole.
- * It exists at t-5 because the site frame this task ships links to it from both
- * the header and the footer, and the design keeps those links: a route that
- * 404s is a worse answer than a page that says the words are coming.
+ * ## The words are the document's; the page supplies only the frame
  *
- * B31's three honest options are omit the affordance, ship a deliberate stub
- * that says what it is, or build the mechanism. The nav links are the design and
- * the copy is another task, so this is the stub — the same call the waitlist
- * card makes on the home page.
+ * The prototype writes its own headline here — "The journey inward should never
+ * be reserved for the privileged." — and splits the copy into a hero, a quote
+ * band and a "the vision" section with sub-headings of its own. Every one of
+ * those sentences is a re-cut of `the_mission`: the headline is the authored
+ * opening with "Coach Lelañea Fulton believes that" trimmed off the front.
+ *
+ * The owner ruled (t-6) that the authored documents win outright where the two
+ * differ. So the prototype contributes the layout, the eyebrow and the rules;
+ * it contributes no prose. Not one sentence on this page is typed into this
+ * file, and `tests/unit/app/public/authored-provenance.test.ts` is what keeps
+ * that true — it reads every file under `app/(public)/` and
+ * `components/app/site/` as text and fails if a six-word run of any authored
+ * paragraph turns up in one.
+ *
+ * That costs the prototype's punchier `h1`, and the trade is deliberate: a
+ * headline retyped from her prose is a second copy of her words that no longer
+ * tracks the source, which is the whole failure `.context/app/content.md`
+ * exists to prevent. The document's own title carries the page instead.
+ *
+ * ## One column, because the document is one argument
+ *
+ * `the_mission` runs fourteen paragraphs from "the journey inward should never
+ * be reserved for the privileged" to what she hopes it does if it reaches
+ * millions. The prototype's two-column split cuts that argument in half and
+ * asks the reader to restart at the top of the second column. Rendered whole it
+ * reads in the order it was written, which for a mission statement is the point.
+ *
+ * @see .context/app/content.md — the pipeline, and why nothing here is retyped
+ * @see .context/app/planning/design/lelanea.html — `#pg-mission`
  */
 export default function MissionPage() {
+  const mission = requireDocument('the_mission');
+
   return (
-    <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)] py-[clamp(56px,7vw,92px)]">
-      <Eyebrow as="p">the mission</Eyebrow>
-      <h1 className="brand-display mt-[18px] max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
-        The journey inward should never be reserved for the privileged.
-      </h1>
-      <p className="text-muted-foreground mt-6 max-w-[62ch] text-[17px] leading-[1.7]">
-        This page is being written. Its words are hers, and they are set down rather than
-        paraphrased, so it arrives when it is ready rather than as a summary of itself.
-      </p>
+    <div className={styles.page}>
+      <section className={`${styles.opening} ${styles.closing}`}>
+        {/* The category, not the prototype's "the mission" — the document is
+            titled "The Mission", so the prototype's eyebrow would print the
+            same three words directly above it in a smaller face. */}
+        <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
+        <h1 className="brand-display mt-[18px] mb-8 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
+          {mission.title}
+        </h1>
+
+        <AuthoredBlocks
+          blocks={mission.blocks}
+          renderStyle={mission.renderStyle}
+          className={`${styles.measure} ${styles.lede}`}
+        />
+      </section>
     </div>
   );
 }
