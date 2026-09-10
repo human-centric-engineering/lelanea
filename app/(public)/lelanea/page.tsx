@@ -10,6 +10,15 @@ export const metadata: Metadata = {
   title: { absolute: 'Lelañea' },
   description: 'Her philosophy, the lineage she draws on, and the person behind the work.',
   alternates: { canonical: '/lelanea' },
+  // REMOVE THIS WITH THE PLACEHOLDER COPY (t-6).
+  //
+  // All three stubs render the same sentence word for word, `robots.ts` allows
+  // everything outside /api and /admin, and the sitemap submits them. Left
+  // indexable, Google's first impression of the site is three near-duplicate
+  // thin pages — and `lastModified` says "changed just now" on every
+  // regeneration, so it keeps re-crawling them. `noindex` costs nothing while
+  // there is nothing to read and comes off with the real copy.
+  robots: { index: false },
 };
 
 /**

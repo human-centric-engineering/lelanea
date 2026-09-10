@@ -110,7 +110,12 @@ export default function HomePage() {
       </section>
 
       <section className={styles.section}>
-        <Eyebrow as="p">what this is</Eyebrow>
+        {/* An `h2`, not a `p`. `Card` renders its title as a `<div>` — a card
+            title is not necessarily a document heading — so with this as a
+            paragraph the whole section was absent from the outline and the
+            page read h1 → (nothing) → h2, skipping all three cards for anyone
+            navigating by heading. The type is identical either way. */}
+        <Eyebrow as="h2">what this is</Eyebrow>
         <div className={styles.cards}>
           {WHAT_THIS_IS.map((card) => (
             <Card key={card.title} title={card.title}>

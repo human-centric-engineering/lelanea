@@ -175,9 +175,14 @@
     order: 6;
   }
 
+  /* The wrapped second row is tightened, but NOT to zero: at 15px with the
+     vertical padding removed these links were about 20px tall, under WCAG 2.2
+     AA 2.5.8's 24×24 floor — on precisely the viewport where they are tapped
+     with a thumb rather than clicked with a pointer. 4px each side clears it
+     while still reading as a tighter row than the desktop bar's 6px. */
   .nav .navlink {
-    padding-top: 0;
-    padding-bottom: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
 }
 

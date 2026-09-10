@@ -116,7 +116,15 @@ export function WaitlistForm() {
         <div className="flex flex-col gap-[7px]">
           <span className={LABEL_ROW}>
             <label htmlFor="wl-source">Where did you hear about this?</label>
-            <FieldHelp title="Where did you hear about this?" ariaLabel="Why we ask this">
+            {/* Each trigger names ITS OWN field. Both said "Why we ask this",
+                which gives a screen-reader user two identically named buttons
+                on one page and no way to tell which field either belongs to —
+                the distinguishing text is in the popover, announced only after
+                activation. */}
+            <FieldHelp
+              title="Where did you hear about this?"
+              ariaLabel="Why we ask where you heard about this"
+            >
               It tells her which of the places she shows up actually reaches people, while there are
               still few enough of you to read one by one. It is never used to sort you into a
               segment.
@@ -129,7 +137,10 @@ export function WaitlistForm() {
         <div className="flex flex-col gap-[7px]">
           <span className={LABEL_ROW}>
             <label htmlFor="wl-why">What would you want to achieve?</label>
-            <FieldHelp title="What would you want to achieve?" ariaLabel="Why we ask this">
+            <FieldHelp
+              title="What would you want to achieve?"
+              ariaLabel="Why we ask what you would want to achieve"
+            >
               Lelañea reads these herself. It is how she can tell what the app is getting wrong
               before there are enough of you to measure. It is never used to sort you into a
               segment.

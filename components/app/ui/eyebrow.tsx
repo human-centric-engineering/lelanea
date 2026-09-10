@@ -3,8 +3,22 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 export interface EyebrowProps extends React.ComponentPropsWithoutRef<'span'> {
-  /** Render as a different element — `div` above a heading, `span` inline. */
-  as?: 'span' | 'div' | 'p';
+  /**
+   * Render as a different element — `div` above a heading, `span` inline.
+   *
+   * A HEADING LEVEL is allowed and is sometimes the honest choice. Where the
+   * eyebrow IS a section's label and nothing else labels that section, marking
+   * it up as a `<p>` leaves the section out of the document outline entirely:
+   * a screen-reader user navigating by heading skips straight over it. The type
+   * is unchanged either way — the class carries the look — so this costs
+   * nothing visually and is the difference between a section that exists in the
+   * outline and one that does not.
+   *
+   * Do NOT reach for it reflexively: an eyebrow sitting directly above a real
+   * `<h2>` is a label for that heading, not a second one, and promoting it
+   * there would put two headings where the design shows one.
+   */
+  as?: 'span' | 'div' | 'p' | 'h2' | 'h3';
 }
 
 /**
@@ -30,7 +44,11 @@ export const Eyebrow = React.forwardRef<HTMLSpanElement, EyebrowProps>(function 
 ) {
   return (
     <Component
-      ref={ref as React.Ref<HTMLSpanElement & HTMLDivElement & HTMLParagraphElement>}
+      ref={
+        ref as React.Ref<
+          HTMLSpanElement & HTMLDivElement & HTMLParagraphElement & HTMLHeadingElement
+        >
+      }
       className={cn('brand-eyebrow text-muted-foreground', className)}
       {...props}
     >

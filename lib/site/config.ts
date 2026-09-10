@@ -13,10 +13,13 @@
  *
  * ## Why constants rather than environment variables
  *
- * These are read by the footer and the waitlist card, both of which render on
- * the client. A client-readable env var has to be `NEXT_PUBLIC_*`, and Sunrise
- * #661 removed the last three of those from this codebase for a reason worth
- * not re-learning: `NEXT_PUBLIC_*` is inlined at **build** time and
+ * `SITE_LINKS` and `SITE_NAV` are read by `SiteFooter` and `SiteHeader`, both
+ * client components. (`WaitlistForm`, which reads `LAUNCH_WINDOW`, is a SERVER
+ * component and could have taken a server env var — an earlier version of this
+ * comment had that wrong. The argument still holds, because the footer and
+ * header do not.) A client-readable env var has to be `NEXT_PUBLIC_*`, and
+ * Sunrise #661 removed the last three of those from this codebase for a reason
+ * worth not re-learning: `NEXT_PUBLIC_*` is inlined at **build** time and
  * `.dockerignore` excludes `.env*`, so a container build shipped none of them
  * and put someone else's name in both footers. `lib/app/leaf-brand.ts` carries
  * the full account.

@@ -20,6 +20,12 @@ import { render, screen } from '@testing-library/react';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { LAUNCH_WINDOW, WAITLIST_ANCHOR } from '@/lib/site/config';
 
+/** One name per trigger — the thing the identical pair used to get wrong. */
+const HELP_LABELS = [
+  'Why we ask where you heard about this',
+  'Why we ask what you would want to achieve',
+];
+
 describe('WaitlistForm', () => {
   describe('while the waitlist is not open', () => {
     it('disables every entry control, so nothing can be typed or sent', () => {
@@ -47,7 +53,7 @@ describe('WaitlistForm', () => {
       // the whole period before the form opens. Nothing failed; the ⓘ simply
       // did not respond. Own-attribute `disabled` on the entry controls is what
       // keeps this true, so this case is what stops a tidy-up reinstating it.
-      const help = screen.getAllByRole('button', { name: 'Why we ask this' });
+      const help = HELP_LABELS.map((name) => screen.getByRole('button', { name }));
       expect(help).toHaveLength(2);
       for (const button of help) {
         expect(button).not.toBeDisabled();
@@ -110,7 +116,20 @@ describe('WaitlistForm', () => {
     it('offers the ⓘ explanation on the two fields that ask for something personal', () => {
       render(<WaitlistForm />);
 
-      expect(screen.getAllByRole('button', { name: 'Why we ask this' })).toHaveLength(2);
+      for (const name of HELP_LABELS) {
+        expect(screen.getByRole('button', { name })).toBeTruthy();
+      }
+    });
+
+    it('gives each ⓘ trigger its own accessible name', () => {
+      render(<WaitlistForm />);
+
+      // Both said "Why we ask this", which is two identically named buttons on
+      // one page: a screen-reader user navigating by control cannot tell which
+      // field either belongs to, and the distinguishing text lives in the
+      // popover, announced only after activation.
+      expect(new Set(HELP_LABELS).size).toBe(HELP_LABELS.length);
+      expect(screen.queryAllByRole('button', { name: 'Why we ask this' })).toHaveLength(0);
     });
   });
 

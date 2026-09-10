@@ -97,6 +97,17 @@ describe('the placeholder public pages', () => {
     }
   });
 
+  it.each(PAGES)('%s is withheld from search while it is a placeholder', (_route, _Page, meta) => {
+    // Three pages with identical body copy, submitted in the sitemap and
+    // allowed by robots.txt, are three near-duplicate thin pages standing as
+    // the site's first impression in search — and `lastModified: new Date()`
+    // re-signals them as freshly changed on every regeneration.
+    //
+    // WHEN t-6 LANDS THE REAL COPY this case should FAIL, and the fix is to
+    // delete it along with the `robots` block. It is written to be noticed.
+    expect(meta.robots).toEqual({ index: false });
+  });
+
   it('gives each page a canonical matching its own route', () => {
     // The copy-paste this catches: three files from one template, one of which
     // kept the template's canonical and now tells crawlers it is a duplicate of
