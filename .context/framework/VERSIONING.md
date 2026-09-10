@@ -147,9 +147,12 @@ into a workflow.
    to skip and cost 0.2.0 four defects. A release is unusually good at falsifying
    sentences that were true when written, because it removes and moves things
    other prose cites as evidence. Nothing automated catches this: type-check and
-   lint do not read prose, and `check:changelog-drift` correlates _identifiers_,
-   which here never change — `/api/health` still exists, it just no longer
-   carries what a docblock says it does.
+   lint do not read prose, and `check:changelog-drift` **does not read this file
+   at all** — it is hardcoded to the root `CHANGELOG.md`
+   ([#239](https://github.com/human-centric-engineering/daybreak/issues/239)).
+   Even once it does, it correlates _identifiers_, which here often do not change
+   — `/api/health` still exists, it just no longer carries what a docblock says it
+   does.
 
    Three places, in this order:
 
