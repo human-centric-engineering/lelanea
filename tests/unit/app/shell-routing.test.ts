@@ -16,6 +16,31 @@
  *
  * So: no mock of any `lib/app/*` seam in this file, deliberately.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this file reads three `lib/app/*` seams for real, on purpose
+ * ---------------------------------------------------------------------------
+ * Reading them unmocked is the entire point: the question is what the PLATFORM
+ * does with this fork's values, and a mock answers a different one. But it does
+ * make this file yours to maintain, so if you have forked Lelañea and these are
+ * failing, they are telling you your seams say something else — not that
+ * anything is broken.
+ *
+ * What to pin, per seam:
+ *
+ *   - `protected-routes.ts` — the `/app` cases assume the shell lives at
+ *     `/app`. Moved it? Change the paths here and the row in
+ *     `tests/unit/lib/app/defaults.test.ts`; the two are deliberately
+ *     redundant, one on the value and one on the wiring.
+ *   - `auth-landing.ts` — `AUTH_LANDING_ROUTE` and `AUTH_LANDING_LABEL` are
+ *     asserted as literals. Pin yours; do not delete the cases, or nothing
+ *     checks that the platform still honours the seam at all.
+ *   - `protected-nav.ts` — the assertion is that no nav entry points at a route
+ *     your product does not serve. If you kept `/dashboard`, invert it; if you
+ *     dropped some other route, name that one instead.
+ *
+ * The `/apply` case is different in kind — it characterises an upstream defect
+ * rather than our configuration, and it is annotated in place.
+ *
  * @see lib/app/protected-routes.ts · lib/app/auth-landing.ts · lib/app/protected-nav.ts
  */
 

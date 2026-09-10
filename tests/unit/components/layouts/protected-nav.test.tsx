@@ -59,15 +59,33 @@ afterEach(() => {
 });
 
 describe('ProtectedNav', () => {
-  it('renders the platform default links when no override is set', async () => {
+  // FORK NOTE — PINNED to this fork's seam, not deleted (`HB2`).
+  //
+  // Upstream this case reads `lib/app/protected-nav.ts` unmocked and asserts
+  // the platform default (`/dashboard`, `/profile`, `/settings`). §04 t-9 fills
+  // that seam, so the default is no longer what this repo renders and the case
+  // necessarily fails — working as designed, exactly as `defaults.test.ts` says.
+  //
+  // Pinned rather than removed because what it actually protects is the
+  // component's end of the seam: that `ProtectedNav` reads the list, renders
+  // every entry, and gets the hrefs right. Deleting it would lose that for the
+  // sake of a value that moved. Update the three literals when the nav changes.
+  //
+  // The platform-default path is unreachable here once the seam is filled, and
+  // the case below (`replaces the default wholesale…`) mocks the seam and still
+  // covers the replacement mechanism generically.
+  it("renders this fork's nav from the filled seam", async () => {
     asUser();
     vi.resetModules();
     const { ProtectedNav } = await import('@/components/layouts/protected-nav');
     render(React.createElement(ProtectedNav));
 
-    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard');
+    expect(screen.getByRole('link', { name: /your journey/i })).toHaveAttribute('href', '/app');
     expect(screen.getByRole('link', { name: /profile/i })).toHaveAttribute('href', '/profile');
     expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/settings');
+    // The reason the seam was filled: the header must not offer a way out of
+    // the product from `/profile` and `/settings`.
+    expect(screen.queryByRole('link', { name: /dashboard/i })).toBeNull();
   });
 
   it('hides an adminOnly item from a non-admin and shows it to an admin', async () => {
