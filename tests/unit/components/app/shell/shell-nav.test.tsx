@@ -16,11 +16,13 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
+
+import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 
@@ -30,9 +32,14 @@ vi.mock('next/navigation', () => ({
 
 const USER = { name: 'Maya Reyes', email: 'maya@example.com' };
 
-function renderAt(pathname: string) {
+/**
+ * `large` by default, and stated deliberately: at happy-dom's own 1024px default
+ * the provider auto-slims the nav, so every label and tooltip case below would
+ * be silently asserting against a collapsed menu.
+ */
+function renderAt(pathname: string, width: WidthName = 'large') {
   mockPathname.current = pathname;
-  return render(<ShellNav user={USER} />);
+  return renderInShell(<ShellNav user={USER} />, width);
 }
 
 /** The nav item whose `aria-current` is set, by accessible name. */

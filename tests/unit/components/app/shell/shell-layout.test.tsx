@@ -50,7 +50,8 @@ vi.mock('@/lib/auth/clear-session', () => ({
     throw new Error('redirected');
   }),
 }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/app' }));
+const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -111,6 +112,8 @@ beforeEach(() => {
 
 describe('the shell layout serves the product', () => {
   it('renders the frame and its children when maintenance is off', async () => {
+    // A workspace route, because that is where a route's children go: on `/app`
+    // itself the conversation pane IS the view and the page renders nothing.
     await renderLayout();
     expect(screen.getByText('the panes')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();

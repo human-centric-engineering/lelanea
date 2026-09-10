@@ -1,44 +1,33 @@
 // @vitest-environment happy-dom
 
 /**
- * The shell's landing view, while it is still a placeholder.
+ * The shell's clean view renders nothing, and that is the assertion.
  *
- * `t-10` replaces this with the conversation pane and the workspace. Until
- * then it has one job: be honest about being empty. D6 says the panes are a
- * deliberate stub with one plain line, and the way that goes wrong is a mocked
- * conversation — an invented transcript, a fake turn count — which reads as a
- * working product to anyone looking at a screenshot.
+ * t-9 gave `/app` a placeholder saying the conversation arrives later. t-10
+ * moved that copy into `ConversationPane`, which the layout renders for every
+ * route in the group — so a page that still returned it would put a second copy
+ * *underneath* the pane already saying it, and the two would drift.
+ *
+ * The honest-content rules t-9 put here (no invented number, no mocked-up
+ * conversation) moved with the copy, to `conversation-pane.test.tsx`.
  *
  * @see app/(lelanea)/app/page.tsx
  */
 
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import ShellHomePage from '@/app/(lelanea)/app/page';
 
-describe('the shell landing view', () => {
-  it('says what the space is for', () => {
-    render(<ShellHomePage />);
-    expect(screen.getByText('The conversation')).toBeTruthy();
-  });
-
-  it('says plainly that the conversation is not here yet', () => {
-    render(<ShellHomePage />);
-    expect(screen.getByText(/arrives in a later phase/)).toBeTruthy();
-  });
-
-  it('invents no number', () => {
-    // The same rule t-11 puts on every placeholder view: no fake sessions, no
-    // fake spend, no counts. A digit here is the tell.
+describe('the shell clean view', () => {
+  it('renders nothing, leaving the pane to be the view', () => {
     const { container } = render(<ShellHomePage />);
-    expect(container.textContent ?? '').not.toMatch(/\d/);
+    expect(container.firstChild).toBeNull();
   });
 
-  it('mocks up no conversation', () => {
-    // No transcript, no composer, no send button masquerading as a real one.
-    render(<ShellHomePage />);
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+  it('still exists as a route, because everything lands here', () => {
+    // `auth-landing.ts` sends every signed-in visitor to `/app`, and `wsOpen`
+    // tests against it. Deleting the page to "tidy up" would 404 the landing.
+    expect(typeof ShellHomePage).toBe('function');
   });
 });
