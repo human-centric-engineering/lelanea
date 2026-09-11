@@ -12,7 +12,19 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import * as React from 'react';
+import { describe, expect, it, vi } from 'vitest';
+
+/*
+ * `next/link` renders a plain `<a>` in a test environment, so "is it a Link or
+ * an anchor" is not observable from the DOM without this. Marking the mock is
+ * what makes the export row's opt-out assertable at all — see the test that
+ * uses it, and `RowLink`'s `external` prop for why it matters.
+ */
+vi.mock('next/link', () => ({
+  default: ({ children, ...props }: React.ComponentPropsWithoutRef<'a'>) =>
+    React.createElement('a', { ...props, 'data-next-link': 'true' }, children),
+}));
 
 import { AccountView } from '@/components/app/views/account-view';
 
@@ -51,18 +63,50 @@ describe('where the controls actually live', () => {
     expect(screen.getByRole('link', { name: /Your profile/ }).getAttribute('href')).toBe(
       '/profile'
     );
+  });
+
+  it('lands the password row on the tab that has a password field', () => {
+    // `DEFAULT_SETTINGS_TAB` is `profile`, so a bare `/settings` opens a
+    // name-and-avatar form with no password anywhere on it — a row whose label
+    // and destination disagree, which no assertion about "is a link" can see.
+    renderAccount();
     expect(screen.getByRole('link', { name: /Password and sign-in/ }).getAttribute('href')).toBe(
-      '/settings'
+      '/settings?tab=security'
     );
   });
 
-  it('sends the data rights somewhere that works today', () => {
-    // §06 `f-gateway` t-3 owns these. Until it lands, a row that leads to the
-    // controls that DO work beats a row that leads nowhere.
+  it('points the export row at the only thing that exports', () => {
+    // The settings account tab carries the delete form and account facts and
+    // nothing else; `/data` describes the right without exercising it. The
+    // route is the whole subject-access surface in the tree, so a row pointing
+    // anywhere else is a broken promise on a GDPR Art. 15 control.
     renderAccount();
-    for (const name of [/Export a copy/, /Close your account/]) {
-      expect(screen.getByRole('link', { name }).getAttribute('href')).toBe('/settings?tab=account');
-    }
+    expect(screen.getByRole('link', { name: /Export a copy/ }).getAttribute('href')).toBe(
+      '/api/v1/users/me/export'
+    );
+  });
+
+  it('reaches the export as a plain anchor, so nothing prefetches it', () => {
+    // `<Link>` prefetches. Behind that href is an export that reads ~28 tables
+    // and has its own rate-limit bucket, so a prefetch would run a full export
+    // because the row scrolled into view — and could spend the reader's
+    // allowance before they clicked anything. Asserted against the marked mock
+    // above, with an in-app row alongside it: without the contrast this would
+    // pass just as well if the mock stopped being applied at all.
+    renderAccount();
+    expect(
+      screen.getByRole('link', { name: /Export a copy/ }).getAttribute('data-next-link')
+    ).toBeNull();
+    expect(screen.getByRole('link', { name: /Your profile/ }).getAttribute('data-next-link')).toBe(
+      'true'
+    );
+  });
+
+  it('sends erasure to the form that performs it', () => {
+    renderAccount();
+    expect(screen.getByRole('link', { name: /Close your account/ }).getAttribute('href')).toBe(
+      '/settings?tab=account'
+    );
   });
 
   it('makes every row a link rather than a button that lies', () => {

@@ -24,14 +24,26 @@ export interface AccountViewProps {
 function RowLink({
   href,
   title,
+  external,
   children,
 }: {
   href: string;
   title: string;
+  /**
+   * Render a plain `<a>` rather than a `<Link>`.
+   *
+   * Required for the export row, and not a style preference: `<Link>`
+   * prefetches, and the thing behind that href is a GDPR Art. 15 export that
+   * reads about twenty-eight tables and has its own rate-limit bucket. A
+   * prefetch would run a full export because the row scrolled into view, and
+   * could spend the reader's allowance before they clicked anything.
+   */
+  external?: boolean;
   children: React.ReactNode;
 }) {
+  const Component = external ? 'a' : Link;
   return (
-    <Link
+    <Component
       href={href}
       className={cn(
         'bg-background mb-2 block rounded-[15px] border border-[var(--color-card-border)]',
@@ -50,7 +62,7 @@ function RowLink({
       <span className="text-muted-foreground mt-1 block text-[13px] leading-[1.55]">
         {children}
       </span>
-    </Link>
+    </Component>
   );
 }
 
@@ -90,10 +102,13 @@ function Section({ label, children }: { label: string; children: React.ReactNode
  * second place a password can be changed, and the second one is always the one
  * that misses a security fix.
  *
- * The data-rights rows point at the same platform settings for now. They are
- * §06 `f-gateway` t-3's to own — this view is where they will surface, and
- * until they exist the honest thing is to send someone to the controls that DO
- * work rather than to show them a row that does not.
+ * The data-rights rows point at whatever works TODAY, which turns out to be two
+ * different places: erasure has a form on the settings page, and subject access
+ * has no UI at all — only `GET /api/v1/users/me/export`, which the export row
+ * therefore links to directly. They are §06 `f-gateway` t-3's to own and this
+ * view is where they will surface; until then the honest thing is to send
+ * someone to the control that works rather than to the page where a control
+ * like it happens to live.
  */
 export function AccountView({ name, email, joined }: AccountViewProps) {
   return (
@@ -119,17 +134,37 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
         <RowLink href="/profile" title="Your profile">
           The name and details other parts of Lelañea use.
         </RowLink>
-        <RowLink href="/settings" title="Password and sign-in">
+        {/*
+          `?tab=security` and not a bare `/settings`. `DEFAULT_SETTINGS_TAB` is
+          `profile`, so the bare path lands on a name-and-avatar form with no
+          password field anywhere on it — a row whose label and destination
+          disagree.
+        */}
+        <RowLink href="/settings?tab=security" title="Password and sign-in">
           Change your password, or see how you signed in.
         </RowLink>
       </Section>
 
       <Section label="your data">
-        <RowLink href="/settings?tab=account" title="Export a copy of everything held about you">
-          Readable, whenever you ask. Handled in your account settings for now.
+        {/*
+          Straight at the endpoint, because there is no UI in front of it. The
+          account settings tab carries the delete form and account facts and
+          nothing else — `/data` describes the right but does not exercise it,
+          and the only subject-access surface in the tree is this route. It
+          answers with `Content-Disposition: attachment`, so a plain link
+          downloads the file; pointing this row at the settings page instead
+          would have been a row that led nowhere, on an Art. 15 control.
+        */}
+        <RowLink
+          href="/api/v1/users/me/export"
+          title="Export a copy of everything held about you"
+          external
+        >
+          Downloads everything held about you as a file, whenever you ask. A more readable version
+          of it comes with the rest of your data controls.
         </RowLink>
         <RowLink href="/settings?tab=account" title="Close your account and erase it">
-          Everything derived from your work goes with it. Also in your account settings.
+          Everything derived from your work goes with it. Handled in your account settings.
         </RowLink>
       </Section>
     </>

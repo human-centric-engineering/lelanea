@@ -79,19 +79,58 @@ function Panel({
  * for an icon and not for `aria-pressed`: an attribute cannot be set by CSS.
  *
  * So the pressed state is withheld until mounted rather than rendered wrong.
- * Between the server's paint and hydration neither chip reads as chosen, which
- * is the honest state for a control whose answer is not knowable yet — and it
- * matches D4, where "nothing chosen" really is a state the app can be in.
+ *
+ * ## Why it presses on the STORED choice and not on the resolved theme
+ *
+ * D4 says the system preference is the default and only the toggle persists, so
+ * the app has three states and `useTheme` publishes two: it returns the
+ * RESOLVED theme and deliberately keeps "nothing chosen" out of its shape (see
+ * `.context/app/divergences.md` row 2, which pins that shape as untouched).
+ *
+ * Pressing a chip on the resolved value therefore reports a choice nobody made.
+ * A reader on macOS auto-appearance would open this at midday, see Light marked
+ * as theirs, and find it dark at sunset — with the panel one line above saying
+ * their choice stands. So the view reads the stored value itself, and presses
+ * nothing until there is one.
+ *
+ * The key is written out here rather than imported because the hook keeps it
+ * private and row 2 is explicit that its public shape does not change. What
+ * stops the two drifting is not this comment but a test that clicks, unmounts
+ * and remounts: if the hook ever wrote somewhere this does not read, the chip
+ * comes back unpressed and that test fails.
+ *
+ * What is still missing is the way BACK — nothing here clears the stored value,
+ * so following the device again is a reload-and-clear-storage job. That needs a
+ * writer `useTheme` does not expose, which is a change to a Sunrise file this
+ * repo already diverges on, so it is carried as a deferral rather than taken
+ * here.
  */
+const THEME_STORAGE_KEY = 'theme';
+
+/** The stored EXPLICIT choice, or `null` when the reader has not made one. */
+function readStoredChoice(): 'light' | 'dark' | null {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : null;
+  } catch {
+    // Blocked or private-mode storage reads as "no choice recorded", which is
+    // the same answer the hook gives itself in that case.
+    return null;
+  }
+}
 export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [chosen, setChosen] = useState<'light' | 'dark' | null>(null);
   const leaningsNoteId = useId();
   // One base, indexed per row: a leaning's own words contain spaces, and an
   // `id` with a space is not a valid target for `htmlFor`.
   const leaningId = useId();
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    setChosen(readStoredChoice());
+  }, []);
 
   return (
     <>
@@ -103,15 +142,22 @@ export function SettingsView() {
           {(['light', 'dark'] as const).map((value) => (
             <Chip
               key={value}
-              selected={mounted && theme === value}
-              // Reading `theme` in a HANDLER is safe — it runs after hydration,
-              // when the value is the real one. Only the markup has to wait.
-              onClick={() => setTheme(value)}
+              selected={mounted && chosen === value}
+              onClick={() => {
+                setTheme(value);
+                setChosen(value);
+              }}
             >
               {value === 'light' ? 'Light' : 'Dark'}
             </Chip>
           ))}
         </div>
+        {mounted && chosen === null ? (
+          <p className="text-muted-foreground mt-3 text-[13px] leading-[1.55]">
+            Nothing chosen yet — following your device, which is showing the{' '}
+            {theme === 'dark' ? 'dark' : 'light'} theme just now.
+          </p>
+        ) : null}
       </Panel>
 
       <Panel heading="Her leanings" sub="Eleven dials, none of them absolute.">

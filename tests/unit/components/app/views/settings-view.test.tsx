@@ -14,7 +14,7 @@
 
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsView } from '@/components/app/views/settings-view';
 import { ThemeProvider } from '@/hooks/use-theme';
@@ -47,7 +47,7 @@ describe('the theme choice', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
-  it('shows which one is in force', async () => {
+  it('shows a stored choice as chosen', async () => {
     window.localStorage.setItem('theme', 'dark');
     renderSettings();
     // Not asserted before the click: the pressed state is deliberately withheld
@@ -59,8 +59,86 @@ describe('the theme choice', () => {
     );
   });
 
-  it('moves the pressed state when the other is chosen', async () => {
+  it('presses NEITHER chip when no choice has been made', async () => {
+    // D4's third state. `useTheme` publishes the RESOLVED theme and keeps
+    // "nothing chosen" out of its shape, so pressing on that value would report
+    // a choice nobody made — a reader on macOS auto-appearance would see Light
+    // marked as theirs at midday and find it dark at sunset, one line under
+    // copy saying their choice stands.
     renderSettings();
+    expect(await screen.findByText(/Nothing chosen yet/)).toBeTruthy();
+    for (const name of ['Light', 'Dark']) {
+      expect(screen.getByRole('button', { name }).getAttribute('aria-pressed')).toBe('false');
+    }
+  });
+
+  it('names the theme the device is actually showing', async () => {
+    // Both directions, because the line is only honest if it follows. Asserting
+    // the light case alone would pass against a hardcoded word — which is what
+    // it would be if someone simplified the ternary away.
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('dark'),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList
+    );
+    try {
+      renderSettings();
+      expect(await screen.findByText(/showing the dark theme/)).toBeTruthy();
+    } finally {
+      matchMedia.mockRestore();
+    }
+  });
+
+  it('stops saying nothing is chosen once something is', async () => {
+    renderSettings();
+    await screen.findByText(/Nothing chosen yet/);
+    await userEvent.click(screen.getByRole('button', { name: 'Light' }));
+    expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+  });
+
+  it('survives storage that throws rather than taking the page down', async () => {
+    // A Safari private window throws on read as well as write. The hook already
+    // treats that as "no choice recorded"; if this view let the throw escape it
+    // would take the whole settings route out through the error boundary, on a
+    // browser where the only consequence should be an unremembered preference.
+    // Spied on the INSTANCE, not on `Storage.prototype`. happy-dom defines the
+    // accessor on the object itself, so a prototype spy is never consulted —
+    // and the test passed anyway, because "nothing chosen" is also what an
+    // empty store says. That is the shape this whole file is written against:
+    // an assertion that cannot tell the case it names from the default.
+    const getItem = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    });
+    try {
+      renderSettings();
+      expect(await screen.findByText(/Nothing chosen yet/)).toBeTruthy();
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it('still shows the choice after a reload', async () => {
+    // The real point of this one is the KEY. The view reads storage directly,
+    // because the hook keeps its key private and the divergence row pins its
+    // public shape as untouched — so nothing but this test stops the two
+    // drifting apart. Click, unmount, mount again: if the hook ever wrote
+    // somewhere this does not read, the chip comes back unpressed here.
+    const first = renderSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Dark' }));
+    first.unmount();
+
+    renderSettings();
+    expect(await screen.findByRole('button', { name: 'Dark', pressed: true })).toBeTruthy();
+  });
+
+  it('moves the pressed state when the other is chosen', async () => {
+    window.localStorage.setItem('theme', 'light');
+    renderSettings();
+    await screen.findByRole('button', { name: 'Light', pressed: true });
     await userEvent.click(screen.getByRole('button', { name: 'Dark' }));
     expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Light' }).getAttribute('aria-pressed')).toBe(
