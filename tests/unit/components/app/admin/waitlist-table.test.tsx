@@ -146,6 +146,21 @@ describe('WaitlistTable', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('page=2');
   });
 
+  it('goes back a page, carrying the search with it', async () => {
+    const user = userEvent.setup();
+    render(
+      <WaitlistTable
+        initialEntries={[entry()]}
+        initialMeta={{ page: 2, limit: 25, total: 60, totalPages: 3 }}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Previous/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('page=1');
+  });
+
   it('does not offer a previous page from the first one', () => {
     render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
 
