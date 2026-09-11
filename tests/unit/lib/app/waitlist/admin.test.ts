@@ -144,9 +144,18 @@ describe('listWaitlistEntries', () => {
   it('pages from the top, newest first', async () => {
     await listWaitlistEntries({ page: 3, limit: 25 });
 
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 50, take: 25, orderBy: { createdAt: 'desc' } })
-    );
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 50, take: 25 }));
+  });
+
+  it('breaks ties on a unique column, so OFFSET paging cannot duplicate a row', async () => {
+    await listWaitlistEntries({ page: 1, limit: 25 });
+
+    // `createdAt` is the transaction timestamp, so rows CAN tie — a launch burst,
+    // or any seeded batch — and on a tie Postgres may order the page-1 and page-2
+    // queries differently, showing one entry twice and never showing another.
+    // Asserted as an exact array because the ORDER of the two clauses is the
+    // property: `id` first would sort the list by a cuid.
+    expect(findMany.mock.calls[0]?.[0]?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
   });
 
   it('counts with the same filter it lists with', async () => {
@@ -169,6 +178,14 @@ describe('listWaitlistEntries', () => {
 });
 
 describe('collectWaitlistEntriesForExport', () => {
+  it('breaks ties too, because the cap makes the last row a decision', async () => {
+    await collectWaitlistEntriesForExport({ q: undefined });
+
+    // A tie at row `WAITLIST_EXPORT_MAX_ROWS` decides who is in the file and who
+    // is not, so an unstable sort there is the same defect with a worse symptom.
+    expect(findMany.mock.calls[0]?.[0]?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+  });
+
   it('caps the rows it reads and still reports the real total', async () => {
     findMany.mockResolvedValue([storedRow()]);
     count.mockResolvedValue(9_999);

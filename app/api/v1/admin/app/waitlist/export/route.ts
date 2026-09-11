@@ -31,6 +31,19 @@
  * downloads a minute, and each one is a complete copy of the list leaving the
  * building.
  *
+ * **The key is namespaced to this flow, which the platform's three other export
+ * routes do not do.** They all pass the literal `export:user:${id}`, so they share
+ * one 10/min budget between them; a first version of this route copied that
+ * string and inherited the sharing while this docblock claimed a per-flow cap.
+ * The code review caught the mismatch. Sharing is the wrong half to keep: ten
+ * waitlist exports would then 429 the same admin's own Art. 15 subject-access
+ * export at `/api/v1/users/me/export`, and a burst of conversation exports would
+ * block this one for reasons nobody could see from either screen. It is the same
+ * argument `lib/app/waitlist/rate-limit.ts` makes for not borrowing
+ * `contactLimiter`: two unrelated flows deserve independent budgets. The cost is
+ * one string that does not match the platform's convention, said here so it is a
+ * choice rather than a slip.
+ *
  * ## What is deliberately absent
  *
  * No row and no address reaches the log — the count does. An export of personal
@@ -57,7 +70,7 @@ import {
 import { validateQueryParams } from '@/lib/api/validation';
 
 export const GET = withAdminAuth(async (request, session) => {
-  const rateLimit = exportLimiter.check(`export:user:${session.user.id}`);
+  const rateLimit = exportLimiter.check(`export:waitlist:user:${session.user.id}`);
   if (!rateLimit.success) return createRateLimitResponse(rateLimit);
 
   const log = await getWaitlistRouteLogger(request);

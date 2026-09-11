@@ -167,6 +167,75 @@ describe('WaitlistTable', () => {
     expect(screen.getByRole('button', { name: /Previous/ }).hasAttribute('disabled')).toBe(true);
   });
 
+  it('ignores a stale response that arrives after a newer one', async () => {
+    const user = userEvent.setup();
+    // Two searches in flight, the FIRST one slower — which is the ordinary case,
+    // not the unlucky one: the ILIKE runs over `intent` with no index behind it.
+    let releaseFirst: (() => void) | undefined;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseFirst = () =>
+            resolve(listResponse([entry({ id: 'stale', email: 'stale@x.test' })]));
+        })
+    );
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve(listResponse([entry({ id: 'fresh', email: 'fresh@x.test' })]))
+    );
+
+    render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+    await user.type(screen.getByLabelText('Search the waitlist'), 'ada');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByLabelText('Search the waitlist'), 'm');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('fresh@x.test')).toBeTruthy());
+
+    // Now let the first one land. Without the sequence guard it overwrites the
+    // rows, the meta AND `appliedSearch` — so the table shows the matches for
+    // `ada` while the box reads `adam`, and the export link quietly points at the
+    // wrong filter.
+    releaseFirst?.();
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toContain(
+        'q=adam'
+      )
+    );
+    expect(screen.queryByText('stale@x.test')).toBeNull();
+    expect(screen.getByText('fresh@x.test')).toBeTruthy();
+  });
+
+  it('does not claim nobody has joined when the list failed to load', () => {
+    render(
+      <WaitlistTable
+        initialEntries={[]}
+        initialMeta={{ ...META, total: 0, totalPages: 0 }}
+        initialLoadFailed
+      />
+    );
+
+    // The one false statement this surface can make (`HB9`), and a banner above
+    // the table does not stop the table making it.
+    expect(screen.queryByText('Nobody has joined the waitlist yet.')).toBeNull();
+    expect(screen.getByText(/did not load, so this is not an answer/)).toBeTruthy();
+  });
+
+  it('stops disclaiming once a fetch succeeds, without needing a reload', async () => {
+    const user = userEvent.setup();
+    render(
+      <WaitlistTable
+        initialEntries={[]}
+        initialMeta={{ ...META, total: 0, totalPages: 0 }}
+        initialLoadFailed
+      />
+    );
+
+    await user.type(screen.getByLabelText('Search the waitlist'), 'ada');
+
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeTruthy());
+    expect(screen.queryByText(/did not load, so this is not an answer/)).toBeNull();
+  });
+
   it('says a fetch failed rather than leaving the old rows looking like the answer', async () => {
     const user = userEvent.setup();
     fetchMock.mockRejectedValue(new Error('network'));

@@ -31,9 +31,12 @@ const EMPTY_META: PaginationMeta = {
  * proved nothing about the route.
  *
  * A failed fetch renders the empty table rather than throwing — the same shape
- * the platform's admin pages take. The table says "Nobody has joined the
- * waitlist yet", which is the one wrong thing this page can say, so the
- * distinction is carried by `loadError`: the page says so above the table.
+ * the platform's admin pages take. But an empty table says "Nobody has joined the
+ * waitlist yet", which is the one wrong thing this page can say, and a banner
+ * above it does not stop the table saying it — the first version of this page
+ * computed `loadError`, rendered the banner, and left the contradiction on
+ * screen. So the flag goes to the table as well, which drops the claim entirely
+ * while the load is in doubt (`HB9`).
  */
 async function getFirstPage(): Promise<{
   entries: WaitlistAdminEntry[];
@@ -95,7 +98,7 @@ export default async function WaitlistAdminPage() {
         </p>
       )}
 
-      <WaitlistTable initialEntries={entries} initialMeta={meta} />
+      <WaitlistTable initialEntries={entries} initialMeta={meta} initialLoadFailed={loadError} />
     </div>
   );
 }

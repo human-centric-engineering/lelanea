@@ -120,12 +120,26 @@ export function buildWaitlistSearchWhere(
 }
 
 /**
- * One page of entries, newest first, plus the total the filter matches.
+ * The sort both reads use: newest first, with `id` breaking ties.
  *
- * Newest first and not sortable: the list is read as "who joined recently, and
- * what did they say", and an orderable column would be a knob nobody asked for
- * on a surface whose whole job is to be read top to bottom.
+ * Not sortable by the reader: the list is read as "who joined recently, and what
+ * did they say", and an orderable column would be a knob nobody asked for on a
+ * surface whose whole job is to be read top to bottom.
+ *
+ * **The tiebreaker is what makes OFFSET paging correct.** `createdAt` defaults to
+ * the transaction timestamp, so rows CAN tie — a launch burst, or any seed or
+ * import that writes a batch — and on a tie Postgres may order the page-1 and
+ * page-2 queries differently, which duplicates one entry and drops another. The
+ * export has the same exposure at its `take` boundary, where a tie at the last
+ * row decides who is in the file. `id` is not chronological, and does not need to
+ * be: it only has to be unique and stable.
  */
+const ENTRY_ORDER = [
+  { createdAt: 'desc' },
+  { id: 'desc' },
+] satisfies Prisma.AppWaitlistEntryOrderByWithRelationInput[];
+
+/** One page of entries, newest first, plus the total the filter matches. */
 export async function listWaitlistEntries(query: {
   q?: string;
   page: number;
@@ -136,7 +150,7 @@ export async function listWaitlistEntries(query: {
   const [rows, total] = await Promise.all([
     prisma.appWaitlistEntry.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: ENTRY_ORDER,
       skip: (query.page - 1) * query.limit,
       take: query.limit,
       select: ENTRY_SELECT,
@@ -164,7 +178,7 @@ export async function collectWaitlistEntriesForExport(filter: WaitlistAdminFilte
   const [rows, total] = await Promise.all([
     prisma.appWaitlistEntry.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: ENTRY_ORDER,
       take: WAITLIST_EXPORT_MAX_ROWS,
       select: ENTRY_SELECT,
     }),

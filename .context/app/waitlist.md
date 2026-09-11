@@ -179,6 +179,28 @@ column it exists for. An answer over 240 characters is collapsed with a per-row
 and a table whose rows are a screen tall is one nobody scans — and truncating
 with no way back would hide the thing the row is for.
 
+Three properties of the table are load-bearing and were all wrong in the first
+version, each caught by the code review:
+
+- **A stale response cannot land on a newer one.** Two requests are in flight
+  whenever a search or a page change is dispatched while the previous one is still
+  running — type `ada`, pause past the debounce, type `m` — and the ILIKE over
+  `intent` has no index behind it, so the earlier query being the slower one is
+  ordinary. Without a request-sequence guard the late response overwrites the
+  rows, the pagination **and** the applied term, so the table shows the matches
+  for `ada` while the box reads `adam` and the export link points at the wrong
+  filter.
+- **A failed load does not claim the list is empty.** The page's error banner does
+  not stop the table underneath saying "Nobody has joined the waitlist yet", which
+  is the one false statement this surface can make (`HB9`) on the one screen whose
+  job is to answer that question. `initialLoadFailed` replaces the claim with a
+  disclaimer, and the first successful fetch clears it without a reload.
+- **The sort carries a unique tiebreaker.** `createdAt` is the transaction
+  timestamp, so rows can tie; on a tie Postgres may order the page-1 and page-2
+  queries differently, showing one entry twice and never showing another. `id`
+  breaks it. The export has the same exposure at its `take` boundary, where a tie
+  at the last row decides who is in the file.
+
 `source` and `locale` are in the API and in the CSV but **not** columns in the
 table. Both are provenance about the join rather than something to read, and
 today both are near-constant: one write path, one locale. The export is where
@@ -216,6 +238,16 @@ route inherits the cap with no handler work at all. The export adds
 section cap alone would permit a hundred full-table downloads a minute and each
 one is a complete copy of the list leaving the building. The list route adds
 nothing: paging 25 rows is not the expensive act.
+
+The key is **`export:waitlist:user:<id>`**, which deliberately departs from the
+platform's convention. Sunrise's three other export routes all pass the literal
+`export:user:<id>`, so they share one 10/min budget; a first version of this route
+copied that string and inherited the sharing while its docblock claimed a per-flow
+cap. Sharing is the wrong half to keep — ten waitlist exports would 429 the same
+admin's own Art. 15 subject-access export at `/api/v1/users/me/export`, and a
+burst of conversation exports would block this one for reasons invisible from
+either screen. Same argument as `rate-limit.ts` makes for not borrowing
+`contactLimiter`.
 
 ### The five things that make a CSV of strangers' answers safe
 

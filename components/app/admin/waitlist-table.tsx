@@ -58,6 +58,16 @@ const COLUMN_COUNT = 6;
 interface WaitlistTableProps {
   initialEntries: WaitlistAdminEntry[];
   initialMeta: PaginationMeta;
+  /**
+   * True when the server page could not load the first page.
+   *
+   * Without it the empty table says "Nobody has joined the waitlist yet" under
+   * the page's own error banner — two contradictory statements on screen, and the
+   * wrong one is the confident one. It is also the exact false claim this whole
+   * surface exists to prevent (`HB9`), on the one screen whose job is to answer
+   * whether anyone has joined.
+   */
+  initialLoadFailed?: boolean;
 }
 
 /**
@@ -102,15 +112,42 @@ function Unanswered(): React.ReactElement {
 export function WaitlistTable({
   initialEntries,
   initialMeta,
+  initialLoadFailed = false,
 }: WaitlistTableProps): React.ReactElement {
   const [entries, setEntries] = useState(initialEntries);
   const [meta, setMeta] = useState(initialMeta);
   const [search, setSearch] = useState('');
   /** The term the rows on screen were fetched with — what the export must match. */
   const [appliedSearch, setAppliedSearch] = useState('');
+  /**
+   * Whether what is on screen is an answer at all. Seeded from the server render
+   * and cleared by the first fetch that succeeds, so a search or a page change
+   * that works stops the disclaimer without needing a reload.
+   */
+  const [loadFailed, setLoadFailed] = useState(initialLoadFailed);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  /**
+   * Which request is the current one. Incremented on dispatch, checked before
+   * every `setState`, so a slow earlier response cannot land on top of a later
+   * one.
+   *
+   * The debounce does NOT make this unnecessary, which is the part that is easy
+   * to get wrong: it collapses a burst of keystrokes into one request, but two
+   * requests are in flight whenever a second search (or a page change) is
+   * dispatched while the first is still running — type `ada`, pause past the
+   * debounce, then type `m`. The ILIKE runs over `intent` with no index behind
+   * it, so the first query being the slower one is ordinary rather than
+   * unlucky.
+   *
+   * What it would cost: a stale response overwrites `entries`, `meta` AND
+   * `appliedSearch`, so the table shows the matches for `ada` while the box
+   * reads `adam` — and because the export link is built from `appliedSearch`,
+   * the downloaded file is for a filter nobody is looking at. That is the
+   * failure this component's test file calls the one worth asserting.
+   */
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -120,6 +157,9 @@ export function WaitlistTable({
 
   const fetchPage = useCallback(
     async (page: number, term: string) => {
+      const seq = requestSeqRef.current + 1;
+      requestSeqRef.current = seq;
+
       setIsLoading(true);
       setError(null);
       try {
@@ -133,17 +173,24 @@ export function WaitlistTable({
 
         if (!parsed.success) throw new Error(parsed.error.message);
 
+        // Superseded while in flight — drop it, including the loading flag. The
+        // newer request owns the table now, and clearing `isLoading` here would
+        // re-enable the pager while that one is still running.
+        if (requestSeqRef.current !== seq) return;
+
         setEntries(parsed.data);
         const parsedMeta = parsePaginationMeta(parsed.meta);
         if (parsedMeta) setMeta(parsedMeta);
         setAppliedSearch(term);
+        setLoadFailed(false);
       } catch {
+        if (requestSeqRef.current !== seq) return;
         // Said out loud rather than swallowed: a table that silently keeps showing
         // the previous page after a failed fetch reads as "these are the matches"
         // when they are not.
         setError('That did not load. Try again.');
       } finally {
-        setIsLoading(false);
+        if (requestSeqRef.current === seq) setIsLoading(false);
       }
     },
     [meta.limit]
@@ -223,9 +270,11 @@ export function WaitlistTable({
             ) : entries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} className="h-24 text-center">
-                  {appliedSearch
-                    ? 'Nobody on the list matches that.'
-                    : 'Nobody has joined the waitlist yet.'}
+                  {loadFailed
+                    ? 'The list did not load, so this is not an answer about who has joined.'
+                    : appliedSearch
+                      ? 'Nobody on the list matches that.'
+                      : 'Nobody has joined the waitlist yet.'}
                 </TableCell>
               </TableRow>
             ) : (

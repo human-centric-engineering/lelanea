@@ -138,10 +138,14 @@ describe('GET /api/v1/admin/app/waitlist/export', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('applies the per-flow sub-cap, keyed on the admin rather than on everyone', async () => {
+  it('applies the per-flow sub-cap, keyed on the admin AND on this flow', async () => {
     await GET(request());
 
-    expect(check).toHaveBeenCalledWith(`export:user:${mockAdminUser().user.id}`);
+    // `export:waitlist:` rather than the platform's bare `export:user:`, which
+    // the three other export routes share as one budget. Pinned because the
+    // difference is invisible at the call site and the consequence is not: a
+    // shared key means ten of these 429 the same admin's own Art. 15 export.
+    expect(check).toHaveBeenCalledWith(`export:waitlist:user:${mockAdminUser().user.id}`);
   });
 
   it('answers 429 past the sub-cap, without touching the table', async () => {

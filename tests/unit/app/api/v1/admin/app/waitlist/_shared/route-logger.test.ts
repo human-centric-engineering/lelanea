@@ -28,11 +28,22 @@ const { withContext, childLogger } = vi.hoisted(() => {
 
 vi.mock('@/lib/logging', () => ({ logger: { withContext } }));
 
-// The REAL context builders, minus the Next request-scoped store they read.
+// The REAL context builders, minus the two request-scoped things they reach for.
+//
+// `@/lib/auth/config` is the one that matters, and the first version of this file
+// mocked `@/lib/auth/utils` instead — a module nothing in the chain imports
+// (`getFullContext` → `getUserContext` → `auth` from `@/lib/auth/config`). The
+// test passed anyway, because `getUserContext` swallows its own failure, so the
+// real better-auth instance and its Prisma adapter were being constructed and
+// `auth.api.getSession` genuinely called against the stub headers. The code
+// review caught it. On the test guarding a privacy property, the isolation should
+// be real rather than incidental.
 vi.mock('next/headers', () => ({
   headers: () => Promise.resolve(new Headers({ 'x-request-id': 'req-1', 'user-agent': 'vitest' })),
 }));
-vi.mock('@/lib/auth/utils', () => ({ getServerSession: () => Promise.resolve(null) }));
+vi.mock('@/lib/auth/config', () => ({
+  auth: { api: { getSession: () => Promise.resolve(null) } },
+}));
 
 import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 
