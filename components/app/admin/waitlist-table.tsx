@@ -376,7 +376,18 @@ export function WaitlistTable({
                     ? 'The list did not load, so this is not an answer about who has joined.'
                     : appliedSearch
                       ? 'Nobody on the list matches that.'
-                      : 'Nobody has joined the waitlist yet.'}
+                      : appliedIncludeRemoved
+                        ? // Removed entries ARE included and there are still none, so
+                          // nobody has ever joined. This is the only empty state that
+                          // can honestly say that.
+                          'Nobody has joined the waitlist yet.'
+                        : // The default filter hides removed entries, so an empty list
+                          // does NOT mean nobody joined — it means nobody is waiting.
+                          // Found by looking at the page with every entry removed,
+                          // where the old copy claimed nobody had joined while two
+                          // people had. Same false-claim problem as the failed-load
+                          // case (`HB9`), reachable on any small list after a cleanup.
+                          'Nobody is on the list. If someone was removed, “Show removed” will find them.'}
                 </TableCell>
               </TableRow>
             ) : (

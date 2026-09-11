@@ -441,13 +441,42 @@ describe('WaitlistTable', () => {
     expect(within(alert).getByText(/did not load/)).toBeTruthy();
   });
 
+  it('does not claim nobody joined when removed entries are merely hidden', async () => {
+    render(
+      <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
+    );
+
+    // The default filter hides removed entries, so an empty list means "nobody is
+    // waiting", not "nobody ever joined". Found by looking at the page with every
+    // entry removed, where the old copy asserted the latter while two people had
+    // joined — the same false-claim problem as a failed load (`HB9`).
+    expect(screen.queryByText('Nobody has joined the waitlist yet.')).toBeNull();
+    expect(screen.getByText(/Nobody is on the list/)).toBeTruthy();
+  });
+
+  it('does say nobody joined once removed entries are included and there are none', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
+    render(
+      <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
+    );
+
+    await user.click(screen.getByLabelText('Show removed'));
+
+    // With the removed included and still nothing there, the stronger claim is the
+    // true one — and it is the only state that can make it.
+    await waitFor(() =>
+      expect(screen.getByText('Nobody has joined the waitlist yet.')).toBeTruthy()
+    );
+  });
+
   it('tells an empty list from an empty search result', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
     );
 
-    expect(screen.getByText('Nobody has joined the waitlist yet.')).toBeTruthy();
+    expect(screen.getByText(/Nobody is on the list/)).toBeTruthy();
 
     fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
     rerender(
