@@ -139,6 +139,19 @@ export function ShellNav({ user }: ShellNavProps) {
         ref={navRef}
         tabIndex={-1}
         aria-label="Main"
+        /*
+         * `inert` while the drawer is shut, and ONLY at small — above it the
+         * nav is an in-flow column that must stay usable.
+         *
+         * `invisible` alone is not enough, and the reason is the transition it
+         * shares with the transform: `visibility` changes DISCRETELY at the
+         * end of a transition, so for the 300ms of a close the panel is still
+         * `visible` and every link in it is still tabbable while sliding off
+         * screen. `drawer.tsx` answers this with `inert` and its comment
+         * claimed this file already did — it did not, until t-22 went looking
+         * for the pattern in order to document it.
+         */
+        inert={width === 'small' && !navOpen}
         data-slim={slim ? 'true' : 'false'}
         className={cn(
           'bg-card relative z-50 flex flex-none flex-col border-r',

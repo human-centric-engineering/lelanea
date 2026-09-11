@@ -293,10 +293,11 @@ either screen. Same argument as `rate-limit.ts` makes for not borrowing
   `url`. So the admin's own `email` context field was redacted in production
   while `?q=someone%40example.com` was written out beside it, to stdout and into
   the ring buffer `GET /api/v1/admin/logs` serves and greps. Both routes take
-  their logger from `_shared/route-logger.ts`, which rebuilds the context without
-  `url`; `endpoint` already carries the query-free path, so nothing operational
-  is lost. Found by the security review of t-8, which caught the route docblock
-  claiming the paragraph above while emitting the address. **The fix is narrow on
+  their logger from `app/api/v1/admin/app/waitlist/_shared/route-logger.ts`,
+  which rebuilds the context without `url`; `endpoint` already carries the
+  query-free path, so nothing operational is lost. Found by the security review
+  of t-8, which caught the route docblock claiming the paragraph above while
+  emitting the address. **The fix is narrow on
   purpose** — every other route in the app still logs its full URL, which is the
   platform's to change: [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685).
 

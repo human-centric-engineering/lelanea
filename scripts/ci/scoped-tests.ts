@@ -238,6 +238,33 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'the latter outright — sunrise#763; the file has no JSX, so the rename ' +
       'is the correct name rather than a workaround.',
   },
+  {
+    path: 'tests/unit/context/app-docs-paths.test.ts',
+    reason:
+      'checks that every repo path `.context/app/*.md` names still exists. Its ' +
+      'inputs are files and it imports none of them, so BOTH branches that ' +
+      'break it are invisible to a scoped run: one that renames a component ' +
+      'reaches this through no module graph, and one that only edits markdown ' +
+      'reaches it through none either. A doc pointing at a moved file is worse ' +
+      'than no doc — it reads as authoritative — and nothing else in the suite ' +
+      'can see it, since a rename fails type-check while its mention in prose ' +
+      'fails nothing. §04 t-22, when `shell.md` arrived naming dozens of ' +
+      'paths. `.test.ts` not `.test.tsx`, per sunrise#763, as above.',
+  },
+  {
+    path: 'tests/unit/app/shell-not-found-streaming.test.ts',
+    reason:
+      'asserts that no `loading` file and no `<Suspense>` wrapping ' +
+      '`{children}` sits between the root and a page under `/app`. Next sets ' +
+      'a 404 only on a response that has not begun streaming, so breaking ' +
+      'either turns every mistyped URL under `/app` into a soft 200 with ' +
+      'nothing else failing. Its inputs are files and it imports none of ' +
+      'them: the branch that adds a loading state touches no module this ' +
+      'would be selected by. Split out of `shell-not-found.test.tsx` in t-22 ' +
+      'precisely so it could be declared here — that file is `.test.tsx`, ' +
+      'which validateAlwaysRun rejects (sunrise#763), and its render cases ' +
+      'genuinely need JSX.',
+  },
 ];
 
 /** Just the paths, for argv building and set arithmetic. */

@@ -31,7 +31,7 @@ import type { CSSProperties } from 'react';
  *
  * The prototype also tints `#ws-eyebrow` with `--tone`. That is not carried
  * over: measured against `--color-background`, `--color-accent-ink` reaches
- * 3.17:1 in light mode and the raw `--color-status-yellow` about 2.3:1, both
+ * 3.17:1 in light mode and the raw `--color-status-yellow` 2.03:1, both
  * well under AA for 12px text. Tinting only some of the six would leave the
  * rule "the eyebrow takes the tone, except twice", which is the kind of rule
  * that gets restored by whoever reads the prototype next. So the eyebrow keeps

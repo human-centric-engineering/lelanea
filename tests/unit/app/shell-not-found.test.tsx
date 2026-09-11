@@ -11,6 +11,16 @@
  * file under a docblock claiming it closed the defect it did not close. So the
  * pairing is the property, and it is asserted as a pairing.
  *
+ * ## The streaming guards live next door
+ *
+ * The two cases asserting that nothing above `/app` suspends have moved to
+ * `tests/unit/app/shell-not-found-streaming.test.ts`, which imports nothing and
+ * is declared in `ALWAYS_RUN_TESTS`. They had to: this file imports the
+ * boundary and the throwing route, so the module graph reaches it when either
+ * changes — but NOT when someone adds a `loading.tsx` or a `<Suspense>`, which
+ * is the only change those two exist to catch. `/code-review` found that while
+ * reviewing t-22.
+ *
  * ## The status code is structural, not behavioural
  *
  * Next returns `200` for a STREAMED response and `404` only for one that has
@@ -32,7 +42,7 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -58,45 +68,14 @@ const SHELL_DIR = path.join(process.cwd(), 'app', '(lelanea)', 'app');
  * run.
  */
 /**
- * Every directory whose `layout` or `loading` sits between the root and the
- * catch-all — the segment's own folder included, since `loading` wraps the
- * `page` beside it.
- */
-const LAYOUT_CHAIN_DIRS = [
-  path.join(process.cwd(), 'app'),
-  path.join(process.cwd(), 'app', '(lelanea)'),
-  SHELL_DIR,
-  path.join(SHELL_DIR, '[...slug]'),
-];
-
-/**
- * Does any `<Suspense>` in this source contain `{children}`?
+ * Read the catch-all's source with COMMENTS STRIPPED, the way
+ * `tokens-only.test.ts` does.
  *
- * Brace-counted rather than matched to the next `</Suspense>`, so a nested
- * boundary cannot end the outer one early and hide a `{children}` beyond it.
- * Returns false when the tags are unbalanced — the caller should see a parse
- * it cannot trust as a reason to look, and the test above names the file.
+ * Its docblock explains why it must not read `SHELL_NAV` and must not `await`,
+ * so without this every rule below matches its own explanation and the file
+ * fails for documenting itself. Both assertions did exactly that on the first
+ * run.
  */
-function suspenseWrappingChildren(source: string): boolean {
-  const open = /<Suspense[\s>]/g;
-  let match: RegExpExecArray | null;
-  while ((match = open.exec(source)) !== null) {
-    let depth = 0;
-    for (let i = match.index; i < source.length; i += 1) {
-      if (source.startsWith('</Suspense', i)) {
-        depth -= 1;
-        if (depth === 0) {
-          if (source.slice(match.index, i).includes('{children}')) return true;
-          break;
-        }
-      } else if (source.startsWith('<Suspense', i)) {
-        depth += 1;
-      }
-    }
-  }
-  return false;
-}
-
 function catchAllSource(): string {
   const raw = readFileSync(path.join(SHELL_DIR, '[...slug]', 'page.tsx'), 'utf8');
   return raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -118,53 +97,6 @@ describe('the route that makes the boundary reachable', () => {
     const source = catchAllSource();
     expect(source).not.toContain('SHELL_NAV');
     expect(source).not.toContain('destinationFor');
-  });
-});
-
-describe('the conditions the 404 status depends on', () => {
-  it('calls notFound() from a synchronous component, before anything can await', () => {
-    // `async` here — or awaiting `params`, which is a Promise in Next 16 —
-    // gives the response a chance to begin streaming, after which the status
-    // can no longer be set and every 404 silently becomes a 200.
-    const source = catchAllSource();
-    expect(source).not.toMatch(/export default async function/);
-    expect(source).not.toMatch(/\bawait\b/);
-  });
-
-  it('has no loading file at any level of the chain, in any spelling', () => {
-    // The segment's OWN folder is included, because `loading` wraps the `page`
-    // beside it — the first version of this guard checked the three levels
-    // above and missed the one place a `loading` file would most obviously be
-    // put. All four extensions Next accepts, for the same reason: a `.js` one
-    // would have sailed past a `.tsx`-only check.
-    for (const dir of LAYOUT_CHAIN_DIRS) {
-      for (const ext of ['tsx', 'ts', 'jsx', 'js']) {
-        const candidate = path.join(dir, `loading.${ext}`);
-        expect(existsSync(candidate), `${candidate} would stream the response`).toBe(false);
-      }
-    }
-  });
-
-  it('has no Suspense boundary wrapping children in any layout above it', () => {
-    // The regression that matters, and the one the first version of this file
-    // could not see at all. Next's own `loading.js` documentation recommends
-    // wrapping a layout's runtime data access in its own `<Suspense>` for
-    // instant navigation — and `app/(lelanea)/app/layout.tsx` awaits
-    // `getServerSession()`, so it is a natural candidate. Do it and every 404
-    // under `/app` becomes a 200, with nothing else failing.
-    //
-    // A bare `<Suspense>` is NOT the finding: the root layout has one today,
-    // wrapping `UserIdentifier` and `PageTracker` as siblings of `{children}`,
-    // which streams nothing in this path. What matters is whether `{children}`
-    // is INSIDE one, so that is what is matched — with real nesting, because a
-    // naive "next closing tag" scan would stop at an inner boundary.
-    for (const layout of LAYOUT_CHAIN_DIRS.map((dir) => path.join(dir, 'layout.tsx'))) {
-      if (!existsSync(layout)) continue;
-      const source = readFileSync(layout, 'utf8');
-      expect(suspenseWrappingChildren(source), `${layout} streams before the page throws`).toBe(
-        false
-      );
-    }
   });
 });
 
