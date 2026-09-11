@@ -57,6 +57,46 @@ const SHELL_DIR = path.join(process.cwd(), 'app', '(lelanea)', 'app');
  * fails for documenting itself. Both assertions did exactly that on the first
  * run.
  */
+/**
+ * Every directory whose `layout` or `loading` sits between the root and the
+ * catch-all — the segment's own folder included, since `loading` wraps the
+ * `page` beside it.
+ */
+const LAYOUT_CHAIN_DIRS = [
+  path.join(process.cwd(), 'app'),
+  path.join(process.cwd(), 'app', '(lelanea)'),
+  SHELL_DIR,
+  path.join(SHELL_DIR, '[...slug]'),
+];
+
+/**
+ * Does any `<Suspense>` in this source contain `{children}`?
+ *
+ * Brace-counted rather than matched to the next `</Suspense>`, so a nested
+ * boundary cannot end the outer one early and hide a `{children}` beyond it.
+ * Returns false when the tags are unbalanced — the caller should see a parse
+ * it cannot trust as a reason to look, and the test above names the file.
+ */
+function suspenseWrappingChildren(source: string): boolean {
+  const open = /<Suspense[\s>]/g;
+  let match: RegExpExecArray | null;
+  while ((match = open.exec(source)) !== null) {
+    let depth = 0;
+    for (let i = match.index; i < source.length; i += 1) {
+      if (source.startsWith('</Suspense', i)) {
+        depth -= 1;
+        if (depth === 0) {
+          if (source.slice(match.index, i).includes('{children}')) return true;
+          break;
+        }
+      } else if (source.startsWith('<Suspense', i)) {
+        depth += 1;
+      }
+    }
+  }
+  return false;
+}
+
 function catchAllSource(): string {
   const raw = readFileSync(path.join(SHELL_DIR, '[...slug]', 'page.tsx'), 'utf8');
   return raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -68,11 +108,13 @@ describe('the route that makes the boundary reachable', () => {
     expect(notFound).toHaveBeenCalled();
   });
 
-  it('resolves no destination, so a typo cannot look deliberate', () => {
-    // t-9's catch-all read `SHELL_NAV` and rendered a placeholder per
-    // destination. This one must not: every destination has a real route now,
-    // and a catch-all that answered them again would shadow-document a list
-    // that had moved on. It knows nothing about the nav at all.
+  it('does not read the nav, so it cannot grow back into t-9’s catch-all', () => {
+    // NAMED FOR WHAT IT CHECKS. This is a source-shape guard, not a routing
+    // one: it cannot observe precedence, and an earlier version of it was
+    // called "resolves no destination" — a claim a string match has no way to
+    // make. What proves the route resolves nothing is the throw above; this
+    // only stops the file drifting back toward t-9's shape, where it read
+    // `SHELL_NAV` and rendered a placeholder per destination.
     const source = catchAllSource();
     expect(source).not.toContain('SHELL_NAV');
     expect(source).not.toContain('destinationFor');
@@ -89,18 +131,39 @@ describe('the conditions the 404 status depends on', () => {
     expect(source).not.toMatch(/\bawait\b/);
   });
 
-  it('has no loading.tsx at or above the shell to start the stream', () => {
-    // The other half, and the half most likely to be broken by someone solving
-    // an unrelated problem. A `loading.tsx` added at `app/`, `app/(lelanea)/`
-    // or `app/(lelanea)/app/` renders a Suspense fallback in this path, which
-    // begins the response and takes the status with it.
-    for (const dir of [
-      path.join(process.cwd(), 'app'),
-      path.join(process.cwd(), 'app', '(lelanea)'),
-      SHELL_DIR,
-    ]) {
-      const candidate = path.join(dir, 'loading.tsx');
-      expect(existsSync(candidate), `${candidate} would stream the response`).toBe(false);
+  it('has no loading file at any level of the chain, in any spelling', () => {
+    // The segment's OWN folder is included, because `loading` wraps the `page`
+    // beside it — the first version of this guard checked the three levels
+    // above and missed the one place a `loading` file would most obviously be
+    // put. All four extensions Next accepts, for the same reason: a `.js` one
+    // would have sailed past a `.tsx`-only check.
+    for (const dir of LAYOUT_CHAIN_DIRS) {
+      for (const ext of ['tsx', 'ts', 'jsx', 'js']) {
+        const candidate = path.join(dir, `loading.${ext}`);
+        expect(existsSync(candidate), `${candidate} would stream the response`).toBe(false);
+      }
+    }
+  });
+
+  it('has no Suspense boundary wrapping children in any layout above it', () => {
+    // The regression that matters, and the one the first version of this file
+    // could not see at all. Next's own `loading.js` documentation recommends
+    // wrapping a layout's runtime data access in its own `<Suspense>` for
+    // instant navigation — and `app/(lelanea)/app/layout.tsx` awaits
+    // `getServerSession()`, so it is a natural candidate. Do it and every 404
+    // under `/app` becomes a 200, with nothing else failing.
+    //
+    // A bare `<Suspense>` is NOT the finding: the root layout has one today,
+    // wrapping `UserIdentifier` and `PageTracker` as siblings of `{children}`,
+    // which streams nothing in this path. What matters is whether `{children}`
+    // is INSIDE one, so that is what is matched — with real nesting, because a
+    // naive "next closing tag" scan would stop at an inner boundary.
+    for (const layout of LAYOUT_CHAIN_DIRS.map((dir) => path.join(dir, 'layout.tsx'))) {
+      if (!existsSync(layout)) continue;
+      const source = readFileSync(layout, 'utf8');
+      expect(suspenseWrappingChildren(source), `${layout} streams before the page throws`).toBe(
+        false
+      );
     }
   });
 });

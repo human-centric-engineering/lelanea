@@ -27,6 +27,27 @@ import { cn } from '@/lib/utils';
  * real 404, the `noindex` Next injects is real, and all this file changes is
  * WHERE it is drawn — inside the frame, with every destination still one click
  * away in the nav, instead of over the top of it.
+ *
+ * ## Two things it is worse at than a full-page 404, both accepted
+ *
+ * **The tab says only "Lelañea".** Next resolves no `metadata` export from a
+ * `not-found` file — the docs' metadata section covers `global-not-found.js`
+ * alone — so this inherits the layout's `default` title while every real
+ * destination exports its own. t-9 recorded tab-indistinguishability as a
+ * defect worth fixing, and this is a narrower version of it: there is one 404
+ * page rather than seven identical destinations, so nothing is confusable with
+ * anything else. Recorded rather than fixed, because the fix is
+ * `global-not-found.js` — experimental, and it bypasses the layout, which is
+ * the one thing this file exists to keep.
+ *
+ * **The nav can contradict the heading.** On `/app/journey/typo` the nav still
+ * marks "Your journey" with `aria-current="page"`, because it prefix-matches —
+ * correctly, since a real child route of a section IS in that section, and §05
+ * needs that for modules opening under `/app/workspace`. Here the child does
+ * not exist, so a screen-reader user is told the current page is "Your journey"
+ * while the heading says there is nothing at that address. The nav cannot know
+ * the route 404'd; the only fix is exact matching, which would break §05. Left,
+ * and written down, because the alternative is a silent regression there.
  */
 export default function ShellNotFound() {
   return (
