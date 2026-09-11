@@ -49,6 +49,25 @@ function renderAt(pathname: string, width: WidthName = 'large') {
   return renderInShell(<ShellNav user={USER} />, width);
 }
 
+/**
+ * The nav WITH the topbar, for the one case that has to open the drawer.
+ *
+ * The burger that opens it lives in `shell-topbar.tsx`, deliberately outside
+ * the `<nav>` — which is what makes marking the closed panel `inert` safe. A
+ * test that rendered only the nav could not reach the opener at all, and would
+ * be measuring the half of the mechanism that is not the point.
+ */
+function renderWithTopbar(width: WidthName = 'small') {
+  mockPathname.current = '/app';
+  return renderInShell(
+    <>
+      <ShellTopbar />
+      <ShellNav user={USER} />
+    </>,
+    width
+  );
+}
+
 /** The nav item whose `aria-current` is set, by accessible name. */
 function currentItems(): string[] {
   return screen
@@ -296,7 +315,33 @@ describe('ShellNav — the column survives a short window', () => {
   });
 });
 
-describe('ShellNav — the drawer is the full menu', () => {
+describe('ShellNav — the drawer is out of reach while it is shut', () => {
+  it('is inert below 900px until it is opened', async () => {
+    // `invisible` alone does not close this. It shares a transition with the
+    // transform, and `visibility` flips DISCRETELY at the END of a transition —
+    // so for the 300ms of a close every link in the panel is still tabbable
+    // while sliding off screen. `drawer.tsx` answers the same problem with
+    // `inert` and its comment claimed this file already did; it did not, until
+    // t-22 went looking for the pattern in order to document it.
+    renderWithTopbar('small');
+    expect(screen.getByRole('navigation', { name: 'Main' }).hasAttribute('inert')).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open the menu' }));
+    expect(screen.getByRole('navigation', { name: 'Main' }).hasAttribute('inert')).toBe(false);
+  });
+
+  it('is never inert above 900px, where it is a column and not a panel', () => {
+    // The guard that stops the fix above from making the desktop nav unusable —
+    // it is the same element at every width.
+    for (const width of ['medium', 'large'] as const) {
+      const { unmount } = renderAt('/app', width);
+      expect(screen.getByRole('navigation', { name: 'Main' }).hasAttribute('inert'), width).toBe(
+        false
+      );
+      unmount();
+    }
+  });
+
   it('offers no collapse control below 900px', async () => {
     // `slim` is ignored inside the drawer, so the toggle would flip a stored
     // preference and change nothing on screen — a dead control, which is what

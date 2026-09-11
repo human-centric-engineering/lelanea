@@ -155,7 +155,15 @@ export function Drawers() {
              *
              * `visibility` does transition, so the closed panel still leaves the
              * accessibility tree and the tab order (via `inert`) without taking
-             * the slide with it. `ShellNav`'s drawer already does this.
+             * the slide with it.
+             *
+             * `inert` is doing real work here rather than restating
+             * `visibility`: the two are on the same transition, and
+             * `visibility` flips DISCRETELY at the END of it, so without
+             * `inert` the panel stays tabbable for the whole 340ms of a close.
+             * This comment used to say `ShellNav`'s drawer already did the
+             * same. It did not — t-22 went looking for the pattern to document
+             * it and found the asymmetry; both carry `inert` now.
              */
             inert={!open}
             tabIndex={-1}

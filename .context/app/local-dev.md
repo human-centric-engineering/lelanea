@@ -36,6 +36,43 @@ nginx forwards to a dead socket; a new hostname without `.env.local` means auth
 callbacks are rejected against the old one. `apply.sh` in the dev-proxy turns the
 registry into Herd proxies.
 
+### `npm start` binds 3000, not 3014
+
+A production preview appears not to work on the test domain, and the reason is in
+the table above. `npm start` resolves `nodeEnv: 'production'`, so
+`scripts/dev-server.mjs` looks for `PORT` in `.env.production.local` →
+`.env.local` → `.env.production` → `.env`. **`PORT=3014` is declared only in
+`.env.development`**, which is not in that chain — so nothing matches, Next falls
+back to its own default of 3000, and the proxy is still pointing `lelanea.test`
+at 3014.
+
+Stop `next dev` first — it holds the port — then:
+
+```bash
+PORT=3014 npm start        # a real env var outranks the env files
+npm start -- -p 3014       # or the explicit-flag path
+```
+
+For something permanent on one machine, put `PORT=3014` in **`.env.local`**: it
+is gitignored, it sits in _both_ chains, and it is the same value dev already
+uses.
+
+**Not `.env.production`.** It is gitignored like the rest of `.env*`, so this
+is not about leaking it into git — `.gitignore`'s own comment records the
+stronger reason: **Next's standalone build copies `.env.production` into the
+build output**, so a port pinned there ships inside the production image. A real
+deployment takes its port from the platform; 3014 baked into the image is a live
+footgun bought for a local preview.
+
+### When a production preview is worth the trouble
+
+Rarely, and then decisively. §04 t-21 is the worked example: a React 19 console
+error appeared on the shell's 404 page and nothing in dev could establish whether
+it shipped. The warning string exists only in React's `.development.js` bundles
+— but _reading bundles_ is an argument, and a clean console on
+`https://lelanea.test/app/journey/typo` from a production build is a fact. It
+became `sunrise#769` on the strength of the second, not the first.
+
 **Why `lelanea.test` and not a subdomain of something shared:** the dev hostname
 mirrors the _production site boundary_, not just the name. Lelañea has its own
 production domain, so it gets its own registrable domain in dev too — which keeps
@@ -85,7 +122,7 @@ cosmetic gain.
 So if you need both running at once:
 
 - **Ports: already solved, and not by us.** The dev-proxy registry gives every
-  app its own loopback port — Lelañea 3014, Sunrise's default 3011 — each pinned
+  app its own loopback port — Lelañea 3014, Sunrise's default 3010 — each pinned
   in that app's committed `.env.development`. Nothing collides and nothing needs
   a `-p` flag. That is precisely why the port is committed rather than left to
   whoever runs `npm run dev`.
