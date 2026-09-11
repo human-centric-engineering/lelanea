@@ -218,6 +218,33 @@ process.
   `canRead`.** Note `applyJourneyTransition` still authorizes through `canRead`
   (#242) — that path is unchanged by this release.
 
+### Security
+
+- **Every journey write is now guarded by `canWrite`, not by a read** (#242).
+  `applyJourneyTransition` reached its write authorization through
+  `assembleJourneyContext` → `getJourney` → `canRead`, which was correct only by
+  coincidence: `canRead` is documented as delegating to Sunrise #367's ownership
+  resolver once it lands, widening `own → team → all`. That widening is about
+  *reading* a cohort. The day it is wired, **every viewer who could merely read a
+  cohort's journeys would have silently gained the right to drive state transitions
+  for those subjects** — writing `UserNodeState` projections and appending
+  `JourneyEvent` rows on their behalf, with no diff to the write path and no test
+  failing.
+
+  `canWrite` pins the write grant to self-or-admin-support, so widening it becomes a
+  deliberate edit someone reviews. With `createJourney` (#159) and
+  `recordNodeProgress` (#168) already on it, this was the last gap.
+
+  **Nothing changes today** — the two predicates are value-identical until #367
+  lands, so no existing caller's behaviour moves. What changes is what happens when
+  it does.
+
+  **If you are building a leaf:** a viewer who may read a subject but not write for
+  them now gets `ForbiddenError` from `applyJourneyTransition` rather than a
+  transition. Today that set is empty. Once #367 widens reads it will not be, and
+  that is the point. The admin-support override (`adminSupportViewer()`) is
+  unaffected and remains a write credential by design.
+
 ## [0.2.0] — 2026-09-07
 
 > **Second tagged Daybreak release, and the first a leaf actually merges** — 0.1.0

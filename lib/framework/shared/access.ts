@@ -137,11 +137,39 @@ export async function canRead(
  * makes `canRead` **narrower** for a subject (a tenancy deny, say), the write is
  * refused too, instead of a stale write grant outliving the read it depends on.
  *
- * **Not yet the only write guard.** `applyJourneyTransition` still reaches its
- * write authorization through `assembleJourneyContext` → `getJourney` → `canRead`,
- * so the state-transition path carries the widening risk this function pins for
- * creation. Routing it through here is filed as #242; it is a change to
- * `f-guidance`, not to this seam.
+ * **Every journey write that takes a VIEWER routes through here** (#242 closed the
+ * last gap): `createJourney` (#159), `recordNodeProgress` (#168) and
+ * `applyJourneyTransition` (`f-guidance`). The last of those needs `canRead` as
+ * well — it cannot validate a transition without loading the subject's graph, node
+ * states and slots — so it holds both guards rather than swapping one for the
+ * other.
+ *
+ * **"Takes a viewer" is the whole of the claim.** It is NOT "every writer of the
+ * journey tables", and the difference is not cosmetic: the unguarded writers are
+ * barrel-exported, so a leaf reaches them by import.
+ *
+ *   - `applyEvent` (`facilitation/engine/apply-event.ts`, re-exported through
+ *     `@/lib/framework/facilitation`) is the sole writer of BOTH `UserNodeState`
+ *     and `JourneyEvent`, and takes `transition.userId` as a plain argument. It is
+ *     unguarded **by design** — F11 makes it a pure engine whose read context is
+ *     the caller's — so the predicate belongs at its caller, which today is only
+ *     `applyJourneyTransition`. A leaf calling it directly supplies its own
+ *     subject and nothing checks it.
+ *   - `recordModuleEngagement` (`engagement/record-engagement.ts`) writes
+ *     `JourneyEvent` and takes a bare `userId`. It cannot hold a guard as it
+ *     stands: it is contractually non-throwing (fire-and-forget from a request
+ *     path), so a refusal has nowhere to go.
+ *
+ * Both are safe today because every in-repo caller binds the subject to someone
+ * already authorized — the authenticated actor, or (in `module-completion.ts`) the
+ * journey subject threaded down from a call that passed this predicate. That is a
+ * property of the call sites, not of the seams, and it is not enforced. Filed as
+ * #251. Deliberately stated as a rule rather than a list of callers: an earlier
+ * version of this note counted them, and the count was wrong within a day.
+ *
+ * A future write that DOES take a viewer must guard here. Nothing enforces that
+ * mechanically; `tests/unit/lib/framework/shared/access.test.ts` pins what the
+ * predicate DOES, not who remembers to call it.
  */
 export async function canWrite(
   viewer: JourneyViewer,
