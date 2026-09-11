@@ -74,9 +74,16 @@ interface WaitlistResponse {
  * disables the two `<FieldHelp>` ⓘ popovers — so the explanation of why we ask
  * for someone's reason for coming becomes unreachable exactly when they are most
  * likely to want it, with no error and nothing to see. That was t-5's first
- * shape. Each control disables itself on `isSubmitting` instead, and
- * `tests/unit/components/app/site/waitlist-form.test.tsx` fails on any
- * `[disabled]` fieldset in the tree whether or not one is otherwise wanted.
+ * shape. Each control disables itself on `isSubmitting` instead.
+ *
+ * The guard against it is in
+ * `tests/unit/components/app/site/waitlist-form.test.tsx`, and one of its cases
+ * runs mid-submission on purpose. A static `<fieldset disabled>` is caught by
+ * any of them; `<fieldset disabled={isSubmitting}>` — the far likelier shape,
+ * since it is how every control here already works — is caught by **only** the
+ * in-flight one, because React emits no `disabled` attribute while the value is
+ * false, so a form rendered at rest looks identical either way. Measured: with
+ * that fieldset injected, 29 of the 30 tests still pass.
  *
  * ## Two error registers, because there are two different failures
  *

@@ -361,6 +361,38 @@ describe('WaitlistForm', () => {
       }
     );
 
+    it('keeps both ⓘ popovers operable WHILE a submission is in flight', async () => {
+      const user = userEvent.setup();
+      let release: ((value: unknown) => void) | undefined;
+      post.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          })
+      );
+      const { container } = render(<WaitlistForm />);
+
+      await user.type(screen.getByLabelText('Your email'), 'ada@example.com');
+      await user.click(screen.getByRole('button', { name: 'Join the waitlist' }));
+      await screen.findByRole('button', { name: 'Joining…' });
+
+      // Every other guard in this file renders the form AT REST, where
+      // `isSubmitting` is false. That is the hole: the natural way to
+      // reintroduce the trap is `<fieldset disabled={isSubmitting}>`, and React
+      // emits no `disabled` attribute at all while the value is false — so it
+      // would pass all of them, then disable both ⓘ buttons for exactly as long
+      // as the request is in flight. This is the assertion taken at the one
+      // moment the attribute would actually exist.
+      expect(container.querySelectorAll('fieldset[disabled]')).toHaveLength(0);
+
+      const { label, body } = HELP_TRIGGERS[0];
+      await user.click(screen.getByRole('button', { name: label }));
+      expect(await screen.findByText(body)).toBeTruthy();
+
+      release?.({ message: 'ok' });
+      expect(await screen.findByText('you are on the list')).toBeTruthy();
+    });
+
     it('gives each ⓘ trigger its own accessible name', () => {
       render(<WaitlistForm />);
 
