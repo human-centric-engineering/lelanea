@@ -25,6 +25,7 @@ import { logger } from '@/lib/logging';
 import {
   checkChangelog,
   formatVerdict,
+  pushEventBeforeSha,
   CHANGELOG_PATH,
   type BarrelDelta,
   type ChangelogViolation,
@@ -63,30 +64,38 @@ import { checkReleaseHistoryPreserved } from '@/scripts/ci/changelog-structure';
  * which is the failure this whole fix is about. Tried it, watched it pass on a
  * branch it should have failed, and removed it.
  *
- * So: an explicit `CHANGELOG_BASE_REF`, then a real `origin/main`, then ONE attempt
- * to fetch enough history to have one. If none of that works there is no honest
- * answer, and the caller turns that into a CI failure rather than a pass.
+ * So: an explicit `CHANGELOG_BASE_REF`, then — on a `push` event only — the previous
+ * tip from the event payload (see {@link pushEventBase}), then a real `origin/main`,
+ * then ONE attempt to fetch enough history to have one, and on a push `HEAD^` as a
+ * narrower-but-honest last resort. If none of that works there is no honest answer,
+ * and the caller turns that into a CI failure rather than a pass.
+ *
+ * The push step sits ahead of `origin/main` deliberately: on a push to `main` those
+ * two are the SAME commit, so `origin/main` would win and {@link baseIsHead} would
+ * fail a run whose real base was available all along. That is not hypothetical — it
+ * red-lined `main` on every code merge from the commit this guard's fail-in-CI
+ * behaviour landed in, and would have done the same to every leaf that merged it.
  */
-function resolveBaseRef(): string | null {
-  const exists = (rev: string): boolean => {
-    try {
-      execFileSync('git', ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], {
-        stdio: ['ignore', 'ignore', 'ignore'],
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  };
+function revExists(rev: string): boolean {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  const explicit = process.env.CHANGELOG_BASE_REF;
-  if (explicit !== undefined && explicit !== '') return exists(explicit) ? explicit : null;
-
-  if (exists('origin/main')) return 'origin/main';
-
-  // CI checks out at depth 1 with no `origin/main` refspec. Fetch it, deepening a
-  // shallow clone first — `merge-base` needs shared history, and a shallow fetch of
-  // main into a shallow HEAD can share no commit at all.
+/**
+ * Fetch `main`, deepening a shallow clone first.
+ *
+ * CI checks out at depth 1 with no `origin/main` refspec. `merge-base` needs shared
+ * history, and a shallow fetch of main into a shallow HEAD can share no commit at
+ * all — so unshallow rather than deepen by a count. Best-effort: the caller turns a
+ * still-missing base into a CI failure, never a pass.
+ */
+function deepenFromOrigin(): void {
   try {
     const shallow =
       execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
@@ -102,11 +111,77 @@ function resolveBaseRef(): string | null {
       { stdio: ['ignore', 'ignore', 'ignore'] }
     );
   } catch {
-    /* fall through — null is a CI failure, not a pass */
+    /* best-effort — a missing base is a CI failure upstream, not a pass */
   }
+}
+
+/**
+ * The previous tip of the branch, on a `push` event — the one case where
+ * `origin/main` is useless because it IS `HEAD`.
+ *
+ * `GITHUB_EVENT_PATH` is a JSON payload GitHub always writes, so this needs no
+ * argument, no env var a workflow has to set, and therefore no edit to any
+ * Sunrise-owned file — the same constraint that shaped `resolveBaseRef` itself.
+ *
+ * **Why `.before` and not `HEAD^`**, which the Sunrise steps beside this one use:
+ * `HEAD^` is the first parent, which equals the previous tip only when the push
+ * added exactly one commit. A direct push of three commits would be diffed from
+ * commit 2 — a seam change in commit 1 sails through, which is the precise hole
+ * #239 exists to close and the reason `HEAD^` was rejected for the PR path above.
+ * `.before` is the real previous tip however many commits arrived. `HEAD^` remains
+ * the fallback when the payload is unreadable: a narrower window is still an honest
+ * answer about something, where no base at all is not.
+ *
+ * Returns `null` off a push event, on the all-zeros SHA a branch creation reports,
+ * or when the commit cannot be made reachable — each falls through to the ladder.
+ */
+function pushEventBase(): string | null {
+  if (process.env.GITHUB_EVENT_NAME !== 'push') return null;
+
+  const payloadPath = process.env.GITHUB_EVENT_PATH;
+  if (payloadPath === undefined || payloadPath === '') return null;
+
+  let before: string | null;
+  try {
+    // The shape rules — including the all-zeros ref-creation case — live in `lib.ts`
+    // so they are unit-tested; this file keeps only the I/O.
+    before = pushEventBeforeSha(JSON.parse(readFileSync(payloadPath, 'utf8')));
+  } catch {
+    return null;
+  }
+  if (before === null) return null;
+
+  if (revExists(before)) return before;
+
+  // Depth-1 checkout: the parent is not in the object store yet.
+  deepenFromOrigin();
+  return revExists(before) ? before : null;
+}
+
+function resolveBaseRef(): string | null {
+  const exists = revExists;
+
+  const explicit = process.env.CHANGELOG_BASE_REF;
+  if (explicit !== undefined && explicit !== '') return exists(explicit) ? explicit : null;
+
+  // BEFORE `origin/main`, because on a push to main the two are the same commit and
+  // `origin/main` would win — leaving `baseIsHead` to fail a run that had a perfectly
+  // good base available all along. That failure is what red-lined main, and every
+  // leaf's main, on every code merge.
+  const pushed = pushEventBase();
+  if (pushed !== null) return pushed;
 
   if (exists('origin/main')) return 'origin/main';
-  return exists('FETCH_HEAD') ? 'FETCH_HEAD' : null;
+
+  deepenFromOrigin();
+
+  if (exists('origin/main')) return 'origin/main';
+  if (exists('FETCH_HEAD')) return 'FETCH_HEAD';
+
+  // Last resort, push events only (see `pushEventBase`): one commit of window beats
+  // no answer. Not offered on a PR, where `HEAD^` is a commit on the branch itself
+  // and the narrowing is silent — the case the docblock above rejected it for.
+  return process.env.GITHUB_EVENT_NAME === 'push' && exists('HEAD^') ? 'HEAD^' : null;
 }
 
 const BASE_REF = resolveBaseRef();
@@ -281,6 +356,13 @@ function isCI(): boolean {
  * There is no honest verdict here: the branch's changes are already in the base, so
  * "nothing changed since the base" is true and useless. Reported as a skip rather
  * than a pass, and in CI as a failure like every other "could not look".
+ *
+ * **This is now a backstop, not the push path.** Failing every push to `main` was
+ * itself the defect for three merges — red on the board says as little as green when
+ * it says it unconditionally. {@link pushEventBase} now supplies the real previous
+ * tip before `origin/main` is consulted, so a push reaches this only when the event
+ * payload, the fetch AND `HEAD^` all failed. Keep the check: it is what catches a
+ * base that is `HEAD` for some reason nobody has thought of yet.
  */
 function baseIsHead(base: string): boolean {
   try {

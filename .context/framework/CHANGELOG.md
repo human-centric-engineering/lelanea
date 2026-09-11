@@ -27,8 +27,16 @@ process.
 
 ## [0.3.0] — 2026-09-11
 
-> **Third tagged Daybreak release. Additive throughout** — nothing a leaf already
-> built stops working. One pinned test row may need updating; see the last note.
+> **Third tagged Daybreak release. Additive, plus one fix you want.** Nothing a leaf
+> already built stops working. One pinned test row may need updating; see the last
+> note.
+>
+> **Take this release rather than the commits behind it.** `npm run
+> framework:changelog` failed on every push to `main` — a base that resolves to
+> `HEAD` has no diff, and #239 had correctly stopped that reporting as a pass. A leaf
+> merging those commits would have gone red on its own `main` on every code merge.
+> Fixed here, and the guard now genuinely gates a push instead of either waving it
+> through or failing it blind. See Fixed.
 >
 > **The journey family gains its missing writers.** `createJourney` starts a
 > journey (nothing in the framework could), `recordNodeProgress` writes
@@ -277,6 +285,38 @@ process.
   **A leaf writing its own framework-tier writes should guard on this, not
   `canRead`.** Every journey write in the framework now does, including
   `applyJourneyTransition` — see Security below (#242).
+
+### Fixed
+
+- **`npm run framework:changelog` no longer fails every push to `main` — yours or
+  your leaf's.** The guard resolves its base as `origin/main`, which on a push to
+  `main` IS `HEAD`: no base, empty diff. It had been reporting that as a confident
+  pass; #239 correctly changed "could not look" into a CI failure, and the
+  consequence was that **every code merge to `main` went red** — three in a row here
+  before anyone traced it, and it would have done the same on every leaf that merged
+  this release.
+
+  On a `push` event the guard now takes the previous tip from the event payload
+  GitHub always writes (`GITHUB_EVENT_PATH` → `.before`), consulted *before*
+  `origin/main` so the identical-commit case never arises. Needs no workflow edit,
+  so it stays fork-owned and survives an upstream sync.
+
+  - **`.before`, not `HEAD^`** — the base Sunrise's own adjacent checks use.
+    `HEAD^` is the first parent, which equals the previous tip only when the push
+    carried exactly one commit; a direct push of three would be diffed from commit
+    2, letting a seam change in commit 1 through. That is the hole #239 exists to
+    close, and why `HEAD^` was rejected for the PR path. It stays as a last-resort
+    fallback on pushes only, where a narrower window still beats no answer.
+  - **The PR path is untouched.** `origin/main` is a real, distinct base there and
+    the reasoning behind it was already sound.
+  - **This makes the guard work on `main` rather than merely stop complaining.**
+    Verified by pointing it at a push that adds a `lib/framework` barrel export with
+    no changelog entry: it fails, and names the symbol. Previously that was a false
+    pass (before #239) and then a blanket failure (after it).
+  - The payload rules — including the all-zeros SHA a branch creation reports —
+    moved to `scripts/release/lib.ts` as `pushEventBeforeSha()` so they are
+    unit-tested, keeping the CLI wrapper to git I/O as its docblock promises.
+
 
 ### Security
 

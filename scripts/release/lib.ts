@@ -359,3 +359,35 @@ export interface ChangelogViolation {
   line: number;
   message: string;
 }
+
+/**
+ * The previous tip a `push` event reports, or `null` when the payload has no usable
+ * one.
+ *
+ * Split out of the CLI wrapper's `pushEventBase` so it can be tested: everything
+ * here is a decision about a parsed value, and the wrapper keeps the I/O (reading
+ * `GITHUB_EVENT_PATH`, asking git whether the commit is reachable). That is the same
+ * division the rest of this module exists for — `changelog-check.ts` documents
+ * itself as git I/O and exiting, and a rule nobody can unit-test does not belong
+ * there.
+ *
+ * **The all-zeros case is the one worth naming.** GitHub reports
+ * `0000…0` as `before` when a ref is created, which is not a commit and never
+ * resolves. Letting it through would send the wrapper to fetch a SHA that cannot
+ * exist, and the honest answer — "this push has no previous tip" — is a `null` that
+ * falls through to the rest of the ladder.
+ *
+ * Deliberately strict about the shape: a 40-character lowercase hex string, because
+ * anything else is a payload this code does not understand, and guessing at one is
+ * how a guard ends up diffing against something nobody intended.
+ */
+export function pushEventBeforeSha(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+
+  const before: unknown = Reflect.get(payload, 'before');
+  if (typeof before !== 'string') return null;
+  if (!/^[0-9a-f]{40}$/.test(before)) return null;
+  if (/^0{40}$/.test(before)) return null;
+
+  return before;
+}
