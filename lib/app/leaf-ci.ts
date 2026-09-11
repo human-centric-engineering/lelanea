@@ -82,9 +82,11 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'every test that imports it, which is not this one. That is the whole ' +
       'blind spot, and it is the exact change the guard exists to catch. It ' +
       'found four such violations already shipped when it was added. Named ' +
-      '`.test.ts` rather than `.test.tsx` because `validateAlwaysRun` rejects ' +
-      'the latter outright — sunrise#763; the file has no JSX, so the rename ' +
-      'is the correct name rather than a workaround.',
+      '`.test.ts` because the file has no JSX — which is the correct name on ' +
+      'its own merits. It was ALSO forced at the time by sunrise#763, and ' +
+      'Daybreak 0.3.0 fixed that: validateAlwaysRun now matches ' +
+      '`.(test|spec).[cm]?[jt]sx?`, so a `.test.tsx` entry is accepted. Do ' +
+      'not split or rename a component test to get onto this list.',
   },
   {
     path: 'tests/unit/context/app-docs-paths.test.ts',
@@ -97,7 +99,9 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'than no doc — it reads as authoritative — and nothing else in the suite ' +
       'can see it, since a rename fails type-check while its mention in prose ' +
       'fails nothing. §04 t-22, when `shell.md` arrived naming dozens of ' +
-      'paths. `.test.ts` not `.test.tsx`, per sunrise#763, as above.',
+      'paths. `.test.ts` because it has no JSX. sunrise#763 also forced the ' +
+      'suffix when this was written; Daybreak 0.3.0 fixed it, so `.tsx` is ' +
+      'accepted now and no longer constrains the name.',
   },
   {
     path: 'tests/unit/app/shell-not-found-streaming.test.ts',
@@ -109,8 +113,9 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'nothing else failing. Its inputs are files and it imports none of ' +
       'them: the branch that adds a loading state touches no module this ' +
       'would be selected by. Split out of `shell-not-found.test.tsx` in t-22 ' +
-      'precisely so it could be declared here — that file is `.test.tsx`, ' +
-      'which validateAlwaysRun rejects (sunrise#763), and its render cases ' +
-      'genuinely need JSX.',
+      'because validateAlwaysRun then rejected `.test.tsx` (sunrise#763). ' +
+      'Daybreak 0.3.0 fixed that, so the split is no longer FORCED — it is ' +
+      'kept because separating the file-scanning assertions from the render ' +
+      'cases is worth keeping on its own. A future test needs no such split.',
   },
 ];
