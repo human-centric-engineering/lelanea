@@ -141,9 +141,21 @@ process.
   **The case you must handle:** the runner skips a unit whose source hash is
   unchanged, so the boot seed runs once and then not again. Add a module and a
   seed for it, run `db:seed` on an existing database, and the boot seed is skipped
-  — your new module never gets its row. Call `syncFrameworkForSeed()` at the top of
-  your own seed's `run()`; that unit's hash changes when you edit it. See
-  [`building-on-daybreak.md`](./building-on-daybreak.md).
+  — your new module never gets its row. Call it at the top of your own seed's
+  `run()`; that unit's hash changes when you edit it:
+
+  ```ts
+  import { syncFrameworkForSeed } from '@/lib/framework/seed';
+  import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+
+  await syncFrameworkForSeed({ registerLeaf: initLeafApp });
+  ```
+
+  **`registerLeaf` is not optional for you.** Omit it and `syncFramework()`
+  reconciles a registry `initLeafApp()` never populated — so your new `Module` row
+  is *still* never created. This seed does **not** fail when that happens: it exits
+  0, having written the framework's own capability rows. What fails is your *next*
+  seed, the one that expects the module row to exist. See [`building-on-daybreak.md`](./building-on-daybreak.md).
 
 - **A leaf can now import `@/lib/framework` from the reserved namespaces and from
   its own seeds, with no configuration.** The core → framework import ban exempts

@@ -51,34 +51,94 @@
  *     (below) and re-runs itself when they change.
  */
 
+import { readdirSync } from 'node:fs';
+import { dirname, join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import type { SeedUnit } from '@/prisma/runner';
 import { syncFrameworkForSeed } from '@/lib/framework/seed';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 
+/**
+ * `__dirname` equivalent for ESM — the idiom `prisma/seed.ts` and
+ * `prisma/seeds/007-knowledge-chunks.ts` already use in this tree. A bare
+ * `__dirname` works today only because `package.json` has no `"type": "module"`,
+ * so tsx loads these as CJS; `import.meta.url` keeps working either way.
+ */
+const here = dirname(fileURLToPath(import.meta.url));
+
+/** The framework's source tree, relative to this file. */
+const FRAMEWORK_DIR = '../../../lib/framework';
+
+/**
+ * **Every `.ts` file under `lib/framework/`**, sorted, as paths relative to this
+ * file — the shape `hashInputs` takes.
+ *
+ * ## Why the whole tree, and not a narrower list
+ *
+ * This unit's job is to reconcile the framework's registration surface into the
+ * database, so its hash should be *the framework's source*. Every narrower
+ * definition is a guess about which files feed a `ai_capability` row, and that
+ * guess has now been wrong twice:
+ *
+ *   1. Naming the four capability **barrels** caught a capability being *added*
+ *      (which edits `index.ts`) and missed every later **edit** to one.
+ *   2. Naming every capability **source file** then missed the constants those
+ *      files build their schemas from — `fill-slot.ts` takes its `enum` from
+ *      `SLOT_SOURCE_TYPE` in `data-slots/vocabulary.ts`, and `submit-proposal.ts`
+ *      from `PROPOSAL_SUBJECT_TYPES` in `emergence/pipeline.ts`. Add a value to
+ *      either and the `functionDefinition` the LLM sees should change, while no
+ *      capability file does — seed skipped, row stale, silently.
+ *
+ * Hand-naming those two would be the third guess, and a transitive import added
+ * tomorrow would be the fourth. The tree is 155 files and ~700 KB, so reading it
+ * costs a few milliseconds against a seed that is idempotent and takes ~65 ms —
+ * a good trade for ending the class.
+ *
+ * The cost worth naming: this unit now re-runs whenever **any** framework file
+ * changes, including ones that touch no database row. That is intentional. It is
+ * a no-op reconcile, and `syncFrameworkCapabilities()` treats `requiresApproval`,
+ * `rateLimit`, `approvalTimeoutMs`, `isIdempotent` and the quarantine columns as
+ * operator-owned — written once on create, never propagated — so re-running more
+ * often cannot weaken a capability's controls.
+ *
+ * **Sorted deliberately.** `readdirSync` order is filesystem-dependent and the
+ * runner hashes in the order given, so an unsorted list would produce a different
+ * hash on a different machine and re-run the seed for no reason.
+ *
+ * **Recursive**, obviously — but stated because the non-recursive version was the
+ * second wrong guess above, one level down.
+ *
+ * Throws at import time if the directory is missing. The runner imports this
+ * module before hashing, so that surfaces as a loud seed failure rather than a
+ * silently shorter hash input — which is the failure mode this exists to prevent.
+ */
+function frameworkSources(): string[] {
+  return (
+    readdirSync(join(here, FRAMEWORK_DIR), { recursive: true })
+      // Entry names use `/` on POSIX and `\` on Windows; the runner resolves these
+      // as relative paths, so normalise before joining.
+      .map((name) => String(name).split(sep).join('/'))
+      .filter((name) => name.endsWith('.ts'))
+      .sort()
+      .map((name) => `${FRAMEWORK_DIR}/${name}`)
+  );
+}
+
 const unit: SeedUnit = {
   name: 'framework-boot',
-  // Fold the framework's own registration sources into this unit's content hash,
-  // so editing them re-runs it (see "It runs once, ever" above).
+  // Fold the framework's ENTIRE source tree into this unit's content hash, so any
+  // framework change re-runs it (see "It runs once, ever" above, and
+  // `frameworkSources()` for why the whole tree rather than a narrower list).
   //
-  // Without this, the once-ever property bites DAYBREAK as well as a leaf — and
+  // Without this the once-ever property bites DAYBREAK as well as a leaf — and
   // worse, because the documented remedy does not apply. A leaf that adds a module
   // also adds a seed for it, and can call `syncFrameworkForSeed()` from that seed's
-  // own `run()`. Add a framework CAPABILITY, though, and there is no seed of your
-  // own to hook into: `ai_capability` row never appears on an existing dev
-  // database, and the tool cannot be granted to an agent, with nothing to edit to
-  // fix it short of touching this file.
-  //
-  // `index.ts` covers a new capability GROUP (it is where each is registered); the
-  // four collections cover a new capability inside an existing group, which does
-  // not touch `index.ts`. Adding a fifth group means editing `index.ts` AND adding
-  // its collection here.
-  hashInputs: [
-    '../../../lib/framework/index.ts',
-    '../../../lib/framework/data-slots/capabilities/index.ts',
-    '../../../lib/framework/guidance/capabilities/index.ts',
-    '../../../lib/framework/engagement/capabilities/index.ts',
-    '../../../lib/framework/facilitation/emergence/capabilities/index.ts',
-  ],
+  // own `run()`. Add or edit a framework CAPABILITY, though, and there is no seed
+  // of your own to hook into: the `ai_capability` row never appears (or silently
+  // keeps saying the old thing) on an existing dev database, with nothing to edit
+  // to fix it short of touching this file.
+  hashInputs: frameworkSources(),
   async run({ logger }) {
     // Throws on failure rather than logging and continuing — the difference from
     // `initApp()`, and the point of the seed-specific entry point. A sync that

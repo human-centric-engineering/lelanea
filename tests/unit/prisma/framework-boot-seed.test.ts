@@ -138,4 +138,45 @@ describe('the boot seed re-runs when the framework changes', () => {
       expect(declared, `hashInputs is missing ${mod}`).toBe(true);
     }
   });
+
+  it('covers every file in the framework tree, not a guess about which ones matter (#245)', async () => {
+    const unit = (await import('@/prisma/seeds/_framework/000-framework-boot')).default;
+    const seedDir = join(SEEDS, '_framework');
+
+    // Three progressively-wrong guesses preceded this, and the test is written
+    // against the tree so a fourth is impossible:
+    //
+    //   1. the four capability BARRELS  — caught a capability being added, missed
+    //      every later edit to one;
+    //   2. every capability SOURCE file — missed the constants those files build
+    //      their schemas from (`SLOT_SOURCE_TYPE` in `data-slots/vocabulary.ts`
+    //      feeds `fill-slot`'s `enum`, and is in neither list);
+    //   3. a non-recursive read of those directories — missed anything nested.
+    //
+    // `syncFrameworkCapabilities()` propagates `name`, `description` and the
+    // parameter schema to the `ai_capability` row, so any of those misses leaves
+    // the row silently stale on an existing dev database, which is the whole
+    // failure `hashInputs` exists to prevent.
+    const declared = new Set((unit.hashInputs ?? []).map((h) => resolve(seedDir, h)));
+    const root = join(process.cwd(), 'lib', 'framework');
+
+    const found: string[] = [];
+    for (const entry of readdirSync(root, { recursive: true })) {
+      const name = String(entry);
+      if (!name.endsWith('.ts')) continue;
+      found.push(name);
+      expect(declared.has(join(root, name)), `hashInputs is missing lib/framework/${name}`).toBe(
+        true
+      );
+    }
+
+    // Guard the guard: an empty or tiny walk would make every assertion above pass
+    // while proving nothing. Asserted as a floor rather than an exact count,
+    // because a count is a stale witness waiting to happen — the previous version
+    // of this test shipped one that was already wrong.
+    expect(found.length).toBeGreaterThan(100);
+    // And the transitive case specifically, by name, since it is the one a
+    // narrower rule would drop first.
+    expect(declared.has(join(root, 'data-slots', 'vocabulary.ts'))).toBe(true);
+  });
 });

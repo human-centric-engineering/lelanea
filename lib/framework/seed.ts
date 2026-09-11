@@ -16,8 +16,27 @@
  * The sequence is not two steps with a gap; the middle step is a *leaf* concern:
  * `initLeafApp()` registers the leaf's modules, and `syncFramework()` reconciles
  * the registry into rows. Run the sync before the leaf has registered and it sees
- * a half-empty registry — which is not merely incomplete, it actively flags
- * partially-registered modules as **removed**.
+ * a registry missing them.
+ *
+ * **What that costs depends on whether the registry is EMPTY or merely partial,
+ * and today it is empty** — `initFramework()` registers zero modules of its own
+ * (verified: `getRegisteredModules()` returns `[]` after it runs), so omitting
+ * `registerLeaf` leaves nothing registered at all. `syncRegisteredModules()`
+ * treats an empty registry as a deliberate no-op and returns *before* the retire
+ * pass, because "nothing registered" cannot be told apart from "registration did
+ * not run". So the sync writes nothing, retires nothing, and logs
+ * `no registered modules — nothing to sync`.
+ *
+ * That is the symptom to look for: **a missing `Module` row and no error** — not
+ * rows flagged as removed, and not a failing seed. Note the rest of the sync is
+ * unaffected: `syncFrameworkCapabilities()` does not consult the module registry,
+ * so the framework's own `ai_capability` rows are written as usual and the run
+ * looks healthy. This comment used to say the reconcile "actively flags
+ * partially-registered modules as removed", which sent a reader hunting for
+ * retired rows that do not exist. It becomes true only once the framework tier
+ * registers modules of its own, which makes the registry genuinely *partial*
+ * rather than empty; the retire pass then runs and the leaf's modules are what it
+ * cannot see.
  *
  * So the ordering has to live somewhere. It cannot live in a function here that
  * calls `initLeafApp()` directly: `lib/framework/**` must not import
@@ -73,7 +92,9 @@ export interface SeedBootOptions {
    *
    * Omit it when the caller has no leaf modules to register — a framework smoke
    * script exercising framework-owned rows only. Omitting it in a process that
-   * *does* have leaf modules means `syncFramework()` sees a registry without them.
+   * *does* have leaf modules means `syncFramework()` sees a registry without them,
+   * which today means an EMPTY one: the sync no-ops and the row is simply never
+   * written, with no error and no retired rows (see the module header).
    */
   registerLeaf?: () => Promise<void>;
 }
