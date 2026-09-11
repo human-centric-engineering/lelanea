@@ -25,6 +25,29 @@ process.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-11
+
+> **Third tagged Daybreak release. Additive throughout** — nothing a leaf already
+> built stops working. One pinned test row may need updating; see the last note.
+>
+> **The journey family gains its missing writers.** `createJourney` starts a
+> journey (nothing in the framework could), `recordNodeProgress` writes
+> `UserNodeState.progress` — the one module-owned field no module could reach —
+> and `canWrite` pins every journey write to self-or-admin-support. That last one
+> changes no behaviour today: it exists so that Sunrise #367 widening *reads*
+> `own → team → all` cannot silently hand every cohort-reader the right to drive
+> transitions for those subjects. If you added a bespoke column for per-node
+> progress, you can now drop it.
+>
+> **Two seams remove a platform edit.** `lib/app/leaf-ci.ts` takes your own
+> coverage exclusions and always-run tests, and `syncFrameworkForSeed()` lets a
+> standalone `db:seed` materialise framework rows before your seeds run. Each has
+> a case you must handle — read the entries, not the headline: the seed runner
+> skips a unit whose hash is unchanged, and `registerLeaf` is not optional for you.
+>
+> **If your `defaults.test.ts` pins `lib/app/ci.ts`'s lists**, both gained a second
+> Daybreak entry, so your pinned row needs updating (#234).
+
 ### Added
 
 - **Daybreak's own changelog is now checked, and the entry gate sees framework
@@ -252,8 +275,8 @@ process.
   replacing it, so a future *narrowing* of reads also refuses the write.
 
   **A leaf writing its own framework-tier writes should guard on this, not
-  `canRead`.** Note `applyJourneyTransition` still authorizes through `canRead`
-  (#242) — that path is unchanged by this release.
+  `canRead`.** Every journey write in the framework now does, including
+  `applyJourneyTransition` — see Security below (#242).
 
 ### Security
 
@@ -714,6 +737,7 @@ process.
   are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md). Only the
   leaf-contract consequence is repeated above.
 
-[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.2.0...HEAD
+[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.3.0...HEAD
+[0.3.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.3.0
 [0.2.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.2.0
 [0.1.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.1.0

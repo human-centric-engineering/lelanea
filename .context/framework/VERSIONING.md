@@ -16,12 +16,6 @@ read that one for the _platform's_ contract with Daybreak.
 > [`CHANGELOG.md`](./CHANGELOG.md) beside it are **Daybreak-owned** and describe
 > the framework.
 
-> **Two companion docs referenced below land in the next task.**
-> `CHANGELOG.md` and `building-on-daybreak.md` (the leaf's sync guide) arrive in
-> [`f-release`](./planning/f-release.md) **t-2**; this file ships first because it
-> defines the contract they implement. Until then those links are forward
-> references, not omissions.
-
 ---
 
 ## The three versions
@@ -83,11 +77,19 @@ This is what a version commits to and what the changelog tracks. A leaf may depe
 on:
 
 - **The `lib/app/*` bridges Daybreak fills** — `bootstrap.ts`, `admin-nav.ts`,
-  `data-export.ts` — **and the reserved `leaf-*` seams they delegate to**
-  (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`, `leaf-db-drift.ts`,
-  `leaf-data-export.ts`). Which files are Daybreak's and which are the leaf's **is
-  itself public surface**: a file changing hands is a breaking change for any leaf
-  that filled it.
+  `data-export.ts`, `brand.ts`, `db-drift.ts` and `ci.ts` — **and the reserved
+  `leaf-*` seams they delegate to** (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+  `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-db-drift.ts`, `leaf-ci.ts`).
+  Which files are Daybreak's and which are the leaf's **is itself public
+  surface**: a file changing hands is a breaking change for any leaf that filled
+  it. Every one of these seams **appends** to Daybreak's own entries except
+  `leaf-brand.ts`, which **overrides** — brand identity is single-valued, so a
+  leaf replaces Daybreak's name rather than composing with it.
+
+  This roster is the count. `CLAUDE.md`'s banner carries the same list for the
+  same reason: it has been wrong before, and a docblock's ordinal ("the fourth
+  bridge") is not a substitute for counting the files.
+
 - **`registerModule()`** and the framework registration seams driven by
   `initFramework()`.
 - **`framework_*` Prisma models** and their published shapes.
