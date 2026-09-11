@@ -142,6 +142,18 @@ export const appCoverageExclusions: AppCoverageExclusion[] = [
       'so a full coverage run never executes it and a scoped run forces it in at 0%. Its ' +
       'pure logic lives in `scripts/boundary/lib.ts`, which stays gated and has its own tests.',
   },
+  {
+    // The wrapper BY NAME again, for the same reason as `scripts/boundary/check.ts`
+    // above: its pure half (`scripts/release/lib.ts`) is at 100% and must STAY
+    // gated, so an extglob over the directory would be exactly wrong here.
+    pattern: 'scripts/release/changelog-check.ts',
+    reason:
+      'a `tsx` CLI entry point run by `npm run framework:changelog` in `app:ci-checks` — ' +
+      'git I/O (merge-base, ls-tree, show, ls-files) with `main()` at module scope and ' +
+      'nothing importing it, so a full coverage run never executes it and a scoped run ' +
+      'forces it in at 0%. Every decision it makes lives in `scripts/release/lib.ts`, which ' +
+      'is unit-tested at 100% and deliberately not excluded.',
+  },
   // The leaf tier's own exclusions (reserved-empty in Daybreak).
   ...leafCoverageExclusions,
 ];
@@ -210,6 +222,14 @@ export const appAlwaysRunTests: AppAlwaysRunTest[] = [
       'the core seeds and before any leaf directory. Nothing imports a seed file, so adding ' +
       'or renaming one — the change that breaks the ordering, silently — reaches this test ' +
       'by no import chain.',
+  },
+  {
+    path: 'tests/unit/scripts/release/changelog-structure.test.ts',
+    reason:
+      'reads `.context/framework/CHANGELOG.md` off disk to check its structure (#239). Nothing ' +
+      'imports a changelog, so the edit that breaks it — a release cut, a mis-typed `###` — ' +
+      'reaches this test by no import chain. It is the only thing checking that file: Sunrise’s ' +
+      'own structure check is hardcoded to the root CHANGELOG.md.',
   },
   // The leaf tier's own whole-tree tests (reserved-empty in Daybreak).
   ...leafAlwaysRunTests,

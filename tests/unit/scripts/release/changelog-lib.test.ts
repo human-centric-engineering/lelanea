@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { checkChangelog, formatVerdict, CHANGELOG_PATH } from '@/scripts/release/lib';
+import { checkChangelog, formatVerdict, CHANGELOG_PATH, barrelReason } from '@/scripts/release/lib';
 
 describe('checkChangelog', () => {
   describe('fires on a public-surface change with no entry', () => {
@@ -136,5 +136,75 @@ describe('formatVerdict', () => {
     expect(message).toContain('changing hands');
     expect(message).toContain(CHANGELOG_PATH);
     expect(message).toContain('VERSIONING.md');
+  });
+});
+
+describe('framework barrel surface gating (#239 gap 3)', () => {
+  const deltaOf = (file: string, added: string[] = [], removed: string[] = []) => ({
+    file,
+    added,
+    removed,
+  });
+
+  it('gates on a symbol ADDED to a framework barrel', () => {
+    const verdict = checkChangelog(
+      ['lib/framework/facilitation/journey/create.ts'],
+      [deltaOf('lib/framework/facilitation/journey/index.ts', ['createJourney'])]
+    );
+
+    expect(verdict.violation).toBe(true);
+    expect(verdict.triggers[0]?.reason).toContain('createJourney');
+  });
+
+  it('calls a REMOVAL breaking, and says so first', () => {
+    // A removal and an addition are not the same news. The reason string leads
+    // with the removal because that is the half that breaks a leaf on upgrade.
+    const reason = barrelReason(deltaOf('lib/framework/x/index.ts', ['newThing'], ['oldThing']));
+
+    expect(reason.indexOf('REMOVED')).toBeLessThan(reason.indexOf('+newThing'));
+    expect(reason).toContain('breaking for any leaf importing them');
+  });
+
+  it('does NOT gate a barrel whose symbols are unchanged', () => {
+    // The objection the old floor rationale raised: a path rule would fire on
+    // every internal refactor. This is the answer to it, asserted.
+    const verdict = checkChangelog(
+      ['lib/framework/facilitation/journey/create.ts'],
+      [deltaOf('lib/framework/facilitation/journey/index.ts')]
+    );
+
+    expect(verdict.violation).toBe(false);
+    expect(verdict.triggers).toEqual([]);
+  });
+
+  it('ignores barrels outside lib/framework', () => {
+    // `lib/app/*` is the leaf's own surface and already has a path rule; core's
+    // barrels are Sunrise's to announce, not Daybreak's.
+    const verdict = checkChangelog(
+      [],
+      [deltaOf('lib/orchestration/index.ts', ['somethingCore']), deltaOf('lib/app/index.ts', ['x'])]
+    );
+
+    expect(verdict.violation).toBe(false);
+  });
+
+  it('is satisfied when the changelog was touched', () => {
+    const verdict = checkChangelog(
+      [CHANGELOG_PATH],
+      [deltaOf('lib/framework/x/index.ts', ['thing'])]
+    );
+
+    expect(verdict.violation).toBe(false);
+    expect(verdict.changelogTouched).toBe(true);
+  });
+
+  it('treats "no deltas supplied" as no information, not as proof of no change', () => {
+    // The wrapper passes `[]` only when it could read both revisions; when it
+    // cannot it warns PARTIAL. This pins that the default is inert rather than
+    // silently exonerating — the path rules still stand on their own.
+    const verdict = checkChangelog(['lib/app/ci.ts']);
+
+    expect(verdict.violation).toBe(true);
+    expect(verdict.triggers).toHaveLength(1);
   });
 });

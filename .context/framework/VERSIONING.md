@@ -148,11 +148,38 @@ into a workflow.
    sentences that were true when written, because it removes and moves things
    other prose cites as evidence. Nothing automated catches this: type-check and
    lint do not read prose, and `check:changelog-drift` **does not read this file
-   at all** — it is hardcoded to the root `CHANGELOG.md`
+   at all** — it is hardcoded to the root `CHANGELOG.md`, and running it here needs
+   a one-line upstream change rather than a fork copy of ~100 lines of git plumbing
    ([#239](https://github.com/human-centric-engineering/daybreak/issues/239)).
    Even once it does, it correlates _identifiers_, which here often do not change
    — `/api/health` still exists, it just no longer carries what a docblock says it
    does.
+
+   **What #239 DID add**, in two places, because the two rules need different
+   inputs:
+
+   - **Structure** — headings, ordering, `[Unreleased]` placement, duplicate
+     sections — is a property of ONE file, asserted by
+     `tests/unit/scripts/release/changelog-structure.test.ts` on every test run.
+     That catches the malformed release section 0.2.0 had to fix by hand.
+   - **Append-only history** — a released section deleted or rewritten — is a
+     property of a CHANGE, so it needs two revisions and runs in
+     `npm run framework:changelog`. This is the rule that catches the shape where
+     deleting a `## [0.1.0]` heading leaves a file that is still perfectly
+     well-formed, so every structural rule passes while a release's notes have
+     silently gone.
+
+   **Neither runs in CI on a changelog-only PR**, which is the PR most able to
+   break this file. Both CI paths — the test jobs and the fork-check step — are
+   gated on the code filter, and `.context/*` is not code. Sunrise ungated its own
+   changelog step for exactly this reason; the fork seams did not inherit that, and
+   fixing it needs an upstream change rather than an edit to a Sunrise-owned
+   workflow (Sunrise #767). Until then these are a local and full-suite net, not a
+   CI gate on the release cut itself — so run `npm run framework:changelog` by hand
+   as part of step 4.
+
+   None of it catches prose that is well-formed and untrue. This step is still the
+   only thing that does.
 
    Three places, in this order:
 

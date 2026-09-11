@@ -463,9 +463,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => {
       expect(appCoverageExclusions.map((entry) => entry.pattern)).toEqual([
         'scripts/boundary/check.ts',
+        'scripts/release/changelog-check.ts',
       ]);
       expect(appAlwaysRunTests.map((entry) => entry.path)).toEqual([
         'tests/unit/prisma/framework-boot-seed.test.ts',
+        'tests/unit/scripts/release/changelog-structure.test.ts',
       ]);
     },
   },

@@ -27,6 +27,43 @@ process.
 
 ### Added
 
+- **Daybreak's own changelog is now checked, and the entry gate sees framework
+  exports** (#239). Two of the three gaps that issue named; the third is an
+  upstream ask (below).
+
+  - **Structure.** `.context/framework/CHANGELOG.md` had never been validated —
+    Sunrise's structure check is hardcoded to the root `CHANGELOG.md` — so a
+    malformed section, a duplicated `###` or an out-of-order release shipped
+    silently. It is now checked on every test run, against the real file.
+
+    Daybreak's changelog keeps **three headings outside Keep-a-Changelog's six**,
+    deliberately: `Platform` (what the Sunrise sync changed about *your* contract,
+    a different problem from a Daybreak-owned change), `Documentation`, and
+    `⚠️ <Category> — action required …`. That last one is the most useful heading
+    in an upgrade document, and folding it into `Changed` to satisfy a convention
+    would make this file worse at its only job. A typo (`### Addded`) still fails.
+
+  - **The entry gate now covers `lib/framework` exports.** Previously it gated on
+    file paths only, so adding `createJourney` to two barrels changed the public
+    surface with nothing requiring an entry — the entry got written because a human
+    read `check:exports` and decided. It now diffs each `lib/framework/**/index.ts`
+    barrel's **exported symbol set** base → HEAD. An internal refactor that moves
+    code without changing what a barrel exports still does not trip it; a rename
+    trips it as one removal plus one addition, which is correct — it breaks every
+    leaf importing the old name.
+
+  **If your leaf pins `lib/app/ci.ts`'s lists in its `defaults.test.ts` row**, both
+  gained a second Daybreak entry — `appAlwaysRunTests` the changelog structure
+  test, and `appCoverageExclusions` the guard's own CLI wrapper — so your pinned
+  row needs updating. That is the bridge-above-the-leaf-seam case in #234, and this
+  is the first change to exercise it.
+
+  Still outstanding: the **drift** check (a bullet that was true when written and
+  falsified by a later commit on the same branch) does not yet run against this
+  file. Its git plumbing lives in Sunrise's CLI wrapper rather than its pure
+  module, so running it here needs a one-line upstream change rather than ~100
+  lines duplicated in the fork. Asked upstream; it lands here when it lands there.
+
 - **`lib/app/leaf-ci.ts` — a leaf declares its own coverage exclusions and
   always-run tests.** Adopted from Sunrise #762 (`lib/app/ci.ts`), which Daybreak
   asked for as #759 and which is on `upstream/main` ahead of a Sunrise release.
