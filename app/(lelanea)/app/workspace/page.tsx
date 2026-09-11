@@ -18,21 +18,17 @@ export const metadata: Metadata = { title: 'Workspace' };
  * one path, and a catch-all that answers one known path is a route nobody can
  * find from the file tree.
  *
- * ## What went with the catch-all, and what did not
+ * ## The catch-all beside it is a different route with a different job
  *
- * A mistyped path under `/app` still leaves the shell for the platform's
- * full-window 404. A segment-level `not-found.tsx` does NOT change that: it
- * renders only when `notFound()` is thrown INSIDE the segment, and only the
- * root `app/not-found.tsx` handles unmatched URLs (`next/dist/docs`,
- * file-conventions/not-found). With the catch-all gone nothing under `/app`
- * throws it, so a boundary here would be a file the router could never reach —
- * which is what a first pass at this task shipped, under a docblock claiming
- * the opposite.
+ * `[...slug]/page.tsx` is back, and it is not t-9's. That one RESOLVED each
+ * destination and rendered a placeholder; this one renders nothing and exists
+ * only to call `notFound()`, so the segment's `not-found.tsx` can be reached at
+ * all. t-11 argued that was a non-goal — the behaviour matched what `main`
+ * shipped, and §05 was where stale deep links would start appearing. The owner
+ * ruled otherwise at close-out (t-21): falling out of the frame on a typo is a
+ * shell defect, and the shell is what §04 is for.
  *
- * Making it reachable needs a catch-all whose only job is to call `notFound()`,
- * which is a different route from the one just deleted and a deliberate
- * non-goal here: the behaviour is the same as `main` ships today, and §05 is
- * where deep links start being produced that can go stale.
+ * A real route beats a catch-all, so this page is unaffected by it.
  */
 export default function WorkspacePage() {
   return (

@@ -9,8 +9,20 @@
  * `shell-placeholder-page.test.tsx` called that component directly. Once each
  * destination had a page of its own, that test would have gone on passing
  * forever while testing a module the router could no longer reach — a real
- * route beats a catch-all, so nothing would have hit it again. The catch-all is
- * deleted; this asks the same two questions of the routes that replaced it.
+ * route beats a catch-all, so nothing would have hit it again. This asks the
+ * same two questions of the routes that replaced it.
+ *
+ * A `[...slug]` exists again, and is not that one: t-21 added a route that
+ * resolves nothing and only calls `notFound()`, so the shell's own 404
+ * boundary is reachable. `shell-not-found.test.tsx` owns it ENTIRELY.
+ *
+ * There is deliberately no assertion here that it fails to shadow these seven.
+ * A first pass added one, matching the catch-all's source for `SHELL_NAV` —
+ * which is a string match wearing the name of a routing property, and would
+ * pass just as well against a catch-all that hardcoded the seven hrefs or read
+ * `VIEW_TONES`. Route precedence is the framework's; what this file can
+ * honestly hold is that each destination has a module, a file at its own path
+ * and its own title, which is what the assertions above do.
  *
  * The list is derived from `SHELL_NAV`, so a destination added to the nav
  * without a page fails here rather than in someone's browser. `MODULES` is
@@ -87,15 +99,6 @@ describe('every destination the nav offers is a route', () => {
     expect(
       existsSync(path.join(process.cwd(), 'app', '(lelanea)', 'app', segment, 'page.tsx'))
     ).toBe(true);
-  });
-
-  it('has no catch-all left behind it', () => {
-    // Once every destination is real, `[...slug]` answers nothing. A route
-    // nobody can reach is a route nobody maintains, and it would quietly
-    // shadow-document a set of destinations that had moved on.
-    expect(existsSync(path.join(process.cwd(), 'app', '(lelanea)', 'app', '[...slug]'))).toBe(
-      false
-    );
   });
 });
 
