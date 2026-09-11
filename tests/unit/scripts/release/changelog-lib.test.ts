@@ -10,7 +10,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { checkChangelog, formatVerdict, CHANGELOG_PATH } from '@/scripts/release/lib';
+import {
+  checkChangelog,
+  formatVerdict,
+  CHANGELOG_PATH,
+  barrelReason,
+  pushEventBeforeSha,
+} from '@/scripts/release/lib';
 
 describe('checkChangelog', () => {
   describe('fires on a public-surface change with no entry', () => {
@@ -136,5 +142,110 @@ describe('formatVerdict', () => {
     expect(message).toContain('changing hands');
     expect(message).toContain(CHANGELOG_PATH);
     expect(message).toContain('VERSIONING.md');
+  });
+});
+
+describe('framework barrel surface gating (#239 gap 3)', () => {
+  const deltaOf = (file: string, added: string[] = [], removed: string[] = []) => ({
+    file,
+    added,
+    removed,
+  });
+
+  it('gates on a symbol ADDED to a framework barrel', () => {
+    const verdict = checkChangelog(
+      ['lib/framework/facilitation/journey/create.ts'],
+      [deltaOf('lib/framework/facilitation/journey/index.ts', ['createJourney'])]
+    );
+
+    expect(verdict.violation).toBe(true);
+    expect(verdict.triggers[0]?.reason).toContain('createJourney');
+  });
+
+  it('calls a REMOVAL breaking, and says so first', () => {
+    // A removal and an addition are not the same news. The reason string leads
+    // with the removal because that is the half that breaks a leaf on upgrade.
+    const reason = barrelReason(deltaOf('lib/framework/x/index.ts', ['newThing'], ['oldThing']));
+
+    expect(reason.indexOf('REMOVED')).toBeLessThan(reason.indexOf('+newThing'));
+    expect(reason).toContain('breaking for any leaf importing them');
+  });
+
+  it('does NOT gate a barrel whose symbols are unchanged', () => {
+    // The objection the old floor rationale raised: a path rule would fire on
+    // every internal refactor. This is the answer to it, asserted.
+    const verdict = checkChangelog(
+      ['lib/framework/facilitation/journey/create.ts'],
+      [deltaOf('lib/framework/facilitation/journey/index.ts')]
+    );
+
+    expect(verdict.violation).toBe(false);
+    expect(verdict.triggers).toEqual([]);
+  });
+
+  it('ignores barrels outside lib/framework', () => {
+    // `lib/app/*` is the leaf's own surface and already has a path rule; core's
+    // barrels are Sunrise's to announce, not Daybreak's.
+    const verdict = checkChangelog(
+      [],
+      [deltaOf('lib/orchestration/index.ts', ['somethingCore']), deltaOf('lib/app/index.ts', ['x'])]
+    );
+
+    expect(verdict.violation).toBe(false);
+  });
+
+  it('is satisfied when the changelog was touched', () => {
+    const verdict = checkChangelog(
+      [CHANGELOG_PATH],
+      [deltaOf('lib/framework/x/index.ts', ['thing'])]
+    );
+
+    expect(verdict.violation).toBe(false);
+    expect(verdict.changelogTouched).toBe(true);
+  });
+
+  it('treats "no deltas supplied" as no information, not as proof of no change', () => {
+    // The wrapper passes `[]` only when it could read both revisions; when it
+    // cannot it warns PARTIAL. This pins that the default is inert rather than
+    // silently exonerating — the path rules still stand on their own.
+    const verdict = checkChangelog(['lib/app/ci.ts']);
+
+    expect(verdict.violation).toBe(true);
+    expect(verdict.triggers).toHaveLength(1);
+  });
+});
+
+describe('pushEventBeforeSha', () => {
+  // Context: on a `push` to main, `origin/main` IS HEAD, so the guard had no base
+  // and failed every merge — main was red for three of them, and any leaf merging
+  // that release would have gone red on its own main the same way. The fix reads
+  // the previous tip out of the push payload; these are the rules for trusting it.
+
+  const SHA = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
+
+  it('returns the previous tip from a well-formed push payload', () => {
+    expect(pushEventBeforeSha({ before: SHA, after: 'z'.repeat(40) })).toBe(SHA);
+  });
+
+  it('rejects the all-zeros SHA a ref creation reports', () => {
+    // THE CASE THIS FUNCTION EXISTS FOR. A created branch has no previous tip;
+    // letting the zeros through sends the caller off to fetch a commit that cannot
+    // exist, and it would then report "could not look" for the wrong reason.
+    expect(pushEventBeforeSha({ before: '0'.repeat(40) })).toBeNull();
+  });
+
+  it.each([
+    ['missing before', {}],
+    ['null payload', null],
+    ['a non-object payload', 'refs/heads/main'],
+    ['a non-string before', { before: 12345 }],
+    ['a short SHA', { before: 'a1b2c3d' }],
+    ['an uppercase SHA', { before: SHA.toUpperCase() }],
+    ['a non-hex string', { before: 'g'.repeat(40) }],
+  ])('returns null for %s', (_label, payload) => {
+    // Strict by intent: anything unrecognised falls through to the rest of the
+    // ladder rather than being guessed at. A guard that diffs against a base
+    // nobody chose is worse than one that says it could not look.
+    expect(pushEventBeforeSha(payload)).toBeNull();
   });
 });

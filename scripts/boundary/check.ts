@@ -26,6 +26,7 @@ import { logger } from '@/lib/logging';
 import {
   checkMigrationHygiene,
   scanForFrameworkVocab,
+  isCoreSource,
   type MigrationFile,
   type SourceFile,
 } from '@/scripts/boundary/lib';
@@ -166,28 +167,6 @@ function runMigrationHygiene(): boolean {
 }
 
 // ── 3. Zero framework vocabulary in core ────────────────────────────────────
-
-/**
- * Paths exempt from the vocab ban: framework tier, leaf tier, tests. This allowlist
- * MIRRORS the framework-tier `files` globs in `lib/framework/eslint.config.mjs` — a
- * path that is framework-tier there must be exempt here too, or a framework file that
- * legitimately uses framework vocabulary trips this scan (as
- * `components/admin/framework/**` did once its first node/journey component landed).
- * Add framework-tier paths to BOTH.
- */
-function isCoreSource(rel: string): boolean {
-  if (rel.startsWith('lib/framework/')) return false; // the framework itself
-  if (rel.startsWith('lib/app/')) return false; // leaf surface (built on framework)
-  if (rel.startsWith('app/admin/framework/')) return false; // framework admin UI (pages)
-  if (rel.startsWith('components/admin/framework/')) return false; // framework admin UI (components)
-  if (rel.startsWith('app/api/v1/admin/framework/')) return false; // framework admin routes
-  if (rel.startsWith('app/api/v1/framework/')) return false; // framework consumer routes (X5 surfaces)
-  const base = path.basename(rel);
-  if (base.startsWith('framework-') && base.endsWith('.prisma')) return false;
-  if (base === 'app.prisma') return false; // leaf schema
-  if (/\.(test|spec)\.tsx?$/.test(base)) return false;
-  return true;
-}
 
 function readCoreSources(): SourceFile[] {
   const roots = ['lib', 'app', 'components', 'prisma/schema'];

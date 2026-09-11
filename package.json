@@ -63,6 +63,7 @@
     "smoke:epub": "tsx --env-file=.env.local scripts/smoke/epub-ingestion.ts",
     "smoke:erasure": "tsx --env-file=.env.local scripts/smoke/erasure.ts",
     "smoke:engine": "tsx --env-file=.env.local scripts/smoke/engine.ts",
+    "smoke:journey-progress": "tsx --env-file=.env.local scripts/smoke/journey-progress.ts",
     "smoke:export": "tsx --env-file=.env.local scripts/smoke/export.ts",
     "postinstall": "prisma generate",
     "prepare": "husky",

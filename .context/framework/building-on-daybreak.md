@@ -51,11 +51,22 @@ bridges they delegate to.**
 | `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         | Prisma-unmodelled DB objects                                    |
 | `lib/app/leaf-data-export.ts` | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations |
 | `lib/app/leaf-brand.ts`       | `brand.ts`            | product name, legal entity, meta description                    |
+| `lib/app/leaf-ci.ts`          | `ci.ts`               | your own coverage exclusions and whole-tree always-run tests    |
 
 Each bridge runs Daybreak's registration and then calls your `leaf-*` hook. Filling a
 bridge directly collides with Daybreak on your next merge — and in the
 `data-export.ts` case, resolving that conflict the obvious way silently drops the
 framework's tables from every GDPR subject-access export.
+
+**`leaf-ci.ts` is where your CI declarations go** — a `tsx` CLI script of your own
+is structurally 0% and will fail the per-file coverage floor the first time anyone
+edits it, and a test whose subject is the repository is reached by no import chain,
+so a scoped run never selects it. Both lists append to Daybreak's, which append to
+Sunrise's, and every guard Sunrise wrote over those lists judges your entries in
+your checkout: a reason under 20 characters or a duplicate fails either list, and an
+always-run path must exist, be passable to `vitest` as an argument, and sit in a
+directory `vitest.config.ts` actually collects. See `lib/app/ci.ts` for two worked
+examples.
 
 **`leaf-brand.ts` is the one that OVERRIDES rather than appends.** Brand identity is
 single-valued: your name replaces Daybreak's, it does not compose with it. A
@@ -86,6 +97,150 @@ the registry refuses a section another tier claimed.
 > is a breaking change and is called out in [`CHANGELOG.md`](./CHANGELOG.md) — that
 > is exactly what happened to `data-export.ts` in `0.1.0`. Read the changelog before
 > merging, not after.
+
+---
+
+## Importing `@/lib/framework` from your own code
+
+Daybreak bans `@/lib/framework` imports from core and app-shell code. The reason is
+not hygiene: a static `@/lib/framework` specifier resolves at **build** time, so
+upstream Sunrise — or a sibling fork with no `lib/framework/` folder — would fail
+`next build`. In **your** repo that folder always exists, so the ban is not
+protecting you from anything; it is protecting the tiers above you. You have two
+ways through it, and the first is free.
+
+### 1. Use the reserved namespaces (no configuration)
+
+Sunrise and Daybreak both keep these empty for you, and they are already exempt:
+
+| Your code                | Reserved path            |
+| ------------------------ | ------------------------ |
+| Consumer API routes      | `app/api/v1/app/**`      |
+| Authenticated pages      | `app/(protected)/app/**` |
+| Public pages             | `app/(public)/app/**`    |
+| Auth-flow pages          | `app/(auth)/app/**`      |
+| Admin pages              | `app/admin/app/**`       |
+| React components         | `components/app/**`      |
+| Server-side registration | `lib/app/**`             |
+| Your seeds               | `prisma/seeds/app-*/**`  |
+
+Put a route that calls `applyJourneyTransition` or `resolveModuleSurface` at
+`app/api/v1/app/runs/route.ts` and it just works — no override, and nothing to
+re-do on a Daybreak upgrade.
+
+### 2. Use your own vocabulary, and re-permit it yourself
+
+If you would rather your URLs read `programme` or `journal` than `app`, that is a
+perfectly good reason to leave the reserved namespaces — Daybreak cannot exempt your
+words, because the next leaf has different ones and they would accumulate in a
+framework-owned config forever. Re-permit them in your own
+`lib/app/eslint.config.mjs`, which the root config spreads **last** so your block
+wins for your files:
+
+```js
+export default [
+  {
+    files: ['app/(protected)/programme/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            // RESTATE the alias ban — see the footgun below.
+            { group: ['./*', '../*'], message: 'Use the @/ path alias.' },
+          ],
+        },
+      ],
+    },
+  },
+];
+```
+
+**This is the supported mechanism, not a workaround.** The seam exists precisely so
+a leaf can make this call.
+
+> **The flat-config footgun.** `no-restricted-imports` **replaces** rather than
+> merges across matching blocks. A block that omits the `@/`-alias ban does not
+> inherit it — it silently turns relative-import enforcement off for those paths.
+> Restate the whole rule per glob.
+
+## Seeding framework configuration
+
+Your seeds can activate a module, bind an agent, or publish a map that references
+one — all of which need the `Module` rows, their slot definitions and the framework
+capability rows to exist. Those are created at **server boot**, and a standalone
+`db:seed` never boots the app.
+
+**Daybreak handles this for you.** `prisma/seeds/_framework/000-framework-boot.ts`
+runs the framework boot sequence against the database, and it sorts after the core
+seeds and before any `app-…` directory, so by the time your seeds run the rows are
+there. `db:reset` and CI need no action from you at all.
+
+### The one case you have to handle yourself
+
+The seed runner **skips a unit whose source hash is unchanged**, so the boot seed
+runs once and then not again. That is fine for a fresh database, `db:reset` and CI.
+It is not fine here:
+
+> You add a new module to your leaf, and a new seed that configures it. You run
+> `db:seed` against your existing dev database. The boot seed is skipped — its
+> source did not change — so your new module never gets its `Module` row, and your
+> new seed fails.
+
+Call the seam at the top of your own seed's `run()`. Your unit's hash _does_ change
+when you edit it, so the sync happens exactly when it is needed:
+
+```ts
+import type { SeedUnit } from '@/prisma/runner';
+import { syncFrameworkForSeed } from '@/lib/framework/seed';
+import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+
+const unit: SeedUnit = {
+  name: 'my-module-config',
+  async run({ prisma }) {
+    await syncFrameworkForSeed({ registerLeaf: initLeafApp });
+    // ...your module's rows now exist; configure them.
+  },
+};
+export default unit;
+```
+
+It is idempotent, so calling it when the boot seed already ran is safe. It is not
+free of noise, though: re-registering a framework capability logs
+`registerFrameworkCapability: duplicate slug — last registration wins` per
+capability, and the registry is `globalThis`-backed, so it persists across seed
+units in one process. Call it from the seeds that need it rather than from all of
+them, or those warnings will outnumber your actual output. They are harmless — the
+last registration is identical to the first.
+
+**Pass `registerLeaf`.** It runs between framework registration and the database
+reconcile, which is the only correct position.
+
+Omit it and the failure is **silent, not loud**: Daybreak's framework tier registers
+no modules of its own, so without your hook the registry is _empty_, and the
+reconcile treats an empty registry as a deliberate no-op — it returns before the
+retire pass rather than mass-unregistering on what might be a registration that
+never ran. So no module row is written and none is removed.
+
+**The rest of the sync still runs, which is what makes this confusing.**
+`syncFrameworkCapabilities()` does not depend on the module registry, so the
+framework's own `ai_capability` rows appear exactly as they should and the seed
+exits 0. It is easy to conclude from that the sync worked. The symptom to look for
+is narrower: **a missing `Module` row, no error message**, and
+`no registered modules — nothing to sync` in the log. Not rows marked removed, and
+not a failing seed.
+
+`syncFrameworkForSeed()` throws where the server-boot bridge logs and continues —
+deliberately. A seed that silently failed to establish the framework would be
+recorded as applied, and the next seed would fail a long way from the cause.
+
+### Seeds are exempt, but core seeds are not
+
+Seed files run via `tsx` and are never part of `next build`, so the build-time
+argument does not reach them — `prisma/seeds/app-*/**` may import the framework
+freely. That is _not_ a blanket exemption for `prisma/seeds/`: the numbered core
+seeds at the top level (`prisma/seeds/001-system-owner.ts`, …) are Sunrise's and
+stay banned, because they exist upstream and in forks with no framework tier.
 
 ---
 
@@ -159,6 +314,11 @@ for everything else it covers.
 - **`tests/unit/lib/app/defaults.test.ts`** — asserts every `lib/app/*` seam ships
   empty. When you fill one, **pin the new value** in its `SEAM_DEFAULTS` row rather
   than removing the row.
+
+  **Filling a `leaf-*` seam breaks two rows, not one** — its own, and the row for
+  the **bridge above it**, a file you never touched. The bridge reads your seam, so
+  your value changes the bridge's resolved value. Confirmed for `brand.ts`,
+  `admin-nav.ts` and `ci.ts`; see issue #234. Pin both.
 
 ---
 

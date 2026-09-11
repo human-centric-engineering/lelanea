@@ -203,3 +203,43 @@ export function scanForFrameworkVocab(
   }
   return hits;
 }
+
+/**
+ * Is `rel` a **Sunrise-core** source file, and therefore subject to the
+ * zero-framework-vocabulary ban? Paths belonging to the framework or leaf tiers
+ * return `false` — a framework identifier there is the tier working, not a leak.
+ *
+ * **This allowlist MIRRORS the non-core paths in `lib/framework/eslint.config.mjs`**
+ * — the framework-tier `files` globs, plus the leaf paths that config exempts from
+ * the core → framework import ban. A path added to one must be added to the other.
+ * Both directions have bitten: `components/admin/framework/**` tripped this scan
+ * once its first node/journey component landed, and the reserved leaf route
+ * namespaces (#157) would have cleared the import ban only to fail here.
+ *
+ * Pure, so it lives here rather than in the CLI wrapper — `check.ts` does the
+ * filesystem walk and feeds paths in.
+ */
+export function isCoreSource(rel: string): boolean {
+  // ── Framework tier ────────────────────────────────────────────────────────
+  if (rel.startsWith('lib/framework/')) return false; // the framework itself
+  if (rel.startsWith('app/admin/framework/')) return false; // framework admin UI (pages)
+  if (rel.startsWith('components/admin/framework/')) return false; // framework admin UI (components)
+  if (rel.startsWith('app/api/v1/admin/framework/')) return false; // framework admin routes
+  if (rel.startsWith('app/api/v1/framework/')) return false; // framework consumer routes (X5)
+
+  // ── Leaf tier — reserved surfaces, empty in Sunrise and in Daybreak ───────
+  if (rel.startsWith('lib/app/')) return false; // leaf lib surface (built on framework)
+  if (rel.startsWith('components/app/')) return false; // leaf components (#157)
+  if (rel.startsWith('app/api/v1/app/')) return false; // leaf consumer routes (#157)
+  if (rel.startsWith('app/(protected)/app/')) return false; // leaf authenticated pages (#157)
+  if (rel.startsWith('app/(public)/app/')) return false; // leaf public pages (#157)
+  if (rel.startsWith('app/(auth)/app/')) return false; // leaf auth-flow pages (#157)
+  if (rel.startsWith('app/admin/app/')) return false; // leaf admin pages (#157)
+
+  // ── By filename ───────────────────────────────────────────────────────────
+  const base = rel.slice(rel.lastIndexOf('/') + 1);
+  if (base.startsWith('framework-') && base.endsWith('.prisma')) return false;
+  if (base === 'app.prisma') return false; // leaf schema
+  if (/\.(test|spec)\.tsx?$/.test(base)) return false;
+  return true;
+}

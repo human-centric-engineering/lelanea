@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  canWrite,
   canRead,
   subjectScope,
   adminSupportViewer,
@@ -99,5 +100,43 @@ describe('adminSupportViewer', () => {
 
   it('produces a viewer canRead grants cross-user reads', async () => {
     await expect(canRead(adminSupportViewer('user_op'), 'user_someone_else')).resolves.toBe(true);
+  });
+});
+
+describe('canWrite', () => {
+  it('grants the subject themselves', async () => {
+    await expect(canWrite(alice, 'user_alice')).resolves.toBe(true);
+  });
+
+  it('grants the explicit admin-support override', async () => {
+    await expect(canWrite(support, 'user_alice')).resolves.toBe(true);
+  });
+
+  it('denies a third party by default', async () => {
+    await expect(canWrite(alice, 'user_bob')).resolves.toBe(false);
+  });
+
+  it('denies a third party whatever ownership scope is asked for', async () => {
+    // The pin, stated as a test. `scope` is carried for Sunrise #367's resolver;
+    // no ownership widening may reach the WRITE grant.
+    for (const ownership of ['own', 'team', 'all'] as const) {
+      await expect(canWrite(alice, 'user_bob', { ownership })).resolves.toBe(false);
+    }
+  });
+
+  it('is no wider than canRead for any viewer/subject pair', async () => {
+    // The composition invariant: a write requires the read. If #367 ever makes
+    // canRead NARROWER, this holds the write down with it — so a stale write grant
+    // cannot outlive the read it depends on.
+    const viewers = [alice, support];
+    const subjects = ['user_alice', 'user_bob', 'user_support'];
+
+    for (const viewer of viewers) {
+      for (const subject of subjects) {
+        const write = await canWrite(viewer, subject);
+        const read = await canRead(viewer, subject);
+        if (write) expect(read).toBe(true);
+      }
+    }
   });
 });

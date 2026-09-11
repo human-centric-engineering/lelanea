@@ -16,12 +16,6 @@ read that one for the _platform's_ contract with Daybreak.
 > [`CHANGELOG.md`](./CHANGELOG.md) beside it are **Daybreak-owned** and describe
 > the framework.
 
-> **Two companion docs referenced below land in the next task.**
-> `CHANGELOG.md` and `building-on-daybreak.md` (the leaf's sync guide) arrive in
-> [`f-release`](./planning/f-release.md) **t-2**; this file ships first because it
-> defines the contract they implement. Until then those links are forward
-> references, not omissions.
-
 ---
 
 ## The three versions
@@ -83,11 +77,19 @@ This is what a version commits to and what the changelog tracks. A leaf may depe
 on:
 
 - **The `lib/app/*` bridges Daybreak fills** — `bootstrap.ts`, `admin-nav.ts`,
-  `data-export.ts` — **and the reserved `leaf-*` seams they delegate to**
-  (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`, `leaf-db-drift.ts`,
-  `leaf-data-export.ts`). Which files are Daybreak's and which are the leaf's **is
-  itself public surface**: a file changing hands is a breaking change for any leaf
-  that filled it.
+  `data-export.ts`, `brand.ts`, `db-drift.ts` and `ci.ts` — **and the reserved
+  `leaf-*` seams they delegate to** (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+  `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-db-drift.ts`, `leaf-ci.ts`).
+  Which files are Daybreak's and which are the leaf's **is itself public
+  surface**: a file changing hands is a breaking change for any leaf that filled
+  it. Every one of these seams **appends** to Daybreak's own entries except
+  `leaf-brand.ts`, which **overrides** — brand identity is single-valued, so a
+  leaf replaces Daybreak's name rather than composing with it.
+
+  This roster is the count. `CLAUDE.md`'s banner carries the same list for the
+  same reason: it has been wrong before, and a docblock's ordinal ("the fourth
+  bridge") is not a substitute for counting the files.
+
 - **`registerModule()`** and the framework registration seams driven by
   `initFramework()`.
 - **`framework_*` Prisma models** and their published shapes.
@@ -143,8 +145,67 @@ into a workflow.
 3. **Move the changelog's `[Unreleased]` section under a new `## [X.Y.Z] — YYYY-MM-DD`
    heading**, and add a fresh empty `[Unreleased]`. Read it as a leaf would: does it
    say what will land on them?
-4. **Open a PR** (`chore(release): Daybreak X.Y.Z`), merge it.
-5. **Tag the merge commit on `main`** and push the single ref:
+4. **Re-read the prose around what the release changed** — the step that is easy
+   to skip and cost 0.2.0 four defects. A release is unusually good at falsifying
+   sentences that were true when written, because it removes and moves things
+   other prose cites as evidence. Nothing automated catches this: type-check and
+   lint do not read prose, and `check:changelog-drift` **does not read this file
+   at all** — it is hardcoded to the root `CHANGELOG.md`, and running it here needs
+   a one-line upstream change rather than a fork copy of ~100 lines of git plumbing
+   ([#239](https://github.com/human-centric-engineering/daybreak/issues/239)).
+   Even once it does, it correlates _identifiers_, which here often do not change
+   — `/api/health` still exists, it just no longer carries what a docblock says it
+   does.
+
+   **What #239 DID add**, in two places, because the two rules need different
+   inputs:
+
+   - **Structure** — headings, ordering, `[Unreleased]` placement, duplicate
+     sections — is a property of ONE file, asserted by
+     `tests/unit/scripts/release/changelog-structure.test.ts` on every test run.
+     That catches the malformed release section 0.2.0 had to fix by hand.
+   - **Append-only history** — a released section deleted or rewritten — is a
+     property of a CHANGE, so it needs two revisions and runs in
+     `npm run framework:changelog`. This is the rule that catches the shape where
+     deleting a `## [0.1.0]` heading leaves a file that is still perfectly
+     well-formed, so every structural rule passes while a release's notes have
+     silently gone.
+
+   **Neither runs in CI on a changelog-only PR**, which is the PR most able to
+   break this file. Both CI paths — the test jobs and the fork-check step — are
+   gated on the code filter, and `.context/*` is not code. Sunrise ungated its own
+   changelog step for exactly this reason; the fork seams did not inherit that, and
+   fixing it needs an upstream change rather than an edit to a Sunrise-owned
+   workflow (Sunrise #767). Until then these are a local and full-suite net, not a
+   CI gate on the release cut itself — so run `npm run framework:changelog` by hand
+   as part of step 4.
+
+   None of it catches prose that is well-formed and untrue. This step is still the
+   only thing that does.
+
+   Three places, in this order:
+
+   - **Docblocks in the files the release touched.** `/pre-pr` does not read
+     these — its documentation step is `.context/`-scoped, so it prints CLEAN
+     having looked at no comment at all (Sunrise #733). 0.2.0 shipped
+     `lib/daybreak-version.ts` telling a leaf to fetch a field the same release
+     removed.
+   - **The leaf-facing docs for the surfaces that moved** — especially
+     [`building-on-daybreak.md`](./building-on-daybreak.md), which is the copy a
+     leaf actually follows. Its Versions table named the wrong endpoint for two
+     of the three versions.
+   - **The new release section itself**, re-read after any reshuffle. Consolidating
+     duplicate `###` headings moved `Added` above `Removed` and falsified a
+     "see Added below" written when it was true.
+
+   The test is not "is the rule still right?" but **"is this still the witness?"**
+   — grep the cited file, endpoint or field rather than reasoning from memory. The
+   rule usually survives; the example is what rots. When repointing one, name the
+   succession ("that witness used to be X, until …") so the next reader does not
+   re-derive it.
+
+5. **Open a PR** (`chore(release): Daybreak X.Y.Z`), merge it.
+6. **Tag the merge commit on `main`** and push the single ref:
 
    ```bash
    git checkout main && git pull --ff-only
@@ -152,9 +213,9 @@ into a workflow.
    git push origin daybreak-v0.2.0
    ```
 
-6. **Create a GitHub release** pointing at the tag, with the changelog section as
+7. **Create a GitHub release** pointing at the tag, with the changelog section as
    its body.
-7. **Tell the leaves** — especially if the release moved a seam's ownership.
+8. **Tell the leaves** — especially if the release moved a seam's ownership.
 
 ---
 
