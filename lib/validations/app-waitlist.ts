@@ -1,5 +1,6 @@
 /**
- * Waitlist validation — the public form's contract, and the route's.
+ * Waitlist validation — the public form's contract, the write route's, and the
+ * admin read's.
  *
  * ## The messages are the product's register, not the platform's
  *
@@ -23,6 +24,7 @@
  *
  * @see .context/app/planning/design/Lelanea_Design_System/README.md — the copy register
  * @see components/app/site/waitlist-form.tsx · app/api/v1/app/waitlist/route.ts
+ * @see lib/app/waitlist/admin.ts — what the admin list and export schemas feed
  */
 
 import { z } from 'zod';
@@ -146,3 +148,55 @@ export type WaitlistWithHoneypotInput = z.infer<typeof waitlistWithHoneypotSchem
  * wanted.
  */
 export type WaitlistFormValues = z.input<typeof waitlistClientSchema>;
+
+// ─── The admin read surface ──────────────────────────────────────────────────
+
+/**
+ * How many entries a page of the admin list holds.
+ *
+ * `paginationQuerySchema`'s own default is 10, which is Sunrise's number for a
+ * list of things an operator scans for one row. This list is read rather than
+ * scanned — `intent` is why the table exists and she reads the answers one by
+ * one (`.context/app/waitlist.md`) — so the default is higher and the page is
+ * still one screenful of scrolling.
+ */
+export const WAITLIST_ADMIN_PAGE_SIZE = 25;
+
+/**
+ * The filter both admin reads share: a free-text search, and nothing else.
+ *
+ * ## `contains` + `mode: 'insensitive'` is an `ILIKE`, and here that is FINE
+ *
+ * `lib/app/waitlist/service.ts` documents at length why the GDPR matcher must
+ * never use `mode: 'insensitive'`: it compiles to Postgres `ILIKE` on this
+ * connector, Prisma does not escape the compared value, and `_` and `%` are both
+ * legal in an email local part — so an *equality* match silently widens into a
+ * wildcard one and hands a data subject a stranger's row, or deletes it.
+ *
+ * The reasoning does not transfer to this search box, and re-deriving it rather
+ * than copying the conclusion is the point (`fp5`). Two things differ: the
+ * caller is an admin who is already authorised to read every row in the table,
+ * so a wider match discloses nothing they could not page to; and a substring
+ * search is *already* a wildcard match by construction, so `%` behaving like one
+ * surprises nobody. The worst case is an odd result set, not a disclosure.
+ *
+ * What remains worth bounding is the cost, hence the length cap.
+ */
+export const waitlistAdminFilterSchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .max(200, 'Please keep the search under 200 characters.')
+    .optional()
+    .transform((value) => (value === undefined || value === '' ? undefined : value)),
+});
+
+/** The admin list query: the shared filter plus page/limit. */
+export const waitlistAdminQuerySchema = z.object({
+  ...waitlistAdminFilterSchema.shape,
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(WAITLIST_ADMIN_PAGE_SIZE),
+});
+
+export type WaitlistAdminFilter = z.infer<typeof waitlistAdminFilterSchema>;
+export type WaitlistAdminQuery = z.infer<typeof waitlistAdminQuerySchema>;

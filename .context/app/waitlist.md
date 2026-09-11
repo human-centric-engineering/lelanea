@@ -1,6 +1,6 @@
 ---
 name: waitlist
-description: The public waitlist — the model, the route, and the two GDPR duties that come with keeping someone's answers.
+description: The public waitlist — the model, the routes, the admin surface that reads it back, and the two GDPR duties that come with keeping someone's answers.
 ---
 
 # The waitlist
@@ -26,6 +26,17 @@ has no account, which is why half of this page is about Articles 15 and 17.
 | `lib/app/waitlist/endpoint.ts`          | The route's path, in one place                                       |
 | `app/api/v1/app/waitlist/route.ts`      | `POST` — the only unauthenticated write the leaf owns                |
 | `components/app/site/waitlist-form.tsx` | The card at the end of the home page's hero column                   |
+
+And the read surface, which landed a task later (t-8):
+
+| Piece                                           | What it is                                                |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| `lib/app/leaf-admin-nav.ts`                     | The "Lelañea" admin sidebar section, pointing at the list |
+| `lib/app/waitlist/admin.ts`                     | The search clause, the two queries, and the CSV           |
+| `app/api/v1/admin/app/waitlist/route.ts`        | `GET` — the paginated list, behind `withAdminAuth`        |
+| `app/api/v1/admin/app/waitlist/export/route.ts` | `GET` — the CSV attachment, sub-capped at 10/min          |
+| `app/admin/app/waitlist/page.tsx`               | The page, server-rendering the first page through the API |
+| `components/app/admin/waitlist-table.tsx`       | The table: search, pager, per-row "show all", export link |
 
 ## The fields, and why these four
 
@@ -142,6 +153,181 @@ about because each reads like the careful choice:
 them counts as filled. A non-string (a number, an object) does: the real form
 cannot produce one.
 
+## Reading it back — the admin surface
+
+t-7 shipped the write and nothing that read it. A row nobody can see is
+indistinguishable from a row that was never written (`HB9`) — including to
+whoever wrote it, and including in review — so until t-8 landed, the only
+evidence the public form worked was its own tests.
+
+`/admin/app/waitlist` is the list, reached from a **"Lelañea"** section in the
+admin sidebar registered by `lib/app/leaf-admin-nav.ts`. The page server-renders
+the first page **through the API** rather than querying Prisma, which is the
+platform's convention for an admin page and the API-first rule in `CLAUDE.md`: a
+page that went straight to the database would be the one caller proving nothing
+about the route.
+
+The surface keeps Sunrise's admin chrome. `/admin/**` classifies as the `admin`
+surface in `lib/app/surface.ts`, which `app/brand-theme.css` deliberately does
+not reach, so the table uses `components/ui/*` rather than the brand kit even
+though it lives in `components/app/`. **Ownership decides the tier, styling does
+not** — `components/admin/` is Sunrise's.
+
+The table shows what someone said, not just that they joined: `intent` is the
+column it exists for. An answer over 240 characters is collapsed with a per-row
+"Show all", because 25 answers of up to 2000 characters each renders as a wall
+and a table whose rows are a screen tall is one nobody scans — and truncating
+with no way back would hide the thing the row is for.
+
+Three properties of the table are load-bearing and were all wrong in the first
+version, each caught by the code review:
+
+- **A stale response cannot land on a newer one.** Two requests are in flight
+  whenever a search or a page change is dispatched while the previous one is still
+  running — type `ada`, pause past the debounce, type `m` — and the ILIKE over
+  `intent` has no index behind it, so the earlier query being the slower one is
+  ordinary. Without a request-sequence guard the late response overwrites the
+  rows, the pagination **and** the applied term, so the table shows the matches
+  for `ada` while the box reads `adam` and the export link points at the wrong
+  filter.
+- **A failed load does not claim the list is empty.** The page's error banner does
+  not stop the table underneath saying "Nobody has joined the waitlist yet", which
+  is the one false statement this surface can make (`HB9`) on the one screen whose
+  job is to answer that question. `initialLoadFailed` replaces the claim with a
+  disclaimer, and the first successful fetch clears it without a reload.
+- **The sort carries a unique tiebreaker.** `createdAt` is the transaction
+  timestamp, so rows can tie; on a tie Postgres may order the page-1 and page-2
+  queries differently, showing one entry twice and never showing another. `id`
+  breaks it. The export has the same exposure at its `take` boundary, where a tie
+  at the last row decides who is in the file.
+
+`source` and `locale` are in the API and in the CSV but **not** columns in the
+table. Both are provenance about the join rather than something to read, and
+today both are near-constant: one write path, one locale. The export is where
+you go for everything; the table is where you go to read.
+
+One cosmetic to expect: the breadcrumb reads **Admin / app / waitlist**, because
+`segmentLabels` in Sunrise's `components/admin/admin-header.tsx` is a hard-coded
+map with no fork seam. Daybreak's own pages read the same way (`framework`,
+lowercase), so this is platform-wide rather than ours, and not worth a divergence
+row over a label.
+
+### Two routes, not one with `?format=csv`
+
+Both shapes exist in the platform — `approvals/history` takes the query
+parameter, `conversations/export` takes the separate route. Taking away a file of
+other people's addresses and stated intentions is a different **act** from paging
+a table, not a different rendering of it, so they are separate: the bulk read
+gets its own rate limit, its own log line and its own line in the security
+review, and the list route keeps exactly one response shape.
+
+`GET /api/v1/admin/app/waitlist` returns the platform's paginated envelope, 25 a
+page, newest first, capped at 100. It is not sortable: the list is read as "who
+joined recently, and what did they say", top to bottom.
+
+`GET /api/v1/admin/app/waitlist/export` answers a `text/csv` attachment carrying
+the same `q` filter, so the file matches what was on screen rather than quietly
+containing everyone.
+
+### Rate limiting, again in two layers
+
+`proxy.ts` has already applied the **`admin` section tier** before either handler
+runs — `RATE_LIMIT_POLICY` matches `/api/v1/admin/` as a prefix, so a new admin
+route inherits the cap with no handler work at all. The export adds
+`exportLimiter` on top (**10 a minute, keyed on the admin's own id**), because the
+section cap alone would permit a hundred full-table downloads a minute and each
+one is a complete copy of the list leaving the building. The list route adds
+nothing: paging 25 rows is not the expensive act.
+
+The key is **`export:waitlist:user:<id>`**, which deliberately departs from the
+platform's convention. Sunrise's three other export routes all pass the literal
+`export:user:<id>`, so they share one 10/min budget; a first version of this route
+copied that string and inherited the sharing while its docblock claimed a per-flow
+cap. Sharing is the wrong half to keep — ten waitlist exports would 429 the same
+admin's own Art. 15 subject-access export at `/api/v1/users/me/export`, and a
+burst of conversation exports would block this one for reasons invisible from
+either screen. Same argument as `rate-limit.ts` makes for not borrowing
+`contactLimiter`.
+
+### The five things that make a CSV of strangers' answers safe
+
+- **Every cell goes through `csvEscape()`** (`lib/api/csv.ts`), including the ones
+  that look safe. `name`, `heardFrom` and `intent` are free text a stranger typed
+  into a public form, and a value starting `=`, `+`, `-`, `@`, tab or CR is a
+  formula to Excel, Calc and Sheets alike — on the machine of the one person who
+  reads every one of these. `email` gets it too: `@` is a trigger character.
+- **And through `csvCell()`, which closes the hole `csvEscape` leaves.** The
+  platform helper quotes on `,`, `"` and `\n` — **not on a lone `\r`** — and checks
+  the formula triggers only against a cell's FIRST character. Records here are
+  joined with CRLF, so an unquoted `\r` mid-cell ends the record early and starts
+  one whose first cell the submitter controls from its first character: exactly
+  the position the trigger prefix exists to deny them. `.trim()` strips only the
+  ends of a string, so `intent = "thanks!\r=cmd|' /C calc'!A0"` goes in through the
+  public form and renders in the admin table as ordinary whitespace. `csvCell()`
+  quotes on `\r` as well, which makes the CR data (RFC 4180 §2.6) and leaves the
+  `=` mid-cell, where nothing evaluates it. Found by the security review of t-8.
+  The defect is in Sunrise's `lib/api/csv.ts` — blob-identical in all three tiers
+  — and `conversations/export` has the same exposure through message content.
+  Filed as
+  [`sunrise#768`](https://github.com/human-centric-engineering/sunrise/issues/768);
+  drop `csvCell()` when that merges through.
+- **A leading UTF-8 BOM.** Excel on Windows reads a BOM-less CSV as the system
+  codepage, which turns a ñ into mojibake. The product's own name has one and so
+  will many of the names on this list; `charset=utf-8` on the response does not
+  reach a file opened from disk. Note that `response.text()` in a test **strips**
+  it (`TextDecoder` defaults to `ignoreBOM: false`), so the assertion is on the
+  bytes.
+- **`Cache-Control: private, no-store`.** A raw `Response` skips
+  `successResponse`'s `private, no-cache` default, and a response with no
+  directive at all is one RFC 9111 §4.2.2 lets a shared cache store and expire on
+  its own guess.
+- **Nothing is logged but counts.** Not a row, and not the search term — the
+  first thing anyone types into that box is somebody's address, and an address in
+  an application log is a copy of their personal data outside the table the
+  Art. 15 export and the Art. 17 erasure know how to reach. The log line carries
+  `searched: true` instead.
+- **And the logger drops the request URL, which is what made that true.** Leaving
+  `q` out of the `meta` was not enough: `getRouteLogger` binds
+  `url: request.url` — query string included — to every line it emits, and the
+  sanitiser redacts by KEY name against `PII_FIELDS`, which lists `email` and not
+  `url`. So the admin's own `email` context field was redacted in production
+  while `?q=someone%40example.com` was written out beside it, to stdout and into
+  the ring buffer `GET /api/v1/admin/logs` serves and greps. Both routes take
+  their logger from `_shared/route-logger.ts`, which rebuilds the context without
+  `url`; `endpoint` already carries the query-free path, so nothing operational
+  is lost. Found by the security review of t-8, which caught the route docblock
+  claiming the paragraph above while emitting the address. **The fix is narrow on
+  purpose** — every other route in the app still logs its full URL, which is the
+  platform's to change: [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685).
+
+### The export cap, and the remedy it ships with
+
+`WAITLIST_EXPORT_MAX_ROWS` is 2000 — far above any realistic pre-launch list,
+and there to bound memory, since `intent` is up to 2000 characters a row.
+
+A cap introduces a state the system did not have before: a file that is silently
+short. `HB10` says ship the remedy with it, so three things carry it. The
+**filename** says `-first-2000` when it truncates, which is the one signal that
+survives a plain browser download. The **page** shows the real total beside the
+button, so "4,000 entries" next to a file named `…-first-2000.csv` reads as the
+cap rather than as the whole list. And the remedy itself is the **search filter**:
+narrow it and export again.
+
+### Searching — where `mode: 'insensitive'` is fine, and why that is not a contradiction
+
+The search is `contains` + `mode: 'insensitive'` over email, name, `heardFrom`
+and `intent`. That is an `ILIKE`, and the section below says at length never to
+use one — so the difference is worth stating rather than leaving as an apparent
+inconsistency.
+
+The hazard there is that an **equality** match silently widens into a wildcard
+one, so a data subject's export reaches a stranger's row and their erasure
+deletes it. Neither half transfers here: the caller is an admin already
+authorised to read every row, so a wider match discloses nothing they could not
+page to, and a substring search is **already** a wildcard match by construction,
+so a `%` in the term behaving like one surprises nobody. What remains worth
+bounding is cost, hence the 200-character cap on the term.
+
 ## The two GDPR duties
 
 Neither is optional and neither is automatic, because **the table is keyed by
@@ -236,7 +422,21 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
   way off the list": true when it is read, and binding on whoever ships that
   email. Owner ruling, 10 September 2026.
 - **`userId` is never written.** The column and its FK exist for the
-  profile-seeding link, which is later work; nothing sets it today.
+  profile-seeding link, which is later work; nothing sets it today — so the admin
+  table's "Account" column reads `—` for everyone, correctly and uninformatively,
+  until that lands.
+- **The admin surface is read-only.** There is no way to edit or remove an entry
+  from it: someone who writes in asking to be taken off the list is removed by a
+  hand-written database statement today. That is a deliberate omission rather than
+  a stub (`B31`) — the honest version of "remove me" needs the ownership proof the
+  gap above describes, and an admin-only delete button would have looked like the
+  affordance while only serving the one person who already has database access.
+  It is the obvious next task on this surface.
+- **An export leaves no durable audit row.** The record that a complete copy of
+  the list was taken is the application log line, which rotates. The platform's
+  audit log (`AiAuditLog`) records orchestration _config_ changes, so using it for
+  a leaf table's bulk read would be a stretch rather than a fit; a subject-access
+  regime that had to prove who exported what would need its own row.
 - **An answer cannot be corrected through this route**, only added to, and a
   stranger can still seed an empty field — see above. A signed confirmation link
   would close both, and would also be what an ownership-proving unsubscribe
