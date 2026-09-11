@@ -9,8 +9,12 @@
  * `shell-placeholder-page.test.tsx` called that component directly. Once each
  * destination had a page of its own, that test would have gone on passing
  * forever while testing a module the router could no longer reach — a real
- * route beats a catch-all, so nothing would have hit it again. The catch-all is
- * deleted; this asks the same two questions of the routes that replaced it.
+ * route beats a catch-all, so nothing would have hit it again. This asks the
+ * same two questions of the routes that replaced it.
+ *
+ * A `[...slug]` exists again, and is not that one: t-21 added a route that
+ * resolves nothing and only calls `notFound()`, so the shell's own 404
+ * boundary is reachable. `shell-not-found.test.tsx` owns it.
  *
  * The list is derived from `SHELL_NAV`, so a destination added to the nav
  * without a page fails here rather than in someone's browser. `MODULES` is
@@ -33,7 +37,7 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -89,13 +93,23 @@ describe('every destination the nav offers is a route', () => {
     ).toBe(true);
   });
 
-  it('has no catch-all left behind it', () => {
-    // Once every destination is real, `[...slug]` answers nothing. A route
-    // nobody can reach is a route nobody maintains, and it would quietly
-    // shadow-document a set of destinations that had moved on.
-    expect(existsSync(path.join(process.cwd(), 'app', '(lelanea)', 'app', '[...slug]'))).toBe(
-      false
+  it('is not shadowed by the catch-all that sits beside them', () => {
+    // This assertion used to read "has no catch-all left behind it", and was
+    // right when t-11 deleted t-9's. `[...slug]` is back for an unrelated job —
+    // throwing `notFound()` so the shell's own 404 boundary is reachable at all
+    // (t-21) — so the property worth holding is no longer its absence but that
+    // it RESOLVES NOTHING. A real route beats a catch-all in App Router, and
+    // the per-destination assertions above are what prove these seven still
+    // win; this one proves the catch-all is not quietly answering for any of
+    // them, which is what t-9's did and what would shadow-document a list that
+    // had moved on.
+    //
+    // `shell-not-found.test.tsx` owns the rest of that route's behaviour.
+    const source = readFileSync(
+      path.join(process.cwd(), 'app', '(lelanea)', 'app', '[...slug]', 'page.tsx'),
+      'utf8'
     );
+    expect(source.replace(/\/\*[\s\S]*?\*\//g, '')).not.toContain('SHELL_NAV');
   });
 });
 
