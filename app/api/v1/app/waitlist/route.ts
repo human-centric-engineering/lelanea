@@ -101,7 +101,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // 4. Record it. A repeat fills what is still empty and overwrites nothing —
     //    see the service for why an unverified write must be additive.
-    const { created, entryId } = await joinWaitlist({
+    const { created, removed, entryId } = await joinWaitlist({
       email: body.email,
       name: body.name,
       heardFrom: body.heardFrom,
@@ -109,23 +109,35 @@ export async function POST(request: NextRequest): Promise<Response> {
       locale: resolveJoinLocale(request.headers.get('accept-language')),
     });
 
-    // `created` is logged and NOT returned. It is the useful half of the fact
-    // and the disclosing half is the response; keeping them apart is the whole
-    // of the fix for the status-code oracle.
+    // `created` and `removed` are logged and NOT returned. They are the useful
+    // half of the fact and the disclosing half is the response; keeping them
+    // apart is the whole of the fix for the status-code oracle.
     //
     // The email is deliberately absent too. This is the one route an
     // unauthenticated stranger can write to, and an address in an application
     // log is a copy of their personal data outside the table the export and
     // erasure paths know about.
-    log.info(created ? 'Waitlist entry created' : 'Waitlist entry updated', {
-      entryId,
-      created,
-      answered: {
-        name: body.name !== undefined,
-        heardFrom: body.heardFrom !== undefined,
-        intent: body.intent !== undefined,
-      },
-    });
+    //
+    // **Three messages, not two, and `answered` is suppressed on the third.** A
+    // submission against a REMOVED entry writes no answers at all (D9 — see the
+    // service): only the record of the attempt. An earlier version logged that as
+    // "Waitlist entry updated" with `answered: { intent: true }`, which said an
+    // answer had been recorded when none had — the one operational record of a
+    // re-join attempt, reporting the opposite of what happened. The code review
+    // of §03 t-24 caught it.
+    if (removed) {
+      log.info('Waitlist re-join attempt recorded on a removed entry', { entryId });
+    } else {
+      log.info(created ? 'Waitlist entry created' : 'Waitlist entry updated', {
+        entryId,
+        created,
+        answered: {
+          name: body.name !== undefined,
+          heardFrom: body.heardFrom !== undefined,
+          intent: body.intent !== undefined,
+        },
+      });
+    }
 
     return successResponse({ message: ACCEPTED }, undefined, { headers });
   } catch (error) {

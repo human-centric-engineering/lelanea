@@ -50,7 +50,7 @@ const ALLOWED = { success: true, limit: 5, remaining: 4, reset: 1_800_000_000 };
 beforeEach(() => {
   vi.clearAllMocks();
   checkMock.mockReturnValue(ALLOWED);
-  joinWaitlistMock.mockResolvedValue({ created: true, entryId: 'entry-1' });
+  joinWaitlistMock.mockResolvedValue({ created: true, removed: false, entryId: 'entry-1' });
 });
 
 describe('POST /api/v1/app/waitlist', () => {
@@ -83,7 +83,7 @@ describe('POST /api/v1/app/waitlist', () => {
 
   it('is INDISTINGUISHABLE between a first join and a repeat', async () => {
     const first = await POST(request({ email: 'ada@example.com' }));
-    joinWaitlistMock.mockResolvedValue({ created: false, entryId: 'entry-1' });
+    joinWaitlistMock.mockResolvedValue({ created: false, removed: false, entryId: 'entry-1' });
     const repeat = await POST(request({ email: 'ada@example.com' }));
 
     // The whole finding, in one case. Anything that differs here — the status,
@@ -94,6 +94,42 @@ describe('POST /api/v1/app/waitlist', () => {
     const [a, b] = await Promise.all([first.json(), repeat.json()]);
     expect(a).toEqual(b);
     expect([...repeat.headers.keys()].sort()).toEqual([...first.headers.keys()].sort());
+  });
+
+  it('logs a re-join against a REMOVED entry as what it is, not as an update', async () => {
+    joinWaitlistMock.mockResolvedValue({ created: false, removed: true, entryId: 'entry-1' });
+
+    const response = await POST(request({ email: 'ada@example.com', intent: 'put me back' }));
+
+    expect(response.status).toBe(200);
+    // D9: a submission against a removed entry writes no answers at all — only the
+    // record of the attempt. The first version logged it as "Waitlist entry updated"
+    // with `answered: { intent: true }`, which said an answer had been recorded when
+    // none had: the one operational record of a re-join attempt, reporting the
+    // opposite of what happened. Found by the code review of §03 t-24.
+    expect(routeLog.info).toHaveBeenCalledWith(
+      'Waitlist re-join attempt recorded on a removed entry',
+      { entryId: 'entry-1' }
+    );
+    const logged = JSON.stringify(routeLog.info.mock.calls);
+    expect(logged).not.toContain('answered');
+    expect(logged).not.toContain('Waitlist entry updated');
+    // And still no address, as everywhere else on this route.
+    expect(logged).not.toContain('ada@example.com');
+  });
+
+  it('is INDISTINGUISHABLE from an ordinary join when the entry was removed', async () => {
+    const ordinary = await POST(request({ email: 'ada@example.com' }));
+    joinWaitlistMock.mockResolvedValue({ created: false, removed: true, entryId: 'entry-1' });
+    const againstRemoved = await POST(request({ email: 'ada@example.com' }));
+
+    // The membership oracle this route was hardened against has a second question
+    // now — "and did that person ask to be taken off?" — which must be no more
+    // answerable than the first.
+    expect(againstRemoved.status).toBe(ordinary.status);
+    const [a, b] = await Promise.all([ordinary.json(), againstRemoved.json()]);
+    expect(a).toEqual(b);
+    expect([...againstRemoved.headers.keys()].sort()).toEqual([...ordinary.headers.keys()].sort());
   });
 
   it('does not leak `created` into the response body', async () => {
