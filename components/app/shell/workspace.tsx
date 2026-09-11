@@ -14,12 +14,31 @@ import { cn } from '@/lib/utils';
  * already, rather than being re-parented later, which is the reason `wsOpen` is
  * route-driven rather than a button somebody has to press.
  *
- * ## `--tone`
+ * ## `--tone`, and where it comes from
  *
- * Each view sets its own `--tone` and the surface reads it: the band across the
- * head, and the wash behind the conversation when it slides over on a tablet.
- * It falls back to the secondary ink, so a view that sets nothing still looks
- * deliberate rather than unstyled.
+ * Each destination carries a hue saying which part of the arc it belongs to.
+ * This surface READS it — the band across the head — and `Panes` publishes it,
+ * because a custom property inherits downward only and the conversation pane is
+ * a sibling of this one. Setting it here left the panel edge on the other side
+ * of the screen permanently teal while the band was green. `view-tone.ts`
+ * carries the table.
+ *
+ * ## The surface has a ground of its own
+ *
+ * `bg-muted`, which is the prototype's `.surface`, and it is what makes every
+ * card on it visible. Panels and the placeholder card are `--color-background`
+ * with a `--color-card-border` that is fully TRANSPARENT in light mode — so on
+ * a surface that is also `--color-background` they had no edge and no fill
+ * difference, and the settings panels simply were not there. Worse, the border
+ * is 8% in dark mode, so the two themes disagreed structurally rather than
+ * chromatically: a bordered panel in one and nothing at all in the other.
+ *
+ * The head keeps `--color-background` and carries the tone as a wash fading out
+ * over 76px, which is the prototype's own gradient — see `TONE_WASH` for why it
+ * is an inline style rather than a class. It is what makes the 3px band read as
+ * the top of a head rather than as a stray rule, which is the complaint that
+ * got the band's colour fixed in t-10 in the first place. Below 900px the band
+ * is dropped entirely and the wash is all of it: see the class list.
  *
  * ## Why the head is a link, not a button
  *
@@ -28,6 +47,36 @@ import { cn } from '@/lib/utils';
  * setter would be a second source of truth for something the URL already knows,
  * and would leave the two disagreeing on a back-button press.
  */
+/**
+ * The prototype's `.surface-head` wash: the tone at 8%, gone by 76px.
+ *
+ * ## Why this is an inline style and not a Tailwind class
+ *
+ * It was `bg-[linear-gradient(…color-mix(…)…)]`, which compiles — and compiles
+ * a fallback that is worse than no wash at all. Tailwind guards any arbitrary
+ * value containing `color-mix()` behind `@supports (color: color-mix(in lab,
+ * red, red))` and synthesises the unguarded rule by STRIPPING the mix and
+ * keeping its first colour. So on a browser without `color-mix` the head was
+ * not an 8% tint but a fully saturated slab of `--color-status-green` or
+ * `--color-accent-ink` fading over 76px, with "Return to the conversation" —
+ * `text-muted-foreground` — sitting on it at roughly 2:1.
+ *
+ * Inline, there is no fallback synthesis. A browser that cannot parse
+ * `color-mix` drops this declaration at computed-value time, `background-image`
+ * takes its initial `none`, and the class above still paints the head its
+ * proper ground. The wash is the thing that degrades, which is the only part
+ * that should.
+ *
+ * It reads `--tone` from `Panes`, so it is a constant rather than a function of
+ * the route: the cascade does the per-route part.
+ */
+const TONE_WASH: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(to bottom, ' +
+    'color-mix(in srgb, var(--tone, transparent) 8%, var(--color-background)) 0, ' +
+    'var(--color-background) 76px)',
+};
+
 export function Workspace({ children }: { children: React.ReactNode }) {
   const { width, wsOpen, pane, chatSlim, setChatSlim } = useShellLayout();
 
@@ -90,7 +139,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           : undefined
       }
       className={cn(
-        'relative flex min-w-0 flex-1 flex-col overflow-hidden',
+        'bg-muted relative flex min-w-0 flex-1 flex-col overflow-hidden',
         // TRANSPARENT when a view sets no tone, which is the prototype's own
         // fallback for this band (`.surface-head`). A visible default was mine,
         // and wrong: with no view setting `--tone` — every view, until t-11 —
@@ -101,7 +150,19 @@ export function Workspace({ children }: { children: React.ReactNode }) {
         //
         // The tablet slide-over keeps an inked fallback on purpose: there it is
         // a panel edge over other content, not a band inside a surface.
-        'border-t-[3px] border-t-[var(--tone,transparent)]',
+        //
+        // NOT AT SMALL, and this is the second time this line has had to be
+        // answered. Below 900px the topbar carries the pane switch, whose
+        // active tab is marked with its own accent underline — and this surface
+        // starts immediately beneath it. Two 3px rules a pixel apart, in two
+        // different colours, read as one broken line rather than as two
+        // separate things: it is what got the band's colour fixed in t-10, and
+        // it came straight back the moment views started setting a tone.
+        //
+        // The head's gradient still carries the tone at that width, so the view
+        // is not left untinted — it just stops competing with the control
+        // directly above it.
+        !carousel && 'border-t-[3px] border-t-[var(--tone,transparent)]',
         overlay && 'ml-14',
         carousel && 'absolute inset-0 w-full flex-none',
         carousel && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
@@ -112,9 +173,19 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       <header
         className={cn(
           'flex flex-none items-center gap-3 border-b border-[var(--color-divider)]',
-          'px-6 py-4'
+          'px-6 py-4',
+          // The head's own ground. The tone wash over it is an INLINE
+          // background-image — see `TONE_WASH` — and the two never collide,
+          // because `bg-background` sets background-COLOR and nothing else.
+          'bg-background'
         )}
+        style={TONE_WASH}
       >
+        {/*
+          The spacer that pushes the link right. The view's own eyebrow and
+          title deliberately do NOT go here — see `views/view.tsx` for why they
+          render with the rest of the view instead.
+        */}
         <div className="min-w-0 flex-1" />
         <Link
           href="/app"
