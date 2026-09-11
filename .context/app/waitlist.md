@@ -179,6 +179,17 @@ column it exists for. An answer over 240 characters is collapsed with a per-row
 and a table whose rows are a screen tall is one nobody scans — and truncating
 with no way back would hide the thing the row is for.
 
+`source` and `locale` are in the API and in the CSV but **not** columns in the
+table. Both are provenance about the join rather than something to read, and
+today both are near-constant: one write path, one locale. The export is where
+you go for everything; the table is where you go to read.
+
+One cosmetic to expect: the breadcrumb reads **Admin / app / waitlist**, because
+`segmentLabels` in Sunrise's `components/admin/admin-header.tsx` is a hard-coded
+map with no fork seam. Daybreak's own pages read the same way (`framework`,
+lowercase), so this is platform-wide rather than ours, and not worth a divergence
+row over a label.
+
 ### Two routes, not one with `?format=csv`
 
 Both shapes exist in the platform — `approvals/history` takes the query
