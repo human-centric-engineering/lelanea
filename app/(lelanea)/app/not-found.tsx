@@ -51,7 +51,7 @@ import { cn } from '@/lib/utils';
  * the script's BODY diverges here, per divergence rows 1 and 2), so the remedy
  * — `useServerInsertedHTML`, or accepting it — is Sunrise's call, not a leaf's.
  *
- * Filed upstream rather than worked around here. Removing this boundary to
+ * Filed as `sunrise#769` rather than worked around here. Removing this boundary to
  * silence a dev-only warning would give back the defect the whole task exists
  * to close.
  *
