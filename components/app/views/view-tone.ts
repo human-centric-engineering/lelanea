@@ -15,9 +15,13 @@ import type { CSSProperties } from 'react';
  * views are functions that mutate one surface. Here a view is a route, and the
  * tone has to be set ABOVE the view: custom properties inherit downward, so a
  * `--tone` set on the page could never reach the band across the workspace head
- * or the wash behind the conversation when it slides over. `Workspace` is the
- * lowest element that sits above both, and the only thing it knows about the
- * view is its path — so the path is the key.
+ * or the edge of the conversation panel when it slides over.
+ *
+ * `Panes` is where it goes, and the distinction cost a round: the workspace is
+ * above the band but is a SIBLING of the conversation, so publishing it there
+ * left the panel edge on one side of the screen permanently teal while the band
+ * on the other was green. `Panes` is the common ancestor of both, and the only
+ * thing it knows about the view is its path — so the path is the key.
  *
  * A destination with no entry gets no tone at all, and the band stays
  * transparent. That is `/app` itself: the clean conversation belongs to no part

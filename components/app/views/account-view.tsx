@@ -5,6 +5,16 @@ import * as React from 'react';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
+/**
+ * The line under the title, exported because the loading state renders it too.
+ *
+ * Not a style preference: the skeleton's bars have to sit on the same lines as
+ * the content that replaces them, and the lede is what puts them there. Two
+ * hardcoded copies would drift the first time one was edited, silently, with
+ * nothing failing.
+ */
+export const ACCOUNT_LEDE = 'What Lelañea knows about you here, and where to change it.';
+
 export interface AccountViewProps {
   /**
    * The name on the account, or `null` when none was ever given.
@@ -131,6 +141,11 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
           className={cn(
             'bg-background grid gap-x-6 gap-y-3 rounded-lg border',
             'border-[var(--color-card-border)] px-[22px] py-5',
+            // See `settings-view.tsx`'s `Panel`: that border is transparent in
+            // light mode and 8% in dark, so without the resting shadow this
+            // has an edge in one theme and a 1.06:1 fill difference in the
+            // other.
+            'shadow-[var(--shadow-rest)]',
             'sm:grid-cols-[auto_1fr]'
           )}
         >

@@ -172,6 +172,30 @@ describe('the theme choice', () => {
     expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('keeps the choice pressed when storage refuses the write', async () => {
+    // `setTheme` swallows a `setItem` throw on purpose, so the choice still
+    // applies for the session. Re-reading storage after that finds nothing —
+    // so without a session-level guard the chip un-pressed one frame after the
+    // click and "Nothing chosen yet" came back, on an app that was explicitly
+    // dark. Exactly the contradiction the re-key was meant to close, arriving
+    // from the other side.
+    const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    });
+    try {
+      renderSettings();
+      await screen.findByText(/Nothing chosen yet/);
+      await userEvent.click(screen.getByRole('button', { name: 'Dark' }));
+
+      expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe(
+        'true'
+      );
+      expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it('still shows the choice after a reload', async () => {
     // The real point of this one is the KEY. The view reads storage directly,
     // because the hook keeps its key private and the divergence row pins its
@@ -236,6 +260,20 @@ describe('the eleven leanings', () => {
     expect(
       screen.getByRole('slider', { name: 'Gentle Direct, and further, challenging' })
     ).toBeTruthy();
+  });
+});
+
+describe('both panels have an edge in both themes', () => {
+  it('carries the resting shadow, because the border is transparent in light', () => {
+    // `--color-card-border` is fully transparent in light mode and 8% in dark.
+    // Without a shadow the panel's only separation from the surface in light
+    // mode is a 1.06:1 fill difference, while dark gets a visible border — the
+    // two themes differing structurally rather than chromatically.
+    renderSettings();
+    for (const name of ['Light and dark', 'Her leanings']) {
+      const panel = screen.getByRole('heading', { name }).closest('section');
+      expect(panel?.className, name).toContain('shadow-[var(--shadow-rest)]');
+    }
   });
 });
 

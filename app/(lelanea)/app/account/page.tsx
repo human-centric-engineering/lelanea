@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { AccountView } from '@/components/app/views/account-view';
+import { ACCOUNT_LEDE, AccountView } from '@/components/app/views/account-view';
 import { View } from '@/components/app/views/view';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
@@ -52,7 +52,7 @@ export default async function AccountPage() {
       // invite accepted before the profile was filled in — and the email is
       // always there, so it stands in rather than leaving the page untitled.
       title={session.user.name?.trim() || session.user.email}
-      lede="What Lelañea knows about you here, and where to change it."
+      lede={ACCOUNT_LEDE}
     >
       <AccountView
         // `null`, not the email. The heading above falls back to the address

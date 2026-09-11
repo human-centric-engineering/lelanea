@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { Chip } from '@/components/app/ui/chip';
 import { useTheme } from '@/hooks/use-theme';
@@ -42,6 +42,14 @@ function Panel({
     <section
       className={cn(
         'bg-background rounded-lg border border-[var(--color-card-border)]',
+        // The kit's resting shadow, and not decoration. `--color-card-border`
+        // is FULLY transparent in light mode and 8% in dark, so without this
+        // the panel's only edge in light mode was a 1.06:1 fill difference
+        // against the surface while dark had a visible border — the two themes
+        // separated structurally rather than chromatically, which is the whole
+        // defect giving the surface its own ground set out to close. `Card`
+        // escapes it by carrying this; a hand-rolled panel has to say so.
+        'shadow-[var(--shadow-rest)]',
         'px-[22px] pt-5 pb-[22px]'
       )}
     >
@@ -123,6 +131,17 @@ export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [chosen, setChosen] = useState<'light' | 'dark' | null>(null);
+  /*
+   * A choice made HERE, held independently of whether the write landed — the
+   * same guard, and for the same reason, as the provider's own
+   * `hasExplicitChoice`. `setTheme` deliberately swallows a `setItem` throw so
+   * the choice still applies for the session; without this ref, re-reading
+   * storage after that would find nothing and un-press the chip one frame after
+   * the click, restoring "Nothing chosen yet" on an app that is explicitly dark
+   * for the session. Storage still WINS when it has a value, which is what lets
+   * the topbar's toggle move the pressed chip.
+   */
+  const choseHere = useRef<'light' | 'dark' | null>(null);
   const leaningsNoteId = useId();
   // One base, indexed per row: a leaning's own words contain spaces, and an
   // `id` with a space is not a valid target for `htmlFor`.
@@ -142,7 +161,7 @@ export function SettingsView() {
    */
   useEffect(() => {
     setMounted(true);
-    setChosen(readStoredChoice());
+    setChosen(readStoredChoice() ?? choseHere.current);
   }, [theme]);
 
   return (
@@ -157,6 +176,7 @@ export function SettingsView() {
               key={value}
               selected={mounted && chosen === value}
               onClick={() => {
+                choseHere.current = value;
                 setTheme(value);
                 setChosen(value);
               }}

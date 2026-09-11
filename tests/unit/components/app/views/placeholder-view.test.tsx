@@ -48,11 +48,16 @@ describe('the three overrides survive the merge', () => {
     // The dashed edge is the only thing distinguishing this from a finished
     // card at a glance.
     'border-dashed',
-    // A third of the view's tone, falling back to the plain border on a route
-    // that has none — so it cannot render tinted-and-wrong.
-    'border-[color-mix(in_srgb,var(--tone,var(--color-border))_32%,var(--color-border))]',
+    // The plain border, NOT the kit's card border — which is fully transparent
+    // in light mode and would leave the dashes invisible on the theme they
+    // matter most in.
+    'border-[var(--color-border)]',
     // It sits ON the surface rather than being another raised panel above it.
     'bg-background',
+    // It hugs its own text rather than stretching the surface: everything else
+    // on the page is built to a measure, and a full-width card left its content
+    // in the left third of a 940px box.
+    'max-w-[30rem]',
     // Still the kit's card: radius and padding come from there, unchanged.
     'rounded-lg',
     'p-6',
@@ -71,6 +76,18 @@ describe('the three overrides survive the merge', () => {
 
   it.each(drops)('drops %s', (cls) => {
     expect(classesOf()).not.toContain(cls);
+  });
+});
+
+describe('no colour-mix in a class', () => {
+  it('keeps the border out of the one construct Tailwind mis-builds', () => {
+    // Tailwind guards any arbitrary value containing `color-mix()` behind an
+    // `@supports` and synthesises the unguarded rule by stripping the mix and
+    // keeping its first colour — so a 32% tone tint became a fully saturated
+    // dashed rule on any browser without `color-mix`. The tint was barely
+    // perceptible; the fallback was not. See `workspace.tsx`, where the same
+    // mechanism was a legibility failure rather than a loud border.
+    expect(classesOf().join(' ')).not.toContain('color-mix');
   });
 });
 

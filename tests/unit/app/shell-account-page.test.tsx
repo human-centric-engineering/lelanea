@@ -34,6 +34,7 @@ const clearInvalidSession = vi.hoisted(() =>
 vi.mock('@/lib/auth/utils', () => ({ getServerSession }));
 vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
 
+import AccountLoading from '@/app/(lelanea)/app/account/loading';
 import AccountPage from '@/app/(lelanea)/app/account/page';
 
 const SESSION = {
@@ -96,5 +97,30 @@ describe('with a session', () => {
     });
     render(await AccountPage());
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('maya@example.com');
+  });
+});
+
+describe('the loading state it is replaced from', () => {
+  it('names its heading, rather than leaving an empty h1 on the page', async () => {
+    // `View` always renders an `<h1>`, and the skeleton's title is an
+    // `aria-hidden` bar — so without a label inside it, the page's only
+    // top-level heading is unnamed. An axe `empty-heading` violation, and an
+    // unnamed landing place for anyone navigating by heading.
+    render(AccountLoading());
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Loading');
+  });
+
+  it('renders the same lede as the page, from the same constant', async () => {
+    // The bars have to sit on the lines the content will occupy, and the lede
+    // is what puts them there. Two hardcoded copies would drift the first time
+    // one was edited, silently.
+    const loading = render(AccountLoading());
+    const ledeWhileLoading = screen.getByText(/What Lelañea knows about you here/);
+    expect(ledeWhileLoading).toBeTruthy();
+    loading.unmount();
+
+    getServerSession.mockResolvedValue(SESSION);
+    render(await AccountPage());
+    expect(screen.getByText(ledeWhileLoading.textContent ?? '')).toBeTruthy();
   });
 });

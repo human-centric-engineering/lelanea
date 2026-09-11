@@ -33,9 +33,17 @@ export interface PlaceholderCardProps {
  * - `border-dashed` — a solid border says "finished"; the dashed one is the
  *   prototype's own signal and the only thing distinguishing this from a real
  *   card at a glance.
- * - the border COLOUR takes a third of the view's tone, so the card belongs to
- *   the destination it sits in. `var(--tone, …)` falls back to the plain border
- *   on a route with no tone, so it cannot render untinted-and-wrong.
+ * - the border COLOUR is the plain `--color-border`, not the kit's card border,
+ *   which is fully transparent in light mode and would leave the dashes
+ *   invisible on the very theme they matter most in.
+ *
+ *   It was a 32% mix of the view's tone, which looked right and carried a
+ *   fallback that did not: Tailwind guards any arbitrary value containing
+ *   `color-mix()` behind an `@supports` and synthesises the unguarded rule by
+ *   stripping the mix and keeping its first colour — a fully saturated tone
+ *   border on any browser without `color-mix`. The tint was barely perceptible
+ *   at 32%; a loud dashed rule on an old browser is not, and the card is not
+ *   the place that needs to carry the tone. The head above it does.
  * - `bg-background`, because the prototype's placeholder sits ON the surface
  *   rather than being another raised panel above it.
  *
@@ -51,13 +59,19 @@ export function PlaceholderCard({ title, children, className }: PlaceholderCardP
       eyebrow="not built yet"
       title={title}
       className={cn(
+        // It hugs its own text rather than stretching the surface. The note is
+        // a reading measure and the view's lede is capped at 44ch, so a
+        // full-width card left a 940px box with its content in the left third
+        // — the one element on the page not built to a measure.
+        'max-w-[30rem]',
         'border-dashed',
-        'border-[color-mix(in_srgb,var(--tone,var(--color-border))_32%,var(--color-border))]',
+        'border-[var(--color-border)]',
         'bg-background',
         className
       )}
     >
-      <p className="text-muted-foreground max-w-[52ch] leading-[1.65]">{children}</p>
+      {/* No measure of its own: the card above is the measure now. */}
+      <p className="text-muted-foreground leading-[1.65]">{children}</p>
     </Card>
   );
 }
