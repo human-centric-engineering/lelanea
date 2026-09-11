@@ -42,7 +42,8 @@
  * Daybreak fills it to register the **framework** tier's probes, then delegates to the reserved
  * **leaf** hook — the drift analogue of the boot bridge (`bootstrap.ts` → `initFramework()` →
  * `leaf-bootstrap.ts`) and the client-nav bridge (`admin-nav.ts` → `initFrameworkNav()` →
- * `leaf-admin-nav.ts`). This is the THIRD `lib/app/*` file Daybreak fills; `lib/app/**` is the
+ * `leaf-admin-nav.ts`). This is one of the `lib/app/*` bridges Daybreak fills — the roster is in
+ * CLAUDE.md's banner, which is where to count them; `lib/app/**` is the
  * sanctioned core→framework bridge (the ESLint boundary exempts it).
  *
  * Full guide: CUSTOMIZATION.md §5 · .context/database/prisma-unmodelled-objects.md

@@ -52,12 +52,15 @@
 > - The `lib/app/*` **leaf** scaffolds (`env.ts`, `capabilities.ts`, `context-contributors.ts`,
 >   `leaf-bootstrap.ts`, `leaf-admin-nav.ts`, …) — Sunrise ships them empty; Daybreak keeps them
 >   empty for the app. Filling one collides with a leaf's registrations on a Daybreak upgrade.
->   **Exception — the four `lib/app/*` _bridges_ Daybreak DOES fill:** `bootstrap.ts` (server boot →
+>   **Exception — the six `lib/app/*` _bridges_ Daybreak DOES fill. This list is the
+>   roster; count bridges here, not from an ordinal in a docblock:** `bootstrap.ts` (server boot →
 >   `initFramework()`), `admin-nav.ts` (client sidebar → the framework nav section),
 >   `data-export.ts` (GDPR Art. 15 subject access → the framework's own manifest at
 >   `lib/framework/privacy/export-sources.ts`, declared through core's
->   `registerAppSubjectSources({ tier: 'framework' })`), and `brand.ts` (product name + legal
->   entity → `lib/brand.ts`). A framework registration that must run in a realm
+>   `registerAppSubjectSources({ tier: 'framework' })`), `brand.ts` (product name + legal
+>   entity → `lib/brand.ts`), `db-drift.ts` (Prisma-unmodelled DB objects → the framework's
+>   drift probes), and `ci.ts` (coverage exclusions + always-run tests → `vitest.config.ts`
+>   and `ALWAYS_RUN_TESTS`; Sunrise #759/#762). A framework registration that must run in a realm
 >   `initFramework()` can't reach — server-boot, the client sidebar, a lazy seam core owns the
 >   init of, or a static function core imports directly — has nowhere else to go; each bridge
 >   delegates to a reserved leaf hook (`leaf-bootstrap.ts` / `leaf-admin-nav.ts` /

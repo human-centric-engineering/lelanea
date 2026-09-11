@@ -51,11 +51,22 @@ bridges they delegate to.**
 | `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         | Prisma-unmodelled DB objects                                    |
 | `lib/app/leaf-data-export.ts` | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations |
 | `lib/app/leaf-brand.ts`       | `brand.ts`            | product name, legal entity, meta description                    |
+| `lib/app/leaf-ci.ts`          | `ci.ts`               | your own coverage exclusions and whole-tree always-run tests    |
 
 Each bridge runs Daybreak's registration and then calls your `leaf-*` hook. Filling a
 bridge directly collides with Daybreak on your next merge — and in the
 `data-export.ts` case, resolving that conflict the obvious way silently drops the
 framework's tables from every GDPR subject-access export.
+
+**`leaf-ci.ts` is where your CI declarations go** — a `tsx` CLI script of your own
+is structurally 0% and will fail the per-file coverage floor the first time anyone
+edits it, and a test whose subject is the repository is reached by no import chain,
+so a scoped run never selects it. Both lists append to Daybreak's, which append to
+Sunrise's, and every guard Sunrise wrote over those lists judges your entries in
+your checkout: a reason under 20 characters or a duplicate fails either list, and an
+always-run path must exist, be passable to `vitest` as an argument, and sit in a
+directory `vitest.config.ts` actually collects. See `lib/app/ci.ts` for two worked
+examples.
 
 **`leaf-brand.ts` is the one that OVERRIDES rather than appends.** Brand identity is
 single-valued: your name replaces Daybreak's, it does not compose with it. A
@@ -291,6 +302,11 @@ for everything else it covers.
 - **`tests/unit/lib/app/defaults.test.ts`** — asserts every `lib/app/*` seam ships
   empty. When you fill one, **pin the new value** in its `SEAM_DEFAULTS` row rather
   than removing the row.
+
+  **Filling a `leaf-*` seam breaks two rows, not one** — its own, and the row for
+  the **bridge above it**, a file you never touched. The bridge reads your seam, so
+  your value changes the bridge's resolved value. Confirmed for `brand.ts`,
+  `admin-nav.ts` and `ci.ts`; see issue #234. Pin both.
 
 ---
 

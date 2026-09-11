@@ -144,17 +144,6 @@ export const NOT_EXEMPT_DESPITE_COVERAGE_EXCLUSION: ReadonlyArray<{
   reason: string;
 }> = [
   {
-    pattern: 'scripts/boundary/check.ts',
-    reason:
-      'a fork-owned `tsx` CLI entry point (`main()` at module scope, nothing ' +
-      'imports it), excluded from COVERAGE because it is structurally 0% — but ' +
-      '4f should still ask for a test, and the honest answer is that its proof ' +
-      'is `npm run framework:boundary` in CI rather than a mocked unit test. Its ' +
-      'pure half, `scripts/boundary/lib.ts`, is unit-tested and gated. ' +
-      '(Daybreak keep-mine; Sunrise #759 asks for a fork-owned seam so neither ' +
-      'this file nor `vitest.config.ts` needs the edit.)',
-  },
-  {
     pattern: '**/types/**',
     reason:
       'three of the seven files under `types/` declare runtime values — ' +

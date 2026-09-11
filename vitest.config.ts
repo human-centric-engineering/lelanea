@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { availableParallelism } from 'node:os';
 import { nextFontStub } from './tests/mocks/next-font-plugin';
+// Relative, not `@/` — the alias below is what THIS file defines for the test
+// runtime; vite's own config loading does not apply it to the config itself.
+import { appCoverageExclusions } from './lib/app/ci';
 
 export default defineConfig({
   // `nextFontStub` stands in for `next/font/*`, which the Next compiler strips
@@ -195,21 +198,6 @@ export default defineConfig({
         // hand against a real database, that vitest never executes. Structurally
         // 0%, so the per-file gate would fail on any edit to it.
         'scripts/spikes/**',
-        // Third instance of the same shape, and the #671 story exactly: a `tsx`
-        // CLI entry point (`main()` at module scope, `process.exit()`) that
-        // nothing imports, so it is absent from a full coverage run and only
-        // materialises at 0% when a scoped run forces it in — which is what
-        // happened the first time anyone edited it (#157).
-        //
-        // Its behaviour is not unverified: `npm run framework:boundary` runs it in
-        // CI's lint job, which is a stronger proof than a mocked unit test of a
-        // wrapper whose whole job is filesystem and ESLint I/O.
-        //
-        // `scripts/boundary/lib.ts` is deliberately NOT excluded — it is the pure,
-        // unit-tested half this wrapper's own header describes, the same split as
-        // `*-assertions.ts` above. Keep pure logic on that side of the line: when
-        // `isCoreSource` moved there it gained 20 test cases, having had none.
-        'scripts/boundary/check.ts',
         '**/types/**',
         '.next/',
         'coverage/',
@@ -227,6 +215,17 @@ export default defineConfig({
         // tests/unit/app/route-module-distinctness.test.ts.
         'app/\\(public\\)/page.tsx', // parens are picomatch syntax — escape or it matches nothing
         'lib/env.ts', // Exclude env validation
+        // The fork-owned tail (#759). Everything above is Sunrise's; a fork's
+        // own `tsx` CLI entry point is structurally 0% for exactly the reasons
+        // the entries above are, and had nowhere to be declared but here — a
+        // merge conflict on a platform file, once per fork, forever.
+        //
+        // Read by `tests/unit/scripts/ci/missing-tests.test.ts`, which RESOLVES
+        // this config rather than parsing it as text, so a spread is visible to
+        // the drift guard where a `...` in a text parse contributed nothing.
+        // That is why this list is spread here rather than concatenated
+        // somewhere less obvious: the config's evaluated value is the authority.
+        ...appCoverageExclusions.map((entry) => entry.pattern),
       ],
       // Coverage thresholds
       thresholds: {

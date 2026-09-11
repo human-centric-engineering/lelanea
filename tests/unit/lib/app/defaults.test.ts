@@ -67,6 +67,8 @@ import { APP_API_KEY_SCOPES } from '@/lib/app/api-key-scopes';
 import { listValidApiKeyScopes, CORE_API_KEY_SCOPES } from '@/lib/auth/api-key-scopes';
 import appEslintConfig from '@/lib/app/eslint.config.mjs';
 import { appFrameSrc } from '@/lib/app/csp';
+import { appCoverageExclusions, appAlwaysRunTests } from '@/lib/app/ci';
+import { leafCoverageExclusions, leafAlwaysRunTests } from '@/lib/app/leaf-ci';
 import { occupiedTiers } from '@/lib/app/reserved-tiers';
 import { initAppUserCreatedHooks } from '@/lib/app/user-created';
 import { collectLeafSubjectData, initLeafSubjectSources } from '@/lib/app/leaf-data-export';
@@ -442,6 +444,42 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // These values are spliced straight into a response header, so an
     // accidental default here is a security change, not a cosmetic one.
     assert: () => expect(appFrameSrc).toEqual([]),
+  },
+  {
+    // PINNED (Daybreak fills this bridge). Upstream ships both lists empty and
+    // asserts exactly that; Daybreak declares the FRAMEWORK tier's two entries
+    // here and spreads the reserved leaf lists after them, so "registers
+    // nothing" is not this checkout's contract — "registers the framework's two,
+    // and nothing else" is.
+    //
+    // Pinned by VALUE rather than by length, because the risk below is about
+    // WHICH path is exempted, and a count cannot see a pattern that changed.
+    // A leaf filling `leaf-ci.ts` will break this row as well as its own — the
+    // bridge-above-the-leaf-seam gap in #234, of which this is the fourth
+    // instance. Pin the leaf's additions here when that happens; do not delete
+    // the row.
+    seam: 'lib/app/ci.ts',
+    risk: 'a stray coverage exclusion would switch the per-file 80% floor OFF for that path on every install, and a stray always-run entry would make every scoped run load a test whose file the install may not even have — one silences a gate, the other breaks the gate that replaced it',
+    assert: () => {
+      expect(appCoverageExclusions.map((entry) => entry.pattern)).toEqual([
+        'scripts/boundary/check.ts',
+      ]);
+      expect(appAlwaysRunTests.map((entry) => entry.path)).toEqual([
+        'tests/unit/prisma/framework-boot-seed.test.ts',
+      ]);
+    },
+  },
+  {
+    // Daybreak's reserved leaf CI seam — the one a LEAF fills. Daybreak keeps it
+    // empty, which is the whole reason the bridge above exists: Sunrise's seam is
+    // built for two tiers, and filling `ci.ts` directly would put Daybreak's
+    // entries in the file a leaf is invited to edit.
+    seam: 'lib/app/leaf-ci.ts',
+    risk: "a value here is Daybreak occupying the surface it reserves for a leaf, so the leaf's own entries would collide with it on every upgrade — the conflict Sunrise #759 removed one tier up, re-created one tier down",
+    assert: () => {
+      expect(leafCoverageExclusions).toEqual([]);
+      expect(leafAlwaysRunTests).toEqual([]);
+    },
   },
 ];
 
