@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { WaitlistTable } from '@/components/app/admin/waitlist-table';
@@ -195,14 +195,25 @@ describe('WaitlistTable', () => {
     // rows, the meta AND `appliedSearch` — so the table shows the matches for
     // `ada` while the box reads `adam`, and the export link quietly points at the
     // wrong filter.
-    releaseFirst?.();
-    await waitFor(() =>
-      expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toContain(
-        'q=adam'
-      )
-    );
+    // `!` rather than `?.`: the waitFor above already proved fetch #1 fired, so an
+    // optional call here would silently no-op if that ever stopped being true —
+    // and a test that releases nothing passes for free.
+    await act(async () => {
+      releaseFirst!();
+    });
+
+    // This is the assertion that detects the defect. The `act` above is what
+    // makes that deliberate rather than incidental: it drains the microtasks the
+    // stale response needs (resolve → await fetch → json() → setState), so a
+    // missing guard has actually had its chance to overwrite the table by the
+    // time these run.
     expect(screen.queryByText('stale@x.test')).toBeNull();
     expect(screen.getByText('fresh@x.test')).toBeTruthy();
+    // And the export link still points at what is on screen, which is the
+    // consequence a reader of this surface would actually notice.
+    expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toContain(
+      'q=adam'
+    );
   });
 
   it('does not claim nobody has joined when the list failed to load', () => {
@@ -222,6 +233,13 @@ describe('WaitlistTable', () => {
 
   it('stops disclaiming once a fetch succeeds, without needing a reload', async () => {
     const user = userEvent.setup();
+    // The fetch must come back EMPTY for this to assert anything. Round 2 of the
+    // code review caught the first version returning a row: with rows on screen
+    // the empty-state cell never renders at all, so the disclaimer was absent
+    // whether or not `setLoadFailed(false)` existed — the test passed with the
+    // fix deleted. An empty successful result is the only state where the two
+    // messages compete.
+    fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
     render(
       <WaitlistTable
         initialEntries={[]}
@@ -230,9 +248,14 @@ describe('WaitlistTable', () => {
       />
     );
 
+    expect(screen.getByText(/did not load, so this is not an answer/)).toBeTruthy();
+
     await user.type(screen.getByLabelText('Search the waitlist'), 'ada');
 
-    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeTruthy());
+    // The search worked and genuinely matched nobody, which is an answer — so the
+    // table has to stop saying it has none. Leaving the disclaimer up would tell
+    // an admin the list is broken for as long as their searches keep missing.
+    await waitFor(() => expect(screen.getByText('Nobody on the list matches that.')).toBeTruthy());
     expect(screen.queryByText(/did not load, so this is not an answer/)).toBeNull();
   });
 
