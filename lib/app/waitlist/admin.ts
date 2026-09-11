@@ -224,8 +224,11 @@ export const WAITLIST_CSV_COLUMNS = [
  * The defect is in `lib/api/csv.ts`, whose blob is identical in Sunrise,
  * Daybreak and here — so Sunrise owns it and it is filed there rather than
  * patched in place (a Sunrise-owned edit is a divergence row; this wrapper is a
- * file of ours). `app/api/v1/admin/orchestration/conversations/export/route.ts`
- * has the same exposure through message content.
+ * file of ours):
+ * [`sunrise#768`](https://github.com/human-centric-engineering/sunrise/issues/768).
+ * `app/api/v1/admin/orchestration/conversations/export/route.ts` has the same
+ * exposure through message content. Drop this wrapper when the fix merges
+ * through.
  */
 function csvCell(value: string): string {
   const escaped = csvEscape(value);

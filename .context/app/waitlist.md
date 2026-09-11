@@ -236,6 +236,9 @@ nothing: paging 25 rows is not the expensive act.
   `=` mid-cell, where nothing evaluates it. Found by the security review of t-8.
   The defect is in Sunrise's `lib/api/csv.ts` — blob-identical in all three tiers
   — and `conversations/export` has the same exposure through message content.
+  Filed as
+  [`sunrise#768`](https://github.com/human-centric-engineering/sunrise/issues/768);
+  drop `csvCell()` when that merges through.
 - **A leading UTF-8 BOM.** Excel on Windows reads a BOM-less CSV as the system
   codepage, which turns a ñ into mojibake. The product's own name has one and so
   will many of the names on this list; `charset=utf-8` on the response does not
