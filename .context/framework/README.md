@@ -55,19 +55,23 @@ reserves for its own forks.**
   **Sunrise** migration
 - Daybreak registers its framework pieces into Sunrise's seams **from within
   `lib/framework/`** (driven by `initFramework()`) — exactly as Sunrise
-  registers its own built-ins from core. The **four exceptions** are the
+  registers its own built-ins from core. The **six exceptions** are the
   `lib/app/*` **bridges** Daybreak fills: `bootstrap.ts` (server boot →
   `initFramework()`), `admin-nav.ts` (client sidebar → the framework nav
   section), `data-export.ts` (subject access → the framework's own GDPR Art. 15
-  manifest), and `brand.ts` (product name + legal entity → `lib/brand.ts`). A
-  framework registration that must run in a realm `initFramework()` can't reach —
-  server-boot, the client sidebar, a lazy seam whose init core owns, or a static
-  value core imports directly — has nowhere else to go; each delegates to a
-  reserved leaf hook (`leaf-bootstrap.ts` / `leaf-admin-nav.ts` /
-  `leaf-data-export.ts` / `leaf-brand.ts`). `brand.ts` is the one where the leaf
-  **overrides** rather than appends — brand identity is single-valued, so a leaf
-  replaces Daybreak's name rather than composing with it. Otherwise Daybreak does
-  **not** fill `lib/app/*` (see next).
+  manifest), `brand.ts` (product name + legal entity → `lib/brand.ts`),
+  `db-drift.ts` (Prisma-unmodelled DB objects) and `ci.ts` (coverage exclusions
+  - always-run tests → `vitest.config.ts` and `ALWAYS_RUN_TESTS`). CLAUDE.md's
+    banner carries the same roster; count them there rather than from an ordinal
+    in a docblock. A
+    framework registration that must run in a realm `initFramework()` can't reach —
+    server-boot, the client sidebar, a lazy seam whose init core owns, or a static
+    value core imports directly — has nowhere else to go; each delegates to a
+    reserved leaf hook (`leaf-bootstrap.ts` / `leaf-admin-nav.ts` /
+    `leaf-data-export.ts` / `leaf-brand.ts`). `brand.ts` is the one where the leaf
+    **overrides** rather than appends — brand identity is single-valued, so a leaf
+    replaces Daybreak's name rather than composing with it. Otherwise Daybreak does
+    **not** fill `lib/app/*` (see next).
 
   `data-export.ts` has the most history behind it. Sunrise v0.8.0 (#467) shipped
   subject access assuming exactly **two** tiers — core declares its tables in
@@ -162,8 +166,10 @@ wiring (which must be eager at boot anyway). Bridging the four would add
 
 **What this means for a leaf app on Daybreak:** to add a contributor, edit the
 `lib/app/<seam>-contributors.ts` file **directly** — Sunrise's documented path,
-no Daybreak-specific indirection. Only boot and admin-nav use the `leaf-*`
-delegation. Both mechanisms feed the same in-memory registry; ordering is safe
+no Daybreak-specific indirection. The `leaf-*` delegation is used only by the
+bridges listed above (boot, admin-nav, data-export, brand, db-drift, ci) — this
+line used to say "only boot and admin-nav", which stopped being true as each
+later bridge landed. Both mechanisms feed the same in-memory registry; ordering is safe
 because `initFramework()` runs at boot, before any seam's first lazy pull.
 
 Sunrise has no middle-tier concept, so this is **not** a deviation from an

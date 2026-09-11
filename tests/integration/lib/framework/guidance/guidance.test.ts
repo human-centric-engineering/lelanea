@@ -24,6 +24,20 @@ vi.mock('@/lib/framework/engagement/module-completion', () => ({
   maybeEmitModuleCompleted: vi.fn(),
 }));
 
+// The access seam is WRAPPED, not replaced: both predicates keep their real bodies, so
+// the behavioural cases below exercise the genuine grant, while the spies record which
+// one the write path consulted. That is the only way to pin #242 — `canWrite` and
+// `canRead` are value-identical until Sunrise #367 lands, so no input distinguishes
+// them, and the regression this guards (swapping back to `canRead`) only becomes
+// observable on the day reads widen and silently take writes with them.
+const accessSpies = vi.hoisted(() => ({ canRead: vi.fn(), canWrite: vi.fn() }));
+vi.mock('@/lib/framework/shared/access', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/framework/shared/access')>();
+  accessSpies.canRead.mockImplementation(actual.canRead);
+  accessSpies.canWrite.mockImplementation(actual.canWrite);
+  return { ...actual, canRead: accessSpies.canRead, canWrite: accessSpies.canWrite };
+});
+
 import {
   loadGuidance,
   loadFocusSuggestion,
@@ -37,6 +51,7 @@ import { getJourneyTimeline } from '@/lib/framework/facilitation/journey/queries
 import { getPublishedMapVersion } from '@/lib/framework/facilitation/map/version-service';
 import { enrichMovesWithRelated } from '@/lib/framework/facilitation/overlays/related';
 import { maybeEmitModuleCompleted } from '@/lib/framework/engagement/module-completion';
+import { ForbiddenError } from '@/lib/api/errors';
 
 const viewer = { userId: 'user-1' };
 const key = { userId: 'user-1', graphSlug: 'onboarding' };
@@ -222,5 +237,71 @@ describe('applyJourneyTransition', () => {
     await applyJourneyTransition(viewer, key, { nodeKey: 'deep', kind: 'enter' });
 
     expect(maybeEmitModuleCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyJourneyTransition — the write guard (#242)', () => {
+  const OTHER = 'user-2';
+
+  it('guards on canWrite, and does so BEFORE assembling anything', async () => {
+    await expect(
+      applyJourneyTransition(
+        { userId: 'user-1' },
+        { userId: OTHER, graphSlug: 'onboarding' },
+        {
+          nodeKey: 'a',
+          kind: 'enter',
+        }
+      )
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    // The point of placing the guard ahead of the assembler: a viewer who may not
+    // write triggers NO reads at all. Six of them sit behind `assembleJourneyContext`
+    // (published graph, journey, node states, slot heads, `now`, module list).
+    expect(assembleJourneyContext).not.toHaveBeenCalled();
+    expect(applyEvent).not.toHaveBeenCalled();
+  });
+
+  it('consults canWrite — the pinned grant — and never the widening canRead', async () => {
+    vi.mocked(assembleJourneyContext).mockResolvedValue(null);
+
+    await applyJourneyTransition({ userId: 'user-1' }, key, { nodeKey: 'a', kind: 'enter' });
+
+    expect(accessSpies.canWrite).toHaveBeenCalledWith({ userId: 'user-1' }, 'user-1', undefined);
+    // `canWrite` composes `canRead` inside `access.ts`, but that is a module-INTERNAL
+    // call and does not route through this mocked export — which is what makes the
+    // second line sharp: the export being untouched means the write path never reached
+    // for it. Swap `canWrite` for `canRead` in `guidance.ts` and both lines fail.
+    expect(accessSpies.canWrite).toHaveBeenCalledOnce();
+    expect(accessSpies.canRead).not.toHaveBeenCalled();
+  });
+
+  it('passes the caller scope to the guard, so a narrowing #367 can refuse the write', async () => {
+    vi.mocked(assembleJourneyContext).mockResolvedValue(null);
+
+    await applyJourneyTransition(
+      { userId: 'user-1' },
+      key,
+      { nodeKey: 'a', kind: 'enter' },
+      { ownership: 'team' }
+    );
+
+    expect(accessSpies.canWrite).toHaveBeenCalledWith({ userId: 'user-1' }, 'user-1', {
+      ownership: 'team',
+    });
+  });
+
+  it('still admits the admin-support override, which is a write credential by design', async () => {
+    vi.mocked(assembleJourneyContext).mockResolvedValue(null);
+
+    await expect(
+      applyJourneyTransition(
+        { userId: 'user-1', isAdminSupport: true },
+        { userId: OTHER, graphSlug: 'onboarding' },
+        { nodeKey: 'a', kind: 'enter' }
+      )
+    ).resolves.toBeNull();
+
+    expect(assembleJourneyContext).toHaveBeenCalled();
   });
 });

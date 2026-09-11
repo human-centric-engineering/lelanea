@@ -114,6 +114,75 @@ export async function canRead(
 }
 
 /**
+ * May `viewer` **write** `subject`'s journey data under `scope`? Default-deny.
+ *
+ * Today this is value-identical to {@link canRead} — self, or the explicit
+ * admin-support override. It exists anyway, and the duplication is the point.
+ *
+ * **Why a separate predicate.** `canRead` is documented above as delegating to
+ * Sunrise #367's ownership resolver when it lands, widening `own → team → all`.
+ * That widening is about **reading**: the `f-ops-views` analytics and coach scopes
+ * exist so someone can see a cohort's journeys. If creation guarded on `canRead`,
+ * the day that resolver is wired every viewer who could merely *read* a cohort
+ * would silently gain the right to *create* `framework_user_journey` rows for
+ * those subjects — with no diff to the write path and no test in the suite
+ * failing. A capability should widen because someone decided to widen it, not by
+ * omission.
+ *
+ * So the write grant is **pinned** here to the narrow set, and widening it is a
+ * deliberate edit to this function that a reviewer will see.
+ *
+ * **It composes rather than replaces:** a write requires `canRead` to pass *and*
+ * the pinned grant. That ordering matters in the other direction — if #367 ever
+ * makes `canRead` **narrower** for a subject (a tenancy deny, say), the write is
+ * refused too, instead of a stale write grant outliving the read it depends on.
+ *
+ * **Every journey write that takes a VIEWER routes through here** (#242 closed the
+ * last gap): `createJourney` (#159), `recordNodeProgress` (#168) and
+ * `applyJourneyTransition` (`f-guidance`). The last of those needs `canRead` as
+ * well — it cannot validate a transition without loading the subject's graph, node
+ * states and slots — so it holds both guards rather than swapping one for the
+ * other.
+ *
+ * **"Takes a viewer" is the whole of the claim.** It is NOT "every writer of the
+ * journey tables", and the difference is not cosmetic: the unguarded writers are
+ * barrel-exported, so a leaf reaches them by import.
+ *
+ *   - `applyEvent` (`facilitation/engine/apply-event.ts`, re-exported through
+ *     `@/lib/framework/facilitation`) is the sole writer of BOTH `UserNodeState`
+ *     and `JourneyEvent`, and takes `transition.userId` as a plain argument. It is
+ *     unguarded **by design** — F11 makes it a pure engine whose read context is
+ *     the caller's — so the predicate belongs at its caller, which today is only
+ *     `applyJourneyTransition`. A leaf calling it directly supplies its own
+ *     subject and nothing checks it.
+ *   - `recordModuleEngagement` (`engagement/record-engagement.ts`) writes
+ *     `JourneyEvent` and takes a bare `userId`. It cannot hold a guard as it
+ *     stands: it is contractually non-throwing (fire-and-forget from a request
+ *     path), so a refusal has nowhere to go.
+ *
+ * Both are safe today because every in-repo caller binds the subject to someone
+ * already authorized — the authenticated actor, or (in `module-completion.ts`) the
+ * journey subject threaded down from a call that passed this predicate. That is a
+ * property of the call sites, not of the seams, and it is not enforced. Filed as
+ * #251. Deliberately stated as a rule rather than a list of callers: an earlier
+ * version of this note counted them, and the count was wrong within a day.
+ *
+ * A future write that DOES take a viewer must guard here. Nothing enforces that
+ * mechanically; `tests/unit/lib/framework/shared/access.test.ts` pins what the
+ * predicate DOES, not who remembers to call it.
+ */
+export async function canWrite(
+  viewer: JourneyViewer,
+  subject: string,
+  scope: AccessScope = {}
+): Promise<boolean> {
+  // A write requires the read (see "composes rather than replaces" above).
+  if (!(await canRead(viewer, subject, scope))) return false;
+  // …plus the pinned narrow grant, which #367's widening deliberately cannot reach.
+  return viewer.userId === subject || viewer.isAdminSupport === true;
+}
+
+/**
  * The list/analytics face of {@link canRead}: the Prisma `where` fragment naming
  * the subjects `viewer` may see under `scope`. `f-ops-views` (15) `AND`s this into
  * its journey aggregations so analytics inherits the same access discipline as the

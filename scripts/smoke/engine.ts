@@ -21,6 +21,7 @@
 import { prisma } from '@/lib/db/client';
 import { inMemoryGraphStore } from '@/lib/framework/facilitation/engine/graph-store';
 import { applyEvent, ENGINE_EVENT_TYPE } from '@/lib/framework/facilitation/engine/apply-event';
+import { createJourney } from '@/lib/framework/facilitation/journey/create';
 
 const PREFIX = 'smoke-test-engine';
 const stamp = Date.now();
@@ -54,9 +55,15 @@ async function main(): Promise<void> {
     });
     subjectUserId = subject.id;
 
-    const journey = await prisma.userJourney.create({
-      data: { userId: subject.id, graphSlug: `${PREFIX}-graph-${stamp}` },
-    });
+    // Started through the framework seam (#159) rather than the table — the seam is
+    // the only sanctioned way to create a journey, and this smoke is the standing
+    // witness. Note the slug names no PUBLISHED map on purpose: the engine takes its
+    // graph as an input (below), which is exactly why `createJourney` does not
+    // validate `graphSlug` against a published version.
+    const journey = await createJourney(
+      { userId: subject.id },
+      { userId: subject.id, graphSlug: `${PREFIX}-graph-${stamp}` }
+    );
     journeyId = journey.id;
 
     // A one-node map, in memory (the engine takes the graph as an input). `welcome`

@@ -58,6 +58,15 @@
  * @see .context/testing/scoped-runs.md — the operator-facing version of this
  */
 
+// FORK NOTE: this module reads `lib/app/ci.ts` for real — no mock — so what
+// your fork declares there becomes part of `ALWAYS_RUN_TESTS` in this checkout,
+// and every guard written over that list judges your entries alongside
+// Sunrise's. Expect a rejected entry to name YOUR file: the path has to exist,
+// carry a reason of at least 20 characters, be a test file vitest would
+// actually collect, and be something the runner can pass to `vitest` as an
+// argument. Nothing here needs pinning when you fill the seam.
+import { appAlwaysRunTests } from '@/lib/app/ci';
+
 /** One test that must run regardless of what the module graph says. */
 export interface AlwaysRunEntry {
   /** Repo-relative path, forward slashes. */
@@ -74,8 +83,10 @@ export interface AlwaysRunEntry {
  * `prisma/schema/*.prisma`" is — because the reason is what tells the next
  * person whether their new test belongs here.
  *
- * A fork adding its own whole-tree invariant appends to this list. Nothing
- * upstream removes entries, so the merge is additive.
+ * A fork adding its own whole-tree invariant declares it in `lib/app/ci.ts`
+ * instead, and the tail below folds it in — so a fork's list and Sunrise's stay
+ * in different files and never conflict (#759). Nothing upstream removes
+ * entries, so the merge is additive either way.
  */
 export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
   {
@@ -208,63 +219,16 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'own version of the guard, rather than carry a red suite about a file it ' +
       'no longer shares.',
   },
-  // LELAÑEA — a leaf entry, appended per this file's own fork note. Upstream
-  // removes nothing from this list, so the merge is additive; on a conflict
-  // with an upstream append, keep both — order carries no meaning here.
-  {
-    path: 'tests/unit/components/app/ui/tokens-only.test.ts',
-    reason:
-      'walks `components/app/ui/` off disk and fails on any colour literal, ' +
-      'and separately checks that every `var(--color-…)` those components ' +
-      'name is actually declared in a stylesheet. Both inputs are files, not ' +
-      'modules: the change it exists to catch is a NEW component with a hex ' +
-      'in it, or a token deleted from `app/brand-theme.css` — and neither ' +
-      'reaches this test through any import chain. A branch touching only the ' +
-      'stylesheet would not select it, which is exactly when a token ' +
-      'disappears out from under a component that still references it.',
-  },
-  {
-    path: 'tests/unit/app/public/authored-provenance.test.ts',
-    reason:
-      'reads every file under `app/(public)/` and `components/app/site/` off ' +
-      "disk and fails if any of Lelañea Fulton's authored sentences — or a " +
-      'trimmed cut of one — appears in the source. It imports only the ' +
-      'content loader, so the module graph connects it to NOTHING it scans: a ' +
-      'branch that retypes a sentence into a page edits that page and selects ' +
-      'every test that imports it, which is not this one. That is the whole ' +
-      'blind spot, and it is the exact change the guard exists to catch. It ' +
-      'found four such violations already shipped when it was added. Named ' +
-      '`.test.ts` rather than `.test.tsx` because `validateAlwaysRun` rejects ' +
-      'the latter outright — sunrise#763; the file has no JSX, so the rename ' +
-      'is the correct name rather than a workaround.',
-  },
-  {
-    path: 'tests/unit/context/app-docs-paths.test.ts',
-    reason:
-      'checks that every repo path `.context/app/*.md` names still exists. Its ' +
-      'inputs are files and it imports none of them, so BOTH branches that ' +
-      'break it are invisible to a scoped run: one that renames a component ' +
-      'reaches this through no module graph, and one that only edits markdown ' +
-      'reaches it through none either. A doc pointing at a moved file is worse ' +
-      'than no doc — it reads as authoritative — and nothing else in the suite ' +
-      'can see it, since a rename fails type-check while its mention in prose ' +
-      'fails nothing. §04 t-22, when `shell.md` arrived naming dozens of ' +
-      'paths. `.test.ts` not `.test.tsx`, per sunrise#763, as above.',
-  },
-  {
-    path: 'tests/unit/app/shell-not-found-streaming.test.ts',
-    reason:
-      'asserts that no `loading` file and no `<Suspense>` wrapping ' +
-      '`{children}` sits between the root and a page under `/app`. Next sets ' +
-      'a 404 only on a response that has not begun streaming, so breaking ' +
-      'either turns every mistyped URL under `/app` into a soft 200 with ' +
-      'nothing else failing. Its inputs are files and it imports none of ' +
-      'them: the branch that adds a loading state touches no module this ' +
-      'would be selected by. Split out of `shell-not-found.test.tsx` in t-22 ' +
-      'precisely so it could be declared here — that file is `.test.tsx`, ' +
-      'which validateAlwaysRun rejects (sunrise#763), and its render cases ' +
-      'genuinely need JSX.',
-  },
+  // The fork-owned tail. Sunrise ships it empty; everything above is core's.
+  //
+  // Spread rather than left as a second list every caller must remember to
+  // union, so every guard already written over `ALWAYS_RUN_TESTS` covers a
+  // fork's entries too: `validateAlwaysRun` below rejects a non-test path or a
+  // bare reason, and `tests/unit/scripts/ci/scoped-tests.test.ts` fails on an
+  // entry whose file does not exist, a reason under 20 characters, or a
+  // duplicate path. A fork's declaration gets the checks core's gets, in the
+  // fork, without a line of its own.
+  ...appAlwaysRunTests,
 ];
 
 /** Just the paths, for argv building and set arithmetic. */
@@ -500,8 +464,34 @@ export function validateAlwaysRun(entries: readonly AlwaysRunEntry[]): string | 
     return 'ALWAYS_RUN_TESTS is empty — a scoped run would skip every whole-tree invariant.';
   }
   for (const entry of entries) {
-    if (!entry.path.startsWith('tests/') || !entry.path.endsWith('.test.ts')) {
+    // WHERE a test lives is not this validator's business; what it IS, is.
+    //
+    // The rule used to be `tests/` prefix AND `.test.ts` suffix, and both halves
+    // contradicted `coverageTargets` below, which says in as many words that the
+    // selection side was widened for a fork that colocates (`lib/foo.test.ts`)
+    // or writes `.spec.ts` — "so this side has to agree about where tests live".
+    // This one did not. And the cost of disagreeing is not a skipped entry:
+    // this runs inside `selfTestFailure`, so a rejection stops the WHOLE scoped
+    // gate. A fork declaring its own colocated whole-tree test in
+    // `lib/app/ci.ts` would have had a seam entry that refuses to run the
+    // runner — the seam handing back a worse failure than the edit it replaced.
+    //
+    // `tests/a.ts` is still rejected, which is the case the old prefix check was
+    // really buying: the suffix is what says "test file", and it says it
+    // wherever the file sits.
+    if (!/\.(test|spec)\.[cm]?[jt]sx?$/.test(entry.path)) {
       return `ALWAYS_RUN_TESTS holds "${entry.path}", which is not a test path.`;
+    }
+    // Dropping the prefix dropped a property something else was leaning on.
+    // These paths become POSITIONAL ARGV for the spawned `vitest run`
+    // (`run-scoped-tests.ts` filters `selection.files` and `coverage` through
+    // `unsafeArgvPaths`, but never the always-run union), and `startsWith
+    // ('tests/')` was structurally why an entry could not present as an option —
+    // a security review named exactly that as the reason the unfiltered path was
+    // safe. So the check moves here, where it is stated rather than implied, and
+    // it now covers the quote and control-character shapes a prefix never did.
+    if (unsafeArgvPaths([entry.path]).length > 0) {
+      return `ALWAYS_RUN_TESTS holds "${entry.path}", which cannot be passed as an argument.`;
     }
     if (entry.reason.trim() === '') {
       return `ALWAYS_RUN_TESTS entry "${entry.path}" has no reason.`;

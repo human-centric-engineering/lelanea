@@ -34,8 +34,8 @@
 >
 > **Lelañea-owned (edit these freely):**
 >
-> - The five `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
->   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-brand.ts`
+> - The six `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+>   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-ci.ts`
 > - Every other `lib/app/*` file Daybreak keeps empty for us (`capabilities.ts`,
 >   `context-contributors.ts`, `env.ts`, `rate-limit.ts`, `public-nav.ts`,
 >   `protected-nav.ts`, `auth-landing.ts`, `emails.ts`, `csp.ts`, `jobs.ts`,
@@ -45,7 +45,7 @@
 > - `app/brand-theme.css`, and our identity: `package.json`, `README.md`, `.env*`
 > - New files anywhere: pages in a route group, routes under `app/api/v1/`, `lib/` modules
 >
-> **The four bridges — DO NOT FILL. Fill the `leaf-*` file each delegates to:**
+> **The six bridges — DO NOT FILL. Fill the `leaf-*` file each delegates to:**
 >
 > | Fill this (ours)              | NOT this (Daybreak's) |
 > | ----------------------------- | --------------------- |
@@ -53,6 +53,12 @@
 > | `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        |
 > | `lib/app/leaf-data-export.ts` | `data-export.ts`      |
 > | `lib/app/leaf-brand.ts`       | `brand.ts`            |
+> | `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         |
+> | `lib/app/leaf-ci.ts`          | `ci.ts`               |
+>
+> **This table is the roster — count bridges here, never from an ordinal in a
+> docblock.** Daybreak fills all six; a file joining the list is a breaking change
+> and is called out in its changelog.
 >
 > Each bridge runs Daybreak's registration and then calls our hook. Filling a
 > bridge directly collides with Daybreak on the next merge — and in the
@@ -65,7 +71,7 @@
 > - **`.context/framework/`** — including its `CHANGELOG.md`, `VERSIONING.md` and
 >   planning board. That board tracks **Daybreak's** work, not ours; ours goes in
 >   `.context/app/`.
-> - `lib/daybreak-version.ts`, and the four `lib/app/*` bridges above
+> - `lib/daybreak-version.ts`, and the six `lib/app/*` bridges above
 >
 > **Sunrise-owned (do NOT edit; extend through a seam):**
 >
@@ -199,9 +205,14 @@
 > - `tests/unit/lib/daybreak-version.test.ts` — the `DAYBREAK_VERSION ===
 package.json.version` parity case is **removed**, with the reasoning recorded
 >   in place. Our version and the framework's are meant to diverge.
-> - `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
->   **pinned** to our brand values rather than deleted, so every seam still left
->   empty keeps its protection. Update it whenever `leaf-brand.ts` changes.
+> - `tests/unit/lib/app/defaults.test.ts` — **three rows are pinned** rather than
+>   deleted, so every seam still left empty keeps its protection:
+>   `lib/app/leaf-brand.ts` (our brand values), `lib/app/leaf-ci.ts` (our four
+>   always-run tests), and the `lib/app/ci.ts` **bridge** row, which asserts
+>   Daybreak's entries followed by ours. Pin the bridge row too whenever you fill
+>   a leaf seam it spreads: it is the only row that proves the bridge still
+>   reaches the seam, and without it the spread could be dropped while the seam's
+>   own row still passed. Update them whenever the seam they pin changes.
 >
 > ### The section immediately below this banner is also Lelañea's
 >

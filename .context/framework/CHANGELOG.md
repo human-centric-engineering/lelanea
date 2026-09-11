@@ -25,6 +25,326 @@ process.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-11
+
+> **Third tagged Daybreak release. Additive, plus one fix you want.** Nothing a leaf
+> already built stops working. One pinned test row may need updating; see the last
+> note.
+>
+> **Take this release rather than the commits behind it.** `npm run
+> framework:changelog` failed on every push to `main` — a base that resolves to
+> `HEAD` has no diff, and #239 had correctly stopped that reporting as a pass. A leaf
+> merging those commits would have gone red on its own `main` on every code merge.
+> Fixed here, and the guard now genuinely gates a push instead of either waving it
+> through or failing it blind. See Fixed.
+>
+> **The journey family gains its missing writers.** `createJourney` starts a
+> journey (nothing in the framework could), `recordNodeProgress` writes
+> `UserNodeState.progress` — the one module-owned field no module could reach —
+> and `canWrite` pins every journey write to self-or-admin-support. That last one
+> changes no behaviour today: it exists so that Sunrise #367 widening *reads*
+> `own → team → all` cannot silently hand every cohort-reader the right to drive
+> transitions for those subjects. If you added a bespoke column for per-node
+> progress, you can now drop it.
+>
+> **Two seams remove a platform edit.** `lib/app/leaf-ci.ts` takes your own
+> coverage exclusions and always-run tests, and `syncFrameworkForSeed()` lets a
+> standalone `db:seed` materialise framework rows before your seeds run. Each has
+> a case you must handle — read the entries, not the headline: the seed runner
+> skips a unit whose hash is unchanged, and `registerLeaf` is not optional for you.
+>
+> **If your `defaults.test.ts` pins `lib/app/ci.ts`'s lists**, both gained a second
+> Daybreak entry, so your pinned row needs updating (#234).
+
+### Added
+
+- **Daybreak's own changelog is now checked, and the entry gate sees framework
+  exports** (#239). Two of the three gaps that issue named; the third is an
+  upstream ask (below).
+
+  - **Structure.** `.context/framework/CHANGELOG.md` had never been validated —
+    Sunrise's structure check is hardcoded to the root `CHANGELOG.md` — so a
+    malformed section, a duplicated `###` or an out-of-order release shipped
+    silently. It is now checked on every test run, against the real file.
+
+    Daybreak's changelog keeps **three headings outside Keep-a-Changelog's six**,
+    deliberately: `Platform` (what the Sunrise sync changed about *your* contract,
+    a different problem from a Daybreak-owned change), `Documentation`, and
+    `⚠️ <Category> — action required …`. That last one is the most useful heading
+    in an upgrade document, and folding it into `Changed` to satisfy a convention
+    would make this file worse at its only job. A typo (`### Addded`) still fails.
+
+  - **The entry gate now covers `lib/framework` exports.** Previously it gated on
+    file paths only, so adding `createJourney` to two barrels changed the public
+    surface with nothing requiring an entry — the entry got written because a human
+    read `check:exports` and decided. It now diffs each `lib/framework/**/index.ts`
+    barrel's **exported symbol set** base → HEAD. An internal refactor that moves
+    code without changing what a barrel exports still does not trip it; a rename
+    trips it as one removal plus one addition, which is correct — it breaks every
+    leaf importing the old name.
+
+  **If your leaf pins `lib/app/ci.ts`'s lists in its `defaults.test.ts` row**, both
+  gained a second Daybreak entry — `appAlwaysRunTests` the changelog structure
+  test, and `appCoverageExclusions` the guard's own CLI wrapper — so your pinned
+  row needs updating. That is the bridge-above-the-leaf-seam case in #234, and this
+  is the first change to exercise it.
+
+  Still outstanding: the **drift** check (a bullet that was true when written and
+  falsified by a later commit on the same branch) does not yet run against this
+  file. Its git plumbing lives in Sunrise's CLI wrapper rather than its pure
+  module, so running it here needs a one-line upstream change rather than ~100
+  lines duplicated in the fork. Asked upstream; it lands here when it lands there.
+
+- **`lib/app/leaf-ci.ts` — a leaf declares its own coverage exclusions and
+  always-run tests.** Adopted from Sunrise #762 (`lib/app/ci.ts`), which Daybreak
+  asked for as #759 and which is on `upstream/main` ahead of a Sunrise release.
+  Two lists, both shipped empty for you:
+
+  ```ts
+  // lib/app/leaf-ci.ts
+  export const leafCoverageExclusions: AppCoverageExclusion[] = [
+    { pattern: 'scripts/my-cli.ts', reason: 'a tsx entry point nothing imports, so a scoped run forces it in at 0%' },
+  ];
+  export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
+    { path: 'tests/unit/my-tree-invariant.test.ts', reason: 'globs the repo; no import chain reaches it' },
+  ];
+  ```
+
+  The cases these exist for: a **`tsx` CLI script of your own** is structurally 0%
+  and fails the per-file 80% floor the first time anyone edits it, and a **test whose
+  subject is the repository** is reached by no import chain, so `--changed` never
+  selects it. Before the seam, declaring either meant editing a platform file.
+
+  - **`lib/app/ci.ts` is one of Daybreak's bridges — do not fill it.** Sunrise's seam
+    is built for two tiers and hands "the fork" one file; Daybreak is the middle of
+    three, so it declares the framework tier's entries there and spreads your lists
+    after them. Filling the bridge directly re-creates, one tier down, exactly the
+    conflict #759 removed one tier up.
+  - **Both lists append**, so the tiers compose — unlike `leaf-brand.ts`, which
+    overrides.
+  - **Your entries are guarded, not merely typed.** Every check Sunrise wrote over
+    the core lists judges yours in your checkout: a `reason` under 20 characters or
+    a duplicate fails either list; an always-run path must additionally exist, be
+    passable to `vitest` as an argument, and sit in a directory `vitest.config.ts`
+    collects — `tests/e2e/**` is excluded there, so a spec declared inside it would
+    pass every other check and then silently never run.
+  - **Mind the extglob.** `scripts/x/!(*-assertions).ts` spares a sibling only when
+    the extracted half is *named* `*-assertions.ts`. Daybreak's own split is
+    `check.ts`/`lib.ts`, so it names the wrapper directly — the pattern would have
+    taken the tested half with it. Prefer naming the file unless you follow the
+    convention.
+  - **Filling `leaf-ci.ts` will break two `defaults.test.ts` rows**, its own and the
+    bridge's. Pin both; don't delete either (#234).
+
+  Daybreak's own three keep-mine edits — `vitest.config.ts`,
+  `scripts/ci/missing-tests.ts` and `scripts/ci/scoped-tests.ts` — are **deleted**,
+  so those files now carry no Daybreak content and merge clean on the next sync.
+
+- **`recordNodeProgress(viewer, key, nodeKey, patch, scope?)`** — the writer for
+  `UserNodeState.progress` (`lib/framework/facilitation/journey/progress.ts`,
+  barrel-exported) (#168). The column is declared module-owned and opaque to the
+  engine, and until now no module could reach it: `applyEvent` writes only the
+  lifecycle projection, `TransitionRequest` carries no payload, and `JourneyEvent`
+  is written inside the engine's own transaction. The one field the framework set
+  aside *for* a module was the one field a module could not write.
+
+  Use it for a beat that must happen **exactly once per node** — showing someone a
+  chart of their own week for the first time, presenting a gap analysis — where
+  re-firing replays a moment the person has already had.
+
+  ```ts
+  const result = await recordNodeProgress(viewer, key, 'week-chart', { chartShown: true });
+  if (!result.ok) {
+    // 'journey_not_started' — start it first; 'node_not_entered' — enter the node first.
+  }
+  ```
+
+  - **It merges, and the database does the merging.** Postgres `jsonb ||` in a
+    single statement, so two beats landing together cannot lose each other's keys —
+    the read-modify-write a leaf would otherwise write itself has exactly that bug,
+    in the one field whose job is "this must not happen twice". Merging the same
+    patch twice is a no-op, so a failed call is safe to retry.
+  - **The merge is shallow.** A nested object in `patch` replaces the one it lands
+    on rather than merging into it. Keep ledger keys flat. A key set to `null` is
+    stored as JSON `null`, not removed — `||` cannot delete.
+  - **It will not create a `UserNodeState`.** A node that was never entered is
+    refused (`node_not_entered`), because creating the row would mean inventing a
+    `status` — the field `applyEvent` is the sole writer of. Enter the node, then
+    record against it.
+  - **Structured refusals, not `null`.** The rest of the journey family returns
+    `null` for "nothing to do"; this one does not, because a write that silently did
+    not happen leaves the beat firing forever, and the two reasons want different
+    fixes. It mirrors `applyEvent`'s `ok`-discriminated result.
+  - **Guarded by `canWrite`**, the pinned self-or-admin-support grant — not the
+    `canRead` that Sunrise #367 will widen to cohorts. Same reasoning as
+    `createJourney`.
+
+  **`TransitionRequest` deliberately did *not* gain a `progress` field**, the
+  alternative the issue offered for "the beat coincides with a transition". It would
+  give the framework two ways to write one field and put module-owned data inside the
+  pure engine, to buy an atomicity that idempotence already covers. Additive if a
+  real case needs it.
+
+  **If you added a bespoke column for this** — as Daybreak's first leaf did — you can
+  now move that ledger onto `UserNodeState.progress` and drop the column and its
+  migration.
+
+- **Seeds can materialise framework rows without booting the app** (#158). A
+  standalone `db:seed` — what `db:reset` and CI run — never runs
+  `initFramework() → initLeafApp() → syncFramework()`, so the `Module` rows, their
+  slot definitions and the framework capability rows did not exist and a leaf
+  seeding framework *configuration* had nothing to operate on.
+  - **`prisma/seeds/_framework/000-framework-boot.ts`** now runs that sequence.
+    It sorts after every core seed and before any `app-…` directory, so a leaf's
+    own seeds find the rows already in place. **No leaf action needed** for
+    `db:reset` or CI.
+  - **`syncFrameworkForSeed(options?)`** in `lib/framework/seed.ts` is the same
+    sequence as a callable seam, for smoke scripts and for the case the boot seed
+    cannot cover. Pass `registerLeaf: initLeafApp` — it runs *between* framework
+    registration and the database reconcile, the only correct position, because
+    the reconcile treats modules missing from the registry as removed. It
+    **throws** where `initApp()` logs and continues: a seed that silently failed
+    to establish the framework would be recorded as applied.
+
+  **The case you must handle:** the runner skips a unit whose source hash is
+  unchanged, so the boot seed runs once and then not again. Add a module and a
+  seed for it, run `db:seed` on an existing database, and the boot seed is skipped
+  — your new module never gets its row. Call it at the top of your own seed's
+  `run()`; that unit's hash changes when you edit it:
+
+  ```ts
+  import { syncFrameworkForSeed } from '@/lib/framework/seed';
+  import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+
+  await syncFrameworkForSeed({ registerLeaf: initLeafApp });
+  ```
+
+  **`registerLeaf` is not optional for you.** Omit it and `syncFramework()`
+  reconciles a registry `initLeafApp()` never populated — so your new `Module` row
+  is *still* never created. This seed does **not** fail when that happens: it exits
+  0, having written the framework's own capability rows. What fails is your *next*
+  seed, the one that expects the module row to exist. See [`building-on-daybreak.md`](./building-on-daybreak.md).
+
+- **A leaf can now import `@/lib/framework` from the reserved namespaces and from
+  its own seeds, with no configuration.** The core → framework import ban exempts
+  three more groups (#157):
+  - **Reserved leaf surfaces** — `app/api/v1/app/**`, `app/(protected)/app/**`,
+    `app/(public)/app/**`, `app/(auth)/app/**`, `app/admin/app/**`, and
+    `components/app/**`. These *do* ship in a build, but the ban's build-time
+    rationale is about a fork with **no** `lib/framework/` folder, and these paths
+    exist only in a leaf — which always has a framework tier beneath it. Same
+    reasoning that already exempts `lib/app/**`.
+  - **Framework- and leaf-tier seeds** — `prisma/seeds/app-*/**`,
+    `prisma/seeds/framework/**`, `prisma/seeds/_framework/**`. Seeds run via `tsx`
+    and are never part of `next build`, the same profile as the already-exempt
+    `scripts/smoke/**`.
+
+  **The numbered core seeds at `prisma/seeds/NNN-*.ts` are deliberately still
+  banned.** "Ships in no build" is not on its own a licence to cross tiers: those
+  files exist in upstream Sunrise and in sibling forks with no framework tier.
+
+  **If you use your own route vocabulary** (`programme/**`, `journal/**`, …) rather
+  than the reserved namespaces, re-permit it in your own
+  `lib/app/eslint.config.mjs`, which is spread last and wins for your files. That is
+  the supported mechanism — Daybreak cannot take one leaf's vocabulary into a
+  framework-owned config. Mind the flat-config footgun: `no-restricted-imports`
+  replaces rather than merges, so restate the `@/`-alias ban in your block.
+  See [`building-on-daybreak.md`](./building-on-daybreak.md).
+
+
+- **`createJourney(viewer, key, scope?)`** — the seam that starts a journey
+  (`lib/framework/facilitation/journey/create.ts`, barrel-exported). Until now
+  nothing in the framework created a `UserJourney`: `applyEvent` is the sole writer
+  of journey *state* and requires an existing `journeyId`, and `getJourney` returned
+  `null` for a journey nobody could start — so a leaf beginning a run had to write
+  the `framework_user_journey` row itself. It is the counterpart to
+  `applyJourneyTransition`: **create the journey, then transition it.**
+  - **Idempotent** on the natural key `(userId, graphSlug, contextKey)` — a second
+    start returns the existing row with its original `startedAt`, including under a
+    concurrent race.
+  - **`canWrite`-guarded** against the journey's owner before any write (see the
+    new export below) — deliberately narrower than the `canRead` guarding the
+    journey reads.
+  - The **caller supplies `contextKey`** (`''` is the default, context-free
+    journey); the framework never mints one. This is also the `contextKey` ↔ run
+    identity that per-run slot provenance will resolve against.
+  - It deliberately does **not** validate `graphSlug` against a published map —
+    `graphSlug` is a plain label by design, and the engine takes its graph as an
+    input. A journey started against an unpublished slug is inert rather than
+    rejected, so publish the map first.
+
+- **`canWrite(viewer, subject, scope?)`** in `lib/framework/shared/access.ts` — the
+  write face of the journey access seam. Today it is value-identical to `canRead`
+  (self, or the explicit admin-support override), and it exists so it stays that
+  way: `canRead` is documented as widening `own → team → all` when Sunrise #367's
+  ownership resolver lands, and that widening is about *reading* a cohort. Without
+  a separate predicate, every future cohort-reader would silently gain the right to
+  create journeys for those subjects. It composes with `canRead` rather than
+  replacing it, so a future *narrowing* of reads also refuses the write.
+
+  **A leaf writing its own framework-tier writes should guard on this, not
+  `canRead`.** Every journey write in the framework now does, including
+  `applyJourneyTransition` — see Security below (#242).
+
+### Fixed
+
+- **`npm run framework:changelog` no longer fails every push to `main` — yours or
+  your leaf's.** The guard resolves its base as `origin/main`, which on a push to
+  `main` IS `HEAD`: no base, empty diff. It had been reporting that as a confident
+  pass; #239 correctly changed "could not look" into a CI failure, and the
+  consequence was that **every code merge to `main` went red** — three in a row here
+  before anyone traced it, and it would have done the same on every leaf that merged
+  this release.
+
+  On a `push` event the guard now takes the previous tip from the event payload
+  GitHub always writes (`GITHUB_EVENT_PATH` → `.before`), consulted *before*
+  `origin/main` so the identical-commit case never arises. Needs no workflow edit,
+  so it stays fork-owned and survives an upstream sync.
+
+  - **`.before`, not `HEAD^`** — the base Sunrise's own adjacent checks use.
+    `HEAD^` is the first parent, which equals the previous tip only when the push
+    carried exactly one commit; a direct push of three would be diffed from commit
+    2, letting a seam change in commit 1 through. That is the hole #239 exists to
+    close, and why `HEAD^` was rejected for the PR path. It stays as a last-resort
+    fallback on pushes only, where a narrower window still beats no answer.
+  - **The PR path is untouched.** `origin/main` is a real, distinct base there and
+    the reasoning behind it was already sound.
+  - **This makes the guard work on `main` rather than merely stop complaining.**
+    Verified by pointing it at a push that adds a `lib/framework` barrel export with
+    no changelog entry: it fails, and names the symbol. Previously that was a false
+    pass (before #239) and then a blanket failure (after it).
+  - The payload rules — including the all-zeros SHA a branch creation reports —
+    moved to `scripts/release/lib.ts` as `pushEventBeforeSha()` so they are
+    unit-tested, keeping the CLI wrapper to git I/O as its docblock promises.
+
+
+### Security
+
+- **Every journey write is now guarded by `canWrite`, not by a read** (#242).
+  `applyJourneyTransition` reached its write authorization through
+  `assembleJourneyContext` → `getJourney` → `canRead`, which was correct only by
+  coincidence: `canRead` is documented as delegating to Sunrise #367's ownership
+  resolver once it lands, widening `own → team → all`. That widening is about
+  *reading* a cohort. The day it is wired, **every viewer who could merely read a
+  cohort's journeys would have silently gained the right to drive state transitions
+  for those subjects** — writing `UserNodeState` projections and appending
+  `JourneyEvent` rows on their behalf, with no diff to the write path and no test
+  failing.
+
+  `canWrite` pins the write grant to self-or-admin-support, so widening it becomes a
+  deliberate edit someone reviews. With `createJourney` (#159) and
+  `recordNodeProgress` (#168) already on it, this was the last gap.
+
+  **Nothing changes today** — the two predicates are value-identical until #367
+  lands, so no existing caller's behaviour moves. What changes is what happens when
+  it does.
+
+  **If you are building a leaf:** a viewer who may read a subject but not write for
+  them now gets `ForbiddenError` from `applyJourneyTransition` rather than a
+  transition. Today that set is empty. Once #367 widens reads it will not be, and
+  that is the point. The admin-support override (`adminSupportViewer()`) is
+  unaffected and remains a write credential by design.
+
 ## [0.2.0] — 2026-09-07
 
 > **Second tagged Daybreak release, and the first a leaf actually merges** — 0.1.0
@@ -457,6 +777,7 @@ process.
   are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md). Only the
   leaf-contract consequence is repeated above.
 
-[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.2.0...HEAD
+[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.3.0...HEAD
+[0.3.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.3.0
 [0.2.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.2.0
 [0.1.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.1.0
