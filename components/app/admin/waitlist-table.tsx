@@ -83,10 +83,22 @@ interface WaitlistTableProps {
   initialLoadFailed?: boolean;
 }
 
-/** What the confirmation dialog is currently asking about. */
+/** What the removal confirmation is currently asking about. */
 interface PendingRemoval {
   id: string;
   email: string;
+}
+
+/**
+ * What the RESTORE confirmation is asking about.
+ *
+ * Only ever set for a row carrying re-submissions, because that is the only case
+ * where a restore is a decision rather than an undo — see the Restore button.
+ */
+interface PendingRestore {
+  id: string;
+  email: string;
+  rejoinRequests: number;
 }
 
 /**
@@ -156,6 +168,7 @@ export function WaitlistTable({
    * clicks through.
    */
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -408,12 +421,25 @@ export function WaitlistTable({
                         <Badge variant="outline" className="font-normal">
                           Removed
                         </Badge>
-                        {/* The D9 signal: they asked to come back, nothing put them
-                            back, so it has to be visible or the record is kept for
-                            nobody. */}
+                        {/*
+                          The D9 signal: the form was submitted again and nothing
+                          put them back, so it has to be visible or the record is
+                          kept for nobody.
+
+                          "Re-submitted", not "asked to re-join". The first states
+                          what happened; the second states who did it, and NOTHING
+                          here knows that — the public form proves no ownership of
+                          the address (A8, no confirmation email). The security
+                          review of this task found the confident wording was the
+                          load-bearing part of a real attack: three unauthenticated
+                          POSTs of a victim's address manufacture a signal that reads
+                          as the victim asking to come back, and the admin's click
+                          then delivers exactly the resurrection D9 refuses to do
+                          automatically.
+                        */}
                         {entry.rejoinRequests > 0 && (
                           <Badge variant="secondary" className="font-normal">
-                            Asked to re-join ×{entry.rejoinRequests}
+                            Re-submitted ×{entry.rejoinRequests}
                           </Badge>
                         )}
                       </div>
@@ -429,15 +455,32 @@ export function WaitlistTable({
                   </TableCell>
                   <TableCell className="text-right">
                     {entry.removedAt ? (
-                      // No confirmation on a restore: it is the undo of the
-                      // destructive-looking act, and itself undoable by removing
-                      // again. A dialog in every direction trains people to dismiss
-                      // the one that matters.
                       <Button
                         variant="ghost"
                         size="sm"
                         disabled={mutatingId === entry.id}
-                        onClick={() => void setRemoved(entry.id, false)}
+                        onClick={() => {
+                          // A plain undo when the admin is reversing their own
+                          // action: no ceremony, and itself undoable by removing
+                          // again. A dialog in every direction trains people to
+                          // dismiss the one that matters.
+                          //
+                          // But a re-submission changes what the click MEANS. The
+                          // form proves nothing about who submitted it, so restoring
+                          // on the strength of one may be putting someone back on a
+                          // list they asked to leave, at a stranger's instigation.
+                          // That is the gap the security review found between D9's
+                          // code and D9's surface, and this is where it closes.
+                          if (entry.rejoinRequests > 0) {
+                            setPendingRestore({
+                              id: entry.id,
+                              email: entry.email,
+                              rejoinRequests: entry.rejoinRequests,
+                            });
+                            return;
+                          }
+                          void setRemoved(entry.id, false);
+                        }}
                       >
                         <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
                         Restore
@@ -535,6 +578,50 @@ export function WaitlistTable({
               }}
             >
               Remove from waitlist
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/*
+        The restore confirmation, which exists ONLY for a row carrying
+        re-submissions. Its whole job is to say that the signal the admin is
+        probably acting on is unverified — the gap the security review found
+        between what D9 enforces in code and what the screen implies.
+      */}
+      <AlertDialog
+        open={pendingRestore !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRestore(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Put {pendingRestore?.email} back on the waitlist?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This address was submitted through the public form{' '}
+              {pendingRestore?.rejoinRequests === 1
+                ? 'once'
+                : `${pendingRestore?.rejoinRequests} times`}{' '}
+              after it was removed.
+              <br />
+              <br />
+              <strong>That does not prove it was them.</strong> The form asks for an address and
+              nothing more — anyone who knows this one can submit it. If the person asked to be
+              taken off, restoring them on the strength of this puts them back on a list they wanted
+              to leave. Write to them if you are not sure.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Leave them off</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = pendingRestore;
+                setPendingRestore(null);
+                if (target) void setRemoved(target.id, false);
+              }}
+            >
+              Put back on the list
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

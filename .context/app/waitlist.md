@@ -396,6 +396,28 @@ A restore does **not** clear `rejoinRequests`. Someone who asked to come back an
 was then put back is exactly the person whose request should stay legible — it is
 the record of why they are here again.
 
+#### The signal is unverified, and the SCREEN has to say so
+
+D9 refuses to clear a removal automatically because nothing proves who submitted
+the form. The first version of this surface then undid that through the admin's
+hand, and the security review of t-24 is what caught it: the badge read **"Asked
+to re-join ×3"** — stating as fact the one thing nobody knows — and Restore sat
+beside it with no confirmation, on the reasoning that an undo needs no ceremony.
+
+Three unauthenticated POSTs of a victim's address (under the 5/hour cap, no other
+field needed) manufacture a confident-looking claim that the victim wants back on.
+The admin clicks Restore and delivers exactly the resurrection D9 exists to
+prevent. The code was right and the presentation re-opened it.
+
+Two changes close it, both in the surface:
+
+- The badge says **"Re-submitted ×3"** — the event, not the actor.
+- **Restore is confirmed when, and only when, the row carries a re-submission.**
+  Undoing your own removal stays a plain click; acting on someone else's
+  submission gets a dialog that says the form proves nothing about who sent it,
+  and suggests writing to them. A dialog in every direction would train an
+  operator to dismiss the one that matters.
+
 ### Seeing them (D10, owner, 11 September 2026)
 
 The list and the CSV exclude removed entries unless `includeRemoved=true`, which

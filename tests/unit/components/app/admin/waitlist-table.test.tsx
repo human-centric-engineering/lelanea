@@ -355,7 +355,7 @@ describe('WaitlistTable', () => {
       expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
     });
 
-    it('shows how many times they asked to come back', () => {
+    it('reports the re-submission as an event, not as something the person did', () => {
       render(
         <WaitlistTable
           initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 2 })]}
@@ -363,12 +363,71 @@ describe('WaitlistTable', () => {
         />
       );
 
-      // D9's whole justification: the re-join is recorded instead of acted on, so
-      // if she cannot see it the record is kept for nobody.
-      expect(screen.getByText(/Asked to re-join ×2/)).toBeTruthy();
+      // D9's justification needs the signal visible — recorded instead of acted on
+      // is worth nothing if nobody can see it. But the WORDING is load-bearing, and
+      // the security review of this task is why: the form proves nothing about who
+      // submitted it, so "asked to re-join" states as fact the one thing nobody
+      // knows. Three unauthenticated POSTs of a victim's address would otherwise
+      // manufacture a confident-looking claim that the victim wants back on.
+      expect(screen.getByText(/Re-submitted ×2/)).toBeTruthy();
+      expect(screen.queryByText(/Asked to re-join/)).toBeNull();
     });
 
-    it('restores without a dialog, because the undo needs no ceremony', async () => {
+    it('asks before restoring a row carrying a re-submission, and says it is unverified', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 2 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+
+      // The attack D9 closes in code runs through the admin's hand instead: a
+      // forged signal plus a frictionless button is the same resurrection. The
+      // dialog is where that stops.
+      expect(patch).not.toHaveBeenCalled();
+      expect(screen.getByText(/does not prove it was them/i)).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: 'Put back on the list' }));
+      await waitFor(() =>
+        expect(patch).toHaveBeenCalledWith('/api/v1/admin/app/waitlist/entry-1', {
+          body: { removed: false },
+        })
+      );
+    });
+
+    it('leaves them off when that dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 1 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+      await user.click(screen.getByRole('button', { name: 'Leave them off' }));
+
+      expect(patch).not.toHaveBeenCalled();
+    });
+
+    it('counts one re-submission in the singular, because ×1 reads as a tally', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 1 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+
+      expect(screen.getByText(/submitted through the public form once/)).toBeTruthy();
+    });
+
+    it('restores without a dialog when the admin is undoing their own action', async () => {
       const user = userEvent.setup();
       render(<WaitlistTable initialEntries={[removed]} initialMeta={META} />);
 
