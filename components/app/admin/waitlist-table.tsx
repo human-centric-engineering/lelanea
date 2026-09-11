@@ -193,6 +193,14 @@ export function WaitlistTable({
    * failure this component's test file calls the one worth asserting.
    */
   const requestSeqRef = useRef(0);
+  /**
+   * `fetchPage`, so it can retry itself without being its own `useCallback`
+   * dependency — which is a cycle TypeScript reports and React cannot resolve.
+   * Assigned on every render, below.
+   */
+  const fetchPageRef = useRef<
+    ((page: number, term: string, withRemoved: boolean) => Promise<void>) | null
+  >(null);
 
   useEffect(() => {
     return () => {
@@ -224,8 +232,24 @@ export function WaitlistTable({
         // re-enable the pager while that one is still running.
         if (requestSeqRef.current !== seq) return;
 
-        setEntries(parsed.data);
         const parsedMeta = parsePaginationMeta(parsed.meta);
+
+        // An empty page that is NOT an empty list: the rows moved out from under
+        // the requested page — usually because this admin just removed the last
+        // one on it, since `setRemoved` re-reads the page it was on. Rendering it
+        // would show "Page 2 of 1", "Showing 26 to 25 of 25", and an empty-state
+        // sentence claiming nobody is on a list holding 25 people. Fetch the last
+        // page that exists instead, and let that render.
+        //
+        // Non-recursive in practice: the retry asks for `totalPages`, which is
+        // below the page that just came back empty, so the condition cannot hold
+        // a second time.
+        if (page > 1 && parsed.data.length === 0 && parsedMeta && parsedMeta.total > 0) {
+          void fetchPageRef.current?.(Math.max(1, parsedMeta.totalPages), term, withRemoved);
+          return;
+        }
+
+        setEntries(parsed.data);
         if (parsedMeta) setMeta(parsedMeta);
         setAppliedSearch(term);
         setAppliedIncludeRemoved(withRemoved);
@@ -243,6 +267,14 @@ export function WaitlistTable({
     [meta.limit]
   );
 
+  // Assigned in an effect, not during render: writing a ref while rendering is what
+  // `react-hooks/refs` forbids, and it is forbidden for a real reason (a render can
+  // be thrown away). The retry that reads this runs inside an async continuation,
+  // long after the render that armed it, so one render's staleness cannot reach it.
+  useEffect(() => {
+    fetchPageRef.current = fetchPage;
+  }, [fetchPage]);
+
   const handleSearch = useCallback(
     (value: string) => {
       setSearch(value);
@@ -256,11 +288,18 @@ export function WaitlistTable({
   const handleToggleRemoved = useCallback(
     (next: boolean) => {
       setIncludeRemoved(next);
-      // Straight back to page 1: the population just changed size, so the page
-      // number that was on screen may no longer exist.
-      void fetchPage(1, appliedSearch, next);
+      // Cancel any pending search first. `handleSearch` captured `includeRemoved`
+      // at keystroke time, so a timer armed seconds ago would fire AFTER this
+      // fetch, win the sequence guard, and re-apply the old filter — leaving the
+      // switch reading on, the removed rows absent, and the export link silently
+      // disagreeing with the screen. The code review of §03 t-24 found it.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      // The LIVE term, not the applied one: whatever is in the box is what the
+      // admin can see, and a half-typed search that has not fired yet is still
+      // the search they are making.
+      void fetchPage(1, search.trim(), next);
     },
-    [appliedSearch, fetchPage]
+    [fetchPage, search]
   );
 
   /**
@@ -388,7 +427,14 @@ export function WaitlistTable({
                   {loadFailed
                     ? 'The list did not load, so this is not an answer about who has joined.'
                     : appliedSearch
-                      ? 'Nobody on the list matches that.'
+                      ? // Same false-claim trap as the default-filter case below,
+                        // and the likelier way in: searching one address is how you
+                        // check whether somebody joined, and with the filter off a
+                        // removed person reads as never having been there. The code
+                        // review of §03 t-24 caught the branch order.
+                        appliedIncludeRemoved
+                        ? 'Nobody on the list matches that.'
+                        : 'Nobody on the list matches that. If they were removed, “Show removed” will find them.'
                       : appliedIncludeRemoved
                         ? // Removed entries ARE included and there are still none, so
                           // nobody has ever joined. This is the only empty state that
@@ -599,11 +645,20 @@ export function WaitlistTable({
           <AlertDialogHeader>
             <AlertDialogTitle>Put {pendingRestore?.email} back on the waitlist?</AlertDialogTitle>
             <AlertDialogDescription>
-              This address was submitted through the public form{' '}
-              {pendingRestore?.rejoinRequests === 1
-                ? 'once'
-                : `${pendingRestore?.rejoinRequests} times`}{' '}
-              after it was removed.
+              {/*
+                Guarded on `pendingRestore`, not optional-chained into the string.
+                Radix keeps the content mounted through the exit animation, so the
+                interpolated version rendered the literal words "undefined times"
+                on the way out of every confirm and cancel. jsdom has no animation,
+                which is why the tests never saw it — the code review did.
+              */}
+              {pendingRestore === null
+                ? null
+                : `This address was submitted through the public form ${
+                    pendingRestore.rejoinRequests === 1
+                      ? 'once'
+                      : `${pendingRestore.rejoinRequests} times`
+                  } after it was removed.`}
               <br />
               <br />
               <strong>That does not prove it was them.</strong> The form asks for an address and

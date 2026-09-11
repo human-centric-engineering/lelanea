@@ -241,8 +241,24 @@ export async function collectWaitlistEntriesForExport(filter: WaitlistAdminFilte
  *
  * It takes the state to reach rather than flipping what it finds. A toggle would
  * mean two admins acting on the same row in the same minute could leave it in
- * either state depending on arrival order, and a double-clicked button could
- * undo itself. `removed: true` twice is the same as once.
+ * either state depending on arrival order, and a double-clicked button could undo
+ * itself.
+ *
+ * **`removed: true` twice has to be the same as once, and the WHERE is what makes
+ * that true.** A bare `where: { id }` updates the row whether or not the value
+ * changes — Postgres counts it as updated either way — so a second removal moved
+ * `removedAt` to a later timestamp and the original was gone. That matters
+ * because `removedAt` is not a cache of a boolean: the CSV discloses it as
+ * `removed_at` and the Art. 15 bundle hands it to the data subject, so moving it
+ * falsifies a record two people can read. Two admins a minute apart, or an
+ * `admin`-scoped API key retrying, was enough. The code review of §03 t-24 caught
+ * it.
+ *
+ * So the write is conditioned on the row NOT already being in the target state,
+ * and a zero count then means one of two different things — already there, or no
+ * such row — which the follow-up read tells apart. Already-there answers 200 with
+ * the original timestamp; no-such-row answers null, which the route turns into a
+ * 404.
  *
  * Restoring does NOT clear `rejoinRequests`. Someone who asked to come back and
  * was then put back on the list is exactly the person whose request should stay
@@ -252,15 +268,19 @@ export async function setWaitlistEntryRemoved(
   id: string,
   removed: boolean
 ): Promise<WaitlistAdminEntry | null> {
-  // `updateMany` + a read rather than `update`, so a missing id is a null rather
-  // than a thrown P2025 the route would have to translate back.
-  const { count } = await prisma.appWaitlistEntry.updateMany({
-    where: { id },
+  // `updateMany` rather than `update`, so a missing id is a count of zero rather
+  // than a thrown P2025 the route would have to translate back — and so the
+  // "not already in this state" condition can live in the WHERE, where Postgres
+  // evaluates it under the row lock.
+  await prisma.appWaitlistEntry.updateMany({
+    where: { id, removedAt: removed ? null : { not: null } },
     data: { removedAt: removed ? new Date() : null },
   });
 
-  if (count === 0) return null;
-
+  // Read regardless of the count. Zero means "already in that state" as often as
+  // "no such row", and only this read can say which; a non-zero count still needs
+  // it to return the row. It also means the body reflects the row as it now
+  // stands, including a concurrent change by another admin.
   const row = await prisma.appWaitlistEntry.findUnique({ where: { id }, select: ENTRY_SELECT });
   return row ? toAdminEntry(row) : null;
 }

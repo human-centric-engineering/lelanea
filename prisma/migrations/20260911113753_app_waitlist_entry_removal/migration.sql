@@ -1,6 +1,6 @@
 -- §03 t-24 — an admin can take someone off the waitlist, and put them back.
 --
--- Three columns and an index. `removedAt` is the removal; `rejoinRequestedAt`
+-- Three columns, and no index. `removedAt` is the removal; `rejoinRequestedAt`
 -- and `rejoinRequests` record a removed address being submitted through the
 -- public form again, which does NOT put them back on the list (D9, owner,
 -- 11 September 2026 — nothing on that route proves the submitter owns the
@@ -27,6 +27,12 @@
 -- Applying them would have taken out this table's own erasure backstop, every
 -- framework erasure path, and every vector search in the product.
 --
+-- NO INDEX ON `removedAt`. The first draft added one. The hot predicate is
+-- `removedAt IS NULL`, which matches nearly every row, so the planner seq-scans
+-- regardless; the only selective form is `IS NOT NULL`, which wants a partial
+-- index Prisma cannot express. Dropped in review, before this migration shipped
+-- anywhere — see prisma/schema/app.prisma.
+--
 -- APPLY WITH `npm run db:migrate:deploy`, not `migrate dev` — the schema and the
 -- database diverge on that FK by design, and the development command reads the
 -- divergence as drift and "corrects" it. Then `npm run db:drift-check`.
@@ -35,6 +41,3 @@
 ALTER TABLE "app_waitlist_entry" ADD COLUMN     "rejoinRequestedAt" TIMESTAMP(3),
 ADD COLUMN     "rejoinRequests" INTEGER NOT NULL DEFAULT 0,
 ADD COLUMN     "removedAt" TIMESTAMP(3);
-
--- CreateIndex
-CREATE INDEX "app_waitlist_entry_removedAt_idx" ON "app_waitlist_entry"("removedAt");

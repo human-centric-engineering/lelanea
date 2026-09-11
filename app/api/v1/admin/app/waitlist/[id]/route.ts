@@ -74,9 +74,15 @@ export const PATCH = withAdminAuth<{ id: string }>(async (request, _session, { p
     throw new NotFoundError('Waitlist entry not found');
   }
 
+  // What was ASKED for, which is the operational fact. The body carries the row as
+  // it now stands, and the two can differ if another admin moved it between the
+  // write and the read — in which case the body is the one to believe.
   log.info(removed ? 'Waitlist entry removed' : 'Waitlist entry restored', {
     entryId: id,
     removed,
+    // The state the row is actually in, so a disagreement is legible in the log
+    // rather than only in a response nobody kept.
+    nowRemoved: entry.removedAt !== null,
   });
 
   return successResponse(entry);

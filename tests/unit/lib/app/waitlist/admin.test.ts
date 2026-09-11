@@ -279,12 +279,42 @@ describe('setWaitlistEntryRemoved', () => {
     expect(entry?.rejoinRequests).toBe(3);
   });
 
+  it('conditions the write so a second removal cannot move the timestamp', async () => {
+    update.mockResolvedValue({ count: 0 });
+    findUnique.mockResolvedValue(storedRow({ removedAt: new Date('2026-09-05T09:00:00.000Z') }));
+
+    const entry = await setWaitlistEntryRemoved('entry-1', true);
+
+    const { where } = update.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    // `removedAt: null` in the WHERE is the whole of it. A bare `where: { id }`
+    // updates the row whether or not the value changes, so a second removal
+    // overwrote `removedAt` with a later time — and that column is disclosed as
+    // `removed_at` in the CSV and handed to the data subject in the Art. 15
+    // bundle, so moving it falsifies a record two people can read.
+    expect(where).toEqual({ id: 'entry-1', removedAt: null });
+    // Already removed, so this answers with the ORIGINAL timestamp rather than a
+    // 404 — the call asked for a state the row is already in.
+    expect(entry?.removedAt).toBe('2026-09-05T09:00:00.000Z');
+  });
+
+  it('conditions a restore the same way round', async () => {
+    update.mockResolvedValue({ count: 1 });
+    findUnique.mockResolvedValue(storedRow());
+
+    await setWaitlistEntryRemoved('entry-1', false);
+
+    const { where } = update.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    expect(where).toEqual({ id: 'entry-1', removedAt: { not: null } });
+  });
+
   it('returns null for an id nothing matches, rather than throwing', async () => {
     update.mockResolvedValue({ count: 0 });
+    findUnique.mockResolvedValue(null);
 
+    // Zero rows updated is ambiguous — already in that state, or no such row — so
+    // the read happens either way and is the only thing that can tell them apart.
     await expect(setWaitlistEntryRemoved('nope', true)).resolves.toBeNull();
-    // And it does not go on to read a row it knows is not there.
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalled();
   });
 });
 

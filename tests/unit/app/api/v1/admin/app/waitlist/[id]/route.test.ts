@@ -108,14 +108,19 @@ describe('PATCH /api/v1/admin/app/waitlist/:id', () => {
     expect(setWaitlistEntryRemoved).toHaveBeenCalledWith(ENTRY_ID, false);
   });
 
-  it('takes the state to reach, so the same call twice is the same as once', async () => {
-    await PATCH(...request({ removed: true }));
+  it('passes the body through as the state to reach, never as a flip', async () => {
+    // Asserting that two identical requests produce two identical calls would be a
+    // tautology — the test supplies both bodies. What is worth pinning is that the
+    // route never consults the CURRENT state to decide what to send: it has no read
+    // before the write, so it cannot flip. The code review of §03 t-24 named the
+    // tautology; the real idempotence lives in `setWaitlistEntryRemoved`, where
+    // `admin.test.ts` now pins the conditional WHERE that enforces it.
     await PATCH(...request({ removed: true }));
 
-    // Both calls ask for `true`. A toggle would have asked for `false` the second
-    // time — so a double-clicked button, or two admins a second apart, would undo
-    // the removal rather than converge on it.
-    expect(setWaitlistEntryRemoved.mock.calls.map((call) => call[1])).toEqual([true, true]);
+    expect(setWaitlistEntryRemoved).toHaveBeenCalledTimes(1);
+    expect(setWaitlistEntryRemoved).toHaveBeenCalledWith(ENTRY_ID, true);
+    // Nothing was read first — a toggle would have needed to.
+    expect(setWaitlistEntryRemoved.mock.calls[0]).toHaveLength(2);
   });
 
   it('answers 404 for an id nothing matches, rather than a cheerful 200', async () => {

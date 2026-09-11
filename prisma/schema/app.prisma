@@ -94,7 +94,13 @@ model AppWaitlistEntry {
 
   @@index([userId])
   @@index([createdAt])
-  /// The list and the export both filter on this, and every page load reads it.
-  @@index([removedAt])
+  /// NO index on `removedAt`, deliberately. The hot predicate is `removedAt IS
+  /// NULL`, which matches nearly every row, so Postgres will sequentially scan
+  /// whatever is indexed; the one selective form — `IS NOT NULL`, for the
+  /// "show removed" view — wants a partial index, which Prisma's schema cannot
+  /// express. An earlier version of this model carried `@@index([removedAt])` with
+  /// a comment claiming the list "filters on this", which confuses reading the
+  /// column with needing an index for it. Caught in review; the index was dropped
+  /// before the migration shipped.
   @@map("app_waitlist_entry")
 }

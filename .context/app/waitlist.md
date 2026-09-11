@@ -431,6 +431,38 @@ an admin who ticks the box is looking for context, not for a separate list. The
 search still applies within whatever is shown, and the export carries both
 filters so the file is always the screen.
 
+### Four things the code review of t-24 corrected
+
+All four were invisible to the gates, and each is the kind of thing that reads as
+working:
+
+- **The log said an answer had been recorded when none had.** A submission against
+  a removed entry was logged as `Waitlist entry updated` with
+  `answered: { intent: true }` — the one operational record of a re-join attempt,
+  reporting the opposite of what happened. It has its own message now, and
+  `answered` is suppressed on that branch.
+- **`removed: true` twice moved `removedAt`.** A bare `where: { id }` updates the
+  row whether or not the value changes, so a second removal — two admins a minute
+  apart, or an API key retrying — overwrote the original timestamp. That column is
+  disclosed as `removed_at` in the CSV and handed to the data subject in the
+  Art. 15 bundle, so moving it falsifies a record two people can read. The write is
+  conditioned on the row not already being in the target state, and the follow-up
+  read tells "already there" (200, original timestamp) from "no such row" (404).
+- **Toggling "Show removed" did not cancel a pending search.** The debounce captured
+  the old filter, so a timer armed seconds earlier fired after the toggle's fetch,
+  won the sequence guard, and left the switch reading on while the rows excluded
+  removed entries and the export link dropped the filter.
+- **Removing the last row on the last page stranded the admin past the end** —
+  "Page 2 of 1", "Showing 26 to 25 of 25", and an empty-state sentence claiming
+  nobody was on a list of 25. An empty page with a non-zero total now re-reads the
+  last page that exists.
+
+And one thing it removed: an `@@index([removedAt])`. The hot predicate is
+`removedAt IS NULL`, which matches nearly every row, so the planner seq-scans
+regardless; the only selective form wants a partial index Prisma cannot express.
+The comment justifying it confused reading the column with needing an index for
+it.
+
 ### The CSV's three new columns are APPENDED
 
 `removed_at`, `rejoin_requested_at`, `rejoin_requests` go at the end, never
