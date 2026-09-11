@@ -38,18 +38,24 @@
  * export and the Art. 17 erasure know how to reach. The same reason the public
  * POST logs `created` but not the address.
  *
+ * **Saying that took more than leaving `q` out of the `meta`.** The platform's
+ * `getRouteLogger` binds the full request URL — query string and all — to every
+ * line, and `url` is not a key the sanitiser redacts. The logger comes from
+ * `_shared/route-logger.ts` for that reason; the security review of this task
+ * caught the first version claiming this paragraph while emitting the address.
+ *
  * @see lib/app/waitlist/admin.ts · app/api/v1/admin/app/waitlist/export/route.ts
  */
 
 import { withAdminAuth } from '@/lib/auth/guards';
 import { paginatedResponse } from '@/lib/api/responses';
 import { validateQueryParams } from '@/lib/api/validation';
-import { getRouteLogger } from '@/lib/api/context';
+import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 import { waitlistAdminQuerySchema } from '@/lib/validations/app-waitlist';
 import { listWaitlistEntries } from '@/lib/app/waitlist/admin';
 
 export const GET = withAdminAuth(async (request, _session) => {
-  const log = await getRouteLogger(request);
+  const log = await getWaitlistRouteLogger(request);
 
   const query = validateQueryParams(request.nextUrl.searchParams, waitlistAdminQuerySchema);
 

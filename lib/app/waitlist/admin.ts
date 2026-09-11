@@ -189,24 +189,68 @@ export const WAITLIST_CSV_COLUMNS = [
 ] as const;
 
 /**
+ * One cell: the platform's escaper, plus the case its predicate misses.
+ *
+ * **`csvEscape` on every cell, including the ones that look safe.** `name`,
+ * `heardFrom` and `intent` are free text a stranger typed into a public form, so
+ * they are the CSV-injection surface the platform helper exists for: a value
+ * starting `=`, `+`, `-`, `@`, tab or CR is a formula to Excel, Calc and Sheets
+ * alike, and the file opens on the machine of the one person who reads every one
+ * of these answers. `email` gets it too — `@` is the trigger character and an
+ * address beginning with one is syntactically possible.
+ *
+ * ## Why a wrapper, and not `csvEscape` alone
+ *
+ * `csvEscape`'s quoting branch fires on `,`, `"` and `\n` — **not on a lone
+ * `\r`**. Its formula-trigger prefix only inspects the FIRST character of a
+ * cell. Put those two together with a file whose records are joined by CRLF and
+ * a bare `\r` in the middle of a cell is an escape sequence:
+ *
+ *     intent = 'Looking forward to it!\r=cmd|\' /C calc\'!A0'
+ *
+ * Unquoted, the `\r` reads as a record separator to every major spreadsheet, so
+ * the record ends early and the next one begins with a cell the submitter
+ * controls **from its first character** — which is precisely the position the
+ * prefix exists to deny them. `.trim()` in `waitlistSchema` strips only the ends
+ * of the string, so an interior `\r` reaches the table intact, and the admin
+ * table renders it as ordinary whitespace. Nothing between the public form and
+ * the spreadsheet shows it.
+ *
+ * Quoting closes it: inside quotes a CR is data (RFC 4180 §2.6), the record no
+ * longer splits, and the `=` is then mid-cell, which no spreadsheet evaluates.
+ * The visitor's own line breaks survive as they typed them, which matters on a
+ * field a human reads.
+ *
+ * The defect is in `lib/api/csv.ts`, whose blob is identical in Sunrise,
+ * Daybreak and here — so Sunrise owns it and it is filed there rather than
+ * patched in place (a Sunrise-owned edit is a divergence row; this wrapper is a
+ * file of ours). `app/api/v1/admin/orchestration/conversations/export/route.ts`
+ * has the same exposure through message content.
+ */
+function csvCell(value: string): string {
+  const escaped = csvEscape(value);
+  if (!value.includes('\r')) return escaped;
+  // Already quoted (the value also held a comma, a quote or a newline) — then
+  // `csvEscape` has handled the quoting and the CR is inside it.
+  if (escaped.startsWith('"') && escaped.endsWith('"')) return escaped;
+  // Otherwise quote it ourselves. An unquoted return from `csvEscape` cannot
+  // contain a `"` — that is one of the characters that would have quoted it —
+  // so the doubling below is belt-and-braces rather than load-bearing.
+  return `"${escaped.replace(/"/g, '""')}"`;
+}
+
+/**
  * Serialise entries as RFC 4180 CSV.
  *
- * Two details that are not decoration:
+ * Every cell goes through `csvCell` — see there for the escaping, which is the
+ * part of this file that matters.
  *
- * - **`csvEscape` on every cell, including the ones that look safe.** `name`,
- *   `heardFrom` and `intent` are free text a stranger typed into a public form,
- *   so they are the CSV-injection surface the platform helper exists for: a
- *   value starting `=`, `+`, `-`, `@`, tab or CR is a formula to Excel, Calc and
- *   Sheets alike, and the file opens on the machine of the one person who reads
- *   every one of these answers. `email` gets it too — `@` is the trigger
- *   character and an address beginning with one is syntactically possible.
- * - **A leading BOM.** Excel on Windows reads a CSV without one as the system
- *   codepage, which turns "Lelañea" into mojibake. The product's own name has a
- *   ñ in it and so will many of the names on this list; `charset=utf-8` on the
- *   response does not reach a file opened from disk, and the BOM does.
+ * **A leading BOM.** Excel on Windows reads a CSV without one as the system
+ * codepage, which turns "Lelañea" into mojibake. The product's own name has a ñ
+ * in it and so will many of the names on this list; `charset=utf-8` on the
+ * response does not reach a file opened from disk, and the BOM does.
  *
- * Rows are joined with CRLF per RFC 4180. A cell's own newlines stay as the
- * visitor typed them, quoted by `csvEscape`.
+ * Rows are joined with CRLF per RFC 4180.
  */
 export function waitlistEntriesToCsv(entries: WaitlistAdminEntry[]): string {
   const lines = [WAITLIST_CSV_COLUMNS.join(',')];
@@ -225,7 +269,7 @@ export function waitlistEntriesToCsv(entries: WaitlistAdminEntry[]): string {
         entry.userId ?? '',
         entry.createdAt,
       ]
-        .map(csvEscape)
+        .map(csvCell)
         .join(',')
     );
   }

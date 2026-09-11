@@ -66,13 +66,55 @@ function entry(overrides: Partial<WaitlistAdminEntry> = {}): WaitlistAdminEntry 
 }
 
 /**
- * The CSV without its BOM, split into rows — what a parser would see.
+ * The CSV without its BOM, split into the records a SPREADSHEET would see.
+ *
+ * Quote-aware on purpose, and that is the whole point of the helper. The first
+ * version split on `\r\n`, which cannot tell a record separator from a line break
+ * a visitor typed inside a quoted answer — so it reported a correctly quoted cell
+ * as a split record, and it would equally have reported an ESCAPE as one record
+ * when the escaping was what failed. A naive splitter cannot distinguish the bug
+ * from the fix.
+ *
+ * So this splits on CRLF, a lone CR or a lone LF when outside quotes, and on
+ * nothing at all inside them — which is how Excel, Calc and Sheets read a file,
+ * and therefore the only parse whose record count means anything here.
  *
  * '\ufeff' spelled out rather than pasted, for the same reason the module spells
  * it out: a literal BOM is invisible in an editor and in a diff.
  */
 function csvRows(csv: string): string[] {
-  return csv.replace(/^\ufeff/, '').split('\r\n');
+  const body = csv.replace(/^\ufeff/, '');
+  const records: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < body.length; i += 1) {
+    const char = body[i];
+
+    if (char === '"') {
+      // A doubled quote is an escaped quote, not a state change.
+      if (inQuotes && body[i + 1] === '"') {
+        current += '""';
+        i += 1;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+
+    if (!inQuotes && (char === '\r' || char === '\n')) {
+      if (char === '\r' && body[i + 1] === '\n') i += 1;
+      records.push(current);
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  records.push(current);
+  return records;
 }
 
 beforeEach(() => {
@@ -195,6 +237,36 @@ describe('waitlistEntriesToCsv', () => {
     // split the record — the naive version loses half of what she is reading.
     expect(csvRows(csv)).toHaveLength(2);
     expect(csvRows(csv)[1]).toContain('"line one\nline two"');
+  });
+
+  it('quotes a bare CR, so an answer cannot start a record of its own', () => {
+    // The escape the platform's `csvEscape` predicate misses: it quotes on `,`,
+    // `"` and `\n`, and checks the formula triggers only against the FIRST
+    // character. A lone `\r` mid-cell is therefore unquoted, and because records
+    // are joined with CRLF every major spreadsheet reads it as a record
+    // separator — ending this record and starting one whose first cell the
+    // submitter controls from its first character. `.trim()` strips only the
+    // ends, so the public form can store one.
+    const csv = waitlistEntriesToCsv([
+      entry({ intent: "Looking forward to it!\r=cmd|' /C calc'!A0" }),
+    ]);
+
+    const rows = csvRows(csv);
+    expect(rows).toHaveLength(2);
+    // Two properties, and the second is the one that bites: the record did not
+    // split, AND no cell anywhere begins with `=`.
+    expect(rows[1]).toContain(`"Looking forward to it!\r=cmd`);
+    expect(rows.some((row) => row.split(',').some((cell) => cell.startsWith('=')))).toBe(false);
+  });
+
+  it('quotes a CRLF inside an answer too, without doubling the quoting', () => {
+    const csv = waitlistEntriesToCsv([entry({ intent: 'line one\r\nline two' })]);
+
+    // `csvEscape` already quotes this one (it contains `\n`), so the wrapper must
+    // leave it alone rather than wrapping a quoted cell in more quotes.
+    expect(csvRows(csv)).toHaveLength(2);
+    expect(csvRows(csv)[1]).toContain('"line one\r\nline two"');
+    expect(csvRows(csv)[1]).not.toContain('"""');
   });
 
   it('quotes a comma rather than inventing a column', () => {

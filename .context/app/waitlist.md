@@ -217,13 +217,25 @@ section cap alone would permit a hundred full-table downloads a minute and each
 one is a complete copy of the list leaving the building. The list route adds
 nothing: paging 25 rows is not the expensive act.
 
-### The four things that make a CSV of strangers' answers safe
+### The five things that make a CSV of strangers' answers safe
 
 - **Every cell goes through `csvEscape()`** (`lib/api/csv.ts`), including the ones
   that look safe. `name`, `heardFrom` and `intent` are free text a stranger typed
   into a public form, and a value starting `=`, `+`, `-`, `@`, tab or CR is a
   formula to Excel, Calc and Sheets alike — on the machine of the one person who
   reads every one of these. `email` gets it too: `@` is a trigger character.
+- **And through `csvCell()`, which closes the hole `csvEscape` leaves.** The
+  platform helper quotes on `,`, `"` and `\n` — **not on a lone `\r`** — and checks
+  the formula triggers only against a cell's FIRST character. Records here are
+  joined with CRLF, so an unquoted `\r` mid-cell ends the record early and starts
+  one whose first cell the submitter controls from its first character: exactly
+  the position the trigger prefix exists to deny them. `.trim()` strips only the
+  ends of a string, so `intent = "thanks!\r=cmd|' /C calc'!A0"` goes in through the
+  public form and renders in the admin table as ordinary whitespace. `csvCell()`
+  quotes on `\r` as well, which makes the CR data (RFC 4180 §2.6) and leaves the
+  `=` mid-cell, where nothing evaluates it. Found by the security review of t-8.
+  The defect is in Sunrise's `lib/api/csv.ts` — blob-identical in all three tiers
+  — and `conversations/export` has the same exposure through message content.
 - **A leading UTF-8 BOM.** Excel on Windows reads a BOM-less CSV as the system
   codepage, which turns a ñ into mojibake. The product's own name has one and so
   will many of the names on this list; `charset=utf-8` on the response does not
@@ -239,6 +251,19 @@ nothing: paging 25 rows is not the expensive act.
   an application log is a copy of their personal data outside the table the
   Art. 15 export and the Art. 17 erasure know how to reach. The log line carries
   `searched: true` instead.
+- **And the logger drops the request URL, which is what made that true.** Leaving
+  `q` out of the `meta` was not enough: `getRouteLogger` binds
+  `url: request.url` — query string included — to every line it emits, and the
+  sanitiser redacts by KEY name against `PII_FIELDS`, which lists `email` and not
+  `url`. So the admin's own `email` context field was redacted in production
+  while `?q=someone%40example.com` was written out beside it, to stdout and into
+  the ring buffer `GET /api/v1/admin/logs` serves and greps. Both routes take
+  their logger from `_shared/route-logger.ts`, which rebuilds the context without
+  `url`; `endpoint` already carries the query-free path, so nothing operational
+  is lost. Found by the security review of t-8, which caught the route docblock
+  claiming the paragraph above while emitting the address. **The fix is narrow on
+  purpose** — every other route in the app still logs its full URL, which is the
+  platform's to change: [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685).
 
 ### The export cap, and the remedy it ships with
 

@@ -28,9 +28,14 @@ const { listWaitlistEntries, routeLog } = vi.hoisted(() => ({
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 vi.mock('@/lib/app/waitlist/admin', () => ({ listWaitlistEntries }));
-// `tests/setup.ts` mocks `getRouteLogger` globally; this narrows it so the
-// no-PII-in-logs case can read what was actually logged.
-vi.mock('@/lib/api/context', () => ({ getRouteLogger: () => Promise.resolve(routeLog) }));
+// The route takes its logger from `_shared/route-logger.ts` rather than from
+// `getRouteLogger`, because that one binds the full request URL — query string
+// included — to every line. Mocked here so the no-PII-in-logs case can read what
+// was actually logged; the dropping of `url` is asserted on the real helper in
+// tests/unit/app/api/v1/admin/app/waitlist/_shared/route-logger.test.ts.
+vi.mock('@/app/api/v1/admin/app/waitlist/_shared/route-logger', () => ({
+  getWaitlistRouteLogger: () => Promise.resolve(routeLog),
+}));
 
 import { auth } from '@/lib/auth/config';
 import { GET } from '@/app/api/v1/admin/app/waitlist/route';

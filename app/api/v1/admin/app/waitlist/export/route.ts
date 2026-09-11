@@ -35,7 +35,8 @@
  *
  * No row and no address reaches the log — the count does. An export of personal
  * data whose audit trail was itself a copy of that personal data would be worse
- * than no audit trail. And the response carries `no-store`: the platform's JSON
+ * than no audit trail. That holds only because the logger drops the request URL,
+ * which carries `?q=` — see `_shared/route-logger.ts`. And the response carries `no-store`: the platform's JSON
  * helper defaults to `private, no-cache`, but this returns a raw `Response` and
  * so would carry no directive at all, which RFC 9111 §4.2.2 lets a shared cache
  * store and expire on its own guess.
@@ -44,7 +45,7 @@
  */
 
 import { withAdminAuth } from '@/lib/auth/guards';
-import { getRouteLogger } from '@/lib/api/context';
+import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 import { exportLimiter, createRateLimitResponse } from '@/lib/security/rate-limit';
 import { waitlistAdminFilterSchema } from '@/lib/validations/app-waitlist';
 import {
@@ -59,7 +60,7 @@ export const GET = withAdminAuth(async (request, session) => {
   const rateLimit = exportLimiter.check(`export:user:${session.user.id}`);
   if (!rateLimit.success) return createRateLimitResponse(rateLimit);
 
-  const log = await getRouteLogger(request);
+  const log = await getWaitlistRouteLogger(request);
 
   const filter = validateQueryParams(request.nextUrl.searchParams, waitlistAdminFilterSchema);
 
