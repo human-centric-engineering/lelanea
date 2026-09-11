@@ -28,6 +28,33 @@ import { cn } from '@/lib/utils';
  * WHERE it is drawn — inside the frame, with every destination still one click
  * away in the nav, instead of over the top of it.
  *
+ * ## It surfaces a React 19 warning that belongs to Sunrise
+ *
+ * In DEV ONLY, and only on this page, the console carries "Encountered a script
+ * tag while rendering React component", pointing at `app/layout.tsx`'s no-flash
+ * theme script. Rendering this boundary makes React client-render the root
+ * layout, and React 19 warns whenever it encounters a `<script>` there.
+ *
+ * Both halves of that were tested rather than reasoned, after two confident and
+ * wrong explanations: the ROOT 404 (`/nonsense`) is clean, which is what
+ * isolates this boundary as the trigger; and a production build of this very
+ * path is clean too, which is what makes it dev-only. The warning string exists
+ * only in React's `.development.js` bundles — zero occurrences in every
+ * production one — so it cannot ship.
+ *
+ * The TRIGGER is here; the CAUSE is not. An inline script in the root layout is
+ * the standard way to set the theme before first paint, and React 19 warns
+ * about all of them — `next-themes`, shadcn and HeroUI carry the same report.
+ * It is a false positive for this use: the script is in the served HTML and
+ * runs on SSR, which is its whole job, and the warning does not ship to
+ * production. `app/layout.tsx` is byte-identical in Sunrise and Daybreak (only
+ * the script's BODY diverges here, per divergence rows 1 and 2), so the remedy
+ * — `useServerInsertedHTML`, or accepting it — is Sunrise's call, not a leaf's.
+ *
+ * Filed upstream rather than worked around here. Removing this boundary to
+ * silence a dev-only warning would give back the defect the whole task exists
+ * to close.
+ *
  * ## Two things it is worse at than a full-page 404, both accepted
  *
  * **The tab says only "Lelañea".** Next resolves no `metadata` export from a
