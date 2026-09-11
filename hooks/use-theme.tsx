@@ -5,8 +5,30 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 type Theme = 'dark' | 'light';
 
 interface ThemeContextValue {
+  /** The theme in force — an explicit choice, or the device's preference. */
   theme: Theme;
+  /**
+   * The stored EXPLICIT choice, or `null` while the device is being followed.
+   *
+   * LELAÑEA divergence (row 2). D4 gives the app three states and the platform
+   * published two: `theme` alone cannot distinguish "chose light" from
+   * "following a device that is currently light". A settings page that renders
+   * a choice therefore had no way to be honest, and t-11 worked around it by
+   * reading `localStorage` directly — duplicating this file's key in a second
+   * place, with nothing but a test holding the two together.
+   *
+   * `null` on the server and on the first client render, like `theme`.
+   */
+  choice: Theme | null;
   setTheme: (theme: Theme) => void;
+  /**
+   * Forget the stored choice and follow the device again.
+   *
+   * LELAÑEA divergence (row 2). Without it D4's default is reachable only by
+   * clearing site data by hand: `setTheme` is the platform's only writer and it
+   * exclusively persists.
+   */
+  clearTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -33,6 +55,16 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 const STORAGE_KEY = 'theme';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
+/**
+ * What this session asked for, regardless of whether storage accepted it.
+ *
+ * `null` defers to storage. The two named states exist because both writers
+ * swallow a failure on purpose — Safari private browsing throws on `setItem`
+ * and `removeItem` alike — so storage is not a reliable record of what the
+ * reader just did, and the OS listener needs to know which way to fail.
+ */
+type SessionIntent = 'chose' | 'cleared' | null;
+
 /** The stored EXPLICIT choice, or null when the user has not made one. */
 function readStoredTheme(): Theme | null {
   try {
@@ -51,7 +83,7 @@ function readSystemTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // A choice made in THIS session, held independently of whether the write
+  // What this SESSION asked for, held independently of whether either write
   // landed. `setTheme` swallows a `setItem` throw so the choice still applies
   // for the session — but the OS listener's guard reads storage back, and in
   // that exact case reads `null`. Without this ref, a Safari private window
@@ -59,12 +91,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // macOS sunrise auto-switch revert a deliberate toggle, with no way to make
   // it stick. Storage is still re-read on every event, so a choice made in
   // another tab is honoured too; this only ADDS a reason to stop following.
-  const hasExplicitChoice = useRef(false);
+  const sessionIntent = useRef<SessionIntent>(null);
   // Matches the no-flash script's resolution exactly: an explicit choice wins,
   // otherwise the system preference. Neither writes.
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'light';
     return readStoredTheme() ?? readSystemTheme();
+  });
+
+  /*
+   * The same fact as `hasExplicitChoice`, as STATE rather than a ref, because
+   * this one is rendered. The ref stays because the OS listener below is
+   * registered once and would capture a stale value; both are written in the
+   * same two places, and `clearTheme` is the only thing that sets either back.
+   */
+  const [choice, setChoice] = useState<Theme | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return readStoredTheme();
   });
 
   useEffect(() => {
@@ -93,7 +136,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!media?.addEventListener) return;
 
     const onChange = (event: MediaQueryListEvent) => {
-      if (hasExplicitChoice.current || readStoredTheme() !== null) return;
+      // `null` means no intent was expressed in this session, so storage
+      // decides. `'cleared'` must beat storage: `clearTheme` swallows a failed
+      // `removeItem` the same way `setTheme` swallows a failed `setItem`, so
+      // the stored value can still be sitting there after the reader has asked
+      // to be rid of it. Re-reading storage alone left the app ignoring the
+      // device while the settings panel said it was following it.
+      if (sessionIntent.current === 'chose') return;
+
+      /*
+       * Storage is a THIRD source of truth here, and another tab can move it
+       * under us. So whichever way this goes, `choice` is reconciled with what
+       * was just read — without it, a tab whose stored choice had been cleared
+       * next door went on pressing that chip in `/app/settings` while tracking
+       * the device, which is the "reports a choice nobody made" failure the
+       * three-chip control exists to prevent.
+       */
+      const stored = readStoredTheme();
+      if (sessionIntent.current === null && stored !== null) {
+        setChoice(stored);
+        return;
+      }
+
+      setChoice(null);
       setThemeState(event.matches ? 'dark' : 'light');
     };
     media.addEventListener('change', onChange);
@@ -104,7 +169,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = useCallback((next: Theme) => {
     // Recorded BEFORE the write, and regardless of whether it succeeds: this is
     // what makes the choice explicit for the session even when nothing persists.
-    hasExplicitChoice.current = true;
+    sessionIntent.current = 'chose';
+    setChoice(next);
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
@@ -113,7 +179,43 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(next);
   }, []);
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+  /**
+   * LELAÑEA divergence (row 2): the way back to D4's default.
+   *
+   * Symmetric with `setTheme` in the part that matters — the ref is cleared
+   * BEFORE the write and regardless of whether it succeeds, so a browser that
+   * refuses `removeItem` still follows the device for the rest of the session
+   * rather than being stuck on a choice it cannot forget.
+   *
+   * Resolving the system preference here rather than leaving `theme` alone is
+   * what makes the control do something visible: the reader chose "follow my
+   * device" and the device may disagree with what is on screen.
+   */
+  const clearTheme = useCallback(() => {
+    sessionIntent.current = 'cleared';
+    setChoice(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      // Downgrade to `null` once the removal is CONFIRMED, so `'cleared'` only
+      // ever means "storage lied". Left latched, it outranked storage for the
+      // rest of the session — so a tab that had cleared (including by clicking
+      // the already-pressed chip, a no-op a reader would think nothing of)
+      // would go on following the OS over an explicit choice made in another
+      // tab. The pre-t-23 boolean was `false` in that state and storage won.
+      if (readStoredTheme() === null) sessionIntent.current = null;
+    } catch {
+      // Storage unavailable — following the device still applies this session,
+      // and `'cleared'` stays latched because that is exactly the case it is
+      // for.
+    }
+    setThemeState(readSystemTheme());
+  }, []);
+
+  return (
+    <ThemeContext.Provider value={{ theme, choice, setTheme, clearTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {
