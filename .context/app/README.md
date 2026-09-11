@@ -45,18 +45,22 @@ Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 
 ## Known next steps
 
-Carried deliberately from the fork, so they are recorded rather than rediscovered:
+Carried deliberately from the fork, so they are recorded rather than
+rediscovered. Re-checked against the tree and the repo settings at t-19.
 
-- **The public landing page is still Sunrise's copy.** `/` renders the starter
-  template's hero, feature grid and FAQ — 23 mentions of "Sunrise" — because that
-  is product content, not a brand seam. The seams themselves are correct: the
-  title, both footers, the meta description and every email already say Lelañea.
-  Replacing the copy is ordinary app work; see `CUSTOMIZATION.md` §6 for the
-  route-shim pattern that keeps our content in app-owned files.
+- **The privacy policy is still Sunrise's template.** `/privacy` renders the
+  starter template's generic policy, kept on purpose and labelled as interim by
+  the notice D8 required — deleting it would leave the site with no policy at
+  all, and writing one ourselves would put a legal document on lelanea.com that
+  no lawyer has seen. It closes when her own policy is written, not before. The
+  Terms of Use cross-reference it (clause 12) and the authored file flags it as
+  an open review note. See `app/(public)/privacy/page.tsx` and
+  [`divergences.md`](./divergences.md) row 10.
 - **No provider keys are configured.** OpenAI, Resend and Google OAuth were
   deliberately not inherited from Daybreak; add Lelañea's own when a feature
-  first needs one.
-- **CI variables are unset.** On a private 2-core/8GB runner, consider
-  `CI_TEST_SCOPE`, `CI_NODE_HEAP_MB` and `CI_LINT_CHUNKS` — see
-  [`../architecture/ci.md`](../architecture/ci.md). Leave `SUNRISE_UPSTREAM_URL`
-  unset (see [`syncing.md`](./syncing.md), trap 3).
+  first needs one. Still true: `.env.local` carries only the database, the
+  auth secret and the app URL, and the repository has no Actions secrets.
+- **Two of the three CI variables are still unset.** `CI_TEST_SCOPE` is set to
+  `changed`. On a private 2-core/8GB runner, consider `CI_NODE_HEAP_MB` and
+  `CI_LINT_CHUNKS` too — see [`../architecture/ci.md`](../architecture/ci.md).
+  Leave `SUNRISE_UPSTREAM_URL` unset (see [`syncing.md`](./syncing.md), trap 3).
