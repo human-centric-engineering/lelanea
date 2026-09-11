@@ -205,9 +205,14 @@
 > - `tests/unit/lib/daybreak-version.test.ts` — the `DAYBREAK_VERSION ===
 package.json.version` parity case is **removed**, with the reasoning recorded
 >   in place. Our version and the framework's are meant to diverge.
-> - `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
->   **pinned** to our brand values rather than deleted, so every seam still left
->   empty keeps its protection. Update it whenever `leaf-brand.ts` changes.
+> - `tests/unit/lib/app/defaults.test.ts` — **three rows are pinned** rather than
+>   deleted, so every seam still left empty keeps its protection:
+>   `lib/app/leaf-brand.ts` (our brand values), `lib/app/leaf-ci.ts` (our four
+>   always-run tests), and the `lib/app/ci.ts` **bridge** row, which asserts
+>   Daybreak's entries followed by ours. Pin the bridge row too whenever you fill
+>   a leaf seam it spreads: it is the only row that proves the bridge still
+>   reaches the seam, and without it the spread could be dropped while the seam's
+>   own row still passed. Update them whenever the seam they pin changes.
 >
 > ### The section immediately below this banner is also Lelañea's
 >
