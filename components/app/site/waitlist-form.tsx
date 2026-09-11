@@ -55,6 +55,29 @@ interface WaitlistResponse {
  * yet" legend are gone, and the ⓘ popovers stay live for the reason they always
  * did.
  *
+ * ## One group, so no `<fieldset>` — and never a disabled one (t-20)
+ *
+ * The fields sit in a plain `<div>`. t-5 grouped them in a `<fieldset>` whose
+ * `<legend class="sr-only">` carried the one thing the `<h2>` did not — *"Waitlist
+ * sign-up, not open yet. The form opens when the waitlist does."* — which was
+ * the only thing telling a screen-reader user WHY every control was inert. t-7
+ * made the form live and replaced that sentence with a copy of the heading, at
+ * which point the legend cost an announcement and said nothing: the card named
+ * itself three times over, at the `<h2>`, at the legend and at the submit
+ * button.
+ *
+ * With one group and nothing left for a legend to add, the grouping buys
+ * nothing, so it goes rather than being given filler to justify it.
+ *
+ * **Do not reintroduce `<fieldset disabled>` to stand the form down.** `disabled`
+ * on a fieldset propagates to every descendant `<button>`, which silently
+ * disables the two `<FieldHelp>` ⓘ popovers — so the explanation of why we ask
+ * for someone's reason for coming becomes unreachable exactly when they are most
+ * likely to want it, with no error and nothing to see. That was t-5's first
+ * shape. Each control disables itself on `isSubmitting` instead, and
+ * `tests/unit/components/app/site/waitlist-form.test.tsx` fails on any
+ * `[disabled]` fieldset in the tree whether or not one is otherwise wanted.
+ *
  * ## Two error registers, because there are two different failures
  *
  * A bad email is the reader's to fix, and the message is the prototype's own
@@ -176,9 +199,12 @@ export function WaitlistForm() {
         />
       </div>
 
-      <fieldset className="mt-[22px] flex flex-col gap-4">
-        <legend className="sr-only">Join the waitlist</legend>
-
+      {/* A plain <div>, and NOT a <fieldset> — see the docblock's grouping note.
+          Whatever this becomes, it must never carry `disabled`: on a fieldset
+          that propagates to every descendant <button>, which silently disables
+          the two <FieldHelp> ⓘ popovers. Each control disables itself on
+          `isSubmitting` instead. */}
+      <div className="mt-[22px] flex flex-col gap-4">
         <div className="flex flex-col gap-[7px]">
           <span className={LABEL_ROW}>
             <label htmlFor="wl-email">Your email</label>
@@ -279,7 +305,7 @@ export function WaitlistForm() {
         <Button block disabled={isSubmitting} size="lg" type="submit">
           {isSubmitting ? 'Joining…' : 'Join the waitlist'}
         </Button>
-      </fieldset>
+      </div>
 
       {/* The closing promise, and the one line here that is NOT the prototype's.
           It read "you can remove yourself in one click", which was decorative

@@ -28,11 +28,22 @@ import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { WAITLIST_ENDPOINT } from '@/lib/app/waitlist/endpoint';
 import { LAUNCH_WINDOW, WAITLIST_ANCHOR } from '@/lib/site/config';
 
-/** One name per trigger — the thing the identical pair used to get wrong. */
-const HELP_LABELS = [
-  'Why we ask where you heard about this',
-  'Why we ask what you would want to achieve',
+/**
+ * One name per trigger — the thing the identical pair used to get wrong — and a
+ * line from each popover's body, so operability can be asserted by what the
+ * reader actually gets rather than by the button still being in the tree.
+ */
+const HELP_TRIGGERS = [
+  {
+    label: 'Why we ask where you heard about this',
+    body: /It tells her which of the places she shows up actually reaches people/,
+  },
+  {
+    label: 'Why we ask what you would want to achieve',
+    body: /It is how she can tell what the app is getting wrong/,
+  },
 ];
+const HELP_LABELS = HELP_TRIGGERS.map((trigger) => trigger.label);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,21 +65,40 @@ describe('WaitlistForm', () => {
       }
     });
 
-    it('puts no `disabled` on the fieldset, which is what would reach the ⓘ buttons', () => {
+    it('stands nothing down with a `disabled` fieldset, which is what would reach the ⓘ buttons', () => {
       const { container } = render(<WaitlistForm />);
 
       // `<fieldset disabled>` propagates to descendant buttons, including the
       // two help popovers. It was the first shape in t-5 and it silently
       // disabled the explanation of WHY we ask for someone's reason for coming.
-      const fieldset = container.querySelector('fieldset');
-      expect(fieldset).not.toBeNull();
-      expect(fieldset?.hasAttribute('disabled')).toBe(false);
+      //
+      // t-20 removed the fieldset entirely, so this asserts the TRAP is absent
+      // rather than that one particular element is clean — it keeps holding if
+      // a grouping element is ever reintroduced, which the old shape of this
+      // test (which required a fieldset to exist) would not have.
+      expect(container.querySelectorAll('fieldset[disabled]')).toHaveLength(0);
     });
 
     it('no longer claims the form is closed', () => {
       render(<WaitlistForm />);
 
       expect(screen.queryByText(/not open yet/i)).toBeNull();
+    });
+
+    it('names the card once for a screen reader, not once per wrapper', () => {
+      const { container } = render(<WaitlistForm />);
+
+      // Three announcements before t-20: the visible <h2>, a sr-only <legend>
+      // inside the fieldset, and the submit button. t-5's legend earned its
+      // announcement — it carried "Waitlist sign-up, not open yet", the only
+      // thing saying WHY the controls were inert — but t-7 made the form live
+      // and replaced that sentence with a copy of the heading.
+      expect(screen.getAllByRole('heading', { name: 'Join the waitlist' })).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: 'Join the waitlist' })).toHaveLength(1);
+
+      // The button's name is the ACTION's and is the design's own word, so it
+      // stays. What must not come back is a second LABEL for the same card.
+      expect(container.querySelectorAll('legend')).toHaveLength(0);
     });
 
     it('still says when the first groups open, in the design’s words', () => {
@@ -313,6 +343,23 @@ describe('WaitlistForm', () => {
         expect(screen.getByRole('button', { name })).toBeTruthy();
       }
     });
+
+    it.each(HELP_TRIGGERS)(
+      'opens the $label popover when it is activated',
+      async ({ label, body }) => {
+        const user = userEvent.setup();
+        render(<WaitlistForm />);
+
+        // Present is not the same as operable, and the difference is exactly the
+        // failure mode a `disabled` fieldset ancestor produces: the button is
+        // still in the tree, still named, and does nothing. `button.disabled`
+        // would not catch it either — the IDL property reflects the ATTRIBUTE,
+        // not the state inherited from a fieldset. Only activating it does.
+        await user.click(screen.getByRole('button', { name: label }));
+
+        expect(await screen.findByText(body)).toBeTruthy();
+      }
+    );
 
     it('gives each ⓘ trigger its own accessible name', () => {
       render(<WaitlistForm />);
