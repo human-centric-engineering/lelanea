@@ -85,17 +85,34 @@ describe('the theme choice', () => {
     );
   });
 
-  it('presses NEITHER chip when no choice has been made', async () => {
-    // D4's third state. `useTheme` publishes the RESOLVED theme and keeps
-    // "nothing chosen" out of its shape, so pressing on that value would report
-    // a choice nobody made — a reader on macOS auto-appearance would see Light
-    // marked as theirs at midday and find it dark at sunset, one line under
-    // copy saying their choice stands.
+  it('presses "Follow my device" when no choice has been made', async () => {
+    // D4's third state, and its DEFAULT. Two chips could not express it, so
+    // `theme` alone would have pressed Light — reporting a choice nobody made
+    // to a reader on macOS auto-appearance, who would then find it dark at
+    // sunset.
     renderSettings();
-    expect(await screen.findByText(/Nothing chosen yet/)).toBeTruthy();
+    expect(
+      await screen.findByRole('button', { name: 'Follow my device', pressed: true })
+    ).toBeTruthy();
     for (const name of ['Light', 'Dark']) {
       expect(screen.getByRole('button', { name }).getAttribute('aria-pressed')).toBe('false');
     }
+  });
+
+  it('gives the device back after a choice has been made', async () => {
+    // The one-way door this task exists to close. Nothing cleared the stored
+    // value before, so following the device again meant clearing site data.
+    window.localStorage.setItem('theme', 'dark');
+    renderSettings();
+    await screen.findByRole('button', { name: 'Dark', pressed: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Follow my device' }));
+
+    expect(window.localStorage.getItem('theme')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Follow my device' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('names the theme the device is actually showing', async () => {
@@ -119,11 +136,15 @@ describe('the theme choice', () => {
     }
   });
 
-  it('stops saying nothing is chosen once something is', async () => {
+  it('stops naming the device once a choice is made, and names it again after', async () => {
     renderSettings();
-    await screen.findByText(/Nothing chosen yet/);
+    await screen.findByText(/Following your device/);
+
     await userEvent.click(screen.getByRole('button', { name: 'Light' }));
-    expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+    expect(screen.queryByText(/Following your device/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Follow my device' }));
+    expect(screen.getByText(/Following your device/)).toBeTruthy();
   });
 
   it('survives storage that throws rather than taking the page down', async () => {
@@ -141,7 +162,7 @@ describe('the theme choice', () => {
     });
     try {
       renderSettings();
-      expect(await screen.findByText(/Nothing chosen yet/)).toBeTruthy();
+      expect(await screen.findByText(/Following your device/)).toBeTruthy();
     } finally {
       getItem.mockRestore();
     }
@@ -150,14 +171,14 @@ describe('the theme choice', () => {
   it('follows a choice made somewhere else in the frame', async () => {
     // The topbar toggle writes the same storage this panel reads. A one-shot
     // read on mount left the panel asserting the opposite of what the app was
-    // doing — "Nothing chosen yet" still on screen after a choice had been
+    // doing — the device line still on screen after a choice had been
     // stored one click earlier.
     renderWithTopbar();
-    await screen.findByText(/Nothing chosen yet/);
+    await screen.findByText(/Following your device/);
 
     await userEvent.click(screen.getByRole('button', { name: 'Toggle from the topbar' }));
 
-    expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+    expect(screen.queryByText(/Following your device/)).toBeNull();
     expect(await screen.findByRole('button', { name: 'Dark', pressed: true })).toBeTruthy();
   });
 
@@ -176,7 +197,7 @@ describe('the theme choice', () => {
     // `setTheme` swallows a `setItem` throw on purpose, so the choice still
     // applies for the session. Re-reading storage after that finds nothing —
     // so without a session-level guard the chip un-pressed one frame after the
-    // click and "Nothing chosen yet" came back, on an app that was explicitly
+    // click and the device line came back, on an app that was explicitly
     // dark. Exactly the contradiction the re-key was meant to close, arriving
     // from the other side.
     const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
@@ -184,24 +205,24 @@ describe('the theme choice', () => {
     });
     try {
       renderSettings();
-      await screen.findByText(/Nothing chosen yet/);
+      await screen.findByText(/Following your device/);
       await userEvent.click(screen.getByRole('button', { name: 'Dark' }));
 
       expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe(
         'true'
       );
-      expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+      expect(screen.queryByText(/Following your device/)).toBeNull();
     } finally {
       setItem.mockRestore();
     }
   });
 
   it('still shows the choice after a reload', async () => {
-    // The real point of this one is the KEY. The view reads storage directly,
-    // because the hook keeps its key private and the divergence row pins its
-    // public shape as untouched — so nothing but this test stops the two
-    // drifting apart. Click, unmount, mount again: if the hook ever wrote
-    // somewhere this does not read, the chip comes back unpressed here.
+    // This used to be about the KEY: t-11 read storage in the view, so the
+    // hook's private key lived in two places and only this test held them
+    // together. `useTheme` publishes `choice` now and the duplication is gone,
+    // so what it pins is the thing a reader cares about — a choice survives the
+    // page going away and coming back.
     const first = renderSettings();
     await userEvent.click(screen.getByRole('button', { name: 'Dark' }));
     first.unmount();

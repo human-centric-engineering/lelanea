@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { Chip } from '@/components/app/ui/chip';
 import { useTheme } from '@/hooks/use-theme';
@@ -66,20 +66,6 @@ function Panel({
   );
 }
 
-const THEME_STORAGE_KEY = 'theme';
-
-/** The stored EXPLICIT choice, or `null` when the reader has not made one. */
-function readStoredChoice(): 'light' | 'dark' | null {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' ? stored : null;
-  } catch {
-    // Blocked or private-mode storage reads as "no choice recorded", which is
-    // the same answer the hook gives itself in that case.
-    return null;
-  }
-}
-
 /**
  * Settings — the one view in t-11 where a control actually does something.
  *
@@ -102,93 +88,68 @@ function readStoredChoice(): 'light' | 'dark' | null {
  *
  * So the pressed state is withheld until mounted rather than rendered wrong.
  *
- * ## Why it presses on the STORED choice and not on the resolved theme
+ * ## Why it presses on the CHOICE and not on the resolved theme
  *
- * D4 says the system preference is the default and only the toggle persists, so
- * the app has three states and `useTheme` publishes two: it returns the
- * RESOLVED theme and deliberately keeps "nothing chosen" out of its shape (see
- * `.context/app/divergences.md` row 2, which pins that shape as untouched).
+ * D4 gives the app three states — following the device, light, dark — and makes
+ * the first the default. `theme` alone cannot tell "chose light" from
+ * "following a device that is currently light", so pressing a chip on it would
+ * report a choice nobody made: a reader on macOS auto-appearance opens this at
+ * midday, sees Light marked as theirs, and finds it dark at sunset.
  *
- * Pressing a chip on the resolved value therefore reports a choice nobody made.
- * A reader on macOS auto-appearance would open this at midday, see Light marked
- * as theirs, and find it dark at sunset — with the panel one line above saying
- * their choice stands. So the view reads the stored value itself, and presses
- * nothing until there is one.
+ * `useTheme` publishes `choice` for exactly this, and `clearTheme` for the way
+ * back. Both are Lelañea additions to a Sunrise file — `.context/app/
+ * divergences.md` row 2 — and both were forced by this panel: t-11 first
+ * reached for the stored value by reading `localStorage` here, which put this
+ * file's idea of the storage key in a second place with only a test holding the
+ * two together. That duplication is gone.
  *
- * The key is written out here rather than imported because the hook keeps it
- * private and row 2 is explicit that its public shape does not change. What
- * stops the two drifting is not this comment but a test that clicks, unmounts
- * and remounts: if the hook ever wrote somewhere this does not read, the chip
- * comes back unpressed and that test fails.
+ * ## Three chips, not two
  *
- * What is still missing is the way BACK — nothing here clears the stored value,
- * so following the device again is a reload-and-clear-storage job. That needs a
- * writer `useTheme` does not expose, which is a change to a Sunrise file this
- * repo already diverges on, so it is carried as a deferral rather than taken
- * here.
+ * A two-chip control cannot express the default state, so choosing either was a
+ * one-way door: nothing cleared the stored value, and following the device
+ * again meant clearing site data by hand. The third chip is the whole reason
+ * `clearTheme` exists.
  */
 export function SettingsView() {
-  const { theme, setTheme } = useTheme();
+  const { theme, choice, setTheme, clearTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [chosen, setChosen] = useState<'light' | 'dark' | null>(null);
-  /*
-   * A choice made HERE, held independently of whether the write landed — the
-   * same guard, and for the same reason, as the provider's own
-   * `hasExplicitChoice`. `setTheme` deliberately swallows a `setItem` throw so
-   * the choice still applies for the session; without this ref, re-reading
-   * storage after that would find nothing and un-press the chip one frame after
-   * the click, restoring "Nothing chosen yet" on an app that is explicitly dark
-   * for the session. Storage still WINS when it has a value, which is what lets
-   * the topbar's toggle move the pressed chip.
-   */
-  const choseHere = useRef<'light' | 'dark' | null>(null);
   const leaningsNoteId = useId();
   // One base, indexed per row: a leaning's own words contain spaces, and an
   // `id` with a space is not a valid target for `htmlFor`.
   const leaningId = useId();
 
-  /*
-   * Keyed on `theme`, NOT on mount.
-   *
-   * This view is not the only writer. `ShellTopbar` renders a live sun/moon
-   * toggle in the same frame, above `Panes`, and it calls the same `setTheme`.
-   * A one-shot read on mount meant clicking it left this panel asserting the
-   * opposite of what the app was doing — "Nothing chosen yet" still on screen
-   * after a choice had just been stored, or "Light" still pressed on a dark
-   * app. Round one moved the source of truth to storage and left it stale;
-   * re-reading whenever the resolved theme changes is what closes it, because
-   * the toggle always flips the theme it writes.
-   */
-  useEffect(() => {
-    setMounted(true);
-    setChosen(readStoredChoice() ?? choseHere.current);
-  }, [theme]);
+  useEffect(() => setMounted(true), []);
 
   return (
     <>
       <Panel
         heading="Light and dark"
-        sub="She follows your device until you choose here; after that, your choice stands."
+        sub="Follow your device, or pick one and it stands until you say otherwise."
       >
         <div className="flex flex-wrap gap-2" role="group" aria-label="Theme">
+          {/*
+            Three chips, because the app has three states and D4 makes the
+            third the DEFAULT. Two of them could not express "following your
+            device", so choosing either was a one-way door — reachable again
+            only by clearing site data by hand.
+          */}
+          <Chip selected={mounted && choice === null} onClick={clearTheme}>
+            Follow my device
+          </Chip>
           {(['light', 'dark'] as const).map((value) => (
             <Chip
               key={value}
-              selected={mounted && chosen === value}
-              onClick={() => {
-                choseHere.current = value;
-                setTheme(value);
-                setChosen(value);
-              }}
+              selected={mounted && choice === value}
+              onClick={() => setTheme(value)}
             >
               {value === 'light' ? 'Light' : 'Dark'}
             </Chip>
           ))}
         </div>
-        {mounted && chosen === null ? (
+        {mounted && choice === null ? (
           <p className="text-muted-foreground mt-3 text-[13px] leading-[1.55]">
-            Nothing chosen yet — following your device, which is showing the{' '}
-            {theme === 'dark' ? 'dark' : 'light'} theme just now.
+            Following your device, which is showing the {theme === 'dark' ? 'dark' : 'light'} theme
+            just now.
           </p>
         ) : null}
       </Panel>
