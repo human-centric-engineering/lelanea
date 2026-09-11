@@ -17,11 +17,37 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsView } from '@/components/app/views/settings-view';
-import { ThemeProvider } from '@/hooks/use-theme';
+import { ThemeProvider, useTheme } from '@/hooks/use-theme';
 
 function renderSettings() {
   return render(
     <ThemeProvider>
+      <SettingsView />
+    </ThemeProvider>
+  );
+}
+
+/**
+ * A second writer in the same provider — what `ShellTopbar` is on this route.
+ *
+ * The topbar's sun/moon toggle renders above `Panes`, so it is on screen at the
+ * same time as this view and calls the same `setTheme`. Standing it up here is
+ * the only way to reach the case where this panel's state and the app's
+ * disagree; without it the suite can only ever see one writer.
+ */
+function Topbar() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+      Toggle from the topbar
+    </button>
+  );
+}
+
+function renderWithTopbar() {
+  return render(
+    <ThemeProvider>
+      <Topbar />
       <SettingsView />
     </ThemeProvider>
   );
@@ -119,6 +145,31 @@ describe('the theme choice', () => {
     } finally {
       getItem.mockRestore();
     }
+  });
+
+  it('follows a choice made somewhere else in the frame', async () => {
+    // The topbar toggle writes the same storage this panel reads. A one-shot
+    // read on mount left the panel asserting the opposite of what the app was
+    // doing — "Nothing chosen yet" still on screen after a choice had been
+    // stored one click earlier.
+    renderWithTopbar();
+    await screen.findByText(/Nothing chosen yet/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle from the topbar' }));
+
+    expect(screen.queryByText(/Nothing chosen yet/)).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Dark', pressed: true })).toBeTruthy();
+  });
+
+  it('moves its pressed chip when the other writer flips back', async () => {
+    window.localStorage.setItem('theme', 'dark');
+    renderWithTopbar();
+    await screen.findByRole('button', { name: 'Dark', pressed: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle from the topbar' }));
+
+    expect(await screen.findByRole('button', { name: 'Light', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('still shows the choice after a reload', async () => {

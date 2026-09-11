@@ -2,10 +2,8 @@
 
 import { MessageCircle } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { toneStyleFor } from '@/components/app/views/view-tone';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,17 +14,29 @@ import { cn } from '@/lib/utils';
  * already, rather than being re-parented later, which is the reason `wsOpen` is
  * route-driven rather than a button somebody has to press.
  *
- * ## `--tone`
+ * ## `--tone`, and where it comes from
  *
- * Each destination carries a hue saying which part of the arc it belongs to,
- * and this surface publishes it: the band across the head reads it, and so will
- * the wash behind the conversation when it slides over on a tablet. It is set
- * HERE, from the path, rather than by the view — a custom property inherits
- * only downward, so a `--tone` written on the page could never reach the band
- * above it. The table and the rest of the reasoning are in `view-tone.ts`.
+ * Each destination carries a hue saying which part of the arc it belongs to.
+ * This surface READS it — the band across the head — and `Panes` publishes it,
+ * because a custom property inherits downward only and the conversation pane is
+ * a sibling of this one. Setting it here left the panel edge on the other side
+ * of the screen permanently teal while the band was green. `view-tone.ts`
+ * carries the table.
  *
- * A route with no entry publishes nothing and the band stays transparent, which
- * is `/app` itself: the clean conversation belongs to no part of the arc.
+ * ## The surface has a ground of its own
+ *
+ * `bg-muted`, which is the prototype's `.surface`, and it is what makes every
+ * card on it visible. Panels and the placeholder card are `--color-background`
+ * with a `--color-card-border` that is fully TRANSPARENT in light mode — so on
+ * a surface that is also `--color-background` they had no edge and no fill
+ * difference, and the settings panels simply were not there. Worse, the border
+ * is 8% in dark mode, so the two themes disagreed structurally rather than
+ * chromatically: a bordered panel in one and nothing at all in the other.
+ *
+ * The head keeps `--color-background` and carries the tone as a wash fading out
+ * over 76px, which is the prototype's own gradient. It is what makes the 3px
+ * band read as the top of a head rather than as a stray rule — the complaint
+ * that got the band's colour fixed in t-10 in the first place.
  *
  * ## Why the head is a link, not a button
  *
@@ -37,14 +47,6 @@ import { cn } from '@/lib/utils';
  */
 export function Workspace({ children }: { children: React.ReactNode }) {
   const { width, wsOpen, pane, chatSlim, setChatSlim } = useShellLayout();
-  /*
-   * The tone is read here rather than set by the view, because a custom
-   * property only inherits DOWNWARD: a `--tone` written on the page could never
-   * reach the band across this head. This is the lowest element above both the
-   * band and the body, and the only thing it knows about the view is its path,
-   * so the path is the key. `view-tone.ts` carries the table and the reasoning.
-   */
-  const pathname = usePathname();
 
   if (!wsOpen) return null;
 
@@ -62,7 +64,6 @@ export function Workspace({ children }: { children: React.ReactNode }) {
   return (
     <section
       aria-label="Workspace"
-      style={toneStyleFor(pathname)}
       aria-hidden={carouselHidden ? 'true' : undefined}
       /*
        * `inert` alongside it, because `aria-hidden` and `pointer-events-none`
@@ -106,7 +107,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           : undefined
       }
       className={cn(
-        'relative flex min-w-0 flex-1 flex-col overflow-hidden',
+        'bg-muted relative flex min-w-0 flex-1 flex-col overflow-hidden',
         // TRANSPARENT when a view sets no tone, which is the prototype's own
         // fallback for this band (`.surface-head`). A visible default was mine,
         // and wrong: with no view setting `--tone` — every view, until t-11 —
@@ -128,7 +129,12 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       <header
         className={cn(
           'flex flex-none items-center gap-3 border-b border-[var(--color-divider)]',
-          'px-6 py-4'
+          'px-6 py-4',
+          // The prototype's `.surface-head`: its own ground, with the tone
+          // washing out of the band over 76px. Written as one gradient rather
+          // than a `bg-background` plus an overlay, because both would be in
+          // `tailwind-merge`'s `bg` group and only one of them would survive.
+          'bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--tone,transparent)_8%,var(--color-background))_0,var(--color-background)_76px)]'
         )}
       >
         {/*

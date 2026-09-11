@@ -58,6 +58,20 @@ function Panel({
   );
 }
 
+const THEME_STORAGE_KEY = 'theme';
+
+/** The stored EXPLICIT choice, or `null` when the reader has not made one. */
+function readStoredChoice(): 'light' | 'dark' | null {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : null;
+  } catch {
+    // Blocked or private-mode storage reads as "no choice recorded", which is
+    // the same answer the hook gives itself in that case.
+    return null;
+  }
+}
+
 /**
  * Settings — the one view in t-11 where a control actually does something.
  *
@@ -105,19 +119,6 @@ function Panel({
  * repo already diverges on, so it is carried as a deferral rather than taken
  * here.
  */
-const THEME_STORAGE_KEY = 'theme';
-
-/** The stored EXPLICIT choice, or `null` when the reader has not made one. */
-function readStoredChoice(): 'light' | 'dark' | null {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' ? stored : null;
-  } catch {
-    // Blocked or private-mode storage reads as "no choice recorded", which is
-    // the same answer the hook gives itself in that case.
-    return null;
-  }
-}
 export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -127,10 +128,22 @@ export function SettingsView() {
   // `id` with a space is not a valid target for `htmlFor`.
   const leaningId = useId();
 
+  /*
+   * Keyed on `theme`, NOT on mount.
+   *
+   * This view is not the only writer. `ShellTopbar` renders a live sun/moon
+   * toggle in the same frame, above `Panes`, and it calls the same `setTheme`.
+   * A one-shot read on mount meant clicking it left this panel asserting the
+   * opposite of what the app was doing — "Nothing chosen yet" still on screen
+   * after a choice had just been stored, or "Light" still pressed on a dark
+   * app. Round one moved the source of truth to storage and left it stale;
+   * re-reading whenever the resolved theme changes is what closes it, because
+   * the toggle always flips the theme it writes.
+   */
   useEffect(() => {
     setMounted(true);
     setChosen(readStoredChoice());
-  }, []);
+  }, [theme]);
 
   return (
     <>

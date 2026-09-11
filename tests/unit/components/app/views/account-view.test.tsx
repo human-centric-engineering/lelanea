@@ -28,17 +28,26 @@ vi.mock('next/link', () => ({
 
 import { AccountView } from '@/components/app/views/account-view';
 
-const FACTS = { name: 'Maya Reyes', email: 'maya@example.com', joined: 'March 2026' };
+const FACTS: {
+  name: string | null;
+  email: string;
+  joined: string;
+} = { name: 'Maya Reyes', email: 'maya@example.com', joined: 'March 2026' };
 
 function renderAccount(props: Partial<typeof FACTS> = {}) {
   return render(<AccountView {...FACTS} {...props} />);
 }
 
 describe('the three facts it actually knows', () => {
-  it.each(Object.values(FACTS))('shows %s', (value) => {
-    renderAccount();
-    expect(screen.getByText(value)).toBeTruthy();
-  });
+  // Narrowed, because `name` is nullable now — the null case has its own
+  // describe block below, and `getByText` cannot be asked to find nothing.
+  it.each(Object.values(FACTS).filter((value): value is string => value !== null))(
+    'shows %s',
+    (value) => {
+      renderAccount();
+      expect(screen.getByText(value)).toBeTruthy();
+    }
+  );
 
   it('labels each of them, so a value is never an unexplained string', () => {
     renderAccount();
@@ -102,6 +111,25 @@ describe('where the controls actually live', () => {
     );
   });
 
+  it('opens the export in a new tab, so a refusal cannot replace the shell', () => {
+    // The success path never navigates — `Content-Disposition: attachment`
+    // cancels it. The rate-limit refusal and any thrown export error come back
+    // as a bare JSON envelope with no disposition header, and same-tab that
+    // commits: raw JSON over the whole app, back button the only way out.
+    renderAccount();
+    const row = screen.getByRole('link', { name: /Export a copy/ });
+    expect(row.getAttribute('target')).toBe('_blank');
+    expect(row.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('leaves the in-app rows in the same tab', () => {
+    // Without this the assertion above would pass just as well if `newTab` were
+    // applied to every row, which would send the reader out of the shell to
+    // change their own password.
+    renderAccount();
+    expect(screen.getByRole('link', { name: /Your profile/ }).getAttribute('target')).toBeNull();
+  });
+
   it('sends erasure to the form that performs it', () => {
     renderAccount();
     expect(screen.getByRole('link', { name: /Close your account/ }).getAttribute('href')).toBe(
@@ -117,12 +145,21 @@ describe('where the controls actually live', () => {
 });
 
 describe('a user with no name', () => {
-  it('falls back to the address rather than showing an empty field', () => {
+  it('drops the Name row rather than answering it with an address', () => {
     // A user can exist without a name — an OAuth provider that returned none,
-    // an invite accepted before the profile was filled in. The page decides
-    // that upstream; this pins that the view renders whatever it is given
-    // rather than hiding a blank.
-    renderAccount({ name: 'maya@example.com' });
-    expect(screen.getAllByText('maya@example.com')).toHaveLength(2);
+    // an invite accepted before the profile was filled in. Falling back to the
+    // email would put `Name — maya@example.com` in a list whose whole claim is
+    // that it shows only what the session holds. The PAGE still titles itself
+    // with the address, which is a stand-in for a heading rather than an answer
+    // to a labelled field.
+    renderAccount({ name: null });
+    expect(screen.queryByText('Name')).toBeNull();
+    expect(screen.getAllByText('maya@example.com')).toHaveLength(1);
+  });
+
+  it('still shows the two facts it does have', () => {
+    renderAccount({ name: null });
+    expect(screen.getByText('Email')).toBeTruthy();
+    expect(screen.getByText('Joined')).toBeTruthy();
   });
 });

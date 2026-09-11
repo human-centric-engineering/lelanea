@@ -55,7 +55,10 @@ export default async function AccountPage() {
       lede="What Lelañea knows about you here, and where to change it."
     >
       <AccountView
-        name={session.user.name?.trim() || session.user.email}
+        // `null`, not the email. The heading above falls back to the address
+        // because a page needs a name; a field LABELLED "Name" does not get to
+        // answer with something that is not one.
+        name={session.user.name?.trim() || null}
         email={session.user.email}
         joined={formatJoined(session.user.createdAt)}
       />

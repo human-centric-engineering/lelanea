@@ -6,8 +6,16 @@ import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
 export interface AccountViewProps {
-  /** The name on the account, or the email when no name was ever given. */
-  name: string;
+  /**
+   * The name on the account, or `null` when none was ever given.
+   *
+   * Nullable rather than falling back to the email, because the row is labelled
+   * "Name" and this view's whole claim is that it shows only what the session
+   * actually holds. `Name — maya@example.com` asserts a fact the system does
+   * not have. The PAGE still titles itself with the email in that case, which
+   * is a stand-in for a heading rather than an answer to a labelled field.
+   */
+  name: string | null;
   email: string;
   /** Already formatted on the server — see the page, and the note below. */
   joined: string;
@@ -25,6 +33,7 @@ function RowLink({
   href,
   title,
   external,
+  newTab,
   children,
 }: {
   href: string;
@@ -39,12 +48,16 @@ function RowLink({
    * could spend the reader's allowance before they clicked anything.
    */
   external?: boolean;
+  /** Open in a new tab, so a failure response cannot replace the shell. */
+  newTab?: boolean;
   children: React.ReactNode;
 }) {
   const Component = external ? 'a' : Link;
   return (
     <Component
       href={href}
+      target={newTab ? '_blank' : undefined}
+      rel={newTab ? 'noopener noreferrer' : undefined}
       className={cn(
         'bg-background mb-2 block rounded-[15px] border border-[var(--color-card-border)]',
         'px-[15px] py-[13px] no-underline hover:no-underline',
@@ -121,8 +134,12 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
             'sm:grid-cols-[auto_1fr]'
           )}
         >
-          <dt className="text-muted-foreground text-[13px]">Name</dt>
-          <dd className="text-[var(--color-heading)]">{name}</dd>
+          {name ? (
+            <>
+              <dt className="text-muted-foreground text-[13px]">Name</dt>
+              <dd className="text-[var(--color-heading)]">{name}</dd>
+            </>
+          ) : null}
           <dt className="text-muted-foreground text-[13px]">Email</dt>
           <dd className="break-all text-[var(--color-heading)]">{email}</dd>
           <dt className="text-muted-foreground text-[13px]">Joined</dt>
@@ -155,10 +172,20 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
           downloads the file; pointing this row at the settings page instead
           would have been a row that led nowhere, on an Art. 15 control.
         */}
+        {/*
+          `target="_blank"` is about the FAILURE, not the success. On a 2xx the
+          `Content-Disposition: attachment` cancels the navigation and nothing
+          opens. But the route answers a rate-limit refusal — and anything
+          thrown inside `exportUserData()` — as a bare JSON envelope with no
+          disposition header, and same-tab that commits: raw JSON replaces the
+          whole app and the back button is the only way home. In a new tab the
+          shell is still behind it.
+        */}
         <RowLink
           href="/api/v1/users/me/export"
           title="Export a copy of everything held about you"
           external
+          newTab
         >
           Downloads everything held about you as a file, whenever you ask. A more readable version
           of it comes with the rest of your data controls.

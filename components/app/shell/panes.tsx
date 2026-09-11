@@ -1,10 +1,12 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useRef } from 'react';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Workspace } from '@/components/app/shell/workspace';
+import { toneStyleFor } from '@/components/app/views/view-tone';
 import { cn } from '@/lib/utils';
 
 /** Far enough to be a swipe and not a tap that wandered. */
@@ -20,12 +22,28 @@ const SWIPE_MIN = 56;
  */
 export function Panes({ children }: { children: React.ReactNode }) {
   const { width, wsOpen, setPane, drawer } = useShellLayout();
+  const pathname = usePathname();
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
 
   const carousel = width === 'small' && wsOpen;
 
   return (
     <div
+      /*
+       * The view's tone is published HERE, on the common ancestor of both
+       * panes, and not on the workspace.
+       *
+       * A custom property inherits downward only. Setting it on the workspace
+       * `<section>` put it on a SIBLING of the conversation, so
+       * `conversation-pane.tsx`'s own `border-t-[var(--tone,…)]` — the edge of
+       * the panel when it slides over on a tablet — could never resolve it and
+       * always fell back to the teal. The band on one side of the screen and
+       * the panel edge on the other are meant to be the same colour; from a
+       * sibling they never could be.
+       *
+       * `view-tone.ts` carries the table and the rest of the reasoning.
+       */
+      style={toneStyleFor(pathname)}
       className={cn('relative flex min-h-0 flex-1', carousel && 'overflow-hidden')}
       onPointerDown={(event) => {
         // Mouse is excluded on purpose: a click-drag across a pane is a text

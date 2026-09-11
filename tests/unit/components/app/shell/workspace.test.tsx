@@ -147,6 +147,30 @@ describe('the tablet re-parks the conversation', () => {
 });
 
 describe('the tone band', () => {
+  it('gives the surface a ground the cards on it can be seen against', () => {
+    // Not a cosmetic pin. Panels and the placeholder card are
+    // `--color-background` with a `--color-card-border` that is FULLY
+    // TRANSPARENT in light mode, so on a surface that was also
+    // `--color-background` they had neither an edge nor a fill difference —
+    // the settings panels simply were not on the page. And because that border
+    // is 8% in DARK mode, the two themes disagreed structurally rather than
+    // chromatically: a bordered panel in one, nothing at all in the other.
+    // `bg-muted` is the prototype's own `.surface`.
+    renderWorkspace('large');
+    const surface = screen.getByLabelText('Workspace');
+    expect(surface.className.split(/\s+/)).toContain('bg-muted');
+  });
+
+  it('keeps the head on the other ground, so the band reads as its top edge', () => {
+    // The head stays `--color-background` and washes the tone out over 76px.
+    // If it inherited the surface's ground there would be nothing for the 3px
+    // band to be the top OF, which is how it read in t-10 — a stray rule.
+    renderWorkspace('large');
+    const head = screen.getByLabelText('Workspace').querySelector('header');
+    expect(head?.className).toContain('linear-gradient');
+    expect(head?.className).toContain('--color-background');
+  });
+
   it('is transparent until a view sets a tone', () => {
     // The prototype's own fallback for this band. A visible default was mine,
     // and it painted a teal rule across the top of the workspace at every

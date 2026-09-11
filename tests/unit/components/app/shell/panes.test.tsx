@@ -57,6 +57,36 @@ beforeEach(() => {
   mockPathname.current = '/app/journey';
 });
 
+describe('the view tone reaches both panes', () => {
+  it('is published on an ancestor of each, not on a sibling', () => {
+    // The defect this pins: `--tone` was set on the workspace `<section>`,
+    // which is a SIBLING of the conversation pane. A custom property inherits
+    // downward only, so the conversation's own `border-t-[var(--tone,…)]` —
+    // the edge of the panel when it slides over on a tablet — could never
+    // resolve it, and stayed teal while the band on the other side of the
+    // screen was green. Asserting containment rather than a computed colour,
+    // because containment is the thing that was wrong.
+    renderPanes('large', '/app/journey');
+
+    const toned = document.querySelector('[style*="--tone"]');
+    expect(toned, 'nothing published a tone').toBeTruthy();
+    expect(toned?.getAttribute('style')).toContain('--color-status-green');
+
+    for (const pane of ['chat', 'ws']) {
+      const el = document.querySelector(`[data-pane="${pane}"]`);
+      expect(el, `no ${pane} pane rendered`).toBeTruthy();
+      expect(toned?.contains(el as Node), `${pane} is not under the tone`).toBe(true);
+    }
+  });
+
+  it('publishes nothing on the conversation itself', () => {
+    // `/app` is untoned on purpose — the band falls back to transparent, which
+    // is the defect t-10 shipped and had to fix.
+    renderPanes('large', '/app');
+    expect(document.querySelector('[style*="--tone"]')).toBeNull();
+  });
+});
+
 describe("the route's own output always reaches the screen", () => {
   it('renders children on /app, where there is no workspace', () => {
     // THE ONE THAT MATTERED. `Workspace` returns null on `/app`, so rendering
