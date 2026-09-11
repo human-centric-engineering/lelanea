@@ -328,6 +328,94 @@ page to, and a substring search is **already** a wildcard match by construction,
 so a `%` in the term behaving like one surprises nobody. What remains worth
 bounding is cost, hence the 200-character cap on the term.
 
+## Taking someone off the list
+
+Someone writes in asking to be taken off. t-8 shipped the admin surface
+read-only and t-24 closes that, because the alternative was a hand-written
+database statement.
+
+**It is a removal, not a deletion, and every line of this section depends on that
+distinction.** `removedAt` is set, the row stays, and it still holds the person's
+email, their name and what they said they wanted. Three consequences, all
+deliberate:
+
+- The **Art. 15 export still discloses a removed entry.** Art. 15 is about what we
+  hold, and we hold it in full. `findWaitlistEntriesForSubject` has no `removedAt`
+  clause, on purpose.
+- The **Art. 17 erasure still deletes it.** `eraseWaitlistEntriesForUser` has no
+  `removedAt` clause either. Adding one would leave every removed person's email
+  in the database while reporting the erasure complete — and it would look like a
+  sensible filter to whoever added it, which is why both sites say so in place and
+  `tests/unit/lib/app/waitlist/privacy.test.ts` pins both.
+- The column is **`removedAt`, never `deletedAt`.** Naming it after deletion is how
+  a later reader concludes the erasure duty was met by a click in the admin.
+
+The **confirmation dialog says this out loud** — "this does not delete their
+data" — because the honest risk is not a misclick. It is an admin believing they
+have answered a "delete my data" request.
+
+### `PATCH`, not `DELETE`
+
+One route (`/api/v1/admin/app/waitlist/[id]`) taking `{ removed: boolean }`, which
+does both directions with one schema. `DELETE` is the obvious verb and the wrong
+one: nothing is deleted, and on this surface that distinction decides a GDPR
+answer, so a verb claiming a deletion is a verb that will eventually be read as
+having performed one.
+
+**The body is the state to REACH, not a toggle.** Two admins acting on the same
+row in the same minute would otherwise leave it in whichever state arrived last,
+and a double-clicked button would undo itself.
+
+### A removed address that re-joins (D9, owner, 11 September 2026)
+
+It **stays removed**, and the attempt is recorded in `rejoinRequestedAt` +
+`rejoinRequests`, which the admin table shows as a badge on the row.
+
+Clearing `removedAt` on a re-join is the obvious reading of "they submitted the
+form, so they want to be on the list", and it is wrong for the same reason the
+additive-write rule above exists: **nothing on the public route proves the
+submitter owns the address.** With resurrect-on-rejoin, anyone who knows a
+victim's address can undo that victim's own removal, repeatedly, and the victim
+cannot tell. That is worse than the overwrite problem it resembles, because it
+defeats a request the person actually made.
+
+Staying removed **silently** was the third option and loses the honest case:
+someone who removed themselves by mistake would have no way back, and no signal
+would reach anyone. Recording the attempt keeps both properties — the removal
+sticks, and "actually, please put me back" is visible to her.
+
+The condition is enforced **in the WHERE** (`removedAt: { not: null }`), not in the
+read that precedes it. A check-then-act version races a concurrent restore: the
+row is live again by the time the write lands, and the counter goes up on someone
+who is on the list. If that update matches nothing, the code falls through to the
+ordinary additive fill — they were restored mid-flight, so their answers are
+wanted. `removedAt: null` is likewise in the WHERE of all three fills, so an
+answer cannot be written onto a row removed a moment earlier.
+
+A restore does **not** clear `rejoinRequests`. Someone who asked to come back and
+was then put back is exactly the person whose request should stay legible — it is
+the record of why they are here again.
+
+### Seeing them (D10, owner, 11 September 2026)
+
+The list and the CSV exclude removed entries unless `includeRemoved=true`, which
+the "Show removed" switch sets. Hidden completely, a soft delete is
+indistinguishable from a hard one to the person using it — `HB9` again, which is
+the defect this whole surface answers. A removed row renders struck through with a
+**Removed** badge and a Restore button in place of Remove.
+
+"Show removed" **widens** the population rather than narrowing it to the removed:
+an admin who ticks the box is looking for context, not for a separate list. The
+search still applies within whatever is shown, and the export carries both
+filters so the file is always the screen.
+
+### The CSV's three new columns are APPENDED
+
+`removed_at`, `rejoin_requested_at`, `rejoin_requests` go at the end, never
+inserted. Anything already consuming a file from t-8 reads by column position as
+often as by name, so a new column in the middle silently shifts every field after
+it.
+
 ## The two GDPR duties
 
 Neither is optional and neither is automatic, because **the table is keyed by
@@ -425,13 +513,16 @@ purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
   profile-seeding link, which is later work; nothing sets it today — so the admin
   table's "Account" column reads `—` for everyone, correctly and uninformatively,
   until that lands.
-- **The admin surface is read-only.** There is no way to edit or remove an entry
-  from it: someone who writes in asking to be taken off the list is removed by a
-  hand-written database statement today. That is a deliberate omission rather than
-  a stub (`B31`) — the honest version of "remove me" needs the ownership proof the
-  gap above describes, and an admin-only delete button would have looked like the
-  affordance while only serving the one person who already has database access.
-  It is the obvious next task on this surface.
+- **A removed row is kept indefinitely.** Removal takes someone off the list and
+  keeps their email, name and answers for as long as the row exists, with no
+  purpose that needs them — which is a storage-limitation problem (Art. 5(1)(e))
+  rather than a bug. Nothing purges them today. The shape of the fix is a retention
+  window and a scheduled purge (`.context/orchestration/retention.md` is the
+  platform's precedent), and it is a task of its own rather than something to bolt
+  onto a soft delete.
+- **An admin still cannot EDIT an entry**, only remove and restore it. Correcting
+  an answer on someone's behalf is the same unverified-write problem as the public
+  route's, and the same signed confirmation link closes both.
 - **An export leaves no durable audit row.** The record that a complete copy of
   the list was taken is the application log line, which rotates. The platform's
   audit log (`AiAuditLog`) records orchestration _config_ changes, so using it for

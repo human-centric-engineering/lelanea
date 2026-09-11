@@ -6,8 +6,12 @@
  * Authentication: admin, as for the list beside it.
  *
  * Query parameters:
- *   - q   optional; the same search the list applies, so the button exports what
- *         the admin is looking at rather than something else
+ *   - q               optional; the same search the list applies
+ *   - includeRemoved  default false; the same filter the list applies
+ *
+ * Both mirror the list so the file matches what the admin is looking at rather
+ * than something else — including the removed entries when, and only when, they
+ * are on screen.
  *
  * Answers a `text/csv` attachment. Capped at `WAITLIST_EXPORT_MAX_ROWS`, newest
  * first, with the cap named in the filename when it bites.
@@ -87,6 +91,7 @@ export const GET = withAdminAuth(async (request, session) => {
     total,
     truncated,
     searched: filter.q !== undefined,
+    includeRemoved: filter.includeRemoved,
   });
 
   return new Response(waitlistEntriesToCsv(entries), {

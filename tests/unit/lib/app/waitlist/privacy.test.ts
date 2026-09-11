@@ -182,6 +182,32 @@ describe('subject access (Art. 15) reaches the waitlist', () => {
     expect(args.where.OR).toContainEqual({ email: 'ada@example.com' });
   });
 
+  it('discloses a REMOVED entry, because we still hold it', async () => {
+    // §03 t-24. An admin taking someone off the list sets `removedAt` and keeps
+    // the row — the email, the name, the stated intent, all of it. Art. 15 is
+    // about what we HOLD, so filtering on `removedAt` here would hand the subject
+    // a bundle that omits a row sitting in the database, which reads exactly like
+    // a complete answer.
+    const removed = { ...ENTRY, removedAt: new Date('2026-09-05T09:00:00.000Z') };
+    delegateFor('appWaitlistEntry').findMany.mockResolvedValue([removed]);
+
+    const bundle = await exportUserData({
+      userId: 'user-1',
+      actorUserId: 'user-1',
+      reason: 'self_service',
+    });
+
+    // Population first: "nothing was filtered" means nothing on an empty result.
+    expect(bundle.app.waitlist).toHaveLength(1);
+    expect(bundle.app.waitlist).toEqual([removed]);
+    // And the query asked for it — no `removedAt` anywhere in the WHERE, which is
+    // the clause a future reader would most plausibly add.
+    const args = delegateFor('appWaitlistEntry').findMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(JSON.stringify(args.where)).not.toContain('removedAt');
+  });
+
   it('still carries the section, empty, for a subject with no entry', async () => {
     const bundle = await exportUserData({
       userId: 'user-1',
@@ -226,6 +252,29 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
     expect(delegateFor('appWaitlistEntry').deleteMany).toHaveBeenCalledWith({
       where: { OR: [{ userId: 'user-1' }, { email: 'ada@example.com' }] },
     });
+  });
+
+  it('deletes a REMOVED entry too — removal is not erasure', async () => {
+    // §03 t-24, and the mirror of the export case above. `removedAt` is a product
+    // state, so it has nothing to say about an erasure request: a `removedAt: null`
+    // clause in this `deleteMany` would leave every removed person's email and
+    // answers in the database while reporting the erasure complete — and it would
+    // look like a sensible filter to whoever added it.
+    delegateFor('appWaitlistEntry').deleteMany.mockResolvedValue({ count: 1 });
+
+    await initLeafApp();
+    await eraseUser({
+      userId: 'user-1',
+      userEmail: 'Ada@Example.com',
+      actorUserId: 'user-1',
+      reason: 'self_service',
+    });
+
+    const args = delegateFor('appWaitlistEntry').deleteMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(args.where).toEqual({ OR: [{ userId: 'user-1' }, { email: 'ada@example.com' }] });
+    expect(JSON.stringify(args.where)).not.toContain('removedAt');
   });
 
   it('deletes BEFORE the user row goes, so the email is still readable', async () => {

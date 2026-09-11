@@ -89,13 +89,21 @@ function uniqueViolation(): unknown {
 /** Arrange the "row already exists" path: the insert loses, the update runs. */
 function entryExists(): void {
   create.mockRejectedValue(uniqueViolation());
-  findUnique.mockResolvedValue({ id: 'entry-1' });
+  // `removedAt: null` is what Prisma returns for a selected nullable column, and
+  // the service now reads it to tell a live entry from a removed one.
+  findUnique.mockResolvedValue({ id: 'entry-1', removedAt: null });
+}
+
+/** Arrange the "row exists and an admin removed it" path (§03 t-24, D9). */
+function entryRemoved(removedAt = new Date('2026-09-05T09:00:00.000Z')): void {
+  create.mockRejectedValue(uniqueViolation());
+  findUnique.mockResolvedValue({ id: 'entry-1', removedAt });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   create.mockResolvedValue({ id: 'entry-1' });
-  findUnique.mockResolvedValue({ id: 'entry-1' });
+  findUnique.mockResolvedValue({ id: 'entry-1', removedAt: null });
   updateMany.mockResolvedValue({ count: 1 });
   findMany.mockResolvedValue([]);
   deleteMany.mockResolvedValue({ count: 0 });
@@ -176,9 +184,9 @@ describe('joinWaitlist', () => {
         (call) => (call[0] as { where: Record<string, unknown> }).where
       );
       expect(wheres).toEqual([
-        { email: 'a@example.com', name: null },
-        { email: 'a@example.com', heardFrom: null },
-        { email: 'a@example.com', intent: null },
+        { email: 'a@example.com', name: null, removedAt: null },
+        { email: 'a@example.com', heardFrom: null, removedAt: null },
+        { email: 'a@example.com', intent: null, removedAt: null },
       ]);
     });
 
@@ -199,6 +207,72 @@ describe('joinWaitlist', () => {
       await joinWaitlist({ email: 'a@example.com', locale: 'en' });
 
       expect(updateMany).not.toHaveBeenCalled();
+    });
+
+    it('records the attempt and writes NOTHING when the entry was removed', async () => {
+      entryRemoved();
+
+      const result = await joinWaitlist({
+        email: 'a@example.com',
+        name: 'Ada',
+        intent: 'please put me back',
+        locale: 'en',
+      });
+
+      // D9 (owner, 11 September 2026). One write, and it is the counter — not the
+      // removal cleared, and not an answer filled. Clearing `removedAt` here would
+      // let anyone who knows an address undo that person's own removal, which is
+      // the additive rule's problem made worse: it defeats a request they made.
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      const call = updateMany.mock.calls[0]?.[0] as {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      };
+      expect(Object.keys(call.data).sort()).toEqual(['rejoinRequestedAt', 'rejoinRequests']);
+      expect(call.data.rejoinRequests).toEqual({ increment: 1 });
+      expect(result).toMatchObject({ created: false, removed: true });
+    });
+
+    it('puts the removal condition in the WHERE, not in the read that precedes it', async () => {
+      entryRemoved();
+
+      await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'en' });
+
+      const { where } = updateMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+      // Same discipline as every other condition in this function. A
+      // check-then-act version races a concurrent restore: the row is live again
+      // by the time the write lands, and the counter goes up on someone who IS on
+      // the list.
+      expect(where).toEqual({ email: 'a@example.com', removedAt: { not: null } });
+    });
+
+    it('falls through to the ordinary fill when the row was restored mid-flight', async () => {
+      entryRemoved();
+      // The guarded update matched nothing: `removedAt` went null between the read
+      // and the write. They are back on the list, so their answers are wanted —
+      // which makes falling through the correct behaviour rather than a failure.
+      updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const result = await joinWaitlist({ email: 'a@example.com', name: 'Ada', locale: 'en' });
+
+      expect(updateMany).toHaveBeenCalledTimes(2);
+      expect(updateMany.mock.calls[1]?.[0]).toMatchObject({
+        where: { email: 'a@example.com', name: null, removedAt: null },
+        data: { name: 'Ada' },
+      });
+      expect(result).toMatchObject({ created: false, removed: false });
+    });
+
+    it('refuses to fill an answer onto a row removed mid-flight', async () => {
+      entryExists();
+
+      await joinWaitlist({ email: 'a@example.com', intent: 'to slow down', locale: 'en' });
+
+      const { where } = updateMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+      // `removedAt: null` in the WHERE, so a removal landing between the read and
+      // this write cannot be followed by a stranger's answer appearing on the
+      // removed row.
+      expect(where).toMatchObject({ removedAt: null });
     });
 
     it('never writes `consentedAt`, `locale`, `userId` or `source`', async () => {

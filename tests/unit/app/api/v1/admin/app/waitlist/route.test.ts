@@ -47,6 +47,9 @@ function request(params: Record<string, string> = {}): NextRequest {
 }
 
 const ENTRY = {
+  removedAt: null,
+  rejoinRequestedAt: null,
+  rejoinRequests: 0,
   id: 'entry-1',
   email: 'ada@example.com',
   name: 'Ada',
@@ -107,7 +110,12 @@ describe('GET /api/v1/admin/app/waitlist', () => {
   it('defaults to the first page of 25 when nothing is asked for', async () => {
     await GET(request());
 
-    expect(listWaitlistEntries).toHaveBeenCalledWith({ page: 1, limit: 25, q: undefined });
+    expect(listWaitlistEntries).toHaveBeenCalledWith({
+      page: 1,
+      limit: 25,
+      q: undefined,
+      includeRemoved: false,
+    });
   });
 
   it('passes the search term through to the query', async () => {

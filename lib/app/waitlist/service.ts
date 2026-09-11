@@ -1,5 +1,5 @@
 /**
- * Joining the waitlist, and the two GDPR duties that come with keeping the row.
+ * Joining the waitlist, being taken off it, and the two GDPR duties either way.
  *
  * The table is the leaf's first, and the only one a visitor can write to. What
  * it holds is a person's email plus, optionally, their name, where they heard
@@ -7,8 +7,16 @@
  * (they can ask for it), Art. 17 (they can have it removed) and the honest
  * handling of a repeat submission live here rather than in the route.
  *
+ * **Removal is not erasure, and this file is where that is enforced.** An admin
+ * can take someone off the list (`removedAt`), and the row survives holding their
+ * email, name and answers — so neither GDPR path may treat a removed entry as
+ * gone. `findWaitlistEntriesForSubject` still returns it and
+ * `eraseWaitlistEntriesForUser` still deletes it, both deliberately without a
+ * `removedAt` filter. See the notes on each.
+ *
  * @see lib/app/leaf-data-export.ts — the Art. 15 declaration and collector
  * @see lib/app/leaf-bootstrap.ts — where the Art. 17 hook is registered
+ * @see lib/app/waitlist/admin.ts — the admin read, and the removal write
  */
 
 import type { Prisma } from '@prisma/client';
@@ -48,6 +56,16 @@ export interface JoinWaitlistInput {
 export interface JoinWaitlistResult {
   /** True on a first join, false when an existing entry was updated. */
   created: boolean;
+  /**
+   * True when the address is on the list but REMOVED, so nothing was written
+   * except the record of the attempt.
+   *
+   * Logged, never returned to the caller — the same rule as `created`, and for
+   * the same reason. A response that differed here would answer "is this person
+   * on your list, and did they ask to be taken off it", which is a more personal
+   * question than the one the status code used to leak.
+   */
+  removed: boolean;
   entryId: string;
 }
 
@@ -130,14 +148,15 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       },
       select: { id: true },
     });
-    return { created: true, entryId: created.id };
+    return { created: true, removed: false, entryId: created.id };
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
   }
 
-  // 2. The row exists. Fill only the columns that are still NULL — and put that
-  //    condition in the WHERE, so Postgres evaluates it while holding the row
-  //    lock rather than this process evaluating it a round trip earlier.
+  // 2. The row exists. Read it once to tell a removed entry from a live one —
+  //    then put every CONDITION in the WHERE of the write, so Postgres evaluates
+  //    it while holding the row lock rather than this process evaluating it a
+  //    round trip earlier.
   //
   //    `locale` and `consentedAt` are absent on purpose: both are provenance
   //    about the join, and an unverified repeat is not evidence about it.
@@ -146,7 +165,7 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
   return prisma.$transaction(async (tx) => {
     const existing = await tx.appWaitlistEntry.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, removedAt: true },
     });
 
     // Erased between the failed insert and this read. Vanishingly unlikely, and
@@ -155,20 +174,66 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       throw new Error('Waitlist entry disappeared between insert conflict and update');
     }
 
+    // 3. The address is on the list but REMOVED. Record that they asked again and
+    //    write nothing else — not the removal cleared, not an answer filled.
+    //
+    //    D9 (owner, 11 September 2026). Clearing `removedAt` here is the obvious
+    //    reading of "they submitted the form, so they want to be on the list",
+    //    and it is wrong for the reason the whole additive rule above exists:
+    //    nothing on this route proves the submitter owns the address. With a
+    //    resurrect-on-rejoin rule, anyone who knows a victim's address can undo
+    //    the victim's own removal, repeatedly, and the victim cannot tell —
+    //    a worse version of the overwrite problem, because it defeats a request
+    //    the person actually made. Staying removed SILENTLY was the other option
+    //    and loses the honest case: someone who removed themselves by mistake
+    //    would have no way back and no signal would reach anyone.
+    //
+    //    `removedAt: { not: null }` is in the WHERE rather than read first, for
+    //    the same reason as every other condition in this function: a
+    //    check-then-act version races a concurrent restore. If the row WAS
+    //    restored in that window the update matches nothing, and falling through
+    //    to the additive fill below is then the correct behaviour rather than a
+    //    failure — they are back on the list, so their answers are wanted.
+    // A truthy check, not `!== null`. Prisma returns `null` for a selected nullable
+    // column, but a narrowed `select` elsewhere — or a test fixture that omits the
+    // field — yields `undefined`, and `undefined !== null` would take the REMOVED
+    // branch for a live entry: silently refusing to record what someone said and
+    // counting their join as a re-join attempt. A `Date` is always truthy, so this
+    // cannot be fooled either way.
+    if (existing.removedAt) {
+      const { count } = await tx.appWaitlistEntry.updateMany({
+        where: { email, removedAt: { not: null } },
+        data: { rejoinRequests: { increment: 1 }, rejoinRequestedAt: new Date() },
+      });
+
+      if (count > 0) return { created: false, removed: true, entryId: existing.id };
+    }
+
+    // 4. On the list. Fill only the columns that are still NULL.
+    //
+    //    `removedAt: null` is in every WHERE below, so a removal landing between
+    //    the read above and these writes cannot be followed by an answer being
+    //    written onto a removed row. Same discipline, same reason.
     if (name !== undefined) {
-      await tx.appWaitlistEntry.updateMany({ where: { email, name: null }, data: { name } });
+      await tx.appWaitlistEntry.updateMany({
+        where: { email, name: null, removedAt: null },
+        data: { name },
+      });
     }
     if (heardFrom !== undefined) {
       await tx.appWaitlistEntry.updateMany({
-        where: { email, heardFrom: null },
+        where: { email, heardFrom: null, removedAt: null },
         data: { heardFrom },
       });
     }
     if (intent !== undefined) {
-      await tx.appWaitlistEntry.updateMany({ where: { email, intent: null }, data: { intent } });
+      await tx.appWaitlistEntry.updateMany({
+        where: { email, intent: null, removedAt: null },
+        data: { intent },
+      });
     }
 
-    return { created: false, entryId: existing.id };
+    return { created: false, removed: false, entryId: existing.id };
   });
 }
 
@@ -211,7 +276,17 @@ function subjectMatch(subject: {
   return { OR: [{ userId: subject.userId }, { email: subject.email.trim().toLowerCase() }] };
 }
 
-/** Every waitlist entry belonging to a data subject (GDPR Art. 15). */
+/**
+ * Every waitlist entry belonging to a data subject (GDPR Art. 15).
+ *
+ * **No `removedAt` filter, and that is not an oversight.** Art. 15 is about what
+ * we HOLD, and a removed entry is held in full — the email, the name, the stated
+ * intent, and now the record of any attempt to re-join. Filtering it out would
+ * hand the subject a bundle that omits a row sitting in the database, which is
+ * the failure mode the `meta.excluded` machinery exists to prevent elsewhere.
+ * `removedAt` travels with the row, so the bundle says so rather than being
+ * silent about it.
+ */
 export function findWaitlistEntriesForSubject(subject: {
   userId: string;
   email: string;
@@ -247,6 +322,15 @@ export const WAITLIST_ERASURE_HOOK = 'lelanea:waitlist-entry';
  * in-transaction phase and is the right failure: an erasure that reported
  * success while leaving the person's email on a public-form table would be
  * worse than one that failed loudly.
+ *
+ * ## A REMOVED entry is erased too, and the matcher must stay blind to `removedAt`
+ *
+ * An admin taking someone off the list sets `removedAt` and keeps the row. That
+ * is a product state, not a deletion, so it has nothing to say about an erasure
+ * request: adding `removedAt: null` to this `deleteMany` would leave every
+ * removed person's email and answers in the database while reporting the erasure
+ * complete — and it would look like a sensible filter to whoever added it, which
+ * is why it is called out here rather than left to read as an omission.
  */
 export async function eraseWaitlistEntriesForUser(ctx: {
   tx: Prisma.TransactionClient;

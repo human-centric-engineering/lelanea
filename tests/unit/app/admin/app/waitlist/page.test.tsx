@@ -41,6 +41,9 @@ import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
 import { WAITLIST_ADMIN_ENDPOINT } from '@/lib/app/waitlist/endpoint';
 
 const ENTRY = {
+  removedAt: null,
+  rejoinRequestedAt: null,
+  rejoinRequests: 0,
   id: 'entry-1',
   email: 'ada@example.com',
   name: 'Ada',

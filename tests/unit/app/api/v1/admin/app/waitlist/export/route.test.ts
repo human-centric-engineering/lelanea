@@ -64,6 +64,9 @@ function request(params: Record<string, string> = {}): NextRequest {
 }
 
 const ENTRY = {
+  removedAt: null,
+  rejoinRequestedAt: null,
+  rejoinRequests: 0,
   id: 'entry-1',
   email: 'ada@example.com',
   name: 'Ada',
@@ -162,7 +165,10 @@ describe('GET /api/v1/admin/app/waitlist/export', () => {
   it('exports what the admin is looking at, filter and all', async () => {
     await GET(request({ q: 'sleep' }));
 
-    expect(collectWaitlistEntriesForExport).toHaveBeenCalledWith({ q: 'sleep' });
+    expect(collectWaitlistEntriesForExport).toHaveBeenCalledWith({
+      q: 'sleep',
+      includeRemoved: false,
+    });
   });
 
   it('says in the filename when the file is only the first N', async () => {

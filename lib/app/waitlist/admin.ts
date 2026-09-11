@@ -56,6 +56,9 @@ const ENTRY_SELECT = {
   consentedAt: true,
   userId: true,
   createdAt: true,
+  removedAt: true,
+  rejoinRequestedAt: true,
+  rejoinRequests: true,
 } satisfies Prisma.AppWaitlistEntrySelect;
 
 /**
@@ -79,6 +82,18 @@ export interface WaitlistAdminEntry {
    */
   userId: string | null;
   createdAt: string;
+  /**
+   * When an admin took them off the list; null means they are on it.
+   *
+   * Returned rather than filtered away, because the admin surface has to be able
+   * to SHOW a removal — a soft delete nobody can see is indistinguishable from a
+   * hard one (`HB9`), which is the defect this whole surface answers.
+   */
+  removedAt: string | null;
+  /** When a removed address was last submitted through the public form again. */
+  rejoinRequestedAt: string | null;
+  /** How many times it has been. Zero for everyone who was never removed. */
+  rejoinRequests: number;
 }
 
 /**
@@ -93,6 +108,8 @@ function toAdminEntry(row: StoredEntry): WaitlistAdminEntry {
     ...row,
     consentedAt: row.consentedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
+    removedAt: row.removedAt?.toISOString() ?? null,
+    rejoinRequestedAt: row.rejoinRequestedAt?.toISOString() ?? null,
   };
 }
 
@@ -112,9 +129,18 @@ function toAdminEntry(row: StoredEntry): WaitlistAdminEntry {
 export function buildWaitlistSearchWhere(
   filter: WaitlistAdminFilter
 ): Prisma.AppWaitlistEntryWhereInput {
-  if (!filter.q) return {};
+  // Removed entries are out unless asked for. Top-level beside the `OR`, which
+  // Prisma ANDs — so "show removed" widens the population and the search still
+  // applies within it, rather than the two filters fighting.
+  const onTheList: Prisma.AppWaitlistEntryWhereInput = filter.includeRemoved
+    ? {}
+    : { removedAt: null };
+
+  if (!filter.q) return onTheList;
+
   const contains = { contains: filter.q, mode: 'insensitive' } as const;
   return {
+    ...onTheList,
     OR: [{ email: contains }, { name: contains }, { heardFrom: contains }, { intent: contains }],
   };
 }
@@ -142,10 +168,14 @@ const ENTRY_ORDER = [
 /** One page of entries, newest first, plus the total the filter matches. */
 export async function listWaitlistEntries(query: {
   q?: string;
+  includeRemoved?: boolean;
   page: number;
   limit: number;
 }): Promise<{ entries: WaitlistAdminEntry[]; total: number }> {
-  const where = buildWaitlistSearchWhere({ q: query.q });
+  const where = buildWaitlistSearchWhere({
+    q: query.q,
+    includeRemoved: query.includeRemoved ?? false,
+  });
 
   const [rows, total] = await Promise.all([
     prisma.appWaitlistEntry.findMany({
@@ -188,6 +218,53 @@ export async function collectWaitlistEntriesForExport(filter: WaitlistAdminFilte
   return { entries: rows.map(toAdminEntry), total };
 }
 
+/**
+ * Take someone off the list, or put them back.
+ *
+ * Returns the updated entry, or `null` when no row has that id — which the route
+ * turns into a 404 rather than reporting a success that changed nothing.
+ *
+ * ## What this is NOT
+ *
+ * It is not a deletion and it is not an erasure. The row keeps the person's
+ * email, their name and what they said they wanted; all this moves is
+ * `removedAt`, which decides whether the list and the export include them. The
+ * Art. 15 export still discloses a removed entry and the Art. 17 hook still
+ * deletes it outright — see `lib/app/waitlist/service.ts`, where both are
+ * deliberately blind to this column.
+ *
+ * Anyone reaching for this function to satisfy a "please delete my data" request
+ * is in the wrong place: that is `eraseUser()`, and for someone with no account
+ * there is no self-service path at all yet (see `.context/app/waitlist.md`).
+ *
+ * ## Idempotent, and deliberately not a toggle
+ *
+ * It takes the state to reach rather than flipping what it finds. A toggle would
+ * mean two admins acting on the same row in the same minute could leave it in
+ * either state depending on arrival order, and a double-clicked button could
+ * undo itself. `removed: true` twice is the same as once.
+ *
+ * Restoring does NOT clear `rejoinRequests`. Someone who asked to come back and
+ * was then put back on the list is exactly the person whose request should stay
+ * legible afterwards — it is the record of why they are here again.
+ */
+export async function setWaitlistEntryRemoved(
+  id: string,
+  removed: boolean
+): Promise<WaitlistAdminEntry | null> {
+  // `updateMany` + a read rather than `update`, so a missing id is a null rather
+  // than a thrown P2025 the route would have to translate back.
+  const { count } = await prisma.appWaitlistEntry.updateMany({
+    where: { id },
+    data: { removedAt: removed ? new Date() : null },
+  });
+
+  if (count === 0) return null;
+
+  const row = await prisma.appWaitlistEntry.findUnique({ where: { id }, select: ENTRY_SELECT });
+  return row ? toAdminEntry(row) : null;
+}
+
 /** The CSV header, which is also the column contract the export test pins. */
 export const WAITLIST_CSV_COLUMNS = [
   'id',
@@ -200,6 +277,12 @@ export const WAITLIST_CSV_COLUMNS = [
   'consented_at',
   'user_id',
   'created_at',
+  // APPENDED, never inserted. Anything already consuming a file from t-8 reads
+  // by column position as often as by name, so a new column in the middle
+  // silently shifts every field after it. The end is the only safe place.
+  'removed_at',
+  'rejoin_requested_at',
+  'rejoin_requests',
 ] as const;
 
 /**
@@ -285,6 +368,9 @@ export function waitlistEntriesToCsv(entries: WaitlistAdminEntry[]): string {
         entry.consentedAt,
         entry.userId ?? '',
         entry.createdAt,
+        entry.removedAt ?? '',
+        entry.rejoinRequestedAt ?? '',
+        String(entry.rejoinRequests),
       ]
         .map(csvCell)
         .join(',')
