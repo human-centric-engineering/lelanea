@@ -2,8 +2,10 @@
 
 import { MessageCircle } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { toneStyleFor } from '@/components/app/views/view-tone';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,10 +18,15 @@ import { cn } from '@/lib/utils';
  *
  * ## `--tone`
  *
- * Each view sets its own `--tone` and the surface reads it: the band across the
- * head, and the wash behind the conversation when it slides over on a tablet.
- * It falls back to the secondary ink, so a view that sets nothing still looks
- * deliberate rather than unstyled.
+ * Each destination carries a hue saying which part of the arc it belongs to,
+ * and this surface publishes it: the band across the head reads it, and so will
+ * the wash behind the conversation when it slides over on a tablet. It is set
+ * HERE, from the path, rather than by the view — a custom property inherits
+ * only downward, so a `--tone` written on the page could never reach the band
+ * above it. The table and the rest of the reasoning are in `view-tone.ts`.
+ *
+ * A route with no entry publishes nothing and the band stays transparent, which
+ * is `/app` itself: the clean conversation belongs to no part of the arc.
  *
  * ## Why the head is a link, not a button
  *
@@ -30,6 +37,14 @@ import { cn } from '@/lib/utils';
  */
 export function Workspace({ children }: { children: React.ReactNode }) {
   const { width, wsOpen, pane, chatSlim, setChatSlim } = useShellLayout();
+  /*
+   * The tone is read here rather than set by the view, because a custom
+   * property only inherits DOWNWARD: a `--tone` written on the page could never
+   * reach the band across this head. This is the lowest element above both the
+   * band and the body, and the only thing it knows about the view is its path,
+   * so the path is the key. `view-tone.ts` carries the table and the reasoning.
+   */
+  const pathname = usePathname();
 
   if (!wsOpen) return null;
 
@@ -47,6 +62,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
   return (
     <section
       aria-label="Workspace"
+      style={toneStyleFor(pathname)}
       aria-hidden={carouselHidden ? 'true' : undefined}
       /*
        * `inert` alongside it, because `aria-hidden` and `pointer-events-none`
@@ -115,6 +131,11 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           'px-6 py-4'
         )}
       >
+        {/*
+          The spacer that pushes the link right. The view's own eyebrow and
+          title deliberately do NOT go here — see `views/view.tsx` for why they
+          render with the rest of the view instead.
+        */}
         <div className="min-w-0 flex-1" />
         <Link
           href="/app"
