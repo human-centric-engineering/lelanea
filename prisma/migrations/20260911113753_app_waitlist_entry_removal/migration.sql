@@ -1,0 +1,43 @@
+-- §03 t-24 — an admin can take someone off the waitlist, and put them back.
+--
+-- Three columns, and no index. `removedAt` is the removal; `rejoinRequestedAt`
+-- and `rejoinRequests` record a removed address being submitted through the
+-- public form again, which does NOT put them back on the list (D9, owner,
+-- 11 September 2026 — nothing on that route proves the submitter owns the
+-- address, so clearing the removal would let anyone who knows an address undo
+-- someone else's).
+--
+-- NOT a deletion, and the naming carries that. The row keeps the person's
+-- email, name and answers, so `removedAt` being set changes nothing about the
+-- two GDPR duties: the Art. 15 export still discloses the entry, and the
+-- Art. 17 hook still DELETEs it. See prisma/schema/app.prisma.
+--
+-- WHAT WAS STRIPPED FROM THE GENERATED SQL (B13). `--create-only` emitted 21
+-- statements before the two below, none of them ours — the same set the
+-- `20260910174113_app_waitlist_entry` migration documents, because the cause is
+-- unchanged: the generator diffs against a shadow database and emits a drop for
+-- every object the schema cannot model. This time that included
+-- `DROP CONSTRAINT "app_waitlist_entry_userId_fkey"` — OUR hand-written FK, the
+-- one `lib/app/leaf-db-drift.ts` probes — plus the fifteen framework FKs to
+-- `user`, `ai_agent`, `ai_knowledge_document`, `ai_knowledge_tag`, `ai_workflow`
+-- and `ai_message`; `DROP INDEX` for `idx_knowledge_embedding`,
+-- `idx_message_embedding`, `idx_framework_node_embedding` (pgvector HNSW) and
+-- `idx_ai_knowledge_chunk_search_vector` (tsvector GIN); and
+-- `ALTER TABLE "ai_knowledge_chunk" ALTER COLUMN "searchVector" DROP DEFAULT`.
+-- Applying them would have taken out this table's own erasure backstop, every
+-- framework erasure path, and every vector search in the product.
+--
+-- NO INDEX ON `removedAt`. The first draft added one. The hot predicate is
+-- `removedAt IS NULL`, which matches nearly every row, so the planner seq-scans
+-- regardless; the only selective form is `IS NOT NULL`, which wants a partial
+-- index Prisma cannot express. Dropped in review, before this migration shipped
+-- anywhere — see prisma/schema/app.prisma.
+--
+-- APPLY WITH `npm run db:migrate:deploy`, not `migrate dev` — the schema and the
+-- database diverge on that FK by design, and the development command reads the
+-- divergence as drift and "corrects" it. Then `npm run db:drift-check`.
+
+-- AlterTable
+ALTER TABLE "app_waitlist_entry" ADD COLUMN     "rejoinRequestedAt" TIMESTAMP(3),
+ADD COLUMN     "rejoinRequests" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "removedAt" TIMESTAMP(3);

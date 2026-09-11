@@ -70,7 +70,37 @@ model AppWaitlistEntry {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
+  /// When an admin took them off the list. Null means they are on it.
+  ///
+  /// **`removedAt`, not `deletedAt`, and the name is the point.** Nothing is
+  /// deleted: the row survives holding this person's email, their name and what
+  /// they said they wanted. Calling it a deletion is how a later reader concludes
+  /// the Art. 17 duty was met by a click in the admin, which it was not — erasure
+  /// still DELETES the row outright, through the hook registered from
+  /// `lib/app/leaf-bootstrap.ts`, and the Art. 15 export still has to disclose a
+  /// removed entry because we still hold it.
+  removedAt         DateTime?
+  /// When a removed address was last submitted through the public form again.
+  ///
+  /// A re-join does NOT put someone back on the list (D9, owner, 11 September
+  /// 2026): nothing on that route proves the submitter owns the address, so
+  /// clearing the removal would let anyone who knows an address undo someone
+  /// else's removal. Recording the attempt is the middle path — the removal
+  /// sticks, and a genuine "actually, please put me back" is visible to her
+  /// rather than silently swallowed.
+  rejoinRequestedAt DateTime?
+  /// How many times a removed address has been submitted again. See above.
+  rejoinRequests    Int       @default(0)
+
   @@index([userId])
   @@index([createdAt])
+  /// NO index on `removedAt`, deliberately. The hot predicate is `removedAt IS
+  /// NULL`, which matches nearly every row, so Postgres will sequentially scan
+  /// whatever is indexed; the one selective form — `IS NOT NULL`, for the
+  /// "show removed" view — wants a partial index, which Prisma's schema cannot
+  /// express. An earlier version of this model carried `@@index([removedAt])` with
+  /// a comment claiming the list "filters on this", which confuses reading the
+  /// column with needing an index for it. Caught in review; the index was dropped
+  /// before the migration shipped.
   @@map("app_waitlist_entry")
 }

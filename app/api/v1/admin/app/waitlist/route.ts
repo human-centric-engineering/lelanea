@@ -8,9 +8,10 @@
  * how this list is reachable headlessly without a second auth path.
  *
  * Query parameters:
- *   - q      optional free-text search over email, name, heardFrom and intent
- *   - page   default 1
- *   - limit  default 25, max 100
+ *   - q               optional free-text search over email, name, heardFrom and intent
+ *   - includeRemoved  default false — entries an admin took off the list are out
+ *   - page            default 1
+ *   - limit           default 25, max 100
  *
  * Returns the platform's paginated envelope: `{ success, data: [...], meta: {
  * page, limit, total, totalPages } }`.
@@ -68,6 +69,7 @@ export const GET = withAdminAuth(async (request, _session) => {
     total,
     page: query.page,
     searched: query.q !== undefined,
+    includeRemoved: query.includeRemoved,
   });
 
   return paginatedResponse(entries, {

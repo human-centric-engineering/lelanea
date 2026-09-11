@@ -28,6 +28,7 @@
  */
 
 import { z } from 'zod';
+import { queryBooleanSchema } from '@/lib/validations/common';
 
 /** Longest value we will store in any of the three optional free-text fields. */
 const FREE_TEXT_MAX = 2000;
@@ -189,6 +190,27 @@ export const waitlistAdminFilterSchema = z.object({
     .max(200, 'Please keep the search under 200 characters.')
     .optional()
     .transform((value) => (value === undefined || value === '' ? undefined : value)),
+  /**
+   * Show entries an admin has taken off the list. Default false: the list is
+   * "who is waiting", and a removed entry is not.
+   *
+   * `queryBooleanSchema`, not `z.coerce.boolean()` — the latter is `Boolean('false')`,
+   * which is `true`, so `?includeRemoved=false` would turn the filter ON. It is
+   * the platform's helper for exactly this, and the bug it avoids is the kind
+   * that only shows up when someone unchecks a box.
+   */
+  includeRemoved: queryBooleanSchema.optional().default(false),
+});
+
+/**
+ * The body of a removal or a restore: the state to REACH, not a toggle.
+ *
+ * A toggle would make two admins acting on the same row in the same minute leave
+ * it in whichever state arrived last, and a double-clicked button undo itself.
+ * `{ removed: true }` twice is the same as once.
+ */
+export const waitlistRemovalSchema = z.object({
+  removed: z.boolean({ error: 'Say whether this entry is removed: true or false.' }),
 });
 
 /** The admin list query: the shared filter plus page/limit. */
@@ -199,4 +221,5 @@ export const waitlistAdminQuerySchema = z.object({
 });
 
 export type WaitlistAdminFilter = z.infer<typeof waitlistAdminFilterSchema>;
+export type WaitlistRemovalInput = z.infer<typeof waitlistRemovalSchema>;
 export type WaitlistAdminQuery = z.infer<typeof waitlistAdminQuerySchema>;

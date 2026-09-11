@@ -36,6 +36,9 @@ function entry(overrides: Partial<WaitlistAdminEntry> = {}): WaitlistAdminEntry 
     consentedAt: '2026-09-01T10:00:00.000Z',
     userId: null,
     createdAt: '2026-09-01T10:00:00.000Z',
+    removedAt: null,
+    rejoinRequestedAt: null,
+    rejoinRequests: 0,
     ...overrides,
   };
 }
@@ -50,11 +53,18 @@ function listResponse(entries: WaitlistAdminEntry[], meta = META) {
   } as unknown as Response;
 }
 
+const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({
+  apiClient: { patch },
+  APIClientError: class APIClientError extends Error {},
+}));
+
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
   fetchMock.mockResolvedValue(listResponse([entry()]));
+  patch.mockResolvedValue({});
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -124,10 +134,12 @@ describe('WaitlistTable', () => {
     // The APPLIED term, not the one in the box: a file that quietly contained
     // everyone while the screen showed three people is the failure here, and it
     // would look like a working export.
+    // `a+friend`, not `a%20friend`: the href is built with `URLSearchParams`, which
+    // encodes a space as `+`. Both decode to the same term server-side (Next's own
+    // `searchParams` uses URLSearchParams too), and building it with the same API
+    // the fetch uses is what keeps the two in step.
     await waitFor(() =>
-      expect(exportLink().getAttribute('href')).toBe(
-        `${WAITLIST_ADMIN_EXPORT_ENDPOINT}?q=a%20friend`
-      )
+      expect(exportLink().getAttribute('href')).toBe(`${WAITLIST_ADMIN_EXPORT_ENDPOINT}?q=a+friend`)
     );
   });
 
@@ -255,8 +267,301 @@ describe('WaitlistTable', () => {
     // The search worked and genuinely matched nobody, which is an answer — so the
     // table has to stop saying it has none. Leaving the disclaimer up would tell
     // an admin the list is broken for as long as their searches keep missing.
-    await waitFor(() => expect(screen.getByText('Nobody on the list matches that.')).toBeTruthy());
+    // The hint is part of the copy when the removed are hidden: searching one
+    // address is how you check whether someone joined, and "nobody matches" reads
+    // as "never joined" for a person who is merely removed.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Nobody on the list matches that\. If they were removed/)
+      ).toBeTruthy()
+    );
     expect(screen.queryByText(/did not load, so this is not an answer/)).toBeNull();
+  });
+
+  describe('taking someone off the list', () => {
+    it('asks before it does anything, and names the person', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+
+      // Named, not "this entry". A confirmation with nothing specific in it is the
+      // one everybody clicks through.
+      expect(
+        screen.getByRole('heading', { name: /Take ada@example.com off the waitlist\?/ })
+      ).toBeTruthy();
+      // And nothing has happened yet.
+      expect(patch).not.toHaveBeenCalled();
+    });
+
+    it('says, in the dialog, that this is not a deletion', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+
+      // The honest risk is not a misclick — it is an admin believing they have
+      // answered a "delete my data" request. They have not: the row keeps the
+      // address and the answers.
+      expect(screen.getByText(/does not delete their data/i)).toBeTruthy();
+    });
+
+    it('removes nobody when the dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Keep them on the list' }));
+
+      // The whole point of the gate. If this ever passes while the PATCH fires,
+      // the dialog is decoration.
+      expect(patch).not.toHaveBeenCalled();
+    });
+
+    it('sends the removal once confirmed, and re-reads the page', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+
+      await waitFor(() =>
+        expect(patch).toHaveBeenCalledWith('/api/v1/admin/app/waitlist/entry-1', {
+          body: { removed: true },
+        })
+      );
+      // Re-read rather than patched in place: the row usually vanishes (the default
+      // filter excludes it) so the totals move, and a locally-edited row would show
+      // a count that disagrees with the list.
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    });
+
+    it('says so when the removal fails, instead of looking like it worked', async () => {
+      const user = userEvent.setup();
+      patch.mockRejectedValue(new Error('network'));
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+
+      const alert = await waitFor(() => screen.getByRole('alert'));
+      expect(within(alert).getByText(/was not removed/)).toBeTruthy();
+    });
+  });
+
+  describe('a removed entry', () => {
+    const removed = entry({ removedAt: '2026-09-05T09:00:00.000Z' });
+
+    it('is marked as removed rather than looking like anyone else', () => {
+      render(<WaitlistTable initialEntries={[removed]} initialMeta={META} />);
+
+      expect(screen.getByText('Removed')).toBeTruthy();
+      // Restore in place of Remove — offering both would invite removing a row that
+      // is already removed.
+      expect(screen.getByRole('button', { name: /Restore/ })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+    });
+
+    it('reports the re-submission as an event, not as something the person did', () => {
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 2 })]}
+          initialMeta={META}
+        />
+      );
+
+      // D9's justification needs the signal visible — recorded instead of acted on
+      // is worth nothing if nobody can see it. But the WORDING is load-bearing, and
+      // the security review of this task is why: the form proves nothing about who
+      // submitted it, so "asked to re-join" states as fact the one thing nobody
+      // knows. Three unauthenticated POSTs of a victim's address would otherwise
+      // manufacture a confident-looking claim that the victim wants back on.
+      expect(screen.getByText(/Re-submitted ×2/)).toBeTruthy();
+      expect(screen.queryByText(/Asked to re-join/)).toBeNull();
+    });
+
+    it('asks before restoring a row carrying a re-submission, and says it is unverified', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 2 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+
+      // The attack D9 closes in code runs through the admin's hand instead: a
+      // forged signal plus a frictionless button is the same resurrection. The
+      // dialog is where that stops.
+      expect(patch).not.toHaveBeenCalled();
+      expect(screen.getByText(/does not prove it was them/i)).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: 'Put back on the list' }));
+      await waitFor(() =>
+        expect(patch).toHaveBeenCalledWith('/api/v1/admin/app/waitlist/entry-1', {
+          body: { removed: false },
+        })
+      );
+    });
+
+    it('leaves them off when that dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 1 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+      await user.click(screen.getByRole('button', { name: 'Leave them off' }));
+
+      expect(patch).not.toHaveBeenCalled();
+    });
+
+    it('counts one re-submission in the singular, because ×1 reads as a tally', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-05T09:00:00.000Z', rejoinRequests: 1 })]}
+          initialMeta={META}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+
+      expect(screen.getByText(/submitted through the public form once/)).toBeTruthy();
+    });
+
+    it('restores without a dialog when the admin is undoing their own action', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[removed]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Restore/ }));
+
+      await waitFor(() =>
+        expect(patch).toHaveBeenCalledWith('/api/v1/admin/app/waitlist/entry-1', {
+          body: { removed: false },
+        })
+      );
+    });
+  });
+
+  describe('the removed filter', () => {
+    it('asks the API for removed entries when the toggle goes on', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByLabelText('Show removed'));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const url = String(fetchMock.mock.calls[0]?.[0]);
+      expect(url).toContain('includeRemoved=true');
+      // Back to page 1: the population just changed size, so the page that was on
+      // screen may not exist any more.
+      expect(url).toContain('page=1');
+    });
+
+    it('cancels a pending search, so a stale fetch cannot re-apply the old filter', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      // Type (arming the 300ms debounce, which captured includeRemoved=false), then
+      // flip the switch inside that window.
+      await user.type(screen.getByLabelText('Search the waitlist'), 'ali');
+      await user.click(screen.getByLabelText('Show removed'));
+
+      // Give the cancelled timer more than its window to fire.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      // Exactly one request, and it has both the term and the filter. Without the
+      // cancellation the stale timer fires second, wins the sequence guard, and
+      // leaves the switch reading on while the rows exclude removed entries and the
+      // export link silently drops the filter.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const url = String(fetchMock.mock.calls[0]?.[0]);
+      expect(url).toContain('includeRemoved=true');
+      expect(url).toContain('q=ali');
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toContain(
+          'includeRemoved=true'
+        )
+      );
+    });
+
+    it('carries the filter into the export, so the file is the screen', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByLabelText('Show removed'));
+
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toContain(
+          'includeRemoved=true'
+        )
+      );
+    });
+
+    it('keeps the filter when paging', async () => {
+      const user = userEvent.setup();
+      const paged = { page: 1, limit: 25, total: 60, totalPages: 3 };
+      // The toggle's own fetch replaces `meta`, so the response has to keep the
+      // list multi-page or Next is disabled by the time we click it — which would
+      // make this pass for the wrong reason.
+      fetchMock.mockResolvedValue(listResponse([entry()], paged));
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={paged} />);
+
+      await user.click(screen.getByLabelText('Show removed'));
+      // Wait on a RENDERED consequence, not on the call count. The fetch is issued
+      // synchronously, so a count assertion can pass on waitFor's first tick while
+      // `isLoading` still disables Next — the click would then be a no-op and the
+      // assertion below would time out. The enabled button is the honest signal
+      // that the first request has settled. Flagged by the code review as a CI
+      // flake window.
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Next/ }).hasAttribute('disabled')).toBe(false)
+      );
+      await user.click(screen.getByRole('button', { name: /Next/ }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      // Losing it here would silently drop the removed rows the admin is looking at
+      // the moment they turned a page.
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('includeRemoved=true');
+    });
+  });
+
+  it('does not strand the admin past the end after removing the last row on a page', async () => {
+    const user = userEvent.setup();
+    // Page 2 of 2 holds the single last entry. Removing it leaves page 2 empty
+    // while 25 people are still on the list.
+    const onPageTwo = { page: 2, limit: 25, total: 26, totalPages: 2 };
+    render(<WaitlistTable initialEntries={[entry()]} initialMeta={onPageTwo} />);
+
+    // The re-read after the removal asks for page 2 and comes back empty with a
+    // total that no longer reaches it.
+    fetchMock.mockResolvedValueOnce(
+      listResponse([], { page: 2, limit: 25, total: 25, totalPages: 1 })
+    );
+    // The corrective read lands on the page that does exist.
+    fetchMock.mockResolvedValueOnce(
+      listResponse([entry({ id: 'survivor', email: 'still@here.test' })], {
+        page: 1,
+        limit: 25,
+        total: 25,
+        totalPages: 1,
+      })
+    );
+
+    await user.click(screen.getByRole('button', { name: /Remove/ }));
+    await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+
+    await waitFor(() => expect(screen.getByText('still@here.test')).toBeTruthy());
+    // Without the correction the table renders "Page 2 of 1", "Showing 26 to 25 of
+    // 25", and an empty-state sentence claiming nobody is on a list of 25.
+    expect(screen.getByText(/Page 1 of 1/)).toBeTruthy();
+    expect(screen.queryByText(/Nobody is on the list/)).toBeNull();
+    expect(screen.getByText('Showing 1 to 25 of 25 entries')).toBeTruthy();
   });
 
   it('says a fetch failed rather than leaving the old rows looking like the answer', async () => {
@@ -270,13 +575,42 @@ describe('WaitlistTable', () => {
     expect(within(alert).getByText(/did not load/)).toBeTruthy();
   });
 
+  it('does not claim nobody joined when removed entries are merely hidden', async () => {
+    render(
+      <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
+    );
+
+    // The default filter hides removed entries, so an empty list means "nobody is
+    // waiting", not "nobody ever joined". Found by looking at the page with every
+    // entry removed, where the old copy asserted the latter while two people had
+    // joined — the same false-claim problem as a failed load (`HB9`).
+    expect(screen.queryByText('Nobody has joined the waitlist yet.')).toBeNull();
+    expect(screen.getByText(/Nobody is on the list/)).toBeTruthy();
+  });
+
+  it('does say nobody joined once removed entries are included and there are none', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
+    render(
+      <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
+    );
+
+    await user.click(screen.getByLabelText('Show removed'));
+
+    // With the removed included and still nothing there, the stronger claim is the
+    // true one — and it is the only state that can make it.
+    await waitFor(() =>
+      expect(screen.getByText('Nobody has joined the waitlist yet.')).toBeTruthy()
+    );
+  });
+
   it('tells an empty list from an empty search result', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <WaitlistTable initialEntries={[]} initialMeta={{ ...META, total: 0, totalPages: 0 }} />
     );
 
-    expect(screen.getByText('Nobody has joined the waitlist yet.')).toBeTruthy();
+    expect(screen.getByText(/Nobody is on the list/)).toBeTruthy();
 
     fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
     rerender(
@@ -287,6 +621,10 @@ describe('WaitlistTable', () => {
     // "Nobody has joined yet" on a filtered empty result is a false statement
     // about the product, on the surface whose whole job is to say whether anyone
     // has joined.
-    await waitFor(() => expect(screen.getByText('Nobody on the list matches that.')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Nobody on the list matches that\. If they were removed/)
+      ).toBeTruthy()
+    );
   });
 });
