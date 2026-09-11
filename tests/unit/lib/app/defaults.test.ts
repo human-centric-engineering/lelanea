@@ -42,10 +42,17 @@
  * ---------------------------------------------------------------------------
  * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
- * `leaf-bootstrap.ts` (the waitlist's erasure hook) and `leaf-data-export.ts`
- * (the waitlist's Art. 15 declaration and collector) assert the FILLED value.
- * Pinning is what keeps the protection for every seam still empty, and turns
- * each row into a guard on the thing we filled it with — see `HB2`.
+ * `leaf-bootstrap.ts` (the waitlist's erasure hook), `leaf-data-export.ts` (the
+ * waitlist's Art. 15 declaration and collector) and `leaf-admin-nav.ts` (the
+ * "Lelañea" sidebar section) assert the FILLED value. Pinning is what keeps the
+ * protection for every seam still empty, and turns each row into a guard on the
+ * thing we filled it with — see `HB2`.
+ *
+ * Filling `leaf-admin-nav.ts` also moves the `lib/app/admin-nav.ts` BRIDGE row,
+ * which asserted that exactly one section — Daybreak's — was registered. That is
+ * two edits for one seam rather than one, and it is the shape of the contract
+ * working: the bridge row still holds the framework section in place and still
+ * fails on a stray third, it just now knows ours is there too.
  *
  * @see lib/app/ · CUSTOMIZATION.md §4
  */
@@ -208,25 +215,37 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     seam: 'lib/app/admin-nav.ts',
-    // PINNED (Daybreak fills this bridge). It registers the framework's own
-    // section and nothing else; the empty contract moves to the reserved leaf
-    // seam it delegates to, `leaf-admin-nav.ts`, asserted in its own row below.
+    // PINNED TWICE OVER. Daybreak fills this bridge to register the framework's
+    // own section, and §03 t-8 filled the leaf seam it then delegates to — so
+    // what this row asserts is the COMPOSITION: the framework's section, ours
+    // after it, and nothing else. The order is part of the contract (the sidebar
+    // renders registration order), and a stray third section from either tier
+    // still fails here.
     risk: 'a stray section here would appear in every Daybreak leaf’s admin sidebar',
     assert: () => {
       __resetNavRegistryForTests();
       initAppNav();
-      const sections = getRegisteredNavSections();
-      expect(sections).toHaveLength(1);
-      expect(sections[0]?.title).toBe('Framework');
+      expect(getRegisteredNavSections().map((section) => section.title)).toEqual([
+        'Framework',
+        'Lelañea',
+      ]);
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §03 t-8 fills this so the waitlist t-7 writes
+    // to is reachable — a row nobody can see is indistinguishable from a row that
+    // was never written (`HB9`). The row still guards the shape: a second section
+    // registered from the leaf, a renamed title that would collide with a core
+    // section's React key, or a moved href all fail here.
     seam: 'lib/app/leaf-admin-nav.ts',
     risk: 'a stray section would appear in every Daybreak leaf’s admin sidebar',
     assert: () => {
       __resetNavRegistryForTests();
       initLeafAdminNav();
-      expect(getRegisteredNavSections()).toHaveLength(0);
+      const sections = getRegisteredNavSections();
+      expect(sections).toHaveLength(1);
+      expect(sections[0]?.title).toBe('Lelañea');
+      expect(sections[0]?.items?.map((item) => item.href)).toEqual(['/admin/app/waitlist']);
     },
   },
   {
