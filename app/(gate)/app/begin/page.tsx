@@ -83,10 +83,16 @@ export default async function BeginPage() {
   return (
     <MaintenanceWrapperWithAdminNotice>
       {/*
-        `.page` for the measure and gutters; NOT `.opening`, whose top padding
-        would push a `h-dvh` step frame below the fold. The frame pads itself.
+        `.page` for the centring and gutters only. NOT `.measure`: that is the
+        public document pages' book measure — 62ch, applied to every paragraph
+        as well as the column — and on a single reading pane with the controls
+        beside it, it left a 411px paragraph on a 1650px laptop (owner, on the
+        first cut). 100ch is the width that read well there, and it is still
+        well inside `.page`'s 1180px. NOT `.opening` either: its top padding
+        would push a `h-dvh` step frame below the fold, and the frame pads
+        itself.
       */}
-      <main className={cn(styles.page, styles.measure)}>
+      <main className={cn(styles.page, 'max-w-[100ch]')}>
         <BeginView
           initialStatus={toGateStatusJson(status)}
           documents={{
