@@ -12,13 +12,15 @@
  * what is in it.
  */
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Drawers } from '@/components/app/shell/drawer';
 import { JOURNEY_MAP_ENDPOINT, TIER_TONES } from '@/components/app/shell/map-drawer';
 import { ShellRail } from '@/components/app/shell/shell-rail';
+import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
 import { getJourneyStructure } from '@/lib/app/content';
 import type { JourneyMapView } from '@/lib/app/journey/map';
@@ -177,6 +179,30 @@ describe('MapDrawerBody — what the map holds', () => {
     await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
 
     expect(rows()).toHaveLength(17);
+    expect(get).toHaveBeenCalledOnce();
+  });
+});
+
+describe('MapDrawerBody — under StrictMode, as the app runs', () => {
+  it('still shows the map after the dev double-mount', async () => {
+    // `next.config` sets `reactStrictMode: true`, so every effect mounts,
+    // unmounts and mounts again in development. A mounted-flag effect that
+    // only CLEARS the flag in its cleanup is left false by that sequence and
+    // drops every response — the drawer sat at "Finding your map…" with a
+    // 200 in the network tab. `renderInShell` does not use StrictMode, which
+    // is why the cases above could not catch it.
+    mockPathname.current = '/app/journey';
+    render(
+      <StrictMode>
+        <ShellLayoutProvider>
+          <ShellRail />
+          <Drawers />
+        </ShellLayoutProvider>
+      </StrictMode>
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+
+    await waitFor(() => expect(rows()).toHaveLength(17));
     expect(get).toHaveBeenCalledOnce();
   });
 });

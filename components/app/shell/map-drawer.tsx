@@ -86,13 +86,20 @@ export function MapDrawerBody() {
   // Unmount only — NOT the fetch effect's own cleanup, which also runs when the
   // drawer closes while the request is in flight, and would leave it loading
   // for the rest of the session.
-  const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  //
+  // Set in the body AND cleared in the cleanup, not cleared alone: React's dev
+  // StrictMode mounts, unmounts and mounts again, so a cleanup-only effect
+  // leaves the flag false after the second mount and every response is
+  // dropped. That shipped past the unit tests (no StrictMode there) and was
+  // caught by looking at it in a browser — the drawer sat at "Finding your
+  // map…" with a 200 in the network tab.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    []
-  );
+    };
+  }, []);
 
   useEffect(() => {
     if (!open || requested.current) return;
