@@ -168,7 +168,12 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
       </header>
 
       {document ? (
+        // Keyed by step, so the pane is a NEW element for each document. Without
+        // it React keeps the same div — same place in the tree — and swaps its
+        // children, and the scroll position of step one is the scroll position
+        // step two opens at (owner, first walk-through).
         <div
+          key={current}
           className={cn(
             'min-h-0 flex-1 overflow-y-auto',
             'border-y border-[var(--color-divider)] py-8',

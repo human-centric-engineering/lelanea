@@ -124,6 +124,24 @@ describe('acknowledging moves the step on', () => {
     expect(screen.getByText(/two of three/)).toBeTruthy();
   });
 
+  it('opens the next document at the top — a fresh pane, not the last one scrolled', async () => {
+    // React reuses a div in the same tree position and keeps its scrollTop, so
+    // step two inherited wherever step one was scrolled to. The pane is keyed
+    // by step; the assertion is on element identity, which is what the key
+    // changes.
+    post.mockResolvedValue(status('disclaimer'));
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    const first = screen.getByTestId('document-pane');
+    first.scrollTop = 400;
+
+    fireEvent.click(button(STEP_COPY.disclaimer.action));
+
+    await waitFor(() => expect(screen.getByTestId('step-terms')).toBeTruthy());
+    const second = screen.getByTestId('document-pane');
+    expect(second).not.toBe(first);
+    expect(second.scrollTop).toBe(0);
+  });
+
   it('shows what the SERVER says stands, not what was clicked', async () => {
     // The ledger answers with more than the click changed — a second tab, or
     // an earlier acknowledgement this paint did not know about. The view must
