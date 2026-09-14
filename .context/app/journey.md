@@ -86,8 +86,9 @@ which is what makes the seed's deep-equal against a stored version meaningful.
    (`expectedBaseVersion`, re-checked inside the write transaction); writes
    **nothing** when a deep-equal of the parsed definitions says nothing changed.
    Deep-equal, not text: jsonb drops key order.
-3. Hashes the structure file, `map-definition.ts` and `definitions.ts`
-   (`hashInputs`), so a change to the shape or the slug rule re-runs it.
+3. Hashes the structure file, the content loader and schema, `map-definition.ts`
+   and `definitions.ts` (`hashInputs`), so a change to the shape, the
+   projection or the slug rule re-runs it.
 
 **The trigger to reclassify the row as operator-owned is the first edit
 Lelañea makes in the map editor.** From then on the seed must create-if-absent

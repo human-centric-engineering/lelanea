@@ -70,6 +70,8 @@ describe('journey map seed unit', () => {
     expect(typeof unit.run).toBe('function');
     expect(unit.hashInputs).toEqual([
       '../../../content/lelanea_module_structure.json',
+      '../../../lib/app/content/index.ts',
+      '../../../lib/app/content/schemas.ts',
       '../../../lib/app/journey/map-definition.ts',
       '../../../lib/app/modules/definitions.ts',
     ]);

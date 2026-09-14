@@ -15,7 +15,8 @@
  * **A pure code projection, for now.** The published version is rebuilt from
  * `content/lelanea_module_structure.json` through `buildJourneyMapDefinition()`
  * every time this unit runs, and the unit re-runs whenever the structure file,
- * the builder, or the slug rule changes (`hashInputs`). Nobody has edited this
+ * the loader that projects it, the builder, or the slug rule changes
+ * (`hashInputs`). Nobody has edited this
  * map in Daybreak's map editor; the day Lelañea does, that edit is what this
  * seed would overwrite on its next run. **That first edit is the trigger to
  * reclassify the row as operator-owned**: at that point this seed should
@@ -42,7 +43,8 @@
  * writes a version row itself.
  *
  * `createdBy` on graph and version is the service account, as every other seed
- * signs its rows; the change summary says where the shape came from.
+ * signs its rows. A re-publish carries a change summary saying where the shape
+ * came from; the create path cannot — `createGraph` stamps v1 "Initial version".
  */
 
 import { isDeepStrictEqual } from 'node:util';
@@ -62,11 +64,15 @@ import { graphExists } from '@/lib/framework/facilitation/map/queries';
 
 const unit: SeedUnit = {
   name: 'app-lelanea/001-journey-map',
-  // The three inputs the published shape is derived from. The seed's own source
-  // is always hashed; these are the files it delegates to. Relative to this
-  // file, as the runner requires.
+  // Every input the published shape is derived from: the structure file, the
+  // loader and schema that project it (a projection change can rename a tier
+  // id, and with it every region key), the builder, and the slug rule. The
+  // seed's own source is always hashed; these are the files it delegates to.
+  // Relative to this file, as the runner requires.
   hashInputs: [
     '../../../content/lelanea_module_structure.json',
+    '../../../lib/app/content/index.ts',
+    '../../../lib/app/content/schemas.ts',
     '../../../lib/app/journey/map-definition.ts',
     '../../../lib/app/modules/definitions.ts',
   ],

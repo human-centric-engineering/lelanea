@@ -12,6 +12,15 @@
  * nothing to clean up — but it records the version it found on entry, so the
  * output says whether this run published or only confirmed.
  *
+ * One thing it does not prove: the post-publish auto-embed. The framework's
+ * publish hook fires `syncMapNodeEmbeddings` fire-and-forget on the shared
+ * Prisma client, and this script's `$disconnect()` in `finally` can end the
+ * pool before that call returns — so on a database where THIS run published
+ * v1 and an embedding provider is configured, the embed fails with a warn and
+ * the version has no embedding rows. `db:seed`'s runner owns its own client
+ * and does not race it; the on-demand embed route re-embeds a version either
+ * way. Advisory, like the no-provider warn the docs describe.
+ *
  * Usage: `npm run smoke:app-journey-map` (reads `.env.local`). Exit 0 on every
  * assertion passing, 1 otherwise; skipped (exit 0, says so) with no database.
  */
