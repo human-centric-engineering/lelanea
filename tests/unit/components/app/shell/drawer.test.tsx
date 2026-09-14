@@ -129,12 +129,15 @@ describe('focus', () => {
 });
 
 describe('what the stubs say', () => {
-  it('says what each will hold rather than showing an empty list', () => {
+  it('says what each is for rather than showing an empty list', () => {
     // An empty panel reads as broken; a panel that says what it is for reads as
-    // unfinished, which is what it is (D6, B31).
+    // unfinished, which is what it is (D6, B31). The map is real from §05 t-14
+    // (`map-drawer.test.tsx`); its head still says what it holds. The resources
+    // remain the honest stub.
     renderDrawers();
-    expect(screen.getByText(/sixteen modules/)).toBeTruthy();
+    expect(screen.getByText(/Sixteen modules/)).toBeTruthy();
     expect(screen.getByText(/Films and reading/)).toBeTruthy();
+    expect(screen.getByText(/arrive later in the programme/)).toBeTruthy();
   });
 
   it('invents no counts', () => {

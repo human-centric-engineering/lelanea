@@ -56,6 +56,13 @@ describe('the style it publishes', () => {
     expect(toneStyleFor('/app')).toBeUndefined();
   });
 
+  it('gives a module page the workspace tone — a module is the workspace', () => {
+    expect(toneStyleFor('/app/modules/values')).toEqual(toneStyleFor('/app/workspace'));
+    expect(toneStyleFor('/app/modules/values')).toEqual({
+      '--tone': 'var(--color-secondary-ink)',
+    });
+  });
+
   it('publishes nothing for a path with no entry', () => {
     expect(toneStyleFor('/app/nonsense')).toBeUndefined();
   });

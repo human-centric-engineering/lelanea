@@ -106,6 +106,31 @@ describe('ShellNav — which destination reads as current', () => {
     expect(currentItems()).toEqual([]);
   });
 
+  it('marks "Workspace" current on a module page — a module IS the workspace', () => {
+    renderAt('/app/modules/values');
+    expect(currentItems()).toEqual(['Workspace']);
+  });
+
+  it('sends "Workspace" to the landing until a module has been visited', () => {
+    renderAt('/app/journey');
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
+      'href',
+      '/app/workspace'
+    );
+  });
+
+  it('sends "Workspace" to the last module visited, once one has been', async () => {
+    // What the module page's `RememberModule` writes, in the same key.
+    window.localStorage.setItem('lelanea.workspace.lastModule', JSON.stringify('boundaries'));
+    renderAt('/app/journey');
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
+        'href',
+        '/app/modules/boundaries'
+      )
+    );
+  });
+
   it('renders all seven destinations', () => {
     renderAt('/app');
     for (const label of [

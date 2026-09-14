@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
+import { MapDrawerBody } from '@/components/app/shell/map-drawer';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
@@ -15,27 +16,40 @@ import { cn } from '@/lib/utils';
  * the id union at the one place that iterates it — and it left the render order
  * as whatever the object literal happened to give. A list states both.
  */
-const DRAWERS: { id: DrawerId; title: string; note: string }[] = [
+const DRAWERS: {
+  id: DrawerId;
+  /** The lowercase tracked-out line above the title — `where you can go`. */
+  eyebrow: string;
+  /** The serif line the panel is called; also its accessible name. */
+  title: string;
+  /** The sentence under the title: what the panel is for. */
+  lede: string;
+  /** What the body renders. A string is an honest note for a panel not built yet. */
+  body: React.ReactNode;
+}[] = [
   {
     id: 'map',
+    eyebrow: 'where you can go',
     title: 'Your map',
-    note: 'The sixteen modules, and where you are among them. This arrives with the journey.',
+    lede: 'Sixteen modules. Work through them in sequence, or ask Lelañea which one fits what you are bringing.',
+    body: <MapDrawerBody />,
   },
   {
     id: 'resources',
+    eyebrow: 'in lelañea’s own words',
     title: 'Resources',
-    note: 'Films and reading, in her own words. These arrive later in the programme.',
+    lede: 'Films and reading, in her own words.',
+    body: 'These arrive later in the programme. What a module points at will be here, beside it.',
   },
 ];
 
 /**
  * The map and resources drawers: panels that ride over the panes.
  *
- * Both are stubs in this task (D6) — the map needs §05's modules and the
- * resources need phase 3 — so each says what it will hold rather than showing an
- * empty list, which reads as broken. What is real here is the MECHANISM: the
- * slide, the scrim, the focus handling and the Escape rung, all of which §05 and
- * f-resources then fill rather than build.
+ * §04 shipped both as stubs (D6); §05 t-14 fills the map from the published
+ * graph (`map-drawer.tsx`), and the resources stay an honest note until
+ * phase 3. What is shared here is the MECHANISM: the slide, the scrim, the
+ * focus handling and the Escape rung.
  *
  * ## Why both render, and only one is open
  *
@@ -134,7 +148,7 @@ export function Drawers() {
           drawer ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
       />
-      {DRAWERS.map(({ id, title, note }) => {
+      {DRAWERS.map(({ id, eyebrow, title, lede, body }) => {
         const open = drawer === id;
         return (
           <div
@@ -179,10 +193,23 @@ export function Drawers() {
           >
             <header
               className={cn(
-                'flex flex-none items-center gap-3 border-b border-[var(--color-divider)] px-5 py-4'
+                'flex flex-none items-start gap-3 border-b border-[var(--color-divider)] px-5 py-4'
               )}
             >
-              <Eyebrow className="min-w-0 flex-1">{title}</Eyebrow>
+              {/*
+                The prototype's `.side-head`: eyebrow, serif title, lede. The
+                title is an `<h2>` — the panel is a dialog with its own outline,
+                and the view's `<h1>` is behind the scrim.
+              */}
+              <div className="min-w-0 flex-1">
+                <Eyebrow as="p" className="block">
+                  {eyebrow}
+                </Eyebrow>
+                <h2 className="brand-display mt-1 text-[23px] leading-[1.1] text-[var(--color-heading)]">
+                  {title}
+                </h2>
+                <p className="text-muted-foreground mt-1.5 text-[13px] leading-[1.55]">{lede}</p>
+              </div>
               <button
                 type="button"
                 onClick={closeDrawer}
@@ -199,8 +226,12 @@ export function Drawers() {
                 <X size={16} strokeWidth={1.5} aria-hidden="true" />
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-              <p className="text-muted-foreground text-sm leading-relaxed">{note}</p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+              {typeof body === 'string' ? (
+                <p className="text-muted-foreground px-3 py-2 text-sm leading-relaxed">{body}</p>
+              ) : (
+                body
+              )}
             </div>
           </div>
         );
