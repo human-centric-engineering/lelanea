@@ -314,9 +314,6 @@ reads as data rather than as copy.
 
 ## Known gaps
 
-- **The account view's data-rights rows** point at §06 `f-gateway` t-3's future
-  home. Subject access has no UI anywhere in the tree, so the export row links
-  straight at `GET /api/v1/users/me/export`.
 - **The 404's tab reads only "Lelañea."** Next resolves no `metadata` export from
   a `not-found` file, and `global-not-found.js` bypasses the layout the boundary
   exists to keep.
