@@ -34,6 +34,7 @@ import {
   BeginView,
   DID_NOT_LAND,
   formatRecordDate,
+  INTRO,
   SHELL_ROUTE,
   STEP_COPY,
 } from '@/components/app/views/begin-view';
@@ -86,11 +87,14 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
     expect(screen.queryByRole('link', { name: 'Begin' })).toBeNull();
   });
 
-  it('lands on the third step for someone who did two last week', () => {
+  it('lands on the third step for someone who did two last week — and calls it one of one', () => {
     render(<BeginView initialStatus={status('disclaimer', 'terms')} documents={DOCUMENTS} />);
 
     expect(screen.getByTestId('step-age_18')).toBeTruthy();
-    expect(screen.getByText(/three of three/)).toBeTruthy();
+    // Progress counts what THIS visit asks for. "three of three" here would
+    // promise two steps that never happened.
+    expect(screen.getByText(/one of one/)).toBeTruthy();
+    expect(screen.getByText(INTRO[1])).toBeTruthy();
     expect(screen.queryByTestId('document-pane')).toBeNull();
     expect(button(STEP_COPY.age_18.action)).toBeTruthy();
     // No document, so the step says what the confirmation is rather than
@@ -105,6 +109,23 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
   it('gives a document step the fixed frame, so the control never leaves the viewport', () => {
     render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
     expect(screen.getByTestId('step-disclaimer').className).toContain('h-dvh');
+  });
+
+  it('after a version bump asks for the two documents as one of two, two of two', async () => {
+    // Code review round 1: keyed to the kind's position, this said "one of
+    // three", "two of three", then "This stands." — a third step promised on
+    // the compliance page and never delivered.
+    post.mockResolvedValue(status('disclaimer', 'age_18'));
+    render(<BeginView initialStatus={status('age_18')} documents={DOCUMENTS} />);
+
+    expect(screen.getByText(/one of two/)).toBeTruthy();
+    expect(screen.getByText(INTRO[2])).toBeTruthy();
+
+    fireEvent.click(button(STEP_COPY.disclaimer.action));
+
+    await waitFor(() => expect(screen.getByTestId('step-terms')).toBeTruthy());
+    expect(screen.getByText(/two of two/)).toBeTruthy();
+    expect(screen.queryByText(/of three/)).toBeNull();
   });
 
   it('puts the document in its own scroll pane, so the control is never below the text', () => {

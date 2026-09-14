@@ -8,7 +8,6 @@ import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import { logger } from '@/lib/logging';
 import {
-  ACKNOWLEDGEMENT_KINDS,
   type AcknowledgementKind,
   type GateStatusJson,
   type KindStatusJson,
@@ -72,8 +71,28 @@ export const AGE_STEP_BODY = [
   'Confirming this is kept beside the two acknowledgements, with the date. After it, you begin: the conversation, the map, and the first room. Everything you have agreed to here can be read back from this page whenever you want it.',
 ];
 
-/** "one of three" — words, not a progress bar; there are three and they are short. */
-const ORDINAL: Record<number, string> = { 0: 'one', 1: 'two', 2: 'three' };
+/** "one of three" — words, not a progress bar; there are at most three and they are short. */
+const COUNT_WORD: Record<number, string> = { 1: 'one', 2: 'two', 3: 'three' };
+
+/**
+ * The opening line, by how many steps this visit actually asks for.
+ *
+ * Three is a first visit. Fewer is a return — two of three done last week, or
+ * a document that changed since it was agreed to (a version bump leaves the
+ * age confirmation standing and asks for the two documents again). Counting
+ * from `ACKNOWLEDGEMENT_KINDS` instead said "one of three, two of three" and
+ * then stopped, on the one page whose job is to be accurate about what was
+ * asked (code review, round 1).
+ */
+export const INTRO: Record<number, string> = {
+  3: 'Three short steps, and each one is recorded — what you agreed to, which version, and when. You can come back to this page to see it.',
+  2: 'Two short steps. Something you agreed to has changed since, or was not finished, so it is asked again — and recorded like the rest: which version, and when.',
+  1: 'One short step, recorded like the rest — what you agreed to, which version, and when.',
+};
+
+export function introFor(total: number): string {
+  return INTRO[total] ?? INTRO[3];
+}
 
 /**
  * A date for the record line, formatted the same way on the server and in the
@@ -162,7 +181,11 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
 
   // `complete` is false exactly when `outstanding` is non-empty.
   const current = status.outstanding[0];
-  const stepIndex = ACKNOWLEDGEMENT_KINDS.indexOf(current);
+  // Progress is through what THIS visit asks for, not through the three
+  // kinds: after a version bump only the two documents are outstanding, and
+  // "one of two" is the truth where "one of three" was not.
+  const total = initialStatus.outstanding.length;
+  const stepNumber = total - status.outstanding.length + 1;
   const copy = STEP_COPY[current];
   const document = current === 'age_18' ? null : documents[current];
 
@@ -175,15 +198,14 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
       data-testid={`step-${current}`}
     >
       <header className="flex flex-col gap-2 pt-[clamp(28px,5vw,48px)] pb-6">
-        <Eyebrow as="p">before you begin · {ORDINAL[stepIndex]} of three</Eyebrow>
+        <Eyebrow as="p">
+          before you begin · {COUNT_WORD[stepNumber] ?? stepNumber} of {COUNT_WORD[total] ?? total}
+        </Eyebrow>
         <h1 className="brand-display text-3xl text-[var(--color-heading)] sm:text-4xl">
           {copy.title}
         </h1>
-        {stepIndex === 0 ? (
-          <p className="text-muted-foreground max-w-prose">
-            Three short steps, and each one is recorded — what you agreed to, which version, and
-            when. You can come back to this page to see it.
-          </p>
+        {stepNumber === 1 ? (
+          <p className="text-muted-foreground max-w-prose">{introFor(total)}</p>
         ) : null}
       </header>
 
