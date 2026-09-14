@@ -208,6 +208,16 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
         <RowLink href="/settings?tab=account" title="Close your account and erase it">
           Everything derived from your work goes with it. Handled in your account settings.
         </RowLink>
+        {/*
+          §06 t-16. The gate page is the record once every acknowledgement
+          stands — the three facts, their dates, and a way back to each text —
+          and this is the only link to it from inside the shell. Without it the
+          gate's own "you can read it back from this page" is true only for
+          someone who knows the URL.
+        */}
+        <RowLink href="/app/begin" title="What you agreed to">
+          The disclaimer, the terms, and your age confirmation — which version, and when.
+        </RowLink>
       </Section>
     </>
   );

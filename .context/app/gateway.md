@@ -166,7 +166,9 @@ hold.
 Afterwards the page is the **record**: "This stands.", the three facts with
 their dates, "Read it again" to each public page, and `Begin`. The layout no
 longer redirects here, but "what did I agree to, and when" stays answerable
-without asking us.
+without asking us — and reachable: the account view's "your data" section
+carries a "What you agreed to" row to `/app/begin`, the only link to it from
+inside the shell.
 
 Copy is in the prototype's register — sentence case, no exclamation points,
 `Begin` not "Start now", and the design guide's own error line ("Something
