@@ -24,9 +24,10 @@
  * **What the graph carries, and what it does not.** Only structure: keys,
  * types, containment, order. Titles, intents and display numbers stay in the
  * content API — a copy here would be a second source for the drawer to read,
- * and the one it read would be the one that drifted. The `meta` bags hold the
- * two numbers a reader needs to sort without going back to content (`order` on
- * a region, `number` on a module).
+ * and the one it read would be the one that drifted. Order is the node order
+ * itself, which is what the reader (`map.ts`) uses; the `meta` bags (`order`
+ * on a region, `number` on a module) record the authored position for anyone
+ * reading the stored definition by eye or in the map editor.
  *
  * The seed (`prisma/seeds/app-lelanea/001-journey-map.ts`) publishes this and
  * hashes this file, so a change to the shape here re-runs it.
@@ -47,9 +48,21 @@ import {
 /** The one map Lelañea publishes. Journeys and the map API key on it. */
 export const JOURNEY_MAP_SLUG = 'lelanea-journey';
 
+/**
+ * The prefix that marks a region node as a tier. One definition: the reader
+ * in `map.ts` strips it to find the tier, and a drift between the two would
+ * fail every region at once — a whole-shell outage from a one-token change.
+ */
+export const TIER_REGION_PREFIX = 'tier:';
+
 /** A region node's key for a tier id: `tier:foundations`. */
 export function regionKeyForTier(tierId: string): string {
-  return `tier:${tierId}`;
+  return `${TIER_REGION_PREFIX}${tierId}`;
+}
+
+/** The tier id a region key names, or `null` when the key is not a tier region. */
+export function tierIdForRegionKey(key: string): string | null {
+  return key.startsWith(TIER_REGION_PREFIX) ? key.slice(TIER_REGION_PREFIX.length) : null;
 }
 
 let definition: MapDefinition | null = null;

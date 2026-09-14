@@ -40,7 +40,7 @@ import type { ModuleTier } from '@/lib/app/content/schemas';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { getRegisteredModule } from '@/lib/framework/modules/registry';
 import { getPublishedMap } from '@/lib/framework/facilitation/map/version-service';
-import { JOURNEY_MAP_SLUG } from '@/lib/app/journey/map-definition';
+import { JOURNEY_MAP_SLUG, tierIdForRegionKey } from '@/lib/app/journey/map-definition';
 
 /** The one state a module can be in this phase. Widens with per-user journeys. */
 export type JourneyModuleState = 'open';
@@ -80,8 +80,6 @@ export interface JourneyMapView {
 /** The error code the route returns when the map names a module the code does not register. */
 export const JOURNEY_MAP_INCONSISTENT = 'JOURNEY_MAP_INCONSISTENT';
 
-const REGION_PREFIX = 'tier:';
-
 /**
  * The published map, projected for the shell — or `null` when no version is
  * published yet (a fresh database before `db:seed`), which the route turns into
@@ -107,8 +105,8 @@ export async function getJourneyMap(): Promise<JourneyMapView | null> {
   const tierByRegionKey = new Map<string, JourneyMapTier>();
   for (const node of nodes) {
     if (node.type !== 'region') continue;
-    const tierId = node.key.startsWith(REGION_PREFIX) ? node.key.slice(REGION_PREFIX.length) : '';
-    const tier = tiersById.get(tierId);
+    const tierId = tierIdForRegionKey(node.key);
+    const tier = tierId === null ? undefined : tiersById.get(tierId);
     if (!tier) {
       problems.push(`region "${node.key}" is not an authored tier`);
       continue;

@@ -34,10 +34,18 @@ export const TIER_TONES: Readonly<Record<string, string>> = {
   integration_and_expansion: 'var(--color-status-purple)',
 };
 
-/** What a module's `state` reads as in the row. Widens with per-user journeys. */
+/**
+ * What a module's `state` reads as in the row. Widens with per-user journeys —
+ * and a tab whose bundle predates that widening stays mounted across every
+ * in-app navigation, so a state this table does not know falls back to the
+ * raw value rather than rendering `undefined`.
+ */
 const STATE_TEXT: Readonly<Record<JourneyMapView['modules'][number]['state'], string>> = {
   open: 'open',
 };
+function stateText(state: JourneyMapView['modules'][number]['state']): string {
+  return STATE_TEXT[state] ?? state;
+}
 
 type Load =
   | { status: 'idle' }
@@ -177,7 +185,7 @@ export function MapDrawerBody() {
                       href={href}
                       onClick={closeDrawer}
                       aria-current={current ? 'page' : undefined}
-                      title={`${module.title} · ${STATE_TEXT[module.state]}`}
+                      title={`${module.title} · ${stateText(module.state)}`}
                       className={cn(
                         'flex w-full items-center gap-[11px] rounded-[11px] border border-transparent',
                         'px-3 py-[9px] text-left no-underline hover:no-underline',
@@ -202,7 +210,7 @@ export function MapDrawerBody() {
                         {module.title}
                       </span>
                       <span className="text-muted-foreground flex-none text-[12px] tracking-[0.04em]">
-                        {STATE_TEXT[module.state]}
+                        {stateText(module.state)}
                       </span>
                       {/* A hollow ring: no module is done or current this phase. */}
                       <i
