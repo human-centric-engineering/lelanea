@@ -11,8 +11,6 @@ import type { FoundationalDocumentDetail } from '@/lib/app/content';
 import { requireDocument } from '@/lib/app/content/sections';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
-import { cn } from '@/lib/utils';
-import styles from '@/app/(public)/document-page.module.css';
 
 export const metadata: Metadata = {
   title: 'Begin',
@@ -83,16 +81,17 @@ export default async function BeginPage() {
   return (
     <MaintenanceWrapperWithAdminNotice>
       {/*
-        `.page` for the centring and gutters only. NOT `.measure`: that is the
-        public document pages' book measure — 62ch, applied to every paragraph
-        as well as the column — and on a single reading pane with the controls
-        beside it, it left a 411px paragraph on a 1650px laptop (owner, on the
-        first cut). 100ch is the width that read well there, and it is still
-        well inside `.page`'s 1180px. NOT `.opening` either: its top padding
-        would push a `h-dvh` step frame below the fold, and the frame pads
-        itself.
+        Plain utilities, and none of `document-page.module.css`. That module is
+        the public document pages' editorial system — `.page` is a 1180px
+        column and `.measure` a 62ch book measure on every paragraph — and the
+        first cut borrowed both. `.measure` left a 411px paragraph on a 1650px
+        laptop; swapping it for `max-w-[100ch]` beside `.page` changed nothing,
+        because the module is unlayered and a Tailwind utility lives in
+        `@layer utilities`, which loses to any unlayered rule whatever the
+        order. So the gate sets its own column: 100ch, which is the width that
+        read well, with the same gutters the public pages use.
       */}
-      <main className={cn(styles.page, 'max-w-[100ch]')}>
+      <main className="mx-auto max-w-[100ch] px-[clamp(20px,5vw,72px)]">
         <BeginView
           initialStatus={toGateStatusJson(status)}
           documents={{
