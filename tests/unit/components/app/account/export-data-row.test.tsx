@@ -194,6 +194,47 @@ describe('ExportDataRow', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('is a card that looks and acts clickable, like every other row on the page (t-30)', () => {
+    // #36 round 2 split the card into a button-as-title and a sibling status
+    // line, and the hover went with the old shape. The card is the surface.
+    fetchMock.mockResolvedValue(response(200, BODY));
+    render(<ExportDataRow />);
+    const card = screen.getByTestId('export-data-card');
+    expect(card.className).toContain('hover:bg-[var(--color-pill-hover)]');
+    expect(card.className).toContain('cursor-pointer');
+    // The pointer must be on the BUTTON: its stretched pseudo-element covers
+    // the card and inherits the button's cursor, which preflight sets to
+    // `default`. A `cursor-pointer` on the card alone never shows.
+    expect(row().className).toContain('cursor-pointer');
+    // The button reaches the whole card, so the status line is part of it too.
+    expect(row().className).toContain('after:absolute');
+    expect(row().className).toContain('after:inset-0');
+    expect(card.className).toContain('relative');
+
+    fireEvent.click(screen.getByRole('status'));
+    // A click on the line does not press the button in the DOM — only the
+    // pseudo-element does, and no DOM test can click one — so the assertion is
+    // on the geometry above and on the button itself still working.
+    fireEvent.click(row());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no hover and a progress cursor while busy', async () => {
+    let settle: (value: Response) => void = () => {};
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => (settle = resolve)));
+    render(<ExportDataRow />);
+
+    fireEvent.click(row());
+
+    await waitFor(() => expect(row().disabled).toBe(true));
+    const card = screen.getByTestId('export-data-card');
+    expect(card.className).toContain('cursor-progress');
+    expect(card.className).not.toContain('hover:bg-');
+    settle(response(200, BODY));
+    await waitFor(() => expect(row().disabled).toBe(false));
+    expect(screen.getByTestId('export-data-card').className).toContain('hover:bg-');
+  });
+
   it('names the file by the reader’s calendar date, not UTC', () => {
     // 23:30 local on the 14th is the 15th in UTC for anyone east of Greenwich
     // — and 08:00 on the 15th in Sydney is still the 14th in UTC. Local parts.

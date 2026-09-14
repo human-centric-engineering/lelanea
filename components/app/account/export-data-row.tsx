@@ -146,11 +146,20 @@ export function ExportDataRow() {
   const refused = state === 'failed' || state === 'limited';
 
   return (
+    // The card is the click and hover surface, as every `RowLink` card is —
+    // the button's `after:` pseudo-element is stretched over it, so a click on
+    // the status line presses the button while the line stays a SIBLING in
+    // the accessibility tree (#36 round 2). The first shape after that split
+    // left the hover on nothing at all, and the row read as a label (t-30).
     <div
       className={cn(
-        'bg-background mb-2 rounded-[15px] border border-[var(--color-card-border)]',
-        'px-[15px] py-[13px]'
+        'bg-background relative mb-2 rounded-[15px] border border-[var(--color-card-border)]',
+        'px-[15px] py-[13px]',
+        'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+        'motion-reduce:transition-none',
+        busy ? 'cursor-progress' : 'cursor-pointer hover:bg-[var(--color-pill-hover)]'
       )}
+      data-testid="export-data-card"
     >
       <button
         type="button"
@@ -159,9 +168,17 @@ export function ExportDataRow() {
         aria-busy={busy}
         aria-describedby="export-data-status"
         className={cn(
-          'flex w-full items-center gap-2 rounded-md text-left text-[var(--color-heading)]',
-          'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-solid',
-          'focus-visible:outline-[var(--color-ring)]',
+          'flex w-full items-center gap-2 text-left text-[var(--color-heading)]',
+          // Stretched over the card. `static` on the button and `relative` on
+          // the card is what makes `inset-0` mean the card, not the button.
+          'static after:absolute after:inset-0 after:rounded-[15px] after:content-[""]',
+          // The cursor has to be HERE: Tailwind 4's preflight gives a button
+          // `cursor: default`, and the stretched pseudo-element inherits the
+          // button's cursor over the whole card — so the card's own
+          // `cursor-pointer` beneath it never showed (owner, t-30 round 2).
+          'cursor-pointer',
+          'focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2',
+          'focus-visible:after:outline-[var(--color-ring)] focus-visible:after:outline-solid',
           'disabled:cursor-progress'
         )}
       >
