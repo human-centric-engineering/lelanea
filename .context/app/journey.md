@@ -29,8 +29,14 @@ follows.
 | `prisma/seeds/app-lelanea/001-journey-map.ts` | Publishes the map through the version service; idempotent                   |
 | `scripts/smoke/app-journey-map.ts`            | `npm run smoke:app-journey-map` — seed, reseed, validation, on the real DB  |
 
-The read surface — the map API, the drawer, the module pages — is §05 t-14 and
-is documented here when it lands.
+| `lib/app/journey/map.ts` | The published graph joined with the content: what the shell reads |
+| `lib/app/journey/paths.ts` | `/app/modules/<slug>`, and the `localStorage` key for the last one visited |
+| `app/api/v1/app/journey/map/route.ts` | `GET` — `withAuth`, ETag; 404 while unpublished; 500 when inconsistent |
+| `components/app/shell/map-drawer.tsx` | The map drawer's body: five tiers, seventeen rows, `aria-current` |
+| `components/app/views/module-view.tsx` | A module's page: eyebrow, title, parts, placeholder, the tier's intent |
+| `components/app/views/module-actions.tsx` | "In Lelañea's own words" (opens resources) · "Talk about this part" (off) |
+| `components/app/views/remember-module.tsx` | Writes the last module visited, for the Workspace nav item |
+| `app/(lelanea)/app/modules/[slug]/page.tsx` | The route; 404 for any slug not on the published map |
 
 ## Slugs: `values`, `curiosity-of-self`, never `module_01_values`
 
@@ -101,6 +107,52 @@ last registration wins` (the framework registered twice in one process, which
 the seed guide accepts) and `Auto-embed after publish failed (advisory)` when
 no embedding provider is configured.
 
+## The read surface (t-14)
+
+**One read, two faces.** `getJourneyMap()` in `lib/app/journey/map.ts` is the
+only path from the framework's published-map reader to the shell. The route is
+its HTTP face — what the drawer fetches — and a server page calls it directly,
+the way the content pages call the content loader. The graph is the source of
+_structure_ (which tiers, which modules, in what order, in which tier); the
+content API supplies every word. So a module in `content/` that is not yet on
+the published map is absent from the drawer AND 404s as a page — the two
+surfaces cannot disagree about what is a place.
+
+**A missing registration is a 500, not a shorter list.** A map node whose slug
+the running code does not register means the seed ran against newer content
+than the code, or the reverse. `getJourneyMap()` throws `APIError` with code
+`JOURNEY_MAP_INCONSISTENT` and the slugs in `details.problems`; the route
+returns that envelope and logs it. Do not "fix" this by filtering — a
+sixteen-module map that renders is exactly the failure nobody notices.
+
+**Every module reads `open`.** No `done`, no `current`: those are per-user
+journey state, which this phase deliberately does not have. The one state the
+drawer shows is _where you are_ — `aria-current="page"` on the open module's
+row — because that is a fact about the route. The `state` field is on the wire
+shape now so the drawer and the page do not grow a second contract when
+journeys arrive.
+
+**The tier tone is a swatch, not the label's colour.** The task said "label
+coloured by tier tone"; `shell.md` measured exactly that pattern at 3.17:1 and
+2.03:1 in light mode and removed it from the eyebrow. Same rule here — the
+label keeps `--color-muted-foreground`, and meaning never rested on the colour.
+A module page takes the workspace tone rather than its tier's: `Panes`
+publishes tone by pathname only, and mapping a slug to a tier there would mean
+bundling the structure file into a client component for one hue.
+
+**"Workspace" goes to the last module visited.** `RememberModule` on a module
+page writes the slug to `localStorage` (`LAST_MODULE_STORAGE_KEY`); the nav
+reads it and resolves the item's `href`, falling back to `/app/workspace` until
+a module has been visited. Per browser, because there is no per-user journey
+to hold "the module you are in" yet — when there is, this is the line that
+moves. The item reads current on any `/app/modules/*` route.
+
+**The parts are not tabs.** The prototype's `.wtabs` switch per-user state;
+here nothing is behind any part, so a `tablist` would be a control that
+controls nothing. They render as a static named list — Values' three authored
+phase tiers, the unnamed pair everywhere else, because naming them would be
+inventing the module.
+
 ## Checking it by hand
 
 - `npm run smoke:app-journey-map` — runs the seed unit twice against the dev
@@ -110,3 +162,7 @@ no embedding provider is configured.
 - `/admin/framework/modules` — seventeen rows, all `draft`.
 - `/admin/framework/maps` — `lelanea-journey · Published`, no draft; the
   atlas renders it.
+- Signed in, the rail's **Map** — five tiers, seventeen rows, all `open`; open
+  one and the drawer closes onto its page; open the map again and that row is
+  current. `/app/modules/values` shows Orientation · Discernment · Integration;
+  any other module shows Part 1 · Part 2. Both themes.

@@ -157,8 +157,8 @@ and tinting four of the six would leave one that reads as an oversight and gets
    `SHELL_NAV` plus `/app/account` exactly, so a nav item without a page fails
    there rather than in someone's browser — and a view that is NOT in the nav
    fails it just as hard for having a row. §05's modules under
-   `/app/workspace/…` are the first of that kind, so they belong in a test of
-   their own rather than in this list.
+   `/app/modules/<slug>` are the first of that kind, so they belong in a test
+   of their own rather than in this list — `tests/unit/app/module-page.test.tsx`.
 
 The view's eyebrow and title render **inside** the scroll body, not in the
 workspace's fixed header. The prototype's `wsHead()` writes above the scroll
@@ -204,8 +204,8 @@ did not, until t-22 went looking for the pattern in order to write this section.
 Both traps share one `FOCUSABLE` selector
 (`components/app/shell/focusable.ts`) rather than each carrying its own, because
 a selector that misses an element type fails in the direction that matters — Tab
-escapes the panel. **§05 puts real controls in the map and resources drawers**,
-which is the first time either will hold more than a placeholder.
+escapes the panel. §05 t-14 put real controls in the map drawer — seventeen
+links — and the trap holds them; the resources drawer is still the note.
 
 ## Modules render inside a swipe target
 
@@ -296,7 +296,10 @@ is the specific failure D6 names.
 
 - **Journey, life situations, share, usage** — the placeholder card, one honest
   line, and a test asserting no placeholder view renders a digit.
-- **Workspace** — stands in for a module until §05.
+- **Workspace** — the landing for "no module open yet". From §05 t-14 the nav
+  item resolves to the last module visited (`lelanea.workspace.lastModule` in
+  `localStorage`, written by `RememberModule` on a module page) and falls back
+  to this landing until one has been. See [`journey.md`](./journey.md).
 - **The eleven voice leanings** — rendered as disabled sliders with the reason
   beside them. Nothing reads a leaning until a model is answering, which is
   phase 2.
@@ -317,9 +320,9 @@ reads as data rather than as copy.
   a `not-found` file, and `global-not-found.js` bypasses the layout the boundary
   exists to keep.
 - **The nav can contradict the 404.** `/app/journey/typo` still marks "Your
-  journey" current, because prefix matching is correct for real child routes and
-  §05 needs it for modules under `/app/workspace`. The nav cannot know the route
-  404'd.
+  journey" current, because prefix matching is correct for real child routes —
+  and `/app/modules/typo` marks "Workspace" current for the same reason. The nav
+  cannot know the route 404'd.
 - **`sunrise#769`** — rendering the nested 404 surfaces a React 19 dev-only
   warning about the platform's no-flash theme script. Confirmed dev-only against
   a production build; filed, not patched.
