@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { ACKNOWLEDGEMENT_KINDS } from '@/lib/app/gateway/acknowledgements';
+import { ACKNOWLEDGEMENT_KINDS } from '@/lib/app/gateway/kinds';
 
 export const acknowledgeSchema = z.strictObject({
   kind: z.enum(ACKNOWLEDGEMENT_KINDS),

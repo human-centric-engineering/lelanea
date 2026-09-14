@@ -44,8 +44,23 @@ stay: they are the record of what was agreed before, and the export returns
 them.
 
 The two documents share one version because they are versioned together, by
-their author, in one file. If they ever need independent versions, that is a
-change to the content schema first and this module second.
+their author, in one file — and **that version is collection-wide**: the content
+schema has no per-document version, so the same `collection.version` also
+covers the five non-legal documents and the `app` / `creator` metadata. Two
+authoring rules follow, and the code cannot enforce either:
+
+- **Any edit to the Disclaimer or the Terms text must bump `collection.version`.**
+  Without the bump nobody is re-gated, and people are bound by text they never
+  saw.
+- **A bump for any other reason re-gates everyone.** Fixing a typo in
+  `about_the_creator` and bumping `1.1 → 1.2` sends every user back to the gate
+  to re-agree to unchanged legal text. Prefer not bumping for non-legal edits.
+
+If either side of that becomes a problem, the fix is a per-legal-document
+version: a change to the content schema first, and a one-line change to
+`getRequiredVersions()` second. Deliberately not built in t-15 — the authored
+file versions the collection as one thing, and inventing a second version the
+author does not maintain would be the dishonest affordance (B31).
 
 **Insert-only.** No `updatedAt`; nothing updates or deletes a row except
 erasure. `@@unique([userId, kind, documentVersion])` is what makes a repeat

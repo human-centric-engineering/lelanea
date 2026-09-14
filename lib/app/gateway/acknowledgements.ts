@@ -19,6 +19,14 @@
  * notice that it happened. The old rows stay: they are the record of what was
  * agreed before, and the Art. 15 export returns all of them.
  *
+ * That version is COLLECTION-wide — the content schema has no per-document
+ * version, and the same string covers the five non-legal documents too. So the
+ * authoring rule, recorded in `.context/app/gateway.md`: any edit to the
+ * Disclaimer or the Terms text MUST bump `collection.version`, and a bump for
+ * any other reason re-gates everyone. A per-document version is the change to
+ * make if either side of that becomes a problem; it is a content-schema change
+ * first and a one-line change here second.
+ *
  * ## Storage-agnostic on purpose
  *
  * A type-only import of `@prisma/client` is allowed from `lib/app/**`; a value
@@ -30,30 +38,14 @@
  * @see lib/app/leaf-db-drift.ts — the hand-written CASCADE FK, pinned
  */
 
-import type { AppAcknowledgement, AppAcknowledgementKind } from '@prisma/client';
+import type { AppAcknowledgement } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { getFoundationalCollectionMeta, listFoundationalDocuments } from '@/lib/app/content';
+import { ACKNOWLEDGEMENT_KINDS, type AcknowledgementKind } from '@/lib/app/gateway/kinds';
 
-/**
- * Every kind, in the order the gate presents them: read the disclaimer, read
- * the terms, confirm your age. The tuple is the validation schema's source of
- * truth as well, so the API cannot accept a kind the enum does not have.
- */
-export const ACKNOWLEDGEMENT_KINDS = [
-  'disclaimer',
-  'terms',
-  'age_18',
-] as const satisfies readonly AppAcknowledgementKind[];
-
-/**
- * The Prisma enum, re-exported under the gateway's name so nothing outside
- * this module imports `@prisma/client` for it. `getRequiredVersions()` is typed
- * as a `Record` over it, so an enum value the tuple above forgets is a compile
- * error there rather than a kind the gate silently never asks for.
- */
-export type AcknowledgementKind = AppAcknowledgementKind;
+export { ACKNOWLEDGEMENT_KINDS, type AcknowledgementKind };
 
 /**
  * The "version" an `age_18` acknowledgement is recorded against.

@@ -18,6 +18,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const { create, findUnique, findMany, mockLogger } = vi.hoisted(() => ({
   create: vi.fn(),
@@ -86,6 +88,33 @@ describe('what is required', () => {
 
   it('presents the kinds in reading order: disclaimer, terms, then age', () => {
     expect([...ACKNOWLEDGEMENT_KINDS]).toEqual(['disclaimer', 'terms', 'age_18']);
+  });
+
+  it('keeps the kinds and the validation schema free of the ledger, so a client form can import them', () => {
+    // Code review round 1: the schema imported the kinds from the ledger
+    // module, which pulls `@/lib/db/client` (a `pg.Pool`), the logger and the
+    // content loader behind it — fine on the server, a broken bundle the moment
+    // t-16's gate form imports the schema. Both files must stay leaf-free.
+    const forbidden = [
+      '@/lib/db/',
+      '@/lib/logging',
+      '@/lib/app/content',
+      '@/lib/app/gateway/acknowledgements',
+    ];
+    for (const file of ['lib/app/gateway/kinds.ts', 'lib/validations/app-acknowledgement.ts']) {
+      const source = readFileSync(path.join(process.cwd(), file), 'utf8');
+      const imports = [...source.matchAll(/^import (type )?[^;]*?from '([^']+)'/gm)];
+      // Population: each file imports SOMETHING, so an empty match is a regex
+      // failure rather than a clean file. (`kinds.ts` has only a type import —
+      // that is the point — so count every import here and filter below.)
+      expect(imports.length, `${file} has no imports?`).toBeGreaterThan(0);
+      const runtimeImports = imports.filter((match) => !match[1]).map((match) => match[2]);
+      for (const specifier of runtimeImports) {
+        for (const prefix of forbidden) {
+          expect(specifier.startsWith(prefix), `${file} imports ${specifier}`).toBe(false);
+        }
+      }
+    }
   });
 });
 
