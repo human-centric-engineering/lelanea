@@ -10,6 +10,15 @@
  * The registry is `globalThis`-backed and shared with every other test in the
  * worker, so it is reset before each case.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/leaf-bootstrap.ts`, not a mock
+ * ---------------------------------------------------------------------------
+ * `initLeafApp()` is Lelañea's filled boot hook, so what this file measures is
+ * what that hook registers: seventeen modules, in the structure file's order.
+ * A fork registering a different set pins its own count and slugs here; a fork
+ * whose hook registers no modules should expect an empty registry and delete
+ * this file rather than loosen it.
+ *
  * @see lib/app/leaf-bootstrap.ts
  */
 

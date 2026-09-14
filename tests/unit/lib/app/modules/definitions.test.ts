@@ -6,6 +6,15 @@
  * real file proves that. Each case says which property of the derivation it
  * pins and why reverting it would matter.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * ---------------------------------------------------------------------------
+ * The whole point is the derivation from the real structure file: the slug
+ * list, the count and the descriptions below are Lelañea's seventeen modules.
+ * A fork of THIS leaf with a different journey should rewrite the pinned
+ * values, not the derivation — and a fork with no `content/` at all has no
+ * modules to register and should delete this file with `definitions.ts`.
+ *
  * @see lib/app/modules/definitions.ts
  */
 
