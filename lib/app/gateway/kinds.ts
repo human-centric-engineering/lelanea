@@ -30,3 +30,24 @@ export const ACKNOWLEDGEMENT_KINDS = [
  * error there rather than a kind the gate silently never asks for.
  */
 export type AcknowledgementKind = AppAcknowledgementKind;
+
+/**
+ * One kind's standing as the API answers it and the gate page receives it —
+ * `GateStatus` (`acknowledgements.ts`) with its `Date` already a string. The
+ * client form holds this shape, so the type lives here, beside the kinds.
+ */
+export interface KindStatusJson {
+  kind: AcknowledgementKind;
+  requiredVersion: string;
+  documentId: string | null;
+  satisfied: boolean;
+  /** ISO 8601, or `null` while the kind is outstanding. */
+  acknowledgedAt: string | null;
+}
+
+/** `GateStatus`, serialised. What `GET /api/v1/app/acknowledgements` returns. */
+export interface GateStatusJson {
+  complete: boolean;
+  kinds: KindStatusJson[];
+  outstanding: AcknowledgementKind[];
+}

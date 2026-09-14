@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 import { Drawers } from '@/components/app/shell/drawer';
 import { EntryBloom } from '@/components/app/shell/entry-bloom';
@@ -8,6 +9,7 @@ import { ShellRail } from '@/components/app/shell/shell-rail';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrapper';
+import { gateRedirectFor } from '@/lib/app/gateway/gate';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
 import { BRAND } from '@/lib/brand';
@@ -66,6 +68,22 @@ export const metadata: Metadata = {
  * fine while the pages under it hold no data — but `t-10` and `t-11` add views
  * that do, and those should guard where they fetch rather than inherit this.
  *
+ * ## The gate (§06)
+ *
+ * Nobody reaches the shell without a verified address and every acknowledgement
+ * at its current version. `gateRedirectFor` (`lib/app/gateway/gate.ts`) says
+ * where to send them instead — Sunrise's verify page, or `/app/begin` — and
+ * `null` when they may enter. It runs here, server-side, because the edge
+ * cannot read the ledger; and it runs on entry only, which is enough, because
+ * there is no way into the shell that does not pass through this layout and
+ * nothing inside it un-acknowledges anything.
+ *
+ * `/app/begin` is NOT under this layout — it is `app/(gate)/app/begin/`, a
+ * sibling route group with the same URL prefix — because a layout that
+ * redirects to a page inside itself redirects forever. A content version bump
+ * re-gates by construction: the ledger matches rows against the version
+ * required now, so this file has nothing to notice.
+ *
  * ## `h-dvh`, not `h-screen`
  *
  * `100vh` on mobile Safari is the viewport *without* the browser chrome
@@ -93,6 +111,9 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   if (!session) {
     clearInvalidSession('/app');
   }
+
+  const gate = await gateRedirectFor(session.user);
+  if (gate) redirect(gate);
 
   return (
     <MaintenanceWrapperWithAdminNotice>

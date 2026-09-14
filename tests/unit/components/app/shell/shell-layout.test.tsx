@@ -29,7 +29,7 @@ const flag = vi.hoisted(() => ({ enabled: false }));
 /** `name` is nullable and `current` is too — both are cases these tests drive. */
 const session = vi.hoisted(() => ({
   current: null as {
-    user: { id: string; name: string | null; email: string; role: string };
+    user: { id: string; name: string | null; email: string; emailVerified: boolean; role: string };
   } | null,
 }));
 
@@ -38,7 +38,30 @@ vi.mock('@/lib/db/client', () => ({
     featureFlag: {
       findUnique: vi.fn(async () => (flag.enabled ? { enabled: true, metadata: null } : null)),
     },
+    // §06: the layout now reads the acknowledgement ledger on entry. Every case
+    // in this file is about the shell ITSELF, so the person is fully
+    // acknowledged at the current versions — the gate's own cases are in
+    // `tests/unit/app/shell-gate.test.tsx`.
+    appAcknowledgement: {
+      findMany: vi.fn(async () => {
+        const { getRequiredVersions } = await import('@/lib/app/gateway/acknowledgements');
+        return Object.entries(getRequiredVersions()).map(([kind, documentVersion]) => ({
+          kind,
+          documentVersion,
+          acknowledgedAt: new Date('2026-09-01T00:00:00.000Z'),
+        }));
+      }),
+    },
   },
+}));
+vi.mock('@/lib/env', () => ({
+  env: { REQUIRE_EMAIL_VERIFICATION: false, NODE_ENV: 'test' },
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname.current,
+  redirect: vi.fn((to: string) => {
+    throw new Error(`redirected:${to}`);
+  }),
 }));
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock('@/lib/auth/config', () => ({
@@ -51,7 +74,6 @@ vi.mock('@/lib/auth/clear-session', () => ({
   }),
 }));
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
-vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -104,7 +126,13 @@ async function renderLayout() {
 beforeEach(() => {
   flag.enabled = false;
   session.current = {
-    user: { id: 'u1', name: 'Maya Reyes', email: 'maya@example.com', role: 'USER' },
+    user: {
+      id: 'u1',
+      name: 'Maya Reyes',
+      email: 'maya@example.com',
+      emailVerified: true,
+      role: 'USER',
+    },
   };
   window.localStorage.clear();
   window.sessionStorage.setItem('lelanea.bloom.seen', '1');
@@ -136,7 +164,9 @@ describe('the shell layout serves the product', () => {
   });
 
   it('falls back to the email when the account has no name', async () => {
-    session.current = { user: { id: 'u1', name: null, email: 'zoe@example.com', role: 'USER' } };
+    session.current = {
+      user: { id: 'u1', name: null, email: 'zoe@example.com', emailVerified: true, role: 'USER' },
+    };
     await renderLayout();
     expect(screen.getAllByText('zoe@example.com').length).toBeGreaterThan(0);
   });
@@ -181,7 +211,13 @@ describe('maintenance mode reaches the shell', () => {
   it('still lets an admin through, as on every other layout', async () => {
     flag.enabled = true;
     session.current = {
-      user: { id: 'a1', name: 'Ada Admin', email: 'ada@example.com', role: 'ADMIN' },
+      user: {
+        id: 'a1',
+        name: 'Ada Admin',
+        email: 'ada@example.com',
+        emailVerified: true,
+        role: 'ADMIN',
+      },
     };
     await renderLayout();
     expect(screen.getByText('the panes')).toBeTruthy();
