@@ -202,6 +202,10 @@ describe('ExportDataRow', () => {
     const card = screen.getByTestId('export-data-card');
     expect(card.className).toContain('hover:bg-[var(--color-pill-hover)]');
     expect(card.className).toContain('cursor-pointer');
+    // The pointer must be on the BUTTON: its stretched pseudo-element covers
+    // the card and inherits the button's cursor, which preflight sets to
+    // `default`. A `cursor-pointer` on the card alone never shows.
+    expect(row().className).toContain('cursor-pointer');
     // The button reaches the whole card, so the status line is part of it too.
     expect(row().className).toContain('after:absolute');
     expect(row().className).toContain('after:inset-0');

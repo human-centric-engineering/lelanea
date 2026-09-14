@@ -172,6 +172,11 @@ export function ExportDataRow() {
           // Stretched over the card. `static` on the button and `relative` on
           // the card is what makes `inset-0` mean the card, not the button.
           'static after:absolute after:inset-0 after:rounded-[15px] after:content-[""]',
+          // The cursor has to be HERE: Tailwind 4's preflight gives a button
+          // `cursor: default`, and the stretched pseudo-element inherits the
+          // button's cursor over the whole card — so the card's own
+          // `cursor-pointer` beneath it never showed (owner, t-30 round 2).
+          'cursor-pointer',
           'focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2',
           'focus-visible:after:outline-[var(--color-ring)] focus-visible:after:outline-solid',
           'disabled:cursor-progress'
