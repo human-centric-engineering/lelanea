@@ -61,6 +61,17 @@ export const STEP_COPY: Record<
   },
 };
 
+/**
+ * The body of the age step, which has no document to fill it. What the
+ * confirmation is, that it is kept, and what comes after — and nothing the app
+ * does not yet do: the product description's "if you say you are under
+ * eighteen the app stops" is later work, so it is not promised here.
+ */
+export const AGE_STEP_BODY = [
+  'The work Lelañea invites is a grown-up\u2019s work \u2014 slow, honest, and yours to carry \u2014 and the terms of use ask that you are eighteen or over before you take it on.',
+  'Confirming this is kept beside the two acknowledgements, with the date. After it, you begin: the conversation, the map, and the first room. Everything you have agreed to here can be read back from this page whenever you want it.',
+];
+
 /** "one of three" — words, not a progress bar; there are three and they are short. */
 const ORDINAL: Record<number, string> = { 0: 'one', 1: 'two', 2: 'three' };
 
@@ -153,7 +164,13 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
   const document = current === 'age_18' ? null : documents[current];
 
   return (
-    <div className="flex h-dvh flex-col" data-testid={`step-${current}`}>
+    // A document step is a fixed frame — the pane scrolls, the control stays in
+    // view. The age step has no pane, so it flows at its own height instead of
+    // stranding the control at the bottom of an empty viewport.
+    <div
+      className={cn('flex flex-col', document ? 'h-dvh' : 'min-h-[60dvh]')}
+      data-testid={`step-${current}`}
+    >
       <header className="flex flex-col gap-2 pt-[clamp(28px,5vw,48px)] pb-6">
         <Eyebrow as="p">before you begin · {ORDINAL[stepIndex]} of three</Eyebrow>
         <h1 className="brand-display text-3xl text-[var(--color-heading)] sm:text-4xl">
@@ -185,7 +202,13 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
           {document}
         </div>
       ) : (
-        <div className="flex-1" />
+        <div className="flex flex-1 flex-col gap-4 py-2" data-testid="age-body">
+          {AGE_STEP_BODY.map((paragraph) => (
+            <p key={paragraph} className="text-foreground max-w-prose text-lg">
+              {paragraph}
+            </p>
+          ))}
+        </div>
       )}
 
       <footer className="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">

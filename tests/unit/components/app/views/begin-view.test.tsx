@@ -29,6 +29,7 @@ vi.mock('next/link', () => ({
 
 import {
   ACKNOWLEDGEMENTS_ROUTE,
+  AGE_STEP_BODY,
   BeginView,
   DID_NOT_LAND,
   formatRecordDate,
@@ -91,6 +92,18 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
     expect(screen.getByText(/three of three/)).toBeTruthy();
     expect(screen.queryByTestId('document-pane')).toBeNull();
     expect(button(STEP_COPY.age_18.action)).toBeTruthy();
+    // No document, so the step says what the confirmation is rather than
+    // leaving a viewport of nothing above the button (owner, walk-through) —
+    // and it is not a fixed-height frame.
+    for (const paragraph of AGE_STEP_BODY) {
+      expect(screen.getByText(paragraph)).toBeTruthy();
+    }
+    expect(screen.getByTestId('step-age_18').className).not.toContain('h-dvh');
+  });
+
+  it('gives a document step the fixed frame, so the control never leaves the viewport', () => {
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    expect(screen.getByTestId('step-disclaimer').className).toContain('h-dvh');
   });
 
   it('puts the document in its own scroll pane, so the control is never below the text', () => {
