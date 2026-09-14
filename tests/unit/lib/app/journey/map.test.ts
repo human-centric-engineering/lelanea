@@ -119,6 +119,38 @@ describe('getJourneyMap', () => {
     ]);
   });
 
+  it('takes a module’s tier and order from the GRAPH, not from the content', async () => {
+    // Move `values` into the last region and to the end of the node list, as
+    // an editor could. The content still says foundations / 01; the map wins.
+    const others = definition.nodes.filter((n) => n.key !== 'values');
+    const values = definition.nodes.find((n) => n.key === 'values')!;
+    getPublishedMap.mockResolvedValue(
+      published({ nodes: [...others, { ...values, region: 'tier:integration_and_expansion' }] })
+    );
+
+    const map = await getJourneyMap();
+
+    const moved = map?.modules.at(-1);
+    expect(moved).toMatchObject({
+      slug: 'values',
+      tier: 'integration_and_expansion',
+      number: 16,
+      displayNumber: '01', // the authored label survives; the position does not
+    });
+  });
+
+  it('reports a module whose region did not project, rather than letting the drawer drop it', async () => {
+    const nodes = definition.nodes.map((n) =>
+      n.key === 'oneness' ? { ...n, region: undefined } : n
+    );
+    getPublishedMap.mockResolvedValue(published({ nodes }));
+
+    const error = (await getJourneyMap().catch((e: unknown) => e)) as APIError;
+    expect((error.details as { problems: string[] }).problems).toEqual([
+      'module "oneness" is in no projected region (none)',
+    ]);
+  });
+
   it('reports a region that is not an authored tier', async () => {
     getPublishedMap.mockResolvedValue(
       published({
@@ -129,6 +161,23 @@ describe('getJourneyMap', () => {
     const error = (await getJourneyMap().catch((e: unknown) => e)) as APIError;
     expect((error.details as { problems: string[] }).problems).toEqual([
       'region "tier:limbo" is not an authored tier',
+    ]);
+  });
+
+  it('a module inside an unauthored region is reported twice — the region, and the module it strands', async () => {
+    const nodes = definition.nodes.map((n) =>
+      n.key === 'oneness' ? { ...n, region: 'tier:limbo' } : n
+    );
+    getPublishedMap.mockResolvedValue(
+      published({
+        nodes: [...nodes, { key: 'tier:limbo', type: 'region', completionMode: 'once' }],
+      })
+    );
+
+    const error = (await getJourneyMap().catch((e: unknown) => e)) as APIError;
+    expect((error.details as { problems: string[] }).problems).toEqual([
+      'region "tier:limbo" is not an authored tier',
+      'module "oneness" is in no projected region (tier:limbo)',
     ]);
   });
 });

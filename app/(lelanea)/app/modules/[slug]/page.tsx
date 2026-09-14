@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 
 import { RememberModule } from '@/components/app/views/remember-module';
 import { ModuleView, UNWRITTEN_PARTS, type ModulePart } from '@/components/app/views/module-view';
@@ -10,6 +11,18 @@ import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 interface Params {
   params: Promise<{ slug: string }>;
 }
+
+/**
+ * One read per request, shared by `generateMetadata` and the page. Each call
+ * is a query and a Zod parse of the published definition, and Next dedupes
+ * only `fetch` — without this every module view (and every prefetch the
+ * drawer's seventeen links trigger) paid it twice.
+ *
+ * Not unit-testable: `cache()` is a passthrough outside the React Server
+ * Components runtime, so the harness sees two calls. The property holds where
+ * it matters and nowhere a test can reach.
+ */
+const loadMap = cache(getJourneyMap);
 
 /**
  * The page for one module — every module, since all seventeen have the same
@@ -30,14 +43,14 @@ interface Params {
  */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const map = await getJourneyMap();
+  const map = await loadMap();
   const place = map?.modules.find((m) => m.slug === slug);
   return { title: place ? place.title : 'Module' };
 }
 
 export default async function ModulePage({ params }: Params) {
   const { slug } = await params;
-  const map = await getJourneyMap();
+  const map = await loadMap();
   const place = map?.modules.find((m) => m.slug === slug);
   if (!map || !place) notFound();
 

@@ -114,6 +114,11 @@ export function MapDrawerBody() {
         if (!mounted.current) return;
         // A 404 is the honest pre-seed state, not a failure to report as one.
         const unpublished = error instanceof APIClientError && error.status === 404;
+        // A failure is retried on the next open — "try again in a moment" is a
+        // promise the drawer has to keep, and the shell stays mounted across
+        // every in-app navigation, so without this the map would be dead until
+        // a hard reload. Found in review.
+        if (!unpublished) requested.current = false;
         setLoad({ status: unpublished ? 'unpublished' : 'failed' });
       });
   }, [open]);
@@ -135,7 +140,7 @@ export function MapDrawerBody() {
   if (load.status === 'failed') {
     return (
       <p className="text-muted-foreground text-sm leading-relaxed" role="status">
-        The map could not be loaded. Close this and try again in a moment.
+        The map could not be loaded. Close this and open it again in a moment.
       </p>
     );
   }

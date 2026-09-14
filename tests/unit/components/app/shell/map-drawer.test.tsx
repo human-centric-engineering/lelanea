@@ -225,13 +225,34 @@ describe('MapDrawerBody — when there is no map', () => {
     );
   });
 
-  it('reports a failed load honestly', async () => {
-    get.mockRejectedValue(new Error('network'));
+  it('reports a failed load honestly, and tries again on the next open', async () => {
+    get.mockRejectedValueOnce(new Error('network'));
     renderDrawers();
     await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
-
     await waitFor(() =>
       expect(within(mapPanel()).getByRole('status')).toHaveTextContent(/could not be loaded/)
     );
+
+    // "Open it again in a moment" has to be true: the shell stays mounted
+    // across every in-app navigation, so a failure that stuck would be for
+    // the whole session.
+    await userEvent.click(screen.getByRole('button', { name: /Close your map/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+
+    await waitFor(() => expect(rows()).toHaveLength(17));
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a 404 — unpublished is a state, not a failure', async () => {
+    get.mockRejectedValue(new APIClientError('Not found', 'NOT_FOUND', 404));
+    renderDrawers();
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+    await waitFor(() =>
+      expect(within(mapPanel()).getByText(/not published yet/)).toBeInTheDocument()
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Close your map/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+
+    expect(get).toHaveBeenCalledOnce();
   });
 });

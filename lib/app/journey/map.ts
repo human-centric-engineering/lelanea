@@ -10,10 +10,13 @@
  *
  * **The graph is the source of structure; the content API decorates it.** Which
  * tiers exist, which modules, in what order and inside which tier all come from
- * the published `FacilitationGraph` version. Labels, intents, titles and display
- * numbers come from `getJourneyStructure()` — the map deliberately carries none
+ * the published `FacilitationGraph` version: a module's `tier` is the region
+ * node it sits in, `number` is its position in the graph, and the lists are in
+ * the graph's node order. Labels, intents, titles and the authored display
+ * number come from `getJourneyStructure()` — the map deliberately carries none
  * of them (see `map-definition.ts`), so there is one place they can drift from,
- * and it is the authored file.
+ * and it is the authored file. The first draft of this file took tier and order
+ * from the content while claiming the opposite; review caught it.
  *
  * **State is always `open` this phase.** Jumping anywhere is first-class and no
  * per-user journey exists yet; the field is on the shape now so the drawer and
@@ -48,14 +51,16 @@ export interface JourneyMapTier {
   label: string;
   /** The authored sentence saying what the tier is for. */
   intent: string;
+  /** Position in the graph, from 0. */
   order: number;
 }
 
 export interface JourneyMapModule {
   /** The registered module slug, and the map node key. */
   slug: string;
+  /** Position in the graph, from 0 — the spine's order. */
   number: number;
-  /** `00` … `16`, as authored. */
+  /** `00` … `16`, as authored — a label, not the position. */
   displayNumber: string;
   title: string;
   tier: ModuleTier;
@@ -94,50 +99,59 @@ export async function getJourneyMap(): Promise<JourneyMapView | null> {
   const tiers: JourneyMapTier[] = [];
   const modules: JourneyMapModule[] = [];
 
-  for (const node of published.definition.nodes) {
-    if (node.type === 'region') {
-      const tierId = node.key.startsWith(REGION_PREFIX) ? node.key.slice(REGION_PREFIX.length) : '';
-      const tier = tiersById.get(tierId);
-      if (!tier) {
-        problems.push(`region "${node.key}" is not an authored tier`);
-        continue;
-      }
-      tiers.push({ id: tier.id, label: tier.label, intent: tier.intent, order: tier.order });
+  // Two passes, because a module's tier is the region it sits in and the
+  // regions have to be known first. Order within each list is the graph's own
+  // node order — the seed writes regions by tier order and modules by number,
+  // and an editor that reorders them has reordered the map.
+  const nodes = published.definition.nodes;
+  const tierByRegionKey = new Map<string, JourneyMapTier>();
+  for (const node of nodes) {
+    if (node.type !== 'region') continue;
+    const tierId = node.key.startsWith(REGION_PREFIX) ? node.key.slice(REGION_PREFIX.length) : '';
+    const tier = tiersById.get(tierId);
+    if (!tier) {
+      problems.push(`region "${node.key}" is not an authored tier`);
       continue;
     }
+    const view = { id: tier.id, label: tier.label, intent: tier.intent, order: tiers.length };
+    tiers.push(view);
+    tierByRegionKey.set(node.key, view);
+  }
+
+  for (const node of nodes) {
     if (node.type !== 'module') continue;
 
-    // Both halves must exist: the code must register the slug (or the admin,
-    // the atlas and every bound agent have nothing to point at) and the
-    // authored structure must know it (or there is no title to show).
+    // Three things must agree: the code registers the slug (or the admin, the
+    // atlas and every bound agent have nothing to point at); the authored
+    // structure knows it (or there is no title to show); and the node sits in
+    // a region that projected (or no tier in the drawer would list it — the
+    // silent drop this function exists to refuse).
     const slug = node.moduleSlug ?? node.key;
     const authored = modulesBySlug.get(slug);
+    const tier = node.region === undefined ? undefined : tierByRegionKey.get(node.region);
     if (!getRegisteredModule(slug)) problems.push(`module "${slug}" is not registered`);
-    if (!authored) {
-      problems.push(`module "${slug}" is not in the authored structure`);
-      continue;
-    }
+    if (!authored) problems.push(`module "${slug}" is not in the authored structure`);
+    if (!tier)
+      problems.push(`module "${slug}" is in no projected region (${node.region ?? 'none'})`);
+    if (!authored || !tier) continue;
     modules.push({
       slug,
-      number: authored.number,
+      number: modules.length,
       displayNumber: authored.displayNumber,
       title: authored.title,
-      tier: authored.tier,
+      tier: tier.id,
       state: 'open',
     });
   }
 
   if (problems.length > 0) {
     throw new APIError(
-      'The published journey map names modules the running code does not know',
+      'The published journey map does not agree with the running code',
       JOURNEY_MAP_INCONSISTENT,
       500,
       { map: JOURNEY_MAP_SLUG, version: published.version, problems }
     );
   }
-
-  tiers.sort((a, b) => a.order - b.order);
-  modules.sort((a, b) => a.number - b.number);
 
   return { slug: published.slug, version: published.version, tiers, modules };
 }
