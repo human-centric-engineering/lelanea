@@ -42,7 +42,8 @@
  * ---------------------------------------------------------------------------
  * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
- * `leaf-bootstrap.ts` (the waitlist's erasure hook), `leaf-data-export.ts` (the
+ * `leaf-bootstrap.ts` (the seventeen journey modules and the waitlist's
+ * erasure hook), `leaf-data-export.ts` (the
  * waitlist's Art. 15 declaration and collector) and `leaf-admin-nav.ts` (the
  * "Lelañea" sidebar section) assert the FILLED value. Pinning is what keeps the
  * protection for every seam still empty, and turns each row into a guard on the
@@ -84,6 +85,11 @@ import { initAppContextContributors } from '@/lib/app/context-contributors';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+import { getModuleDefinitions, LELANEA_MODULE_COUNT } from '@/lib/app/modules/definitions';
+import {
+  getRegisteredModules,
+  __resetModuleRegistryForTests,
+} from '@/lib/framework/modules/registry';
 import { WAITLIST_ERASURE_HOOK } from '@/lib/app/waitlist/service';
 import {
   getErasureCleanupHooks,
@@ -428,20 +434,29 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). §03 t-7 fills this seam: the waitlist's
-    // Art. 17 erasure hook is registered here, because `app_waitlist_entry` is
-    // keyed by email and the FK cascade cannot reach the rows of anyone who
-    // joined before signing up.
+    // PINNED, not deleted (`HB2`). Two things are registered here, and both
+    // are pinned by count as well as by name.
     //
-    // The count is pinned as well as the name. A hook registered TWICE under
-    // different names would run the same delete twice inside the erasure
-    // transaction, and a second hook added here without a decision is exactly
-    // what this row exists to notice.
+    // §05 t-12: the seventeen journey modules, each a `ModuleDefinition` with
+    // an empty interior. The framework's boot sync upserts a `framework_module`
+    // row per registered slug, so an eighteenth registration here would grow
+    // the admin list and the map without a decision, and a missing one would
+    // leave a module the drawer names with no row to point at.
+    //
+    // §03 t-7: the waitlist's Art. 17 erasure hook, because `app_waitlist_entry`
+    // is keyed by email and the FK cascade cannot reach the rows of anyone who
+    // joined before signing up. A hook registered TWICE under different names
+    // would run the same delete twice inside the erasure transaction.
     seam: 'lib/app/leaf-bootstrap.ts',
-    risk: 'a stray registration would run one-time work on every boot; a MISSING one would leave an erased user’s email on the waitlist table',
+    risk: 'a stray registration would run one-time work on every boot; a MISSING one would leave an erased user’s email on the waitlist table, or a journey module with no row',
     assert: async () => {
       __resetErasureCleanupHooksForTests();
+      __resetModuleRegistryForTests();
       await expect(initLeafApp()).resolves.toBeUndefined();
+
+      const modules = getRegisteredModules();
+      expect(modules).toHaveLength(LELANEA_MODULE_COUNT);
+      expect(modules.map((m) => m.slug)).toEqual(getModuleDefinitions().map((d) => d.slug));
 
       const hooks = getErasureCleanupHooks();
       expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
@@ -490,25 +505,34 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/eslint.config.mjs',
     risk: 'a stray flat-config block would apply lint rules to every fork',
-    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads one
-    // block — the `content/*.json` import boundary that keeps authored content
-    // reachable only through `lib/app/content` — so the row is PINNED to that
-    // one block rather than deleted: deleting it would stop noticing the NEXT
-    // block, and a lint block added here applies to the whole repo.
+    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads two
+    // blocks — the `content/*.json` import boundary that keeps authored content
+    // reachable only through `lib/app/content`, and the block that lets a
+    // leaf test under `tests/**/lib/app/**` import the framework it exercises
+    // — so the row is PINNED to those two rather than deleted: deleting it
+    // would stop noticing the NEXT block, and a lint block added here applies
+    // to the whole repo.
     //
-    // Pin the count and the rule, not the message text, so rewording a lint
-    // message is not a test change. `tests/unit/lib/app/content/eslint-boundary.test.ts`
-    // is what asserts the block actually behaves — this row only asserts that
-    // the seam still holds exactly what we think it holds.
+    // Pin the count, the names, the file globs and the rule, not the message
+    // text, so rewording a lint message is not a test change. The second
+    // block's `files` is pinned because that is the whole risk: widened to
+    // `app/**` it would lift the framework ban from the shell. Both blocks'
+    // behaviour is asserted in `tests/unit/lib/app/content/eslint-boundary.test.ts`;
+    // this row only asserts that the seam still holds exactly what we think.
     //
     // The root eslint.config.mjs spreads this array last; that spread itself is
     // exercised by every `npm run lint` run.
     assert: () => {
-      expect(appEslintConfig).toHaveLength(1);
+      expect(appEslintConfig).toHaveLength(2);
       expect(appEslintConfig[0]).toMatchObject({
         name: 'lelanea/content-json-boundary',
         ignores: ['lib/app/content/**'],
         rules: { 'no-restricted-syntax': expect.arrayContaining(['error']) },
+      });
+      expect(appEslintConfig[1]).toMatchObject({
+        name: 'lelanea/leaf-tests-may-import-framework',
+        files: ['tests/**/lib/app/**/*.{ts,tsx}'],
+        rules: { 'no-restricted-imports': expect.arrayContaining(['error']) },
       });
     },
   },
