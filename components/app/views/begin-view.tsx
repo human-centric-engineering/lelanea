@@ -154,7 +154,10 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
   };
 
   if (status.complete) {
-    return <Record status={status} />;
+    // `Begin` for the person who just finished the third step; `Return` for
+    // the one who came back to read the record (from the account view), who
+    // began some time ago and has nothing to begin.
+    return <Record status={status} justCompleted={!initialStatus.complete} />;
   }
 
   // `complete` is false exactly when `outstanding` is non-empty.
@@ -228,8 +231,11 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
   );
 }
 
-/** The screen once every kind stands — three facts, their dates, and Begin. */
-function Record({ status }: { status: GateStatusJson }) {
+/** Where `Return` goes: the row that leads here is on the account view. */
+export const ACCOUNT_ROUTE = '/app/account';
+
+/** The screen once every kind stands — three facts, their dates, and one way on. */
+function Record({ status, justCompleted }: { status: GateStatusJson; justCompleted: boolean }) {
   return (
     <div className="flex min-h-dvh flex-col gap-10 pt-[clamp(28px,5vw,48px)] pb-20">
       <header className="flex flex-col gap-2">
@@ -276,9 +282,15 @@ function Record({ status }: { status: GateStatusJson }) {
         })}
       </ul>
 
-      <Button asChild size="lg" className="self-start">
-        <Link href={SHELL_ROUTE}>Begin</Link>
-      </Button>
+      {justCompleted ? (
+        <Button asChild size="lg" className="self-start">
+          <Link href={SHELL_ROUTE}>Begin</Link>
+        </Button>
+      ) : (
+        <Button asChild variant="secondary" className="self-start">
+          <Link href={ACCOUNT_ROUTE}>Return</Link>
+        </Button>
+      )}
     </div>
   );
 }

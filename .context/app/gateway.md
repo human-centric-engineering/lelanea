@@ -164,11 +164,14 @@ paint and click from leaving the page showing a state the ledger does not
 hold.
 
 Afterwards the page is the **record**: "This stands.", the three facts with
-their dates, "Read it again" to each public page, and `Begin`. The layout no
-longer redirects here, but "what did I agree to, and when" stays answerable
-without asking us — and reachable: the account view's "your data" section
-carries a "What you agreed to" row to `/app/begin`, the only link to it from
-inside the shell.
+their dates, "Read it again" to each public page, and one way on — `Begin`
+(to `/app`) for the person who just finished the third step, `Return` (to
+`/app/account`) for one who came back to read it and began some time ago.
+The view tells them apart by whether it was loaded already complete. The
+layout no longer redirects here, but "what did I agree to, and when" stays
+answerable without asking us — and reachable: the account view's "your data"
+section carries a "What you agreed to" row to `/app/begin`, above the erasure
+row, the only link to it from inside the shell.
 
 Copy is in the prototype's register — sentence case, no exclamation points,
 `Begin` not "Start now", and the design guide's own error line ("Something

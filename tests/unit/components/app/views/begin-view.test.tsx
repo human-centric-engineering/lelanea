@@ -28,6 +28,7 @@ vi.mock('next/link', () => ({
 }));
 
 import {
+  ACCOUNT_ROUTE,
   ACKNOWLEDGEMENTS_ROUTE,
   AGE_STEP_BODY,
   BeginView,
@@ -203,7 +204,10 @@ describe('acknowledging moves the step on', () => {
 });
 
 describe('BeginView afterwards — the record', () => {
-  it('renders every kind as a fact with its date, a way back to each text, and Begin', () => {
+  it('renders every kind as a fact with its date, a way back to each text, and Return', () => {
+    // Loaded already complete — someone who came back to read it, from the
+    // account view. They began some time ago, so the way on is Return, not
+    // Begin.
     render(
       <BeginView initialStatus={status('disclaimer', 'terms', 'age_18')} documents={DOCUMENTS} />
     );
@@ -218,7 +222,8 @@ describe('BeginView afterwards — the record', () => {
     const readAgain = screen.getAllByRole('link', { name: 'Read it again' });
     expect(readAgain.map((link) => link.getAttribute('href'))).toEqual(['/disclaimer', '/terms']);
     expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Begin' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Begin' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Return' }).getAttribute('href')).toBe(ACCOUNT_ROUTE);
   });
 
   it('formats the record date the same way wherever it renders', () => {

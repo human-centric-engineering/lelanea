@@ -147,7 +147,7 @@ describe('/app/begin', () => {
     expect(screen.getByRole('button', { name: STEP_COPY.terms.action })).toBeTruthy();
   });
 
-  it('is the read-only record afterwards, with Begin the only action', async () => {
+  it('is the read-only record afterwards, with Return the only action', async () => {
     findMany.mockResolvedValue([
       { kind: 'disclaimer', documentVersion: VERSION, acknowledgedAt: new Date('2026-09-01') },
       { kind: 'terms', documentVersion: VERSION, acknowledgedAt: new Date('2026-09-01') },
@@ -159,6 +159,9 @@ describe('/app/begin', () => {
     for (const name of ['disclaimer', 'terms', 'age_18'] as const) {
       expect(screen.getByTestId(`record-${name}`)).toBeTruthy();
     }
-    expect(screen.getByRole('link', { name: 'Begin' }).getAttribute('href')).toBe('/app');
+    // Loaded complete means they came back to read it, not that they just
+    // finished — so Return to the account view, not Begin.
+    expect(screen.queryByRole('link', { name: 'Begin' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Return' }).getAttribute('href')).toBe('/app/account');
   });
 });
