@@ -10,6 +10,13 @@
  * content shows up in these counts rather than in a stale fixture. The drawer
  * mechanism (slide, scrim, focus) is `drawer.test.tsx`'s; this file is about
  * what is in it.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * ---------------------------------------------------------------------------
+ * The five tier labels and seventeen rows are Lelañea's. A fork with a
+ * different journey pins its own counts and names; a fork with no `content/`
+ * has no map to draw and should delete this file with `map-drawer.tsx`.
  */
 
 import { render, screen, waitFor, within } from '@testing-library/react';

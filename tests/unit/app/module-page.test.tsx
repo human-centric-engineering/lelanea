@@ -8,6 +8,14 @@
  * is real, so the Values parts come from the structure file. Deliberately NOT a
  * row in `shell-view-pages.test.tsx` — that list is the nav's destinations, and
  * `shell.md` says modules belong in a test of their own.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * ---------------------------------------------------------------------------
+ * The slugs, titles and parts asserted below are Lelañea's journey, read from
+ * the real structure file so the page and the content cannot drift apart. A
+ * fork with a different journey pins its own; a fork with no `content/` has no
+ * module pages and should delete this file with the route.
  */
 
 import { render, screen } from '@testing-library/react';

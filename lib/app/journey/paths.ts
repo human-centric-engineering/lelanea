@@ -12,13 +12,5 @@ export function modulePath(slug: string): string {
   return `${MODULES_PATH_PREFIX}/${slug}`;
 }
 
-/** The slug of the module a pathname is on, or `null` when it is not a module page. */
-export function moduleSlugFromPath(pathname: string): string | null {
-  if (!pathname.startsWith(`${MODULES_PATH_PREFIX}/`)) return null;
-  const rest = pathname.slice(MODULES_PATH_PREFIX.length + 1);
-  const slug = rest.split('/')[0];
-  return slug ? slug : null;
-}
-
 /** The browser-local key remembering the last module visited (the Workspace nav item reads it). */
 export const LAST_MODULE_STORAGE_KEY = 'lelanea.workspace.lastModule';
