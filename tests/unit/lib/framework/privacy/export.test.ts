@@ -64,8 +64,9 @@ const findMany = {
   // The eval source reaches the subject by JOIN: conversations first, then evals.
   aiConversation: vi.fn(),
   frameworkConversationEval: vi.fn(),
-  // LELAÑEA — the leaf tier's own table, reached through the real leaf seam.
+  // LELAÑEA — the leaf tier's own tables, reached through the real leaf seam.
   appWaitlistEntry: vi.fn(),
+  appAcknowledgement: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -89,6 +90,7 @@ vi.mock('@/lib/db/client', () => ({
       findMany: (...a: unknown[]) => findMany.frameworkConversationEval(...a),
     },
     appWaitlistEntry: { findMany: (...a: unknown[]) => findMany.appWaitlistEntry(...a) },
+    appAcknowledgement: { findMany: (...a: unknown[]) => findMany.appAcknowledgement(...a) },
   },
 }));
 
@@ -99,8 +101,8 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
 /** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
-const LEAF_SECTIONS = ['waitlist'];
-const LEAF_MODELS = ['AppWaitlistEntry'];
+const LEAF_SECTIONS = ['waitlist', 'acknowledgements'];
+const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement'];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
 
@@ -109,6 +111,7 @@ beforeEach(() => {
   // Empty rather than a marker row: what the bridge cases below assert is the
   // section KEY, and a leaf row here would only prove the stub returned it.
   findMany.appWaitlistEntry.mockResolvedValue([]);
+  findMany.appAcknowledgement.mockResolvedValue([]);
 
   // Personal-data sources return rows verbatim.
   findMany.userJourney.mockResolvedValue([{ id: 'j1', graphSlug: 'onboarding' }]);

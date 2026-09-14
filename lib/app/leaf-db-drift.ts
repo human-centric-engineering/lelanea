@@ -26,4 +26,17 @@ export function registerLeafDriftProbes(): void {
     // `P2003` for every user who had ever joined the waitlist.
     probe: constraintExists('app_waitlist_entry_userId_fkey', 'ON DELETE SET NULL'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_acknowledgement_userId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_acknowledgement',
+    // The opposite policy to the waitlist's, and the reason the definition is
+    // asserted rather than the existence: `ON DELETE CASCADE` IS the whole Art.
+    // 17 disposition for this table — there is no erasure hook behind it — so a
+    // constraint re-created with `NO ACTION` would pass an existence check while
+    // making `eraseUser()` fail with `P2003` for everyone who ever reached the
+    // gate, and one re-created with `SET NULL` would fail on the NOT NULL column.
+    probe: constraintExists('app_acknowledgement_userId_fkey', 'ON DELETE CASCADE'),
+  });
 }

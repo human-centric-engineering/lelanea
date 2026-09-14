@@ -66,7 +66,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
  * LELAÑEA — the leaf's filled seams reach Prisma, so the client is stubbed.
  *
  * `leaf-bootstrap.ts` and `leaf-data-export.ts` both import
- * `lib/app/waitlist/service.ts`, which imports `@/lib/db/client`. Importing that
+ * `lib/app/waitlist/service.ts` (and the latter `lib/app/gateway/acknowledgements.ts`),
+ * which import `@/lib/db/client`. Importing that
  * module for real builds a `pg.Pool` from `env.DATABASE_URL`, which is undefined
  * in this harness — so the stub is what keeps these rows exercising the REAL
  * seams rather than forcing them into `UNASSERTED_SEAMS`.
@@ -77,7 +78,10 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
  * client in `tests/unit/lib/app/waitlist/service.test.ts`.
  */
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appWaitlistEntry: { findMany: vi.fn(async () => []) } },
+  prisma: {
+    appWaitlistEntry: { findMany: vi.fn(async () => []) },
+    appAcknowledgement: { findMany: vi.fn(async () => []) },
+  },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
 import { initAppCapabilities } from '@/lib/app/capabilities';
@@ -320,12 +324,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(emailOverrides).toEqual({}),
   },
   {
-    // PINNED, not deleted (`HB2`). §03 t-7 fills this seam with the waitlist.
-    // Upstream this row asserts the seam contributes NOTHING; here it asserts it
-    // contributes EXACTLY the waitlist and nothing else, which keeps every
-    // property the empty version protected: a second table declared without a
-    // decision, a section name colliding with the framework tier's, or a
-    // collector returning a key nothing declared all still fail here.
+    // PINNED, not deleted (`HB2`). §03 t-7 fills this seam with the waitlist,
+    // §06 t-15 with the acknowledgement ledger. Upstream this row asserts the
+    // seam contributes NOTHING; here it asserts it contributes EXACTLY those two
+    // and nothing else, which keeps every property the empty version protected:
+    // a third table declared without a decision, a section name colliding with
+    // the framework tier's, or a collector returning a key nothing declared all
+    // still fail here.
     //
     // The two halves are pinned together on purpose. A declared section MUST
     // appear in what the collector returns — `exportUserData()` throws if one is
@@ -339,7 +344,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // coverage guard enforces — and a table added without a decision fails
       // here rather than only in that guard.
       const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
-      expect(appModels).toEqual(['AppWaitlistEntry']);
+      expect(appModels).toEqual(['AppAcknowledgement', 'AppWaitlistEntry']);
 
       // Reading the registry triggers the lazy init, which runs the bridge:
       // framework tier first, then this seam. `initLeafSubjectSources()` is
@@ -358,8 +363,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
 
       const waitlist = sources.find((entry) => entry.model === 'AppWaitlistEntry');
       expect(waitlist).toMatchObject({ section: 'waitlist', disposition: 'export' });
-      // Nothing of ours is excluded: the one table holds personal data.
-      expect(excluded.map((entry) => entry.model)).not.toContain('AppWaitlistEntry');
+      const acknowledgements = sources.find((entry) => entry.model === 'AppAcknowledgement');
+      expect(acknowledgements).toMatchObject({
+        section: 'acknowledgements',
+        disposition: 'export',
+      });
+      // Nothing of ours is excluded: both tables hold personal data. (The
+      // registry also holds the framework tier's exclusions, so filter to ours.)
+      expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([]);
 
       // The collector's half of the same contract: every section this seam
       // DECLARES must appear in what it RETURNS, as an array, even when the
@@ -375,6 +386,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         .sort();
       expect(Object.keys(collected).sort()).toEqual(leafSections);
       expect(collected.waitlist).toEqual([]);
+      expect(collected.acknowledgements).toEqual([]);
     },
   },
   {
