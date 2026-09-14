@@ -78,7 +78,7 @@ which is what makes the seed's deep-equal against a stored version meaningful.
 `001-journey-map.ts` is a **pure code projection** (fp4). It:
 
 1. Calls `syncFrameworkForSeed({ registerLeaf: initLeafApp })` first. On a
-   fresh database Daybreak's `_framework/000-framework-boot.ts` has already
+   fresh database Daybreak's `prisma/seeds/_framework/000-framework-boot.ts` has already
    done this; on an existing one that unit is skipped (its hash covers only
    `lib/framework/**`), and the module rows the map points at would be missing.
 2. Creates the map published as v1 when absent; publishes a new version pinned
