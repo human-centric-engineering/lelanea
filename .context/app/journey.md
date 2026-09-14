@@ -113,8 +113,11 @@ no embedding provider is configured.
 only path from the framework's published-map reader to the shell. The route is
 its HTTP face — what the drawer fetches — and a server page calls it directly,
 the way the content pages call the content loader. The graph is the source of
-_structure_ (which tiers, which modules, in what order, in which tier); the
-content API supplies every word. So a module in `content/` that is not yet on
+_structure_ — which tiers, which modules, in what order, in which tier: a
+module's `tier` is the region node it sits in and `number` is its position in
+the graph, so an editor that moves a module has moved it. The content API
+supplies every word, including the authored `displayNumber`, which is a label
+and not the position. So a module in `content/` that is not yet on
 the published map is absent from the drawer AND 404s as a page — the two
 surfaces cannot disagree about what is a place.
 
@@ -122,8 +125,10 @@ surfaces cannot disagree about what is a place.
 the running code does not register means the seed ran against newer content
 than the code, or the reverse. `getJourneyMap()` throws `APIError` with code
 `JOURNEY_MAP_INCONSISTENT` and the slugs in `details.problems`; the route
-returns that envelope and logs it. Do not "fix" this by filtering — a
-sixteen-module map that renders is exactly the failure nobody notices.
+returns that envelope and logs it — as does a module node in no projected
+region, which the drawer would otherwise list under no tier. Do not "fix"
+either by filtering — a sixteen-module map that renders is exactly the failure
+nobody notices.
 
 **Every module reads `open`.** No `done`, no `current`: those are per-user
 journey state, which this phase deliberately does not have. The one state the
