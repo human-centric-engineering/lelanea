@@ -227,15 +227,20 @@ So the two rights live in two different places, on purpose:
   it" row leads to the settings form. Not rebuilt in the shell: a second
   erasure path is the one thing `CLAUDE.md` forbids outright, and the second
   one is always the one that misses a security fix.
-- **Export** is ours: `ExportDataRow`, a button on the account view. It fetches
-  the bundle through `apiClient`, re-serialises it, and hands it to the browser
-  as `lelanea-my-data-<date>.json`. The reason it is a fetch and not the link
-  t-11 shipped: the route answers a rate-limit refusal (10 a minute) and any
-  thrown error as a bare JSON envelope with no `Content-Disposition`, and a
+- **Export** is ours: `ExportDataRow`, a button on the account view. It
+  `fetch`es the route and hands the body to the browser as
+  `lelanea-my-data-<date>.json` (the reader's calendar date) via `res.blob()`
+  — bytes to file, never parsed, as `backup-panel.tsx` does, because the
+  bundle is the whole account and `apiClient` would hold a heavy one three
+  times over in the tab. The reason it is a fetch and not the link t-11
+  shipped: the route answers a rate-limit refusal (10 a minute) and any thrown
+  error as a bare JSON envelope with no `Content-Disposition`, and a
   navigation to that put raw `{"success":false,…}` in a tab on an Art. 15
-  control. Now a refusal is a sentence in the row, in the register ("You have
-  asked for a few copies just now. Give it a minute, then try once more."). It
-  is the one button on a page of links, and the view's test says so.
+  control. Now a 429 is a sentence in the row, in the register ("You have
+  asked for a few copies just now. Give it a minute, then try once more."); a
+  401 — a session that ended while the page sat open — goes to sign-in with a
+  way back, because "try once more" can never succeed there. It is the one
+  button on a page of links, and the view's test says so.
 
 `lib/app/account-sections.ts` is untouched — the shell's account view is our
 home for these, not Sunrise's settings page.

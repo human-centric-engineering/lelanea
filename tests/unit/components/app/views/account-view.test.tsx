@@ -25,10 +25,6 @@ vi.mock('next/link', () => ({
     React.createElement('a', { ...props, 'data-next-link': 'true' }, children),
 }));
 
-vi.mock('@/lib/api/client', () => ({
-  apiClient: { get: vi.fn() },
-  APIClientError: class extends Error {},
-}));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

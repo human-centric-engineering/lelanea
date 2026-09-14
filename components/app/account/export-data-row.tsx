@@ -3,16 +3,18 @@
 import { Download } from 'lucide-react';
 import * as React from 'react';
 
-import { apiClient, APIClientError } from '@/lib/api/client';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
 /** The self-service Art. 15 route — the only thing in the tree that exports. */
 export const EXPORT_ROUTE = '/api/v1/users/me/export';
 
+/** Where an expired session is sent, and where it comes back to. */
+export const SIGN_IN_ROUTE = '/login?callbackUrl=%2Fapp%2Faccount';
+
 /**
- * The row's three answers, in the prototype's register — a description of
- * what happened and what to do, never a fault. Exported for the tests.
+ * The row's answers, in the prototype's register — a description of what
+ * happened and what to do, never a fault. Exported for the tests.
  */
 export const EXPORT_COPY = {
   idle: 'Everything held about you, as one file. It is yours to keep.',
@@ -24,21 +26,26 @@ export const EXPORT_COPY = {
 
 export type ExportState = keyof typeof EXPORT_COPY;
 
-/** The file the browser is handed. Dated, so two copies do not overwrite each other. */
+/**
+ * The file the browser is handed. Dated in the READER's calendar, not UTC —
+ * someone in Sydney exporting at eight in the morning should not receive
+ * yesterday's date (code review, round 1). Informational: same-day copies are
+ * suffixed by the browser anyway.
+ */
 export function exportFilename(now = new Date()): string {
-  return `lelanea-my-data-${now.toISOString().slice(0, 10)}.json`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `lelanea-my-data-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
 }
 
 /**
- * Hand a JSON document to the browser as a download.
+ * Hand a file to the browser.
  *
  * A blob URL and a synthetic click, because the route's own
  * `Content-Disposition: attachment` only helps a NAVIGATION — and navigating
  * to it was the problem this row replaces (see below). Revoked on the next
  * tick: the click has already consumed the URL by then.
  */
-function saveJson(document: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' });
+function save(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement('a');
   anchor.href = url;
@@ -61,10 +68,21 @@ function saveJson(document: unknown, filename: string): void {
  * happened. A fetch keeps the answer in the row: the file is handed over on
  * success, and a refusal is a sentence rather than a JSON screen.
  *
- * `apiClient` unwraps the envelope, so `data` IS the bundle — what the route
- * would have written to the file, re-serialised here with the same two-space
- * indent. The filename is the client's: the route's header is not readable
- * through the client, and a date is more useful than a user id anyway.
+ * ## `fetch` and `res.blob()`, not `apiClient`
+ *
+ * The bundle is the whole account — the route's header lists about
+ * twenty-eight tables, every conversation and message among them. `apiClient`
+ * would parse all of it into objects so the row could stringify it again,
+ * holding a heavy account three times over in the tab. `res.blob()` moves the
+ * bytes straight to the file, as `backup-panel.tsx` does for the same reason,
+ * and a non-2xx never reaches the parser at all: its status is the whole
+ * answer. The file is the route's own body, byte for byte.
+ *
+ * ## The three refusals
+ *
+ * 429 is "give it a minute". 401 is a session that has ended while the page
+ * sat open — "try once more" can never succeed there, so the row sends the
+ * person to sign in and back here. Anything else is the guide's line.
  *
  * ## One button on a page of links
  *
@@ -77,23 +95,28 @@ export function ExportDataRow() {
 
   const request = (): void => {
     setState('busy');
-    apiClient
-      .get<unknown>(EXPORT_ROUTE)
-      .then((bundle) => {
-        saveJson(bundle, exportFilename());
-        setState('done');
+    fetch(EXPORT_ROUTE, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(async (res) => {
+        if (res.ok) {
+          save(await res.blob(), exportFilename());
+          setState('done');
+          return;
+        }
+        if (res.status === 401) {
+          window.location.assign(SIGN_IN_ROUTE);
+          return;
+        }
+        logger.warn('Self-service export refused', { status: res.status });
+        setState(res.status === 429 ? 'limited' : 'failed');
       })
       .catch((caught: unknown) => {
-        const limited = caught instanceof APIClientError && caught.status === 429;
-        logger.warn('Self-service export did not complete', {
-          limited,
-          error: String(caught),
-        });
-        setState(limited ? 'limited' : 'failed');
+        logger.warn('Self-service export did not complete', { error: String(caught) });
+        setState('failed');
       });
   };
 
   const busy = state === 'busy';
+  const refused = state === 'failed' || state === 'limited';
 
   return (
     <button
@@ -116,15 +139,18 @@ export function ExportDataRow() {
         Export a copy of everything held about you
         <Download size={14} strokeWidth={1.5} aria-hidden="true" className="flex-none" />
       </span>
+      {/*
+        One live-region role, and only one: `alert` for a refusal, `status`
+        (politely announced) for everything else. An explicit `aria-live` beside
+        `role="alert"` gave readers two contradictory instructions (code review,
+        round 1).
+      */}
       <span
         className={cn(
           'mt-1 block text-[13px] leading-[1.55]',
-          state === 'failed' || state === 'limited'
-            ? 'text-[var(--color-heading)]'
-            : 'text-muted-foreground'
+          refused ? 'text-[var(--color-heading)]' : 'text-muted-foreground'
         )}
-        role={state === 'failed' || state === 'limited' ? 'alert' : undefined}
-        aria-live="polite"
+        role={refused ? 'alert' : 'status'}
         data-state={state}
       >
         {EXPORT_COPY[state]}
