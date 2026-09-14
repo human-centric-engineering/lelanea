@@ -6,8 +6,8 @@
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
- * `AppWaitlistEntry` here; the guidance below is upstream's and still applies to
- * every table added after it.
+ * `AppWaitlistEntry` and `AppAcknowledgement` here; the guidance below is
+ * upstream's and still applies to every table added after them.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
  * framework tier's own collector. Whatever you return lands under `app.<section>`
@@ -42,6 +42,7 @@
 import type { AppSubjectData, AppSubjectQuery } from '@/lib/app/data-export';
 import { registerAppSubjectSources } from '@/lib/privacy/subject-source-registry';
 import { findWaitlistEntriesForSubject } from '@/lib/app/waitlist/service';
+import { findAcknowledgementsForSubject } from '@/lib/app/gateway/acknowledgements';
 
 /**
  * Declare the leaf app's own models to core's subject-source registry.
@@ -80,6 +81,13 @@ export function initLeafSubjectSources(): void {
         description:
           'Your waitlist entry — the email address you gave, and anything you told us about where you heard about Lelañea and what you would want to achieve.',
       },
+      {
+        model: 'AppAcknowledgement',
+        section: 'acknowledgements',
+        disposition: 'export',
+        description:
+          'What you acknowledged at the gate — the disclaimer, the terms of use, and that you are eighteen or over — with the version of each you agreed to and when.',
+      },
     ],
   });
 }
@@ -87,18 +95,23 @@ export function initLeafSubjectSources(): void {
 /**
  * Collect Lelañea's own data about one subject.
  *
- * One section today: `waitlist`. It is returned whether or not the subject has
- * an entry — an empty array, never an omitted key. A declared section missing
- * from this object makes `exportUserData()` throw, and a key set to `undefined`
- * counts as missing because `JSON.stringify` drops it.
+ * Two sections: `waitlist` and `acknowledgements`. Each is returned whether or
+ * not the subject has a row — an empty array, never an omitted key. A declared
+ * section missing from this object makes `exportUserData()` throw, and a key
+ * set to `undefined` counts as missing because `JSON.stringify` drops it.
  *
- * The rows are matched by EMAIL as well as by user id, because the waitlist is
- * the one thing a stranger can do before there is an account: for everyone on
- * it today there is no user id to match on. That makes it the same case as
- * core's `ContactSubmission`, and the same reason the coverage guard could
- * never have found this table for us.
+ * The waitlist rows are matched by EMAIL as well as by user id, because the
+ * waitlist is the one thing a stranger can do before there is an account: for
+ * everyone on it today there is no user id to match on. That makes it the same
+ * case as core's `ContactSubmission`, and the same reason the coverage guard
+ * could never have found this table for us. Acknowledgements are matched by
+ * user id alone — there is no row without an account — and include those
+ * against superseded document versions, because we still hold them.
  */
 export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
-  const waitlist = await findWaitlistEntriesForSubject(subject);
-  return { waitlist };
+  const [waitlist, acknowledgements] = await Promise.all([
+    findWaitlistEntriesForSubject(subject),
+    findAcknowledgementsForSubject(subject),
+  ]);
+  return { waitlist, acknowledgements };
 }

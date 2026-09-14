@@ -232,7 +232,13 @@ describe('reserved fork tiers', () => {
       'prisma/schema/app.prisma declares something this fork has not decided on. ' +
         'Add it here AND to initLeafSubjectSources() in lib/app/leaf-data-export.ts ' +
         '(GDPR Art. 15), or move it out.'
-    ).toEqual(['enum AppWaitlistSource {', 'model AppWaitlistEntry {']);
+    ).toEqual([
+      'enum AppWaitlistSource {',
+      'model AppWaitlistEntry {',
+      // §06 t-15 — the acknowledgement ledger.
+      'enum AppAcknowledgementKind {',
+      'model AppAcknowledgement {',
+    ]);
   });
 
   it('the reservation is documented in both places a fork would look', () => {

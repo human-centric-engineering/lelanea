@@ -107,6 +107,44 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
+  /**
+   * §06 t-15 — the acknowledgement ledger's FK, the same shape with the
+   * OPPOSITE policy. `ON DELETE CASCADE` is the entire Art. 17 disposition for
+   * `app_acknowledgement` (no erasure hook stands behind it), so the definition
+   * is what is pinned, not the existence.
+   */
+  it('registers the leaf acknowledgement FK probe', () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_acknowledgement');
+
+    expect(probe, 'the acknowledgement FK probe is not registered').toBeDefined();
+    expect(probe?.name).toContain('app_acknowledgement_userId_fkey');
+    expect(probe?.kind).toBe('FK constraint');
+  });
+
+  it('passes on the CASCADE FK the acknowledgement migration writes', async () => {
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE CASCADE ON UPDATE CASCADE' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_acknowledgement');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+  });
+
+  it('FAILS when the acknowledgement FK has the waitlist policy instead', async () => {
+    // `SET NULL` is the right answer one table over and the wrong one here:
+    // `userId` is NOT NULL on this table, so a SET NULL cascade makes every
+    // erasure of a person who reached the gate fail on the constraint.
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE SET NULL ON UPDATE CASCADE' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_acknowledgement');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
   it('keeps the framework probes when the leaf registers its own', () => {
     registerAppDriftProbes();
     const tables = getAppDriftProbes().map((p) => p.table);
@@ -116,5 +154,6 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     // then reports it as unexpected on every CI run.
     expect(tables).toContain('framework_node_embedding');
     expect(tables).toContain('app_waitlist_entry');
+    expect(tables).toContain('app_acknowledgement');
   });
 });

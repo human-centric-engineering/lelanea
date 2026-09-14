@@ -104,3 +104,54 @@ model AppWaitlistEntry {
   /// before the migration shipped.
   @@map("app_waitlist_entry")
 }
+
+/// What a person can acknowledge at the gate — one value per thing the Terms
+/// require before the app opens.
+///
+/// `disclaimer` and `terms` are the two foundational documents that carry
+/// `requiresAcknowledgement: true` in the authored collection; `age_18` is the
+/// eighteen-plus confirmation the Terms require, captured at the gate rather
+/// than in Sunrise's signup form (A7) so no platform form is edited. The
+/// mapping from a kind to its document id lives in `lib/app/gateway/`, and a
+/// test pins that every acknowledgement-required document has a kind here.
+enum AppAcknowledgementKind {
+  disclaimer
+  terms
+  age_18
+
+  @@map("app_acknowledgement_kind")
+}
+
+/// One thing a person acknowledged: which kind, against which version, when.
+///
+/// The gate in front of the shell reads this table (§06). A kind is satisfied
+/// only by a row carrying the CURRENT version — the foundational collection's
+/// version for the two documents, a constant for the age rule — so a change to
+/// either document re-gates by construction, and the old row stays as the
+/// record of what was agreed before. **Insert-only**: nothing updates or deletes
+/// a row except erasure, which is why there is no `updatedAt`. The unique index
+/// is what makes a repeat acknowledgement idempotent rather than a duplicate.
+///
+/// **`userId` is a plain scalar with no Prisma `@relation`** — a fork table must
+/// not add a reverse field to the Sunrise-owned `User` model (CUSTOMIZATION.md
+/// §5). The foreign key is hand-written in the `app_acknowledgement` migration
+/// with `ON DELETE CASCADE` — this is personal data and goes when the account
+/// goes — and pinned by a drift probe in `lib/app/leaf-db-drift.ts` so a future
+/// `migrate dev` cannot quietly drop it. Declared in full as a subject-data
+/// source in `lib/app/leaf-data-export.ts`.
+model AppAcknowledgement {
+  id              String                 @id @default(cuid())
+  /// Hand-written FK — see the note above.
+  userId          String
+  kind            AppAcknowledgementKind
+  /// The version this acknowledgement was given against: the foundational
+  /// collection's `version` for `disclaimer` and `terms`, the constant the
+  /// gateway module exports for `age_18`.
+  documentVersion String
+  /// Server-set at insert; the client never supplies it.
+  acknowledgedAt  DateTime               @default(now())
+
+  @@unique([userId, kind, documentVersion])
+  @@index([userId])
+  @@map("app_acknowledgement")
+}
