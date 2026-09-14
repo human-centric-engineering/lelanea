@@ -90,3 +90,29 @@ package.json.version` parity case is removed; our version and the framework's
 - `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
   pinned to our brand values rather than deleted, so the seams still empty keep
   their protection. Update it whenever `leaf-brand.ts` changes.
+
+## One Daybreak guard deliberately unwired from CI
+
+`app:ci-checks` in `package.json` — Sunrise's fork-owned CI seam — runs
+`framework:boundary` only. Daybreak wires `framework:changelog` there too, and
+**we removed it on purpose** ([`daybreak#258`](https://github.com/human-centric-engineering/daybreak/issues/258)).
+
+The guard's first rule flags any top-level `lib/app/*.ts|mjs` change as
+"Daybreak public surface — add an entry to `.context/framework/CHANGELOG.md`".
+That is right in Daybreak's repo, where such a diff means a seam changed hands.
+In a leaf it fires on every PR that fills a seam Daybreak reserved for us —
+`leaf-bootstrap.ts`, `eslint.config.mjs`, `capabilities.ts`, `jobs.ts`, any of
+them — and the remedy it names is an edit to Daybreak's release log, which we
+must not make. First hit: PR #31, the first `lib/app/*` change after the 0.3.0
+sync made the guard a real gate.
+
+**What we gave up:** the guard's append-only-history rule on
+`.context/framework/CHANGELOG.md` no longer runs in our CI. We only ever
+receive that file through a sync, and `changelog-structure.test.ts` still
+guards its shape, so the loss is small. Run `npm run framework:changelog` by
+hand on a sync PR if you want the history rule's opinion.
+
+**On conflict:** the line will conflict whenever Daybreak changes
+`app:ci-checks`. Take Daybreak's version, then drop `framework:changelog` from
+it again — unless the release notes say the guard is now leaf-aware, in which
+case keep theirs. That is the deletion trigger for this section.
