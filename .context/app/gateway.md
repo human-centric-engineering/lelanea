@@ -7,8 +7,8 @@ description: The gate in front of the shell — the acknowledgement ledger, its 
 
 Nobody reaches the shell without acknowledging the Disclaimer and the Terms of
 Use and confirming they are eighteen or over (§06). This doc covers the
-**ledger** and its API (t-15). The gate page and the layout redirect that read
-it are t-16 and will be added here when they land; data rights are t-17.
+**ledger** and its API (t-15) and the **gate** in front of the shell (t-16).
+Data rights are t-17.
 
 ## The pieces
 
@@ -17,10 +17,15 @@ it are t-16 and will be added here when they land; data rights are t-17.
 | Model + enum                              | `prisma/schema/app.prisma` — `AppAcknowledgement`          |
 | Migration (hand-written FK, see below)    | `prisma/migrations/20260914121123_app_acknowledgement/`    |
 | Ledger module — required versions, status | `lib/app/gateway/acknowledgements.ts`                      |
+| Kinds (client-safe; no Prisma behind it)  | `lib/app/gateway/kinds.ts`                                 |
 | Validation                                | `lib/validations/app-acknowledgement.ts`                   |
 | Routes                                    | `app/api/v1/app/acknowledgements/route.ts` (`GET`, `POST`) |
 | Art. 15 declaration + collector           | `lib/app/leaf-data-export.ts` — section `acknowledgements` |
 | Art. 17 — the cascade, pinned             | `lib/app/leaf-db-drift.ts`                                 |
+| The gate — where a person is sent         | `lib/app/gateway/gate.ts`                                  |
+| The redirect                              | `app/(lelanea)/app/layout.tsx`                             |
+| The gate page, `/app/begin`               | `app/(gate)/app/begin/page.tsx`                            |
+| The gate's controls (client)              | `components/app/views/begin-view.tsx`                      |
 
 ## The model, and the one rule it encodes
 
@@ -95,6 +100,86 @@ proof the key may proceed.
 
 Rate limit: the `/api/v1/**` section cap only. Three writes per person per
 version is the route's lifetime traffic.
+
+## The gate
+
+`gateRedirectFor(user)` in `lib/app/gateway/gate.ts` answers one question for
+the shell layout: where does this person go, or `null` when they may enter.
+Two checks, in this order:
+
+1. **Verification.** An unverified address goes to Sunrise's `/verify-email`
+   (with `?email=` so the resend works) — but only when the platform is
+   requiring verification: `REQUIRE_EMAIL_VERIFICATION ?? NODE_ENV ===
+'production'`, the same expression `lib/auth/config.ts` applies to sign-in,
+   restated here because the platform does not export it and pinned by
+   `gate.test.ts`. When it is off nobody is ever sent a verification email, so
+   a gate that demanded one would lock every local account out with nothing to
+   click. `.env.development` sets it `false` explicitly for local work;
+   `.env.example` documents the knob but deliberately leaves it unset, because
+   the self-hosted deploy docs copy that file to a production `.env`.
+2. **The ledger.** Any kind outstanding at its current version → `/app/begin`.
+
+Verification is checked first, so an unverified address costs no query and is
+not asked to agree to anything before proving it is someone's.
+
+### Why the gate is in the layout, and why `/app/begin` is not
+
+The edge (`proxy.ts`) already keeps a signed-out visitor away from `/app/**` —
+`lib/app/protected-routes.ts` lists `/app` and matching is by prefix — but the
+edge has no database, so the ledger is read in `app/(lelanea)/app/layout.tsx`,
+server-side, on entry. A layout is not re-rendered between sibling pages, and
+that is enough: there is no way into the shell that does not pass through it,
+and nothing inside the shell un-acknowledges anything.
+
+**`/app/begin` lives in `app/(gate)/app/begin/`, a sibling route group** with
+the same URL prefix and no shell chrome. It cannot sit under the shell layout:
+that layout redirects to `/app/begin`, and a page under it would be redirected
+to itself forever. The task sketch put it under `(lelanea)`; the tree said no.
+Static routes beat the shell's `[...slug]` catch-all, so the URL resolves to the
+gate page. The page wraps itself in the maintenance wrapper for the reason the
+shell does, and applies the verification redirect itself, since it is outside
+the layout that would otherwise do it.
+
+### The page — one thing at a time
+
+The first cut put both documents in full on one page with the controls at the
+bottom: about ten screens of legal text before the first button. The owner's
+reaction was that anyone landing there would leave and not come back — the
+gate failing at its one job. So the page is **three steps**, each a single
+viewport: the step's heading ("First, what this is — and what it is not."), the
+document in a pane that scrolls on its own, and the control always in view
+beneath it. The text is still there in full, and it is still read before it is
+agreed to; it is just not a wall. The third step, age, has no document.
+
+The current step is the **first outstanding kind**, so someone who did two of
+three last week lands on the third. There is no "back": an acknowledged
+document is on its public page (`/disclaimer`, `/terms`), and the record
+screen links there.
+
+The documents are rendered on the server through `AuthoredBlocks` (not
+`AuthoredDocument`, which renders an `<h1>`; the step has one, the document's
+own title sits at `<h2>`) and handed to `BeginView` as nodes. The controls are
+the only client state: a click `POST`s `{ kind }` and **replaces the whole
+status with the server's answer** rather than flipping a flag, which is what
+moves the step on — and what keeps a second tab or a version bump between
+paint and click from leaving the page showing a state the ledger does not
+hold.
+
+Afterwards the page is the **record**: "This stands.", the three facts with
+their dates, "Read it again" to each public page, and one way on — `Begin`
+(to `/app`) for the person who just finished the third step, `Return` (to
+`/app/account`) for one who came back to read it and began some time ago.
+The view tells them apart by whether it was loaded already complete. The
+layout no longer redirects here, but "what did I agree to, and when" stays
+answerable without asking us — and reachable: the account view's "your data"
+section carries a "What you agreed to" row to `/app/begin`, above the erasure
+row, the only link to it from inside the shell.
+
+Copy is in the prototype's register — sentence case, no exclamation points,
+`Begin` not "Start now", and the design guide's own error line ("Something
+didn't land. Try that once more."). The record date is formatted in UTC so
+server and browser agree on the string; the cost is a date that can sit a day
+off for someone far from UTC, on a line whose point is "this stands".
 
 ## The two GDPR duties
 

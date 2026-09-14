@@ -26,7 +26,7 @@ one that breaks something silently.
 
 | Piece        | File                                                  | What it is                                                           |
 | ------------ | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session gate, maintenance wrapper, `h-dvh overflow-hidden` frame     |
+| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame   |
 | Nav          | `components/app/shell/shell-nav.tsx`                  | Seven destinations + the account footer; 234px, or 64px slim         |
 | Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; the theme toggle, and ≤900 the burger and the pane switch      |
 | Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone    |
@@ -170,9 +170,10 @@ done that way and so is not.
 
 ## A view that reads about the reader must guard itself
 
-`app/(lelanea)/app/layout.tsx` checks the session, and **a layout is not
-re-rendered when the router moves between sibling pages inside it.** So that
-check gates _entry to the shell_, not each view.
+`app/(lelanea)/app/layout.tsx` checks the session — and, since §06, the
+acknowledgement gate (see [`gateway.md`](./gateway.md)) — and **a layout is
+not re-rendered when the router moves between sibling pages inside it.** So
+those checks gate _entry to the shell_, not each view.
 
 That was harmless while every page under it was a static placeholder, which is
 what t-9 shipped. `app/(lelanea)/app/account/page.tsx` is the first that is not: it renders a name,

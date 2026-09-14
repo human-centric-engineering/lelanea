@@ -43,7 +43,11 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { getFoundationalCollectionMeta, listFoundationalDocuments } from '@/lib/app/content';
-import { ACKNOWLEDGEMENT_KINDS, type AcknowledgementKind } from '@/lib/app/gateway/kinds';
+import {
+  ACKNOWLEDGEMENT_KINDS,
+  type AcknowledgementKind,
+  type GateStatusJson,
+} from '@/lib/app/gateway/kinds';
 
 export { ACKNOWLEDGEMENT_KINDS, type AcknowledgementKind };
 
@@ -148,6 +152,22 @@ export async function getGateStatus(userId: string): Promise<GateStatus> {
 
   const outstanding = kinds.filter((entry) => !entry.satisfied).map((entry) => entry.kind);
   return { complete: outstanding.length === 0, kinds, outstanding };
+}
+
+/**
+ * `GateStatus` with its dates as ISO strings — the shape a client component can
+ * take as a prop, and the same one the API's JSON envelope carries, so the gate
+ * page's first paint and its response to a POST are one type.
+ */
+export function toGateStatusJson(status: GateStatus): GateStatusJson {
+  return {
+    complete: status.complete,
+    outstanding: status.outstanding,
+    kinds: status.kinds.map((kind) => ({
+      ...kind,
+      acknowledgedAt: kind.acknowledgedAt?.toISOString() ?? null,
+    })),
+  };
 }
 
 /** What `recordAcknowledgement` answers: the row, and whether this call made it. */

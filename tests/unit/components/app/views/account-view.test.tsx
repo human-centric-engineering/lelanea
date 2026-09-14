@@ -137,9 +137,21 @@ describe('where the controls actually live', () => {
     );
   });
 
+  it('leads to the record of what was agreed at the gate', () => {
+    // §06 t-16: the only way into `/app/begin` from inside the shell. In the
+    // same tab — it is an app page, not a download.
+    renderAccount();
+    const row = screen.getByRole('link', { name: /What you agreed to/ });
+    expect(row.getAttribute('href')).toBe('/app/begin');
+    expect(row.getAttribute('target')).toBeNull();
+    // Above erasure: closing the account is the last thing on the page.
+    const rows = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(rows.indexOf('/app/begin')).toBeLessThan(rows.indexOf('/settings?tab=account'));
+  });
+
   it('makes every row a link rather than a button that lies', () => {
     renderAccount();
-    expect(screen.getAllByRole('link')).toHaveLength(4);
+    expect(screen.getAllByRole('link')).toHaveLength(5);
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });
