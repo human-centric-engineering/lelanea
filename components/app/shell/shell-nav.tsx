@@ -9,7 +9,12 @@ import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
+import { LAST_MODULE_STORAGE_KEY, MODULES_PATH_PREFIX, modulePath } from '@/lib/app/journey/paths';
+import { useLocalStorage } from '@/lib/hooks/use-local-storage';
 import { cn } from '@/lib/utils';
+
+/** The nav item that means "back to the module you are in". */
+const WORKSPACE_HREF = '/app/workspace';
 
 export interface ShellNavProps {
   /** The signed-in person, for the pinned account footer. */
@@ -54,6 +59,17 @@ export function initialsFor(name: string, email: string): string {
  */
 export function ShellNav({ user }: ShellNavProps) {
   const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, width } = useShellLayout();
+  /*
+   * "Workspace" resolves to the last module visited, remembered per browser
+   * by the module page (`RememberModule`). Until one has been, it goes to the
+   * `/app/workspace` landing that says so. Read here rather than pushed into
+   * the nav item table, because the table is static and this is the one entry
+   * whose destination is a fact about the reader. `null` on the server and on
+   * the first client paint (the hook starts from `initial` to keep hydration
+   * honest), so the href settles one effect later — a link, not a redirect, so
+   * that is invisible.
+   */
+  const [lastModule] = useLocalStorage<string | null>(LAST_MODULE_STORAGE_KEY, null);
   const pathname = usePathname();
 
   /*
@@ -275,16 +291,22 @@ export function ShellNav({ user }: ShellNavProps) {
             // "The conversation" on every page in the product. Exact match for it;
             // prefix match for the rest, so `/app/situations/3` still marks
             // "Life situations" as current.
+            // The Workspace item is also current on any module page: a module
+            // IS the workspace, whichever URL it lives at.
+            const onModule =
+              entry.href === WORKSPACE_HREF && pathname.startsWith(`${MODULES_PATH_PREFIX}/`);
             const current =
               entry.href === '/app'
                 ? pathname === '/app'
-                : pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+                : onModule || pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+            const href =
+              entry.href === WORKSPACE_HREF && lastModule ? modulePath(lastModule) : entry.href;
             const Icon = entry.icon;
 
             return (
               <Link
                 key={entry.href}
-                href={entry.href}
+                href={href}
                 // Closes the drawer even when the route does not change —
                 // tapping the item for the page already showing otherwise
                 // left the panel and its scrim sitting over it.
