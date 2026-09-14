@@ -131,3 +131,39 @@ describe('content/*.json import boundary', () => {
     });
   });
 });
+
+/**
+ * The second block in the seam: a leaf test may import the framework it
+ * exercises, and the `@/`-alias ban survives the replace-not-merge. Both halves
+ * are asserted against the RESOLVED project config, because the failure mode
+ * is a block that lints clean on its own and never reaches a real file.
+ */
+describe('leaf tests may import the framework', () => {
+  function importPatterns(config: Linter.Config): string[] {
+    const [, options] = config.rules?.['no-restricted-imports'] as [
+      number,
+      { patterns: { group: string[] }[] },
+    ];
+    return options.patterns.flatMap((pattern) => pattern.group);
+  }
+
+  it('lifts the framework ban for a test under tests/**/lib/app/**', async () => {
+    const config = await new ESLint().calculateConfigForFile(
+      'tests/unit/lib/app/modules/registration.test.ts'
+    );
+    const groups = importPatterns(config);
+
+    expect(groups).not.toContain('@/lib/framework');
+    expect(groups).not.toContain('@/lib/framework/*');
+    // Restated, not lost: the alias ban is what replace-not-merge would drop.
+    expect(groups).toEqual(expect.arrayContaining(['./*', '../*']));
+  });
+
+  it('leaves the framework ban in place for a test of the app shell', async () => {
+    const config = await new ESLint().calculateConfigForFile(
+      'tests/unit/components/app/shell/map-drawer.test.tsx'
+    );
+
+    expect(importPatterns(config)).toEqual(expect.arrayContaining(['@/lib/framework']));
+  });
+});
