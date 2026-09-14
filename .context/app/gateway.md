@@ -114,7 +114,9 @@ Two checks, in this order:
    restated here because the platform does not export it and pinned by
    `gate.test.ts`. When it is off nobody is ever sent a verification email, so
    a gate that demanded one would lock every local account out with nothing to
-   click. `.env.example` documents the knob.
+   click. `.env.development` sets it `false` explicitly for local work;
+   `.env.example` documents the knob but deliberately leaves it unset, because
+   the self-hosted deploy docs copy that file to a production `.env`.
 2. **The ledger.** Any kind outstanding at its current version → `/app/begin`.
 
 Verification is checked first, so an unverified address costs no query and is
