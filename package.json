@@ -65,6 +65,7 @@
     "smoke:engine": "tsx --env-file=.env.local scripts/smoke/engine.ts",
     "smoke:journey-progress": "tsx --env-file=.env.local scripts/smoke/journey-progress.ts",
     "smoke:export": "tsx --env-file=.env.local scripts/smoke/export.ts",
+    "smoke:app-journey-map": "tsx --env-file=.env.local scripts/smoke/app-journey-map.ts",
     "postinstall": "prisma generate",
     "prepare": "husky",
     "check:client-env": "tsx scripts/ci/check-client-env-delivery.ts"
