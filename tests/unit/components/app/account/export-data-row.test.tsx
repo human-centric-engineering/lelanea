@@ -43,6 +43,7 @@ function response(status: number, body = '', headers: Record<string, string> = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   clicked = [];
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
@@ -66,6 +67,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -102,7 +104,12 @@ describe('ExportDataRow', () => {
     expect(clicked).toHaveLength(1);
     expect(clicked[0]?.getAttribute('download')).toBe(exportFilename());
     expect(clicked[0]?.getAttribute('href')).toBe('blob:lelanea/my-data');
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:lelanea/my-data'));
+    // Revoked, but not on the next tick: Firefox and Safari start the read
+    // asynchronously, and a URL gone by then fails a large download while the
+    // row says "Saved".
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(60_000);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:lelanea/my-data');
   });
 
   it('is busy, and says so, while the bundle is being gathered', async () => {
@@ -128,7 +135,7 @@ describe('ExportDataRow', () => {
 
     fireEvent.click(row());
 
-    expect((await screen.findByRole('alert')).textContent).toBe(EXPORT_COPY.limited);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(EXPORT_COPY.limited));
     expect(createObjectURL).not.toHaveBeenCalled();
     expect(clicked).toHaveLength(0);
     // And the control is usable again — "give it a minute, then try once more".
@@ -145,8 +152,11 @@ describe('ExportDataRow', () => {
     fireEvent.click(row());
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith(SIGN_IN_ROUTE));
-    expect(SIGN_IN_ROUTE).toContain('callbackUrl=%2Fapp%2Faccount');
-    expect(screen.queryByRole('alert')).toBeNull();
+    // Through the clear-session route, so a cookie still in the jar is cleared
+    // rather than bouncing `/login` back into the shell — and the return
+    // survives.
+    expect(SIGN_IN_ROUTE).toMatch(/^\/api\/auth\/clear-session\?returnUrl=%2Fapp%2Faccount$/);
+    expect(screen.getByRole('status').textContent).toBe(EXPORT_COPY.busy);
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 
@@ -154,27 +164,34 @@ describe('ExportDataRow', () => {
     fetchMock.mockResolvedValueOnce(response(500, '{"success":false}'));
     const { unmount } = render(<ExportDataRow />);
     fireEvent.click(row());
-    expect((await screen.findByRole('alert')).textContent).toBe(EXPORT_COPY.failed);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(EXPORT_COPY.failed));
     unmount();
 
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     render(<ExportDataRow />);
     fireEvent.click(row());
-    expect((await screen.findByRole('alert')).textContent).toBe(EXPORT_COPY.failed);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(EXPORT_COPY.failed));
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 
-  it('uses ONE live-region role at a time: status normally, alert on a refusal', async () => {
+  it('announces through ONE always-mounted status region that is a sibling of the button', async () => {
+    // A live region inside a <button> is flattened out of the accessibility
+    // tree — a button's children are presentational — so the first shape was
+    // never announced. The region has to exist before its text changes, and
+    // it has to be outside the button, which describes itself by it.
     fetchMock.mockResolvedValue(response(429));
     render(<ExportDataRow />);
-    const line = screen.getByRole('status');
-    expect(line.getAttribute('aria-live')).toBeNull();
+    const region = screen.getByRole('status');
+    expect(row().contains(region)).toBe(false);
+    expect(row().getAttribute('aria-describedby')).toBe(region.id);
+    expect(row().textContent).not.toContain(EXPORT_COPY.idle);
 
     fireEvent.click(row());
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.getAttribute('aria-live')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    await waitFor(() => expect(region.textContent).toBe(EXPORT_COPY.limited));
+    // The SAME element, not a replacement.
+    expect(screen.getByRole('status')).toBe(region);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('names the file by the reader’s calendar date, not UTC', () => {

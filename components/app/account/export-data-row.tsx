@@ -9,8 +9,17 @@ import { cn } from '@/lib/utils';
 /** The self-service Art. 15 route — the only thing in the tree that exports. */
 export const EXPORT_ROUTE = '/api/v1/users/me/export';
 
-/** Where an expired session is sent, and where it comes back to. */
-export const SIGN_IN_ROUTE = '/login?callbackUrl=%2Fapp%2Faccount';
+/**
+ * Where an ended session is sent, and where it comes back to.
+ *
+ * The clear-session route, not `/login` directly: a 401 with the cookie still
+ * in the jar (revoked from another device, session row pruned) would hit the
+ * proxy's cookie-presence check on `/login` and be bounced into the shell,
+ * which clears it and comes back to `/login?callbackUrl=/app` — the way back
+ * here lost. This is what the server's own `clearInvalidSession()` does, from
+ * the browser (code review, round 2).
+ */
+export const SIGN_IN_ROUTE = '/api/auth/clear-session?returnUrl=%2Fapp%2Faccount';
 
 /**
  * The row's answers, in the prototype's register — a description of what
@@ -42,8 +51,7 @@ export function exportFilename(now = new Date()): string {
  *
  * A blob URL and a synthetic click, because the route's own
  * `Content-Disposition: attachment` only helps a NAVIGATION — and navigating
- * to it was the problem this row replaces (see below). Revoked on the next
- * tick: the click has already consumed the URL by then.
+ * to it was the problem this row replaces (see below).
  */
 function save(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -51,8 +59,17 @@ function save(blob: Blob, filename: string): void {
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
 }
+
+/**
+ * How long the blob URL outlives the click. Chrome resolves it synchronously;
+ * Firefox and Safari begin the read asynchronously, and a URL revoked on the
+ * next tick can fail a large download with a network error while the row
+ * says "Saved". A minute is what the file-saver libraries settle on; the cost
+ * is the bundle staying in memory that long (code review, round 2).
+ */
+const REVOKE_AFTER_MS = 60_000;
 
 /**
  * "Export a copy of everything held about you" — a control, not a link.
@@ -89,6 +106,16 @@ function save(blob: Blob, filename: string): void {
  * Every other row on the account view is a link, and the view's test insists
  * on that — "a link rather than a button that lies". This is the one control
  * that is genuinely an action: nothing is navigated to, a file is produced.
+ *
+ * ## The status line is a SIBLING of the button, not a child
+ *
+ * The first shape put the line inside the `<button>`. A button's children are
+ * presentational, so assistive tech flattens them: the line was not a live
+ * region at all, its text was folded into the button's name, and a
+ * screen-reader user who hit the rate limit heard nothing. Now the card is a
+ * `<div>`, the button is the title, and one always-mounted `role="status"`
+ * region beneath it carries every answer — a region that exists before the
+ * text changes is what gets announced (code review, round 2).
  */
 export function ExportDataRow() {
   const [state, setState] = React.useState<ExportState>('idle');
@@ -119,42 +146,39 @@ export function ExportDataRow() {
   const refused = state === 'failed' || state === 'limited';
 
   return (
-    <button
-      type="button"
-      onClick={request}
-      disabled={busy}
-      aria-busy={busy}
+    <div
       className={cn(
-        'bg-background mb-2 block w-full rounded-[15px] border border-[var(--color-card-border)]',
-        'px-[15px] py-[13px] text-left',
-        'disabled:hover:bg-background hover:bg-[var(--color-pill-hover)]',
-        'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
-        'motion-reduce:transition-none',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-        'focus-visible:outline-[var(--color-ring)]',
-        'disabled:cursor-progress'
+        'bg-background mb-2 rounded-[15px] border border-[var(--color-card-border)]',
+        'px-[15px] py-[13px]'
       )}
     >
-      <span className="flex items-center gap-2 text-[var(--color-heading)]">
+      <button
+        type="button"
+        onClick={request}
+        disabled={busy}
+        aria-busy={busy}
+        aria-describedby="export-data-status"
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md text-left text-[var(--color-heading)]',
+          'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-solid',
+          'focus-visible:outline-[var(--color-ring)]',
+          'disabled:cursor-progress'
+        )}
+      >
         Export a copy of everything held about you
         <Download size={14} strokeWidth={1.5} aria-hidden="true" className="flex-none" />
-      </span>
-      {/*
-        One live-region role, and only one: `alert` for a refusal, `status`
-        (politely announced) for everything else. An explicit `aria-live` beside
-        `role="alert"` gave readers two contradictory instructions (code review,
-        round 1).
-      */}
-      <span
+      </button>
+      <p
+        id="export-data-status"
+        role="status"
+        data-state={state}
         className={cn(
-          'mt-1 block text-[13px] leading-[1.55]',
+          'mt-1 text-[13px] leading-[1.55]',
           refused ? 'text-[var(--color-heading)]' : 'text-muted-foreground'
         )}
-        role={refused ? 'alert' : 'status'}
-        data-state={state}
       >
         {EXPORT_COPY[state]}
-      </span>
-    </button>
+      </p>
+    </div>
   );
 }

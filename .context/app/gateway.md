@@ -238,8 +238,12 @@ So the two rights live in two different places, on purpose:
   navigation to that put raw `{"success":false,…}` in a tab on an Art. 15
   control. Now a 429 is a sentence in the row, in the register ("You have
   asked for a few copies just now. Give it a minute, then try once more."); a
-  401 — a session that ended while the page sat open — goes to sign-in with a
-  way back, because "try once more" can never succeed there. It is the one
+  401 — a session that ended while the page sat open — goes through the
+  clear-session route to sign-in with a way back (a stale cookie would bounce
+  `/login` into the shell otherwise), because "try once more" can never
+  succeed there. The status line is a sibling of the button, not a child — a
+  button's children are presentational, so a live region inside one is never
+  announced. It is the one
   button on a page of links, and the view's test says so.
 
 `lib/app/account-sections.ts` is untouched — the shell's account view is our
