@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 
 /**
- * The gate's controls: what each shows before and after, what a click does,
- * and what the page becomes once all three stand.
+ * The gate, one step at a time: which step shows, what a click does, and what
+ * the page becomes once all three stand.
  *
  * `apiClient` is mocked at the boundary the view actually calls, and the
  * status it answers with is what the view must display — the view replaces
@@ -30,24 +30,20 @@ vi.mock('next/link', () => ({
 import {
   ACKNOWLEDGEMENTS_ROUTE,
   BeginView,
-  CONTROL_COPY,
   DID_NOT_LAND,
   formatRecordDate,
   SHELL_ROUTE,
+  STEP_COPY,
 } from '@/components/app/views/begin-view';
 import type { GateStatusJson, KindStatusJson } from '@/lib/app/gateway/kinds';
 
 const AT = '2026-09-01T00:00:00.000Z';
 
-function kind(
-  name: KindStatusJson['kind'],
-  satisfied: boolean,
-  documentId: string | null = name === 'age_18' ? null : name
-): KindStatusJson {
+function kind(name: KindStatusJson['kind'], satisfied: boolean): KindStatusJson {
   return {
     kind: name,
     requiredVersion: name === 'age_18' ? '18' : '1.1',
-    documentId,
+    documentId: name === 'age_18' ? null : name,
     satisfied,
     acknowledgedAt: satisfied ? AT : null,
   };
@@ -66,116 +62,130 @@ const DOCUMENTS = {
   terms: <p>the terms, in full</p>,
 };
 
+function button(name: string): HTMLButtonElement {
+  return screen.getByRole('button', { name });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('BeginView, before anything stands', () => {
-  it('renders both documents and one action per kind, and no Begin', () => {
+describe('BeginView shows ONE step — the first outstanding kind', () => {
+  it('opens on the disclaimer, alone, with its control in view and no Begin', () => {
     render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
 
+    expect(screen.getByTestId('step-disclaimer')).toBeTruthy();
     expect(screen.getByText('the disclaimer, in full')).toBeTruthy();
-    expect(screen.getByText('the terms, in full')).toBeTruthy();
-    for (const copy of Object.values(CONTROL_COPY)) {
-      expect(screen.getByRole('button', { name: copy.action })).toBeTruthy();
-      expect(screen.getByText(copy.statement)).toBeTruthy();
-    }
+    // The other two are NOT on the page: one thing at a time.
+    expect(screen.queryByText('the terms, in full')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(button(STEP_COPY.disclaimer.action)).toBeTruthy();
+    expect(screen.getByText(/one of three/)).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Begin' })).toBeNull();
-    expect(screen.getByText(/Begin once all three stand/)).toBeTruthy();
+  });
+
+  it('lands on the third step for someone who did two last week', () => {
+    render(<BeginView initialStatus={status('disclaimer', 'terms')} documents={DOCUMENTS} />);
+
+    expect(screen.getByTestId('step-age_18')).toBeTruthy();
+    expect(screen.getByText(/three of three/)).toBeTruthy();
+    expect(screen.queryByTestId('document-pane')).toBeNull();
+    expect(button(STEP_COPY.age_18.action)).toBeTruthy();
+  });
+
+  it('puts the document in its own scroll pane, so the control is never below the text', () => {
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    const pane = screen.getByTestId('document-pane');
+    expect(pane.className).toContain('overflow-y-auto');
+    expect(pane.className).toContain('min-h-0');
+    expect(pane.textContent).toContain('the disclaimer, in full');
   });
 
   it('keeps to the register: sentence case, no exclamation points', () => {
     const { container } = render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
     expect(container.textContent).not.toContain('!');
-    for (const copy of Object.values(CONTROL_COPY)) {
-      expect(copy.action).toMatch(/^[A-Z][^A-Z]*$|^I /);
+    for (const copy of Object.values(STEP_COPY)) {
+      expect(copy.action).not.toMatch(/\b[A-Z][a-z]+ [A-Z]/);
     }
   });
 });
 
-describe('acknowledging', () => {
-  it('posts the kind and replaces the status with the server’s answer', async () => {
+describe('acknowledging moves the step on', () => {
+  it('posts the kind and shows the NEXT step from the server’s answer', async () => {
     post.mockResolvedValue(status('disclaimer'));
     render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: CONTROL_COPY.disclaimer.action }));
+    fireEvent.click(button(STEP_COPY.disclaimer.action));
 
-    await waitFor(() => expect(screen.getByTestId('record-disclaimer')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('step-terms')).toBeTruthy());
     expect(post).toHaveBeenCalledWith(ACKNOWLEDGEMENTS_ROUTE, { body: { kind: 'disclaimer' } });
-    // The record line: the copy, and the date from the server.
-    expect(screen.getByTestId('record-disclaimer').textContent).toContain(
-      CONTROL_COPY.disclaimer.record
-    );
-    expect(screen.getByTestId('record-disclaimer').textContent).toContain(formatRecordDate(AT));
-    // The other two are still actions.
-    expect(screen.getByRole('button', { name: CONTROL_COPY.terms.action })).toBeTruthy();
-    expect(screen.getByRole('button', { name: CONTROL_COPY.age_18.action })).toBeTruthy();
+    expect(screen.getByText('the terms, in full')).toBeTruthy();
+    expect(screen.queryByText('the disclaimer, in full')).toBeNull();
+    expect(screen.getByText(/two of three/)).toBeTruthy();
   });
 
   it('shows what the SERVER says stands, not what was clicked', async () => {
     // The ledger answers with more than the click changed — a second tab, or
     // an earlier acknowledgement this paint did not know about. The view must
-    // take the answer whole.
+    // take the answer whole: here it skips straight to the age step.
     post.mockResolvedValue(status('disclaimer', 'terms'));
     render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: CONTROL_COPY.disclaimer.action }));
+    fireEvent.click(button(STEP_COPY.disclaimer.action));
 
-    await waitFor(() => expect(screen.getByTestId('record-terms')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('step-age_18')).toBeTruthy());
   });
 
-  it('opens Begin once the answer says every kind stands', async () => {
+  it('becomes the record, with Begin, once the answer says every kind stands', async () => {
     post.mockResolvedValue(status('disclaimer', 'terms', 'age_18'));
     render(<BeginView initialStatus={status('disclaimer', 'terms')} documents={DOCUMENTS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: CONTROL_COPY.age_18.action }));
+    fireEvent.click(button(STEP_COPY.age_18.action));
 
     const begin = await screen.findByRole('link', { name: 'Begin' });
     expect(begin.getAttribute('href')).toBe(SHELL_ROUTE);
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('says so, in the guide’s words, when the post does not land — and keeps the action', async () => {
+  it('says so, in the guide’s words, when the post does not land — and stays on the step', async () => {
     post.mockRejectedValue(new Error('network'));
-    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    render(<BeginView initialStatus={status('disclaimer')} documents={DOCUMENTS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: CONTROL_COPY.terms.action }));
+    fireEvent.click(button(STEP_COPY.terms.action));
 
     expect((await screen.findByRole('alert')).textContent).toBe(DID_NOT_LAND);
-    expect(screen.getByRole('button', { name: CONTROL_COPY.terms.action })).toBeTruthy();
-    expect(screen.queryByTestId('record-terms')).toBeNull();
+    expect(screen.getByTestId('step-terms')).toBeTruthy();
+    expect(button(STEP_COPY.terms.action).disabled).toBe(false);
   });
 
-  it('disables every action while one is in flight', async () => {
+  it('disables the action while the post is in flight', async () => {
     let settle: (value: GateStatusJson) => void = () => {};
     post.mockReturnValue(new Promise<GateStatusJson>((resolve) => (settle = resolve)));
     render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: CONTROL_COPY.disclaimer.action }));
+    fireEvent.click(button(STEP_COPY.disclaimer.action));
 
-    await waitFor(() => {
-      for (const button of screen.getAllByRole('button')) {
-        expect((button as HTMLButtonElement).disabled).toBe(true);
-      }
-    });
+    await waitFor(() => expect(button(STEP_COPY.disclaimer.action).disabled).toBe(true));
     settle(status('disclaimer'));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: CONTROL_COPY.terms.action }).disabled).toBe(false)
-    );
+    await waitFor(() => expect(screen.getByTestId('step-terms')).toBeTruthy());
   });
 });
 
 describe('BeginView afterwards — the record', () => {
-  it('renders every kind as a fact with its date, and Begin', () => {
+  it('renders every kind as a fact with its date, a way back to each text, and Begin', () => {
     render(
       <BeginView initialStatus={status('disclaimer', 'terms', 'age_18')} documents={DOCUMENTS} />
     );
 
     for (const name of ['disclaimer', 'terms', 'age_18'] as const) {
       const record = screen.getByTestId(`record-${name}`);
-      expect(record.textContent).toContain(CONTROL_COPY[name].record);
+      expect(record.textContent).toContain(STEP_COPY[name].record);
       expect(record.querySelector('time')?.getAttribute('dateTime')).toBe(AT);
     }
+    // No walls of text here either: the documents are a link away.
+    expect(screen.queryByText('the disclaimer, in full')).toBeNull();
+    const readAgain = screen.getAllByRole('link', { name: 'Read it again' });
+    expect(readAgain.map((link) => link.getAttribute('href'))).toEqual(['/disclaimer', '/terms']);
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByRole('link', { name: 'Begin' })).toBeTruthy();
   });

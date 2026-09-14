@@ -48,7 +48,7 @@ vi.mock('@/lib/auth/utils', () => ({ getServerSession }));
 vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
 
 import BeginPage, { metadata } from '@/app/(gate)/app/begin/page';
-import { CONTROL_COPY } from '@/components/app/views/begin-view';
+import { STEP_COPY } from '@/components/app/views/begin-view';
 import { AGE_18_VERSION } from '@/lib/app/gateway/acknowledgements';
 import { getFoundationalCollectionMeta, getFoundationalDocument } from '@/lib/app/content';
 
@@ -119,22 +119,22 @@ describe('/app/begin', () => {
     await expect(BeginPage()).rejects.toThrow('redirected:/verify-email?email=maya%40example.com');
   });
 
-  it('renders both documents in full, from the content file, above their controls', async () => {
+  it('opens on the disclaimer, in full and from the content file, with its control', async () => {
     await renderPage();
 
     expect(screen.getByText(firstParagraph('disclaimer'), { exact: false })).toBeTruthy();
-    expect(screen.getByText(firstParagraph('terms_of_use'), { exact: false })).toBeTruthy();
-    // One h1 — the page's — and the documents one level down.
+    // One step at a time: the terms are not on this screen.
+    expect(screen.queryByText(firstParagraph('terms_of_use'), { exact: false })).toBeNull();
+    // One h1 — the step's — and the document's own title one level down.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
       screen.getByRole('heading', { level: 2, name: getFoundationalDocument('disclaimer')!.title })
     ).toBeTruthy();
-    for (const copy of Object.values(CONTROL_COPY)) {
-      expect(screen.getByRole('button', { name: copy.action })).toBeTruthy();
-    }
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: STEP_COPY.disclaimer.action })).toBeTruthy();
   });
 
-  it('reads the caller’s ledger and renders what already stands as a record', async () => {
+  it('reads the caller’s ledger and opens on the first kind still outstanding', async () => {
     findMany.mockResolvedValue([
       { kind: 'disclaimer', documentVersion: VERSION, acknowledgedAt: new Date('2026-09-01') },
       { kind: 'age_18', documentVersion: AGE_18_VERSION, acknowledgedAt: new Date('2026-09-01') },
@@ -142,9 +142,9 @@ describe('/app/begin', () => {
     await renderPage();
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'u1' } }));
-    expect(screen.getByTestId('record-disclaimer')).toBeTruthy();
-    expect(screen.getByTestId('record-age_18')).toBeTruthy();
-    expect(screen.getByRole('button', { name: CONTROL_COPY.terms.action })).toBeTruthy();
+    expect(screen.getByTestId('step-terms')).toBeTruthy();
+    expect(screen.getByText(firstParagraph('terms_of_use'), { exact: false })).toBeTruthy();
+    expect(screen.getByRole('button', { name: STEP_COPY.terms.action })).toBeTruthy();
   });
 
   it('is the read-only record afterwards, with Begin the only action', async () => {
@@ -156,6 +156,9 @@ describe('/app/begin', () => {
     await renderPage();
 
     expect(screen.queryByRole('button')).toBeNull();
+    for (const name of ['disclaimer', 'terms', 'age_18'] as const) {
+      expect(screen.getByTestId(`record-${name}`)).toBeTruthy();
+    }
     expect(screen.getByRole('link', { name: 'Begin' }).getAttribute('href')).toBe('/app');
   });
 });

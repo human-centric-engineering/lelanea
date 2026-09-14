@@ -66,7 +66,8 @@ function GateDocument({ document: doc }: { document: FoundationalDocumentDetail 
  *
  * `AuthoredBlocks` is a server component and the prose is memoised content;
  * rendering it here and handing the nodes to the client view means the words
- * are never serialised as props and never re-rendered on a click.
+ * are never serialised as props and never re-rendered on a click. The view
+ * shows one at a time — see `BeginView` for why it is steps and not a page.
  */
 export default async function BeginPage() {
   const session = await getServerSession();
@@ -81,7 +82,11 @@ export default async function BeginPage() {
 
   return (
     <MaintenanceWrapperWithAdminNotice>
-      <main className={cn(styles.page, styles.opening, styles.measure)}>
+      {/*
+        `.page` for the measure and gutters; NOT `.opening`, whose top padding
+        would push a `h-dvh` step frame below the fold. The frame pads itself.
+      */}
+      <main className={cn(styles.page, styles.measure)}>
         <BeginView
           initialStatus={toGateStatusJson(status)}
           documents={{

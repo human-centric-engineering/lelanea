@@ -7,7 +7,12 @@ import { Button } from '@/components/app/ui/button';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import { logger } from '@/lib/logging';
-import type { AcknowledgementKind, GateStatusJson, KindStatusJson } from '@/lib/app/gateway/kinds';
+import {
+  ACKNOWLEDGEMENT_KINDS,
+  type AcknowledgementKind,
+  type GateStatusJson,
+  type KindStatusJson,
+} from '@/lib/app/gateway/kinds';
 import { cn } from '@/lib/utils';
 
 /** The API this view writes to and re-reads from. */
@@ -20,30 +25,44 @@ export const SHELL_ROUTE = '/app';
 export const DID_NOT_LAND = "Something didn't land. Try that once more.";
 
 /**
- * The words on each control, in the prototype's register: sentence case, no
- * exclamation, "you". Exported so the page test can assert them without
- * restating them.
+ * The words for each step, in the prototype's register: sentence case, no
+ * exclamation, "you". Exported so the tests can assert them without restating
+ * them.
+ *
+ * `title` is the step's own heading — not the document's, which sits inside
+ * the pane with its own header. `readAgain` is where the record screen sends
+ * someone who wants the text back; the two public pages carry the same
+ * documents, with no controls.
  */
-export const CONTROL_COPY: Record<
+export const STEP_COPY: Record<
   AcknowledgementKind,
-  { statement: string; action: string; record: string }
+  { title: string; statement: string; action: string; record: string; readAgain: string | null }
 > = {
   disclaimer: {
+    title: 'First, what this is — and what it is not.',
     statement: 'You have read the disclaimer, and you understand what Lelañea is and is not.',
     action: 'I have read the disclaimer',
     record: 'Disclaimer acknowledged',
+    readAgain: '/disclaimer',
   },
   terms: {
+    title: 'Then, the terms.',
     statement: 'You have read the terms of use, and you agree to them.',
     action: 'I agree to the terms',
     record: 'Terms acknowledged',
+    readAgain: '/terms',
   },
   age_18: {
-    statement: 'The terms ask that you are eighteen or over.',
+    title: 'And one thing to confirm.',
+    statement: 'Lelañea is for adults. The terms ask that you are eighteen or over.',
     action: 'I am eighteen or over',
     record: 'Age confirmed',
+    readAgain: null,
   },
 };
+
+/** "one of three" — words, not a progress bar; there are three and they are short. */
+const ORDINAL: Record<number, string> = { 0: 'one', 1: 'two', 2: 'three' };
 
 /**
  * A date for the record line, formatted the same way on the server and in the
@@ -60,71 +79,34 @@ export function formatRecordDate(iso: string): string {
   return RECORD_DATE.format(new Date(iso));
 }
 
-interface ControlProps {
-  entry: KindStatusJson;
-  busy: boolean;
-  onAcknowledge: (kind: AcknowledgementKind) => void;
-}
-
-/**
- * One acknowledgement: the statement, then either the action or the record.
- *
- * Once satisfied it is a `<p>` with a `<time>`, not a disabled button — the
- * control has become a fact, and a fact reads as one. There is no way to
- * un-acknowledge from here, and there should not be: the ledger is insert-only.
- */
-function Control({ entry, busy, onAcknowledge }: ControlProps) {
-  const copy = CONTROL_COPY[entry.kind];
-
-  return (
-    <div
-      className={cn(
-        'bg-background rounded-lg border border-[var(--color-card-border)]',
-        'px-[22px] py-5 shadow-[var(--shadow-rest)]',
-        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'
-      )}
-    >
-      <p className="text-[var(--color-heading)]">{copy.statement}</p>
-      {entry.satisfied && entry.acknowledgedAt ? (
-        <p className="text-muted-foreground shrink-0 text-sm" data-testid={`record-${entry.kind}`}>
-          {copy.record} ·{' '}
-          <time dateTime={entry.acknowledgedAt}>{formatRecordDate(entry.acknowledgedAt)}</time>
-        </p>
-      ) : (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="shrink-0"
-          disabled={busy}
-          onClick={() => onAcknowledge(entry.kind)}
-        >
-          {copy.action}
-        </Button>
-      )}
-    </div>
-  );
-}
-
 export interface BeginViewProps {
   /** Where the person stands on first paint, from `getGateStatus()` on the server. */
   initialStatus: GateStatusJson;
   /**
    * The two documents, already rendered on the server — `AuthoredBlocks` is a
    * server component and the words never need to reach the browser as data.
-   * Keyed by kind so the view can place each above its own control.
+   * Keyed by kind so the view can place each in its own step.
    */
   documents: { disclaimer: React.ReactNode; terms: React.ReactNode };
 }
 
 /**
- * The gate: read both documents in full, say so, confirm your age, then begin.
+ * The gate: one thing at a time, and then you begin.
  *
- * ## What is client-side here, and what is not
+ * ## Why steps, and not one page
  *
- * The documents arrive as rendered nodes. Only the three controls and the
- * status they change are state, so this is the smallest island the page can
- * have — the prose is not re-shipped as JSON and is not re-rendered on a click.
+ * The first version put both documents in full on one page with the controls
+ * underneath — about ten screens of legal text before the first button. The
+ * owner's reaction was that anyone landing there would leave and not come
+ * back, which is the whole gate failing at its one job. So: one step per kind.
+ * Each is a single viewport — the step's heading, the document in a pane that
+ * scrolls on its own, and the control always in view beneath it. The text is
+ * still there in full, and it is still read before it is agreed to; it is just
+ * not a wall.
+ *
+ * The current step is the first outstanding kind, so a person who did two of
+ * three last week lands on the third. There is no "back": an acknowledged
+ * document is on its public page, and the record screen links there.
  *
  * ## The status after a POST is the server's, not a guess
  *
@@ -132,28 +114,23 @@ export interface BeginViewProps {
  * replaces its state with the response rather than flipping one flag locally.
  * That is what keeps a double-click, a second tab, or a content version bump
  * between paint and click from leaving the page showing a state the ledger
- * does not hold.
+ * does not hold — and it is what moves the step on.
  *
  * ## Afterwards, this is the record
  *
- * With every kind satisfied the same page renders each control as a fact with
- * its date, and `Begin` is the only action left. The shell layout no longer
+ * With every kind satisfied the same page renders the three facts with their
+ * dates, a way back to each text, and `Begin`. The shell layout no longer
  * redirects here, but the page stays reachable, because "what did I agree to,
  * and when" is a question a person is entitled to have answered without
  * asking us.
  */
 export function BeginView({ initialStatus, documents }: BeginViewProps) {
   const [status, setStatus] = React.useState<GateStatusJson>(initialStatus);
-  const [busy, setBusy] = React.useState<AcknowledgementKind | null>(null);
+  const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const entryFor = (kind: AcknowledgementKind): KindStatusJson => {
-    // Non-null: the ledger presents every kind, in order, every time.
-    return status.kinds.find((entry) => entry.kind === kind)!;
-  };
-
   const acknowledge = (kind: AcknowledgementKind): void => {
-    setBusy(kind);
+    setBusy(true);
     setError(null);
     apiClient
       .post<GateStatusJson>(ACKNOWLEDGEMENTS_ROUTE, { body: { kind } })
@@ -162,56 +139,118 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
         logger.warn('Acknowledgement did not land', { kind, error: String(caught) });
         setError(DID_NOT_LAND);
       })
-      .finally(() => setBusy(null));
+      .finally(() => setBusy(false));
   };
 
+  if (status.complete) {
+    return <Record status={status} />;
+  }
+
+  // `complete` is false exactly when `outstanding` is non-empty.
+  const current = status.outstanding[0];
+  const stepIndex = ACKNOWLEDGEMENT_KINDS.indexOf(current);
+  const copy = STEP_COPY[current];
+  const document = current === 'age_18' ? null : documents[current];
+
   return (
-    <div className="flex flex-col gap-12">
-      <header className="flex flex-col gap-3">
-        <Eyebrow as="p">before you begin</Eyebrow>
-        <h1 className="brand-display text-4xl text-[var(--color-heading)] sm:text-5xl">
-          Two things to read, and one thing to confirm.
+    <div className="flex h-dvh flex-col" data-testid={`step-${current}`}>
+      <header className="flex flex-col gap-2 pt-[clamp(28px,5vw,48px)] pb-6">
+        <Eyebrow as="p">before you begin · {ORDINAL[stepIndex]} of three</Eyebrow>
+        <h1 className="brand-display text-3xl text-[var(--color-heading)] sm:text-4xl">
+          {copy.title}
         </h1>
-        <p className="text-muted-foreground max-w-prose text-lg">
-          Lelañea is a place to return to. It is not therapy, not healthcare, and not crisis support
-          — the disclaimer says what it is and is not, and the terms say how it is used. Read both,
-          in full, and say so below. What you agree to here is recorded, with the version and the
-          date, and you can come back to this page to see it.
-        </p>
+        {stepIndex === 0 ? (
+          <p className="text-muted-foreground max-w-prose">
+            Three short steps, and each one is recorded — what you agreed to, which version, and
+            when. You can come back to this page to see it.
+          </p>
+        ) : null}
       </header>
 
-      <section className="flex flex-col gap-6" aria-labelledby="begin-disclaimer">
-        <div id="begin-disclaimer">{documents.disclaimer}</div>
-        <Control entry={entryFor('disclaimer')} busy={busy !== null} onAcknowledge={acknowledge} />
-      </section>
+      {document ? (
+        <div
+          className={cn(
+            'min-h-0 flex-1 overflow-y-auto',
+            'border-y border-[var(--color-divider)] py-8',
+            // A little room on the right so the scrollbar does not sit on the text.
+            'pr-4'
+          )}
+          data-testid="document-pane"
+        >
+          {document}
+        </div>
+      ) : (
+        <div className="flex-1" />
+      )}
 
-      <section className="flex flex-col gap-6" aria-labelledby="begin-terms">
-        <div id="begin-terms">{documents.terms}</div>
-        <Control entry={entryFor('terms')} busy={busy !== null} onAcknowledge={acknowledge} />
-      </section>
-
-      <section className="flex flex-col gap-6" aria-labelledby="begin-age">
-        <Eyebrow as="h2" id="begin-age">
-          your age
-        </Eyebrow>
-        <Control entry={entryFor('age_18')} busy={busy !== null} onAcknowledge={acknowledge} />
-      </section>
-
-      {error ? (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      ) : null}
-
-      <footer className="flex flex-col gap-3 pb-20">
-        {status.complete ? (
-          <Button asChild size="lg" className="self-start">
-            <Link href={SHELL_ROUTE}>Begin</Link>
+      <footer className="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-prose text-[var(--color-heading)]">{copy.statement}</p>
+        <div className="flex shrink-0 flex-col items-start gap-2">
+          <Button type="button" disabled={busy} onClick={() => acknowledge(current)}>
+            {copy.action}
           </Button>
-        ) : (
-          <p className="text-muted-foreground">Begin once all three stand. There is no hurry.</p>
-        )}
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          ) : null}
+        </div>
       </footer>
+    </div>
+  );
+}
+
+/** The screen once every kind stands — three facts, their dates, and Begin. */
+function Record({ status }: { status: GateStatusJson }) {
+  return (
+    <div className="flex min-h-dvh flex-col gap-10 pt-[clamp(28px,5vw,48px)] pb-20">
+      <header className="flex flex-col gap-2">
+        <Eyebrow as="p">what you agreed to</Eyebrow>
+        <h1 className="brand-display text-3xl text-[var(--color-heading)] sm:text-4xl">
+          This stands.
+        </h1>
+      </header>
+
+      <ul className="flex flex-col gap-3">
+        {status.kinds.map((entry: KindStatusJson) => {
+          const copy = STEP_COPY[entry.kind];
+          return (
+            <li
+              key={entry.kind}
+              data-testid={`record-${entry.kind}`}
+              className={cn(
+                'bg-background rounded-lg border border-[var(--color-card-border)]',
+                'px-[22px] py-4 shadow-[var(--shadow-rest)]',
+                'flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between'
+              )}
+            >
+              <span className="text-[var(--color-heading)]">
+                {copy.record}
+                {entry.acknowledgedAt ? (
+                  <>
+                    {' · '}
+                    <time dateTime={entry.acknowledgedAt} className="text-muted-foreground">
+                      {formatRecordDate(entry.acknowledgedAt)}
+                    </time>
+                  </>
+                ) : null}
+              </span>
+              {copy.readAgain ? (
+                <Link
+                  href={copy.readAgain}
+                  className="text-muted-foreground text-sm underline underline-offset-4"
+                >
+                  Read it again
+                </Link>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      <Button asChild size="lg" className="self-start">
+        <Link href={SHELL_ROUTE}>Begin</Link>
+      </Button>
     </div>
   );
 }

@@ -138,21 +138,35 @@ gate page. The page wraps itself in the maintenance wrapper for the reason the
 shell does, and applies the verification redirect itself, since it is outside
 the layout that would otherwise do it.
 
-### The page
+### The page — one thing at a time
 
-Both documents in full, rendered on the server through `AuthoredBlocks` (not
-`AuthoredDocument`, which renders an `<h1>`; the page has one, the documents
-sit at `<h2>`), each followed by its control, then the eighteen-plus
-confirmation, then `Begin`. The controls are the only client state
-(`BeginView`): a click `POST`s `{ kind }` and **replaces the whole status with
-the server's answer** rather than flipping a flag, so a second tab or a version
-bump between paint and click cannot leave the page showing a state the ledger
-does not hold. Once satisfied a control renders as a fact with its date, not a
-disabled button; the ledger is insert-only and there is nothing to undo.
+The first cut put both documents in full on one page with the controls at the
+bottom: about ten screens of legal text before the first button. The owner's
+reaction was that anyone landing there would leave and not come back — the
+gate failing at its one job. So the page is **three steps**, each a single
+viewport: the step's heading ("First, what this is — and what it is not."), the
+document in a pane that scrolls on its own, and the control always in view
+beneath it. The text is still there in full, and it is still read before it is
+agreed to; it is just not a wall. The third step, age, has no document.
 
-Afterwards the page is the **record**: the same URL, every control a fact, and
-`Begin` the only action. The layout no longer redirects here, but "what did I
-agree to, and when" stays answerable without asking us.
+The current step is the **first outstanding kind**, so someone who did two of
+three last week lands on the third. There is no "back": an acknowledged
+document is on its public page (`/disclaimer`, `/terms`), and the record
+screen links there.
+
+The documents are rendered on the server through `AuthoredBlocks` (not
+`AuthoredDocument`, which renders an `<h1>`; the step has one, the document's
+own title sits at `<h2>`) and handed to `BeginView` as nodes. The controls are
+the only client state: a click `POST`s `{ kind }` and **replaces the whole
+status with the server's answer** rather than flipping a flag, which is what
+moves the step on — and what keeps a second tab or a version bump between
+paint and click from leaving the page showing a state the ledger does not
+hold.
+
+Afterwards the page is the **record**: "This stands.", the three facts with
+their dates, "Read it again" to each public page, and `Begin`. The layout no
+longer redirects here, but "what did I agree to, and when" stays answerable
+without asking us.
 
 Copy is in the prototype's register — sentence case, no exclamation points,
 `Begin` not "Start now", and the design guide's own error line ("Something
