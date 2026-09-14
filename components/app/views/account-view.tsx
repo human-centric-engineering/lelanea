@@ -2,6 +2,7 @@ import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { ExportDataRow } from '@/components/app/account/export-data-row';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
@@ -42,32 +43,20 @@ export interface AccountViewProps {
 function RowLink({
   href,
   title,
-  external,
-  newTab,
   children,
 }: {
   href: string;
   title: string;
-  /**
-   * Render a plain `<a>` rather than a `<Link>`.
-   *
-   * Required for the export row, and not a style preference: `<Link>`
-   * prefetches, and the thing behind that href is a GDPR Art. 15 export that
-   * reads about twenty-eight tables and has its own rate-limit bucket. A
-   * prefetch would run a full export because the row scrolled into view, and
-   * could spend the reader's allowance before they clicked anything.
-   */
-  external?: boolean;
-  /** Open in a new tab, so a failure response cannot replace the shell. */
-  newTab?: boolean;
   children: React.ReactNode;
 }) {
-  const Component = external ? 'a' : Link;
+  // A `<Link>`, and safely so: every row here leads to a page. The `external`
+  // and `newTab` escape hatches this once carried existed for the export row —
+  // a `<Link>` prefetches, and prefetching an Art. 15 export ran it because the
+  // row scrolled into view — and went with it when the export became a
+  // control (`ExportDataRow`, §06 t-17).
   return (
-    <Component
+    <Link
       href={href}
-      target={newTab ? '_blank' : undefined}
-      rel={newTab ? 'noopener noreferrer' : undefined}
       className={cn(
         'bg-background mb-2 block rounded-[15px] border border-[var(--color-card-border)]',
         'px-[15px] py-[13px] no-underline hover:no-underline',
@@ -85,7 +74,7 @@ function RowLink({
       <span className="text-muted-foreground mt-1 block text-[13px] leading-[1.55]">
         {children}
       </span>
-    </Component>
+    </Link>
   );
 }
 
@@ -125,13 +114,16 @@ function Section({ label, children }: { label: string; children: React.ReactNode
  * second place a password can be changed, and the second one is always the one
  * that misses a security fix.
  *
- * The data-rights rows point at whatever works TODAY, which turns out to be two
- * different places: erasure has a form on the settings page, and subject access
- * has no UI at all — only `GET /api/v1/users/me/export`, which the export row
- * therefore links to directly. They are §06 `f-gateway` t-3's to own and this
- * view is where they will surface; until then the honest thing is to send
- * someone to the control that works rather than to the page where a control
- * like it happens to live.
+ * ## The two data rights (§06 t-17)
+ *
+ * They live in two different places, on purpose. Erasure is Sunrise's form on
+ * the settings page — typed confirmation, password-gated on the route, routed
+ * through `eraseUser()` — and this view links to it rather than building a
+ * second erasure path, which is the one thing CLAUDE.md forbids outright.
+ * Subject access has no platform UI, only `GET /api/v1/users/me/export`, so
+ * the export control is ours: `ExportDataRow`, a button that fetches the
+ * bundle and hands it over as a file, answering a refusal in a sentence rather
+ * than as a JSON screen.
  */
 export function AccountView({ name, email, joined }: AccountViewProps) {
   return (
@@ -179,32 +171,11 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
 
       <Section label="your data">
         {/*
-          Straight at the endpoint, because there is no UI in front of it. The
-          account settings tab carries the delete form and account facts and
-          nothing else — `/data` describes the right but does not exercise it,
-          and the only subject-access surface in the tree is this route. It
-          answers with `Content-Disposition: attachment`, so a plain link
-          downloads the file; pointing this row at the settings page instead
-          would have been a row that led nowhere, on an Art. 15 control.
+          §06 t-17. The one control on this page that is not a link: the
+          export is an ACTION — a file is produced, nothing is navigated to —
+          and `ExportDataRow` says why a fetch beat the link t-11 shipped here.
         */}
-        {/*
-          `target="_blank"` is about the FAILURE, not the success. On a 2xx the
-          `Content-Disposition: attachment` cancels the navigation and nothing
-          opens. But the route answers a rate-limit refusal — and anything
-          thrown inside `exportUserData()` — as a bare JSON envelope with no
-          disposition header, and same-tab that commits: raw JSON replaces the
-          whole app and the back button is the only way home. In a new tab the
-          shell is still behind it.
-        */}
-        <RowLink
-          href="/api/v1/users/me/export"
-          title="Export a copy of everything held about you"
-          external
-          newTab
-        >
-          Downloads everything held about you as a file, whenever you ask. A more readable version
-          of it comes with the rest of your data controls.
-        </RowLink>
+        <ExportDataRow />
         {/*
           §06 t-16. The gate page is the record once every acknowledgement
           stands — the three facts, their dates, and a way back to each text —
@@ -216,8 +187,14 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
         <RowLink href="/app/begin" title="What you agreed to">
           The disclaimer, the terms, and your age confirmation — which version, and when.
         </RowLink>
+        {/*
+          Sunrise's form: a typed confirmation, and the route asks for the
+          password. Quiet here, explicit there. Not rebuilt in the shell — the
+          second erasure path is always the one that misses a security fix.
+        */}
         <RowLink href="/settings?tab=account" title="Close your account and erase it">
-          Everything derived from your work goes with it. Handled in your account settings.
+          Everything derived from your work goes with it — your waitlist entry, what you agreed to
+          at the gate, all of it. Handled in your account settings, with a confirmation.
         </RowLink>
       </Section>
     </>

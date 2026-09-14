@@ -6,9 +6,10 @@ description: The gate in front of the shell — the acknowledgement ledger, its 
 # The gateway
 
 Nobody reaches the shell without acknowledging the Disclaimer and the Terms of
-Use and confirming they are eighteen or over (§06). This doc covers the
-**ledger** and its API (t-15) and the **gate** in front of the shell (t-16).
-Data rights are t-17.
+Use and confirming they are eighteen or over, and a person can leave with their
+data (§06). This doc covers the **ledger** and its API (t-15), the **gate** in
+front of the shell (t-16), and the two **data rights** on the account view
+(t-17).
 
 ## The pieces
 
@@ -26,6 +27,8 @@ Data rights are t-17.
 | The redirect                              | `app/(lelanea)/app/layout.tsx`                             |
 | The gate page, `/app/begin`               | `app/(gate)/app/begin/page.tsx`                            |
 | The gate's controls (client)              | `components/app/views/begin-view.tsx`                      |
+| The export control (client)               | `components/app/account/export-data-row.tsx`               |
+| Both rights, one subject, end to end      | `tests/unit/lib/app/privacy/subject-rights.test.ts`        |
 
 ## The model, and the one rule it encodes
 
@@ -208,3 +211,49 @@ that true:
 FK, so `migrate dev` emits a DROP for it (and for every other unmodelled object
 in the tree — 20 statements this time, all stripped; the migration's header
 lists them). See B13 and the waitlist migration for the same story.
+
+## The two data rights, on the account view (t-17)
+
+Data rights ship with accounts whatever else slips. What the tree had when this
+was claimed was the inverse of the plan's hypothesis: **deletion UI existed**
+(Sunrise's `DeleteAccountForm` on `/settings?tab=account` — a typed
+confirmation, and `DELETE /api/v1/users/me` asks for the password before it
+calls `eraseUser()`), and **export UI did not** — only
+`GET /api/v1/users/me/export`, which the account view linked at directly.
+
+So the two rights live in two different places, on purpose:
+
+- **Erasure** stays Sunrise's. The account view's "Close your account and erase
+  it" row leads to the settings form. Not rebuilt in the shell: a second
+  erasure path is the one thing `CLAUDE.md` forbids outright, and the second
+  one is always the one that misses a security fix.
+- **Export** is ours: `ExportDataRow`, a button on the account view. It
+  `fetch`es the route and hands the body to the browser as
+  `lelanea-my-data-<date>.json` (the reader's calendar date) via `res.blob()`
+  — bytes to file, never parsed, as `backup-panel.tsx` does, because the
+  bundle is the whole account and `apiClient` would hold a heavy one three
+  times over in the tab. The reason it is a fetch and not the link t-11
+  shipped: the route answers a rate-limit refusal (10 a minute) and any thrown
+  error as a bare JSON envelope with no `Content-Disposition`, and a
+  navigation to that put raw `{"success":false,…}` in a tab on an Art. 15
+  control. Now a 429 is a sentence in the row, in the register ("You have
+  asked for a few copies just now. Give it a minute, then try once more."); a
+  401 — a session that ended while the page sat open — goes through the
+  clear-session route to sign-in with a way back (a stale cookie would bounce
+  `/login` into the shell otherwise), because "try once more" can never
+  succeed there. The status line is a sibling of the button, not a child — a
+  button's children are presentational, so a live region inside one is never
+  announced. It is the one
+  button on a page of links, and the view's test says so.
+
+`lib/app/account-sections.ts` is untouched — the shell's account view is our
+home for these, not Sunrise's settings page.
+
+**What the bundle contains, for a data subject:** `app.waitlist` (matched by
+email as well as user id, because the entry usually pre-dates the account) and
+`app.acknowledgements` (by user id, every version ever agreed to), beside the
+platform and framework sections. `subject-rights.test.ts` proves both for one
+person through the real seams, and that erasure removes the waitlist row by
+hook, the person by delete, and the acknowledgements by the cascade — with an
+assertion that nothing deletes those by hand, because a hook appearing there
+would mean the cascade had been duplicated or replaced.

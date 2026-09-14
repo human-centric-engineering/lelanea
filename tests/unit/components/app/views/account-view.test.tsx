@@ -16,14 +16,17 @@ import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 /*
- * `next/link` renders a plain `<a>` in a test environment, so "is it a Link or
- * an anchor" is not observable from the DOM without this. Marking the mock is
- * what makes the export row's opt-out assertable at all — see the test that
- * uses it, and `RowLink`'s `external` prop for why it matters.
+ * `next/link` renders a plain `<a>` in a test environment. The mock is marked
+ * so a row can be told apart from a bare anchor if one ever returns — the
+ * export row was one until §06 t-17 made it a control.
  */
 vi.mock('next/link', () => ({
   default: ({ children, ...props }: React.ComponentPropsWithoutRef<'a'>) =>
     React.createElement('a', { ...props, 'data-next-link': 'true' }, children),
+}));
+
+vi.mock('@/lib/logging', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { AccountView } from '@/components/app/views/account-view';
@@ -84,50 +87,33 @@ describe('where the controls actually live', () => {
     );
   });
 
-  it('points the export row at the only thing that exports', () => {
-    // The settings account tab carries the delete form and account facts and
-    // nothing else; `/data` describes the right without exercising it. The
-    // route is the whole subject-access surface in the tree, so a row pointing
-    // anywhere else is a broken promise on a GDPR Art. 15 control.
+  it('makes the export a control, not a link — the one row that produces rather than leads', () => {
+    // §06 t-17. t-11 linked this row straight at `GET /api/v1/users/me/export`
+    // in a new tab, and a refusal came back as raw JSON in that tab. The export
+    // is now `ExportDataRow`: a button, so a refusal is a sentence in the row.
+    // Its own behaviour is `tests/unit/components/app/account/export-data-row.test.tsx`.
     renderAccount();
-    expect(screen.getByRole('link', { name: /Export a copy/ }).getAttribute('href')).toBe(
-      '/api/v1/users/me/export'
-    );
+    const row = screen.getByRole('button', { name: /Export a copy/ });
+    expect(row.getAttribute('type')).toBe('button');
+    expect(screen.queryByRole('link', { name: /Export a copy/ })).toBeNull();
   });
 
-  it('reaches the export as a plain anchor, so nothing prefetches it', () => {
-    // `<Link>` prefetches. Behind that href is an export that reads ~28 tables
-    // and has its own rate-limit bucket, so a prefetch would run a full export
-    // because the row scrolled into view — and could spend the reader's
-    // allowance before they clicked anything. Asserted against the marked mock
-    // above, with an in-app row alongside it: without the contrast this would
-    // pass just as well if the mock stopped being applied at all.
+  it('never prefetches an export: no link on the page points at the route', () => {
+    // `<Link>` prefetches, and prefetching an Art. 15 export ran it because a
+    // row scrolled into view. With the row a button that cannot happen, but a
+    // future link to the route would bring it back — so the property is pinned
+    // on the whole page, not on one element.
     renderAccount();
-    expect(
-      screen.getByRole('link', { name: /Export a copy/ }).getAttribute('data-next-link')
-    ).toBeNull();
-    expect(screen.getByRole('link', { name: /Your profile/ }).getAttribute('data-next-link')).toBe(
-      'true'
-    );
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).not.toContain('/api/v1/users/me/export');
+    expect(hrefs.length).toBeGreaterThan(0);
   });
 
-  it('opens the export in a new tab, so a refusal cannot replace the shell', () => {
-    // The success path never navigates — `Content-Disposition: attachment`
-    // cancels it. The rate-limit refusal and any thrown export error come back
-    // as a bare JSON envelope with no disposition header, and same-tab that
-    // commits: raw JSON over the whole app, back button the only way out.
+  it('keeps every row in the same tab', () => {
     renderAccount();
-    const row = screen.getByRole('link', { name: /Export a copy/ });
-    expect(row.getAttribute('target')).toBe('_blank');
-    expect(row.getAttribute('rel')).toContain('noopener');
-  });
-
-  it('leaves the in-app rows in the same tab', () => {
-    // Without this the assertion above would pass just as well if `newTab` were
-    // applied to every row, which would send the reader out of the shell to
-    // change their own password.
-    renderAccount();
-    expect(screen.getByRole('link', { name: /Your profile/ }).getAttribute('target')).toBeNull();
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('target')).toBeNull();
+    }
   });
 
   it('sends erasure to the form that performs it', () => {
@@ -149,10 +135,12 @@ describe('where the controls actually live', () => {
     expect(rows.indexOf('/app/begin')).toBeLessThan(rows.indexOf('/settings?tab=account'));
   });
 
-  it('makes every row a link rather than a button that lies', () => {
+  it('makes every row that leads somewhere a link, and the one that does something a button', () => {
     renderAccount();
-    expect(screen.getAllByRole('link')).toHaveLength(5);
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getAllByRole('link')).toHaveLength(4);
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toContain('Export a copy');
   });
 });
 
