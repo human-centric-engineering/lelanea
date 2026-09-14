@@ -161,7 +161,7 @@ describe('leaf tests may import the framework', () => {
 
   it('leaves the framework ban in place for a test of the app shell', async () => {
     const config = await new ESLint().calculateConfigForFile(
-      'tests/unit/components/app/shell/map-drawer.test.tsx'
+      'tests/unit/components/app/shell/drawer.test.tsx'
     );
 
     expect(importPatterns(config)).toEqual(expect.arrayContaining(['@/lib/framework']));

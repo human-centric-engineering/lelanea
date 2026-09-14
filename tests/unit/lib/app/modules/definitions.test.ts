@@ -112,6 +112,9 @@ describe('getModuleDefinitions', () => {
   it('declares an empty interior: a config schema accepting {} and nothing else', () => {
     for (const definition of definitions) {
       expect(definition.configSchema.safeParse({}).success).toBe(true);
+      // Strict: a body with a key is refused (400 at the admin config route),
+      // not stripped to `{}` and stored as if it had been saved.
+      expect(definition.configSchema.safeParse({ anything: 1 }).success).toBe(false);
       expect(definition.slotDefinitions).toBeUndefined();
       expect(definition.agentRoles).toBeUndefined();
       expect(definition.capabilities).toBeUndefined();

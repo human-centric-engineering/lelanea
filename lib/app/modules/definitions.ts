@@ -78,9 +78,11 @@ function toDefinition(module: JourneyModuleView, tier: JourneyTierView): ModuleD
     name: module.title,
     description: describe(module, tier),
     // An empty interior, deliberately: the admin config form renders no fields
-    // and the API accepts `{}`. Each module grows its own schema when it is
-    // written.
-    configSchema: z.object({}),
+    // and the API accepts `{}` and nothing else. Strict, like every authored
+    // schema in `lib/app/content/schemas.ts`: a plain `z.object({})` would
+    // strip unknown keys and store `{}` for a body that said something, which
+    // reads as saved. Each module grows its own schema when it is written.
+    configSchema: z.strictObject({}),
   };
 }
 
