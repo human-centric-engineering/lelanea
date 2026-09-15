@@ -39,44 +39,6 @@ one that breaks something silently.
 | Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, once per session (`sessionStorage`, `lelanea.bloom.seen`)   |
 | Tooltip      | `components/app/ui/tipped.tsx`                        | The bubble on any icon-only control; never fires on touch              |
 
-## The left menu opens and closes five ways, and two of them persist
-
-| Gesture                          | Direction | Writes `lelanea.nav.slim` |
-| -------------------------------- | --------- | ------------------------- |
-| the collapse control, at the top | both      | yes                       |
-| a press on the menu's dead space | both      | yes                       |
-| a press out in the panes         | closes    | no                        |
-| opening Ask Lelañea              | closes    | no                        |
-| crossing 1100px inward           | closes    | no                        |
-
-The split is about **what the press was aimed at**. The first two are a reader
-working the menu; the rest are the layout getting out of the way for a moment,
-and persisting any of those silently rewrites a choice somebody made on purpose
-(divergence Row 2's rule, which now has three callers rather than one).
-
-A press on any control — a link, a button, the separator — does none of it, or
-using the app folds the menu as a side effect. Same guard list `workspace.tsx`
-uses for its re-park gesture.
-
-**Ask Lelañea and the menu are mutually exclusive**, and that rule lives in
-`use-shell-layout.tsx` rather than in the two components. Both eat the middle of
-the screen from the same end; two components each reaching for the other's
-setter is one rule written twice, and the second copy is the one that rots.
-
-### The width transition is unconditional, and the startup correction is what moves
-
-`shell-nav.tsx` used to arm its width transition only after a reader had used
-the collapse control. That hid a real problem and created two others: the first
-collapse had nothing to transition from (the flag and the width landed in one
-commit), and the auto-slim never animated at all.
-
-The real problem is that `useLocalStorage` adopts its stored value in a plain
-effect, **after paint** — so a reader who had chosen the slim menu watched it
-render at 234px and correct on every page load. The provider now adopts that
-preference in a **layout effect**, declared before `fit` so the auto-slim still
-wins under 1100px. Nothing to animate away from, so the transition can simply
-always be on.
-
 Its own route group, because `app/(protected)/layout.tsx` is a header over a
 single `container mx-auto` main — a centred document column, which is the
 opposite shape. `/profile` and `/settings` stay behind that frame on purpose and
@@ -154,6 +116,44 @@ One ordered walk rather than independent handlers, which would race. Each rung i
 The account menu sits above rung 1 without being in the walk: Radix dismisses it
 on Escape in the capture phase, and the menu stops the event there so the drawer
 under it stays open. See [the account menu](#the-account-menu).
+
+## The left menu opens and closes five ways, and two of them persist
+
+| Gesture                          | Direction | Writes `lelanea.nav.slim` |
+| -------------------------------- | --------- | ------------------------- |
+| the collapse control, at the top | both      | yes                       |
+| a press on the menu's dead space | both      | yes                       |
+| a press out in the panes         | closes    | no                        |
+| opening Ask Lelañea              | closes    | no                        |
+| crossing 1100px inward           | closes    | no                        |
+
+The split is about **what the press was aimed at**. The first two are a reader
+working the menu; the rest are the layout getting out of the way for a moment,
+and persisting any of those silently rewrites a choice somebody made on purpose
+(divergence Row 2's rule, which now has three callers rather than one).
+
+A press on any control — a link, a button, the separator — does none of it, or
+using the app folds the menu as a side effect. Same guard list `workspace.tsx`
+uses for its re-park gesture.
+
+**Ask Lelañea and the menu are mutually exclusive**, and that rule lives in
+`use-shell-layout.tsx` rather than in the two components. Both eat the middle of
+the screen from the same end; two components each reaching for the other's
+setter is one rule written twice, and the second copy is the one that rots.
+
+### The width transition is unconditional, and the startup correction is what moves
+
+`shell-nav.tsx` used to arm its width transition only after a reader had used
+the collapse control. That hid a real problem and created two others: the first
+collapse had nothing to transition from (the flag and the width landed in one
+commit), and the auto-slim never animated at all.
+
+The real problem is that `useLocalStorage` adopts its stored value in a plain
+effect, **after paint** — so a reader who had chosen the slim menu watched it
+render at 234px and correct on every page load. The provider now adopts that
+preference in a **layout effect**, declared before `fit` so the auto-slim still
+wins under 1100px. Nothing to animate away from, so the transition can simply
+always be on.
 
 ## The tone
 
