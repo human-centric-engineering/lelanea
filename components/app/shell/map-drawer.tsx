@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient, APIClientError } from '@/lib/api/client';
@@ -252,7 +253,8 @@ export function MapDrawerBody() {
                       aria-current={current ? 'page' : undefined}
                       title={`${module.title} · ${state.text}`}
                       className={cn(
-                        'flex w-full items-center gap-[11px] rounded-[11px] border border-transparent',
+                        'flex w-full items-center gap-[11px] border border-transparent',
+                        ICON_RADIUS,
                         'px-3 py-[9px] text-left no-underline hover:no-underline',
                         'hover:bg-[var(--color-pill)]',
                         'transition-[background-color] duration-200 ease-[var(--ease-brand)]',

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, ArrowUp, Mic, PanelLeftClose } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Mic } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
@@ -14,7 +14,9 @@ import {
   type ModulePlace,
   useShellLayout,
 } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { PanelCollapseIcon } from '@/components/app/ui/panel-icons';
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { cn } from '@/lib/utils';
@@ -191,7 +193,8 @@ export function ConversationPane() {
                 title="Collapse the conversation"
                 className={cn(
                   'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
-                  'items-center justify-center rounded-[10px]',
+                  'items-center justify-center',
+                  ICON_RADIUS,
                   'hover:bg-[var(--color-pill-hover)]',
                   'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                   'motion-reduce:transition-none',
@@ -199,7 +202,7 @@ export function ConversationPane() {
                   'focus-visible:outline-[var(--color-ring)]'
                 )}
               >
-                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+                <PanelCollapseIcon />
               </button>
             ) : null}
 
@@ -223,7 +226,8 @@ export function ConversationPane() {
                   href="/app"
                   title="Return to the main conversation with Lelañea"
                   className={cn(
-                    'flex min-w-0 flex-none items-center gap-1.5 rounded-[10px] px-2 py-1',
+                    'flex min-w-0 flex-none items-center gap-1.5 px-2 py-1',
+                    ICON_RADIUS,
                     'text-[13.5px] text-[var(--color-secondary-ink)] no-underline',
                     'hover:bg-[var(--color-secondary-wash)] hover:no-underline',
                     'transition-[background-color] duration-200 ease-[var(--ease-brand)]',

@@ -1,15 +1,17 @@
 'use client';
 
-import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
+import { PanelCollapseIcon, PanelExpandIcon } from '@/components/app/ui/panel-icons';
 import { Tipped } from '@/components/app/ui/tipped';
 import { AccountMenu, type AccountMenuUser } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { SHELL_OVERLAY_ATTR, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { LAST_MODULE_STORAGE_KEY, MODULES_PATH_PREFIX, modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
@@ -378,7 +380,8 @@ export function ShellNav({ user }: ShellNavProps) {
               title="Close the menu"
               className={cn(
                 'text-muted-foreground hover:text-foreground flex h-9 w-9 flex-none',
-                'items-center justify-center rounded-[10px]',
+                'items-center justify-center',
+                ICON_RADIUS,
                 'hover:bg-[var(--color-pill-hover)]',
                 'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                 'motion-reduce:transition-none',
@@ -432,7 +435,8 @@ export function ShellNav({ user }: ShellNavProps) {
                   aria-expanded={!slim}
                   className={cn(
                     'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-                    'flex h-8 flex-none items-center justify-center rounded-[10px]',
+                    'flex h-8 flex-none items-center justify-center',
+                    ICON_RADIUS,
                     'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                     'motion-reduce:transition-none',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
@@ -442,11 +446,7 @@ export function ShellNav({ user }: ShellNavProps) {
                     slim ? 'w-11' : 'w-8'
                   )}
                 >
-                  {slim ? (
-                    <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
-                  ) : (
-                    <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
-                  )}
+                  {slim ? <PanelExpandIcon /> : <PanelCollapseIcon />}
                 </button>
               )}
             </Tipped>
@@ -519,7 +519,8 @@ export function ShellNav({ user }: ShellNavProps) {
                     onClick={width === 'small' ? closeNav : undefined}
                     aria-current={current ? 'page' : undefined}
                     className={cn(
-                      'flex h-[42px] flex-none items-center gap-3 rounded-xl border border-transparent',
+                      'flex h-[42px] flex-none items-center gap-3 border border-transparent',
+                      ICON_RADIUS,
                       'text-muted-foreground text-left no-underline hover:no-underline',
                       'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                       'motion-reduce:transition-none',

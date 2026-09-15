@@ -397,7 +397,7 @@ describe('Escape goes through the verbs, not the setters beneath them', () => {
     renderInShell(
       <>
         <ShellTopbar />
-        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com' }} />
+        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', role: null }} />
       </>,
       'small'
     );

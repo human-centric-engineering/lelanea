@@ -3,6 +3,7 @@
 import { BookOpen, Map } from 'lucide-react';
 
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { Tipped } from '@/components/app/ui/tipped';
 import { cn } from '@/lib/utils';
 
@@ -91,7 +92,8 @@ export function ShellRail() {
                     ? [
                         // A thumb target: half the row each, 48px tall, icon
                         // beside a sentence-case label at readable size.
-                        'text-foreground h-12 min-w-0 flex-1 gap-[9px] rounded-[14px] text-sm',
+                        'text-foreground h-12 min-w-0 flex-1 gap-[9px] text-sm',
+                        ICON_RADIUS,
                         'border border-[var(--color-border)] bg-[var(--color-popover)]',
                         'shadow-[var(--shadow-rest)]',
                         // It goes down under the thumb, like every other button
@@ -107,7 +109,8 @@ export function ShellRail() {
                           : 'text-muted-foreground',
                       ]
                     : [
-                        'text-muted-foreground w-[62px] flex-col gap-1.5 rounded-xl px-0 pt-2.5 pb-2',
+                        'text-muted-foreground w-[62px] flex-col gap-1.5 px-0 pt-2.5 pb-2',
+                        ICON_RADIUS,
                         'text-[8.5px] leading-none tracking-[0.05em] whitespace-nowrap uppercase',
                         'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
                         open &&

@@ -38,7 +38,7 @@ function renderModule(slug: string, displayNumber: string, title: string) {
   return renderInShell(
     <>
       <ConversationPane />
-      <RememberModule slug={slug} displayNumber={displayNumber} title={title} />
+      <RememberModule slug={slug} displayNumber={displayNumber} title={title} tier="foundations" />
     </>,
     'large'
   );
@@ -56,11 +56,60 @@ describe('RememberModule — the remembered slug', () => {
     rerender(
       <>
         <ConversationPane />
-        <RememberModule slug="oneness" displayNumber="02" title="Oneness" />
+        <RememberModule slug="oneness" displayNumber="02" title="Oneness" tier="foundations" />
       </>
     );
 
     expect(window.localStorage.getItem(LAST_MODULE_STORAGE_KEY)).toBe(JSON.stringify('oneness'));
+  });
+});
+
+describe('RememberModule — the recents list', () => {
+  const stored = () =>
+    JSON.parse(window.localStorage.getItem('lelanea.workspace.recents') ?? '[]') as {
+      slug: string;
+      label: string;
+    }[];
+
+  it('records the visit for the topbar strip', () => {
+    renderModule('values', '01', 'Values');
+    expect(stored()).toEqual([{ slug: 'values', label: '01 · Values', tier: 'foundations' }]);
+  });
+
+  it('puts the newest first', () => {
+    const { rerender } = renderModule('values', '01', 'Values');
+    mockPathname.current = '/app/modules/boundaries';
+    rerender(
+      <>
+        <ConversationPane />
+        <RememberModule
+          slug="boundaries"
+          displayNumber="02"
+          title="Boundaries"
+          tier="foundations"
+        />
+      </>
+    );
+
+    expect(stored().map((e) => e.slug)).toEqual(['boundaries', 'values']);
+  });
+
+  it('MOVES a module already in the list rather than leaving a stale position', () => {
+    // A "recently" strip whose order does not follow the reader is just a list.
+    const { rerender } = renderModule('values', '01', 'Values');
+    const revisit = (slug: string, n: string, title: string) => {
+      mockPathname.current = `/app/modules/${slug}`;
+      rerender(
+        <>
+          <ConversationPane />
+          <RememberModule slug={slug} displayNumber={n} title={title} tier="foundations" />
+        </>
+      );
+    };
+    revisit('boundaries', '02', 'Boundaries');
+    revisit('values', '01', 'Values');
+
+    expect(stored().map((e) => e.slug)).toEqual(['values', 'boundaries']);
   });
 });
 
@@ -78,7 +127,12 @@ describe('RememberModule — the published place', () => {
     rerender(
       <>
         <ConversationPane />
-        <RememberModule slug="boundaries" displayNumber="04" title="Boundaries" />
+        <RememberModule
+          slug="boundaries"
+          displayNumber="04"
+          title="Boundaries"
+          tier="foundations"
+        />
       </>
     );
 
@@ -100,7 +154,7 @@ describe('RememberModule — the published place', () => {
     rerender(
       <>
         <ConversationPane />
-        <RememberModule slug="values" displayNumber="01" title="Values" />
+        <RememberModule slug="values" displayNumber="01" title="Values" tier="foundations" />
       </>
     );
 

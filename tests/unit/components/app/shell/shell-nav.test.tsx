@@ -239,6 +239,26 @@ describe('ShellNav — slim mode', () => {
     expect(item.nextElementSibling?.textContent).not.toContain('What you are living through');
   });
 
+  it("uses the design's own collapse pair, pointing where the menu is going", async () => {
+    // Two bars and a chevron — `<||` to collapse, `||>` to expand — ported
+    // path-for-path from the prototype. lucide's `PanelLeftClose`/`PanelLeftOpen`
+    // were the nearest thing in the kit and are a different drawing: a full
+    // panel outline with an arrow inside, which reads as a window rather than
+    // as an edge being pushed. This is the only glyph in the shell that has to
+    // communicate a DIRECTION rather than a destination.
+    renderAt('/app');
+    const glyph = () => toggle().querySelector('svg')?.innerHTML ?? '';
+
+    // Collapse: chevron pointing left, bars on the right.
+    expect(glyph()).toContain('m10 9-3 3 3 3');
+    expect(glyph()).toContain('M20 5v14');
+
+    await userEvent.click(toggle());
+    // Expand: chevron pointing right, bars on the left.
+    expect(glyph()).toContain('m14 9 3 3-3 3');
+    expect(glyph()).toContain('M4 5v14');
+  });
+
   it('offers the way back', async () => {
     renderAt('/app');
     await userEvent.click(toggle());
@@ -287,7 +307,7 @@ describe('ShellNav — slim mode', () => {
 
 describe('ShellNav — collapsing changes the width and nothing else', () => {
   /** The nav's three regions, in order: brand, scrolling items, pinned footer. */
-  const regions = () => Array.from(document.querySelectorAll('nav > div'));
+  const regions = () => Array.from(document.querySelectorAll<HTMLElement>('nav > div'));
 
   it('keeps the brand row the same height in both states', async () => {
     // The defect this guards, and the reason the collapse control can live at
