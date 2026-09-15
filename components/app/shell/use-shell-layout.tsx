@@ -54,6 +54,16 @@ export const NAV_TOGGLE_ATTR = 'data-nav-toggle';
  *
  * An attribute rather than a list of component names, so the next full-screen
  * thing opts out by carrying it rather than by being remembered.
+ *
+ * **It is detected by hit-testing (`closest`), so it covers exactly the window
+ * in which the overlay is solid to the pointer — no more.** The bloom releases
+ * `pointer-events` for its 420ms fade on purpose, so that the shell is live as
+ * it appears rather than half a second later; through that slice a press lands
+ * on the shell, `event.target` is whatever is underneath, and this guard
+ * correctly does not fire. That is the same boundary in both directions rather
+ * than a hole in one of them: while the overlay is blocking the pointer, nothing
+ * beneath it reacts; once it has stopped, everything does. Gating on the bloom's
+ * animation phase instead would mean the shell looked live and was not.
  */
 export const SHELL_OVERLAY_ATTR = 'data-shell-overlay';
 
@@ -297,6 +307,13 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
 
       // The drawer belongs to small screens; leaving it open on the way up
       // strands a fixed panel over a layout that has no scrim any more.
+      //
+      // The raw setter here, deliberately, where every other close path uses
+      // `closeNav`: this one is a WIDTH transition, so the panel stops being
+      // `inert` (that is `width === 'small' && !navOpen`) and stops being a
+      // panel at all — nothing is stranded, and the burger `closeNav` would
+      // hand focus to no longer renders. Using `closeNav` would also capture a
+      // stale `navOpen` in this mount-only effect.
       setNavOpenState(false);
 
       const crossedInward =
@@ -510,18 +527,26 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * The order is the point — each rung is "the most recently opened thing that
    * is covering something" — so it is expressed as a single ordered walk rather
    * than as independent handlers, which would race.
+   *
+   * **Every rung goes through the verb, not the setter beneath it.** Both verbs
+   * grew a second half in this branch — `closeNav` hands focus back to the
+   * burger, `setChatSlim` releases the menu override — and a rung calling
+   * `setNavOpenState` or `setChatSlimState` directly gets the first half only.
+   * That is worse than never having added them: the same user-visible action
+   * then behaves one way from the button and another from the key. Escape is
+   * also the rung that can least afford it, being the keyboard-only gesture.
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (navOpen) return setNavOpenState(false);
+      if (navOpen) return closeNav();
       if (drawer) return setDrawer(null);
-      if (width === 'medium' && wsOpen && !chatSlim) return setChatSlimState(true);
-      if (chatSlim && width !== 'medium') return setChatSlimState(false);
+      if (width === 'medium' && wsOpen && !chatSlim) return setChatSlim(true);
+      if (chatSlim && width !== 'medium') return setChatSlim(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen, drawer, width, wsOpen, chatSlim]);
+  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, setChatSlim]);
 
   const value = useMemo<ShellLayout>(
     () => ({

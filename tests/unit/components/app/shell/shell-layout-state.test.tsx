@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Panes } from '@/components/app/shell/panes';
 import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
+import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { CHAT_MAX, CHAT_MIN } from '@/components/app/shell/use-shell-layout';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
@@ -367,5 +368,43 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     // menu. Same reasoning as the click-away, and as the 1100px auto-slim.
     renderShell('medium');
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+});
+
+describe('Escape goes through the verbs, not the setters beneath them', () => {
+  // Both verbs grew a second half in this branch — `closeNav` hands focus back
+  // to the burger, `setChatSlim` releases the menu override — and a rung
+  // calling the raw setter gets the first half only. That is worse than never
+  // having added them: the same user-visible action then behaves one way from
+  // the button and another from the key, and Escape is the rung that can least
+  // afford it, being keyboard-only.
+  const nav = () => document.querySelector('nav[aria-label="Main"]');
+
+  it('releases the menu override when Escape parks the conversation', async () => {
+    renderShell(1200);
+    await userEvent.click(strip()!);
+    expect(nav()?.getAttribute('data-slim')).toBe('true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(strip()).not.toBeNull();
+    // The collapse BUTTON already did this. The key has to agree with it.
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
+  });
+
+  it('hands focus back to the burger when Escape closes the ≤900px drawer', async () => {
+    // The panel goes `inert` the instant it closes, so focus left on it drops
+    // to `<body>` and the next Tab restarts from the top of the document.
+    renderInShell(
+      <>
+        <ShellTopbar />
+        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com' }} />
+      </>,
+      'small'
+    );
+    const burger = screen.getByRole('button', { name: 'Open the menu' });
+    await userEvent.click(burger);
+
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open the menu' }));
   });
 });

@@ -121,7 +121,7 @@ export function initialsFor(name: string, email: string): string {
  * person, so the nav is about destinations. Owner ruling, 15 September 2026.
  */
 export function ShellNav({ user }: ShellNavProps) {
-  const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, collapseNav, drawer, width } =
+  const { navSlim, navOpen, closeNav, toggleNavSlim, collapseNav, drawer, width } =
     useShellLayout();
   /*
    * "Workspace" resolves to the last module visited, remembered per browser
@@ -269,7 +269,7 @@ export function ShellNav({ user }: ShellNavProps) {
       {width === 'small' ? (
         <div
           aria-hidden="true"
-          onClick={() => setNavOpen(false)}
+          onClick={closeNav}
           className={cn(
             'fixed inset-0 z-[55] bg-[var(--color-scrim)]',
             'transition-opacity duration-300 ease-[var(--ease-brand)]',
