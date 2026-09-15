@@ -84,18 +84,23 @@ export function initialsFor(name: string, email: string): string {
  *
  * ## Five ways it opens and closes, and they are not interchangeable
  *
- * | Gesture                        | Direction | Writes the preference |
- * | ------------------------------ | --------- | --------------------- |
- * | the collapse control, at the top | both    | yes                   |
- * | a press on the menu's dead space | both    | yes                   |
- * | a press out in the panes       | closes    | no                    |
- * | opening Ask Lelañea            | closes    | no                    |
- * | crossing 1100px inward         | closes    | no                    |
+ * | Gesture                          | Direction | Where                | Persists |
+ * | -------------------------------- | --------- | -------------------- | -------- |
+ * | the collapse control, at the top | both      | above 900px          | yes      |
+ * | a press on the menu's dead space | both      | above 900px          | yes      |
+ * | a press out in the panes         | closes    | above 900px          | no       |
+ * | Ask Lelañea opening / parking    | both      | `medium` + workspace | no       |
+ * | crossing 1100px inward           | closes    | —                    | no       |
  *
  * The split is about what the press was aimed at. The first two are a reader
  * working the menu deliberately, so they persist; the rest are the layout
  * getting out of the way for a moment, and persisting any of those would
  * silently rewrite a choice somebody made on purpose — see `collapseNav`.
+ *
+ * None of the first three fire while a drawer is open: a press inside an
+ * `aria-modal` dialog must not reach the shell it is covering. And the Ask
+ * Lelañea row is width-conditional because its whole reason is crowding — see
+ * `setChatSlim` for the geometry that decides where the two actually compete.
  *
  * ## What is deliberately absent
  *

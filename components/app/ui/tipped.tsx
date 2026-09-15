@@ -46,10 +46,14 @@ export interface TipTrigger {
  * ## It never fires on touch
  *
  * A hover tooltip that latches on tap sits over the very thing it describes,
- * which on the ≤900px rail is a thumb-sized button (t-35). `pointerenter` is
- * therefore ignored for `touch`, and focus only shows it when the focus is
- * keyboard focus (`:focus-visible`) — a tap that moves focus into a button does
- * not.
+ * and stays there until something else is touched. `pointerenter` is therefore
+ * ignored for `touch`, and focus only shows it when the focus is keyboard focus
+ * (`:focus-visible`) — a tap that moves focus into a button does not.
+ *
+ * That is a property of the POINTER, not of the layout, and it is not a reason
+ * for a caller to stop thinking about width: `shell-rail.tsx` still passes a
+ * `null` label in its ≤900px footer, because down there the bubble would be
+ * measured off the side of the screen whatever pointer asked for it.
  *
  * ## The bubble is not the accessible name
  *
