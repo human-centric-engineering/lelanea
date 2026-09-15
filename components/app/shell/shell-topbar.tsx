@@ -2,7 +2,7 @@
 
 import { Columns2, Menu, MessageCircle } from 'lucide-react';
 
-import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { NAV_TOGGLE_ATTR, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
 /**
@@ -48,12 +48,14 @@ export function ShellTopbar() {
       {small ? (
         <button
           type="button"
+          // The drawer hands focus back here when it closes — see `closeNav`.
+          {...{ [NAV_TOGGLE_ATTR]: '' }}
           onClick={() => setNavOpen(!navOpen)}
           aria-label={navOpen ? 'Close the menu' : 'Open the menu'}
           aria-expanded={navOpen}
           className={cn(
             'text-muted-foreground hover:text-foreground flex h-9 w-9 flex-none items-center',
-            'justify-center rounded-full hover:bg-[var(--color-pill-hover)]',
+            'justify-center rounded-[10px] hover:bg-[var(--color-pill-hover)]',
             'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
             'motion-reduce:transition-none',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',

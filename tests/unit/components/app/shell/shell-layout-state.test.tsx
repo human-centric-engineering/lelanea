@@ -261,3 +261,60 @@ describe('the auto-slim fires on crossing, not on every resize', () => {
     expect(nav()?.getAttribute('data-slim')).toBe('true');
   });
 });
+
+describe('Ask Lelañea and the left menu are mutually exclusive', () => {
+  // Both eat the middle of the screen, and with the workspace open they eat it
+  // from the same end: 234px of menu plus a 420px conversation panel leaves a
+  // tablet showing slivers of three things and the whole of none of them. The
+  // rule lives in the provider rather than in the two components, so there is
+  // one copy of it — which is what this file is checking.
+  const nav = () => document.querySelector('nav[aria-label="Main"]');
+  const slimNow = () => nav()?.getAttribute('data-slim');
+
+  it('collapses the menu when the conversation is opened from its strip', async () => {
+    renderShell('large');
+    expect(slimNow()).toBe('false');
+
+    // Fold it first, so there is a strip to open.
+    handle().focus();
+    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+    const pull = strip();
+    expect(pull).not.toBeNull();
+
+    await userEvent.click(pull!);
+    expect(strip()).toBeNull();
+    expect(slimNow()).toBe('true');
+  });
+
+  it('parks the conversation when the menu is expanded', async () => {
+    renderShell('large');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+    expect(slimNow()).toBe('true');
+    expect(strip()).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(slimNow()).toBe('false');
+    expect(strip()).not.toBeNull();
+  });
+
+  it('does not park a conversation that has no workspace beside it', async () => {
+    // With nothing to give the width to, folding leaves a 56px sliver against
+    // empty space — which is the defect the `!wsOpen` reset already exists to
+    // prevent. The rule is about two things competing, and on `/app` there is
+    // only one.
+    mockPathname.current = '/app';
+    renderShell('large');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(strip()).toBeNull();
+  });
+
+  it('opening the conversation does not rewrite the stored menu preference', () => {
+    // Asking for the conversation is not a statement about how you like your
+    // menu. Same reasoning as the click-away, and as the 1100px auto-slim.
+    renderShell('large');
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+});
