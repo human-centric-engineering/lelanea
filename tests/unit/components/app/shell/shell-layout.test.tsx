@@ -22,6 +22,7 @@
  */
 
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { cloneElement, isValidElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,6 +75,12 @@ vi.mock('@/lib/auth/clear-session', () => ({
   }),
 }));
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+// The account menu's sign-out tracks an event; the root layout's provider is
+// above this route group, so it is stubbed here as the theme provider is wrapped.
+vi.mock('@/lib/analytics', () => ({
+  useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
+  EVENTS: { USER_LOGGED_OUT: 'user_logged_out' },
+}));
 
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -169,6 +176,27 @@ describe('the shell layout serves the product', () => {
     };
     await renderLayout();
     expect(screen.getAllByText('zoe@example.com').length).toBeGreaterThan(0);
+  });
+
+  it('hands the nav the session’s role, so an admin gets the Admin row on first paint', async () => {
+    // The role is read here, server-side, rather than by the menu from a client
+    // session — which renders without it until the session resolves. This is
+    // the one test that proves the value actually crosses from the session to
+    // the menu; `account-menu.test.tsx` only proves what the menu does with it.
+    session.current = {
+      user: {
+        id: 'u1',
+        name: 'Maya Reyes',
+        email: 'maya@example.com',
+        emailVerified: true,
+        role: 'ADMIN',
+      },
+    };
+    await renderLayout();
+    await userEvent.click(screen.getByRole('button', { name: /Maya Reyes/ }));
+    expect((await screen.findByRole('menuitem', { name: 'Admin' })).getAttribute('href')).toBe(
+      '/admin'
+    );
   });
 });
 

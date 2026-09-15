@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
+import { AccountMenu, type AccountMenuUser } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
@@ -17,8 +18,8 @@ import { cn } from '@/lib/utils';
 const WORKSPACE_HREF = '/app/workspace';
 
 export interface ShellNavProps {
-  /** The signed-in person, for the pinned account footer. */
-  user: { name: string; email: string };
+  /** The signed-in person, for the pinned account menu. */
+  user: AccountMenuUser;
 }
 
 /**
@@ -47,7 +48,7 @@ export function initialsFor(name: string, email: string): string {
  *
  * A client island because three things here are browser state — the slim
  * preference, the tooltip on hover, and which item is current. Everything it
- * renders comes from the server: the seven destinations are static, and the
+ * renders comes from the server: the five destinations are static, and the
  * account footer is passed the session's user rather than fetching one.
  *
  * ## What is deliberately absent
@@ -56,6 +57,11 @@ export function initialsFor(name: string, email: string): string {
  * sessions". Nothing counts sessions yet, so this renders the email instead —
  * real, useful, and honest — rather than a number that would have to be
  * invented (D6, `B31`).
+ *
+ * The prototype's nav also carries "Usage and billing" and "Settings" as its
+ * last two rows. They moved into the account menu (`account-menu.tsx`) along
+ * with the theme toggle and sign-out — one place for everything about the
+ * person, so the nav is about destinations. Owner ruling, 15 September 2026.
  */
 export function ShellNav({ user }: ShellNavProps) {
   const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, width } = useShellLayout();
@@ -264,11 +270,11 @@ export function ShellNav({ user }: ShellNavProps) {
 
         {/*
         `overflow-y-auto`, because the shell is `h-dvh overflow-hidden` and every
-        child here is `flex-none`: the seven destinations, the brand row and the
-        account footer come to roughly 460px, so below about 500px of viewport
-        height — a phone in landscape, a short desktop window — "Usage and
-        billing", "Settings" and the account footer were cut off with nothing on
-        the page able to scroll to them.
+        child here is `flex-none`: the destinations, the brand row and the
+        account footer came to roughly 460px when there were seven, so below
+        about 500px of viewport height — a phone in landscape, a short desktop
+        window — the last rows and the account footer were cut off with nothing
+        on the page able to scroll to them. Five rows are shorter, not immune.
 
         `scrollbar-none` keeps the chrome out of a 64px column; the content is
         still reachable by wheel, trackpad, touch and keyboard focus.
@@ -276,14 +282,12 @@ export function ShellNav({ user }: ShellNavProps) {
         <div className="-mx-1 mt-3 flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-0.5 overflow-y-auto px-1">
           {SHELL_NAV.map((entry, i) => {
             if (!isNavItem(entry)) {
-              return entry.kind === 'separator' ? (
+              return (
                 <div
                   key={`sep-${i}`}
                   aria-hidden="true"
                   className="mx-[7px] my-[9px] h-px flex-none bg-[var(--color-divider)]"
                 />
-              ) : (
-                <span key={`spacer-${i}`} className="min-h-2.5 flex-1" />
               );
             }
 
@@ -383,40 +387,12 @@ export function ShellNav({ user }: ShellNavProps) {
             </button>
           )}
 
-          <Link
-            href="/app/account"
-            onClick={width === 'small' ? closeNav : undefined}
-            title={slim ? `Your account — ${user.name}` : undefined}
-            className={cn(
-              'flex h-12 flex-none items-center gap-[11px] rounded-xl text-left',
-              'no-underline hover:bg-[var(--color-pill-hover)] hover:no-underline',
-              'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
-              'motion-reduce:transition-none',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-              'focus-visible:outline-[var(--color-ring)]',
-              slim ? 'w-11 justify-center px-0' : 'w-full px-2'
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'bg-secondary text-secondary-foreground flex h-[34px] w-[34px] flex-none',
-                'items-center justify-center rounded-full text-[13px] font-medium'
-              )}
-            >
-              {initialsFor(user.name, user.email)}
-            </span>
-            {slim ? (
-              <span className="sr-only">Your account — {user.name}</span>
-            ) : (
-              <span className="min-w-0">
-                <b className="text-foreground block text-[13.5px] font-medium">{user.name}</b>
-                <span className="text-muted-foreground block truncate text-[11.5px]">
-                  {user.email}
-                </span>
-              </span>
-            )}
-          </Link>
+          <AccountMenu
+            user={user}
+            initials={initialsFor(user.name, user.email)}
+            slim={slim}
+            onNavigate={width === 'small' ? closeNav : undefined}
+          />
         </div>
       </nav>
     </>

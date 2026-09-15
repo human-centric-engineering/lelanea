@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
 
 /**
- * The top bar — the theme toggle, which is the one thing on it that does
- * something, and the three things that must NOT be on it yet.
+ * The top bar — the two ≤900px controls, and the four things that must NOT be
+ * on it.
  *
  * The absences carry the weight here. Recents, the budget meter and the
  * prototype's own tag are all omitted because nothing feeds them (D6, `B31`),
  * and the cheapest way for a fake to arrive later is somebody porting the
  * prototype's bar wholesale and leaving `$12.40 left` in it. A digit on this bar
- * is the tell, so that is what is asserted.
+ * is the tell, so that is what is asserted. The fourth absence is the theme
+ * toggle, which moved into the account menu on 15 September 2026 — so above
+ * 900px the bar is empty, and a control appearing there to fill it is the
+ * regression.
  *
  * @see components/app/shell/shell-topbar.tsx
  */
@@ -21,18 +24,10 @@ import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
-const theme = vi.hoisted(() => ({ current: 'light', setTheme: vi.fn() }));
-
 const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
-vi.mock('@/hooks/use-theme', () => ({
-  useTheme: () => ({ theme: theme.current, setTheme: theme.setTheme }),
-}));
-
 beforeEach(() => {
-  theme.current = 'light';
-  theme.setTheme.mockClear();
   mockPathname.current = '/app';
 });
 
@@ -40,55 +35,6 @@ beforeEach(() => {
 function renderBar(width: WidthName = 'large') {
   return renderInShell(<ShellTopbar />, width);
 }
-
-describe('ShellTopbar — the theme toggle', () => {
-  it('renders identical markup whichever theme is current', () => {
-    // THE HYDRATION TEST, and the reason both faces sit in the DOM at once.
-    //
-    // `ThemeProvider` resolves to `'light'` on the server and to the real value
-    // on the client's first render. Any branch on `theme` in the returned
-    // markup therefore makes server and client disagree for every reader in
-    // dark mode, and React tears the tree down and re-renders it. Asserting the
-    // two renders are byte-identical is that same claim, stated so it fails the
-    // moment somebody reintroduces a ternary.
-    theme.current = 'light';
-    const light = renderBar();
-    const lightHtml = light.container.innerHTML;
-    light.unmount();
-
-    theme.current = 'dark';
-    const dark = renderBar();
-    expect(dark.container.innerHTML).toBe(lightHtml);
-  });
-
-  it('carries both faces and both names, for CSS to choose between', () => {
-    // The corollary of the case above: if the markup cannot branch, the theme
-    // has to be readable from it some other way. `dark:` keys on `.dark` on
-    // `<html>`, which the root layout's no-flash script sets before first paint.
-    const { container } = renderBar();
-
-    expect(container.querySelector('.dark\\:hidden')).not.toBeNull();
-    expect(container.querySelector('.hidden.dark\\:block')).not.toBeNull();
-    expect(container.textContent).toContain('Switch to the dark theme');
-    expect(container.textContent).toContain('Switch to the light theme');
-  });
-
-  it('switches away from light', async () => {
-    theme.current = 'light';
-    renderBar();
-    await userEvent.click(screen.getByRole('button'));
-    expect(theme.setTheme).toHaveBeenCalledWith('dark');
-  });
-
-  it('switches away from dark', async () => {
-    // `theme` is read in the HANDLER, which runs after hydration — the one
-    // place it is safe. This proves the handler still reads it.
-    theme.current = 'dark';
-    renderBar();
-    await userEvent.click(screen.getByRole('button'));
-    expect(theme.setTheme).toHaveBeenCalledWith('light');
-  });
-});
 
 describe('ShellTopbar — what it must not invent', () => {
   it('shows no number anywhere', () => {
@@ -104,16 +50,22 @@ describe('ShellTopbar — what it must not invent', () => {
     expect(screen.queryByRole('button', { name: /usage|billing|budget/i })).toBeNull();
   });
 
-  it('offers only the theme toggle above 900px', () => {
-    // Updated deliberately from t-9's "exactly one control", which was written
-    // to fail the moment these arrived. Above 900px the nav is a column with
-    // nothing to open and both panes are on screen with nothing to switch
-    // between, so a burger or a pane switch here would be the dead control t-9
-    // refused to ship.
+  it('offers nothing above 900px — not even the theme toggle', () => {
+    // t-9 wrote "exactly one control" for the toggle; t-10 kept the burger and
+    // pane switch off this width because the nav is a column with nothing to
+    // open and both panes are on screen. Now the toggle has gone to the
+    // account menu too, and the bar is deliberately empty until recents and
+    // the budget meter have something real to show. A button here is either a
+    // dead control or the toggle coming back to fill the space.
     renderBar('large');
-    expect(screen.getAllByRole('button')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: /menu/i })).toBeNull();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByRole('group', { name: 'Show' })).toBeNull();
+  });
+
+  it('carries no theme toggle at any width', () => {
+    renderBar('small');
+    expect(screen.queryByRole('button', { name: /theme/i })).toBeNull();
+    expect(screen.queryByText(/Switch to the/)).toBeNull();
   });
 
   it('offers the burger on a phone, and reports what it did', async () => {

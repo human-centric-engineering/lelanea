@@ -139,6 +139,9 @@ export default async function ShellLayout({ children }: { children: React.ReactN
               // back to it too.
               name: session.user.name?.trim() || session.user.email,
               email: session.user.email,
+              // Read here, server-side, so the account menu's Admin row is
+              // right on first paint rather than after a client session read.
+              role: session.user.role ?? null,
             }}
           />
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

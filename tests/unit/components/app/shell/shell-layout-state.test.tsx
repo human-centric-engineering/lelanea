@@ -26,11 +26,20 @@ import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
+// `ShellNav` mounts the account menu, whose hooks want their providers. Neither
+// theme nor analytics is what this file measures, so both are stubbed.
+vi.mock('@/hooks/use-theme', () => ({
+  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+}));
+vi.mock('@/lib/analytics', () => ({
+  useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
+  EVENTS: { USER_LOGGED_OUT: 'user_logged_out' },
+}));
 
 function renderShell(width: WidthName | number = 'large') {
   return renderInShell(
     <>
-      <ShellNav user={{ name: 'Simon H', email: 'simon@example.com' }} />
+      <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', role: null }} />
       <ShellRail />
       <Panes>the module</Panes>
     </>,
