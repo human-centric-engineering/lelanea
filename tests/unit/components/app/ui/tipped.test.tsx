@@ -103,6 +103,95 @@ describe('Tipped', () => {
     expect(screen.getByRole('button', { name: 'Your map' })).toBeTruthy();
   });
 
+  it('hangs off the right of the trigger when the side says so', async () => {
+    // The collapsed left menu points right; the panel rail points left. The two
+    // are different declarations — `left: box.right + 12` against
+    // `right: innerWidth - box.left + 12` — so one being correct says nothing
+    // about the other.
+    render(
+      <Tipped side="right" label="Your journey — Where you have been">
+        {(tip) => (
+          <button type="button" {...tip} aria-label="Your journey">
+            <span aria-hidden="true">icon</span>
+          </button>
+        )}
+      </Tipped>
+    );
+    await userEvent.hover(screen.getByRole('button'));
+
+    const el = bubble() as HTMLElement;
+    expect(el.style.left).not.toBe('');
+    expect(el.style.right).toBe('');
+  });
+
+  it('dismisses when the page scrolls under a resting pointer', () => {
+    // The coordinates are a snapshot, so scrolling the nav's item list on a
+    // short viewport leaves the bubble behind. Dismiss rather than re-measure:
+    // a tooltip is momentary, and re-measuring every scroll frame is work for
+    // something the reader has stopped looking at.
+    renderTipped();
+    const trigger = screen.getByRole('button');
+    act(() => {
+      trigger.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse', bubbles: true })
+      );
+    });
+    expect(bubble()?.className).toContain('visible');
+
+    act(() => {
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(bubble()?.className).toContain('invisible');
+  });
+
+  it('dismisses on a resize, which moves the trigger out from under it', () => {
+    renderTipped();
+    act(() => {
+      screen
+        .getByRole('button')
+        .dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse', bubbles: true }));
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(bubble()?.className).toContain('invisible');
+  });
+
+  it('shows on keyboard focus and not on a focus that merely landed there', () => {
+    // `:focus-visible` is the browser's own answer to "did they mean to be
+    // here", and it is already what every focus ring in this shell is drawn
+    // from. A tap that moves focus into a button must not raise the bubble.
+    //
+    // The selector is stubbed in both directions rather than driven through the
+    // harness: happy-dom resolves `:focus-visible` as plain `:focus`, so a real
+    // programmatic focus would match it and the negative case would pass for
+    // the wrong reason — which is exactly the shape of test this component's
+    // touch guard exists to avoid.
+    renderTipped();
+    const trigger = screen.getByRole('button');
+    const real = trigger.matches.bind(trigger);
+    let keyboard = false;
+    trigger.matches = (selector: string) =>
+      selector === ':focus-visible' ? keyboard : real(selector);
+
+    act(() => {
+      trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(bubble()?.className).toContain('invisible');
+
+    keyboard = true;
+    act(() => {
+      trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(bubble()?.className).toContain('visible');
+
+    act(() => {
+      trigger.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    expect(bubble()?.className).toContain('invisible');
+  });
+
   it('renders no bubble and no handlers when there is no label', () => {
     renderTipped(null);
     expect(screen.getByRole('button').nextElementSibling).toBeNull();
