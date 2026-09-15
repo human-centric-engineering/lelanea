@@ -24,7 +24,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { cloneElement, isValidElement } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const flag = vi.hoisted(() => ({ enabled: false }));
 /** `name` is nullable and `current` is too — both are cases these tests drive. */
@@ -138,6 +138,12 @@ async function renderLayout() {
   return result;
 }
 
+// The picture case stubs `window.Image`; undo it here, not at the end of that
+// test, or a failing assertion there leaks the stub into every case after it.
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 beforeEach(() => {
   flag.enabled = false;
   session.current = {
@@ -206,7 +212,6 @@ describe('the shell layout serves the product', () => {
     expect(trigger.querySelector('img')?.getAttribute('src')).toBe(
       'https://avatars.example.com/maya.png'
     );
-    vi.unstubAllGlobals();
   });
 
   it('hands the nav the session’s role, so an admin gets the Admin row on first paint', async () => {
