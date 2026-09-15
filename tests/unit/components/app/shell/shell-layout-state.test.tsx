@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Panes } from '@/components/app/shell/panes';
 import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
+import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { CHAT_MAX, CHAT_MIN } from '@/components/app/shell/use-shell-layout';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
@@ -259,5 +260,151 @@ describe('the auto-slim fires on crossing, not on every resize', () => {
 
     resizeTo(1000);
     expect(nav()?.getAttribute('data-slim')).toBe('true');
+  });
+});
+
+describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPETE', () => {
+  // The owner's reason was that the two crowd the conversation off the screen,
+  // and that is a statement about one geometry: at `medium` with the workspace
+  // open the conversation is a fixed 420px panel riding over the work while the
+  // menu is a 234px column in the flow. At `large` both panes are in the flow
+  // and the reader sizes the conversation themselves. Applied everywhere, the
+  // rule folded the conversation to a 56px strip on a 1600px screen, where a
+  // 234px menu and a 440px pane fit with room to spare.
+  const nav = () => document.querySelector('nav[aria-label="Main"]');
+  const slimNow = () => nav()?.getAttribute('data-slim');
+
+  // 1200, not the `medium` alias: that resolves below the 1100px auto-slim
+  // threshold, where the nav is already slim on arrival — so a case asserting
+  // "opening the conversation collapsed it" would pass without the rule
+  // existing at all. 1200 is medium AND above the threshold, so the only thing
+  // that can collapse the menu is the rule under test.
+  it('collapses the menu when the conversation is opened on a tablet', async () => {
+    renderShell(1200);
+    // At medium with a workspace open the conversation parks itself, so the
+    // strip is already there.
+    const pull = strip();
+    expect(pull).not.toBeNull();
+
+    await userEvent.click(pull!);
+    expect(slimNow()).toBe('true');
+  });
+
+  it('does NOT hand a 234px menu back to a 1000px tablet', async () => {
+    // The regression the first fix introduced. `slimOverride` is one slot with
+    // two writers, and releasing it to `null` handed the menu back to the
+    // STORED preference even when `fit`'s auto-slim had been the one holding
+    // it. At 1000px — medium, and below the 1100px threshold — a reader whose
+    // stored preference is "expanded" loads slim, and parking the conversation
+    // put the full menu back on a tablet with no crossing left to re-assert the
+    // rule. The release asks the viewport the same question `fit` does.
+    renderShell(1000);
+    expect(slimNow()).toBe('true');
+
+    await userEvent.click(strip()!);
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(slimNow()).toBe('true');
+  });
+
+  it('gives the menu back when the conversation is parked again', async () => {
+    // The half that was missing. The only thing that ever released the override
+    // was `fit`'s outward 1100px crossing, which at a fixed window width never
+    // happens — so a reader who opened the conversation once kept a collapsed
+    // menu for the rest of the session. That is the failure the override exists
+    // to prevent, one level down.
+    renderShell(1200);
+    await userEvent.click(strip()!);
+    expect(slimNow()).toBe('true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(slimNow()).toBe('false');
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+
+  it('parks the conversation when the menu is expanded on a tablet', async () => {
+    renderShell(1200);
+    await userEvent.click(strip()!);
+    expect(strip()).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(strip()).not.toBeNull();
+  });
+
+  it('does NOT fold the conversation when the menu is expanded at large', async () => {
+    // On a 1600px screen there is nothing to get out of the way of, and a
+    // conversation vanishing reads as a bug rather than as a considerate layout.
+    renderShell('large');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+
+    expect(strip()).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('does NOT collapse the menu when the conversation is opened at large', async () => {
+    renderShell('large');
+    handle().focus();
+    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+    expect(strip()).not.toBeNull();
+
+    await userEvent.click(strip()!);
+    expect(slimNow()).toBe('false');
+  });
+
+  it('does not park a conversation that has no workspace beside it', async () => {
+    // With nothing to give the width to, folding leaves a 56px sliver against
+    // empty space — the defect the `!wsOpen` reset already exists to prevent.
+    mockPathname.current = '/app';
+    renderShell('medium');
+
+    // Medium is under 1100, so the nav arrives already auto-slimmed — expanding
+    // it is the gesture under test either way.
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(strip()).toBeNull();
+  });
+
+  it('opening the conversation does not rewrite the stored menu preference', () => {
+    // Asking for the conversation is not a statement about how you like your
+    // menu. Same reasoning as the click-away, and as the 1100px auto-slim.
+    renderShell('medium');
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+});
+
+describe('Escape goes through the verbs, not the setters beneath them', () => {
+  // Both verbs grew a second half in this branch — `closeNav` hands focus back
+  // to the burger, `setChatSlim` releases the menu override — and a rung
+  // calling the raw setter gets the first half only. That is worse than never
+  // having added them: the same user-visible action then behaves one way from
+  // the button and another from the key, and Escape is the rung that can least
+  // afford it, being keyboard-only.
+  const nav = () => document.querySelector('nav[aria-label="Main"]');
+
+  it('releases the menu override when Escape parks the conversation', async () => {
+    renderShell(1200);
+    await userEvent.click(strip()!);
+    expect(nav()?.getAttribute('data-slim')).toBe('true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(strip()).not.toBeNull();
+    // The collapse BUTTON already did this. The key has to agree with it.
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
+  });
+
+  it('hands focus back to the burger when Escape closes the ≤900px drawer', async () => {
+    // The panel goes `inert` the instant it closes, so focus left on it drops
+    // to `<body>` and the next Tab restarts from the top of the document.
+    renderInShell(
+      <>
+        <ShellTopbar />
+        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', role: null }} />
+      </>,
+      'small'
+    );
+    const burger = screen.getByRole('button', { name: 'Open the menu' });
+    await userEvent.click(burger);
+
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open the menu' }));
   });
 });

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useRef } from 'react';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
+import { Drawers } from '@/components/app/shell/drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Workspace } from '@/components/app/shell/workspace';
 import { toneStyleFor } from '@/components/app/views/view-tone';
@@ -124,6 +125,17 @@ export function Panes({ children }: { children: React.ReactNode }) {
          */
         <div className="absolute inset-0 z-10 overflow-y-auto empty:hidden">{children}</div>
       )}
+
+      {/*
+        The drawers live HERE, not in the shell frame, and the position is the
+        reason. The design's `.rdrawer` is absolute inside `.panes`, so a panel
+        lands below the topbar and clear of the right rail — which is why its
+        capture shows the topbar still readable and the rail button that opened
+        the panel still lit. Rendered up in the frame they were `fixed` and
+        covered both. This container is already `relative`; see `drawer.tsx` for
+        what that changes about the panel's ARIA.
+      */}
+      <Drawers />
     </div>
   );
 }

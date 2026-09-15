@@ -3,6 +3,8 @@
 import { BookOpen, Map } from 'lucide-react';
 
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
+import { Tipped } from '@/components/app/ui/tipped';
 import { cn } from '@/lib/utils';
 
 const RAIL_ITEMS: { id: DrawerId; label: string; tip: string; icon: typeof Map }[] = [
@@ -13,15 +15,41 @@ const RAIL_ITEMS: { id: DrawerId; label: string; tip: string; icon: typeof Map }
 /**
  * The right rail: 70px, and the fourth column of the four-column shell.
  *
- * `t-9` shipped its two buttons `disabled` with the reason in their accessible
- * name, because the rail is a column and the shell is four columns or it is not
- * the shell — but the drawers they open belonged to this task. They are live
- * now, and the panels behind them are themselves honest stubs: the map needs
- * §05's modules and the resources need phase 3, so each says what it will hold
- * rather than showing an empty list.
+ * Both buttons are live, and the panels behind them are honest about what they
+ * hold: the map is the published graph, and the resources are the designed
+ * placeholder until phase 3 fills them. (`t-9` shipped them `disabled` with the
+ * reason in their accessible name, because the rail is a column and the shell is
+ * four columns or it is not the shell — but the drawers belonged to `t-10`.)
  *
- * Below 900px the rail leaves the right edge and becomes a footer, where the two
- * panels are within reach of a thumb.
+ * ## Below 900px it is not a smaller rail, it is two keys
+ *
+ * The rail's vertical form is 62px of icon with an 8.5px uppercase caption under
+ * it — legible as a column label beside a full screen of work, and wrong as a
+ * phone control: two of them huddled in the middle of a bare strip, hard to hit
+ * and not reading as the two ways out of the conversation.
+ *
+ * So at that width they become the prototype's `.mrail-btn`: two raised keys
+ * splitting the full width of the footer between them, 48px tall, icon BESIDE a
+ * sentence-case label at body size. The recipe is the one the composer and the
+ * pane switch already use here — the lifted ground, a hairline, a resting shadow
+ * — so the footer reads as part of the same product rather than as a toolbar.
+ *
+ * What the footer already had is kept: `order-last`, the top border, and
+ * `env(safe-area-inset-bottom)` so the row clears a phone's home indicator
+ * rather than sitting under it.
+ *
+ * **The tooltip is for the vertical rail only.** `Tipped` already refuses touch
+ * pointers, which is what keeps a bubble off a tap — but suppressing it here as
+ * well is not belt-and-braces, it is geometry. The bubble points LEFT, which is
+ * the only direction that works beside a right-hand rail; against a full-width
+ * key it is measured from that key's left edge, so on the left-hand one it lands
+ * at x≈0 with its right edge at the screen edge (invisible), and on the
+ * right-hand one it lands on top of its neighbour. A bubble nobody can read is
+ * not a tooltip.
+ *
+ * Nothing is lost by dropping it: the whole reason the vertical rail needs one
+ * is that its 8.5px caption cannot carry `Your map — the sixteen modules`, and
+ * down here each key already says `Map` in sentence case at body size.
  */
 export function ShellRail() {
   const { drawer, openDrawer, closeDrawer, width } = useShellLayout();
@@ -31,40 +59,84 @@ export function ShellRail() {
     <nav
       aria-label="Panels"
       className={cn(
-        'bg-card relative z-50 flex flex-none gap-1.5 border-[var(--color-divider)]',
+        'bg-card relative z-50 flex flex-none border-[var(--color-divider)]',
         small
-          ? // A footer, with safe-area padding so the last row clears a phone's
-            // home indicator rather than sitting under it.
-            'order-last w-full flex-row items-stretch justify-center border-t py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]'
-          : 'w-[70px] flex-col items-center border-l py-3.5'
+          ? // The footer: two keys, full width, with a gap between them so they
+            // read as two things rather than one wide strip.
+            [
+              'order-last w-full flex-row items-stretch gap-3 border-t',
+              'px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]',
+            ]
+          : 'w-[70px] flex-col items-center gap-1.5 border-l py-3.5'
       )}
     >
       {RAIL_ITEMS.map((item) => {
         const Icon = item.icon;
         const open = drawer === item.id;
         return (
-          <button
-            key={item.id}
-            type="button"
-            title={item.tip}
-            aria-label={item.tip}
-            aria-expanded={open}
-            onClick={() => (open ? closeDrawer() : openDrawer(item.id))}
-            className={cn(
-              'text-muted-foreground flex w-[62px] flex-none flex-col items-center',
-              'justify-center gap-1.5 rounded-xl px-0 pt-2.5 pb-2 text-[8.5px]',
-              'leading-none tracking-[0.05em] whitespace-nowrap uppercase',
-              'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-              'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-              'motion-reduce:transition-none',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-              'focus-visible:outline-[var(--color-ring)]',
-              open && 'bg-[var(--color-secondary-wash)] text-[var(--color-secondary-ink)]'
+          <Tipped key={item.id} side="left" label={small ? null : item.tip}>
+            {(tip) => (
+              <button
+                {...tip}
+                type="button"
+                aria-label={item.tip}
+                aria-expanded={open}
+                onClick={() => (open ? closeDrawer() : openDrawer(item.id))}
+                className={cn(
+                  'flex flex-none items-center justify-center',
+                  'transition-[background-color,color,border-color,box-shadow,transform]',
+                  'duration-200 ease-[var(--ease-brand)] motion-reduce:transition-none',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                  'focus-visible:outline-[var(--color-ring)]',
+                  small
+                    ? [
+                        // A thumb target: half the row each, 48px tall, icon
+                        // beside a sentence-case label at readable size.
+                        'text-foreground h-12 min-w-0 flex-1 gap-[9px] text-sm',
+                        ICON_RADIUS,
+                        'border border-[var(--color-border)] bg-[var(--color-popover)]',
+                        'shadow-[var(--shadow-rest)]',
+                        // It goes down under the thumb, like every other button
+                        // here. `active:` rather than `hover:` — a phone has no
+                        // hover, and a hover style that latches on tap stays
+                        // stuck until something else is touched.
+                        'active:scale-[0.97] active:shadow-none',
+                        open
+                          ? [
+                              'border-[var(--color-secondary-ink)]',
+                              'bg-[var(--color-secondary-wash)] text-[var(--color-secondary-ink)]',
+                            ]
+                          : 'text-muted-foreground',
+                      ]
+                    : [
+                        'text-muted-foreground w-[62px] flex-col gap-1.5 px-0 pt-2.5 pb-2',
+                        ICON_RADIUS,
+                        'text-[8.5px] leading-none tracking-[0.05em] whitespace-nowrap uppercase',
+                        'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+                        open &&
+                          'bg-[var(--color-secondary-wash)] text-[var(--color-secondary-ink)]',
+                      ]
+                )}
+              >
+                <Icon
+                  size={small ? 18 : 20}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  // The prototype keeps the glyph muted inside a key whose label
+                  // is not, and takes the secondary ink with it when open.
+                  className={cn('flex-none', small && !open && 'text-muted-foreground')}
+                />
+                <span
+                  className={cn(
+                    small && 'text-foreground min-w-0 truncate',
+                    small && open && 'text-[var(--color-secondary-ink)]'
+                  )}
+                >
+                  {item.label}
+                </span>
+              </button>
             )}
-          >
-            <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
-            <span>{item.label}</span>
-          </button>
+          </Tipped>
         );
       })}
     </nav>

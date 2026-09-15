@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 
+import { modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
 
 /**
@@ -29,6 +30,53 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
 const SLIM_KEY = 'lelanea.nav.slim';
 const CHAT_W_KEY = 'lelanea.chat.width';
 
+/**
+ * The attribute the ≤900px burger carries, so that closing the drawer can hand
+ * focus back to it.
+ *
+ * A data attribute rather than a ref through context: the burger lives in
+ * `shell-topbar.tsx`, the drawer closes from four places in three files, and
+ * threading a ref between two sibling islands to answer "where did this come
+ * from" is more machinery than one selector.
+ */
+export const NAV_TOGGLE_ATTR = 'data-nav-toggle';
+
+/**
+ * Marks a full-screen overlay that covers the shell, so shell-wide `document`
+ * listeners stand down while it is up.
+ *
+ * `pointer-events` cannot express this. It decides what a press reaches by
+ * HIT-TESTING, and a listener bound to `document` is not under the overlay —
+ * it sees the press either way. The entry bloom found this the hard way: it is
+ * deliberately solid to the pointer for its ~2.9s so a click cannot reach a nav
+ * item nobody can see, and the nav's click-away collapsed the menu anyway,
+ * because the overlay is neither a control nor inside the nav.
+ *
+ * An attribute rather than a list of component names, so the next full-screen
+ * thing opts out by carrying it rather than by being remembered.
+ *
+ * **It is detected by hit-testing (`closest`), so it covers exactly the window
+ * in which the overlay is solid to the pointer — no more.** The bloom releases
+ * `pointer-events` for its 420ms fade on purpose, so that the shell is live as
+ * it appears rather than half a second later; through that slice a press lands
+ * on the shell, `event.target` is whatever is underneath, and this guard
+ * correctly does not fire. That is the same boundary in both directions rather
+ * than a hole in one of them: while the overlay is blocking the pointer, nothing
+ * beneath it reacts; once it has stopped, everything does. Gating on the bloom's
+ * animation phase instead would mean the shell looked live and was not.
+ */
+export const SHELL_OVERLAY_ATTR = 'data-shell-overlay';
+
+/**
+ * The width below which the nav slims itself, whatever the reader prefers.
+ *
+ * Named because TWO things ask it now: `fit`, on crossing it inward, and
+ * `setChatSlim`, when it hands the override back — a release that ignored the
+ * viewport put a 234px menu on a 1000px tablet. A threshold written twice is a
+ * threshold that gets changed once.
+ */
+export const AUTO_SLIM_BELOW = 1100;
+
 /** The prototype's `RZ.chat` bounds and `CHAT_FOLD`. */
 export const CHAT_MIN = 330;
 export const CHAT_MAX = 660;
@@ -39,6 +87,20 @@ export const CHAT_FOLD = 296;
 export type WidthClass = 'small' | 'medium' | 'large';
 export type DrawerId = 'map' | 'resources';
 export type Pane = 'chat' | 'ws';
+
+/**
+ * Where the reader is, as the module page tells the shell.
+ *
+ * The slug is carried alongside the label so a reader is never shown the
+ * previous module's name for a frame: the label is used only while the slug
+ * still matches the route, so a navigation that outruns the publishing effect
+ * shows nothing rather than something wrong.
+ */
+export interface ModulePlace {
+  slug: string;
+  /** `01 · Values` — the authored display number and title. */
+  label: string;
+}
 
 export interface ShellLayout {
   width: WidthClass;
@@ -51,7 +113,36 @@ export interface ShellLayout {
   chatSlim: boolean;
   drawer: DrawerId | null;
   pane: Pane;
+  /**
+   * The module the workspace is showing, published UP from the page — see
+   * `setModulePlace`. `null` anywhere that is not a module.
+   */
+  modulePlace: ModulePlace | null;
+  /**
+   * How a module page tells the shell what it is.
+   *
+   * The conversation column's way back reads `← the main conversation · on 01 ·
+   * Values`, and the shell cannot work that second half out for itself: a module
+   * page is rendered INSIDE the workspace, which is a sibling of the
+   * conversation, and context flows downward only. The page is also the only
+   * thing holding the authored display number and title — the shell has a
+   * pathname and nothing else.
+   *
+   * `shell.md` already ruled that a view's title is not worth carrying up here
+   * for the workspace's own header, because a context set from an effect costs a
+   * frame of empty heading on every navigation. This is a different bargain and
+   * the ruling still holds: what is missing for that frame is a muted suffix
+   * beside a link that is already correct and already says where it goes, not
+   * the heading of the page.
+   */
+  setModulePlace: (place: ModulePlace | null) => void;
   toggleNavSlim: () => void;
+  /**
+   * Collapse the menu to the icon rail WITHOUT touching the stored preference —
+   * the click-away in `shell-nav.tsx`. See the implementation for why the two
+   * are different acts.
+   */
+  collapseNav: () => void;
   setNavOpen: (open: boolean) => void;
   /** Close the ≤900px drawer regardless of whether the route changed. */
   closeNav: () => void;
@@ -103,6 +194,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpenState] = useState(false);
   const [drawer, setDrawer] = useState<DrawerId | null>(null);
   const [pane, setPaneState] = useState<Pane>('chat');
+  const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
 
   /**
    * The stored preference and the live value are DIFFERENT THINGS, and keeping
@@ -132,6 +224,46 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [storedSlim, setStoredSlim] = useLocalStorage<boolean>(SLIM_KEY, false);
   const [slimOverride, setSlimOverride] = useState<boolean | null>(null);
   const navSlim = slimOverride ?? storedSlim;
+
+  /**
+   * Adopt the stored preference BEFORE PAINT, and this is what pays for the
+   * collapse animation being unconditional.
+   *
+   * `useLocalStorage` cannot help here, and for a good reason of its own: it
+   * must return `initial` on the first client render or the tree does not match
+   * the server's HTML, so it adopts the real value in a plain effect — after
+   * paint. A reader who had chosen the slim menu therefore watched it render at
+   * 234px and then correct to 64px on every single page load.
+   *
+   * While the width transition was armed only after a reader had used the
+   * control (`shell-nav.tsx`'s old `readerToggled`), that correction was
+   * invisible — but so was the first collapse, and so was every auto-slim. The
+   * flag was buying the wrong thing: what actually has to be true is that the
+   * startup correction never reaches the screen, and then the transition can
+   * simply always be on.
+   *
+   * A LAYOUT effect gets that: it runs after hydration has matched the server,
+   * and before the browser paints, so there is no previous frame at 234px for
+   * CSS to animate away from. It is the same argument `fit` below already makes
+   * for the viewport, which is why the two sit together — and why this one is
+   * declared FIRST. `fit`'s auto-slim must win over a stored preference when the
+   * window is under 1100px, and effects run in declaration order.
+   *
+   * `slimOverride` rather than a write back through `setStoredSlim`: writing
+   * would be a second source of truth for a value storage already holds, and the
+   * override is released on the way back out past 1100px, which drops cleanly
+   * back to the same stored value once `useLocalStorage` has caught up.
+   */
+  useIsomorphicLayoutEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SLIM_KEY);
+      if (raw !== null) setSlimOverride(JSON.parse(raw) === true);
+    } catch {
+      // Storage can be unavailable (private mode, a blocked third-party frame)
+      // or hold something another process wrote. Either way the expanded
+      // default stands, which is what `useLocalStorage` falls back to as well.
+    }
+  }, []);
 
   const [storedChatW, setStoredChatW] = useLocalStorage<number>(CHAT_W_KEY, CHAT_DEFAULT);
   const [chatW, setChatW] = useState(CHAT_DEFAULT);
@@ -175,13 +307,23 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
 
       // The drawer belongs to small screens; leaving it open on the way up
       // strands a fixed panel over a layout that has no scrim any more.
+      //
+      // The raw setter here, deliberately, where every other close path uses
+      // `closeNav`: this one is a WIDTH transition, so the panel stops being
+      // `inert` (that is `width === 'small' && !navOpen`) and stops being a
+      // panel at all — nothing is stranded, and the burger `closeNav` would
+      // hand focus to no longer renders. Using `closeNav` would also capture a
+      // stale `navOpen` in this mount-only effect.
       setNavOpenState(false);
 
-      const crossedInward = w < 1100 && (previous === null || previous >= 1100);
+      const crossedInward =
+        w < AUTO_SLIM_BELOW && (previous === null || previous >= AUTO_SLIM_BELOW);
       if (crossedInward) setSlimOverride(true);
       // Crossing back out drops the override, so the reader's stored preference
       // applies again rather than being buried for the session.
-      if (w >= 1100 && previous !== null && previous < 1100) setSlimOverride(null);
+      if (w >= AUTO_SLIM_BELOW && previous !== null && previous < AUTO_SLIM_BELOW) {
+        setSlimOverride(null);
+      }
     };
 
     fit();
@@ -266,18 +408,116 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     [setStoredChatW]
   );
 
-  const setChatSlim = useCallback((slim: boolean) => setChatSlimState(slim), []);
+  /**
+   * Ask Lelañea and the left menu are mutually exclusive — **where they are
+   * actually competing** — and the rule lives HERE rather than in the two
+   * components.
+   *
+   * ## The width condition is the rule, not a caveat on it
+   *
+   * The owner's reason was that the two crowd the conversation off the screen,
+   * and that is a statement about one geometry: at `medium` with the workspace
+   * open, the conversation is a fixed 420px panel riding OVER the work while the
+   * menu is a 234px column in the flow, so the two eat the same screen from the
+   * same end and a tablet shows slivers of three things and the whole of none.
+   *
+   * At `large` both panes are in the flow and the reader sizes the conversation
+   * themselves with the handle; at `small` the menu is a drawer and the panes
+   * are a carousel. Neither competes. Applied unconditionally, this folded the
+   * conversation to a 56px strip when somebody expanded the menu on a 1600px
+   * screen — where a 234px menu and a 440px pane fit with room to spare, so the
+   * conversation vanishing reads as a bug rather than as a layout being
+   * considerate. Read the reasoning attached to the rule, not just the rule.
+   *
+   * One copy of it, because two components each reaching for the other's setter
+   * is the same rule written twice and the second copy is the one that rots.
+   *
+   * ## It moves the live value, and hands it back to whoever held it
+   *
+   * Never storage: asking for the conversation is not a statement about how you
+   * like your menu. And parking the conversation RELEASES the override rather
+   * than leaving it set, so the menu comes back the moment the competition ends.
+   * Without that release the only thing that ever cleared it was `fit`'s
+   * outward 1100px crossing — which at a fixed window width never happens, so a
+   * reader who opened the conversation once kept a collapsed menu for the rest
+   * of the session, which is the failure the override exists to prevent.
+   *
+   * **It releases to the VIEWPORT's answer, not to `null`.** `slimOverride` is
+   * one slot with two writers, and dropping it to `null` handed the menu back to
+   * the stored preference even when `fit` had been the one holding it. Measured:
+   * a 1000px tablet with the menu expanded in storage loads slim (auto-slim,
+   * below 1100), and parking the conversation put a 234px menu back on a 1000px
+   * screen — the exact state the auto-slim exists to prevent, with no crossing
+   * left to re-assert it. So the release asks the same question `fit` asks.
+   */
+  const setChatSlim = useCallback(
+    (slim: boolean) => {
+      setChatSlimState(slim);
+      if (width !== 'medium' || !wsOpen) return;
+      setSlimOverride(slim ? (window.innerWidth < AUTO_SLIM_BELOW ? true : null) : true);
+    },
+    [width, wsOpen]
+  );
+
   const setNavOpen = useCallback((open: boolean) => setNavOpenState(open), []);
-  const closeNav = useCallback(() => setNavOpenState(false), []);
+
+  /**
+   * Closing the ≤900px drawer, and handing focus back.
+   *
+   * The panel goes `inert` the moment this runs, so a keyboard reader whose
+   * focus was inside it — on a nav item, or on the close control they just
+   * pressed — is left focused on an element the browser has removed from the tab
+   * order. The next Tab starts again from the top of the document, which is the
+   * quiet way a menu becomes unusable without a pointer.
+   *
+   * Focus goes to the burger, because that is the control that opened it and the
+   * one that will open it again. Above 900px there is no burger and no drawer,
+   * so the lookup simply finds nothing.
+   */
+  const closeNav = useCallback(() => {
+    // Read `navOpen` rather than deciding inside a functional update: an updater
+    // has to be pure, and React calls it twice in development StrictMode.
+    if (navOpen) document.querySelector<HTMLElement>(`[${NAV_TOGGLE_ATTR}]`)?.focus();
+    setNavOpenState(false);
+  }, [navOpen]);
+
   const openDrawer = useCallback((id: DrawerId) => setDrawer(id), []);
   const closeDrawer = useCallback(() => setDrawer(null), []);
   const setPane = useCallback((p: Pane) => setPaneState(p), []);
+  const setModulePlace = useCallback((place: ModulePlace | null) => setModulePlaceState(place), []);
+
+  /*
+   * Only while the slug still matches the route.
+   *
+   * The page publishes from an effect, so between asking for a module and that
+   * effect running the value here is the PREVIOUS module's. Showing it would be
+   * worse than showing nothing — the reader is told, confidently, that they are
+   * somewhere they have just left. Comparing against the route makes the stale
+   * frame empty instead of wrong.
+   */
+  const modulePlace =
+    modulePlaceState && pathname === modulePath(modulePlaceState.slug) ? modulePlaceState : null;
 
   const toggleNavSlim = useCallback(() => {
     const next = !navSlim;
     setSlimOverride(next);
     setStoredSlim(next); // the ONLY write to storage
-  }, [navSlim, setStoredSlim]);
+    // The other half of the rule above, and under the same condition: expanding
+    // the menu parks the conversation only at `medium` with the workspace open,
+    // which is the one geometry where the two compete. See `setChatSlim`.
+    if (!next && wsOpen && width === 'medium') setChatSlimState(true);
+  }, [navSlim, setStoredSlim, wsOpen, width]);
+
+  /**
+   * The click-away collapse. It moves the LIVE value and leaves storage alone.
+   *
+   * The stored preference is a deliberate choice the reader made with the
+   * control; a click that happened to land on the background is not. Persisting
+   * here would mean a stray press in the conversation silently rewrote a setting
+   * they would then have to find and set again — the same failure `fit`'s
+   * auto-slim is written to avoid, and recorded as divergence Row 2.
+   */
+  const collapseNav = useCallback(() => setSlimOverride(true), []);
 
   /**
    * The Escape chain, in the prototype's order, minus the two rungs that are not
@@ -287,18 +527,26 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * The order is the point — each rung is "the most recently opened thing that
    * is covering something" — so it is expressed as a single ordered walk rather
    * than as independent handlers, which would race.
+   *
+   * **Every rung goes through the verb, not the setter beneath it.** Both verbs
+   * grew a second half in this branch — `closeNav` hands focus back to the
+   * burger, `setChatSlim` releases the menu override — and a rung calling
+   * `setNavOpenState` or `setChatSlimState` directly gets the first half only.
+   * That is worse than never having added them: the same user-visible action
+   * then behaves one way from the button and another from the key. Escape is
+   * also the rung that can least afford it, being the keyboard-only gesture.
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (navOpen) return setNavOpenState(false);
+      if (navOpen) return closeNav();
       if (drawer) return setDrawer(null);
-      if (width === 'medium' && wsOpen && !chatSlim) return setChatSlimState(true);
-      if (chatSlim && width !== 'medium') return setChatSlimState(false);
+      if (width === 'medium' && wsOpen && !chatSlim) return setChatSlim(true);
+      if (chatSlim && width !== 'medium') return setChatSlim(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen, drawer, width, wsOpen, chatSlim]);
+  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, setChatSlim]);
 
   const value = useMemo<ShellLayout>(
     () => ({
@@ -310,7 +558,10 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatSlim,
       drawer,
       pane,
+      modulePlace,
+      setModulePlace,
       toggleNavSlim,
+      collapseNav,
       setNavOpen,
       closeNav,
       setChatWidth,
@@ -328,7 +579,10 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatSlim,
       drawer,
       pane,
+      modulePlace,
+      setModulePlace,
       toggleNavSlim,
+      collapseNav,
       setNavOpen,
       closeNav,
       setChatWidth,

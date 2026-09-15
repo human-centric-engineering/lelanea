@@ -1,18 +1,52 @@
 'use client';
 
-import { Mic, PanelLeftClose, SendHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Mic } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
+import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
   CHAT_FOLD,
   CHAT_MAX,
   CHAT_MIN,
+  type ModulePlace,
   useShellLayout,
 } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { PanelCollapseIcon } from '@/components/app/ui/panel-icons';
+import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { cn } from '@/lib/utils';
+
+/**
+ * Where the reader is, in the words the shell can honestly use.
+ *
+ * Two sources, because the shell knows two different amounts about a route. A
+ * nav destination is in `SHELL_NAV`, which is static and client-side, so its
+ * label is available on the first render with no round trip. A module is not:
+ * its authored number and title live on the server, so the page publishes them
+ * (`RememberModule`) and they arrive one effect later.
+ *
+ * `null` for anything neither knows about — a `[...slug]` 404, say — which
+ * renders the way back on its own rather than `on undefined`.
+ */
+export function placeLabel(pathname: string, modulePlace: ModulePlace | null): string | null {
+  // A module can ONLY be named by what the page published. Falling through to
+  // the nav below would name it `The conversation`, because that item's href is
+  // `/app` and `/app` is every view's prefix — the same trap the nav's own
+  // current-item test exists for, arriving in a second place.
+  if (pathname.startsWith(`${MODULES_PATH_PREFIX}/`)) return modulePlace?.label ?? null;
+
+  const item = SHELL_NAV.filter(isNavItem).find((entry) =>
+    entry.href === '/app'
+      ? pathname === '/app'
+      : pathname === entry.href || pathname.startsWith(`${entry.href}/`)
+  );
+  return item?.label ?? null;
+}
 
 /** Arrow steps, and the larger one Shift asks for. */
 const STEP = 16;
@@ -21,13 +55,22 @@ const STEP_SHIFT = 48;
 /**
  * The conversation pane, and the handle that sizes it.
  *
+ * ## Three parts, always all three
+ *
+ * A title row, a transcript area and the composer. The column keeps that shape
+ * at every width and in both view states — full frame and beside the workspace —
+ * because those are what make it read as a conversation rather than as a panel
+ * that happens to have a text box at the bottom.
+ *
  * ## What it is not, yet
  *
- * A deliberate stub (D6). The composer renders — a real multi-row textarea that
- * grows to 160px, with send and mic beside it — but everything is `disabled` and
- * one plain line says why. No turns, no thinking indicator, no fake transcript:
- * the conversation is phase 2's, and a mocked-up one here would read as a
- * working product to anyone glancing at a screenshot.
+ * A deliberate stub (D6). The composer renders as the designed card — a real
+ * multi-row textarea that grows to 160px, mic and send on its foot — but
+ * everything is `disabled`, and the transcript holds one plain line saying why.
+ * No turns, no thinking indicator, no fake bubbles: the conversation is phase
+ * 2's, and a mocked-up one here would read as a working product to anyone
+ * glancing at a screenshot. The prototype's user/AI bubble styling therefore has
+ * nothing to style yet and is deliberately not carried over ahead of it.
  *
  * ## The strip
  *
@@ -36,7 +79,8 @@ const STEP_SHIFT = 48;
  * brings it back.
  */
 export function ConversationPane() {
-  const { chatW, chatSlim, setChatSlim, width, wsOpen, pane } = useShellLayout();
+  const { chatW, chatSlim, setChatSlim, width, wsOpen, pane, modulePlace } = useShellLayout();
+  const pathname = usePathname();
   const reducedMotion = useReducedMotion();
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
@@ -122,18 +166,26 @@ export function ConversationPane() {
       {overlay && chatSlim ? null : (
         <>
           {/*
-            The chat head, and the collapse control the prototype puts in it
-            (`#chat-collapse`), shown whenever there is a workspace to give the
-            width back to — `#app.no-ws` hides it, and so does the small block,
-            where the pane switch does this job instead.
+            The chat head (`.chat-head`), and the collapse control the prototype
+            puts in it (`#chat-collapse`), shown whenever there is a workspace to
+            give the width back to — `#app.no-ws` hides it, and so does the small
+            block, where the pane switch does this job instead.
 
-            It was missing entirely, which left Escape as the ONLY way to park
-            the conversation on a tablet: the surface click is a fallback, not an
-            affordance, and nothing on screen said the pane could collapse at
-            all. The strip is how it comes back; this is how it goes away.
+            The control was missing entirely, which left Escape as the ONLY way
+            to park the conversation on a tablet: the surface click is a
+            fallback, not an affordance, and nothing on screen said the pane
+            could collapse at all. The strip is how it comes back; this is how it
+            goes away.
+
+            THE HEAD ITSELF renders at every width and in both view states, which
+            it did not: it was nested inside the same condition as the control,
+            so the one view every signed-in visitor lands on — `/app`, the
+            conversation at full width — had no title on it at all. The prototype
+            hides the BUTTON there (`#app.no-ws #chat-collapse`) and keeps
+            `#chat-label` where it always is, top left above the first turn.
           */}
-          {wsOpen && width !== 'small' ? (
-            <div className="flex flex-none items-center gap-2 px-6 pt-3.5">
+          <div className="flex flex-none items-center gap-2 px-6 pt-3.5 max-[760px]:px-3.5 max-[760px]:pt-3">
+            {wsOpen && width !== 'small' ? (
               <button
                 type="button"
                 onClick={() => setChatSlim(true)}
@@ -141,7 +193,8 @@ export function ConversationPane() {
                 title="Collapse the conversation"
                 className={cn(
                   'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
-                  'items-center justify-center rounded-[10px]',
+                  'items-center justify-center',
+                  ICON_RADIUS,
                   'hover:bg-[var(--color-pill-hover)]',
                   'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                   'motion-reduce:transition-none',
@@ -149,16 +202,79 @@ export function ConversationPane() {
                   'focus-visible:outline-[var(--color-ring)]'
                 )}
               >
-                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+                <PanelCollapseIcon />
               </button>
-              <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
-            </div>
-          ) : null}
+            ) : null}
 
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-              This is where you and Lelañea will talk. The conversation arrives in a later phase.
-            </p>
+            {/*
+              THE WAY BACK, and it is the thing in this column that actually
+              costs somebody something when it is wrong.
+
+              With the workspace open the head is a link — a back arrow and `the
+              main conversation` in the secondary ink — with where you currently
+              are beside it in muted text. It was a small outlined panel glyph
+              followed by `the conversation` in grey: a different icon, different
+              words, the wrong colour, and nothing about it read as a link at
+              all, so the one way back out of a module looked like a caption.
+
+              On `/app` there is nowhere to go back TO — that IS the main
+              conversation — so it stays the eyebrow the design keeps there.
+            */}
+            {wsOpen ? (
+              <>
+                <Link
+                  href="/app"
+                  title="Return to the main conversation with Lelañea"
+                  className={cn(
+                    'flex min-w-0 flex-none items-center gap-1.5 px-2 py-1',
+                    ICON_RADIUS,
+                    'text-[13.5px] text-[var(--color-secondary-ink)] no-underline',
+                    'hover:bg-[var(--color-secondary-wash)] hover:no-underline',
+                    'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+                    'motion-reduce:transition-none',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                    'focus-visible:outline-[var(--color-ring)]'
+                  )}
+                >
+                  <ArrowLeft size={15} strokeWidth={1.6} className="flex-none" aria-hidden="true" />
+                  <span className="truncate">the main conversation</span>
+                </Link>
+                {/*
+                  Muted, and quietly absent rather than wrong: a module's label
+                  arrives one effect after the route does, and the provider
+                  withholds it while the slug and the route disagree.
+                */}
+                {placeLabel(pathname, modulePlace) ? (
+                  <span className="text-muted-foreground min-w-0 truncate text-[13px]">
+                    on {placeLabel(pathname, modulePlace)}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+            )}
+          </div>
+
+          {/*
+            The transcript area (`.chat-log`), which is a SCROLL CONTAINER with
+            the composer below it rather than a centred sentence filling the
+            column.
+
+            The distinction is the whole of t-36's third complaint: the column
+            has a title row, a transcript and a composer, and it keeps all three
+            whether or not there is anything in the transcript yet. The honest
+            note about phase 2 goes INSIDE here, where a turn will go, rather
+            than in place of the column.
+
+            `.inner` is the prototype's 604px measure, shared with the composer
+            below so the two line up as one column at any pane width.
+          */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-5 pb-2 max-[760px]:px-3.5 max-[760px]:pt-4">
+            <div className="mx-auto flex w-full max-w-[604px] flex-1 flex-col items-center justify-center text-center">
+              <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+                This is where you and Lelañea will talk. The conversation arrives in a later phase.
+              </p>
+            </div>
           </div>
 
           <Composer />
@@ -238,22 +354,53 @@ const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void; classNam
 );
 
 /**
- * The composer: a real textarea, and everything disabled.
+ * The composer: the prototype's card, and everything in it disabled.
  *
- * The auto-grow is wired but CANNOT RUN yet, and the comment here used to claim
- * otherwise — a disabled control fires no `input` event, so the handler never
- * fires and the layout case it was said to prove is not being proved. It is kept
- * rather than deleted because it is the behaviour phase 2 needs the moment the
- * control is enabled, and removing it would mean rediscovering the 160px cap
- * then. What it is not is evidence that the frame survives a growing composer;
- * that is still owed.
+ * ## A card, not a bar
+ *
+ * It was a full-bleed row ruled off from the transcript with a border-top —
+ * which is a chat BAR, and reads as a different product. The prototype's
+ * `.composer-wrap` has no rule at all: the card floats on the pane's own ground
+ * at a 604px measure centred in the column, 20px of radius, the lifted
+ * `--color-popover` ground and `--shadow-rest` under it. It is two rows tall
+ * before anyone types (`min-height: 60px` on the textarea), so the placeholder
+ * sits at the top with room beneath it rather than being a single line.
+ *
+ * The measure is the same `604px` the transcript above it uses, so the two are
+ * one column. That is also what makes the split view free: the card narrows
+ * with its pane and needs no second styling (t-36).
+ *
+ * ## The foot
+ *
+ * Mic bottom-left, the shift-return hint pushed right, and the send button as
+ * the prototype's filled terracotta disc (`--color-primary`) with a white
+ * up-arrow — not an outline and not a bare glyph. The hint is dropped below
+ * 760px, where there is no keyboard to give it advice about.
+ *
+ * ## Still a stub (D6)
+ *
+ * Every control is `disabled`, and their accessible names say why. The
+ * placeholder is the prototype's, because the card is what this task is about —
+ * the honest line about phase 2 is in the transcript above, where a reader who
+ * wonders what the box is for will already be looking.
+ *
+ * The auto-grow is wired but CANNOT RUN yet: a disabled control fires no
+ * `input` event. It is kept rather than deleted because it is the behaviour
+ * phase 2 needs the moment the control is enabled, and removing it would mean
+ * rediscovering the 160px cap then. What it is not is evidence that the frame
+ * survives a growing composer; that is still owed.
  */
 function Composer() {
   return (
-    <div className="flex-none border-t border-[var(--color-divider)] px-6 py-4">
+    <div className="flex-none px-6 pt-2 pb-5 max-[760px]:px-3.5 max-[760px]:pb-4">
       <div
         className={cn(
-          'bg-card flex items-end gap-2 rounded-2xl border border-[var(--color-card-border)] p-2'
+          'mx-auto w-full max-w-[604px] rounded-[20px] px-3.5 pt-3 pb-2.5',
+          'border border-[var(--color-border)] bg-[var(--color-popover)]',
+          'shadow-[var(--shadow-rest)]',
+          'transition-[border-color] duration-200 ease-[var(--ease-brand)]',
+          'motion-reduce:transition-none',
+          'focus-within:border-[var(--color-secondary)]'
         )}
       >
         <label className="sr-only" htmlFor="shell-composer">
@@ -261,38 +408,53 @@ function Composer() {
         </label>
         <textarea
           id="shell-composer"
-          rows={1}
+          rows={2}
           disabled
-          placeholder="The conversation arrives in a later phase"
+          placeholder="What would you like to talk about today?"
           onInput={(event) => {
             const el = event.currentTarget;
             el.style.height = 'auto';
             el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
           }}
           className={cn(
-            'text-foreground placeholder:text-muted-foreground min-h-9 flex-1 resize-none',
-            'bg-transparent px-2 py-1.5 text-[15px] leading-relaxed outline-none',
+            'text-foreground placeholder:text-muted-foreground block w-full resize-none',
+            'max-h-[160px] min-h-[60px] bg-transparent text-[15px] leading-[1.6] outline-none',
             'disabled:cursor-not-allowed'
           )}
         />
-        {[
-          { id: 'mic', label: 'Record a voice note', Icon: Mic },
-          { id: 'send', label: 'Send', Icon: SendHorizontal },
-        ].map(({ id, label, Icon }) => (
-          <span key={id} title={`${label} — arrives with the conversation`} className="flex-none">
+        <div className="flex items-center gap-2 pt-1.5">
+          <span title="Record a voice note — arrives with the conversation" className="flex-none">
             <button
               type="button"
               disabled
-              aria-label={`${label} — arrives with the conversation`}
+              aria-label="Record a voice note — arrives with the conversation"
               className={cn(
                 'text-muted-foreground flex h-9 w-9 items-center justify-center rounded-full',
                 'disabled:opacity-50'
               )}
             >
-              <Icon size={18} strokeWidth={1.5} aria-hidden="true" />
+              <Mic size={18} strokeWidth={1.5} aria-hidden="true" />
             </button>
           </span>
-        ))}
+          <span className="flex-1" />
+          <span className="text-muted-foreground flex-none text-[12px] max-[760px]:hidden">
+            shift + return for a new line
+          </span>
+          <span title="Send — arrives with the conversation" className="flex-none">
+            <button
+              type="button"
+              disabled
+              aria-label="Send — arrives with the conversation"
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-full',
+                'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]',
+                'disabled:opacity-60'
+              )}
+            >
+              <ArrowUp size={17} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          </span>
+        </div>
       </div>
     </div>
   );

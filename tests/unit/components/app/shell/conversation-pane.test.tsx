@@ -61,6 +61,105 @@ describe('the composer is present, and inert', () => {
   });
 });
 
+describe('the head', () => {
+  it('names the column on the clean view, where the collapse control is hidden', () => {
+    // The title was nested inside the collapse control's own condition, so the
+    // one view every signed-in visitor lands on had no title on it at all. The
+    // prototype hides `#chat-collapse` there (`#app.no-ws`) and keeps
+    // `#chat-label` exactly where it always is.
+    mockPathname.current = '/app';
+    const { container } = renderInShell(<ConversationPane />, 'large');
+
+    expect(container.textContent).toContain('the conversation');
+    expect(screen.queryByRole('button', { name: 'Collapse the conversation' })).toBeNull();
+  });
+
+  it('names the column on a phone too', () => {
+    mockPathname.current = '/app';
+    const { container } = renderInShell(<ConversationPane />, 'small');
+    expect(container.textContent).toContain('the conversation');
+  });
+
+  it('turns the title into the way back once there is a workspace open', () => {
+    // t-36: with the workspace open the head is a LINK — a back arrow and `the
+    // main conversation` in the secondary ink, with where you are beside it in
+    // muted text. It was a small outlined panel glyph followed by `the
+    // conversation` in grey, so the one way back out of a module read as a
+    // caption. On `/app` there is nowhere to go back to, so the eyebrow stays.
+    mockPathname.current = '/app/journey';
+    renderInShell(<ConversationPane />, 'large');
+
+    const back = screen.getByRole('link', { name: /the main conversation/ });
+    expect(back.getAttribute('href')).toBe('/app');
+    expect(back.className).toContain('text-[var(--color-secondary-ink)]');
+    expect(screen.getByText('on Your journey')).toBeTruthy();
+  });
+});
+
+describe('the split view keeps a conversation beside the work', () => {
+  // t-36's third and fourth complaints. They were satisfied by t-31 rather than
+  // re-solved here — the column's three parts and the shared composer card —
+  // but nothing asserted either WITH THE WORKSPACE OPEN, which is the state
+  // they are about. Every other case in this file renders the full-width view.
+
+  it('keeps the title row, the transcript and the composer, rather than a centred sentence', () => {
+    mockPathname.current = '/app/modules/values';
+    const { container } = renderInShell(<ConversationPane />, 'large');
+
+    // The way back is the title row in this state.
+    expect(screen.getByRole('link', { name: /the main conversation/ })).toBeTruthy();
+    // A real scroll container, with the honest note INSIDE it where a turn goes.
+    const transcript = container.querySelector('.overflow-y-auto');
+    expect(transcript).not.toBeNull();
+    expect(transcript?.textContent).toMatch(/arrives in a later phase/);
+    // And the composer is still there.
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('uses the same composer card, just narrower', () => {
+    // The card is centred on one 604px measure shared with the transcript, so
+    // it narrows with its pane and needs no second styling. A split view that
+    // collapsed it to a thin single-line input with a bare send glyph is the
+    // defect.
+    mockPathname.current = '/app/modules/values';
+    const { container } = renderInShell(<ConversationPane />, 'large');
+
+    const measured = container.querySelectorAll('.max-w-\\[604px\\]');
+    expect(measured).toHaveLength(2);
+
+    // The filled circular send disc, not a bare glyph.
+    const send = screen.getByRole('button', { name: /^Send/ });
+    expect(send.className).toContain('rounded-full');
+    expect(send.className).toContain('bg-[var(--color-primary)]');
+    // Multi-line, not a single-line input.
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' }).className).toContain(
+      'min-h-[60px]'
+    );
+  });
+});
+
+describe('the composer card', () => {
+  it('keeps the transcript and the composer on one measure', () => {
+    // The card is centred on the prototype's 604px measure and the transcript
+    // above it shares that measure, so the two read as one column at any pane
+    // width — which is also what makes the split view (t-36) need no second
+    // styling. A full-bleed bar ruled off with a border-top was neither.
+    const { container } = renderInShell(<ConversationPane />, 'large');
+    const measured = container.querySelectorAll('.max-w-\\[604px\\]');
+
+    expect(measured).toHaveLength(2);
+    measured.forEach((el) => expect(el.className).toContain('mx-auto'));
+  });
+
+  it('gives the box room to be more than one line before anyone types', () => {
+    const { container } = renderInShell(<ConversationPane />, 'large');
+    const box = container.querySelector('#shell-composer');
+
+    expect(box?.getAttribute('rows')).toBe('2');
+    expect(box?.className).toContain('min-h-[60px]');
+  });
+});
+
 describe('dragging the pane', () => {
   it('tracks the pointer', () => {
     renderInShell(<ConversationPane />);

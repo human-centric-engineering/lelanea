@@ -1,14 +1,17 @@
 'use client';
 
-import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { LotusMark } from '@/components/app/ui/lotus-mark';
+import { PanelCollapseIcon, PanelExpandIcon } from '@/components/app/ui/panel-icons';
+import { Tipped } from '@/components/app/ui/tipped';
 import { AccountMenu, type AccountMenuUser } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
-import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { SHELL_OVERLAY_ATTR, useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { LAST_MODULE_STORAGE_KEY, MODULES_PATH_PREFIX, modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
@@ -16,6 +19,42 @@ import { cn } from '@/lib/utils';
 
 /** The nav item that means "back to the module you are in". */
 const WORKSPACE_HREF = '/app/workspace';
+
+/**
+ * What a click-away must NOT collapse the menu on.
+ *
+ * The same list `workspace.tsx` guards its re-park gesture with, and for the
+ * same reason: a click on a control is a request to do that thing, not an
+ * incidental press on the background. Without it, using anything at all in the
+ * workspace — a button, a link, a checkbox — folded the menu as a side effect,
+ * which reads as the app flinching rather than as dismissing something.
+ */
+const INTERACTIVE = 'a, button, input, select, textarea, [role="button"], [role="separator"]';
+
+/**
+ * The shared height of the top area, in BOTH states, and it is the whole answer
+ * to why the collapse control can live up here at all.
+ *
+ * The prototype stacks the mark above the control when slim
+ * (`.lnav.slim .lnav-top { flex-direction: column }`) and keeps them side by
+ * side when open — which makes the top area taller in one state than the other,
+ * so every nav icon below it shifted down as the menu collapsed. That is the
+ * defect the control was moved to the footer to dodge, and dodging it was the
+ * wrong fix: it cost the design's own layout.
+ *
+ * Reserving the taller of the two heights in both states solves it directly.
+ * The row is the same height open or slim, the mark and the control simply
+ * change how they sit inside it, and the first nav item starts at the same y
+ * either way.
+ *
+ * 72px is the slim stack MEASURED, and the measurement is the point: this said
+ * 70px on the strength of a "25px-tall mark", which is not what renders.
+ * `LotusMark` sizes by BLOOM width, not by frame height — `lotusFrameSize(30,
+ * water)` is 45.59 × 29.51, rounded to 46 × 30 — so the column is 30 + 10 + 32,
+ * and every child is `flex-none`. Two pixels short of its contents is not a
+ * tight fit; it is an overflow that clips into the first nav item.
+ */
+const NAV_TOP_H = 'h-[72px]';
 
 export interface ShellNavProps {
   /** The signed-in person, for the pinned account menu. */
@@ -51,6 +90,26 @@ export function initialsFor(name: string, email: string): string {
  * renders comes from the server: the five destinations are static, and the
  * account footer is passed the session's user rather than fetching one.
  *
+ * ## Five ways it opens and closes, and they are not interchangeable
+ *
+ * | Gesture                          | Direction | Where                | Persists |
+ * | -------------------------------- | --------- | -------------------- | -------- |
+ * | the collapse control, at the top | both      | above 900px          | yes      |
+ * | a press on the menu's dead space | both      | above 900px          | yes      |
+ * | a press out in the panes         | closes    | above 900px          | no       |
+ * | Ask Lelañea opening / parking    | both      | `medium` + workspace | no       |
+ * | crossing 1100px inward           | closes    | —                    | no       |
+ *
+ * The split is about what the press was aimed at. The first two are a reader
+ * working the menu deliberately, so they persist; the rest are the layout
+ * getting out of the way for a moment, and persisting any of those would
+ * silently rewrite a choice somebody made on purpose — see `collapseNav`.
+ *
+ * None of the first three fire while a drawer is open: a press inside an
+ * `aria-modal` dialog must not reach the shell it is covering. And the Ask
+ * Lelañea row is width-conditional because its whole reason is crowding — see
+ * `setChatSlim` for the geometry that decides where the two actually compete.
+ *
  * ## What is deliberately absent
  *
  * The prototype's account footer carries a second line reading "eleven
@@ -64,7 +123,8 @@ export function initialsFor(name: string, email: string): string {
  * person, so the nav is about destinations. Owner ruling, 15 September 2026.
  */
 export function ShellNav({ user }: ShellNavProps) {
-  const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, width } = useShellLayout();
+  const { navSlim, navOpen, closeNav, toggleNavSlim, collapseNav, drawer, width } =
+    useShellLayout();
   /*
    * "Workspace" resolves to the last module visited, remembered per browser
    * by the module page (`RememberModule`). Until one has been, it goes to the
@@ -132,11 +192,74 @@ export function ShellNav({ user }: ShellNavProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [navOpen]);
 
-  const [readerToggled, setReaderToggled] = useState(false);
-  const toggleSlim = () => {
-    setReaderToggled(true);
-    toggleNavSlim();
-  };
+  /**
+   * Pressing dead space works the menu, and WHICH dead space decides what it
+   * means.
+   *
+   * | Where the press lands        | What it does | Writes the preference |
+   * | ---------------------------- | ------------ | --------------------- |
+   * | the menu's own empty space   | toggles      | yes                   |
+   * | anywhere else, menu open     | collapses    | no                    |
+   * | anywhere else, menu slim     | nothing      | —                     |
+   *
+   * The asymmetry is the point, and it is about what the press was AIMED at. A
+   * press inside the menu is a deliberate act on the menu — including bringing
+   * it back, which is the whole reason the collapsed rail's empty space is a
+   * target at all: it is a 64px-wide column of nothing, and making it dead would
+   * leave one 32px control as the only way back. That is the same act as the
+   * control, so it persists like the control. A press out in the conversation is
+   * a dismissal — it says nothing about how somebody likes their menu, so it
+   * moves the live value and leaves storage alone (`collapseNav`).
+   *
+   * On `pointerdown` rather than `click`, so the menu is already moving by the
+   * time the press resolves — `click` fires after `mouseup`, which on a drag or
+   * a long press is noticeably late.
+   *
+   * It is not a scrim: above 900px the menu is a column in the flow, not a panel
+   * over anything, so there is nothing to dim and nothing to swallow the press
+   * with. And it never fires on a press that lands on a control (`INTERACTIVE`)
+   * — including the menu's own items and its own collapse button, which have
+   * their own jobs.
+   *
+   * Focus is safe by construction, which is why there is no focus handling here:
+   * this changes the menu's WIDTH. Every item stays rendered, focusable and in
+   * the same order, so a reader whose focus was on one keeps it. The case where
+   * focus really would be stranded is the ≤900px drawer going `inert`, and that
+   * is handled where the drawer closes — `closeNav` in `use-shell-layout.tsx`.
+   */
+  useEffect(() => {
+    if (width === 'small') return;
+    // Nothing at all while a drawer is open, and this is not belt-and-braces.
+    // The drawer's scrim is a bare `<div>` and the panel's own dead space — its
+    // lede, its arc headings, its padding — is not a control either, so
+    // `INTERACTIVE` misses both and `navRef` does not contain them. Dismissing
+    // the map by clicking its scrim therefore closed the drawer AND silently
+    // collapsed the menu behind it. A press inside an `aria-modal` dialog must
+    // not reach the shell it is covering; that is what modal means.
+    if (drawer) return;
+    const onDown = (event: PointerEvent) => {
+      // The primary button only. `pointerdown` fires for button 2 as well, so a
+      // right-click anywhere in the panes restructured the layout underneath
+      // the context menu that was about to open.
+      if (event.button !== 0) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(INTERACTIVE)) return;
+      // A full-screen overlay is covering the shell, and a press on it is not a
+      // press on the shell. `pointer-events` cannot say this to a `document`
+      // listener — see `SHELL_OVERLAY_ATTR`. The entry bloom is the one that
+      // bit: a click during the opening animation collapsed the reader's menu
+      // as their first interaction with the app.
+      if (target.closest(`[${SHELL_OVERLAY_ATTR}]`)) return;
+      if (navRef.current?.contains(target)) {
+        toggleNavSlim();
+        return;
+      }
+      if (!slim) collapseNav();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [width, slim, drawer, collapseNav, toggleNavSlim]);
 
   return (
     <>
@@ -148,7 +271,7 @@ export function ShellNav({ user }: ShellNavProps) {
       {width === 'small' ? (
         <div
           aria-hidden="true"
-          onClick={() => setNavOpen(false)}
+          onClick={closeNav}
           className={cn(
             'fixed inset-0 z-[55] bg-[var(--color-scrim)]',
             'transition-opacity duration-300 ease-[var(--ease-brand)]',
@@ -188,14 +311,27 @@ export function ShellNav({ user }: ShellNavProps) {
             'motion-reduce:transition-none',
             navOpen ? 'visible translate-x-0' : 'invisible -translate-x-[102%]',
           ],
-          // Above 900px only, for the same twMerge reason: below it the nav is a
-          // drawer that SLIDES, and a width transition here replaced the
-          // `transition-[transform,visibility]` it needs — so once a reader had ever
-          // used the collapse control, the phone drawer stopped animating and
-          // `visibility` snapped. `readerToggled` is state, so it survived the resize
-          // that took them there.
+          // THIS IS WHAT WAS DEFEATING THE ANIMATION, and it was not a missing
+          // transition: the transition existed and was gated behind a
+          // `readerToggled` piece of state set by the very click that also
+          // changed the width. Both landed in one React commit, so the class and
+          // the new width arrived together and the browser had nothing to
+          // transition FROM — the first collapse snapped, and the auto-slim on
+          // crossing 1100px, which never set the flag, snapped every time.
+          // Resolved through `cn` to be sure: at `large`, slim, untoggled, the
+          // list came out with no `transition-*` in it at all.
+          //
+          // The flag was there to keep a width transition off the ≤900px
+          // drawer, which needs its own `transition-[transform,visibility]` and
+          // would have lost it to twMerge. But `width !== 'small'` already does
+          // exactly that, and the two branches are mutually exclusive — so the
+          // flag was buying nothing and costing the first animation.
+          //
+          // Emitting it unconditionally above 900px is safe on first paint:
+          // `fitToWidth` runs in a LAYOUT effect, before the browser has painted
+          // the server's expanded default, so the correction to slim has no
+          // previous frame to animate away from.
           width !== 'small' &&
-            readerToggled &&
             'transition-[width] duration-[260ms] ease-[var(--ease-brand)] motion-reduce:transition-none',
           // 9px when slim, not 10px, and the difference is load-bearing: the item
           // is `w-11` (44px), so at 10px the inner box is exactly 44px and the
@@ -209,22 +345,21 @@ export function ShellNav({ user }: ShellNavProps) {
         )}
       >
         {/*
-        ONE ROW IN BOTH STATES, and that is the whole point of it.
+        The mark and the collapse control, at the top, where the prototype puts
+        them (`.lnav-top`) — and at ONE HEIGHT in both states, which is what
+        makes that possible without the nav items jumping. See `NAV_TOP_H`.
 
-        The prototype stacks the mark above the collapse control when slim
-        (`.lnav.slim .lnav-top { flex-direction: column }`), which makes the top
-        area taller in one state than the other — so every nav icon below it
-        shifted down as the menu collapsed. Collapsing a menu should change its
-        width and nothing else; icons that jump make the two states read as two
-        different navs. Owner ruling, 10 September 2026.
-
-        The toggle therefore lives in the footer below, where it holds one
-        position in both states rather than trading places with the wordmark.
+        Open, they sit in a row with the control pushed right. Slim, the control
+        drops under the mark and both centre in the 64px rail, as
+        `.lnav.slim .lnav-top` does. The row is the same height either way, so
+        the first nav item below starts at the same y.
       */}
         <div
           className={cn(
-            'flex h-8 flex-none items-center gap-2.5 pt-0.5',
-            slim ? 'justify-center px-0' : 'px-[3px]'
+            NAV_TOP_H,
+            'flex flex-none',
+            slim ? 'flex-col items-center justify-center gap-2.5 px-0' : 'items-center gap-2.5',
+            !slim && (width === 'small' ? 'px-0' : 'px-[3px]')
           )}
         >
           {/*
@@ -245,7 +380,8 @@ export function ShellNav({ user }: ShellNavProps) {
               title="Close the menu"
               className={cn(
                 'text-muted-foreground hover:text-foreground flex h-9 w-9 flex-none',
-                'items-center justify-center rounded-full',
+                'items-center justify-center',
+                ICON_RADIUS,
                 'hover:bg-[var(--color-pill-hover)]',
                 'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                 'motion-reduce:transition-none',
@@ -259,13 +395,62 @@ export function ShellNav({ user }: ShellNavProps) {
           <Link
             href="/"
             aria-label="Lelañea, back to the site"
-            className="flex min-w-0 items-center gap-2.5 no-underline hover:no-underline"
+            className="flex min-w-0 flex-none items-center gap-2.5 no-underline hover:no-underline"
           >
             <LotusMark size={30} />
             {slim ? null : (
               <span className="brand-display text-[22px] whitespace-nowrap">Lelañea</span>
             )}
           </Link>
+
+          {/*
+            The spacer that pushes the control to the right edge when the menu is
+            open. Slim, the row is a centred column and there is nothing to push.
+          */}
+          {slim || width === 'small' ? null : <span className="min-w-0 flex-1" />}
+
+          {/*
+            No collapse control inside the ≤900px drawer. There the menu is
+            always its full self — `slim` is ignored at that width, which the
+            prototype's small block states outright — so this button would flip a
+            preference with no visible effect. The burger opens and closes the
+            nav at that width, and the close control above is its partner.
+          */}
+          {width === 'small' ? null : (
+            /*
+              It takes the brand tooltip when slim, like everything else in the
+              64px rail. Collapsed, this is the one control that is ALWAYS
+              there — and it was the only icon in the column with no hover hint
+              at all, which reads as the odd one out rather than as the obvious
+              way back. Expanded, the label would be noise beside a menu that
+              already says what it is.
+            */
+            <Tipped side="right" label={slim ? 'Expand the menu' : null}>
+              {(tip) => (
+                <button
+                  {...tip}
+                  type="button"
+                  onClick={toggleNavSlim}
+                  aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
+                  aria-expanded={!slim}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+                    'flex h-8 flex-none items-center justify-center',
+                    ICON_RADIUS,
+                    'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                    'motion-reduce:transition-none',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                    'focus-visible:outline-[var(--color-ring)]',
+                    // Slim, it takes the item width so it sits on the same
+                    // vertical centre line as every icon below it.
+                    slim ? 'w-11' : 'w-8'
+                  )}
+                >
+                  {slim ? <PanelExpandIcon /> : <PanelCollapseIcon />}
+                </button>
+              )}
+            </Tipped>
+          )}
         </div>
 
         {/*
@@ -308,85 +493,78 @@ export function ShellNav({ user }: ShellNavProps) {
             const Icon = entry.icon;
 
             return (
-              <Link
+              /*
+                The brand tooltip, and only when the labels are gone. An open
+                menu already says what each item is, which is the prototype's
+                own rule (`.lnav:not(.slim) .lnav-item::after { content: none }`).
+                `null` renders the link with no bubble and no handlers.
+
+                It REPLACES the native `title`, which was the browser's tooltip:
+                a different shape, a different delay, unstyleable, and it fires
+                on touch. The accessible name stays where it was — the `sr-only`
+                span below — because a tooltip is not a name.
+              */
+              <Tipped
                 key={entry.href}
-                href={href}
-                // Closes the drawer even when the route does not change —
-                // tapping the item for the page already showing otherwise
-                // left the panel and its scrim sitting over it.
-                onClick={width === 'small' ? closeNav : undefined}
-                aria-current={current ? 'page' : undefined}
-                title={slim ? `${entry.label} — ${entry.hint}` : undefined}
-                className={cn(
-                  'flex h-[42px] flex-none items-center gap-3 rounded-xl border border-transparent',
-                  'text-muted-foreground text-left no-underline hover:no-underline',
-                  'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-                  'motion-reduce:transition-none',
-                  'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                  'focus-visible:outline-[var(--color-ring)]',
-                  'aria-[current=page]:border-[var(--color-secondary-ink)]',
-                  'aria-[current=page]:bg-[var(--color-secondary-wash)]',
-                  'aria-[current=page]:text-[var(--color-secondary-ink)]',
-                  slim ? 'w-11 justify-center px-0' : 'w-full px-[11px]'
-                )}
+                side="right"
+                label={slim ? `${entry.label} — ${entry.hint}` : null}
               >
-                <Icon size={18} strokeWidth={1.5} className="flex-none" aria-hidden="true" />
-                {slim ? (
-                  <span className="sr-only">{entry.label}</span>
-                ) : (
-                  <span
+                {(tip) => (
+                  <Link
+                    {...tip}
+                    href={href}
+                    // Closes the drawer even when the route does not change —
+                    // tapping the item for the page already showing otherwise
+                    // left the panel and its scrim sitting over it.
+                    onClick={width === 'small' ? closeNav : undefined}
+                    aria-current={current ? 'page' : undefined}
                     className={cn(
-                      'min-w-0 flex-1 overflow-hidden text-[14.5px] text-ellipsis whitespace-nowrap',
-                      current && 'font-medium'
+                      'flex h-[42px] flex-none items-center gap-3 border border-transparent',
+                      ICON_RADIUS,
+                      'text-muted-foreground text-left no-underline hover:no-underline',
+                      'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                      'motion-reduce:transition-none',
+                      'hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                      'focus-visible:outline-[var(--color-ring)]',
+                      'aria-[current=page]:border-[var(--color-secondary-ink)]',
+                      'aria-[current=page]:bg-[var(--color-secondary-wash)]',
+                      'aria-[current=page]:text-[var(--color-secondary-ink)]',
+                      slim ? 'w-11 justify-center px-0' : 'w-full px-[11px]'
                     )}
                   >
-                    {entry.label}
-                  </span>
+                    <Icon size={18} strokeWidth={1.5} className="flex-none" aria-hidden="true" />
+                    {slim ? (
+                      // The LABEL, not the tooltip's `label — hint`. The
+                      // accessible name should say the same thing in both
+                      // states, and the expanded menu says the label; a name
+                      // that grows a subtitle when the menu narrows is the same
+                      // destination announcing itself two different ways.
+                      <span className="sr-only">{entry.label}</span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'min-w-0 flex-1 overflow-hidden text-[14.5px] text-ellipsis whitespace-nowrap',
+                          current && 'font-medium'
+                        )}
+                      >
+                        {entry.label}
+                      </span>
+                    )}
+                  </Link>
                 )}
-              </Link>
+              </Tipped>
             );
           })}
         </div>
 
         {/*
-        The pinned footer: the collapse toggle and the account, in one position
-        in both states. Outside the scroll container on purpose — a control for
-        the nav itself should not scroll away with the nav's contents.
+        The pinned footer: the account, and nothing else now that the collapse
+        control has gone back up to the top where the design puts it. Outside
+        the scroll container on purpose — the account should not scroll away
+        with the destinations above it.
       */}
         <div className="-mx-1 flex flex-none flex-col gap-0.5 px-1 pt-1">
-          {/*
-          No collapse control inside the drawer. Below 900px the menu is always
-          its full self — `slim` is ignored there, which the prototype's small
-          block states outright — so this button would flip a preference with no
-          visible effect. A control that does nothing is what this shell has
-          refused twice already; the burger opens and closes the nav at this
-          width.
-        */}
-          {width === 'small' ? null : (
-            <button
-              type="button"
-              onClick={toggleSlim}
-              aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
-              title={slim ? 'Expand the menu' : 'Collapse the menu'}
-              className={cn(
-                'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-                'flex h-8 flex-none items-center rounded-[10px]',
-                'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-                'motion-reduce:transition-none',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                'focus-visible:outline-[var(--color-ring)]',
-                slim ? 'w-11 justify-center px-0' : 'w-full justify-end px-2'
-              )}
-            >
-              {slim ? (
-                <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
-              ) : (
-                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
-              )}
-            </button>
-          )}
-
           <AccountMenu
             user={user}
             initials={initialsFor(user.name, user.email)}
