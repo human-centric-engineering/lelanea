@@ -172,8 +172,11 @@ describe('Tipped', () => {
     const trigger = screen.getByRole('button');
     const real = trigger.matches.bind(trigger);
     let keyboard = false;
-    trigger.matches = (selector: string) =>
-      selector === ':focus-visible' ? keyboard : real(selector);
+    // Cast, because `Element.matches` is an overload set whose string form is
+    // declared as a type predicate — a plain `(s: string) => boolean` is not
+    // assignable to it, and a bare assignment fails `tsc` while Vitest is green.
+    trigger.matches = ((selector: string) =>
+      selector === ':focus-visible' ? keyboard : real(selector)) as Element['matches'];
 
     act(() => {
       trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));

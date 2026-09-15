@@ -15,59 +15,44 @@ import { cn } from '@/lib/utils';
 export const JOURNEY_MAP_ENDPOINT = '/api/v1/app/journey/map';
 
 /**
- * The hue each tier carries, keyed by its id — the prototype's `TIER_TONE`,
- * every value an existing palette token.
+ * The hue each of the five arcs is named in — the prototype's `TIER_TONE`,
+ * resolved to the token of that hue that can carry TEXT.
  *
- * It paints the swatch beside the tier label, NOT the label's text. The
- * prototype tints the text, and `shell.md` records why that is not carried
- * over anywhere in the shell: measured in light mode, `--color-accent-ink`
- * reaches 3.17:1 and `--color-status-yellow` 2.03:1 against the ground — both
- * under AA for text this size — and the rule is set by the worse theme. The
- * label keeps `--color-muted-foreground`, where contrast is measured; the tone
- * is decorative, and the label carries the tier.
- */
-export const TIER_TONES: Readonly<Record<string, string>> = {
-  onboarding: 'var(--color-status-green)',
-  foundations: 'var(--color-secondary-ink)',
-  inner_authority: 'var(--color-status-yellow)',
-  embodied_relationship: 'var(--color-accent-ink)',
-  integration_and_expansion: 'var(--color-status-purple)',
-};
-
-/**
- * The same five arcs, in the ink each hue keeps for TEXT — and the pair exists
- * because a tint and a typeface are different jobs.
- *
- * The prototype names its tiers in their own colour (`.tierlab { color:
- * var(--tiertone) }`), and `shell.md` recorded why that was not carried over: in
- * light mode the raw hues do not carry 11px type. Measured against
+ * The design names its tiers in their own colour (`.tierlab { color:
+ * var(--tiertone) }`). `shell.md` recorded why that was not carried over: in
+ * light mode the raw hues do not carry 11px type — measured against
  * `--color-background`, `--color-accent-ink` reaches 3.17:1 and raw
  * `--color-status-yellow` 2.03:1, both under AA. So the label was left muted
- * with the tone on a bullet beside it — which is a different thing from what the
- * design draws, and reads as a list with dots rather than as five named arcs.
+ * with the raw tone on a bullet beside it, which is a different thing from what
+ * the design draws: it reads as a list with dots rather than as five named arcs.
  *
- * The palette already answers this, and the first pass simply did not use it:
- * every status hue ships an `-ink` sibling that flips per theme precisely so it
- * can carry text. Measured on `--color-background` in light / dark:
+ * The palette already answers this and the first pass simply did not use it.
+ * Every status hue ships an `-ink` sibling that flips per theme precisely so it
+ * can be set in type. Measured on `--color-background`, light / dark:
  *
- * | Arc                      | Token                        | Light | Dark |
- * | ------------------------ | ---------------------------- | ----- | ---- |
- * | onboarding               | `--color-status-green-ink`   | 6.30  | pass |
- * | foundations              | `--color-secondary-ink`      | 4.91  | 6.96 |
- * | inner authority          | `--color-status-yellow-ink`  | 5.05  | pass |
- * | embodied relationship    | `--color-status-red-ink`     | 5.92  | 6.46 |
- * | integration & expansion  | `--color-status-purple-ink`  | 6.43  | pass |
+ * | Arc                     | Token                       | Light | Dark |
+ * | ----------------------- | --------------------------- | ----- | ---- |
+ * | onboarding              | `--color-status-green-ink`  | 6.30  | pass |
+ * | foundations             | `--color-secondary-ink`     | 4.91  | 6.96 |
+ * | inner authority         | `--color-status-yellow-ink` | 5.05  | pass |
+ * | embodied relationship   | `--color-status-red-ink`    | 5.92  | 6.46 |
+ * | integration & expansion | `--color-status-purple-ink` | 6.43  | pass |
  *
  * The orange arc is the one to notice. `--color-accent-ink` is the ceremonial
  * burnt orange and holds across both modes, which is exactly why it cannot do
- * this: 3.17:1 in light and 3.92:1 in dark — it fails in BOTH. Its text-carrying
- * sibling in this palette is `--color-status-red-ink`, the same terracotta
- * family, which the stylesheet itself describes as "where §6.2's danger hue is
- * actually read as a colour rather than sat on". `--color-primary` is the other
- * candidate and fails dark at 2.72:1.
+ * this: 3.17:1 light and 3.92:1 dark — it fails in BOTH. Its text-carrying
+ * sibling here is `--color-status-red-ink`, the same terracotta family, which
+ * the stylesheet describes as "where §6.2's danger hue is actually read as a
+ * colour rather than sat on". `--color-primary` is the other candidate and
+ * fails dark at 2.72:1.
  *
- * `TIER_TONES` stays for anything painting a SURFACE with an arc's hue, where
- * the contrast question does not arise.
+ * **There is deliberately no second table of raw hues.** One stood beside this
+ * for a while, left over from painting the bullet — and the moment the bullet
+ * went it had no caller and a docblock saying the opposite of this one. Two
+ * tables of arc colours, one of them wrong and neither used, is how the next
+ * reader ends up acting on whichever they open first. If something ever needs an
+ * arc's hue on a SURFACE, where contrast does not arise, add it back then with
+ * the caller that wants it.
  */
 export const TIER_INKS: Readonly<Record<string, string>> = {
   onboarding: 'var(--color-status-green-ink)',
@@ -227,10 +212,11 @@ export function MapDrawerBody() {
               labels are common nouns, so nothing loses a capital that meant
               something. An eyebrow carrying Lelañea's name would.
 
-              The colour is `TIER_INKS`, not `TIER_TONES` — see the table at the
-              declaration for why those are two lists and what each was
-              measured at. Inline rather than an arbitrary class because the
-              value is a per-tier lookup, not a constant.
+              The colour comes from `TIER_INKS` — see the table at its
+              declaration for what each arc was measured at, and why the orange
+              one does not use the ceremonial `--color-accent-ink`. Inline
+              rather than an arbitrary class because the value is a per-tier
+              lookup, not a constant.
             */}
             <Eyebrow
               as="h3"

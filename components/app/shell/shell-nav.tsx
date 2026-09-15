@@ -110,7 +110,7 @@ export function initialsFor(name: string, email: string): string {
  * person, so the nav is about destinations. Owner ruling, 15 September 2026.
  */
 export function ShellNav({ user }: ShellNavProps) {
-  const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, collapseNav, width } =
+  const { navSlim, navOpen, setNavOpen, closeNav, toggleNavSlim, collapseNav, drawer, width } =
     useShellLayout();
   /*
    * "Workspace" resolves to the last module visited, remembered per browser
@@ -216,6 +216,14 @@ export function ShellNav({ user }: ShellNavProps) {
    */
   useEffect(() => {
     if (width === 'small') return;
+    // Nothing at all while a drawer is open, and this is not belt-and-braces.
+    // The drawer's scrim is a bare `<div>` and the panel's own dead space — its
+    // lede, its arc headings, its padding — is not a control either, so
+    // `INTERACTIVE` misses both and `navRef` does not contain them. Dismissing
+    // the map by clicking its scrim therefore closed the drawer AND silently
+    // collapsed the menu behind it. A press inside an `aria-modal` dialog must
+    // not reach the shell it is covering; that is what modal means.
+    if (drawer) return;
     const onDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -228,7 +236,7 @@ export function ShellNav({ user }: ShellNavProps) {
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [width, slim, collapseNav, toggleNavSlim]);
+  }, [width, slim, drawer, collapseNav, toggleNavSlim]);
 
   return (
     <>
@@ -385,29 +393,42 @@ export function ShellNav({ user }: ShellNavProps) {
             nav at that width, and the close control above is its partner.
           */}
           {width === 'small' ? null : (
-            <button
-              type="button"
-              onClick={toggleNavSlim}
-              aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
-              aria-expanded={!slim}
-              className={cn(
-                'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
-                'flex h-8 flex-none items-center justify-center rounded-[10px]',
-                'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-                'motion-reduce:transition-none',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                'focus-visible:outline-[var(--color-ring)]',
-                // Slim, it takes the item width so it sits on the same vertical
-                // centre line as every icon below it.
-                slim ? 'w-11' : 'w-8'
+            /*
+              It takes the brand tooltip when slim, like everything else in the
+              64px rail. Collapsed, this is the one control that is ALWAYS
+              there — and it was the only icon in the column with no hover hint
+              at all, which reads as the odd one out rather than as the obvious
+              way back. Expanded, the label would be noise beside a menu that
+              already says what it is.
+            */
+            <Tipped side="right" label={slim ? 'Expand the menu' : null}>
+              {(tip) => (
+                <button
+                  {...tip}
+                  type="button"
+                  onClick={toggleNavSlim}
+                  aria-label={slim ? 'Expand the menu' : 'Collapse the menu'}
+                  aria-expanded={!slim}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground hover:bg-[var(--color-pill-hover)]',
+                    'flex h-8 flex-none items-center justify-center rounded-[10px]',
+                    'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+                    'motion-reduce:transition-none',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                    'focus-visible:outline-[var(--color-ring)]',
+                    // Slim, it takes the item width so it sits on the same
+                    // vertical centre line as every icon below it.
+                    slim ? 'w-11' : 'w-8'
+                  )}
+                >
+                  {slim ? (
+                    <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+                  )}
+                </button>
               )}
-            >
-              {slim ? (
-                <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
-              ) : (
-                <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
-              )}
-            </button>
+            </Tipped>
           )}
         </div>
 

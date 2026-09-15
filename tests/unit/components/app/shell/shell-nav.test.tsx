@@ -20,7 +20,7 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -253,6 +253,19 @@ describe('ShellNav — slim mode', () => {
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
   });
 
+  it('gives the collapse control a tooltip too, since it is always in the rail', async () => {
+    // Every other icon in the 64px rail raises one, and this is the control
+    // that is ALWAYS there — the one with no hover hint reads as the odd one
+    // out rather than as the obvious way back. Expanded, the label would be
+    // noise beside a menu that already says what it is.
+    renderAt('/app');
+    const control = () => screen.getByRole('button', { name: /the menu/ });
+    expect(control().nextElementSibling).toBeNull();
+
+    await userEvent.click(control());
+    expect(control().nextElementSibling?.textContent).toBe('Expand the menu');
+  });
+
   it('keeps the account footer reachable at 64px, still named by the person', async () => {
     renderAt('/app');
     await userEvent.click(toggle());
@@ -303,9 +316,11 @@ describe('ShellNav — collapsing changes the width and nothing else', () => {
     renderAt('/app');
     const [brand, , footer] = regions();
 
-    // One control, in the brand row, where the design draws it.
+    // One control, in the brand row, where the design draws it. The footer has
+    // a button of its own — the account menu's trigger — so the assertion is
+    // about the COLLAPSE control being absent from it, not about buttons.
     expect(brand.querySelector('button')).not.toBeNull();
-    expect(footer.querySelector('button')).toBeNull();
+    expect(within(footer).queryByRole('button', { name: /the menu/ })).toBeNull();
     // The footer is the account and only the account.
     expect(footer.textContent).toContain(USER.name);
     expect(screen.getAllByRole('button', { name: /the menu/ })).toHaveLength(1);

@@ -262,51 +262,81 @@ describe('the auto-slim fires on crossing, not on every resize', () => {
   });
 });
 
-describe('Ask Lelañea and the left menu are mutually exclusive', () => {
-  // Both eat the middle of the screen, and with the workspace open they eat it
-  // from the same end: 234px of menu plus a 420px conversation panel leaves a
-  // tablet showing slivers of three things and the whole of none of them. The
-  // rule lives in the provider rather than in the two components, so there is
-  // one copy of it — which is what this file is checking.
+describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPETE', () => {
+  // The owner's reason was that the two crowd the conversation off the screen,
+  // and that is a statement about one geometry: at `medium` with the workspace
+  // open the conversation is a fixed 420px panel riding over the work while the
+  // menu is a 234px column in the flow. At `large` both panes are in the flow
+  // and the reader sizes the conversation themselves. Applied everywhere, the
+  // rule folded the conversation to a 56px strip on a 1600px screen, where a
+  // 234px menu and a 440px pane fit with room to spare.
   const nav = () => document.querySelector('nav[aria-label="Main"]');
   const slimNow = () => nav()?.getAttribute('data-slim');
 
-  it('collapses the menu when the conversation is opened from its strip', async () => {
-    renderShell('large');
-    expect(slimNow()).toBe('false');
-
-    // Fold it first, so there is a strip to open.
-    handle().focus();
-    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+  it('collapses the menu when the conversation is opened on a tablet', async () => {
+    renderShell('medium');
+    // At medium with a workspace open the conversation parks itself, so the
+    // strip is already there.
     const pull = strip();
     expect(pull).not.toBeNull();
 
     await userEvent.click(pull!);
-    expect(strip()).toBeNull();
     expect(slimNow()).toBe('true');
   });
 
-  it('parks the conversation when the menu is expanded', async () => {
-    renderShell('large');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+  it('gives the menu back when the conversation is parked again', async () => {
+    // The half that was missing. The only thing that ever released the override
+    // was `fit`'s outward 1100px crossing, which at a fixed window width never
+    // happens — so a reader who opened the conversation once kept a collapsed
+    // menu for the rest of the session. That is the failure the override exists
+    // to prevent, one level down.
+    renderShell('medium');
+    await userEvent.click(strip()!);
     expect(slimNow()).toBe('true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(slimNow()).toBe('false');
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+
+  it('parks the conversation when the menu is expanded on a tablet', async () => {
+    renderShell('medium');
+    await userEvent.click(strip()!);
     expect(strip()).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
-    expect(slimNow()).toBe('false');
     expect(strip()).not.toBeNull();
+  });
+
+  it('does NOT fold the conversation when the menu is expanded at large', async () => {
+    // On a 1600px screen there is nothing to get out of the way of, and a
+    // conversation vanishing reads as a bug rather than as a considerate layout.
+    renderShell('large');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+
+    expect(strip()).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('does NOT collapse the menu when the conversation is opened at large', async () => {
+    renderShell('large');
+    handle().focus();
+    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+    expect(strip()).not.toBeNull();
+
+    await userEvent.click(strip()!);
+    expect(slimNow()).toBe('false');
   });
 
   it('does not park a conversation that has no workspace beside it', async () => {
     // With nothing to give the width to, folding leaves a 56px sliver against
-    // empty space — which is the defect the `!wsOpen` reset already exists to
-    // prevent. The rule is about two things competing, and on `/app` there is
-    // only one.
+    // empty space — the defect the `!wsOpen` reset already exists to prevent.
     mockPathname.current = '/app';
-    renderShell('large');
+    renderShell('medium');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse the menu' }));
+    // Medium is under 1100, so the nav arrives already auto-slimmed — expanding
+    // it is the gesture under test either way.
     await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
     expect(strip()).toBeNull();
   });
@@ -314,7 +344,7 @@ describe('Ask Lelañea and the left menu are mutually exclusive', () => {
   it('opening the conversation does not rewrite the stored menu preference', () => {
     // Asking for the conversation is not a statement about how you like your
     // menu. Same reasoning as the click-away, and as the 1100px auto-slim.
-    renderShell('large');
+    renderShell('medium');
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
   });
 });

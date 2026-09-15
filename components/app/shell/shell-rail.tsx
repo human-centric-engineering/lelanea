@@ -37,10 +37,18 @@ const RAIL_ITEMS: { id: DrawerId; label: string; tip: string; icon: typeof Map }
  * `env(safe-area-inset-bottom)` so the row clears a phone's home indicator
  * rather than sitting under it.
  *
- * The tooltip is deliberately NOT suppressed by width here — `Tipped` ignores
- * touch pointers outright, which is the real rule. A phone with a mouse
- * attached gets the bubble; a tap never does. A hover tooltip that latches on
- * tap sits directly over the button it describes.
+ * **The tooltip is for the vertical rail only.** `Tipped` already refuses touch
+ * pointers, which is what keeps a bubble off a tap — but suppressing it here as
+ * well is not belt-and-braces, it is geometry. The bubble points LEFT, which is
+ * the only direction that works beside a right-hand rail; against a full-width
+ * key it is measured from that key's left edge, so on the left-hand one it lands
+ * at x≈0 with its right edge at the screen edge (invisible), and on the
+ * right-hand one it lands on top of its neighbour. A bubble nobody can read is
+ * not a tooltip.
+ *
+ * Nothing is lost by dropping it: the whole reason the vertical rail needs one
+ * is that its 8.5px caption cannot carry `Your map — the sixteen modules`, and
+ * down here each key already says `Map` in sentence case at body size.
  */
 export function ShellRail() {
   const { drawer, openDrawer, closeDrawer, width } = useShellLayout();
@@ -65,7 +73,7 @@ export function ShellRail() {
         const Icon = item.icon;
         const open = drawer === item.id;
         return (
-          <Tipped key={item.id} side="left" label={item.tip}>
+          <Tipped key={item.id} side="left" label={small ? null : item.tip}>
             {(tip) => (
               <button
                 {...tip}

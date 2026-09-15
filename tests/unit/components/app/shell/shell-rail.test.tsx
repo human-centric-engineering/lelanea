@@ -122,9 +122,7 @@ describe('ShellRail', () => {
     expect(map.className).toContain('w-[62px]');
   });
 
-  it('carries the brand tooltip, and never the browser one', () => {
-    // Same bubble as the collapsed left menu, per the task — and `Tipped`
-    // ignores touch pointers, which is what keeps it off a phone tap.
+  it('carries the brand tooltip on the vertical rail, and never the browser one', () => {
     renderInShell(<ShellRail />, 'large');
     const map = screen.getByRole('button', { name: /Your map/ });
     expect(map.getAttribute('title')).toBeNull();
@@ -132,5 +130,30 @@ describe('ShellRail', () => {
     const bubble = map.nextElementSibling;
     expect(bubble?.textContent).toBe('Your map — the sixteen modules');
     expect(bubble?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('drops the tooltip in the footer, where it could not be read anyway', () => {
+    // Geometry, not belt-and-braces. The bubble points LEFT — the only
+    // direction that works beside a right-hand rail — and is measured from its
+    // trigger's left edge. Against a full-width key that puts the left one's
+    // bubble off the screen entirely and the right one's on top of its
+    // neighbour. Nothing is lost: each key already says `Map` in sentence case
+    // at body size, which is the whole reason the vertical rail needs a bubble
+    // and the footer does not.
+    renderInShell(<ShellRail />, 'small');
+    const map = screen.getByRole('button', { name: /Your map/ });
+
+    expect(map.getAttribute('title')).toBeNull();
+    // No bubble anywhere in the footer. Asserted by TEXT rather than by
+    // `nextElementSibling`: with no bubble rendered, a key's next sibling is
+    // simply the other key, so a sibling check would pass for the wrong reason.
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(
+      Array.from(rail.querySelectorAll('span')).some(
+        (el) => el.textContent === 'Your map — the sixteen modules'
+      )
+    ).toBe(false);
+    // The name is still there for anyone reading with a screen reader.
+    expect(map.getAttribute('aria-label')).toBe('Your map — the sixteen modules');
   });
 });

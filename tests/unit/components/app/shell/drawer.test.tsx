@@ -15,11 +15,12 @@
  * @see components/app/shell/drawer.tsx
  */
 
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Drawers } from '@/components/app/shell/drawer';
+import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -210,6 +211,46 @@ describe('the panel is the designed panel', () => {
       expect(close.className).toContain('rounded-[10px]');
       expect(close.className).not.toContain('rounded-full');
     }
+  });
+});
+
+describe('an open drawer does not leak presses into the shell behind it', () => {
+  /** The rail, the drawers AND the nav — the click-away lives on the nav. */
+  const renderWithNav = () =>
+    renderInShell(
+      <>
+        <ShellNav user={{ name: 'Maya Reyes', email: 'maya@example.com' }} />
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+  const navSlim = () => document.querySelector('nav[aria-label="Main"]')?.getAttribute('data-slim');
+
+  it('leaves the left menu alone when its scrim is dismissed', async () => {
+    // The scrim is a bare `<div>` and a panel's own dead space is not a control
+    // either, so the nav's click-away saw neither as interactive and neither as
+    // inside the nav — dismissing the map by clicking its scrim closed the
+    // drawer AND silently collapsed the menu behind it. A press inside an
+    // `aria-modal` dialog must not reach the shell it is covering.
+    renderWithNav();
+    expect(navSlim()).toBe('false');
+
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+    await act(async () => {
+      scrimEl().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(navSlim()).toBe('false');
+  });
+
+  it('leaves it alone for a press on the open panel itself', async () => {
+    renderWithNav();
+    await userEvent.click(screen.getByRole('button', { name: /Resources/ }));
+
+    await act(async () => {
+      panel('resources')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(navSlim()).toBe('false');
   });
 });
 

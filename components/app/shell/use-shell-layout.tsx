@@ -363,26 +363,48 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   );
 
   /**
-   * Ask Lelañea and the left menu are mutually exclusive, and the rule lives
-   * HERE rather than in the two components.
+   * Ask Lelañea and the left menu are mutually exclusive — **where they are
+   * actually competing** — and the rule lives HERE rather than in the two
+   * components.
    *
-   * Both of them eat the middle of the screen, and with the workspace open they
-   * eat it from the same end: 234px of menu plus a 420px conversation panel
-   * leaves a tablet showing slivers of three things and the whole of none of
-   * them. So opening either closes the other, which is one rule about two pieces
-   * of state — exactly what this provider is for. Two components each reaching
-   * for the other's setter would be the same rule written twice, and the second
-   * copy is the one that rots.
+   * ## The width condition is the rule, not a caveat on it
    *
-   * It closes the menu by OVERRIDE, never by writing storage: asking for the
-   * conversation is not a statement about how you like your menu, and the
-   * reader's stored preference comes back the next time the override is
-   * released (see `fit`). That is D4's ruling applied a third time.
+   * The owner's reason was that the two crowd the conversation off the screen,
+   * and that is a statement about one geometry: at `medium` with the workspace
+   * open, the conversation is a fixed 420px panel riding OVER the work while the
+   * menu is a 234px column in the flow, so the two eat the same screen from the
+   * same end and a tablet shows slivers of three things and the whole of none.
+   *
+   * At `large` both panes are in the flow and the reader sizes the conversation
+   * themselves with the handle; at `small` the menu is a drawer and the panes
+   * are a carousel. Neither competes. Applied unconditionally, this folded the
+   * conversation to a 56px strip when somebody expanded the menu on a 1600px
+   * screen — where a 234px menu and a 440px pane fit with room to spare, so the
+   * conversation vanishing reads as a bug rather than as a layout being
+   * considerate. Read the reasoning attached to the rule, not just the rule.
+   *
+   * One copy of it, because two components each reaching for the other's setter
+   * is the same rule written twice and the second copy is the one that rots.
+   *
+   * ## It moves the live value, and releases it again
+   *
+   * Never storage: asking for the conversation is not a statement about how you
+   * like your menu. And parking the conversation RELEASES the override rather
+   * than leaving it set, so the stored preference comes back the moment the
+   * competition ends. Without that release the only thing that ever cleared it
+   * was `fit`'s outward 1100px crossing — which at a fixed window width never
+   * happens, so a reader who opened the conversation once kept a collapsed menu
+   * for the rest of the session. That is the very failure the override exists to
+   * prevent, one level down.
    */
-  const setChatSlim = useCallback((slim: boolean) => {
-    setChatSlimState(slim);
-    if (!slim) setSlimOverride(true);
-  }, []);
+  const setChatSlim = useCallback(
+    (slim: boolean) => {
+      setChatSlimState(slim);
+      if (width !== 'medium' || !wsOpen) return;
+      setSlimOverride(slim ? null : true);
+    },
+    [width, wsOpen]
+  );
 
   const setNavOpen = useCallback((open: boolean) => setNavOpenState(open), []);
 
@@ -427,11 +449,10 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     const next = !navSlim;
     setSlimOverride(next);
     setStoredSlim(next); // the ONLY write to storage
-    // The other half of the rule above: expanding the menu parks the
-    // conversation. Only when there is a workspace to park it against —
-    // with none, `chatSlim` is forced false anyway and the strip would be a
-    // 56px sliver beside empty space.
-    if (!next && wsOpen && width !== 'small') setChatSlimState(true);
+    // The other half of the rule above, and under the same condition: expanding
+    // the menu parks the conversation only at `medium` with the workspace open,
+    // which is the one geometry where the two compete. See `setChatSlim`.
+    if (!next && wsOpen && width === 'medium') setChatSlimState(true);
   }, [navSlim, setStoredSlim, wsOpen, width]);
 
   /**

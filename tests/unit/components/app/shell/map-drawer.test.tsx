@@ -25,7 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Drawers } from '@/components/app/shell/drawer';
-import { JOURNEY_MAP_ENDPOINT, TIER_INKS, TIER_TONES } from '@/components/app/shell/map-drawer';
+import { JOURNEY_MAP_ENDPOINT, TIER_INKS } from '@/components/app/shell/map-drawer';
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
@@ -147,11 +147,10 @@ describe('MapDrawerBody — what the map holds', () => {
     await openMap();
 
     for (const tier of realMap().tiers) {
-      expect(TIER_TONES[tier.id]).toMatch(/^var\(--color-/);
       expect(TIER_INKS[tier.id]).toMatch(/^var\(--color-.*-ink\)$/);
     }
-    // The ceremonial orange fails AA in BOTH themes at this size, so the arc
-    // that carries it in `TIER_TONES` must not carry it here.
+    // The ceremonial orange fails AA in BOTH themes at this size, so the
+    // orange arc must be named in something else.
     expect(TIER_INKS.embodied_relationship).not.toBe('var(--color-accent-ink)');
 
     const heading = within(mapPanel()).getByRole('heading', { name: /onboarding/i });

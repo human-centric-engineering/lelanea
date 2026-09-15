@@ -119,13 +119,13 @@ under it stays open. See [the account menu](#the-account-menu).
 
 ## The left menu opens and closes five ways, and two of them persist
 
-| Gesture                          | Direction | Writes `lelanea.nav.slim` |
-| -------------------------------- | --------- | ------------------------- |
-| the collapse control, at the top | both      | yes                       |
-| a press on the menu's dead space | both      | yes                       |
-| a press out in the panes         | closes    | no                        |
-| opening Ask Lelañea              | closes    | no                        |
-| crossing 1100px inward           | closes    | no                        |
+| Gesture                          | Direction | Where                | Writes `lelanea.nav.slim` |
+| -------------------------------- | --------- | -------------------- | ------------------------- |
+| the collapse control, at the top | both      | above 900px          | yes                       |
+| a press on the menu's dead space | both      | above 900px          | yes                       |
+| a press out in the panes         | closes    | above 900px          | no                        |
+| Ask Lelañea opening / parking    | both      | `medium` + workspace | no                        |
+| crossing 1100px inward           | closes    | —                    | no                        |
 
 The split is about **what the press was aimed at**. The first two are a reader
 working the menu; the rest are the layout getting out of the way for a moment,
@@ -134,12 +134,29 @@ and persisting any of those silently rewrites a choice somebody made on purpose
 
 A press on any control — a link, a button, the separator — does none of it, or
 using the app folds the menu as a side effect. Same guard list `workspace.tsx`
-uses for its re-park gesture.
+uses for its re-park gesture. **And nothing at all while a drawer is open**: the
+scrim is a bare `<div>` and a panel's own dead space is not a control either, so
+without that guard dismissing the map by clicking its scrim also collapsed the
+menu behind it. A press inside an `aria-modal` dialog must not reach the shell it
+is covering.
 
-**Ask Lelañea and the menu are mutually exclusive**, and that rule lives in
-`use-shell-layout.tsx` rather than in the two components. Both eat the middle of
-the screen from the same end; two components each reaching for the other's
-setter is one rule written twice, and the second copy is the one that rots.
+**Ask Lelañea and the menu are mutually exclusive where they compete**, and that
+rule lives in `use-shell-layout.tsx` rather than in the two components — two
+components each reaching for the other's setter is one rule written twice, and
+the second copy is the one that rots.
+
+"Where they compete" is the rule, not a caveat on it. At `medium` with the
+workspace open the conversation is a fixed 420px panel riding over the work while
+the menu is a 234px column in the flow, so the two eat the same screen from the
+same end. At `large` both panes are in the flow and the reader sizes the
+conversation with the handle; at `small` the menu is a drawer and the panes are a
+carousel. Applied everywhere, this folded the conversation to a 56px strip when
+somebody expanded the menu on a 1600px screen.
+
+It also **releases** the override when the conversation is parked again, rather
+than only setting it. Otherwise the sole thing that ever cleared it was `fit`'s
+outward 1100px crossing — which at a fixed window width never happens, so opening
+the conversation once left a reader with a collapsed menu for the session.
 
 ### The width transition is unconditional, and the startup correction is what moves
 
