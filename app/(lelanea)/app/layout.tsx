@@ -138,6 +138,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
               // back to it too.
               name: session.user.name?.trim() || session.user.email,
               email: session.user.email,
+              image: session.user.image ?? null,
               // Read here, server-side, so the account menu's Admin row is
               // right on first paint rather than after a client session read.
               role: session.user.role ?? null,

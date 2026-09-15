@@ -300,7 +300,11 @@ export function ShellNav({ user }: ShellNavProps) {
         data-slim={slim ? 'true' : 'false'}
         className={cn(
           'bg-card relative z-50 flex flex-none flex-col border-r',
-          'border-[var(--color-divider)] pt-3.5 pb-13',
+          // `pb-4`, not the prototype's 52px: nothing in this shell needs that
+          // space, and it left the account row floating above the composer's
+          // bottom edge. The composer's wrapper is `py-4`, so this puts the two
+          // bottom edges level. Owner ruling, 15 September 2026.
+          'border-[var(--color-divider)] pt-3.5 pb-4',
           // Below 900px the nav leaves the flow entirely and becomes a panel over
           // the panes. `invisible` as well as the transform, so a closed drawer is
           // out of the tab order rather than merely off-screen.

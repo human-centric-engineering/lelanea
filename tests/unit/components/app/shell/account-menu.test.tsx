@@ -37,9 +37,18 @@ import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { ThemeProvider } from '@/hooks/use-theme';
 
-import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
+import {
+  renderInShell,
+  stubImageLoading,
+  type WidthName,
+} from '@/tests/unit/components/app/shell/render-shell';
 
-const USER: AccountMenuUser = { name: 'Maya Reyes', email: 'maya@example.com', role: 'USER' };
+const USER: AccountMenuUser = {
+  name: 'Maya Reyes',
+  email: 'maya@example.com',
+  image: null,
+  role: 'USER',
+};
 
 function renderMenu(overrides: Partial<AccountMenuUser> = {}, slim = false) {
   return renderInShell(
@@ -61,14 +70,11 @@ function renderDrawer(width: WidthName = 'small') {
 }
 
 /**
- * Expanded, the row shows name AND email, and both are the button's name —
- * exactly as the link it replaced read. Slim, the email is not rendered and
- * the name stands alone. Exact strings, not regexes, in both: the defect this
- * guards is the avatar's initials joining the name as "MR Maya Reyes…", which a
- * `/Maya Reyes/` match would pass.
+ * The trigger's name is the person's name and nothing else, in both widths.
+ * An exact string, not a regex: the defect this guards is the avatar's initials
+ * joining the name as "MR Maya Reyes", which a `/Maya Reyes/` match would pass.
  */
-const NAME = 'Maya Reyes maya@example.com';
-const SLIM_NAME = 'Maya Reyes';
+const NAME = 'Maya Reyes';
 const trigger = () => screen.getByRole('button', { name: NAME });
 
 /** Open the popover and wait for its contents — Radix portals them. */
@@ -91,6 +97,7 @@ beforeEach(() => {
   mockLoggerError.mockReset();
   window.localStorage.clear();
   document.documentElement.classList.remove('light', 'dark');
+  stubImageLoading();
   // The component navigates on a successful sign-out; happy-dom would
   // otherwise attempt a real one.
   Object.defineProperty(window, 'location', {
@@ -101,6 +108,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -112,11 +120,18 @@ describe('AccountMenu — the trigger', () => {
     expect(screen.getByText('MR')).toBeTruthy();
   });
 
+  it('shows the name only — the email is in the menu, not the row', async () => {
+    const ui = userEvent.setup();
+    renderMenu();
+    expect(screen.queryByText('maya@example.com')).toBeNull();
+    await openMenu(ui);
+    expect(screen.getByRole('menu').textContent).toContain('maya@example.com');
+  });
+
   it('keeps the name when slim, and gives the avatar a tooltip', () => {
     renderMenu({}, true);
-    const button = screen.getByRole('button', { name: SLIM_NAME });
+    const button = screen.getByRole('button', { name: NAME });
     expect(button.getAttribute('title')).toBe('Maya Reyes');
-    expect(screen.queryByText('maya@example.com')).toBeNull();
   });
 
   it('renders no menu until it is opened', () => {
@@ -133,6 +148,39 @@ describe('AccountMenu — the trigger', () => {
     await ui.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(document.activeElement).toBe(trigger());
+  });
+});
+
+describe('AccountMenu — the avatar', () => {
+  it('shows the picture once it has loaded, inside the same hidden circle', () => {
+    renderMenu({ image: 'https://avatars.example.com/maya.png' });
+    const trigger = screen.getByRole('button', { name: NAME });
+    const img = trigger.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://avatars.example.com/maya.png');
+    // Decoration beside the name: nothing for a screen reader to say about it.
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(img?.closest('[aria-hidden]')).toBeTruthy();
+    expect(screen.queryByText('MR')).toBeNull();
+  });
+
+  it('falls back to initials when there is no picture', () => {
+    renderMenu({ image: null });
+    expect(screen.getByText('MR')).toBeTruthy();
+    expect(screen.getByRole('button', { name: NAME }).querySelector('img')).toBeNull();
+  });
+
+  it('falls back to initials when the picture fails to load — never a broken glyph', () => {
+    renderMenu({ image: 'https://avatars.example.com/broken.png' });
+    expect(screen.getByText('MR')).toBeTruthy();
+    expect(screen.getByRole('button', { name: NAME }).querySelector('img')).toBeNull();
+  });
+
+  it('keeps the picture in the rail, where it is the whole control', () => {
+    renderMenu({ image: 'https://avatars.example.com/maya.png' }, true);
+    const trigger = screen.getByRole('button', { name: NAME });
+    expect(trigger.querySelector('img')?.getAttribute('src')).toBe(
+      'https://avatars.example.com/maya.png'
+    );
   });
 });
 

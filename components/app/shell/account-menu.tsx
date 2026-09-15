@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useId, useState } from 'react';
 
 import { ICON_RADIUS } from '@/components/app/shell/chrome';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -29,6 +29,12 @@ export interface AccountMenuUser {
    */
   name: string;
   email: string;
+  /**
+   * The account's picture, or `null`. A same-origin `/uploads/…` URL from the
+   * local storage provider, or `https:` from S3, Vercel Blob or an OAuth
+   * provider — all of which the platform's `img-src` already allows.
+   */
+  image: string | null;
   /** `'ADMIN'` shows the Admin row; anything else, including `null`, does not. */
   role: string | null;
 }
@@ -204,24 +210,34 @@ export function AccountMenu({ user, initials, slim, onNavigate }: AccountMenuPro
         )}
       >
         {/*
-          `aria-hidden` on the wrapper, not `alt=""` on an image: with no picture
+          `aria-hidden` on the wrapper, not `alt=""` on the image: with no picture
           the FALLBACK is what renders, and its initials are text inside the
           button, so unhidden they join its name and it reads "MR Maya Reyes".
-          t-40 adds the image inside this same wrapper.
+
+          Radix shows the image only once it has LOADED and the fallback in every
+          other state — no `src`, still loading, or failed — so a broken picture
+          degrades to initials rather than to the browser's broken-image glyph.
         */}
         <Avatar aria-hidden className="h-[34px] w-[34px]">
+          <AvatarImage src={user.image ?? undefined} alt="" />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-[13px] font-medium">
             {initials}
           </AvatarFallback>
         </Avatar>
-        {slim ? (
-          <span className="sr-only">{user.name}</span>
-        ) : (
-          <span className="min-w-0">
-            <b className="text-foreground block text-[13.5px] font-medium">{user.name}</b>
-            <span className="text-muted-foreground block truncate text-[11.5px]">{user.email}</span>
-          </span>
-        )}
+        {/*
+          The name alone beside the avatar. The email was here too, and it made
+          the row a two-line block that read as a card rather than a person —
+          the Hub's footer is avatar + name, and the email is one click away in
+          the menu's header. Owner ruling, 15 September 2026.
+        */}
+        <span
+          className={cn(
+            'text-foreground min-w-0 truncate text-[13.5px] font-medium',
+            slim && 'sr-only'
+          )}
+        >
+          {user.name}
+        </span>
       </DropdownMenuTrigger>
 
       {/*

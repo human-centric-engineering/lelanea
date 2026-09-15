@@ -263,7 +263,9 @@ describe('an open drawer does not leak presses into the shell behind it', () => 
   const renderWithNav = () =>
     renderInShell(
       <>
-        <ShellNav user={{ name: 'Maya Reyes', email: 'maya@example.com', role: null }} />
+        <ShellNav
+          user={{ name: 'Maya Reyes', email: 'maya@example.com', image: null, role: null }}
+        />
         <ShellRail />
         <Drawers />
       </>

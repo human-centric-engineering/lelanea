@@ -40,7 +40,7 @@ vi.mock('@/lib/analytics', () => ({
 function renderShell(width: WidthName | number = 'large') {
   return renderInShell(
     <>
-      <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', role: null }} />
+      <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', image: null, role: null }} />
       <ShellRail />
       <Panes>the module</Panes>
     </>,
@@ -397,7 +397,7 @@ describe('Escape goes through the verbs, not the setters beneath them', () => {
     renderInShell(
       <>
         <ShellTopbar />
-        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', role: null }} />
+        <ShellNav user={{ name: 'Simon H', email: 'simon@example.com', image: null, role: null }} />
       </>,
       'small'
     );
