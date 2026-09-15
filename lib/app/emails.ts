@@ -26,6 +26,22 @@
  *
  * Full guide: CUSTOMIZATION.md §4 · lib/email/registry.ts
  */
+import InvitationEmail from '@/components/app/emails/invitation';
+import WelcomeEmail from '@/components/app/emails/welcome';
 import type { EmailOverrides } from '@/lib/email/registry';
 
-export const emailOverrides: EmailOverrides = {};
+/**
+ * Lelañea's two, and why only two (t-41, 15 September 2026).
+ *
+ * `welcome` and `invitation` carried the platform's framing — a starter
+ * template's idea of what was joined, a dashboard and a team that do not
+ * exist here — so both are replaced. `verifyEmail`, `resetPassword` and
+ * `changeEmailApproval` are deliberately left on the default: their copy is
+ * neutral, security-worded and names the product through `BRAND.name`; only
+ * the chrome is generic, and re-deriving the platform's security wording to
+ * restyle it is its own piece of work, not this bug's.
+ */
+export const emailOverrides: EmailOverrides = {
+  welcome: WelcomeEmail,
+  invitation: InvitationEmail,
+};

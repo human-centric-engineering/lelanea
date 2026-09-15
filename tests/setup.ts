@@ -276,6 +276,22 @@ vi.mock('next/headers', () => ({
  * being mocked into always passing. Never `vi.doUnmock` this — that REMOVES the
  * pin rather than restoring it; defaults.test.ts fails if any file does.
  */
+/**
+ * LELAÑEA divergence — see `.context/app/divergences.md`, row 14.
+ *
+ * Pin the email-override seam to "overrides nothing", for every test file. Same
+ * class as the brand pin below and it arrived the same way: filling
+ * `lib/app/emails.ts` (t-41) made two core tests fail that had done nothing
+ * wrong — `registry.test.tsx`'s "falls back to the platform default" and
+ * `config-database-hook.test.ts`'s welcome-email cases both assert the
+ * platform template is what gets rendered. Evidence for sunrise#636. The two
+ * files that need the real seam read it with `vi.importActual`
+ * (`tests/unit/lib/app/defaults.test.ts`) or their own `vi.doMock`
+ * (`registry.test.tsx`), which is what keeps "the seam holds exactly these"
+ * able to fail here rather than being mocked into always passing.
+ */
+vi.mock('@/lib/app/emails', () => ({ emailOverrides: {} }));
+
 vi.mock('@/lib/app/brand', async (importOriginal) => {
   // DERIVED from the real module's export list, not a hand-written triple. A
   // fourth brand field added later would otherwise read `undefined` in every
