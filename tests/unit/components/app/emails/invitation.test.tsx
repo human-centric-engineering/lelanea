@@ -44,10 +44,21 @@ describe('InvitationEmail', () => {
     expect(html).not.toContain(', you have been invited.');
   });
 
-  it('states the expiry', async () => {
+  it('states the expiry, formatted the way the template formats it', async () => {
+    // Computed with the same call rather than written out: the template
+    // formats in the process's local zone, and a literal date fails at UTC+12,
+    // where this instant is already the 23rd. SSR separates adjacent text
+    // nodes with `<!-- -->`.
     const html = await render(<InvitationEmail {...PROPS} />);
-    // SSR separates adjacent text nodes with `<!-- -->`.
-    expect(html).toMatch(/expires on (<!-- -->)?September 22, 2026/);
+    const expected = new Date(PROPS.expiresAt).toLocaleString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+    expect(html).toContain(`expires on <!-- -->${expected}`);
   });
 
   it('promises nothing the product does not have', async () => {

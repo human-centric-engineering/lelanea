@@ -14,12 +14,21 @@
  */
 
 import { render } from '@react-email/render';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyFirstName } from '@/components/app/content/authored-document';
 import WelcomeEmail, { firstNameFrom, WELCOME_BEATS } from '@/components/app/emails/welcome';
+import * as sections from '@/lib/app/content/sections';
 import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
 import { BRAND } from '@/lib/brand';
+
+// Real module, spied: the failure-domain case below needs to know WHEN the
+// loader is read, not to change what it returns.
+vi.mock('@/lib/app/content/sections', { spy: true });
+
+beforeEach(() => {
+  vi.mocked(sections.requireDocument).mockClear();
+});
 
 const PROPS = {
   userName: 'Maya Reyes',
@@ -77,6 +86,22 @@ describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
     expect(html).toContain('Welcome.');
     expect(html).not.toContain('Welcome, User');
     expect(html).not.toContain('{{first_name}}');
+  });
+});
+
+describe('WelcomeEmail — where a loader failure would land', () => {
+  it('reads the document during render, not when the template is called as a function', async () => {
+    // `resolveEmailTemplate` invokes the template as a plain function while the
+    // argument to `sendEmail()` is still being built — before the `.catch()`
+    // the signup after-hook relies on. A loader throw there would abort account
+    // creation. Reading inside a child component moves it into `render()`,
+    // which runs inside `sendEmail`'s own try: a failed welcome, not a failed
+    // signup.
+    const element = WelcomeEmail(PROPS);
+    expect(sections.requireDocument).not.toHaveBeenCalled();
+
+    await render(element);
+    expect(sections.requireDocument).toHaveBeenCalledWith('the_initiation');
   });
 });
 

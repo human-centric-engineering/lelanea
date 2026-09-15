@@ -36,6 +36,18 @@ import { BRAND } from '@/lib/brand';
  * copy, and about the mechanics only: the gate, then the conversation. Nothing
  * there is presented as hers.
  *
+ * ## The beats are read inside a child component, not in the template body
+ *
+ * `resolveEmailTemplate` calls the template as a plain function while the
+ * argument to `sendEmail()` is still being built — BEFORE the `.catch()` the
+ * signup after-hook relies on for "a failed welcome never fails signup". A
+ * loader throw in the template body (a document shorter than the range, or
+ * gone) would therefore abort account creation rather than log a failed
+ * email. `WelcomeBeats` moves the reads into `render()`, which runs inside
+ * `sendEmail`'s own `try`, so the failure domain is the one the platform
+ * designed for. The range pin in the test is what makes that throw unlikely;
+ * this is what makes it survivable.
+ *
  * ## The first name
  *
  * The merge field takes the reader's first name, or the sentence closes over
@@ -67,17 +79,31 @@ export interface WelcomeEmailProps {
   baseUrl: string;
 }
 
+/** Her opening beats, one per line, read at render time (see the docblock). */
+function WelcomeBeats({ firstName }: { firstName: string | null }): React.ReactElement {
+  const beats = paragraphRange(
+    requireDocument('the_initiation'),
+    WELCOME_BEATS.from,
+    WELCOME_BEATS.to
+  ).map((beat) => applyFirstName(beat, firstName));
+
+  return (
+    <>
+      {beats.map((beat, i) => (
+        <Text key={i} style={styles.beat} className="lelanea-heading">
+          {beat}
+        </Text>
+      ))}
+    </>
+  );
+}
+
 export default function WelcomeEmail({
   userName,
   userEmail,
   baseUrl,
 }: WelcomeEmailProps): React.ReactElement {
   const firstName = firstNameFrom(userName);
-  const beats = paragraphRange(
-    requireDocument('the_initiation'),
-    WELCOME_BEATS.from,
-    WELCOME_BEATS.to
-  ).map((beat) => applyFirstName(beat, firstName));
   const beginUrl = `${baseUrl}${appAuthLandingRoute ?? '/'}`;
 
   return (
@@ -86,11 +112,7 @@ export default function WelcomeEmail({
       baseUrl={baseUrl}
       reason={`You are receiving this because an account was created at ${BRAND.name} for ${userEmail}.`}
     >
-      {beats.map((beat, i) => (
-        <Text key={i} style={styles.beat} className="lelanea-heading">
-          {beat}
-        </Text>
-      ))}
+      <WelcomeBeats firstName={firstName} />
 
       <Text style={{ ...styles.text, marginTop: '24px' }} className="lelanea-text">
         Your account is ready. The first time you open {BRAND.name} you will be asked to read what

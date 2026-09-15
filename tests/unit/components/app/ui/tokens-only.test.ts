@@ -74,9 +74,10 @@ function sourceFiles(dir: string = APP_DIR, prefix = ''): string[] {
 /**
  * The one file allowed to write a colour out, and why: email has no `var()`,
  * so the chrome under `components/app/emails/` carries the palette as literals.
- * What keeps that honest is `tests/unit/components/app/emails/lelanea-email.test.ts`,
- * which reads `app/brand-theme.css` and pins every one of those literals to the
- * token it copies — a literal there that is NOT a token value fails that suite.
+ * What keeps that honest is `tests/unit/components/app/emails/lelanea-email.test.tsx`,
+ * which reads `app/brand-theme.css` and pins every literal in BOTH exported
+ * palettes — light to the first declaration of each token, dark to the `.dark`
+ * one — so a literal there that is NOT a token value fails that suite.
  * The templates themselves are not exempt: they take colour from the chrome's
  * exported `styles`, and this guard still runs over them.
  */

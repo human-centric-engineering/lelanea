@@ -66,8 +66,8 @@ export const EMAIL_PALETTE = {
   divider: 'rgba(111, 115, 118, 0.16)',
 } as const;
 
-/** Dark values, from the same file's `.dark` block. */
-const DARK = {
+/** Dark values, from the same file's `.dark` block. Pinned by the test too. */
+export const EMAIL_PALETTE_DARK = {
   background: '#282c2e',
   card: '#3d4245',
   heading: '#f3f0ec',
@@ -97,11 +97,11 @@ export function LelaneaEmail({ preview, baseUrl, reason, children }: LelaneaEmai
         <meta name="supported-color-schemes" content="light dark" />
         <style>{`
           @media (prefers-color-scheme: dark) {
-            .lelanea-ground { background-color: ${DARK.background} !important; }
-            .lelanea-card { background-color: ${DARK.card} !important; }
-            .lelanea-heading { color: ${DARK.heading} !important; }
-            .lelanea-text { color: ${DARK.foreground} !important; }
-            .lelanea-muted { color: ${DARK.muted} !important; }
+            .lelanea-ground { background-color: ${EMAIL_PALETTE_DARK.background} !important; }
+            .lelanea-card { background-color: ${EMAIL_PALETTE_DARK.card} !important; }
+            .lelanea-heading { color: ${EMAIL_PALETTE_DARK.heading} !important; }
+            .lelanea-text { color: ${EMAIL_PALETTE_DARK.foreground} !important; }
+            .lelanea-muted { color: ${EMAIL_PALETTE_DARK.muted} !important; }
           }
         `}</style>
       </Head>

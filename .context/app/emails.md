@@ -70,6 +70,15 @@ sentence closes over the gap (D7, `applyFirstName`). The platform passes
 `lib/auth/config.ts`, pinned by a test; the honest fix is upstream (pass `null`
 through).
 
+**The beats are read at render time, not in the template body.**
+`resolveEmailTemplate` calls the template as a plain function while the
+argument to `sendEmail()` is still being built — before the `.catch()` the
+signup after-hook relies on. A loader throw in the body would abort account
+creation; inside the `WelcomeBeats` child it lands in `render()`, inside
+`sendEmail`'s own `try`, and is logged as a failed welcome. The range pin makes
+that throw unlikely; the child makes it survivable. `welcome.test.tsx` asserts
+the loader is not touched by the function call, only by the render.
+
 **The action is `/app`**, via `appAuthLandingRoute` — not the platform's
 `/dashboard`. A new account lands on the gate (`/app/begin`) from there.
 

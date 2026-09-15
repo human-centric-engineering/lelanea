@@ -22,15 +22,36 @@ import { render } from '@react-email/render';
 import { Text } from '@react-email/components';
 import { describe, expect, it } from 'vitest';
 
-import { EMAIL_PALETTE, LelaneaEmail } from '@/components/app/emails/lelanea-email';
+import {
+  EMAIL_PALETTE,
+  EMAIL_PALETTE_DARK,
+  LelaneaEmail,
+} from '@/components/app/emails/lelanea-email';
 
 const css = readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 'utf8');
 
-/** The first (light) declaration of a token in the theme. */
-function lightToken(name: string): string {
-  const match = css.match(new RegExp(`--color-${name}:\\s*([^;]+);`));
-  if (!match) throw new Error(`app/brand-theme.css declares no --color-${name}`);
-  return match[1].trim();
+/** Every declaration of a token in the theme, in file order. */
+function declarations(name: string): string[] {
+  const found = [...css.matchAll(new RegExp(`--color-${name}:\\s*([^;]+);`, 'g'))].map((m) =>
+    m[1].trim()
+  );
+  if (found.length === 0) throw new Error(`app/brand-theme.css declares no --color-${name}`);
+  return found;
+}
+
+/** The first declaration: the light value. */
+const lightToken = (name: string) => declarations(name)[0];
+
+/**
+ * The last declaration: the `.dark` override. The theme declares each token
+ * once for light and once in the dark block, so "last" is "dark" — pinned by
+ * the count below, so a third declaration cannot silently make this read the
+ * wrong one.
+ */
+function darkToken(name: string): string {
+  const all = declarations(name);
+  expect(all, `--color-${name} should be declared exactly twice (light, dark)`).toHaveLength(2);
+  return all[1];
 }
 
 describe('LelaneaEmail — the palette is the theme', () => {
@@ -45,6 +66,16 @@ describe('LelaneaEmail — the palette is the theme', () => {
     ['divider', 'divider'],
   ] as const)('%s is --color-%s', (key, token) => {
     expect(EMAIL_PALETTE[key]).toBe(lightToken(token));
+  });
+
+  it.each([
+    ['background', 'background'],
+    ['card', 'popover'],
+    ['heading', 'heading'],
+    ['foreground', 'foreground'],
+    ['muted', 'muted-foreground'],
+  ] as const)('dark %s is the .dark --color-%s', (key, token) => {
+    expect(EMAIL_PALETTE_DARK[key]).toBe(darkToken(token));
   });
 });
 
