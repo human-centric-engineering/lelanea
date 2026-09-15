@@ -96,6 +96,48 @@ describe('the head', () => {
   });
 });
 
+describe('the split view keeps a conversation beside the work', () => {
+  // t-36's third and fourth complaints. They were satisfied by t-31 rather than
+  // re-solved here — the column's three parts and the shared composer card —
+  // but nothing asserted either WITH THE WORKSPACE OPEN, which is the state
+  // they are about. Every other case in this file renders the full-width view.
+
+  it('keeps the title row, the transcript and the composer, rather than a centred sentence', () => {
+    mockPathname.current = '/app/modules/values';
+    const { container } = renderInShell(<ConversationPane />, 'large');
+
+    // The way back is the title row in this state.
+    expect(screen.getByRole('link', { name: /the main conversation/ })).toBeTruthy();
+    // A real scroll container, with the honest note INSIDE it where a turn goes.
+    const transcript = container.querySelector('.overflow-y-auto');
+    expect(transcript).not.toBeNull();
+    expect(transcript?.textContent).toMatch(/arrives in a later phase/);
+    // And the composer is still there.
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('uses the same composer card, just narrower', () => {
+    // The card is centred on one 604px measure shared with the transcript, so
+    // it narrows with its pane and needs no second styling. A split view that
+    // collapsed it to a thin single-line input with a bare send glyph is the
+    // defect.
+    mockPathname.current = '/app/modules/values';
+    const { container } = renderInShell(<ConversationPane />, 'large');
+
+    const measured = container.querySelectorAll('.max-w-\\[604px\\]');
+    expect(measured).toHaveLength(2);
+
+    // The filled circular send disc, not a bare glyph.
+    const send = screen.getByRole('button', { name: /^Send/ });
+    expect(send.className).toContain('rounded-full');
+    expect(send.className).toContain('bg-[var(--color-primary)]');
+    // Multi-line, not a single-line input.
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' }).className).toContain(
+      'min-h-[60px]'
+    );
+  });
+});
+
 describe('the composer card', () => {
   it('keeps the transcript and the composer on one measure', () => {
     // The card is centred on the prototype's 604px measure and the transcript
