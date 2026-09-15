@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient, APIClientError } from '@/lib/api/client';
@@ -15,36 +16,81 @@ import { cn } from '@/lib/utils';
 export const JOURNEY_MAP_ENDPOINT = '/api/v1/app/journey/map';
 
 /**
- * The hue each tier carries, keyed by its id — the prototype's `TIER_TONE`,
- * every value an existing palette token.
+ * The hue each of the five arcs is named in — the prototype's `TIER_TONE`,
+ * resolved to the token of that hue that can carry TEXT.
  *
- * It paints the swatch beside the tier label, NOT the label's text. The
- * prototype tints the text, and `shell.md` records why that is not carried
- * over anywhere in the shell: measured in light mode, `--color-accent-ink`
- * reaches 3.17:1 and `--color-status-yellow` 2.03:1 against the ground — both
- * under AA for text this size — and the rule is set by the worse theme. The
- * label keeps `--color-muted-foreground`, where contrast is measured; the tone
- * is decorative, and the label carries the tier.
+ * The design names its tiers in their own colour (`.tierlab { color:
+ * var(--tiertone) }`). `shell.md` recorded why that was not carried over: in
+ * light mode the raw hues do not carry 11px type — measured against
+ * `--color-background`, `--color-accent-ink` reaches 3.17:1 and raw
+ * `--color-status-yellow` 2.03:1, both under AA. So the label was left muted
+ * with the raw tone on a bullet beside it, which is a different thing from what
+ * the design draws: it reads as a list with dots rather than as five named arcs.
+ *
+ * The palette already answers this and the first pass simply did not use it.
+ * Every status hue ships an `-ink` sibling that flips per theme precisely so it
+ * can be set in type. Measured on `--color-background`, light / dark:
+ *
+ * | Arc                     | Token                       | Light | Dark |
+ * | ----------------------- | --------------------------- | ----- | ---- |
+ * | onboarding              | `--color-status-green-ink`  | 6.30  | pass |
+ * | foundations             | `--color-secondary-ink`     | 4.91  | 6.96 |
+ * | inner authority         | `--color-status-yellow-ink` | 5.05  | pass |
+ * | embodied relationship   | `--color-status-red-ink`    | 5.92  | 6.46 |
+ * | integration & expansion | `--color-status-purple-ink` | 6.43  | pass |
+ *
+ * The orange arc is the one to notice. `--color-accent-ink` is the ceremonial
+ * burnt orange and holds across both modes, which is exactly why it cannot do
+ * this: 3.17:1 light and 3.92:1 dark — it fails in BOTH. Its text-carrying
+ * sibling here is `--color-status-red-ink`, the same terracotta family, which
+ * the stylesheet describes as "where §6.2's danger hue is actually read as a
+ * colour rather than sat on". `--color-primary` is the other candidate and
+ * fails dark at 2.72:1.
+ *
+ * **There is deliberately no second table of raw hues.** One stood beside this
+ * for a while, left over from painting the bullet — and the moment the bullet
+ * went it had no caller and a docblock saying the opposite of this one. Two
+ * tables of arc colours, one of them wrong and neither used, is how the next
+ * reader ends up acting on whichever they open first. If something ever needs an
+ * arc's hue on a SURFACE, where contrast does not arise, add it back then with
+ * the caller that wants it.
  */
-export const TIER_TONES: Readonly<Record<string, string>> = {
-  onboarding: 'var(--color-status-green)',
+export const TIER_INKS: Readonly<Record<string, string>> = {
+  onboarding: 'var(--color-status-green-ink)',
   foundations: 'var(--color-secondary-ink)',
-  inner_authority: 'var(--color-status-yellow)',
-  embodied_relationship: 'var(--color-accent-ink)',
-  integration_and_expansion: 'var(--color-status-purple)',
+  inner_authority: 'var(--color-status-yellow-ink)',
+  embodied_relationship: 'var(--color-status-red-ink)',
+  integration_and_expansion: 'var(--color-status-purple-ink)',
 };
 
 /**
- * What a module's `state` reads as in the row. Widens with per-user journeys —
- * and a tab whose bundle predates that widening stays mounted across every
- * in-app navigation, so a state this table does not know falls back to the
- * raw value rather than rendering `undefined`.
+ * What a module's `state` reads as in the row, and the dot that goes with it.
+ *
+ * **`open` reads as "not started", deliberately.** `open` is a fact about the
+ * SYSTEM — every module can be jumped into, because no per-user journey exists
+ * yet — and putting it in the row made every line say the same non-word about
+ * itself. The design's column says where the reader has got to (`complete ●`,
+ * `step 5 of 10 ●`, `not started ○`), so while there is nothing to say, the
+ * honest thing to say is that nothing has been started.
+ *
+ * The dot encodes the same thing: a hollow ring for not started, and a filled
+ * one in the state's colour once there is a state to fill it with. `null` here
+ * means the ring.
+ *
+ * Widens with per-user journeys — and a tab whose bundle predates that widening
+ * stays mounted across every in-app navigation, so a state this table does not
+ * know falls back to the raw value rather than rendering `undefined`.
  */
-const STATE_TEXT: Readonly<Record<JourneyMapView['modules'][number]['state'], string>> = {
-  open: 'open',
+const STATE_ROW: Readonly<
+  Record<JourneyMapView['modules'][number]['state'], { text: string; fill: string | null }>
+> = {
+  open: { text: 'not started', fill: null },
 };
-function stateText(state: JourneyMapView['modules'][number]['state']): string {
-  return STATE_TEXT[state] ?? state;
+function stateRow(state: JourneyMapView['modules'][number]['state']): {
+  text: string;
+  fill: string | null;
+} {
+  return STATE_ROW[state] ?? { text: state, fill: null };
 }
 
 type Load =
@@ -160,16 +206,35 @@ export function MapDrawerBody() {
         const modules = map.modules.filter((m) => m.tier === tier.id);
         return (
           <section key={tier.id} aria-labelledby={`map-tier-${tier.id}`} className="flex flex-col">
+            {/*
+              Lowercase, tracked out, and in the arc's own ink — the design's
+              `.tierlab`. `lowercase` is safe HERE specifically, which is the
+              caveat `Eyebrow` refuses to force on every eyebrow: these five
+              labels are common nouns, so nothing loses a capital that meant
+              something. An eyebrow carrying Lelañea's name would.
+
+              The colour comes from `TIER_INKS` — see the table at its
+              declaration for what each arc was measured at, and why the orange
+              one does not use the ceremonial `--color-accent-ink`. Inline
+              rather than an arbitrary class because the value is a per-tier
+              lookup, not a constant — and inline is also the only thing that
+              WINS here, which is the next paragraph.
+
+              NO SIZE OR TRACKING UTILITIES. This carried
+              `text-[11px] tracking-[0.13em]` to match the design's `.tierlab`,
+              and both were dead: `.brand-eyebrow` is declared unlayered in
+              `app/brand-theme.css`, which that file says outright beats every
+              utility including an arbitrary value. They rendered at the
+              eyebrow's own 12px / 0.14em regardless. A point of size is not
+              worth plain CSS on this element, but a class that reads as doing
+              something and does nothing is worth deleting.
+            */}
             <Eyebrow
               as="h3"
               id={`map-tier-${tier.id}`}
-              className="flex items-center gap-2 px-3 pt-3.5 pb-0.5 text-[11px] tracking-[0.13em]"
+              style={{ color: TIER_INKS[tier.id] ?? 'var(--color-muted-foreground)' }}
+              className="block px-3 pt-4 pb-1 lowercase"
             >
-              <i
-                aria-hidden="true"
-                className="inline-block h-[7px] w-[7px] flex-none rounded-full"
-                style={{ background: TIER_TONES[tier.id] ?? 'var(--color-border)' }}
-              />
               {tier.label}
             </Eyebrow>
             <p className="text-muted-foreground px-3 pb-1.5 text-[12.5px] leading-[1.55]">
@@ -179,15 +244,17 @@ export function MapDrawerBody() {
               {modules.map((module) => {
                 const href = modulePath(module.slug);
                 const current = pathname === href;
+                const state = stateRow(module.state);
                 return (
                   <li key={module.slug}>
                     <Link
                       href={href}
                       onClick={closeDrawer}
                       aria-current={current ? 'page' : undefined}
-                      title={`${module.title} · ${stateText(module.state)}`}
+                      title={`${module.title} · ${state.text}`}
                       className={cn(
-                        'flex w-full items-center gap-[11px] rounded-[11px] border border-transparent',
+                        'flex w-full items-center gap-[11px] border border-transparent',
+                        ICON_RADIUS,
                         'px-3 py-[9px] text-left no-underline hover:no-underline',
                         'hover:bg-[var(--color-pill)]',
                         'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
@@ -210,12 +277,23 @@ export function MapDrawerBody() {
                         {module.title}
                       </span>
                       <span className="text-muted-foreground flex-none text-[12px] tracking-[0.04em]">
-                        {stateText(module.state)}
+                        {state.text}
                       </span>
-                      {/* A hollow ring: no module is done or current this phase. */}
+                      {/*
+                        The dot encodes the state: a hollow ring for not
+                        started, filled in the state's colour once there is one.
+                        With no per-user journey every row is a ring, honestly —
+                        `state.fill` is the seam that stops being null.
+                      */}
                       <i
                         aria-hidden="true"
-                        className="h-[7px] w-[7px] flex-none rounded-full border-[1.5px] border-[var(--color-border)]"
+                        style={state.fill ? { background: state.fill } : undefined}
+                        className={cn(
+                          'h-[7px] w-[7px] flex-none rounded-full',
+                          state.fill
+                            ? 'border-[1.5px] border-transparent'
+                            : 'border-[1.5px] border-[var(--color-border)]'
+                        )}
                       />
                     </Link>
                   </li>

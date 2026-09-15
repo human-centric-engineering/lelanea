@@ -40,14 +40,52 @@ describe('ShellTopbar — what it must not invent', () => {
   it('shows no number anywhere', () => {
     // Nothing meters spend until phase 2. `$12.40 left` in the prototype's bar
     // is the specific fake this guards against.
+    //
+    // Deliberately the DEFAULT render, with no recents stored: a real pill says
+    // `01 · Values`, and that digit is the module's authored number rather than
+    // an invention. The distinction this case is about is an invented figure,
+    // so it asserts against the bar a reader sees before they have been
+    // anywhere — which is also the only state in which every digit would be a
+    // fake.
     const { container } = renderBar();
     expect(container.textContent ?? '').not.toMatch(/\d/);
   });
 
-  it('carries no recents strip and no budget control', () => {
+  it('carries no budget control', () => {
+    // Recents is no longer on this list, and that is the change. It was here
+    // because nothing opened a module until §05 and the strip would have been
+    // permanently empty; §05 landed and `RememberModule` records real visits.
+    // The budget stays: nothing meters spend until phase 2.
     renderBar();
-    expect(screen.queryByLabelText(/recently/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /usage|billing|budget/i })).toBeNull();
+  });
+
+  it('shows the recents strip, and says plainly when it is empty', () => {
+    // An EMPTY strip and an ABSENT one say different things. The first tells a
+    // new reader the app is keeping their place; the second is
+    // indistinguishable from a feature that does not exist.
+    renderBar('large');
+    const strip = screen.getByLabelText('Recently opened');
+
+    expect(strip.textContent).toContain('recently');
+    expect(strip.textContent).toContain('nothing opened yet');
+    // And it invents no module to fill itself with.
+    expect(strip.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('shows a pill per module this browser actually opened, most recent first', () => {
+    window.localStorage.setItem(
+      'lelanea.workspace.recents',
+      JSON.stringify([
+        { slug: 'boundaries', label: '02 · Boundaries', tier: 'foundations' },
+        { slug: 'values', label: '01 · Values', tier: 'foundations' },
+      ])
+    );
+    renderBar('large');
+
+    const pills = screen.getByLabelText('Recently opened').querySelectorAll('a');
+    expect(Array.from(pills).map((a) => a.textContent)).toEqual(['02 · Boundaries', '01 · Values']);
+    expect(pills[0].getAttribute('href')).toBe('/app/modules/boundaries');
   });
 
   it('offers nothing above 900px — not even the theme toggle', () => {

@@ -118,4 +118,15 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'kept because separating the file-scanning assertions from the render ' +
       'cases is worth keeping on its own. A future test needs no such split.',
   },
+  {
+    path: 'tests/unit/components/app/shell/chrome.test.tsx',
+    reason:
+      'scans every file in `components/app/shell/` for a hard-coded corner ' +
+      'radius. Its inputs are the directory LISTING rather than any import, ' +
+      'so a scoped run would select it only when a file it already covers ' +
+      'changes — and the failure it exists to catch is a NEW control arriving ' +
+      'with a radius of its own, which reaches this through no module graph at ' +
+      'all. The four radii it replaced each looked deliberate alone; the owner ' +
+      'saw them together as a shell that could not decide. t-43.',
+  },
 ];

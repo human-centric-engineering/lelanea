@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { Drawers } from '@/components/app/shell/drawer';
 import { EntryBloom } from '@/components/app/shell/entry-bloom';
 import { Panes } from '@/components/app/shell/panes';
 import { ShellNav } from '@/components/app/shell/shell-nav';
@@ -150,7 +149,6 @@ export default async function ShellLayout({ children }: { children: React.ReactN
             <Panes>{children}</Panes>
           </div>
           <ShellRail />
-          <Drawers />
           <EntryBloom />
         </div>
       </ShellLayoutProvider>

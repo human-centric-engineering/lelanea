@@ -20,11 +20,12 @@
  * @see components/app/shell/shell-nav.tsx
  */
 
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
+import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
@@ -212,21 +213,52 @@ describe('ShellNav — slim mode', () => {
     expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();
   });
 
-  it('gives every item a tooltip carrying its hint', async () => {
-    // In slim mode the label is hidden, so `label — hint` on the title is the
-    // only thing telling two icons apart.
+  it('gives every item the brand tooltip carrying its hint', async () => {
+    // In slim mode the label is hidden, so `label — hint` is the only thing
+    // telling two icons apart. It is the BRAND tooltip now, not the browser's
+    // `title`: a different shape, an unstyleable delay, and it fires on touch.
     renderAt('/app');
     await userEvent.click(toggle());
 
-    expect(screen.getByRole('link', { name: 'Life situations' }).getAttribute('title')).toBe(
-      'Life situations — What you are living through'
-    );
+    const item = screen.getByRole('link', { name: /Life situations/ });
+    expect(item.getAttribute('title')).toBeNull();
+
+    // The bubble is the link's own sibling, `aria-hidden`, and present in the
+    // DOM from the start so it has something to fade from.
+    const bubble = item.nextElementSibling;
+    expect(bubble?.textContent).toBe('Life situations — What you are living through');
+    expect(bubble?.getAttribute('aria-hidden')).toBe('true');
+    expect(bubble?.className).toContain('invisible');
   });
 
-  it('drops the tooltips again when labelled, so they are not doubled', async () => {
+  it('drops the tooltips again when labelled, so they are not doubled', () => {
+    // The prototype's own rule: an open menu already says what each item is
+    // (`.lnav:not(.slim) .lnav-item::after { content: none }`). With no label
+    // there is no bubble element at all, not merely a hidden one.
     renderAt('/app');
     const item = screen.getByRole('link', { name: /Life situations/ });
     expect(item.getAttribute('title')).toBeNull();
+    expect(item.nextElementSibling?.textContent).not.toContain('What you are living through');
+  });
+
+  it("uses the design's own collapse pair, pointing where the menu is going", async () => {
+    // Two bars and a chevron — `<||` to collapse, `||>` to expand — ported
+    // path-for-path from the prototype. lucide's `PanelLeftClose`/`PanelLeftOpen`
+    // were the nearest thing in the kit and are a different drawing: a full
+    // panel outline with an arrow inside, which reads as a window rather than
+    // as an edge being pushed. This is the only glyph in the shell that has to
+    // communicate a DIRECTION rather than a destination.
+    renderAt('/app');
+    const glyph = () => toggle().querySelector('svg')?.innerHTML ?? '';
+
+    // Collapse: chevron pointing left, bars on the right.
+    expect(glyph()).toContain('m10 9-3 3 3 3');
+    expect(glyph()).toContain('M20 5v14');
+
+    await userEvent.click(toggle());
+    // Expand: chevron pointing right, bars on the left.
+    expect(glyph()).toContain('m14 9 3 3-3 3');
+    expect(glyph()).toContain('M4 5v14');
   });
 
   it('offers the way back', async () => {
@@ -242,6 +274,19 @@ describe('ShellNav — slim mode', () => {
     renderAt('/app');
     await userEvent.click(toggle());
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
+  });
+
+  it('gives the collapse control a tooltip too, since it is always in the rail', async () => {
+    // Every other icon in the 64px rail raises one, and this is the control
+    // that is ALWAYS there — the one with no hover hint reads as the odd one
+    // out rather than as the obvious way back. Expanded, the label would be
+    // noise beside a menu that already says what it is.
+    renderAt('/app');
+    const control = () => screen.getByRole('button', { name: /the menu/ });
+    expect(control().nextElementSibling).toBeNull();
+
+    await userEvent.click(control());
+    expect(control().nextElementSibling?.textContent).toBe('Expand the menu');
   });
 
   it('keeps the account footer reachable at 64px, still named by the person', async () => {
@@ -263,34 +308,52 @@ describe('ShellNav — slim mode', () => {
 
 describe('ShellNav — collapsing changes the width and nothing else', () => {
   /** The nav's three regions, in order: brand, scrolling items, pinned footer. */
-  const regions = () => Array.from(document.querySelectorAll('nav > div'));
+  const regions = () => Array.from(document.querySelectorAll<HTMLElement>('nav > div'));
 
   it('keeps the brand row the same height in both states', async () => {
-    // The defect this guards: the prototype stacks the mark above the collapse
-    // control when slim, which made the top area taller in one state than the
-    // other — so every nav icon below it shifted down as the menu collapsed.
-    // Collapsing should move the right edge and nothing else.
+    // The defect this guards, and the reason the collapse control can live at
+    // the top at all: the prototype stacks the mark above the control when slim,
+    // which makes the top area taller in one state than the other — so every nav
+    // icon below it shifted down as the menu collapsed. Collapsing should move
+    // the right edge and nothing else.
+    //
+    // It is solved by RESERVING the taller of the two heights in both states,
+    // not by moving the control out of the row, which is what t-22 did and what
+    // t-33 was raised to undo. So `flex-col` when slim is now correct and the
+    // height is what has to hold.
     renderAt('/app');
     const expanded = regions()[0].className;
 
     await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
     const slim = regions()[0].className;
 
-    expect(slim).toContain('h-8');
-    expect(expanded).toContain('h-8');
-    // A column direction is what made it taller; height alone would not catch
-    // a future `flex-col` whose children happen to fit.
-    expect(slim).not.toContain('flex-col');
+    // 72px, and the number is measured rather than eyeballed: `LotusMark` sizes
+    // by BLOOM width, not frame height, so `size={30}` renders 46 × 30 — the
+    // slim stack is 30 + 10 + 32. This said 70 on the strength of a "25px mark"
+    // and was two pixels short of its own contents, every child `flex-none`.
+    expect(expanded).toContain('h-[72px]');
+    expect(slim).toContain('h-[72px]');
+    // The stack is the prototype's layout; only its HEIGHT was ever the problem.
+    expect(slim).toContain('flex-col');
     expect(expanded).not.toContain('flex-col');
   });
 
-  it('keeps the toggle out of the brand row, so it cannot push the items down', () => {
+  it('puts the collapse control at the top, under the mark, and nowhere else', async () => {
     renderAt('/app');
     const [brand, , footer] = regions();
 
-    expect(brand.querySelector('button')).toBeNull();
-    expect(footer.querySelector('button')).not.toBeNull();
+    // One control, in the brand row, where the design draws it. The footer has
+    // a button of its own — the account menu's trigger — so the assertion is
+    // about the COLLAPSE control being absent from it, not about buttons.
+    expect(brand.querySelector('button')).not.toBeNull();
+    expect(within(footer).queryByRole('button', { name: /the menu/ })).toBeNull();
+    // The footer is the account and only the account.
     expect(footer.textContent).toContain(USER.name);
+    expect(screen.getAllByRole('button', { name: /the menu/ })).toHaveLength(1);
+
+    // And it stays in the brand row when slim, rather than trading places.
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    expect(regions()[0].querySelector('button')).not.toBeNull();
   });
 
   it('leaves room for the active border and the focus ring when slim', async () => {
@@ -314,6 +377,142 @@ describe('ShellNav — collapsing changes the width and nothing else', () => {
   });
 });
 
+describe('ShellNav — clicking away collapses it', () => {
+  /** A press on the page background, which is what a click-away actually is. */
+  const pressBackground = () =>
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+  it('collapses on a press that lands on nothing', async () => {
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+    expect(nav?.className).toContain('w-[234px]');
+
+    pressBackground();
+    await waitFor(() => expect(nav?.className).toContain('w-16'));
+  });
+
+  it('does NOT write the preference, so a stray press cannot rewrite a choice', async () => {
+    // The whole reason this is a separate verb from the collapse control. The
+    // control is somebody stating how they like their menu; a press that landed
+    // on the background is not, and persisting it would leave them to find the
+    // setting again. Divergence Row 2's rule, applied to a third cause.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    pressBackground();
+    await waitFor(() => expect(nav?.className).toContain('w-16'));
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+
+  it('ignores a press on a control, so using the app does not fold the menu', async () => {
+    // Without this guard every button, link and checkbox in the workspace
+    // collapsed the menu as a side effect of being used — the app flinching
+    // rather than dismissing something. Same list `workspace.tsx` guards its
+    // own re-park gesture with.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    const item = screen.getByRole('link', { name: /Life situations/ });
+    await act(async () => {
+      item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(nav?.className).toContain('w-[234px]');
+  });
+
+  it('does nothing out in the panes once it is already slim', async () => {
+    // There is nothing left to collapse, and a press out there says nothing
+    // about how the reader likes their menu either way.
+    renderAt('/app');
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    const nav = document.querySelector('nav');
+    expect(nav?.className).toContain('w-16');
+
+    pressBackground();
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
+    expect(nav?.className).toContain('w-16');
+  });
+
+  it('brings the menu BACK when its own dead space is pressed', async () => {
+    // The collapsed rail is a 64px column of mostly nothing. Making that dead
+    // would leave one 32px control as the only way back — so a press inside the
+    // menu works the menu, in both directions.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+    await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
+    expect(nav?.className).toContain('w-16');
+
+    await act(async () => {
+      nav!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(nav?.className).toContain('w-[234px]');
+  });
+
+  it('persists a press on its own dead space, because it is aimed at the menu', async () => {
+    // The asymmetry with the click-away above, and the reason they are two
+    // different verbs: this one IS a reader working the control, just with a
+    // bigger target.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    await act(async () => {
+      nav!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(nav?.className).toContain('w-16');
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
+  });
+
+  it('ignores a right-click, which is about to open a context menu', async () => {
+    // `pointerdown` fires for button 2 as well, so a right-click anywhere in
+    // the panes restructured the layout underneath the menu about to appear
+    // over it.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 2 }));
+    });
+    expect(nav?.className).toContain('w-[234px]');
+  });
+
+  it('stands down while a full-screen overlay is up', async () => {
+    // The entry bloom is `fixed inset-0 z-[100]` for its ~2.9s and deliberately
+    // solid to the pointer, so a click cannot reach a nav item nobody can see.
+    // `pointer-events` decides that by HIT-TESTING, and a listener bound to
+    // `document` is not under anything — so a click during the opening
+    // animation collapsed the reader's menu as their first interaction with the
+    // app. An overlay says so with `SHELL_OVERLAY_ATTR`.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    const overlay = document.createElement('div');
+    overlay.setAttribute(SHELL_OVERLAY_ATTR, '');
+    document.body.appendChild(overlay);
+    act(() => {
+      overlay.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(nav?.className).toContain('w-[234px]');
+    overlay.remove();
+  });
+
+  it('leaves the ≤900px drawer alone — it has a scrim of its own', async () => {
+    // Below 900px the menu is a panel over a scrim, and `slim` is ignored
+    // entirely. A click-away there is the scrim's job, and collapsing to a rail
+    // nobody can see would be a preference flipped for no visible reason.
+    renderWithTopbar('small');
+    await userEvent.click(screen.getByRole('button', { name: 'Open the menu' }));
+
+    const nav = document.querySelector('nav');
+    expect(nav?.className).toContain('translate-x-0');
+
+    pressBackground();
+    expect(nav?.className).toContain('translate-x-0');
+  });
+});
+
 describe('ShellNav — the column survives a short window', () => {
   it('scrolls rather than clipping its last items', () => {
     // The shell is `h-dvh overflow-hidden` and every nav child is `flex-none`,
@@ -329,38 +528,45 @@ describe('ShellNav — the column survives a short window', () => {
     expect(list?.className).toContain('min-h-0');
   });
 
-  it('does not animate the width when the stored preference is applied', async () => {
-    // THE CASE THE FIRST FIX FAILED. `useLocalStorage` returns its `initial` on
-    // the first render and adopts the stored value in a mount effect, so a
-    // reader who had chosen the slim nav watched it render at 234px and slide
-    // closed on every page load.
+  it('never renders the stored preference at the wrong width', async () => {
+    // THE CASE BOTH EARLIER FIXES GOT WRONG, and the one that makes an
+    // unconditional transition safe. `useLocalStorage` returns its `initial` on
+    // the first render and adopts the stored value in a plain effect — after
+    // paint — so a reader who had chosen the slim nav watched it render at 234px
+    // and correct to 64px on every page load.
     //
-    // Arming the transition from a mount effect does NOT fix that: React
-    // batches both effects into one re-render, so the corrected width and the
-    // armed transition land in the same style change and CSS plays it anyway.
-    // The first version of this test asserted only the SERVER render and its own
-    // comment admitted a DOM assertion would pass either way — so it could not
-    // see the bug it was written for.
+    // Suppressing the transition until the reader had used the control hid that,
+    // and hid the first collapse and every auto-slim with it. The provider now
+    // adopts the preference in a LAYOUT effect instead, so the correction lands
+    // before the browser paints and there is no earlier frame to animate from.
     //
-    // This one waits for the correction to actually land in the DOM and then
-    // checks the transition is still absent, which is the moment that matters.
+    // The assertion is therefore about the WIDTH, not about the transition: RTL
+    // flushes layout effects synchronously, so the first DOM anyone can observe
+    // is already the stored one. `w-[234px]` appearing here at all is the bug.
     window.localStorage.setItem('lelanea.nav.slim', 'true');
     renderAt('/app');
     const nav = document.querySelector('nav');
 
+    expect(nav?.className).toContain('w-16');
+    expect(nav?.className).not.toContain('w-[234px]');
+    // And it stays put — nothing later in the mount undoes it.
     await waitFor(() => expect(nav?.className).toContain('w-16'));
-    expect(nav?.className).not.toContain('transition-[width]');
   });
 
-  it('does animate a width the reader asked for', async () => {
-    // Suppressing it forever would be a different bug.
+  it('animates every collapse, including the first one', async () => {
+    // The old gate armed the transition from the same click that changed the
+    // width, so both landed in one commit and the FIRST collapse had nothing to
+    // transition from. Resolved through `cn`, the class list simply had no
+    // `transition-*` in it until a reader had already collapsed the menu once.
     renderAt('/app');
     const nav = document.querySelector('nav');
-    expect(nav?.className).not.toContain('transition-[width]');
+    expect(nav?.className).toContain('transition-[width]');
 
     await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
     expect(nav?.className).toContain('transition-[width]');
     expect(nav?.className).toContain('w-16');
+    // `prefers-reduced-motion` still switches it off.
+    expect(nav?.className).toContain('motion-reduce:transition-none');
   });
 });
 

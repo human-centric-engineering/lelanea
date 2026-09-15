@@ -59,7 +59,12 @@ export default async function ModulePage({ params }: Params) {
 
   return (
     <>
-      <RememberModule slug={place.slug} />
+      <RememberModule
+        slug={place.slug}
+        displayNumber={place.displayNumber}
+        title={place.title}
+        tier={place.tier}
+      />
       <ModuleView
         displayNumber={place.displayNumber}
         title={place.title}

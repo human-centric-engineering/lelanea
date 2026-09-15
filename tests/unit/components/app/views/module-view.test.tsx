@@ -114,6 +114,6 @@ describe('ModuleView', () => {
     await userEvent.click(screen.getByRole('button', { name: /own words/ }));
 
     expect(resources).not.toHaveAttribute('inert');
-    expect(within(resources).getByText(/arrive later in the programme/)).toBeInTheDocument();
+    expect(within(resources).getByText(/arrive with the programme/)).toBeInTheDocument();
   });
 });

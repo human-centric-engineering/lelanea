@@ -4,6 +4,7 @@ import { Gauge, LogOut, Shield, SlidersHorizontal, UserRound } from 'lucide-reac
 import Link from 'next/link';
 import { useId, useState } from 'react';
 
+import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -198,7 +199,8 @@ export function AccountMenu({ user, initials, slim, onNavigate }: AccountMenuPro
       <DropdownMenuTrigger
         title={slim ? user.name : undefined}
         className={cn(
-          'flex h-12 flex-none items-center gap-[11px] rounded-xl text-left',
+          'flex h-12 flex-none items-center gap-[11px] text-left',
+          ICON_RADIUS,
           'hover:bg-[var(--color-pill-hover)] data-[state=open]:bg-[var(--color-pill-hover)]',
           'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
           'motion-reduce:transition-none',

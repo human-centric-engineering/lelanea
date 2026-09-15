@@ -16,7 +16,7 @@
  * @see components/app/shell/shell-rail.tsx
  */
 
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -78,5 +78,82 @@ describe('ShellRail', () => {
     expect(rail.className).toContain('w-full');
     // Safe-area padding, or the last row sits under a phone's home indicator.
     expect(rail.className).toContain('env(safe-area-inset-bottom)');
+  });
+
+  it('is two full-width keys down there, not two shrunken rail cells', () => {
+    // The complaint this answers: the footer arrived as two small icon-and-
+    // caption cells huddled in the middle of a bare strip — hard to hit, and
+    // not reading as the two main ways out of the conversation. `justify-center`
+    // is the tell, and `flex-1` on each key is the fix.
+    renderInShell(<ShellRail />, 'small');
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(rail.className).not.toContain('justify-center');
+
+    for (const name of [/Your map/, /Resources/]) {
+      const key = screen.getByRole('button', { name });
+      expect(key.className).toContain('flex-1');
+      expect(key.className).toContain('h-12'); // a thumb target, not a 34px cell
+      expect(key.className).toContain('border');
+      // Sentence case at body size, not the rail's 8.5px uppercase caption.
+      expect(key.className).not.toContain('uppercase');
+      expect(key.className).not.toContain('text-[8.5px]');
+      // Icon BESIDE the label, so the key reads as `⌖ Map`.
+      expect(key.className).not.toContain('flex-col');
+    }
+  });
+
+  it('keeps the open key visibly selected in its wide form', () => {
+    // The active state was carried by a wash that reads on a 62px cell and gets
+    // lost across a half-width key, so it takes the border too.
+    renderInShell(<ShellRail />, 'small');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.className).not.toContain('secondary-wash');
+
+    fireEvent.click(map);
+    expect(map.className).toContain('var(--color-secondary-wash)');
+    expect(map.className).toContain('border-[var(--color-secondary-ink)]');
+  });
+
+  it('keeps the vertical rail a vertical rail above 900px', () => {
+    renderInShell(<ShellRail />, 'large');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.className).toContain('flex-col');
+    expect(map.className).toContain('uppercase');
+    expect(map.className).toContain('w-[62px]');
+  });
+
+  it('carries the brand tooltip on the vertical rail, and never the browser one', () => {
+    renderInShell(<ShellRail />, 'large');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.getAttribute('title')).toBeNull();
+
+    const bubble = map.nextElementSibling;
+    expect(bubble?.textContent).toBe('Your map — the sixteen modules');
+    expect(bubble?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('drops the tooltip in the footer, where it could not be read anyway', () => {
+    // Geometry, not belt-and-braces. The bubble points LEFT — the only
+    // direction that works beside a right-hand rail — and is measured from its
+    // trigger's left edge. Against a full-width key that puts the left one's
+    // bubble off the screen entirely and the right one's on top of its
+    // neighbour. Nothing is lost: each key already says `Map` in sentence case
+    // at body size, which is the whole reason the vertical rail needs a bubble
+    // and the footer does not.
+    renderInShell(<ShellRail />, 'small');
+    const map = screen.getByRole('button', { name: /Your map/ });
+
+    expect(map.getAttribute('title')).toBeNull();
+    // No bubble anywhere in the footer. Asserted by TEXT rather than by
+    // `nextElementSibling`: with no bubble rendered, a key's next sibling is
+    // simply the other key, so a sibling check would pass for the wrong reason.
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(
+      Array.from(rail.querySelectorAll('span')).some(
+        (el) => el.textContent === 'Your map — the sixteen modules'
+      )
+    ).toBe(false);
+    // The name is still there for anyone reading with a screen reader.
+    expect(map.getAttribute('aria-label')).toBe('Your map — the sixteen modules');
   });
 });
