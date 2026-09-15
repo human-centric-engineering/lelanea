@@ -34,7 +34,7 @@ const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 
-const USER = { name: 'Simon H', email: 'simon@example.com', role: null };
+const USER = { name: 'Simon H', email: 'simon@example.com', image: null, role: null };
 
 // `ShellNav` mounts the account menu, whose hooks want their providers. Neither
 // theme nor analytics is what this file measures, so both are stubbed.

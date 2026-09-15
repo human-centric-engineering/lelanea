@@ -46,7 +46,7 @@ vi.mock('@/lib/analytics', () => ({
   EVENTS: { USER_LOGGED_OUT: 'user_logged_out' },
 }));
 
-const USER = { name: 'Maya Reyes', email: 'maya@example.com', role: null };
+const USER = { name: 'Maya Reyes', email: 'maya@example.com', image: null, role: null };
 
 /**
  * `large` by default, and stated deliberately: at happy-dom's own 1024px default
@@ -159,11 +159,13 @@ describe('ShellNav — which destination reads as current', () => {
 });
 
 describe('ShellNav — the account footer is the real person', () => {
-  it('shows the session name and email, not a placeholder', () => {
+  it('shows the session name and initials, not a placeholder — and no email in the row', () => {
     renderAt('/app');
     expect(screen.getByText('Maya Reyes')).toBeTruthy();
-    expect(screen.getByText('maya@example.com')).toBeTruthy();
     expect(screen.getByText('MR')).toBeTruthy();
+    // The email moved into the menu's header (t-40, owner ruling): the row is
+    // avatar + name, as the Hub's footer is.
+    expect(screen.queryByText('maya@example.com')).toBeNull();
   });
 
   it('invents no session count', () => {
@@ -180,7 +182,7 @@ describe('ShellNav — the account footer is the real person', () => {
     // they join its name as "MR Maya Reyes…" — which a `/Maya Reyes/` match
     // would pass. `aria-haspopup` is what says the footer opens something.
     renderAt('/app');
-    const trigger = screen.getByRole('button', { name: 'Maya Reyes maya@example.com' });
+    const trigger = screen.getByRole('button', { name: 'Maya Reyes' });
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
     expect(screen.queryByRole('link', { name: /Maya Reyes/ })).toBeNull();
   });
@@ -250,7 +252,6 @@ describe('ShellNav — slim mode', () => {
     expect(account.getAttribute('aria-haspopup')).toBe('menu');
     expect(account.getAttribute('title')).toBe('Maya Reyes');
     expect(screen.getByText('MR')).toBeTruthy();
-    expect(screen.queryByText('maya@example.com')).toBeNull();
   });
 
   it('still marks the current item', async () => {

@@ -1,4 +1,5 @@
 import { render, type RenderResult } from '@testing-library/react';
+import { vi } from 'vitest';
 
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 
@@ -65,4 +66,35 @@ export function renderInShell(
     rerender: (next: React.ReactNode) =>
       result.rerender(<ShellLayoutProvider>{next}</ShellLayoutProvider>),
   };
+}
+
+/**
+ * Make Radix's `Avatar` decide between picture and initials from the URL.
+ *
+ * Radix constructs a `window.Image`, sets `src`, and reads `complete` /
+ * `naturalWidth` — synchronously first, then again on `load` / `error`.
+ * happy-dom never fires either, so left alone every image case sits in
+ * `loading`, shows the fallback, and an assertion that the picture rendered
+ * can only be hedged ("if the img is there…"). This answers synchronously
+ * instead: a URL containing `broken` fails, everything else has loaded.
+ *
+ * Call it in `beforeEach`; `vi.unstubAllGlobals()` in `afterEach` undoes it.
+ */
+export function stubImageLoading(): void {
+  class StubImage extends EventTarget {
+    complete = false;
+    naturalWidth = 0;
+    crossOrigin: string | null = null;
+    referrerPolicy = '';
+    #src = '';
+    get src() {
+      return this.#src;
+    }
+    set src(value: string) {
+      this.#src = value;
+      this.complete = true;
+      this.naturalWidth = value.includes('broken') ? 0 : 1;
+    }
+  }
+  vi.stubGlobal('Image', StubImage);
 }

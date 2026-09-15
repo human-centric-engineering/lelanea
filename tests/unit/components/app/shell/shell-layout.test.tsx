@@ -30,7 +30,14 @@ const flag = vi.hoisted(() => ({ enabled: false }));
 /** `name` is nullable and `current` is too — both are cases these tests drive. */
 const session = vi.hoisted(() => ({
   current: null as {
-    user: { id: string; name: string | null; email: string; emailVerified: boolean; role: string };
+    user: {
+      id: string;
+      name: string | null;
+      email: string;
+      emailVerified: boolean;
+      role: string;
+      image?: string | null;
+    };
   } | null,
 }));
 
@@ -85,6 +92,7 @@ vi.mock('@/lib/analytics', () => ({
 import { ThemeProvider } from '@/hooks/use-theme';
 
 import ShellLayout from '@/app/(lelanea)/app/layout';
+import { stubImageLoading } from '@/tests/unit/components/app/shell/render-shell';
 
 /**
  * Resolve async server components down the tree before handing it to React.
@@ -176,6 +184,29 @@ describe('the shell layout serves the product', () => {
     };
     await renderLayout();
     expect(screen.getAllByText('zoe@example.com').length).toBeGreaterThan(0);
+  });
+
+  it('hands the nav the session’s picture', async () => {
+    session.current = {
+      user: {
+        id: 'u1',
+        name: 'Maya Reyes',
+        email: 'maya@example.com',
+        emailVerified: true,
+        role: 'USER',
+        image: 'https://avatars.example.com/maya.png',
+      },
+    };
+    // Radix renders the <img> only once it reports loaded, which happy-dom's
+    // real Image never does; the stub answers "loaded" so this can assert the
+    // picture rather than hedge on it.
+    stubImageLoading();
+    await renderLayout();
+    const trigger = screen.getByRole('button', { name: /Maya Reyes/ });
+    expect(trigger.querySelector('img')?.getAttribute('src')).toBe(
+      'https://avatars.example.com/maya.png'
+    );
+    vi.unstubAllGlobals();
   });
 
   it('hands the nav the session’s role, so an admin gets the Admin row on first paint', async () => {

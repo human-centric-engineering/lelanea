@@ -209,8 +209,23 @@ the row is the tidy-away; both stay.
 Composed from Sunrise's `DropdownMenu` + `Avatar` + `authClient.signOut`, not
 `UserButton`, which takes no props, hardcodes `align="end"` with no `side`, and
 shows Admin unconditionally (`sunrise#706`, open). Identity is a **prop** from
-`app/(lelanea)/app/layout.tsx` — `name`, `email` and now `role` — never a
-client-side `useSession()`, which renders empty on first paint. The links are a
+`app/(lelanea)/app/layout.tsx` — `name`, `email`, `image` and `role` — never a
+client-side `useSession()`, which renders empty on first paint.
+
+The trigger is avatar + name, as the Hub's footer is; the email is in the menu's
+header only. The avatar shows the account's picture once it has loaded and
+initials in every other state — no picture, still loading, failed — so a broken
+image degrades to initials, never to the browser's broken-image glyph. Nothing
+had to be configured for that: `AvatarImage` is a plain `<img>` (not
+`next/image`, so `remotePatterns` is irrelevant) and the platform's CSP already
+sends `img-src 'self' data: https: blob:`, which covers same-origin `/uploads/`,
+S3, Vercel Blob and OAuth-provider hosts alike. The row sits `pb-4` from the
+bottom, level with the composer — the prototype's 52px was for space this shell
+does not use.
+
+Radix decides picture-or-initials from `window.Image`, which happy-dom never
+fires; `stubImageLoading()` in `render-shell.tsx` answers from the URL so the
+tests can assert the picture rendered rather than hedge on it. The links are a
 table (`ACCOUNT_MENU_LINKS`) so `shell-view-pages.test.tsx` can prove each has a
 route, as it does for `SHELL_NAV`.
 
