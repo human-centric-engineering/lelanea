@@ -1,16 +1,12 @@
-import {
-  Columns2,
-  Gauge,
-  Map,
-  MessageCircle,
-  Send,
-  SlidersHorizontal,
-  Waves,
-  type LucideIcon,
-} from 'lucide-react';
+import { Columns2, Map, MessageCircle, Send, Waves, type LucideIcon } from 'lucide-react';
 
 /**
- * The seven destinations of the left nav, in the prototype's order.
+ * The five destinations of the left nav, in the prototype's order.
+ *
+ * The prototype has seven: "Usage and billing" and "Settings" sat at the foot,
+ * pinned down by a flexible spacer. Both moved into the account menu
+ * (`account-menu.tsx`) — one place for everything about the person, not two.
+ * Owner ruling, 15 September 2026.
  *
  * Ported from the prototype's `NAV` array (`design/lelanea.html`), including the
  * hints, which are not decoration: in slim mode the label is hidden and the
@@ -30,8 +26,8 @@ export interface ShellNavItem {
   icon: LucideIcon;
 }
 
-/** A rule between two groups, or the flexible gap that pins the last two down. */
-export type ShellNavEntry = ShellNavItem | { kind: 'separator' } | { kind: 'spacer' };
+/** A rule between two groups. */
+export type ShellNavEntry = ShellNavItem | { kind: 'separator' };
 
 export function isNavItem(entry: ShellNavEntry): entry is ShellNavItem {
   return !('kind' in entry);
@@ -63,18 +59,5 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
     label: 'Share with Lelañea',
     hint: 'Tell us what is working, and what is not',
     icon: Send,
-  },
-  { kind: 'spacer' },
-  {
-    href: '/app/usage',
-    label: 'Usage and billing',
-    hint: 'What you have spent, and the card on file',
-    icon: Gauge,
-  },
-  {
-    href: '/app/settings',
-    label: 'Settings',
-    hint: 'How she speaks to you',
-    icon: SlidersHorizontal,
   },
 ] as const;

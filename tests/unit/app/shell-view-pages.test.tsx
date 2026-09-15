@@ -49,6 +49,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { ACCOUNT_MENU_LINKS } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -60,19 +61,23 @@ import UsagePage, { metadata as usageMeta } from '@/app/(lelanea)/app/usage/page
 import WorkspacePage, { metadata as workspaceMeta } from '@/app/(lelanea)/app/workspace/page';
 import { metadata as accountMeta } from '@/app/(lelanea)/app/account/page';
 
-/** Every destination the nav offers, other than the shell root, plus account. */
+/**
+ * Every destination the nav offers, other than the shell root, plus every row
+ * of the account menu — which is where Usage, Settings and the account itself
+ * are offered from since 15 September 2026. Both tables are read, so a row
+ * added to either without a page fails here.
+ */
 const OFFERED = [
   ...SHELL_NAV.filter(isNavItem)
     .map((item) => item.href)
     .filter((href) => href !== '/app'),
-  '/app/account',
+  ...ACCOUNT_MENU_LINKS.map((row) => row.href),
 ];
 
-/** The name the nav (or the account footer) calls each one. */
-const LABELS: Record<string, string> = {
-  ...Object.fromEntries(SHELL_NAV.filter(isNavItem).map((item) => [item.href, item.label])),
-  '/app/account': 'Your account',
-};
+/** The name the nav (or the account menu) calls each one. */
+const LABELS: Record<string, string> = Object.fromEntries(
+  [...SHELL_NAV.filter(isNavItem), ...ACCOUNT_MENU_LINKS].map((item) => [item.href, item.label])
+);
 
 const MODULES = {
   '/app/workspace': { Page: WorkspacePage, metadata: workspaceMeta, placeholder: true },

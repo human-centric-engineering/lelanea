@@ -82,9 +82,10 @@ function Panel({
  * `useTheme` resolves from `localStorage` and `matchMedia`, neither of which
  * exists on the server, so its first client value and its SSR value differ by
  * design — the provider returns `light` on the server and the real answer after
- * hydration. `shell-topbar.tsx` answers this by rendering markup that is
- * theme-agnostic and letting a `dark:` variant do the work, which is possible
- * for an icon and not for `aria-pressed`: an attribute cannot be set by CSS.
+ * hydration. Sunrise's `components/theme-toggle.tsx` answers this by rendering
+ * markup that is theme-agnostic and letting a `dark:` variant do the work,
+ * which is possible for an icon and not for `aria-pressed`: an attribute cannot
+ * be set by CSS.
  *
  * So the pressed state is withheld until mounted rather than rendered wrong.
  *

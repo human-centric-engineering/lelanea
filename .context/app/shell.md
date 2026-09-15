@@ -24,18 +24,19 @@ one that breaks something silently.
 └──────────┴──────────────────────────┴────────────────────────┴──────┘
 ```
 
-| Piece        | File                                                  | What it is                                                           |
-| ------------ | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame   |
-| Nav          | `components/app/shell/shell-nav.tsx`                  | Seven destinations + the account footer; 234px, or 64px slim         |
-| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; the theme toggle, and ≤900 the burger and the pane switch      |
-| Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone    |
-| Conversation | `components/app/shell/conversation-pane.tsx`          | Resizable 330–660, folds at 296 to a 56px strip                      |
-| Workspace    | `components/app/shell/workspace.tsx`                  | Where the route's view renders                                       |
-| Rail         | `components/app/shell/shell-rail.tsx`                 | Map and Resources, as buttons that open the drawers                  |
-| Drawers      | `components/app/shell/drawer.tsx`                     | Ride **over** the panes on a scrim; they never squeeze them          |
-| Focus traps  | `components/app/shell/focusable.ts` + the two drawers | One shared `FOCUSABLE` selector, so both traps hold the same list    |
-| Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, once per session (`sessionStorage`, `lelanea.bloom.seen`) |
+| Piece        | File                                                  | What it is                                                             |
+| ------------ | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame     |
+| Nav          | `components/app/shell/shell-nav.tsx`                  | Five destinations + the account menu; 234px, or 64px slim              |
+| Account menu | `components/app/shell/account-menu.tsx`               | The footer's popover: account, settings, usage, admin, theme, sign out |
+| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; empty above 900, where it holds the burger and the pane switch   |
+| Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone      |
+| Conversation | `components/app/shell/conversation-pane.tsx`          | Resizable 330–660, folds at 296 to a 56px strip                        |
+| Workspace    | `components/app/shell/workspace.tsx`                  | Where the route's view renders                                         |
+| Rail         | `components/app/shell/shell-rail.tsx`                 | Map and Resources, as buttons that open the drawers                    |
+| Drawers      | `components/app/shell/drawer.tsx`                     | Ride **over** the panes on a scrim; they never squeeze them            |
+| Focus traps  | `components/app/shell/focusable.ts` + the two drawers | One shared `FOCUSABLE` selector, so both traps hold the same list      |
+| Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, once per session (`sessionStorage`, `lelanea.bloom.seen`)   |
 
 Its own route group, because `app/(protected)/layout.tsx` is a header over a
 single `container mx-auto` main — a centred document column, which is the
@@ -110,6 +111,10 @@ One ordered walk rather than independent handlers, which would race. Each rung i
 2. a map/resources drawer
 3. at medium, park the conversation panel
 4. un-fold a folded conversation, anywhere but medium
+
+The account menu sits above rung 1 without being in the walk: Radix dismisses it
+on Escape in the capture phase, and the menu stops the event there so the drawer
+under it stays open. See [the account menu](#the-account-menu).
 
 ## The tone
 
@@ -189,6 +194,45 @@ the layer that notices a session going away _while_ someone is inside the shell.
 
 Raised by t-9's security review, below its reporting threshold then and carried
 forward on the task record (`B28`) because t-11 is where it became live.
+
+## The account menu
+
+Everything about the **person** rather than the work lives in one popover at the
+foot of the nav: name and email · **Your account** (`/app/account`) · **Settings**
+· **Usage and billing** · **Admin** (only when `role === 'ADMIN'`) · **Dark mode**
+· **Sign out**. Owner ruling, 15 September 2026: Settings and Usage came out of
+`SHELL_NAV` and the theme toggle came out of the topbar, so this is the one place
+and not a second route to the same pages. The prototype's budget meter, when it
+arrives in phase 2, will open Usage too — the meter is the glanceable control and
+the row is the tidy-away; both stay.
+
+Composed from Sunrise's `DropdownMenu` + `Avatar` + `authClient.signOut`, not
+`UserButton`, which takes no props, hardcodes `align="end"` with no `side`, and
+shows Admin unconditionally (`sunrise#706`, open). Identity is a **prop** from
+`app/(lelanea)/app/layout.tsx` — `name`, `email` and now `role` — never a
+client-side `useSession()`, which renders empty on first paint. The links are a
+table (`ACCOUNT_MENU_LINKS`) so `shell-view-pages.test.tsx` can prove each has a
+route, as it does for `SHELL_NAV`.
+
+Worked out first in HCE Hub — its `AccountMenu` component and the
+`account-menu.md` doc beside it, both in that repo (hce-hub §34, PRs #222 and
+#224). What transferred and what did not:
+
+| Same as the Hub                                                                                                    | Different here                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Hard `window.location` sign-out — for Next's client Router Cache, not the stale "nanostore" reason in `UserButton` | Lands on `/`, not `/login`: the site header shows "Log in" to a visitor, and it is where `UserButton` also goes |
+| `aria-hidden` on the whole `Avatar`, so the fallback's initials do not join the button's name                      | Three trigger layouts — the 234px row, the 64px rail (avatar only, `title` = name), the ≤900 drawer             |
+| Failure path: `preventDefault` on Sign out, `role="alert"` + `aria-describedby`, flag cleared on open              | `onEscapeKeyDown` stops propagation, or the layout's Escape chain closes the drawer under the menu              |
+| Dark mode as a `DropdownMenuCheckboxItem`, no leading icon, `preventDefault` so the repaint is visible             | Content is `z-[70]`: the drawer panel is `z-[60]` and Sunrise's `z-50` portal opened _behind_ it                |
+| Tests render the real `ThemeProvider`                                                                              | Rows close the drawer behind them (`onNavigate` → `closeNav`), as a nav item does                               |
+
+Dark mode here persists a choice exactly as the topbar toggle did; "follow the
+device" (D4) stays in Settings, the page that can show all three states.
+
+**Tests that mount `ShellNav` for another reason** now mount this too, so they
+stub `@/hooks/use-theme` and `@/lib/analytics` — both throw outside their
+providers. `shell-layout.test.tsx` wraps the real `ThemeProvider` and holds the
+one case that proves `role` crosses from the session to the menu.
 
 ## A panel that is off screen must also be out of reach
 
@@ -305,6 +349,8 @@ is the specific failure D6 names.
   beside them. Nothing reads a leaning until a model is answering, which is
   phase 2.
 - **Recents and the budget meter** — omitted from the topbar rather than faked.
+  With the theme toggle moved to the account menu, the bar is empty above 900px
+  until they arrive; that is intentional, and its docblock says so.
 - **The composer** — present, inert.
 
 The account view shows the three facts the session holds and no statistics. The

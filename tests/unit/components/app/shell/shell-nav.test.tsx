@@ -13,6 +13,10 @@
  *    nav fed by the session rather than by a constant, and `initialsFor` has to
  *    survive names the prototype's "Maya Reyes" never tested it against.
  *
+ * The footer's menu — its rows, the theme item, sign-out and the two drawer
+ * collisions — has its own file, `account-menu.test.tsx`. Here it is only the
+ * trigger that matters: that the nav hands it the person, in both widths.
+ *
  * @see components/app/shell/shell-nav.tsx
  */
 
@@ -31,13 +35,18 @@ vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
 }));
 
-// `ShellTopbar` renders alongside the nav in the drawer cases below — the burger
-// is the only thing that opens the drawer, so the two have to be tested together.
+// The account menu at the foot of the nav reads the theme and, on sign-out,
+// analytics. Neither is measured here; `account-menu.test.tsx` renders the real
+// `ThemeProvider` for the cases that are about it.
 vi.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
+vi.mock('@/lib/analytics', () => ({
+  useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
+  EVENTS: { USER_LOGGED_OUT: 'user_logged_out' },
+}));
 
-const USER = { name: 'Maya Reyes', email: 'maya@example.com' };
+const USER = { name: 'Maya Reyes', email: 'maya@example.com', role: null };
 
 /**
  * `large` by default, and stated deliberately: at happy-dom's own 1024px default
@@ -131,7 +140,7 @@ describe('ShellNav — which destination reads as current', () => {
     );
   });
 
-  it('renders all seven destinations', () => {
+  it('renders the five destinations, and no longer the two that moved', () => {
     renderAt('/app');
     for (const label of [
       'The conversation',
@@ -139,11 +148,13 @@ describe('ShellNav — which destination reads as current', () => {
       'Your journey',
       'Life situations',
       'Share with Lelañea',
-      'Usage and billing',
-      'Settings',
     ]) {
       expect(screen.getByRole('link', { name: new RegExp(label) })).toBeTruthy();
     }
+    // Usage and Settings live in the account menu now — one place, not two.
+    // A row here again would be the duplicate the owner ruled out.
+    expect(screen.queryByRole('link', { name: /Usage and billing/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Settings/ })).toBeNull();
   });
 });
 
@@ -159,10 +170,19 @@ describe('ShellNav — the account footer is the real person', () => {
     // The prototype's footer reads "eleven sessions". Nothing counts sessions
     // yet, so D6 says omit rather than fake — and a digit in this subtree is
     // how that would come back.
-    const { container } = renderAt('/app');
-    const footer = screen.getByRole('link', { name: /Maya Reyes/ });
+    renderAt('/app');
+    const footer = screen.getByRole('button', { name: /Maya Reyes/ });
     expect(footer.textContent).not.toMatch(/\d/);
-    expect(container.querySelector('[href="/app/account"]')).toBeTruthy();
+  });
+
+  it('is a menu trigger named by the person, not a link', () => {
+    // EXACT name: the avatar's initials are text inside the button, and unhidden
+    // they join its name as "MR Maya Reyes…" — which a `/Maya Reyes/` match
+    // would pass. `aria-haspopup` is what says the footer opens something.
+    renderAt('/app');
+    const trigger = screen.getByRole('button', { name: 'Maya Reyes maya@example.com' });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(screen.queryByRole('link', { name: /Maya Reyes/ })).toBeNull();
   });
 });
 
@@ -183,9 +203,10 @@ describe('ShellNav — slim mode', () => {
     // or a screen-reader user loses the nav entirely at 64px.
     expect(screen.queryByText('Lelañea')).toBeNull();
     expect(screen.getByRole('link', { name: 'Life situations' })).toBeTruthy();
-    // Seven destinations, the account footer, and the wordmark — which keeps
-    // its own `aria-label` when its text is hidden, so it stays a link.
-    expect(screen.getAllByRole('link')).toHaveLength(9);
+    // Five destinations and the wordmark — which keeps its own `aria-label`
+    // when its text is hidden, so it stays a link. The account footer is a
+    // button, not a link, since it opens a menu.
+    expect(screen.getAllByRole('link')).toHaveLength(6);
     expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();
   });
 
@@ -221,13 +242,15 @@ describe('ShellNav — slim mode', () => {
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
   });
 
-  it('keeps the account footer reachable at 64px', async () => {
+  it('keeps the account footer reachable at 64px, still named by the person', async () => {
     renderAt('/app');
     await userEvent.click(toggle());
 
-    const account = screen.getByRole('link', { name: /Your account/ });
-    expect(account.getAttribute('href')).toBe('/app/account');
+    const account = screen.getByRole('button', { name: 'Maya Reyes' });
+    expect(account.getAttribute('aria-haspopup')).toBe('menu');
+    expect(account.getAttribute('title')).toBe('Maya Reyes');
     expect(screen.getByText('MR')).toBeTruthy();
+    expect(screen.queryByText('maya@example.com')).toBeNull();
   });
 
   it('still marks the current item', async () => {
@@ -293,11 +316,11 @@ describe('ShellNav — collapsing changes the width and nothing else', () => {
 describe('ShellNav — the column survives a short window', () => {
   it('scrolls rather than clipping its last items', () => {
     // The shell is `h-dvh overflow-hidden` and every nav child is `flex-none`,
-    // so at roughly 460px of content there is nothing on the page able to
-    // reach "Usage and billing", "Settings" or the account footer once the
-    // viewport drops below about 500px — a phone in landscape, or a short
-    // desktop window. The scroll container is the only thing that fixes it,
-    // and jsdom cannot measure layout, so the container is what is asserted.
+    // so with enough rows there is nothing on the page able to reach the last
+    // of them or the account footer once the viewport is short enough — a
+    // phone in landscape, or a short desktop window. The scroll container is
+    // the only thing that fixes it, and jsdom cannot measure layout, so the
+    // container is what is asserted.
     const { container } = renderAt('/app');
     const list = container.querySelector('nav > div:nth-of-type(2)');
 
