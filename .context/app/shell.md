@@ -214,8 +214,9 @@ client-side `useSession()`, which renders empty on first paint. The links are a
 table (`ACCOUNT_MENU_LINKS`) so `shell-view-pages.test.tsx` can prove each has a
 route, as it does for `SHELL_NAV`.
 
-Worked out first in HCE Hub (`components/hub/account/account-menu.tsx`,
-`.context/app/account-menu.md` there). What transferred and what did not:
+Worked out first in HCE Hub — its `AccountMenu` component and the
+`account-menu.md` doc beside it, both in that repo (hce-hub §34, PRs #222 and
+#224). What transferred and what did not:
 
 | Same as the Hub                                                                                                    | Different here                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |

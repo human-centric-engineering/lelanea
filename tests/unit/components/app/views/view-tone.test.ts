@@ -4,22 +4,26 @@
  * The property worth pinning is COVERAGE, not the individual colours: a
  * destination added to the nav without an entry here gets no band, which looks
  * like a styling accident rather than a missing table row, and nothing else in
- * the suite would notice. So this derives its list from `SHELL_NAV` the way the
- * route test does.
+ * the suite would notice. So this derives its list from `SHELL_NAV` and the
+ * account menu's rows the way the route test does.
  *
  * @see components/app/views/view-tone.ts
  */
 import { describe, expect, it } from 'vitest';
 
+import { ACCOUNT_MENU_LINKS } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { toneStyleFor, VIEW_TONES } from '@/components/app/views/view-tone';
 
-/** Every destination the nav offers, other than the shell root, plus account. */
+/**
+ * Every destination the nav offers, other than the shell root, plus every row
+ * of the account menu — the same two tables `shell-view-pages.test.ts` reads.
+ */
 const TONED = [
   ...SHELL_NAV.filter(isNavItem)
     .map((item) => item.href)
     .filter((href) => href !== '/app'),
-  '/app/account',
+  ...ACCOUNT_MENU_LINKS.map((row) => row.href),
 ];
 
 describe('every destination carries a tone', () => {
