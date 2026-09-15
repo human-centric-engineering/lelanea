@@ -38,11 +38,31 @@ function renderTipped(label: string | null = 'Your map — the sixteen modules')
 const bubble = () => screen.getByRole('button').nextElementSibling;
 
 describe('Tipped', () => {
-  it('is in the DOM before anything hovers it, and invisible', () => {
+  it('is in the DOM before anything hovers it, invisible and parked off-screen', () => {
+    // Off-screen matters as much as invisible. A `fixed` element with no
+    // top/left falls back to its STATIC position — in the flow, right after the
+    // trigger — so an unmeasured bubble is not nowhere, it is in the nav.
     renderTipped();
     expect(bubble()?.textContent).toBe('Your map — the sixteen modules');
     expect(bubble()?.className).toContain('invisible');
     expect(bubble()?.className).toContain('opacity-0');
+    expect((bubble() as HTMLElement).style.top).toBe('-9999px');
+  });
+
+  it('fades out where it faded in, rather than flashing back up the menu', async () => {
+    // The defect: position and visibility were one nullable value, so hiding
+    // cleared the coordinates and the 160ms opacity fade ran from the bubble's
+    // static position at the top of the nav. The coordinates are sticky now —
+    // written on the way in, never cleared.
+    renderTipped();
+    const trigger = screen.getByRole('button');
+    await userEvent.hover(trigger);
+    const placed = (bubble() as HTMLElement).style.top;
+    expect(placed).not.toBe('-9999px');
+
+    await userEvent.unhover(trigger);
+    expect(bubble()?.className).toContain('invisible');
+    expect((bubble() as HTMLElement).style.top).toBe(placed);
   });
 
   it('shows on a mouse pointer', async () => {

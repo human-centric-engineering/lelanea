@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 
+import { modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
 
 /**
@@ -51,6 +52,20 @@ export type WidthClass = 'small' | 'medium' | 'large';
 export type DrawerId = 'map' | 'resources';
 export type Pane = 'chat' | 'ws';
 
+/**
+ * Where the reader is, as the module page tells the shell.
+ *
+ * The slug is carried alongside the label so a reader is never shown the
+ * previous module's name for a frame: the label is used only while the slug
+ * still matches the route, so a navigation that outruns the publishing effect
+ * shows nothing rather than something wrong.
+ */
+export interface ModulePlace {
+  slug: string;
+  /** `01 · Values` — the authored display number and title. */
+  label: string;
+}
+
 export interface ShellLayout {
   width: WidthClass;
   /** The workspace is open. Route-driven: `/app` is the clean view, anything deeper is a module. */
@@ -62,6 +77,29 @@ export interface ShellLayout {
   chatSlim: boolean;
   drawer: DrawerId | null;
   pane: Pane;
+  /**
+   * The module the workspace is showing, published UP from the page — see
+   * `setModulePlace`. `null` anywhere that is not a module.
+   */
+  modulePlace: ModulePlace | null;
+  /**
+   * How a module page tells the shell what it is.
+   *
+   * The conversation column's way back reads `← the main conversation · on 01 ·
+   * Values`, and the shell cannot work that second half out for itself: a module
+   * page is rendered INSIDE the workspace, which is a sibling of the
+   * conversation, and context flows downward only. The page is also the only
+   * thing holding the authored display number and title — the shell has a
+   * pathname and nothing else.
+   *
+   * `shell.md` already ruled that a view's title is not worth carrying up here
+   * for the workspace's own header, because a context set from an effect costs a
+   * frame of empty heading on every navigation. This is a different bargain and
+   * the ruling still holds: what is missing for that frame is a muted suffix
+   * beside a link that is already correct and already says where it goes, not
+   * the heading of the page.
+   */
+  setModulePlace: (place: ModulePlace | null) => void;
   toggleNavSlim: () => void;
   /**
    * Collapse the menu to the icon rail WITHOUT touching the stored preference —
@@ -120,6 +158,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpenState] = useState(false);
   const [drawer, setDrawer] = useState<DrawerId | null>(null);
   const [pane, setPaneState] = useState<Pane>('chat');
+  const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
 
   /**
    * The stored preference and the live value are DIFFERENT THINGS, and keeping
@@ -370,6 +409,19 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const openDrawer = useCallback((id: DrawerId) => setDrawer(id), []);
   const closeDrawer = useCallback(() => setDrawer(null), []);
   const setPane = useCallback((p: Pane) => setPaneState(p), []);
+  const setModulePlace = useCallback((place: ModulePlace | null) => setModulePlaceState(place), []);
+
+  /*
+   * Only while the slug still matches the route.
+   *
+   * The page publishes from an effect, so between asking for a module and that
+   * effect running the value here is the PREVIOUS module's. Showing it would be
+   * worse than showing nothing — the reader is told, confidently, that they are
+   * somewhere they have just left. Comparing against the route makes the stale
+   * frame empty instead of wrong.
+   */
+  const modulePlace =
+    modulePlaceState && pathname === modulePath(modulePlaceState.slug) ? modulePlaceState : null;
 
   const toggleNavSlim = useCallback(() => {
     const next = !navSlim;
@@ -424,6 +476,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatSlim,
       drawer,
       pane,
+      modulePlace,
+      setModulePlace,
       toggleNavSlim,
       collapseNav,
       setNavOpen,
@@ -443,6 +497,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatSlim,
       drawer,
       pane,
+      modulePlace,
+      setModulePlace,
       toggleNavSlim,
       collapseNav,
       setNavOpen,

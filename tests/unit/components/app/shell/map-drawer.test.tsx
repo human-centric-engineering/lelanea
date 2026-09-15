@@ -25,7 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Drawers } from '@/components/app/shell/drawer';
-import { JOURNEY_MAP_ENDPOINT, TIER_TONES } from '@/components/app/shell/map-drawer';
+import { JOURNEY_MAP_ENDPOINT, TIER_INKS, TIER_TONES } from '@/components/app/shell/map-drawer';
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
@@ -118,26 +118,46 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(within(onboarding).getAllByRole('link')).toHaveLength(1);
   });
 
-  it('shows number, title and status on each row, every one open — no done, no current', async () => {
+  it('shows number, title and an honest state on each row — no done, no current', async () => {
+    // `open` is a fact about the SYSTEM — every module can be jumped into,
+    // because no per-user journey exists yet — and putting that word in the row
+    // made all seventeen lines say the same non-word about themselves. The
+    // design's column says where the READER has got to, so while there is
+    // nothing to say, "not started" is the honest thing to say.
     renderDrawers();
     await openMap();
 
     const values = rows()[1];
     expect(values).toHaveTextContent('01');
     expect(values).toHaveTextContent('Values');
-    expect(values).toHaveTextContent('open');
+    expect(values).toHaveTextContent('not started');
     expect(values).toHaveAttribute('href', '/app/modules/values');
     expect(rows().filter((r) => r.getAttribute('aria-current') === 'page')).toHaveLength(0);
     expect(mapPanel().textContent).not.toMatch(/complete|step \d/i);
+    // And every row says it, rather than one row being special by accident.
+    for (const row of rows()) expect(row).toHaveTextContent('not started');
   });
 
-  it('carries the tier under the label, not only as a colour', async () => {
+  it('names each arc in its own ink, from a token, and lowercase', async () => {
+    // The design names its tiers in their own colour. Both tables are tokens —
+    // `TIER_INKS` is the one that carries TEXT and is measured for it; see the
+    // table at its declaration for the numbers and for why the orange arc does
+    // not use `--color-accent-ink`.
     renderDrawers();
     await openMap();
-    // The swatch is decorative; the label is the tier. Every tier has a token.
+
     for (const tier of realMap().tiers) {
       expect(TIER_TONES[tier.id]).toMatch(/^var\(--color-/);
+      expect(TIER_INKS[tier.id]).toMatch(/^var\(--color-.*-ink\)$/);
     }
+    // The ceremonial orange fails AA in BOTH themes at this size, so the arc
+    // that carries it in `TIER_TONES` must not carry it here.
+    expect(TIER_INKS.embodied_relationship).not.toBe('var(--color-accent-ink)');
+
+    const heading = within(mapPanel()).getByRole('heading', { name: /onboarding/i });
+    expect(heading.className).toContain('lowercase');
+    expect(heading.getAttribute('style')).toContain('--color-status-green-ink');
+
     expect(within(mapPanel()).getByText(/inner compass/)).toBeInTheDocument();
   });
 

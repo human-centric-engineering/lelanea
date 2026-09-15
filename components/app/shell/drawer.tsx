@@ -6,8 +6,27 @@ import { useEffect, useRef } from 'react';
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { MapDrawerBody } from '@/components/app/shell/map-drawer';
+import { ResourcesDrawerBody } from '@/components/app/shell/resources-drawer';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
+
+/**
+ * The panel's width, in ONE place so both drawers inherit it.
+ *
+ * `min(432px, 100%)` is the prototype's `.rdrawer` value, read rather than
+ * guessed. Ours was `min(420px, 88vw)`, which is the wrong number twice: 12px
+ * narrow everywhere, and on a phone it left a 12% strip of scrim down one side
+ * that reads as a panel that failed to finish opening.
+ *
+ * The second half of the `min()` is what keeps it sane across the range, and is
+ * why the width can be a constant at all. 432px is a fixed panel over the panes,
+ * not a share of them — so it takes the same bite at 1600px as at 1000px, where
+ * the panes are only about 700px wide to begin with. That is the design's
+ * intent: a drawer rides OVER the work rather than squeezing it, and the scrim
+ * says so. Below 432px of viewport the `100%` takes over and it is simply the
+ * screen.
+ */
+const PANEL_W = 'w-[min(432px,100%)]';
 
 /**
  * An ordered list, not a record keyed by id.
@@ -24,7 +43,7 @@ const DRAWERS: {
   title: string;
   /** The sentence under the title: what the panel is for. */
   lede: string;
-  /** What the body renders. A string is an honest note for a panel not built yet. */
+  /** What the body renders. */
   body: React.ReactNode;
 }[] = [
   {
@@ -39,7 +58,7 @@ const DRAWERS: {
     eyebrow: 'in lelañea’s own words',
     title: 'Resources',
     lede: 'Films and reading, in her own words.',
-    body: 'These arrive later in the programme. What a module points at will be here, beside it.',
+    body: <ResourcesDrawerBody />,
   },
 ];
 
@@ -182,7 +201,14 @@ export function Drawers() {
             inert={!open}
             tabIndex={-1}
             className={cn(
-              'bg-card fixed top-0 right-0 bottom-0 z-[75] flex w-[min(420px,88vw)] flex-col',
+              // `--color-background`, not the card. The prototype's `.rdrawer`
+              // is the page ground with only its HEAD on the card wash, and the
+              // difference is load-bearing rather than cosmetic: the panel is
+              // where the map's tier labels are read, and their contrast is
+              // measured against this ground. On the card they lose about a
+              // fifth of a point, which is the margin two of the five have.
+              'fixed top-0 right-0 bottom-0 z-[75] flex flex-col bg-[var(--color-background)]',
+              PANEL_W,
               'border-l border-[var(--color-border)] shadow-[var(--shadow-lift)]',
               'transition-[transform,visibility] duration-[340ms] ease-[var(--ease-brand)]',
               'motion-reduce:transition-none',
@@ -193,7 +219,14 @@ export function Drawers() {
           >
             <header
               className={cn(
-                'flex flex-none items-start gap-3 border-b border-[var(--color-divider)] px-5 py-4'
+                // The pale wash, ruled off from the body below — the
+                // prototype's `.rdrawer .side-head`, which is the one part of
+                // the panel that is NOT the page ground. Padding is its
+                // `18px 18px 16px`, dropping to 14px below 760px where the
+                // panel is most of a phone.
+                'flex flex-none items-start gap-3 bg-[var(--color-card)]',
+                'border-b border-[var(--color-divider)] px-[18px] pt-[18px] pb-4',
+                'max-[760px]:px-3.5 max-[760px]:pt-3.5 max-[760px]:pb-3'
               )}
             >
               {/*
@@ -205,33 +238,46 @@ export function Drawers() {
                 <Eyebrow as="p" className="block">
                   {eyebrow}
                 </Eyebrow>
-                <h2 className="brand-display mt-1 text-[23px] leading-[1.1] text-[var(--color-heading)]">
+                <h2 className="brand-display mt-1.5 text-[27px] leading-[1.1] text-[var(--color-heading)]">
                   {title}
                 </h2>
-                <p className="text-muted-foreground mt-1.5 text-[13px] leading-[1.55]">{lede}</p>
+                <p className="text-muted-foreground mt-2 text-[13.5px] leading-[1.6]">{lede}</p>
               </div>
+              {/*
+                An OUTLINED button, not a bare glyph — the prototype's
+                `.icon-btn.bordered`, which is what makes it read as a control
+                rather than as a decoration in the corner of a panel.
+
+                Rounded square rather than the prototype's disc, which is t-42:
+                every icon-only control in this shell wears the same highlight,
+                and one circle among rounded squares reads as the odd one out
+                rather than as the pattern.
+              */}
               <button
                 type="button"
                 onClick={closeDrawer}
                 aria-label={`Close ${title.toLowerCase()}`}
                 className={cn(
-                  'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
-                  'items-center justify-center rounded-full hover:bg-[var(--color-pill-hover)]',
+                  'text-muted-foreground hover:text-foreground flex h-9 w-9 flex-none',
+                  'items-center justify-center rounded-[10px]',
+                  'border border-[var(--color-border)] hover:bg-[var(--color-pill-hover)]',
                   'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
                   'motion-reduce:transition-none',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
                   'focus-visible:outline-[var(--color-ring)]'
                 )}
               >
-                <X size={16} strokeWidth={1.5} aria-hidden="true" />
+                <X size={17} strokeWidth={1.6} aria-hidden="true" />
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-              {typeof body === 'string' ? (
-                <p className="text-muted-foreground px-3 py-2 text-sm leading-relaxed">{body}</p>
-              ) : (
-                body
+            {/* `.rdrawer .side-body`: 16px round, 22px at the foot. */}
+            <div
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-[22px]',
+                'max-[760px]:px-3 max-[760px]:pt-3 max-[760px]:pb-5'
               )}
+            >
+              {body}
             </div>
           </div>
         );

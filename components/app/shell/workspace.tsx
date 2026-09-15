@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageCircle } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
@@ -187,20 +187,37 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           render with the rest of the view instead.
         */}
         <div className="min-w-0 flex-1" />
+        {/*
+          The design's `.btn.btn-sm.btn-ghost`: an OUTLINED pill, 34px tall, with
+          the back arrow the conversation column's link uses. Ours was an
+          unbordered row of muted text, which is the same problem the column had
+          — the way back reading as a caption.
+
+          Both affordances exist on purpose and this is the second of them. The
+          column's link is where a reader's eye already is; this one is where
+          their hand is when they have finished with the work.
+
+          Below 900px it keeps the arrow and drops to `Conversation`, as the
+          prototype's `#ws-close .short` does — at that width the pane switch is
+          the primary way across and this is a wide label in a narrow head.
+        */}
         <Link
           href="/app"
+          title="Return to the main conversation with Lelañea"
+          aria-label="Return to the conversation"
           className={cn(
-            'text-muted-foreground hover:text-foreground flex flex-none items-center gap-2',
-            'rounded-full px-3 py-1.5 text-[13px] no-underline hover:no-underline',
-            'hover:bg-[var(--color-pill-hover)]',
-            'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+            'text-foreground flex h-[34px] flex-none items-center gap-2 rounded-full',
+            'border border-[var(--color-border)] px-3.5 text-sm no-underline',
+            'hover:bg-[var(--color-pill)] hover:no-underline',
+            'transition-[background-color,border-color] duration-200 ease-[var(--ease-brand)]',
             'motion-reduce:transition-none',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
             'focus-visible:outline-[var(--color-ring)]'
           )}
         >
-          <MessageCircle size={15} strokeWidth={1.5} aria-hidden="true" />
-          Return to the conversation
+          <ArrowLeft size={15} strokeWidth={1.6} aria-hidden="true" />
+          <span className="max-[900px]:hidden">Return to the conversation</span>
+          <span className="hidden max-[900px]:inline">Conversation</span>
         </Link>
       </header>
 

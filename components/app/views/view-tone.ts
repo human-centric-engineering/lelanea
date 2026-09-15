@@ -71,7 +71,8 @@ export function toneStyleFor(
  * whichever URL. The prototype tones a module by its tier, but the tone is
  * published from `Panes`, which knows only the path — and mapping a slug to a
  * tier there would mean bundling the structure file into a client component
- * for one hue. The tier's colour lives on the drawer's swatch instead.
+ * for one hue. The tier's colour is carried in the map drawer instead, where
+ * `TIER_INKS` names each arc in it (`map-drawer.tsx`).
  */
 function toneKeyFor(pathname: string): string {
   return pathname.startsWith(`${MODULES_PATH_PREFIX}/`) ? '/app/workspace' : pathname;

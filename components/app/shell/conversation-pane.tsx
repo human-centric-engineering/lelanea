@@ -1,18 +1,50 @@
 'use client';
 
-import { ArrowUp, Mic, PanelLeftClose } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Mic, PanelLeftClose } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
+import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
   CHAT_FOLD,
   CHAT_MAX,
   CHAT_MIN,
+  type ModulePlace,
   useShellLayout,
 } from '@/components/app/shell/use-shell-layout';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { cn } from '@/lib/utils';
+
+/**
+ * Where the reader is, in the words the shell can honestly use.
+ *
+ * Two sources, because the shell knows two different amounts about a route. A
+ * nav destination is in `SHELL_NAV`, which is static and client-side, so its
+ * label is available on the first render with no round trip. A module is not:
+ * its authored number and title live on the server, so the page publishes them
+ * (`RememberModule`) and they arrive one effect later.
+ *
+ * `null` for anything neither knows about — a `[...slug]` 404, say — which
+ * renders the way back on its own rather than `on undefined`.
+ */
+export function placeLabel(pathname: string, modulePlace: ModulePlace | null): string | null {
+  // A module can ONLY be named by what the page published. Falling through to
+  // the nav below would name it `The conversation`, because that item's href is
+  // `/app` and `/app` is every view's prefix — the same trap the nav's own
+  // current-item test exists for, arriving in a second place.
+  if (pathname.startsWith(`${MODULES_PATH_PREFIX}/`)) return modulePlace?.label ?? null;
+
+  const item = SHELL_NAV.filter(isNavItem).find((entry) =>
+    entry.href === '/app'
+      ? pathname === '/app'
+      : pathname === entry.href || pathname.startsWith(`${entry.href}/`)
+  );
+  return item?.label ?? null;
+}
 
 /** Arrow steps, and the larger one Shift asks for. */
 const STEP = 16;
@@ -45,7 +77,8 @@ const STEP_SHIFT = 48;
  * brings it back.
  */
 export function ConversationPane() {
-  const { chatW, chatSlim, setChatSlim, width, wsOpen, pane } = useShellLayout();
+  const { chatW, chatSlim, setChatSlim, width, wsOpen, pane, modulePlace } = useShellLayout();
+  const pathname = usePathname();
   const reducedMotion = useReducedMotion();
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
@@ -169,7 +202,53 @@ export function ConversationPane() {
                 <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
               </button>
             ) : null}
-            <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+
+            {/*
+              THE WAY BACK, and it is the thing in this column that actually
+              costs somebody something when it is wrong.
+
+              With the workspace open the head is a link — a back arrow and `the
+              main conversation` in the secondary ink — with where you currently
+              are beside it in muted text. It was a small outlined panel glyph
+              followed by `the conversation` in grey: a different icon, different
+              words, the wrong colour, and nothing about it read as a link at
+              all, so the one way back out of a module looked like a caption.
+
+              On `/app` there is nowhere to go back TO — that IS the main
+              conversation — so it stays the eyebrow the design keeps there.
+            */}
+            {wsOpen ? (
+              <>
+                <Link
+                  href="/app"
+                  title="Return to the main conversation with Lelañea"
+                  className={cn(
+                    'flex min-w-0 flex-none items-center gap-1.5 rounded-[10px] px-2 py-1',
+                    'text-[13.5px] text-[var(--color-secondary-ink)] no-underline',
+                    'hover:bg-[var(--color-secondary-wash)] hover:no-underline',
+                    'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+                    'motion-reduce:transition-none',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                    'focus-visible:outline-[var(--color-ring)]'
+                  )}
+                >
+                  <ArrowLeft size={15} strokeWidth={1.6} className="flex-none" aria-hidden="true" />
+                  <span className="truncate">the main conversation</span>
+                </Link>
+                {/*
+                  Muted, and quietly absent rather than wrong: a module's label
+                  arrives one effect after the route does, and the provider
+                  withholds it while the slug and the route disagree.
+                */}
+                {placeLabel(pathname, modulePlace) ? (
+                  <span className="text-muted-foreground min-w-0 truncate text-[13px]">
+                    on {placeLabel(pathname, modulePlace)}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+            )}
           </div>
 
           {/*

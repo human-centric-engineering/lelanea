@@ -37,6 +37,45 @@ one that breaks something silently.
 | Drawers      | `components/app/shell/drawer.tsx`                     | Ride **over** the panes on a scrim; they never squeeze them            |
 | Focus traps  | `components/app/shell/focusable.ts` + the two drawers | One shared `FOCUSABLE` selector, so both traps hold the same list      |
 | Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, once per session (`sessionStorage`, `lelanea.bloom.seen`)   |
+| Tooltip      | `components/app/ui/tipped.tsx`                        | The bubble on any icon-only control; never fires on touch              |
+
+## The left menu opens and closes five ways, and two of them persist
+
+| Gesture                          | Direction | Writes `lelanea.nav.slim` |
+| -------------------------------- | --------- | ------------------------- |
+| the collapse control, at the top | both      | yes                       |
+| a press on the menu's dead space | both      | yes                       |
+| a press out in the panes         | closes    | no                        |
+| opening Ask Lelañea              | closes    | no                        |
+| crossing 1100px inward           | closes    | no                        |
+
+The split is about **what the press was aimed at**. The first two are a reader
+working the menu; the rest are the layout getting out of the way for a moment,
+and persisting any of those silently rewrites a choice somebody made on purpose
+(divergence Row 2's rule, which now has three callers rather than one).
+
+A press on any control — a link, a button, the separator — does none of it, or
+using the app folds the menu as a side effect. Same guard list `workspace.tsx`
+uses for its re-park gesture.
+
+**Ask Lelañea and the menu are mutually exclusive**, and that rule lives in
+`use-shell-layout.tsx` rather than in the two components. Both eat the middle of
+the screen from the same end; two components each reaching for the other's
+setter is one rule written twice, and the second copy is the one that rots.
+
+### The width transition is unconditional, and the startup correction is what moves
+
+`shell-nav.tsx` used to arm its width transition only after a reader had used
+the collapse control. That hid a real problem and created two others: the first
+collapse had nothing to transition from (the flag and the width landed in one
+commit), and the auto-slim never animated at all.
+
+The real problem is that `useLocalStorage` adopts its stored value in a plain
+effect, **after paint** — so a reader who had chosen the slim menu watched it
+render at 234px and correct on every page load. The provider now adopts that
+preference in a **layout effect**, declared before `fit` so the auto-slim still
+wins under 1100px. Nothing to animate away from, so the transition can simply
+always be on.
 
 Its own route group, because `app/(protected)/layout.tsx` is a header over a
 single `container mx-auto` main — a centred document column, which is the
@@ -53,11 +92,11 @@ login, OAuth, signup, invite, verify and the header brand link all follow).
 `use-shell-layout.tsx` classifies on `window.innerWidth`, and almost nothing
 about the shell is checkable from a screenshot of one width.
 
-| Class    | Range    | What changes                                                                    |
-| -------- | -------- | ------------------------------------------------------------------------------- |
-| `small`  | ≤ 900    | Nav becomes a drawer; the panes are a carousel with a pane switch in the topbar |
-| `medium` | 901–1240 | The conversation is an absolutely-positioned panel over the workspace           |
-| `large`  | > 1240   | Both panes are in flow, side by side                                            |
+| Class    | Range    | What changes                                                                                                                            |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `small`  | ≤ 900    | Nav becomes a drawer; the panes are a carousel with a pane switch in the topbar; the right rail becomes two full-width keys in a footer |
+| `medium` | 901–1240 | The conversation is an absolutely-positioned panel over the workspace                                                                   |
+| `large`  | > 1240   | Both panes are in flow, side by side                                                                                                    |
 
 A fourth threshold, **1100**, is not a width class: crossing _inward_ past it
 auto-slims the nav, and crossing back out releases the override. It is keyed on
@@ -132,7 +171,7 @@ A route with no entry publishes nothing and the band stays transparent. That is
 `/app` itself: the clean conversation belongs to no part of the arc, and a
 visible default there was a defect in t-10.
 
-**The tone paints the band, not the eyebrow**, which the prototype tints.
+**The tone paints the band, not the view's eyebrow**, which the prototype tints.
 Measured **in light mode** against `--color-background`, `--color-accent-ink`
 reaches 3.17:1 and the raw `--color-status-yellow` 2.03:1 — both under AA for
 12px text.
@@ -144,6 +183,50 @@ fine, has an argument for restoring the prototype's eyebrow tint — which is th
 outcome this paragraph exists to prevent. The rule is set by the worse theme,
 and tinting four of the six would leave one that reads as an oversight and gets
 "fixed" back.
+
+### Coloured type is a different table from coloured surface
+
+The paragraph above was read once as "nothing in the shell is ever tinted", and
+that was too strong — it cost the map drawer the design's five named arcs, which
+became a muted list with dots beside it. **Both halves of the rule matter: the
+raw hue never carries type, and the palette ships a token that does.**
+
+Every status hue has an `-ink` sibling that flips per theme precisely so it can
+be set in type. `map-drawer.tsx` keeps two tables side by side for this —
+`TIER_TONES` for anything painting a surface, `TIER_INKS` for the arc names —
+with the measured numbers at the declaration.
+
+The one to notice is the orange arc: `--color-accent-ink` is the ceremonial
+burnt orange and **holds across both modes**, which is exactly why it cannot
+carry a label — 3.17:1 light and 3.92:1 dark, failing in _both_.
+`--color-primary` is the obvious substitute and fails dark at 2.72:1. The arc
+takes `--color-status-red-ink`, the same terracotta family, which the stylesheet
+describes as where §6.2's hue is read as a colour rather than sat on.
+
+The view's eyebrow in the workspace head is still untinted, and for the original
+reason.
+
+## Where the reader is, and the one thing the shell cannot work out
+
+The conversation column's way back reads `← the main conversation · on 01 ·
+Values`. The shell can name a **nav destination** on the first render —
+`SHELL_NAV` is static and client-side — and cannot name a **module** at all: the
+authored number and title are on the server, and a module page renders _inside_
+the workspace, which is a sibling of the conversation. Context flows downward
+only.
+
+So the page publishes it: `RememberModule` sets `modulePlace` on the provider,
+alongside the slug it already remembers for the Workspace nav item.
+
+**The provider withholds the label while the published slug and the route
+disagree.** A page publishes from an effect, so between asking for a module and
+that effect running, the shell still holds the previous one — and showing it
+tells the reader, confidently, that they are somewhere they have just left. The
+stale frame renders nothing instead.
+
+This is the same mechanism "Adding a view" below rules out for the workspace's
+own header, and that ruling stands: what goes missing for a frame here is a
+muted suffix beside a link that is already correct, not the page's heading.
 
 ## Adding a view
 
@@ -348,6 +431,16 @@ is the specific failure D6 names.
 - **The eleven voice leanings** — rendered as disabled sliders with the reason
   beside them. Nothing reads a leaning until a model is answering, which is
   phase 2.
+- **The resources drawer's films.** `resources-drawer.tsx` builds the designed
+  placeholder card and the `to watch` section, and leaves the list behind it
+  empty — the films are **f-resources'**, in phase 3. A thumbnail and a duration
+  pill are what an invention would look like here, so the section says it is
+  empty rather than carrying two plausible films.
+- **A module's real state in the map.** Every row reads `not started ○`, because
+  no per-user journey exists. `open` — which the API returns — is a fact about
+  the system rather than about the reader, and putting it in the column made all
+  seventeen rows say the same non-word about themselves. `STATE_ROW` in
+  `map-drawer.tsx` is the seam that widens.
 - **Recents and the budget meter** — omitted from the topbar rather than faked.
   With the theme toggle moved to the account menu, the bar is empty above 900px
   until they arrive; that is intentional, and its docblock says so.

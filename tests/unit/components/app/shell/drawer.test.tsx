@@ -15,7 +15,7 @@
  * @see components/app/shell/drawer.tsx
  */
 
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -133,17 +133,83 @@ describe('what the stubs say', () => {
     // An empty panel reads as broken; a panel that says what it is for reads as
     // unfinished, which is what it is (D6, B31). The map is real from §05 t-14
     // (`map-drawer.test.tsx`); its head still says what it holds. The resources
-    // remain the honest stub.
+    // are the designed placeholder now rather than a grey paragraph — but still
+    // a placeholder, with no invented films behind it.
     renderDrawers();
     expect(screen.getByText(/Sixteen modules/)).toBeTruthy();
     expect(screen.getByText(/Films and reading/)).toBeTruthy();
-    expect(screen.getByText(/arrive later in the programme/)).toBeTruthy();
+    expect(screen.getByText(/arrive with the programme/)).toBeTruthy();
+  });
+
+  it("builds the resources panel's sections without inventing anything to put in them", () => {
+    // The chrome and the placeholder are this task's; the films are
+    // f-resources', in phase 3. So the section exists and is honestly empty,
+    // rather than carrying two plausible films with a stock thumbnail on them.
+    renderDrawers();
+    const watch = screen.getByRole('heading', { name: 'to watch' });
+    expect(watch).toBeTruthy();
+    expect(screen.getByText(/Nothing to watch yet/)).toBeTruthy();
+    // A duration pill is the tell that something got invented.
+    expect(screen.queryByText(/\d+ ?min/i)).toBeNull();
   });
 
   it('invents no counts', () => {
     const { container } = renderDrawers();
     const panels = Array.from(container.querySelectorAll('[role="dialog"]'));
     for (const p of panels) expect(p.textContent ?? '').not.toMatch(/\d/);
+  });
+});
+
+describe('the panel is the designed panel', () => {
+  const panels = () => Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'));
+
+  it('sets the width once, so both drawers are the same panel', () => {
+    // 432px is the design's `.rdrawer`, read rather than guessed — ours was
+    // `min(420px, 88vw)`, which is 12px narrow everywhere AND left a 12% strip
+    // of scrim down the side of a phone, reading as a panel that failed to
+    // finish opening. The `100%` half is what keeps it sane at the bottom of
+    // the range; the fixed half is the point above it, because a drawer rides
+    // OVER the panes rather than taking width from them.
+    renderDrawers();
+    const widths = new Set(panels().map((p) => (p.className.match(/w-\[[^\]]+\]/) ?? [])[0]));
+    expect(widths).toEqual(new Set(['w-[min(432px,100%)]']));
+  });
+
+  it('puts the head on the pale wash and the body on the page ground', () => {
+    // Not cosmetic: the map's tier labels are read on the BODY ground, and
+    // their contrast is measured against it. On the card they lose about a
+    // fifth of a point, which is the margin two of the five have.
+    renderDrawers();
+    for (const panel of panels()) {
+      expect(panel.className).toContain('bg-[var(--color-background)]');
+      const head = panel.querySelector('header');
+      expect(head?.className).toContain('bg-[var(--color-card)]');
+      expect(head?.className).toContain('border-b');
+    }
+  });
+
+  it('gives each head an eyebrow, a serif title and a line of body copy', () => {
+    renderDrawers();
+    for (const panel of panels()) {
+      const head = panel.querySelector('header');
+      expect(head?.querySelector('.brand-eyebrow')).not.toBeNull();
+      expect(head?.querySelector('h2')?.className).toContain('brand-display');
+      expect(head?.querySelectorAll('p')).toHaveLength(2); // eyebrow + lede
+    }
+  });
+
+  it('closes with an outlined button, not a bare glyph', () => {
+    // `.icon-btn.bordered` — the border is what makes it read as a control
+    // rather than as a decoration in the corner. Rounded square rather than the
+    // design's disc, which is t-42: one circle among rounded squares reads as
+    // the odd one out rather than as the pattern.
+    renderDrawers();
+    for (const panel of panels()) {
+      const close = within(panel).getByRole('button', { name: /^Close / });
+      expect(close.className).toContain('border');
+      expect(close.className).toContain('rounded-[10px]');
+      expect(close.className).not.toContain('rounded-full');
+    }
   });
 });
 

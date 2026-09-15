@@ -75,9 +75,28 @@ export function Tipped({
    * sanctioned shape, and it costs one extra render when the node attaches.
    */
   const [node, setNode] = useState<HTMLElement | null>(null);
-  const [at, setAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
 
-  const hide = useCallback(() => setAt(null), []);
+  /**
+   * The position and the visibility are SEPARATE state, and collapsing them
+   * into one nullable value is a bug — it shipped once and is worth naming.
+   *
+   * A `fixed` element with no `top`/`left` does not go nowhere: it falls back to
+   * its static position, which is in the flow right after the trigger, near the
+   * top of the nav. So clearing the coordinates on the way out dropped the
+   * bubble up there and ran the 160ms opacity fade FROM that spot — a flash at
+   * the top of the menu every time the pointer left an icon, and again on the
+   * next hover before the new measurement landed.
+   *
+   * The coordinates are therefore sticky: they are written on the way in and
+   * never cleared, so the bubble fades out exactly where it faded in. `shown` is
+   * the only thing that moves on hide. Before the first measurement it is parked
+   * off-screen rather than left in the flow, so even a paint that beats the
+   * measurement has nothing visible in the wrong place.
+   */
+  const [at, setAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
+  const [shown, setShown] = useState(false);
+
+  const hide = useCallback(() => setShown(false), []);
   const show = useCallback(() => {
     if (!node) return;
     const box = node.getBoundingClientRect();
@@ -87,6 +106,7 @@ export function Tipped({
         ? { top, left: box.right + 12 }
         : { top, right: window.innerWidth - box.left + 12 }
     );
+    setShown(true);
   }, [node, side]);
 
   /*
@@ -98,14 +118,14 @@ export function Tipped({
    * bubble the reader has already stopped looking at.
    */
   useEffect(() => {
-    if (!at) return;
+    if (!shown) return;
     window.addEventListener('scroll', hide, true);
     window.addEventListener('resize', hide);
     return () => {
       window.removeEventListener('scroll', hide, true);
       window.removeEventListener('resize', hide);
     };
-  }, [at, hide]);
+  }, [shown, hide]);
 
   if (label === null) return <>{children({})}</>;
 
@@ -132,7 +152,13 @@ export function Tipped({
       })}
       <span
         aria-hidden="true"
-        style={at ? { top: at.top, left: at.left, right: at.right } : undefined}
+        style={
+          at
+            ? { top: at.top, left: at.left, right: at.right }
+            : // Parked off-screen until it has been measured, so it can never
+              // paint at its static position inside the nav's flow.
+              { top: -9999, left: -9999 }
+        }
         className={cn(
           'pointer-events-none fixed z-[80] -translate-y-1/2 rounded-[9px] px-[11px] py-1.5',
           'border border-[var(--color-border)] bg-[var(--color-popover)]',
@@ -140,7 +166,7 @@ export function Tipped({
           'text-[var(--color-foreground)] shadow-[var(--shadow-rest)]',
           'transition-[opacity,visibility] duration-[160ms] ease-[var(--ease-brand)]',
           'motion-reduce:transition-none',
-          at ? 'visible opacity-100' : 'invisible opacity-0'
+          shown ? 'visible opacity-100' : 'invisible opacity-0'
         )}
       >
         {label}

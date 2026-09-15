@@ -16,7 +16,7 @@
  * @see components/app/shell/shell-rail.tsx
  */
 
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -78,5 +78,59 @@ describe('ShellRail', () => {
     expect(rail.className).toContain('w-full');
     // Safe-area padding, or the last row sits under a phone's home indicator.
     expect(rail.className).toContain('env(safe-area-inset-bottom)');
+  });
+
+  it('is two full-width keys down there, not two shrunken rail cells', () => {
+    // The complaint this answers: the footer arrived as two small icon-and-
+    // caption cells huddled in the middle of a bare strip — hard to hit, and
+    // not reading as the two main ways out of the conversation. `justify-center`
+    // is the tell, and `flex-1` on each key is the fix.
+    renderInShell(<ShellRail />, 'small');
+    const rail = screen.getByRole('navigation', { name: 'Panels' });
+    expect(rail.className).not.toContain('justify-center');
+
+    for (const name of [/Your map/, /Resources/]) {
+      const key = screen.getByRole('button', { name });
+      expect(key.className).toContain('flex-1');
+      expect(key.className).toContain('h-12'); // a thumb target, not a 34px cell
+      expect(key.className).toContain('border');
+      // Sentence case at body size, not the rail's 8.5px uppercase caption.
+      expect(key.className).not.toContain('uppercase');
+      expect(key.className).not.toContain('text-[8.5px]');
+      // Icon BESIDE the label, so the key reads as `⌖ Map`.
+      expect(key.className).not.toContain('flex-col');
+    }
+  });
+
+  it('keeps the open key visibly selected in its wide form', () => {
+    // The active state was carried by a wash that reads on a 62px cell and gets
+    // lost across a half-width key, so it takes the border too.
+    renderInShell(<ShellRail />, 'small');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.className).not.toContain('secondary-wash');
+
+    fireEvent.click(map);
+    expect(map.className).toContain('var(--color-secondary-wash)');
+    expect(map.className).toContain('border-[var(--color-secondary-ink)]');
+  });
+
+  it('keeps the vertical rail a vertical rail above 900px', () => {
+    renderInShell(<ShellRail />, 'large');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.className).toContain('flex-col');
+    expect(map.className).toContain('uppercase');
+    expect(map.className).toContain('w-[62px]');
+  });
+
+  it('carries the brand tooltip, and never the browser one', () => {
+    // Same bubble as the collapsed left menu, per the task — and `Tipped`
+    // ignores touch pointers, which is what keeps it off a phone tap.
+    renderInShell(<ShellRail />, 'large');
+    const map = screen.getByRole('button', { name: /Your map/ });
+    expect(map.getAttribute('title')).toBeNull();
+
+    const bubble = map.nextElementSibling;
+    expect(bubble?.textContent).toBe('Your map — the sixteen modules');
+    expect(bubble?.getAttribute('aria-hidden')).toBe('true');
   });
 });

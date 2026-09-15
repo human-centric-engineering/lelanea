@@ -75,8 +75,24 @@ describe('the head', () => {
   });
 
   it('names the column on a phone too', () => {
+    mockPathname.current = '/app';
     const { container } = renderInShell(<ConversationPane />, 'small');
     expect(container.textContent).toContain('the conversation');
+  });
+
+  it('turns the title into the way back once there is a workspace open', () => {
+    // t-36: with the workspace open the head is a LINK — a back arrow and `the
+    // main conversation` in the secondary ink, with where you are beside it in
+    // muted text. It was a small outlined panel glyph followed by `the
+    // conversation` in grey, so the one way back out of a module read as a
+    // caption. On `/app` there is nowhere to go back to, so the eyebrow stays.
+    mockPathname.current = '/app/journey';
+    renderInShell(<ConversationPane />, 'large');
+
+    const back = screen.getByRole('link', { name: /the main conversation/ });
+    expect(back.getAttribute('href')).toBe('/app');
+    expect(back.className).toContain('text-[var(--color-secondary-ink)]');
+    expect(screen.getByText('on Your journey')).toBeTruthy();
   });
 });
 
