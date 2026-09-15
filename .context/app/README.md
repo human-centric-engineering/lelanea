@@ -34,6 +34,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`shell.md`](./shell.md)             | The four-column app shell at `/app`: panes, state, and adding a view               |
 | [`journey.md`](./journey.md)         | The seventeen modules in the registry, the published map, and the seed             |
 | [`gateway.md`](./gateway.md)         | The gate: the ledger, its API, the redirect, `/app/begin`, and the two data rights |
+| [`emails.md`](./emails.md)           | Which auth emails are ours, the chrome they share, and why the welcome is verbatim |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 

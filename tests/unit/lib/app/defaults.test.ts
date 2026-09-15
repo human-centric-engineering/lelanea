@@ -102,6 +102,8 @@ import {
 import { publicNavItems, footerNavItems, footerLegalItems } from '@/lib/app/public-nav';
 import { protectedNavItems } from '@/lib/app/protected-nav';
 import { appAuthLandingRoute, appAuthLandingLabel } from '@/lib/app/auth-landing';
+import InvitationEmail from '@/components/app/emails/invitation';
+import WelcomeEmail from '@/components/app/emails/welcome';
 import { emailOverrides } from '@/lib/app/emails';
 import { initApp } from '@/lib/app/bootstrap';
 import { initAppKnowledgeAccessContributors } from '@/lib/app/knowledge-access-contributors';
@@ -319,9 +321,19 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(footerCopyright).toBeNull(),
   },
   {
+    // PINNED, not deleted (`HB2`). §06 t-41 fills this seam with Lelañea's
+    // welcome and invitation. Upstream this row asserts the seam overrides
+    // NOTHING; here it asserts it overrides EXACTLY those two, so a third
+    // template swapped without a decision — or one of these two silently
+    // dropped — still fails here. `verifyEmail`, `resetPassword` and
+    // `changeEmailApproval` stay on the platform default on purpose.
     seam: 'lib/app/emails.ts',
     risk: 'a stray override would swap an auth email for every install',
-    assert: () => expect(emailOverrides).toEqual({}),
+    assert: () => {
+      expect(Object.keys(emailOverrides).sort()).toEqual(['invitation', 'welcome']);
+      expect(emailOverrides.welcome).toBe(WelcomeEmail);
+      expect(emailOverrides.invitation).toBe(InvitationEmail);
+    },
   },
   {
     // PINNED, not deleted (`HB2`). §03 t-7 fills this seam with the waitlist,
