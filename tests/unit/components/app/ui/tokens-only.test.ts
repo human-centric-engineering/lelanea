@@ -71,7 +71,27 @@ function sourceFiles(dir: string = APP_DIR, prefix = ''): string[] {
   return found.sort();
 }
 
+/**
+ * The one file allowed to write a colour out, and why: email has no `var()`,
+ * so the chrome under `components/app/emails/` carries the palette as literals.
+ * What keeps that honest is `tests/unit/components/app/emails/lelanea-email.test.ts`,
+ * which reads `app/brand-theme.css` and pins every one of those literals to the
+ * token it copies — a literal there that is NOT a token value fails that suite.
+ * The templates themselves are not exempt: they take colour from the chrome's
+ * exported `styles`, and this guard still runs over them.
+ */
+const LITERALS_PINNED_ELSEWHERE = new Set(['emails/lelanea-email.tsx']);
+
 describe('components/app — colour comes from tokens, never from a literal', () => {
+  it('still needs the exemption it carries', () => {
+    // An exemption that has stopped being true is a hole. If the chrome ever
+    // moves back onto tokens, delete it from the set rather than leaving a door.
+    for (const file of LITERALS_PINNED_ELSEWHERE) {
+      const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
+      expect(code.match(HEX_LITERAL)?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
   it('has files to scan', () => {
     // Without this the whole suite passes on an empty directory, which is
     // exactly what it would do if the folder were ever renamed. `.every` over
@@ -86,11 +106,14 @@ describe('components/app — colour comes from tokens, never from a literal', ()
     expect(files.some((name) => name.startsWith('shell/'))).toBe(true);
   });
 
-  it.each(sourceFiles())('%s declares no colour of its own', (file) => {
-    const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
-    expect(code.match(HEX_LITERAL) ?? []).toEqual([]);
-    expect(code.match(FUNCTIONAL_COLOUR) ?? []).toEqual([]);
-  });
+  it.each(sourceFiles().filter((file) => !LITERALS_PINNED_ELSEWHERE.has(file)))(
+    '%s declares no colour of its own',
+    (file) => {
+      const code = stripComments(readFileSync(path.join(APP_DIR, file), 'utf8'));
+      expect(code.match(HEX_LITERAL) ?? []).toEqual([]);
+      expect(code.match(FUNCTIONAL_COLOUR) ?? []).toEqual([]);
+    }
+  );
 
   it('would catch a literal that was added tomorrow', () => {
     // The negative control. Both patterns are proved to fire, and the comment

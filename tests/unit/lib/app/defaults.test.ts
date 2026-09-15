@@ -104,7 +104,6 @@ import { protectedNavItems } from '@/lib/app/protected-nav';
 import { appAuthLandingRoute, appAuthLandingLabel } from '@/lib/app/auth-landing';
 import InvitationEmail from '@/components/app/emails/invitation';
 import WelcomeEmail from '@/components/app/emails/welcome';
-import { emailOverrides } from '@/lib/app/emails';
 import { initApp } from '@/lib/app/bootstrap';
 import { initAppKnowledgeAccessContributors } from '@/lib/app/knowledge-access-contributors';
 import { initAppGuardFloorContributors } from '@/lib/app/guard-floor-contributors';
@@ -329,10 +328,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // `changeEmailApproval` stay on the platform default on purpose.
     seam: 'lib/app/emails.ts',
     risk: 'a stray override would swap an auth email for every install',
-    assert: () => {
-      expect(Object.keys(emailOverrides).sort()).toEqual(['invitation', 'welcome']);
-      expect(emailOverrides.welcome).toBe(WelcomeEmail);
-      expect(emailOverrides.invitation).toBe(InvitationEmail);
+    // `importActual`, for the reason the brand row gives: tests/setup.ts pins
+    // this seam to `{}` for the whole suite, and asserting against the mock
+    // would be true by construction.
+    assert: async () => {
+      const seam = await vi.importActual<typeof import('@/lib/app/emails')>('@/lib/app/emails');
+      expect(Object.keys(seam.emailOverrides).sort()).toEqual(['invitation', 'welcome']);
+      expect(seam.emailOverrides.welcome).toBe(WelcomeEmail);
+      expect(seam.emailOverrides.invitation).toBe(InvitationEmail);
     },
   },
   {
