@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Lotus } from '@/components/app/ui/lotus';
+import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
 /**
@@ -97,6 +98,17 @@ export function EntryBloom() {
       // Purely decorative and briefly on top of everything: a screen reader
       // should hear the shell, not an unnamed overlay it cannot dismiss.
       aria-hidden="true"
+      /*
+        The same claim as `pointer-events-auto` below, made to the things that
+        listen on `document` rather than to the ones that hit-test.
+        `shell-nav.tsx`'s click-away fires wherever the press lands, and this
+        overlay is neither a control nor inside the nav — so clicking anywhere
+        during the ~2.9s bloom collapsed the reader's menu as their very first
+        interaction with the app. `pointer-events-auto` cannot help with that:
+        it stops the press reaching what is UNDER the overlay, and a document
+        listener is not under anything.
+      */
+      {...{ [SHELL_OVERLAY_ATTR]: '' }}
       className={cn(
         'bg-background fixed inset-0 z-[100] flex items-center justify-center',
         // While it is OPAQUE it must also be solid to the pointer. It was

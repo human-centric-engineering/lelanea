@@ -209,9 +209,12 @@ became a muted list with dots beside it. **Both halves of the rule matter: the
 raw hue never carries type, and the palette ships a token that does.**
 
 Every status hue has an `-ink` sibling that flips per theme precisely so it can
-be set in type. `map-drawer.tsx` keeps two tables side by side for this —
-`TIER_TONES` for anything painting a surface, `TIER_INKS` for the arc names —
-with the measured numbers at the declaration.
+be set in type. `TIER_INKS` in `map-drawer.tsx` names the five arcs in those,
+with the measured numbers at its declaration. There is deliberately **no**
+second table of raw hues beside it: one stood there while the bullet existed,
+and the moment the bullet went it had no caller and a docblock saying the
+opposite of this. If something ever needs an arc's hue on a surface, where
+contrast does not arise, it comes back then with the caller that wants it.
 
 The one to notice is the orange arc: `--color-accent-ink` is the ceremonial
 burnt orange and **holds across both modes**, which is exactly why it cannot

@@ -9,7 +9,7 @@ import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { Tipped } from '@/components/app/ui/tipped';
 import { AccountMenu, type AccountMenuUser } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
-import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { SHELL_OVERLAY_ATTR, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { FOCUSABLE } from '@/components/app/shell/focusable';
 import { LAST_MODULE_STORAGE_KEY, MODULES_PATH_PREFIX, modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
@@ -41,12 +41,18 @@ const INTERACTIVE = 'a, button, input, select, textarea, [role="button"], [role=
  * wrong fix: it cost the design's own layout.
  *
  * Reserving the taller of the two heights in both states solves it directly.
- * The row is the same 70px open or slim, the mark and the control simply change
- * how they sit inside it, and the first nav item starts at the same y either
- * way. 70px is the slim stack measured: the 25px-tall mark, a 10px gap, and the
- * 32px control.
+ * The row is the same height open or slim, the mark and the control simply
+ * change how they sit inside it, and the first nav item starts at the same y
+ * either way.
+ *
+ * 72px is the slim stack MEASURED, and the measurement is the point: this said
+ * 70px on the strength of a "25px-tall mark", which is not what renders.
+ * `LotusMark` sizes by BLOOM width, not by frame height — `lotusFrameSize(30,
+ * water)` is 45.59 × 29.51, rounded to 46 × 30 — so the column is 30 + 10 + 32,
+ * and every child is `flex-none`. Two pixels short of its contents is not a
+ * tight fit; it is an overflow that clips into the first nav item.
  */
-const NAV_TOP_H = 'h-[70px]';
+const NAV_TOP_H = 'h-[72px]';
 
 export interface ShellNavProps {
   /** The signed-in person, for the pinned account menu. */
@@ -230,9 +236,19 @@ export function ShellNav({ user }: ShellNavProps) {
     // not reach the shell it is covering; that is what modal means.
     if (drawer) return;
     const onDown = (event: PointerEvent) => {
+      // The primary button only. `pointerdown` fires for button 2 as well, so a
+      // right-click anywhere in the panes restructured the layout underneath
+      // the context menu that was about to open.
+      if (event.button !== 0) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest(INTERACTIVE)) return;
+      // A full-screen overlay is covering the shell, and a press on it is not a
+      // press on the shell. `pointer-events` cannot say this to a `document`
+      // listener — see `SHELL_OVERLAY_ATTR`. The entry bloom is the one that
+      // bit: a click during the opening animation collapsed the reader's menu
+      // as their first interaction with the app.
+      if (target.closest(`[${SHELL_OVERLAY_ATTR}]`)) return;
       if (navRef.current?.contains(target)) {
         toggleNavSlim();
         return;

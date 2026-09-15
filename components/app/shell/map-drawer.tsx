@@ -216,13 +216,23 @@ export function MapDrawerBody() {
               declaration for what each arc was measured at, and why the orange
               one does not use the ceremonial `--color-accent-ink`. Inline
               rather than an arbitrary class because the value is a per-tier
-              lookup, not a constant.
+              lookup, not a constant — and inline is also the only thing that
+              WINS here, which is the next paragraph.
+
+              NO SIZE OR TRACKING UTILITIES. This carried
+              `text-[11px] tracking-[0.13em]` to match the design's `.tierlab`,
+              and both were dead: `.brand-eyebrow` is declared unlayered in
+              `app/brand-theme.css`, which that file says outright beats every
+              utility including an arbitrary value. They rendered at the
+              eyebrow's own 12px / 0.14em regardless. A point of size is not
+              worth plain CSS on this element, but a class that reads as doing
+              something and does nothing is worth deleting.
             */}
             <Eyebrow
               as="h3"
               id={`map-tier-${tier.id}`}
               style={{ color: TIER_INKS[tier.id] ?? 'var(--color-muted-foreground)' }}
-              className="block px-3 pt-4 pb-1 text-[11px] tracking-[0.13em] lowercase"
+              className="block px-3 pt-4 pb-1 lowercase"
             >
               {tier.label}
             </Eyebrow>

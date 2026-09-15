@@ -273,8 +273,13 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
   const nav = () => document.querySelector('nav[aria-label="Main"]');
   const slimNow = () => nav()?.getAttribute('data-slim');
 
+  // 1200, not the `medium` alias: that resolves below the 1100px auto-slim
+  // threshold, where the nav is already slim on arrival — so a case asserting
+  // "opening the conversation collapsed it" would pass without the rule
+  // existing at all. 1200 is medium AND above the threshold, so the only thing
+  // that can collapse the menu is the rule under test.
   it('collapses the menu when the conversation is opened on a tablet', async () => {
-    renderShell('medium');
+    renderShell(1200);
     // At medium with a workspace open the conversation parks itself, so the
     // strip is already there.
     const pull = strip();
@@ -284,13 +289,29 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     expect(slimNow()).toBe('true');
   });
 
+  it('does NOT hand a 234px menu back to a 1000px tablet', async () => {
+    // The regression the first fix introduced. `slimOverride` is one slot with
+    // two writers, and releasing it to `null` handed the menu back to the
+    // STORED preference even when `fit`'s auto-slim had been the one holding
+    // it. At 1000px — medium, and below the 1100px threshold — a reader whose
+    // stored preference is "expanded" loads slim, and parking the conversation
+    // put the full menu back on a tablet with no crossing left to re-assert the
+    // rule. The release asks the viewport the same question `fit` does.
+    renderShell(1000);
+    expect(slimNow()).toBe('true');
+
+    await userEvent.click(strip()!);
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(slimNow()).toBe('true');
+  });
+
   it('gives the menu back when the conversation is parked again', async () => {
     // The half that was missing. The only thing that ever released the override
     // was `fit`'s outward 1100px crossing, which at a fixed window width never
     // happens — so a reader who opened the conversation once kept a collapsed
     // menu for the rest of the session. That is the failure the override exists
     // to prevent, one level down.
-    renderShell('medium');
+    renderShell(1200);
     await userEvent.click(strip()!);
     expect(slimNow()).toBe('true');
 
@@ -300,7 +321,7 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
   });
 
   it('parks the conversation when the menu is expanded on a tablet', async () => {
-    renderShell('medium');
+    renderShell(1200);
     await userEvent.click(strip()!);
     expect(strip()).toBeNull();
 

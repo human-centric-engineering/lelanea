@@ -195,6 +195,42 @@ describe('Tipped', () => {
     expect(bubble()?.className).toContain('invisible');
   });
 
+  it('does not come back on its own after its label goes away', async () => {
+    // A keyboard reader fires none of `pointerleave`, `pointerdown` or `blur`.
+    // Tab to the collapsed menu's control, press Enter, and the menu expands:
+    // `label` goes null and the bubble unmounts with `shown` still true and
+    // focus still on the button. Press Enter again and it reappeared instantly,
+    // at stale coordinates, with no pointer or focus event anywhere.
+    const { rerender } = renderTipped();
+    const trigger = screen.getByRole('button');
+    await userEvent.hover(trigger);
+    expect(bubble()?.className).toContain('visible');
+
+    // The label goes — as it does when the menu expands.
+    rerender(
+      <Tipped side="left" label={null}>
+        {(tip) => (
+          <button type="button" {...tip} aria-label="Your map">
+            <span aria-hidden="true">icon</span>
+          </button>
+        )}
+      </Tipped>
+    );
+    expect(screen.getByRole('button').nextElementSibling).toBeNull();
+
+    // And back, with nothing having hovered or focused it.
+    rerender(
+      <Tipped side="left" label="Your map — the sixteen modules">
+        {(tip) => (
+          <button type="button" {...tip} aria-label="Your map">
+            <span aria-hidden="true">icon</span>
+          </button>
+        )}
+      </Tipped>
+    );
+    expect(bubble()?.className).toContain('invisible');
+  });
+
   it('renders no bubble and no handlers when there is no label', () => {
     renderTipped(null);
     expect(screen.getByRole('button').nextElementSibling).toBeNull();

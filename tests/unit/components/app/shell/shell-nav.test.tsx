@@ -25,6 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
+import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
@@ -305,8 +306,12 @@ describe('ShellNav — collapsing changes the width and nothing else', () => {
     await userEvent.click(screen.getByRole('button', { name: /the menu/ }));
     const slim = regions()[0].className;
 
-    expect(expanded).toContain('h-[70px]');
-    expect(slim).toContain('h-[70px]');
+    // 72px, and the number is measured rather than eyeballed: `LotusMark` sizes
+    // by BLOOM width, not frame height, so `size={30}` renders 46 × 30 — the
+    // slim stack is 30 + 10 + 32. This said 70 on the strength of a "25px mark"
+    // and was two pixels short of its own contents, every child `flex-none`.
+    expect(expanded).toContain('h-[72px]');
+    expect(slim).toContain('h-[72px]');
     // The stack is the prototype's layout; only its HEIGHT was ever the problem.
     expect(slim).toContain('flex-col');
     expect(expanded).not.toContain('flex-col');
@@ -436,6 +441,40 @@ describe('ShellNav — clicking away collapses it', () => {
     });
     expect(nav?.className).toContain('w-16');
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBe('true');
+  });
+
+  it('ignores a right-click, which is about to open a context menu', async () => {
+    // `pointerdown` fires for button 2 as well, so a right-click anywhere in
+    // the panes restructured the layout underneath the menu about to appear
+    // over it.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 2 }));
+    });
+    expect(nav?.className).toContain('w-[234px]');
+  });
+
+  it('stands down while a full-screen overlay is up', async () => {
+    // The entry bloom is `fixed inset-0 z-[100]` for its ~2.9s and deliberately
+    // solid to the pointer, so a click cannot reach a nav item nobody can see.
+    // `pointer-events` decides that by HIT-TESTING, and a listener bound to
+    // `document` is not under anything — so a click during the opening
+    // animation collapsed the reader's menu as their first interaction with the
+    // app. An overlay says so with `SHELL_OVERLAY_ATTR`.
+    renderAt('/app');
+    const nav = document.querySelector('nav');
+
+    const overlay = document.createElement('div');
+    overlay.setAttribute(SHELL_OVERLAY_ATTR, '');
+    document.body.appendChild(overlay);
+    act(() => {
+      overlay.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(nav?.className).toContain('w-[234px]');
+    overlay.remove();
   });
 
   it('leaves the ≤900px drawer alone — it has a scrim of its own', async () => {

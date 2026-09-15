@@ -238,7 +238,9 @@ export function Drawers() {
                 <Eyebrow as="p" className="block">
                   {eyebrow}
                 </Eyebrow>
-                <h2 className="brand-display mt-1.5 text-[27px] leading-[1.1] text-[var(--color-heading)]">
+                {/* No `leading-*`: `.brand-display` sets `line-height: 1.05`
+                    unlayered, so a utility here would be a dead class. */}
+                <h2 className="brand-display mt-1.5 text-[27px] text-[var(--color-heading)]">
                   {title}
                 </h2>
                 <p className="text-muted-foreground mt-2 text-[13.5px] leading-[1.6]">{lede}</p>

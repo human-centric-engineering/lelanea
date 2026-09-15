@@ -41,6 +41,32 @@ const CHAT_W_KEY = 'lelanea.chat.width';
  */
 export const NAV_TOGGLE_ATTR = 'data-nav-toggle';
 
+/**
+ * Marks a full-screen overlay that covers the shell, so shell-wide `document`
+ * listeners stand down while it is up.
+ *
+ * `pointer-events` cannot express this. It decides what a press reaches by
+ * HIT-TESTING, and a listener bound to `document` is not under the overlay —
+ * it sees the press either way. The entry bloom found this the hard way: it is
+ * deliberately solid to the pointer for its ~2.9s so a click cannot reach a nav
+ * item nobody can see, and the nav's click-away collapsed the menu anyway,
+ * because the overlay is neither a control nor inside the nav.
+ *
+ * An attribute rather than a list of component names, so the next full-screen
+ * thing opts out by carrying it rather than by being remembered.
+ */
+export const SHELL_OVERLAY_ATTR = 'data-shell-overlay';
+
+/**
+ * The width below which the nav slims itself, whatever the reader prefers.
+ *
+ * Named because TWO things ask it now: `fit`, on crossing it inward, and
+ * `setChatSlim`, when it hands the override back — a release that ignored the
+ * viewport put a 234px menu on a 1000px tablet. A threshold written twice is a
+ * threshold that gets changed once.
+ */
+export const AUTO_SLIM_BELOW = 1100;
+
 /** The prototype's `RZ.chat` bounds and `CHAT_FOLD`. */
 export const CHAT_MIN = 330;
 export const CHAT_MAX = 660;
@@ -273,11 +299,14 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       // strands a fixed panel over a layout that has no scrim any more.
       setNavOpenState(false);
 
-      const crossedInward = w < 1100 && (previous === null || previous >= 1100);
+      const crossedInward =
+        w < AUTO_SLIM_BELOW && (previous === null || previous >= AUTO_SLIM_BELOW);
       if (crossedInward) setSlimOverride(true);
       // Crossing back out drops the override, so the reader's stored preference
       // applies again rather than being buried for the session.
-      if (w >= 1100 && previous !== null && previous < 1100) setSlimOverride(null);
+      if (w >= AUTO_SLIM_BELOW && previous !== null && previous < AUTO_SLIM_BELOW) {
+        setSlimOverride(null);
+      }
     };
 
     fit();
@@ -386,22 +415,29 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * One copy of it, because two components each reaching for the other's setter
    * is the same rule written twice and the second copy is the one that rots.
    *
-   * ## It moves the live value, and releases it again
+   * ## It moves the live value, and hands it back to whoever held it
    *
    * Never storage: asking for the conversation is not a statement about how you
    * like your menu. And parking the conversation RELEASES the override rather
-   * than leaving it set, so the stored preference comes back the moment the
-   * competition ends. Without that release the only thing that ever cleared it
-   * was `fit`'s outward 1100px crossing — which at a fixed window width never
-   * happens, so a reader who opened the conversation once kept a collapsed menu
-   * for the rest of the session. That is the very failure the override exists to
-   * prevent, one level down.
+   * than leaving it set, so the menu comes back the moment the competition ends.
+   * Without that release the only thing that ever cleared it was `fit`'s
+   * outward 1100px crossing — which at a fixed window width never happens, so a
+   * reader who opened the conversation once kept a collapsed menu for the rest
+   * of the session, which is the failure the override exists to prevent.
+   *
+   * **It releases to the VIEWPORT's answer, not to `null`.** `slimOverride` is
+   * one slot with two writers, and dropping it to `null` handed the menu back to
+   * the stored preference even when `fit` had been the one holding it. Measured:
+   * a 1000px tablet with the menu expanded in storage loads slim (auto-slim,
+   * below 1100), and parking the conversation put a 234px menu back on a 1000px
+   * screen — the exact state the auto-slim exists to prevent, with no crossing
+   * left to re-assert it. So the release asks the same question `fit` asks.
    */
   const setChatSlim = useCallback(
     (slim: boolean) => {
       setChatSlimState(slim);
       if (width !== 'medium' || !wsOpen) return;
-      setSlimOverride(slim ? null : true);
+      setSlimOverride(slim ? (window.innerWidth < AUTO_SLIM_BELOW ? true : null) : true);
     },
     [width, wsOpen]
   );

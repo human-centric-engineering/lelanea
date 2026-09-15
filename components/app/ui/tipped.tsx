@@ -113,6 +113,21 @@ export function Tipped({
     setShown(true);
   }, [node, side]);
 
+  /**
+   * A bubble with no label is a bubble that is not shown.
+   *
+   * `hide` is wired to `pointerleave`, `pointerdown` and `blur` — and a KEYBOARD
+   * reader fires none of them. Tab to the collapsed menu's control (focus-visible
+   * shows the bubble), press Enter, and the menu expands: `label` goes `null`,
+   * the bubble unmounts with `shown` still true and focus still on the button.
+   * Press Enter again and it reappears instantly, at stale coordinates, with no
+   * pointer or focus event anywhere. The early return below is in render, so it
+   * cannot reset state; this can, and it detaches the listeners below with it.
+   */
+  useEffect(() => {
+    if (label === null) setShown(false);
+  }, [label]);
+
   /*
    * The coordinates are a snapshot, so anything that moves the trigger under a
    * resting pointer leaves the bubble behind. Scrolling the nav's item list is
