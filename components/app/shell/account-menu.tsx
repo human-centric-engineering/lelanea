@@ -93,9 +93,14 @@ export interface AccountMenuProps {
  *   attaches it to the item the reader is still focused on. A *disabled* item
  *   would not do: Radix drops disabled entries from its roving focus, so a
  *   keyboard user could never reach it again.
- * - `signOutFailed` cleared on open. This component stays mounted while the
- *   content unmounts, so without the reset a failure is still rendered — and
- *   re-announced — the next time the menu opens, describing an attempt long over.
+ * - `signOutFailed` cleared on CLOSE, unless a sign-out is still in flight.
+ *   This component stays mounted while the content unmounts, so without a reset
+ *   a failure is still rendered — and re-announced — the next time the menu
+ *   opens, describing an attempt long over. Clearing on open (the Hub's shape)
+ *   has a hole: a click outside dismisses the menu mid-request, the failure
+ *   lands against a closed menu, and the reopen wipes it before anyone sees it —
+ *   the reader is still signed in with no explanation. Clearing on close skips
+ *   the in-flight case, so a late failure survives to the next open.
  *
  * ## Why sign-out lands on `/`
  *
@@ -181,7 +186,7 @@ export function AccountMenu({ user, initials, slim, onNavigate }: AccountMenuPro
   return (
     <DropdownMenu
       onOpenChange={(open) => {
-        if (open) setSignOutFailed(false);
+        if (!open && !isSigningOut) setSignOutFailed(false);
       }}
     >
       <DropdownMenuTrigger

@@ -316,6 +316,39 @@ describe('AccountMenu — sign out', () => {
     ).toBe(false);
   });
 
+  it('keeps a failure that lands after the menu was dismissed, for the next opening', async () => {
+    // The hole in clearing on OPEN: a click outside dismisses the menu while
+    // the request is in flight, the failure arrives against a closed menu, and
+    // the reopen wiped it before anyone saw it — leaving the reader signed in
+    // with a Sign out item that reads as if nothing was tried.
+    const ui = userEvent.setup();
+    let fail: (() => void) | undefined;
+    mockSignOut.mockImplementation(
+      (opts: SignOutOptions) =>
+        new Promise<void>((resolve) => {
+          fail = () => {
+            opts.fetchOptions.onError({ error: new Error('offline') });
+            resolve();
+          };
+        })
+    );
+
+    renderMenu();
+    await openMenu(ui);
+    await ui.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+
+    await ui.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fail!();
+
+    await openMenu(ui);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn’t sign out/);
+    expect(
+      screen.getByRole('menuitem', { name: 'Sign out' }).getAttribute('aria-disabled')
+    ).not.toBe('true');
+  });
+
   it('still redirects when analytics rejects after the session is already gone', async () => {
     const ui = userEvent.setup();
     mockTrack.mockRejectedValue(new Error('analytics down'));
