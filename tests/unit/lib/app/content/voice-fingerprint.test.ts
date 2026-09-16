@@ -16,6 +16,19 @@
  * - **The version is orderable.** An evaluation attributes an output to a
  *   fingerprint version; "v2 draft" cannot be compared to anything.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam
+ * ---------------------------------------------------------------------------
+ * Every case here is about Lelañea's authored core, not a platform contract. A
+ * fork that replaces `content/` with its own material has no
+ * `lelanea_voice_fingerprint.json` and should expect the whole file to fail.
+ *
+ * Rewrite it against your own core rather than deleting it: the coupling to real
+ * authored text is the entire value, and the provenance case in particular is
+ * what stops a drafted file passing itself off as a transcribed one. If your
+ * fork ships no voice fingerprint at all, delete the file and the schema
+ * together — a file left behind asserting an absent seam is worse than neither.
+ *
  * @see lib/app/content/schemas.ts — `voiceFingerprintFileSchema`
  * @see tests/unit/lib/app/voice/fingerprint.test.ts — what the core becomes
  */

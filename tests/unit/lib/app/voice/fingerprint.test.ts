@@ -28,6 +28,21 @@
  * being independent of retrieval is the entire point of the feature; a comment
  * saying so would be worth nothing the day somebody wires a lookup in.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam
+ * ---------------------------------------------------------------------------
+ * The assertions walk Lelañea's authored core and require each of its beats to
+ * survive into the composed prompt. A fork with its own core still passes
+ * unchanged — nothing here pins her words — but a fork with NO voice fingerprint
+ * has nothing for `getVoiceFingerprint()` to return and should delete this file
+ * alongside the seam.
+ *
+ * What a fork should pin if it keeps the shape: the mapping table in
+ * `lib/app/voice/fingerprint.ts`, and the "loses the whole core when the agent
+ * is not linked" case. That second one is the load-bearing half — a prompt that
+ * silently stops carrying identity still answers fluently, and sounds like
+ * nobody.
+ *
  * @see lib/app/voice/fingerprint.ts
  * @see lib/orchestration/agents/resolve-effective-prompt.ts
  */

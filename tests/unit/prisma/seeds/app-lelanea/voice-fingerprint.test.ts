@@ -36,6 +36,18 @@
  * consumer. Sequenced mocks cannot express "and then something else looked at
  * what you wrote".
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam
+ * ---------------------------------------------------------------------------
+ * The seed under test projects Lelañea's authored core, so this file needs that
+ * seam populated. A fork without one should delete this file with the seed.
+ *
+ * A fork that keeps the shape should pin the LAST describe block above all
+ * else: it is the only place anything asserts that an agent of yours reaches
+ * Sunrise's resolver as `restricted`. The platform default is `full`, a `full`
+ * agent returns before any access contributor runs, and nothing else in any
+ * tier will tell you that your designation rule has quietly stopped executing.
+ *
  * @see prisma/seeds/app-lelanea/003-voice-fingerprint.ts
  * @see lib/orchestration/knowledge/resolveAgentDocumentAccess.ts — the short-circuit
  */
