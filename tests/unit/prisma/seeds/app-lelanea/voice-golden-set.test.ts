@@ -1,0 +1,393 @@
+/**
+ * The golden-set seed: what it writes, what a re-run must not, and the one case
+ * where reconciling would quietly re-caption history.
+ *
+ * ## 1. `fp4` — idempotent, safe on empty, ownership classified
+ *
+ * The dataset and its cases are a pure code projection of the authored file; the
+ * control agent is split, with the five columns that make it a control
+ * reconciled and its name, description and temperature left to whoever edits
+ * them. A re-run on a current database issues **no write at all**, which is the
+ * only shape that can churn `updatedAt` in a harness with no database (`B9`).
+ *
+ * ## 2. The exception, and it is the interesting half
+ *
+ * A dataset case cannot be deleted once a run has scored it —
+ * `AiEvaluationCaseResult.datasetCase` declares no `onDelete`, so Prisma's
+ * default `Restrict` applies. So the seed reconciles a version nothing has run
+ * yet, and **refuses** one something has, naming the remedy: bump the authored
+ * version, which mints a new dataset beside the old one.
+ *
+ * Reconciling instead would re-caption every historical answer with a question it
+ * was never asked, which is a worse outcome than a loud failure and an
+ * indistinguishable one from a correct comparison.
+ *
+ * ## 3. The control is reconciled back to bare
+ *
+ * An operator who attaches her profile to the control produces a comparison of
+ * her voice with itself. `assertArmsComparable` refuses to QUEUE in that state
+ * (`tests/unit/lib/app/voice/comparison.test.ts`); this file pins the half that
+ * stops the state persisting.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/content` seam
+ * ---------------------------------------------------------------------------
+ * The seed under test projects Lelañea's authored golden set, so this file needs
+ * that seam populated. A fork without one should delete this file with the seed.
+ *
+ * @see prisma/seeds/app-lelanea/004-voice-golden-set.ts
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+interface FakeDataset {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  caseCount: number;
+  contentHash: string;
+  source: string;
+  userId: string | null;
+}
+
+interface FakeCase {
+  datasetId: string;
+  position: number;
+  input: unknown;
+  metadata: unknown;
+}
+
+interface FakeAgent {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  systemInstructions: string;
+  model: string;
+  provider: string;
+  isActive: boolean;
+  isSystem: boolean;
+  knowledgeAccessMode: string;
+  profileId: string | null;
+  persona: string | null;
+  guardrails: string | null;
+  brandVoiceInstructions: string | null;
+}
+
+const world = {
+  users: [{ id: 'service-account', accountType: 'SERVICE' }],
+  datasets: [] as FakeDataset[],
+  cases: [] as FakeCase[],
+  agents: [] as FakeAgent[],
+  runs: [] as { id: string; datasetId: string }[],
+};
+
+/** Every write the fake saw, so "a re-run writes nothing" is checkable. */
+const writes = {
+  datasetCreate: 0,
+  datasetUpdate: 0,
+  caseDeleteMany: 0,
+  caseCreateMany: 0,
+  agentCreate: 0,
+  agentUpdate: 0,
+};
+
+let nextId = 0;
+
+vi.mock('@/lib/db/client', () => ({ prisma: {} }));
+
+vi.mock('@/lib/logging', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+/**
+ * A stateful fake rather than sequenced one-shot mocks.
+ *
+ * The idempotence claim needs the seed's SECOND run to read what its first run
+ * wrote, and the freeze claim needs a run row to exist beside the dataset. Neither
+ * is expressible as "the third call returns this".
+ */
+const prisma = {
+  user: {
+    findFirst: vi.fn(
+      async ({ where }: { where: { accountType: string } }) =>
+        world.users.find((user) => user.accountType === where.accountType) ?? null
+    ),
+  },
+  aiDataset: {
+    findUnique: vi.fn(
+      async ({ where }: { where: { id: string } }) =>
+        world.datasets.find((dataset) => dataset.id === where.id) ?? null
+    ),
+    create: vi.fn(
+      async ({
+        data,
+      }: {
+        data: Omit<FakeDataset, 'userId'> & {
+          userId: string | null;
+          cases?: { create: Omit<FakeCase, 'datasetId'>[] };
+        };
+      }) => {
+        writes.datasetCreate += 1;
+        const { cases, ...row } = data;
+        world.datasets.push(row);
+        for (const entry of cases?.create ?? []) {
+          world.cases.push({ datasetId: row.id, ...entry });
+        }
+        return row;
+      }
+    ),
+    update: vi.fn(
+      async ({ where, data }: { where: { id: string }; data: Partial<FakeDataset> }) => {
+        writes.datasetUpdate += 1;
+        const dataset = world.datasets.find((candidate) => candidate.id === where.id);
+        if (!dataset) throw new Error(`No dataset ${where.id}`);
+        Object.assign(dataset, data);
+        return dataset;
+      }
+    ),
+  },
+  aiDatasetCase: {
+    deleteMany: vi.fn(async ({ where }: { where: { datasetId: string } }) => {
+      writes.caseDeleteMany += 1;
+      world.cases = world.cases.filter((entry) => entry.datasetId !== where.datasetId);
+      return { count: 0 };
+    }),
+    createMany: vi.fn(async ({ data }: { data: FakeCase[] }) => {
+      writes.caseCreateMany += 1;
+      world.cases.push(...data);
+      return { count: data.length };
+    }),
+  },
+  aiEvaluationRun: {
+    count: vi.fn(
+      async ({ where }: { where: { datasetId: string } }) =>
+        world.runs.filter((run) => run.datasetId === where.datasetId).length
+    ),
+  },
+  aiAgent: {
+    findUnique: vi.fn(
+      async ({ where }: { where: { slug: string } }) =>
+        world.agents.find((agent) => agent.slug === where.slug) ?? null
+    ),
+    create: vi.fn(async ({ data }: { data: Partial<FakeAgent> }) => {
+      writes.agentCreate += 1;
+      const agent = {
+        id: `agent-${(nextId += 1)}`,
+        profileId: null,
+        // The three inheritable columns default to NULL in the schema, so a seed
+        // that omits them must land NULL here — not `undefined`, which would make
+        // "the control carries none of its own" pass without the seed omitting them.
+        persona: null,
+        guardrails: null,
+        brandVoiceInstructions: null,
+        ...data,
+      } as FakeAgent;
+      world.agents.push(agent);
+      return agent;
+    }),
+    update: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: Partial<FakeAgent> & { profile?: { disconnect: boolean } };
+      }) => {
+        writes.agentUpdate += 1;
+        const agent = world.agents.find((candidate) => candidate.id === where.id);
+        if (!agent) throw new Error(`No agent ${where.id}`);
+        const { profile, ...columns } = data;
+        Object.assign(agent, columns);
+        if (profile?.disconnect) agent.profileId = null;
+        return agent;
+      }
+    ),
+  },
+  // The seed's reconcile path batches its three writes. The fake runs them in
+  // order, which is what the real client does too.
+  $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+};
+
+import { logger } from '@/lib/logging';
+import unit, {
+  CONTROL_KNOWLEDGE_ACCESS_MODE,
+} from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
+import { getVoiceGoldenSet } from '@/lib/app/content';
+import { VOICE_CONTROL_AGENT_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
+
+function ctx() {
+  return { prisma: prisma as never, logger: logger as never };
+}
+
+async function runSeed(): Promise<void> {
+  await unit.run(ctx());
+}
+
+const goldenSet = getVoiceGoldenSet();
+const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+
+function control(): FakeAgent {
+  const agent = world.agents.find((candidate) => candidate.slug === VOICE_CONTROL_AGENT_SLUG);
+  if (!agent) throw new Error('The seed left no control agent behind');
+  return agent;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  nextId = 0;
+  world.datasets = [];
+  world.cases = [];
+  world.agents = [];
+  world.runs = [];
+  for (const key of Object.keys(writes) as (keyof typeof writes)[]) writes[key] = 0;
+});
+
+describe('a fresh install', () => {
+  it('writes the dataset under a versioned id, with one case per authored prompt', async () => {
+    await runSeed();
+
+    expect(world.datasets).toHaveLength(1);
+    expect(world.datasets[0]?.id).toBe(datasetId);
+    expect(world.datasets[0]?.caseCount).toBe(goldenSet.prompts.length);
+    expect(world.cases).toHaveLength(goldenSet.prompts.length);
+
+    // The set belongs to the install, not to a person — so it survives the
+    // service account and is not scoped out of anybody's view by an owner they
+    // do not share.
+    expect(world.datasets[0]?.userId).toBeNull();
+  });
+
+  it('carries each prompt whole, with what it is probing beside it', async () => {
+    await runSeed();
+
+    const ordered = [...world.cases].sort((a, b) => a.position - b.position);
+    expect(ordered.map((entry) => entry.input)).toEqual(
+      goldenSet.prompts.map((prompt) => prompt.prompt)
+    );
+    // `probe` is what tells whoever reads two answers what the question was
+    // testing. Dropped, the surface still renders and the comparison becomes a
+    // vibe — so it is pinned on the row rather than trusted to the projection.
+    expect(ordered.map((entry) => entry.metadata)).toEqual(
+      goldenSet.prompts.map((prompt) => ({
+        key: prompt.key,
+        kind: prompt.kind,
+        probe: prompt.probe,
+      }))
+    );
+  });
+
+  it('creates the control bare, restricted, and with nothing of hers on it', async () => {
+    await runSeed();
+
+    expect(control().systemInstructions).toBe(goldenSet.control.systemInstructions);
+    expect(control().knowledgeAccessMode).toBe(CONTROL_KNOWLEDGE_ACCESS_MODE);
+    expect(control().profileId).toBeNull();
+    expect(control().persona).toBeNull();
+    expect(control().guardrails).toBeNull();
+    expect(control().brandVoiceInstructions).toBeNull();
+
+    // Empty provider/model is what makes both arms resolve to the SAME install
+    // default without either naming a model — the condition the queue-time guard
+    // then enforces.
+    expect(control().provider).toBe('');
+    expect(control().model).toBe('');
+  });
+});
+
+describe('a re-run', () => {
+  it('writes nothing at all on a current database', async () => {
+    await runSeed();
+    for (const key of Object.keys(writes) as (keyof typeof writes)[]) writes[key] = 0;
+
+    await runSeed();
+
+    expect(writes).toEqual({
+      datasetCreate: 0,
+      datasetUpdate: 0,
+      caseDeleteMany: 0,
+      caseCreateMany: 0,
+      agentCreate: 0,
+      agentUpdate: 0,
+    });
+  });
+
+  it('puts the control back when somebody gave it her profile', async () => {
+    await runSeed();
+    control().profileId = 'profile-core';
+    control().persona = 'her persona, pasted';
+
+    await runSeed();
+
+    expect(control().profileId).toBeNull();
+    expect(control().persona).toBeNull();
+    expect(writes.agentUpdate).toBe(1);
+  });
+
+  it('puts the control instructions back when somebody edited them', async () => {
+    await runSeed();
+    control().systemInstructions = 'You are Lelañea.';
+
+    await runSeed();
+
+    expect(control().systemInstructions).toBe(goldenSet.control.systemInstructions);
+  });
+});
+
+describe('the authored prompts changed', () => {
+  /** Make the stored dataset disagree with what the file now projects. */
+  function driftTheStoredSet(): void {
+    world.datasets[0].contentHash = 'a-hash-from-an-older-file';
+  }
+
+  it('reconciles in place while nothing has been asked of the version', async () => {
+    await runSeed();
+    driftTheStoredSet();
+    world.cases = [];
+
+    await runSeed();
+
+    expect(writes.caseDeleteMany).toBe(1);
+    expect(writes.caseCreateMany).toBe(1);
+    expect(world.cases).toHaveLength(goldenSet.prompts.length);
+    expect(world.datasets[0]?.contentHash).not.toBe('a-hash-from-an-older-file');
+  });
+
+  it('refuses once a run exists, and names the remedy rather than the error', async () => {
+    await runSeed();
+    driftTheStoredSet();
+    // One run of ANY status is enough: a failed run still holds result rows for
+    // every case it got through, and those are what `Restrict` refuses to orphan.
+    world.runs.push({ id: 'run-1', datasetId });
+
+    await expect(runSeed()).rejects.toThrow(/Bump `goldenSet.version`/);
+
+    // And it refused BEFORE touching anything — an abort that had already
+    // deleted the cases would have left the install with no golden set and the
+    // history row banked as applied.
+    expect(writes.caseDeleteMany).toBe(0);
+    expect(world.cases).toHaveLength(goldenSet.prompts.length);
+  });
+});
+
+describe('a set that projected to nothing', () => {
+  it('THROWS rather than returning, so the runner cannot bank the abort as applied', async () => {
+    // `prisma/runner.ts` upserts the `SeedHistory` row the moment `run()`
+    // resolves and logs `✓ applied`, so a quiet return would make every later
+    // `db:seed` skip the unit — leaving an install with no golden set,
+    // permanently, until somebody deleted the history row by hand.
+    vi.doMock('@/lib/app/voice/golden-set', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/app/voice/golden-set')>();
+      return { ...actual, projectGoldenSetCases: () => [] };
+    });
+    vi.resetModules();
+
+    const emptyUnit = (await import('@/prisma/seeds/app-lelanea/004-voice-golden-set')).default;
+    await expect(emptyUnit.run(ctx())).rejects.toThrow(/projected to no cases/);
+    expect(world.datasets).toHaveLength(0);
+
+    vi.doUnmock('@/lib/app/voice/golden-set');
+    vi.resetModules();
+  });
+});

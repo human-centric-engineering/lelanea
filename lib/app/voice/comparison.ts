@@ -58,8 +58,9 @@
  * context contributor fires on an evaluation turn — including ours. The golden
  * set therefore hears layer one of the fingerprint, which is also the layer the
  * retrieval-empty case is there to prove. Layers two and three are not covered
- * by this and no configuration here can cover them; it is an upstream gap, filed
- * as such. See `.context/app/voice.md`.
+ * by this, and no configuration here can cover them: the blob is identical in
+ * all three tiers, so it is a Sunrise gap rather than anything a leaf or the
+ * framework can close. Recorded in `.context/app/voice.md`.
  *
  * **Whether an answer reads as her is hers to say.** This ships the set, both
  * arms, and the surface that makes the judgement cheap to make. It does not make

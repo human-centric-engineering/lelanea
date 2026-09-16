@@ -243,6 +243,8 @@ describe('reserved fork tiers', () => {
       // is about one of her files, and the only thing on it that touches a person
       // is `designatedBy`, the id of the admin who last set it.
       'model AppKnowledgeDesignation {',
+      'model AppVoiceComparison {',
+      'model AppVoiceComparisonArm {',
     ]);
   });
 
