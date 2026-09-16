@@ -283,7 +283,10 @@ export interface VoiceOverlays {
     readonly heading: string;
     readonly originLabel: string;
     readonly lines: readonly string[];
+    /** After a search that came back empty. */
     readonly noneFoundNote: string;
+    /** After a search that could not be run — a different fact, and said so. */
+    readonly unavailableNote: string;
   };
   coreOnly: VoiceCoreSection;
 }
@@ -699,6 +702,7 @@ export function getVoiceOverlays(): VoiceOverlays {
       originLabel: file.exemplars.originLabel,
       lines: file.exemplars.lines,
       noneFoundNote: file.exemplars.noneFoundNote,
+      unavailableNote: file.exemplars.unavailableNote,
     },
     coreOnly: { heading: file.coreOnly.heading, lines: file.coreOnly.lines },
   });

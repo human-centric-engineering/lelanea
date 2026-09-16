@@ -65,7 +65,13 @@ function validOverlaysFile() {
         exemplarQuery: 'q',
       },
     ],
-    exemplars: { heading: 'H', originLabel: 'O', lines: ['a'], noneFoundNote: 'n' },
+    exemplars: {
+      heading: 'H',
+      originLabel: 'O',
+      lines: ['a'],
+      noneFoundNote: 'n',
+      unavailableNote: 'u',
+    },
     coreOnly: { heading: 'H', lines: ['a'] },
     reviewNotes: [],
   };
@@ -91,6 +97,7 @@ describe('the authored overlays', () => {
     expect(content.exemplars.heading.trim().length).toBeGreaterThan(0);
     expect(content.exemplars.lines.length).toBeGreaterThan(0);
     expect(content.exemplars.noneFoundNote.trim().length).toBeGreaterThan(0);
+    expect(content.exemplars.unavailableNote.trim().length).toBeGreaterThan(0);
     expect(content.coreOnly.heading.trim().length).toBeGreaterThan(0);
     expect(content.coreOnly.lines.length).toBeGreaterThan(0);
   });
@@ -180,6 +187,21 @@ describe('drift fails loudly', () => {
 
     // The fallback body is what stands between an unknown situation and an empty
     // block, so an empty one is the failure this whole branch exists to avoid.
+    expect(() => voiceOverlaysFileSchema.parse(file)).toThrow();
+  });
+
+  it('says a different thing for a search that failed and one that found nothing', () => {
+    // Two authored sentences because they are two facts. Collapsing them made
+    // the block report an empty search result for a search that never ran.
+    const content = getVoiceOverlays();
+
+    expect(content.exemplars.unavailableNote).not.toBe(content.exemplars.noneFoundNote);
+  });
+
+  it('rejects an exemplars block with no retrieval-unavailable line', () => {
+    const file: Record<string, unknown> = validOverlaysFile();
+    delete (file.exemplars as Record<string, unknown>).unavailableNote;
+
     expect(() => voiceOverlaysFileSchema.parse(file)).toThrow();
   });
 

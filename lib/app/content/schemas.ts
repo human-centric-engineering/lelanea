@@ -614,7 +614,18 @@ export const voiceOverlaysFileSchema = z
        */
       originLabel: z.string().min(1),
       lines: voiceLinesSchema,
+      /** After a search that came back empty. */
       noneFoundNote: z.string().min(1),
+      /**
+       * After a search that could not be run at all.
+       *
+       * A separate line rather than a reuse of the one above, for the same
+       * reason the core-only branch emits no exemplar section at all: "no
+       * passage was found" asserts an empty result, and reporting an empty
+       * result for a search that errored is the small dishonesty this whole
+       * feature is about not committing. Caught by /code-review.
+       */
+      unavailableNote: z.string().min(1),
     }),
     /** The body emitted when no overlay matches — never empty, by construction. */
     coreOnly: z.strictObject({

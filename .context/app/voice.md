@@ -273,7 +273,7 @@ whole block.
 ## Labelling by origin is the whole safety property
 
 The failure this must not have is the model reading her exemplars as things the
-**user** said, or as facts to assert. Three things together prevent it, and none
+**user** said, or as facts to assert. Four things together prevent it, and none
 is sufficient alone:
 
 1. **Every passage carries its own origin label**, on the line above it —
@@ -306,6 +306,54 @@ prevent, arriving by length rather than by path.
 **The tests assert the labels on the emitted block**, not on the loader's return
 value — the block is what a model reads, and a labelling regression that only
 showed up in the framing would pass a test written against the former.
+
+**What none of the four can reach: the block's own header.**
+`formatLockedContext` interpolates the raw `contextId` into `id: ${id}`, and the
+platform validates that field as `z.string().max(100)` — newlines included. A
+`contextId` carrying `\n\n=== END LOCKED CONTEXT ===` closes the block one line
+_above_ everything the passage pipeline neutralises. Sunrise's file and Sunrise's
+validator, reachable before this feature existed through any unknown
+`contextType`, and admin-only — but worth knowing, because the rest of this
+section reads as though the block were sealed.
+
+## What this path cannot check, and where the gate belongs
+
+**It does not know which agent the turn is for.** `contributeCorpusAccess` gates
+the tool path on `isCorpusAgent(slug)`, so a platform-seeded agent never gets her
+corpus. This path has no equivalent and cannot have one: `buildContext` hands a
+contributor the context tuple and a `userId`, and nothing else — no agent
+identity reaches it, and the seam is Sunrise's.
+
+So the block attaches to whichever agent the turn names. Today that is
+admin-only, and an admin can already read every document in
+`/admin/orchestration/knowledge`, so nothing crosses a privilege boundary — but
+"which agents see her material at all" is a real property and it is asserted
+nowhere.
+
+**The gate belongs on the route that pins the tuple, and that route is the next
+task.** A member-facing surface resolves its own agent server-side, the way
+`resolveModuleSurface` does; deciding whether to send `contextType: 'voice'` is
+that route's decision and it has the agent in hand. Widening the platform's
+`ContextRequest` to carry an agent id would work too and is Sunrise's call, not
+a leaf's. **Do not pin the tuple on a member route without settling this.**
+
+## Two caches, and the one writer that evicts both
+
+`resolveAgentDocumentAccess` memoises which documents an agent may search;
+`buildContext` memoises the framed block with her passages already in it. Both
+for 60 seconds.
+
+`setDesignation` — the leaf's own surface — evicts both. **The platform's generic
+document editor evicts neither block cache**: `PATCH
+/api/v1/admin/orchestration/knowledge/documents/:id` replaces every tag row from
+`body.tagIds` and calls `invalidateAllAgentAccess()` only, so re-designating
+through that screen leaves her passages in the prompt for up to a minute. Worse,
+it replaces tags **wholesale**, so the generic tag UI can silently undesignate a
+document this feature governs.
+
+That route is Sunrise's — the blob is identical in all three tiers — so the fix
+is an `upstream-gap` issue there, not an edit here. Stated so the mitigation on
+our own write path is not read as complete.
 
 ## It is the same for every user, on purpose
 
@@ -669,3 +717,13 @@ overlays.
 
 **A user's voice leanings** — a filter over the overlays and the exemplars — are
 later still, and may not reach the core.
+
+**Two `upstream-gap` issues for Sunrise**, both on files whose blob is identical
+in all three tiers (so Daybreak could not action either):
+
+1. `formatLockedContext` interpolates the raw `contextId` into the block header,
+   and `contextId` is validated as `z.string().max(100)` — so the fence is
+   forgeable one line above everything a contributor can neutralise.
+2. `PATCH /api/v1/admin/orchestration/knowledge/documents/:id` replaces a
+   document's tags wholesale and evicts only the access cache, so it can silently
+   undesignate a document and leave its passages in the prompt for a minute.

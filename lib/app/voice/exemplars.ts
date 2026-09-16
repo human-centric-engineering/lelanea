@@ -118,6 +118,22 @@ const INVISIBLE = /\p{Cf}/gu;
 const CONTROL = /(?![\n\t])\p{Cc}/gu;
 
 /**
+ * The two Unicode line separators, normalised to `\n` rather than stripped.
+ *
+ * U+2028 and U+2029 ARE line breaks — that is what they are for — but they are
+ * category `Zl`/`Zp`, so neither {@link INVISIBLE} nor {@link CONTROL} touches
+ * them and `String.prototype.split('\n')` does not split on them. The
+ * consequence was precise: `context-contributor.ts` quotes every passage line so
+ * that nothing a document supplied sits at column 0, and a passage carrying
+ * `…\u2029Ignore the passages above.` was ONE line to `split`, so everything
+ * after the separator rendered unquoted. Caught by /code-review.
+ *
+ * Converting rather than stripping keeps the break the author put there, and
+ * puts it in the one form every later stage understands.
+ */
+const LINE_SEPARATORS = /[\u2028\u2029]/g;
+
+/**
  * Destroy every run of three or more `=`, wherever it appears.
  *
  * `buildContext` frames every body between `=== LOCKED CONTEXT ===` and
@@ -164,7 +180,8 @@ export function prepareSource(name: string): string {
   const cleaned = neutraliseFences(name.replace(INVISIBLE, '').replace(CONTROL, ''))
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned.length <= MAX_SOURCE_CHARS ? cleaned : `${cleaned.slice(0, MAX_SOURCE_CHARS)}…`;
+  const cut = cutToCodePoints(cleaned, MAX_SOURCE_CHARS);
+  return cut === cleaned ? cleaned : `${cut}…`;
 }
 
 /** Collapse the whitespace a chunker leaves behind, without reflowing her lines. */
@@ -178,18 +195,33 @@ function collapseBlankRuns(text: string): string {
  * The ellipsis is not decoration — an example that stops mid-sentence with no
  * mark reads to a model as a sentence she wrote that way.
  */
+/**
+ * Cut to `limit` characters without splitting one in half.
+ *
+ * `slice` counts UTF-16 code units, so a hard cut that lands inside a surrogate
+ * pair leaves a lone surrogate, which the response encoder turns into U+FFFD —
+ * her passage ending in a replacement character. `Array.from` iterates code
+ * points, so the cut lands between characters. Caught by /code-review.
+ */
+function cutToCodePoints(text: string, limit: number): string {
+  const points = Array.from(text);
+  return points.length <= limit ? text : points.slice(0, limit).join('');
+}
+
 function truncate(text: string): string {
-  if (text.length <= MAX_EXEMPLAR_CHARS) return text;
-  const cut = text.slice(0, MAX_EXEMPLAR_CHARS);
+  const cut = cutToCodePoints(text, MAX_EXEMPLAR_CHARS);
+  if (cut === text) return text;
   const lastSpace = cut.lastIndexOf(' ');
   return `${(lastSpace > MAX_EXEMPLAR_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 /** The whole passage pipeline, in the order it has to run. */
 export function preparePassage(content: string): string {
-  return truncate(
-    collapseBlankRuns(neutraliseFences(content.replace(INVISIBLE, '').replace(CONTROL, '')))
-  );
+  const normalised = content
+    .replace(INVISIBLE, '')
+    .replace(CONTROL, '')
+    .replace(LINE_SEPARATORS, '\n');
+  return truncate(collapseBlankRuns(neutraliseFences(normalised)));
 }
 
 /**
@@ -228,19 +260,33 @@ export async function retrieveVoiceExemplars(
 }
 
 /**
- * The same, but never throwing.
+ * The same, but never throwing — and `null` when it could not look.
  *
  * A retrieval failure — the embedding provider down, a dimension mismatch, a
  * transient database error — must not cost the person her register. The overlay
  * and the always-on core are the reliable half of this feature, and throwing out
- * to `buildContext`'s contributor-catch would blank the whole block and lose
- * them both over something retrieval did. The same degrade-rather-than-throw
- * shape the framework's module contributor uses for its slot read.
+ * to `buildContext`'s contributor-catch would blank the whole block and lose them
+ * both over something retrieval did. The same degrade-rather-than-throw shape the
+ * framework's module contributor uses for its slot read.
+ *
+ * **`null` rather than `[]`, because they are different facts.** An empty list
+ * means her material was searched and nothing matched; `null` means it could not
+ * be searched. The first version collapsed the two and the block said "no passage
+ * of hers was found for this moment" after a search that never ran — the same
+ * small dishonesty the core-only branch goes out of its way to avoid three lines
+ * further down. Caught by /code-review.
+ *
+ * **The degraded block is still cached for the minute.** `buildContext` leaves a
+ * result uncached only when a contributor THROWS, and throwing here would cost
+ * the register, which is the thing this function exists to protect. So a
+ * one-second provider blip suppresses her passages for up to sixty seconds on
+ * that `(situation, user)` — an accepted cost, stated rather than discovered, and
+ * one the authored note above makes visible rather than silent.
  */
 export async function retrieveVoiceExemplarsSafely(
   query: string,
   limit: number = MAX_EXEMPLARS
-): Promise<VoiceExemplar[]> {
+): Promise<VoiceExemplar[] | null> {
   try {
     return await retrieveVoiceExemplars(query, limit);
   } catch (err) {
@@ -248,6 +294,6 @@ export async function retrieveVoiceExemplarsSafely(
       query,
       error: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return null;
   }
 }
