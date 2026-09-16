@@ -73,6 +73,15 @@ export const MAX_EXEMPLARS = 3;
  */
 export const MAX_EXEMPLAR_CHARS = 1_200;
 
+/**
+ * The most of a document NAME that is emitted in an origin label.
+ *
+ * Short on purpose. The label exists so a passage can be traced back to the
+ * piece of writing it came from, and a name longer than this is not doing that
+ * job — it is something somebody put in a filename.
+ */
+export const MAX_SOURCE_CHARS = 120;
+
 /** One passage of hers, ready to be labelled and emitted. */
 export interface VoiceExemplar {
   /** The document it came from, where the row has a name. */
@@ -82,19 +91,80 @@ export interface VoiceExemplar {
 }
 
 /**
- * Replace the `=` characters in any fence-shaped line.
+ * Characters that are invisible to a reader and to a tokeniser but not to a
+ * regex: zero-width spaces, the joiners, the byte-order mark.
+ *
+ * Stripped rather than neutralised. Her writing does not contain them, they
+ * cannot be seen in any review of a passage, and their only effect on a prompt
+ * is to make two strings that look identical fail to match.
+ *
+ * `\p{Cf}` rather than a hand-written list: it is the Unicode category these
+ * belong to, so it covers the soft hyphen and the directional overrides too
+ * without anybody having to remember them.
+ */
+const INVISIBLE = /\p{Cf}/gu;
+
+/**
+ * Control characters, except the two that carry meaning in her writing.
+ *
+ * `\n` is load-bearing — the single-line cadence IS the voice, so a passage's
+ * line breaks are content — and `\t` is harmless. Everything else in the
+ * category is stripped.
+ *
+ * Written as a Unicode property rather than as a character-class of `\u00xx`
+ * escapes: the escape form trips ESLint's `no-control-regex`, and enumerating a
+ * range by hand is the shape that misses one.
+ */
+const CONTROL = /(?![\n\t])\p{Cc}/gu;
+
+/**
+ * Destroy every run of three or more `=`, wherever it appears.
  *
  * `buildContext` frames every body between `=== LOCKED CONTEXT ===` and
  * `=== END LOCKED CONTEXT ===`. A passage carrying a line of its own that looks
  * like that would close the block early, and everything after it — including the
- * rest of her passage — would read to the model as ordinary prompt rather than
- * as labelled, quarantined material.
+ * rest of her passage — would read to the model as ordinary prompt rather than as
+ * labelled, quarantined material.
  *
- * The words are kept and only the fence is destroyed, so a passage that happens
- * to discuss a heading rule still reads as itself.
+ * **Not anchored to the start of a line, and that is the fix for a real
+ * bypass.** The first version matched `^[ \t]*={3,}` — space and tab only — so a
+ * single U+00A0, U+200B, `\f` or `\v` in front of the fence defeated it
+ * completely and the line survived byte for byte. Every one of those prefixes is
+ * invisible once tokenised, so the model read an exact fence. Anchoring on the
+ * punctuation instead of on its position removes the whole class: there is no
+ * prefix that can save a run of `=`. Caught by /security-review.
+ *
+ * The words are kept and only the punctuation is destroyed, so a passage that
+ * happens to discuss a heading rule still reads as itself. That is not the only
+ * thing standing between a forged fence and the model, though, and it should not
+ * be: `context-contributor.ts` quotes every passage line, so nothing from a
+ * document can sit at column 0 where a real fence sits.
  */
 function neutraliseFences(text: string): string {
-  return text.replace(/^[ \t]*={3,}.*$/gm, (line) => line.replaceAll('=', '-'));
+  return text.replace(/={3,}/g, (run) => '-'.repeat(run.length));
+}
+
+/**
+ * A document's name, made safe to put inside a one-line origin label.
+ *
+ * **This is the string the first version forgot.** Passages were neutralised and
+ * the document name was interpolated raw — and the name is the more exposed of
+ * the two: `document-manager.ts` derives it from an uploaded file name, and the
+ * `fetch-url` ingest path takes it from `decodeURIComponent()` of a URL's last
+ * segment, so `%0A` in a URL is a real newline in the column. A name of
+ * `a%0A%0A===%20END%20LOCKED%20CONTEXT%20===%0A%0A…` put a forged fence in the
+ * label itself, outside everything guarding the passage beneath it. Caught by
+ * /security-review.
+ *
+ * A label is one line by construction, so that is enforced here rather than
+ * hoped for: every run of whitespace collapses to a single space, invisibles and
+ * controls are stripped, fence runs are destroyed, and the result is capped.
+ */
+export function prepareSource(name: string): string {
+  const cleaned = neutraliseFences(name.replace(INVISIBLE, '').replace(CONTROL, ''))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length <= MAX_SOURCE_CHARS ? cleaned : `${cleaned.slice(0, MAX_SOURCE_CHARS)}…`;
 }
 
 /** Collapse the whitespace a chunker leaves behind, without reflowing her lines. */
@@ -117,7 +187,9 @@ function truncate(text: string): string {
 
 /** The whole passage pipeline, in the order it has to run. */
 export function preparePassage(content: string): string {
-  return truncate(collapseBlankRuns(neutraliseFences(content)));
+  return truncate(
+    collapseBlankRuns(neutraliseFences(content.replace(INVISIBLE, '').replace(CONTROL, '')))
+  );
 }
 
 /**
@@ -145,10 +217,13 @@ export async function retrieveVoiceExemplars(
   });
 
   return results
-    .map((result) => ({
-      source: result.documentName?.trim() ? result.documentName.trim() : null,
-      passage: preparePassage(result.chunk.content),
-    }))
+    .map((result) => {
+      const source = prepareSource(result.documentName ?? '');
+      return {
+        source: source === '' ? null : source,
+        passage: preparePassage(result.chunk.content),
+      };
+    })
     .filter((exemplar) => exemplar.passage.length > 0);
 }
 

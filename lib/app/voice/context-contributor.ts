@@ -83,17 +83,38 @@ function block(heading: string, lines: readonly string[]): string {
 }
 
 /**
- * One passage, under its own origin label.
+ * The mark every line of a passage carries.
+ *
+ * Quoting is a structural defence, not decoration. `buildContext` frames the
+ * block with a fence at column 0, so a line that could forge that fence has to
+ * BE at column 0 — and with this prefix nothing from a document ever is. It
+ * costs one character per line and it does not depend on recognising a pattern,
+ * which is what the pattern-matching half of this defence kept failing to do.
+ *
+ * It also says the right thing to a model on every single line: this is quoted
+ * material, not something being said to you. The authored framing says so once;
+ * this repeats it everywhere, which is the same reasoning as labelling each
+ * passage rather than the list.
+ */
+const QUOTE = '> ';
+
+/**
+ * One passage, under its own origin label, with every line of it quoted.
  *
  * The document name is included where the row has one, because "which piece of
  * her writing" is the difference between an example and an anonymous paragraph —
  * and it is what lets her, reading a transcript later, find the passage that
  * produced a reply. Its absence degrades to the label alone rather than to an
- * invented title.
+ * invented title. `prepareSource()` has already made it a single safe line; the
+ * label is emitted unquoted because it is ours rather than the document's.
  */
 function labelled(exemplar: VoiceExemplar, originLabel: string): string {
   const label = exemplar.source === null ? originLabel : `${originLabel} · ${exemplar.source}`;
-  return [`[${label}]`, exemplar.passage].join('\n');
+  const quoted = exemplar.passage
+    .split('\n')
+    .map((line) => `${QUOTE}${line}`)
+    .join('\n');
+  return [`[${label}]`, quoted].join('\n');
 }
 
 /**
