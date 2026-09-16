@@ -80,7 +80,6 @@
  * @see prisma/seeds/app-lelanea/002-knowledge-designation.ts — where the tags come from
  */
 
-/** What a document is for. */
 /**
  * The slug prefix marking an agent as one of Lelañea's own.
  *
@@ -102,6 +101,7 @@
  */
 export const CORPUS_AGENT_SLUG_PREFIX = 'lelanea-';
 
+/** What a document is for. */
 export const DOCUMENT_PURPOSES = ['knowledge', 'voice', 'both'] as const;
 export type DocumentPurpose = (typeof DOCUMENT_PURPOSES)[number];
 

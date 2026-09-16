@@ -227,7 +227,9 @@ export interface VoiceFingerprintCore {
   provenance: DeepReadonly<VoiceFingerprintFile['fingerprint']['provenance']>;
   identity: VoiceCoreSection;
   cadence: VoiceCoreSection & {
+    readonly reachesForLabel: string;
     readonly reachesFor: readonly string[];
+    readonly avoidsLabel: string;
     readonly avoids: readonly string[];
   };
   grounding: VoiceCoreSection;
@@ -588,7 +590,9 @@ export function getVoiceFingerprint(): VoiceFingerprintCore {
     cadence: {
       heading: file.cadence.heading,
       lines: file.cadence.lines,
+      reachesForLabel: file.cadence.reachesForLabel,
       reachesFor: file.cadence.reachesFor,
+      avoidsLabel: file.cadence.avoidsLabel,
       avoids: file.cadence.avoids,
     },
     grounding: { heading: file.grounding.heading, lines: file.grounding.lines },

@@ -56,7 +56,14 @@ function validFingerprintFile() {
       notes: [],
     },
     identity: { heading: 'Who you are', lines: ['a'] },
-    cadence: { heading: 'How you sound', lines: ['a'], reachesFor: ['x'], avoids: ['y'] },
+    cadence: {
+      heading: 'How you sound',
+      lines: ['a'],
+      reachesForLabel: 'Words you reach for',
+      reachesFor: ['x'],
+      avoidsLabel: 'Words you steer away from',
+      avoids: ['y'],
+    },
     grounding: { heading: 'How you ground', lines: ['a'] },
     boundaries: {
       heading: 'What you decline',
@@ -92,6 +99,8 @@ describe('the authored core', () => {
       core.grounding.heading,
       core.boundaries.heading,
       core.boundaries.howYouDeclineHeading,
+      core.cadence.reachesForLabel,
+      core.cadence.avoidsLabel,
     ]) {
       expect(heading.length).toBeGreaterThan(0);
     }
@@ -141,6 +150,16 @@ describe('drift fails loudly', () => {
 
   it('rejects an unknown key rather than dropping it', () => {
     const file = { ...validFingerprintFile(), overlays: [] };
+
+    expect(() => voiceFingerprintFileSchema.parse(file)).toThrow();
+  });
+
+  it('rejects a beat that is only whitespace', () => {
+    // The projection filters beats on `line.trim().length > 0`, so a bare space
+    // used to parse clean and then silently vanish from the prompt. The schema
+    // is the half that should be strict. Caught by /code-review.
+    const file = validFingerprintFile();
+    file.identity.lines = [' '];
 
     expect(() => voiceFingerprintFileSchema.parse(file)).toThrow();
   });

@@ -76,6 +76,14 @@ validation error, it is a subtly worse prompt nobody can see.
 half is a rule, not a manner: _answer from her material; where you have nothing,
 say so._
 
+**Every heading and label is authored too** — `boundaries.howYouDeclineHeading`,
+`cadence.reachesForLabel` and `cadence.avoidsLabel` included. Each is copy the
+model reads, so a string literal in `fingerprint.ts` would be her words arriving
+through a second authoring path — the exact thing the content seam and its
+ESLint rule exist to prevent. It also means a core authored in another `locale`
+translates whole, rather than emitting two English labels into an otherwise
+translated section.
+
 **Every beat gets its own line.** The single-line cadence runs through her
 written work and is authored, not an artifact of transcription. A block whose
 beats are all empty emits **nothing at all**, not a bare heading: a heading with
@@ -110,9 +118,15 @@ attribute an output to a version of her voice that never reached it.
   names and descriptions _are_ operator-owned — a tag name is a label, this text
   is the artefact.)
 - **`AiAgent` `lelanea-guide`** — the first agent that speaks as her. Created
-  once; only `profileId` and `knowledgeAccessMode` are reconciled afterwards.
-  Everything else — name, description, temperature, activation — is left to
-  whoever edits it.
+  once, with **three** columns reconciled afterwards, for two different reasons.
+  `profileId` and `knowledgeAccessMode` because both are load-bearing invariants
+  rather than preferences; `systemInstructions` because
+  `SYSTEM_AGENT_PROTECTED_FIELDS` covers it — so no operator can set it, and a
+  write-once field would be unreachable by _anyone_ after the first create.
+  Everything else — name, description, temperature — is left to whoever edits
+  it. `isActive` is on that protected list too, so a system agent cannot be
+  deactivated through the admin at all; activation is not among the things an
+  operator owns here.
 
 **The agent's own persona / brand voice / guardrails columns are left NULL**, so
 the profile is what speaks. Sunrise's per-field resolution defaults to
@@ -220,7 +234,10 @@ no provenance column.
 ### Whose agents
 
 An agent participates when its slug starts with `lelanea-`
-(`CORPUS_AGENT_SLUG_PREFIX`). A contributor can only **widen** a restricted
+(`CORPUS_AGENT_SLUG_PREFIX`, defined in `designation.ts` and re-exported here —
+it is vocabulary, and it has to live in a module that imports nothing, because
+`corpus-access.ts` imports `@/lib/db/client` and that builds a `pg.Pool` at
+import time). A contributor can only **widen** a restricted
 agent, so firing for every restricted agent on the install would hand her corpus
 to the platform's own seeded agents — the pattern advisor, the quiz master, the
 evaluation judges — because they happen to be restricted.
@@ -343,9 +360,11 @@ holding both in mind before editing either.
 `prisma/seeds/app-lelanea/003-voice-fingerprint.ts` treats the profile's three
 text columns as a **pure code projection** and reconciles them on every run: they
 are the artefact itself, and nobody is meant to hand-edit her voice in the admin.
-The agent beside it is **split** — `profileId` and `knowledgeAccessMode` are
-code-owned invariants and are reconciled; its name, description, temperature and
-activation are written once and then belong to whoever edits them.
+The agent beside it is **split** — `profileId`, `knowledgeAccessMode` and
+`systemInstructions` are reconciled; its name, description and temperature are
+written once and then belong to whoever edits them. (`isActive` belongs to
+nobody here: it is protected, so a system agent cannot be deactivated through
+the admin at all.)
 
 It re-runs when either `content/lelanea_voice_fingerprint.json` or
 `lib/app/voice/fingerprint.ts` changes (`hashInputs`), so a new line in her
@@ -353,8 +372,12 @@ identity or a change to which block lands in which column reaches the database
 rather than leaving it a version behind. On a database already carrying the
 current version it issues **no write at all**.
 
-It also refuses to write a composed section that came back empty — by
-**throwing**, which is the part that matters. `prisma/runner.ts` upserts the
+It also refuses to write when an authored block came back empty — by
+**throwing**, which is the part that matters. It checks the four authored
+**blocks** as well as the three composed **columns**, because the mapping is 4→3
+and the coarse check cannot see a block go missing: `grounding` and `boundaries`
+share `guardrails`, so losing her grounding rule alone still leaves that column
+populated. `prisma/runner.ts` upserts the
 `SeedHistory` row the moment `run()` resolves and logs `✓ applied`, so a quiet
 `return` would bank the aborted run as a success and every later `db:seed` would
 skip the unit, leaving a fresh install with no profile and no agent until

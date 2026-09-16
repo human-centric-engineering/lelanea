@@ -1,14 +1,22 @@
 /**
  * Zod schemas for Lelañea's authored content.
  *
- * The six files under `content/` are Lelañea Fulton's own words, transcribed and
- * corrected only for typography. They are **not** a draft for the build to
- * improve on, so nothing here coerces, defaults or repairs — every schema is a
- * `strictObject`, and an unknown key fails validation rather than being dropped.
- * That strictness is the point: it turns a silent edit to an authored file into
- * a red CI run (`tests/unit/lib/app/content/schemas.test.ts` parses all six real
- * files), which is the only cheap way to notice that content drifted away from
- * what the renderers and the API contract expect.
+ * Six of the seven files under `content/` are Lelañea Fulton's own words,
+ * transcribed and corrected only for typography. They are **not** a draft for
+ * the build to improve on, so nothing here coerces, defaults or repairs — every
+ * schema is a `strictObject`, and an unknown key fails validation rather than
+ * being dropped. That strictness is the point: it turns a silent edit to an
+ * authored file into a red CI run, which is the only cheap way to notice that
+ * content drifted away from what the renderers and the API contract expect.
+ *
+ * The seventh — the voice fingerprint's always-on core, at the bottom of this
+ * file — is the exception that proves the rule: it WAS drafted, from the other
+ * six, and carries a required `provenance` block saying so. Its schema is no
+ * looser for it.
+ *
+ * Every real file is parsed by a test: `schemas.test.ts` for the three served
+ * collections, `values.test.ts` for the Release-2 files, and
+ * `voice-fingerprint.test.ts` for the core.
  *
  * Strict on structure, permissive on prose. Free-text values (`surface`,
  * `textFormat`, headings, notes) are `z.string()`, because new authored copy
@@ -429,8 +437,16 @@ export const discoveryQuestionsFileSchema = discoveryQuestionsFileBase.superRefi
 // parallel authoring path for her voice is exactly what that rule exists to
 // prevent.
 
-/** One beat of the core. Its own line in the composed prompt, never joined. */
-const voiceLinesSchema = z.array(z.string().min(1)).min(1);
+/**
+ * One beat of the core. Its own line in the composed prompt, never joined.
+ *
+ * `.trim()` before `.min(1)` because the projection filters beats on
+ * `line.trim().length > 0`: without it a line of `" "` parsed clean and then
+ * silently vanished from the prompt, so the schema and the projection disagreed
+ * about what counts as a beat. The schema is the half that should be strict.
+ * Caught by /code-review.
+ */
+const voiceLinesSchema = z.array(z.string().trim().min(1)).min(1);
 
 /**
  * `major.minor`, optionally `.patch`.
@@ -468,9 +484,19 @@ export const voiceFingerprintFileSchema = z.strictObject({
   cadence: z.strictObject({
     heading: z.string().min(1),
     lines: voiceLinesSchema,
-    /** The words she reaches for, and — just as tellingly — the ones she avoids. */
-    reachesFor: z.array(z.string().min(1)).min(1),
-    avoids: z.array(z.string().min(1)).min(1),
+    /**
+     * The words she reaches for, and — just as tellingly — the ones she avoids.
+     *
+     * Each list carries its own label for the same reason every block carries
+     * its own heading: the label is copy the model reads. As TypeScript string
+     * literals they were a second authoring path for her words, and a core
+     * authored in another `locale` would have emitted two English labels into an
+     * otherwise translated section with no way to change them.
+     */
+    reachesForLabel: z.string().min(1),
+    reachesFor: z.array(z.string().trim().min(1)).min(1),
+    avoidsLabel: z.string().min(1),
+    avoids: z.array(z.string().trim().min(1)).min(1),
   }),
   grounding: z.strictObject({
     heading: z.string().min(1),

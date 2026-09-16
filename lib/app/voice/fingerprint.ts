@@ -151,6 +151,33 @@ function inlineList(label: string, entries: readonly string[]): string {
 }
 
 /**
+ * The authored blocks that composed to nothing.
+ *
+ * Block-level, not column-level, and that distinction is the whole point.
+ * `grounding` and `boundaries` share the `guardrails` column, so a core whose
+ * grounding rule has vanished still produces a NON-EMPTY `guardrails` string —
+ * and a guard that only looked at the three composed columns would wave it
+ * through and overwrite a correct profile with one that had lost "answer from
+ * her material; where you have nothing, say so" entirely. Caught by
+ * /code-review, on the guard added for precisely this class of failure.
+ *
+ * Returns block names rather than a boolean so a caller can say WHICH one went
+ * missing; an operator reading "a section was empty" has nowhere to start.
+ */
+export function missingCoreBlocks(core: VoiceFingerprintCore = getVoiceFingerprint()): string[] {
+  const blocks: [string, readonly string[]][] = [
+    ['identity', core.identity.lines],
+    ['cadence', core.cadence.lines],
+    ['grounding', core.grounding.lines],
+    ['boundaries', core.boundaries.lines],
+    ['boundaries.howYouDecline', core.boundaries.howYouDecline],
+  ];
+  return blocks
+    .filter(([, lines]) => lines.every((line) => line.trim().length === 0))
+    .map(([name]) => name);
+}
+
+/**
  * Project the authored core onto the three columns.
  *
  * Takes the core as an argument — defaulting to the authored one — so a caller
@@ -178,8 +205,8 @@ export function composeFingerprintProfileSections(
 
   const brandVoiceInstructions = [
     block(core.cadence.heading, core.cadence.lines),
-    inlineList('Words you reach for', core.cadence.reachesFor),
-    inlineList('Words you steer away from', core.cadence.avoids),
+    inlineList(core.cadence.reachesForLabel, core.cadence.reachesFor),
+    inlineList(core.cadence.avoidsLabel, core.cadence.avoids),
   ]
     .filter(Boolean)
     .join('\n\n');

@@ -35,8 +35,12 @@
  * comparison; a re-run on a database already holding the current version issues
  * no write at all, so `updatedAt` never moves.
  *
- * **Safe on empty.** The composed sections are checked before anything is
- * written, and a run that would blank a populated section aborts instead. Today
+ * **Safe on empty.** Both the four authored BLOCKS and the three composed
+ * COLUMNS are checked before anything is written, and a run that would blank a
+ * populated section aborts instead. Two levels because the mapping is 4→3:
+ * `grounding` and `boundaries` share `guardrails`, so losing grounding alone
+ * leaves that column populated and a column-only check would wave it through.
+ * Today
  * the strict Zod schema makes an empty source hard to produce — but the loader's
  * own docblock says the file moves behind a database the first time copy has to
  * change without a deploy, and on that day this guard is the only thing standing
@@ -93,6 +97,7 @@ import {
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,
   VOICE_PROFILE_SLUG,
   composeFingerprintProfileSections,
+  missingCoreBlocks,
   type FingerprintProfileSections,
 } from '@/lib/app/voice/fingerprint';
 
@@ -117,19 +122,33 @@ export function sectionsArePopulated(sections: FingerprintProfileSections): bool
 
 const unit: SeedUnit = {
   name: 'app-lelanea/003-voice-fingerprint',
-  // The authored core and the projection that shapes it. Editing either — a new
-  // line in her identity, a change to which block lands in which column — must
-  // re-run this unit, or the database keeps serving the previous version of her
-  // voice while the tree says otherwise.
+  // Everything between the authored words and the row. The loader is on the list
+  // (as it is on `001-journey-map.ts`'s) because `getVoiceFingerprint()` decides
+  // which authored fields reach the projection at all — `collection.title`
+  // becomes the profile's `name` — so a change there moves the row while leaving
+  // the seed's own source untouched. Omit it and `db:seed` skips the unit on an
+  // unchanged hash, which is the exact drift this list exists to prevent.
+  // Caught by /code-review.
   hashInputs: [
     '../../../content/lelanea_voice_fingerprint.json',
+    '../../../lib/app/content/index.ts',
+    '../../../lib/app/content/schemas.ts',
     '../../../lib/app/voice/fingerprint.ts',
   ],
   async run({ prisma, logger }) {
     const core = getVoiceFingerprint();
     const sections = composeFingerprintProfileSections(core);
 
-    if (!sectionsArePopulated(sections)) {
+    // TWO checks, at two levels, because the mapping is 4→3 and the coarser one
+    // cannot see a block go missing. `grounding` and `boundaries` share the
+    // `guardrails` column: lose grounding alone and `guardrails` is still a
+    // populated string, so the column check below passes while the profile has
+    // quietly stopped carrying "answer from her material; where you have
+    // nothing, say so". The block check catches that; the column check still
+    // earns its place, since a mapping change could drop a column the blocks
+    // know nothing about.
+    const missing = missingCoreBlocks(core);
+    if (missing.length > 0 || !sectionsArePopulated(sections)) {
       // THROW, not return. A partial projection would replace a populated
       // section with an empty one, and an agent with no guardrails is a worse
       // state than an agent a version behind — so the write is refused either
@@ -140,11 +159,14 @@ const unit: SeedUnit = {
       // install with no profile and no agent, permanently, until somebody
       // deleted the history row by hand. An abort designed to be loud would
       // have been the quietest possible failure. Caught by /code-review.
-      logger.error('voice fingerprint: a composed section was empty — refusing to write', {
+      logger.error('voice fingerprint: an authored block was empty — refusing to write', {
         version: core.collection.version,
+        missingBlocks: missing,
       });
       throw new Error(
-        `Voice fingerprint v${core.collection.version} composed an empty section — refusing to write a profile with no voice in it.`
+        `Voice fingerprint v${core.collection.version} composed an empty section` +
+          (missing.length > 0 ? ` (blocks: ${missing.join(', ')})` : '') +
+          ' — refusing to write a profile with no voice in it.'
       );
     }
 

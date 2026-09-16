@@ -59,6 +59,7 @@ import {
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,
   composeFingerprintProfileSections,
   fingerprintVersionMarker,
+  missingCoreBlocks,
   readFingerprintVersion,
 } from '@/lib/app/voice/fingerprint';
 import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/corpus-access';
@@ -148,8 +149,10 @@ describe('the composed prompt, with nothing retrieved', () => {
     const prompt = composedPrompt(voiceProfile());
 
     for (const line of core.cadence.lines) expect(prompt).toContain(line);
-    expect(prompt).toContain(core.cadence.reachesFor.join(', '));
-    expect(prompt).toContain(core.cadence.avoids.join(', '));
+    expect(prompt).toContain(
+      `${core.cadence.reachesForLabel}: ${core.cadence.reachesFor.join(', ')}`
+    );
+    expect(prompt).toContain(`${core.cadence.avoidsLabel}: ${core.cadence.avoids.join(', ')}`);
   });
 
   it('gives every beat its own line rather than flattening them into prose', () => {
@@ -224,6 +227,33 @@ describe('attributing an output to a version', () => {
     const hollow = { ...core, identity: { ...core.identity, lines: [] } };
 
     expect(composeFingerprintProfileSections(hollow).persona).toBe('');
+  });
+});
+
+describe('a block that has gone missing is named, not merely detected', () => {
+  it('sees nothing missing in the authored core', () => {
+    expect(missingCoreBlocks(core)).toEqual([]);
+  });
+
+  it('names the block that vanished, even when its COLUMN is still populated', () => {
+    // The finding this function exists for. `grounding` and `boundaries` share
+    // the `guardrails` column, so losing grounding alone leaves that column a
+    // non-empty string — a column-level guard waves it through and the seed
+    // overwrites a correct profile with one that has lost "answer from her
+    // material; where you have nothing, say so" entirely.
+    const hollow = { ...core, grounding: { ...core.grounding, lines: [] } };
+    const sections = composeFingerprintProfileSections(hollow);
+
+    // The column check cannot see it — that is the whole point.
+    expect(sections.guardrails.length).toBeGreaterThan(0);
+    // The block check can, and says which.
+    expect(missingCoreBlocks(hollow)).toEqual(['grounding']);
+  });
+
+  it('treats a block of whitespace as missing, matching what the prompt shows', () => {
+    const hollow = { ...core, cadence: { ...core.cadence, lines: ['   ', ''] } };
+
+    expect(missingCoreBlocks(hollow)).toEqual(['cadence']);
   });
 });
 

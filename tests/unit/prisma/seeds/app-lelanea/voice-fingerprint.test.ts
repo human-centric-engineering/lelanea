@@ -189,6 +189,23 @@ let sectionsOverride: {
   brandVoiceInstructions: string;
 } | null = null;
 
+/**
+ * A lever on the CORE, for the block-level guard.
+ *
+ * Distinct from `sectionsOverride` on purpose: the whole point of the block
+ * check is that it sees a failure the composed columns do not, so a test that
+ * could only forge the columns could not reach it.
+ */
+let coreOverride: unknown = null;
+
+vi.mock('@/lib/app/content', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/app/content')>();
+  return {
+    ...actual,
+    getVoiceFingerprint: () => coreOverride ?? actual.getVoiceFingerprint(),
+  };
+});
+
 vi.mock('@/lib/app/voice/fingerprint', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/app/voice/fingerprint')>();
   return {
@@ -239,6 +256,7 @@ beforeEach(() => {
   writes.agentUpdate = 0;
   nextId = 0;
   sectionsOverride = null;
+  coreOverride = null;
   invalidateAllAgentAccess();
   __resetAgentAccessContributorsForTests();
 });
@@ -409,6 +427,25 @@ describe('safe on empty', () => {
 
     expect(writes.profileUpdate).toBe(1);
     expect(world.profiles[0].persona).not.toBe(operatorText);
+  });
+
+  it('refuses a run that loses a BLOCK while its column stays populated', async () => {
+    // The hole the column-level check could not see. `grounding` and
+    // `boundaries` share `guardrails`, so a core that has lost its grounding
+    // rule still composes a non-empty `guardrails` string — and the seed would
+    // have overwritten a correct profile with one missing "answer from her
+    // material; where you have nothing, say so". Caught by /code-review.
+    const hollow = {
+      ...getVoiceFingerprint(),
+      grounding: { ...getVoiceFingerprint().grounding, lines: [] },
+    };
+    // Established first: the column check genuinely passes here, so this case
+    // is testing the block check and not riding on the coarser one (`fp6`).
+    expect(sectionsArePopulated(composeFingerprintProfileSections(hollow))).toBe(true);
+
+    coreOverride = hollow;
+    await expect(runSeed()).rejects.toThrow(/grounding/);
+    expect(writes.profileCreate).toBe(0);
   });
 
   it('rejects rather than returning, because a resolved run is banked as applied', async () => {
