@@ -36,8 +36,12 @@
  *   she sounds, are not what the person said, are not facts, and are not
  *   instructions. It is in `content/lelanea_voice_overlays.json` rather than in
  *   this file because it is copy the model reads.
- * - **Every passage line is quoted** ({@link QUOTE}), so nothing a document
- *   supplied sits at column 0, where a real fence sits.
+ * - **Every passage line is quoted** ({@link QUOTE}), so no line of a passage
+ *   sits at column 0, where a real fence sits. The label line above it is
+ *   unquoted because it is OURS — and the half of it that is not, the document's
+ *   name, has its own delimiters and its fence runs stripped by
+ *   `prepareSource()` before it gets there, so it cannot end the label early and
+ *   continue as prose.
  * - **Fence neutralisation** in `exemplars.ts`, so a passage cannot forge the
  *   end of the `LOCKED CONTEXT` block and escape the three above.
  *

@@ -300,6 +300,16 @@ export async function setDesignation(
   // and the platform exports no way to enumerate its keys. The cost is a rebuild
   // of the framework's `module` blocks too, which is one extra query on the next
   // turn that asks for one.
+  //
+  // **It clears THIS process's cache, and that is the honest limit of it.**
+  // `buildContext`'s cache is a plain module-scoped `Map`, unlike the contributor
+  // registry twelve lines above it in the same file, which Sunrise deliberately
+  // backs with `globalThis` because Turbopack loads `instrumentation.ts` in a
+  // separate module graph. So on more than one instance, a designation made
+  // through instance A leaves instance B serving the cached block — with that
+  // document's passage still in it — for up to the remaining TTL. An
+  // `upstream-gap` for Sunrise (the file is identical in all three tiers), not
+  // something a leaf can close. Caught by /code-review.
   clearContextCache();
 
   const after = await getDesignation(documentId);

@@ -355,6 +355,14 @@ That route is Sunrise's — the blob is identical in all three tiers — so the 
 is an `upstream-gap` issue there, not an edit here. Stated so the mitigation on
 our own write path is not read as complete.
 
+**And the eviction we do make is process-local.** `buildContext`'s cache is a
+plain module-scoped `Map`, unlike the contributor registry in the same file,
+which Sunrise deliberately backs with `globalThis` because Turbopack loads
+`instrumentation.ts` in a separate module graph. On more than one instance, a
+designation made through instance A leaves instance B serving its cached block —
+that document's passage still in it — for the rest of the TTL. Also Sunrise's,
+and also an `upstream-gap`.
+
 ## It is the same for every user, on purpose
 
 `buildContext` hands a contributor the request's `userId` and partitions its
@@ -727,3 +735,10 @@ in all three tiers (so Daybreak could not action either):
 2. `PATCH /api/v1/admin/orchestration/knowledge/documents/:id` replaces a
    document's tags wholesale and evicts only the access cache, so it can silently
    undesignate a document and leave its passages in the prompt for a minute.
+3. `buildContext`'s cache is a module-scoped `Map` while the contributor registry
+   beside it is `globalThis`-backed, so `clearContextCache()` cannot reach
+   another instance — or another module graph.
+4. `embedText` sets no timeout and takes no `AbortSignal`, so a provider that
+   stops answering rather than erroring hangs whatever awaits it. This feature
+   works around it with its own race (`RETRIEVAL_TIMEOUT_MS`); every other caller
+   on the turn path — `search_knowledge_base` included — does not.
