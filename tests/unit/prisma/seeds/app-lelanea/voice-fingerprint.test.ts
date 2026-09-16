@@ -52,6 +52,9 @@
  * @see lib/orchestration/knowledge/resolveAgentDocumentAccess.ts — the short-circuit
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 interface FakeProfile {
@@ -462,6 +465,50 @@ describe('safe on empty', () => {
     expect(writes.profileCreate).toBe(0);
     expect(writes.agentCreate).toBe(0);
     expect(vi.mocked(logger.error)).toHaveBeenCalled();
+  });
+});
+
+describe('what a change to the tree has to re-run', () => {
+  const SEED_PATH = join(
+    process.cwd(),
+    'prisma',
+    'seeds',
+    'app-lelanea',
+    '003-voice-fingerprint.ts'
+  );
+
+  it('names every input between the authored words and the row', () => {
+    // Pinned, as both sibling seeds pin theirs. Without `hashInputs` the unit's
+    // content hash covers only its own source, so `db:seed` skips it and the
+    // database keeps the previous row with nothing to say so.
+    //
+    // `designation.ts` is the one that has already been missed. `VOICE_AGENT_SLUG`
+    // derives from `CORPUS_AGENT_SLUG_PREFIX`, which lives there — change the
+    // prefix and unit 002 re-runs while this one would not, leaving an agent
+    // whose slug no longer matches `isCorpusAgent()`. The corpus contributor
+    // then stops widening her restricted agent, and her designated material
+    // drops out of its document set silently.
+    expect(unit.hashInputs).toEqual([
+      '../../../content/lelanea_voice_fingerprint.json',
+      '../../../lib/app/content/index.ts',
+      '../../../lib/app/content/schemas.ts',
+      '../../../lib/app/voice/designation.ts',
+      '../../../lib/app/voice/fingerprint.ts',
+    ]);
+  });
+
+  it('names paths that resolve', () => {
+    // RESOLVED, not just compared to a string. `prisma/runner.ts` throws on a
+    // hashInput it cannot read — at seed time, which is the wrong moment to find
+    // out a relative path is one `../` short.
+    expect(unit.hashInputs?.length).toBeGreaterThan(0);
+    for (const relative of unit.hashInputs ?? []) {
+      expect(existsSync(resolve(dirname(SEED_PATH), relative)), relative).toBe(true);
+    }
+  });
+
+  it('is filed where the runner will discover it', () => {
+    expect(unit.name).toBe('app-lelanea/003-voice-fingerprint');
   });
 });
 

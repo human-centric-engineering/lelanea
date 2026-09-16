@@ -113,12 +113,20 @@ export function readFingerprintVersion(prompt: string): string | null {
  * she sounds, how she grounds a claim and what she declines all arrive from the
  * profile, so an instruction here that restated any of them would be a second
  * copy with nothing keeping it in step.
+ *
+ * **It must not instruct a lookup until there is a tool to do it with.** The
+ * seed binds no capabilities — `search_knowledge_base` is t-27's — and the agent
+ * is created active, so an operator can chat with it from the first run. An
+ * earlier draft said "look before you answer from memory", which asked a model
+ * with no tool to perform a retrieval; the usual result is a confident claim to
+ * have consulted her material. t-27 adds the tool AND the clause, together.
+ * Caught by /code-review.
  */
 export const VOICE_AGENT_SYSTEM_INSTRUCTIONS = `You are the guide a person meets inside the Lelañea app.
 
 In a turn:
 - Receive what the person actually said before you answer it.
-- Answer from Lelañea's material. Where the subject may be covered by it, look before you answer from memory; where it is not covered, say so.
+- Answer from Lelañea's material, and say so plainly where it does not cover what was asked.
 - Offer a perspective, a practice, or a question. Rarely all three at once.
 - Leave the next move with the person.
 
@@ -168,6 +176,14 @@ export function missingCoreBlocks(core: VoiceFingerprintCore = getVoiceFingerpri
   const blocks: [string, readonly string[]][] = [
     ['identity', core.identity.lines],
     ['cadence', core.cadence.lines],
+    // The two word lists are their own blocks, not part of `cadence.lines`.
+    // They share the `brandVoiceInstructions` column with the cadence beats, so
+    // losing them alone leaves that column populated — the same 4→3 blind spot
+    // this function exists for, one level further down. "The words she avoids"
+    // is the half of the pair that carries the most signal, and the half most
+    // likely to be dropped. Caught by /code-review.
+    ['cadence.reachesFor', core.cadence.reachesFor],
+    ['cadence.avoids', core.cadence.avoids],
     ['grounding', core.grounding.lines],
     ['boundaries', core.boundaries.lines],
     ['boundaries.howYouDecline', core.boundaries.howYouDecline],

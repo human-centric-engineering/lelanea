@@ -250,6 +250,18 @@ describe('a block that has gone missing is named, not merely detected', () => {
     expect(missingCoreBlocks(hollow)).toEqual(['grounding']);
   });
 
+  it('sees the word lists, which share a column with the cadence beats', () => {
+    // Same 4→3 blind spot one level down: `cadence.lines` still composes, so
+    // `brandVoiceInstructions` stays non-empty while "the words she avoids" —
+    // the half of the pair that carries the most signal — has gone.
+    const hollow = { ...core, cadence: { ...core.cadence, avoids: [] } };
+
+    expect(composeFingerprintProfileSections(hollow).brandVoiceInstructions.length).toBeGreaterThan(
+      0
+    );
+    expect(missingCoreBlocks(hollow)).toEqual(['cadence.avoids']);
+  });
+
   it('treats a block of whitespace as missing, matching what the prompt shows', () => {
     const hollow = { ...core, cadence: { ...core.cadence, lines: ['   ', ''] } };
 

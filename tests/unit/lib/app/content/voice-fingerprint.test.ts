@@ -171,6 +171,16 @@ describe('drift fails loudly', () => {
     expect(() => voiceFingerprintFileSchema.parse(file)).toThrow();
   });
 
+  it('rejects an id with whitespace, which would break version attribution', () => {
+    // The id is half the prompt's version marker, and `readFingerprintVersion()`
+    // matches it as `\S+`. A space would compose a marker that looked right and
+    // read back as null. Caught by /code-review.
+    const file = validFingerprintFile();
+    file.fingerprint.id = 'lelanea voice core';
+
+    expect(() => voiceFingerprintFileSchema.parse(file)).toThrow(/lowercase slug/);
+  });
+
   it('rejects a version that cannot be ordered', () => {
     const file = validFingerprintFile();
     file.fingerprint.version = 'v2 draft';

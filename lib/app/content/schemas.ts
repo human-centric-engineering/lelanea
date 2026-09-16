@@ -462,7 +462,20 @@ const fingerprintVersionSchema = z.string().regex(/^\d+\.\d+(\.\d+)?$/, {
 
 export const voiceFingerprintFileSchema = z.strictObject({
   fingerprint: z.strictObject({
-    id: z.string().min(1),
+    /**
+     * No whitespace, because the id goes into the prompt's version marker and
+     * `readFingerprintVersion()` matches it as `\S+`. An id with a space in it
+     * composed a marker that looked right and read back as `null` — attribution
+     * silently lost rather than failing. Constraining the id makes the round
+     * trip structural instead of something a test has to remember to cover.
+     * Caught by /code-review.
+     */
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9][a-z0-9_-]*$/, {
+        message: 'id must be a lowercase slug with no whitespace — it goes into the prompt',
+      }),
     title: z.string().min(1),
     /** Which layer of the fingerprint this file is. Only the core exists today. */
     layer: z.literal('core'),

@@ -122,17 +122,24 @@ export function sectionsArePopulated(sections: FingerprintProfileSections): bool
 
 const unit: SeedUnit = {
   name: 'app-lelanea/003-voice-fingerprint',
-  // Everything between the authored words and the row. The loader is on the list
-  // (as it is on `001-journey-map.ts`'s) because `getVoiceFingerprint()` decides
-  // which authored fields reach the projection at all — `collection.title`
-  // becomes the profile's `name` — so a change there moves the row while leaving
-  // the seed's own source untouched. Omit it and `db:seed` skips the unit on an
-  // unchanged hash, which is the exact drift this list exists to prevent.
-  // Caught by /code-review.
+  // Everything between the authored words and the row, and the test below pins
+  // this list so an omission is a red CI run rather than a skipped seed.
+  //
+  // The loader is here (as it is on `001-journey-map.ts`'s list) because
+  // `getVoiceFingerprint()` decides which authored fields reach the projection
+  // at all — `collection.title` becomes the profile's `name`. `designation.ts`
+  // is here because `VOICE_AGENT_SLUG` is derived from
+  // `CORPUS_AGENT_SLUG_PREFIX`, which lives there: change the prefix and unit
+  // 002 re-runs while this one would not, leaving an agent whose slug no longer
+  // matches `isCorpusAgent()` — so the corpus contributor stops widening it and
+  // her designated material drops out of the agent's document set with no error
+  // anywhere. Both omissions were caught by /code-review, the second of them
+  // introduced by the fix for the first.
   hashInputs: [
     '../../../content/lelanea_voice_fingerprint.json',
     '../../../lib/app/content/index.ts',
     '../../../lib/app/content/schemas.ts',
+    '../../../lib/app/voice/designation.ts',
     '../../../lib/app/voice/fingerprint.ts',
   ],
   async run({ prisma, logger }) {
