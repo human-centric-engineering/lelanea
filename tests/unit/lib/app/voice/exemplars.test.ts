@@ -87,6 +87,18 @@ import { logger } from '@/lib/logging';
 const searchKnowledgeMock = searchKnowledge as ReturnType<typeof vi.fn>;
 const loggerWarn = logger.warn as ReturnType<typeof vi.fn>;
 
+/**
+ * The string as it survives being encoded and decoded as UTF-8.
+ *
+ * A lone surrogate has no UTF-8 encoding, so it comes back as U+FFFD — which is
+ * precisely what the response encoder does to it on the way into a prompt.
+ * Comparing against the round trip asserts the real consequence rather than
+ * looking for a replacement character the string does not contain yet.
+ */
+function survivesUtf8(text: string): string {
+  return Buffer.from(text, 'utf8').toString('utf8');
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   world.searchError = null;
@@ -261,10 +273,14 @@ describe('preparePassage', () => {
     // `slice` counts UTF-16 code units, so a hard cut landing inside a surrogate
     // pair leaves a lone surrogate — U+FFFD in the prompt, at the end of her
     // passage. No spaces, so the word-boundary path cannot save it.
-    const prepared = preparePassage('🌱'.repeat(MAX_EXEMPLAR_CHARS));
+    //
+    // The ODD-length prefix is the whole test. An even run of astral characters
+    // is cut on a pair boundary by luck, and the first version of this case
+    // passed against the unfixed code for exactly that reason — a green bar that
+    // proved nothing. Caught by running the revert.
+    const prepared = preparePassage(`x${'🌱'.repeat(MAX_EXEMPLAR_CHARS)}`);
 
-    expect(prepared).not.toContain('\uFFFD');
-    expect([...prepared].every((ch) => ch === '🌱' || ch === '…')).toBe(true);
+    expect(prepared).toBe(survivesUtf8(prepared));
   });
 
   it('truncates at a word boundary and says that it did', () => {
@@ -290,9 +306,9 @@ describe('prepareSource — the string the first version forgot', () => {
   });
 
   it('does not cut a name’s character in half either', () => {
-    const prepared = prepareSource('🌱'.repeat(MAX_SOURCE_CHARS * 2));
+    const prepared = prepareSource(`x${'🌱'.repeat(MAX_SOURCE_CHARS)}`);
 
-    expect(prepared).not.toContain('\uFFFD');
+    expect(prepared).toBe(survivesUtf8(prepared));
   });
 
   it('caps a name long enough to be a payload rather than a title', () => {
