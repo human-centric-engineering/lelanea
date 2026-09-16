@@ -17,6 +17,12 @@ leaf swap any of them through `lib/app/emails.ts`. Lelañea swaps two.
 | `resetPassword`       | platform default                       | Same.                                                                                                                   |
 | `changeEmailApproval` | platform default                       | Same. Re-deriving the platform's security wording just to restyle it is its own piece of work, not a bug's — see below. |
 
+And one that is not a platform kind at all — the registry has no waitlist
+email to override, so `lib/app/waitlist/confirmation.ts` sends
+`components/app/emails/waitlist-confirmation.tsx` itself, from the route's
+`after()`. Same chrome; see [`waitlist.md`](./waitlist.md#the-confirmation-email)
+for the four rules it follows.
+
 **Never edit `emails/*.tsx`.** They are Sunrise's; every edit is a merge conflict
 on the next sync. Copy, adapt, register. `tests/unit/lib/app/defaults.test.ts`
 pins the seam to exactly these two, so a third swapped without a decision — or

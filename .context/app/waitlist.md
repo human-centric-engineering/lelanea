@@ -100,8 +100,9 @@ preserve.
 **The cost is the correction case.** Someone who wants to _change_ an answer
 cannot do it here. That is the right way round while there is no proof of
 ownership — she reads these by hand — and the honest fix is a signed
-confirmation link, which is the same mechanism the first waitlist email needs
-anyway.
+confirmation link. The confirmation email (t-37) is deliberately NOT that link:
+it acknowledges, it proves nothing, and adding a token to it would make it a
+verification flow with its own state, which is a separate decision.
 
 **What additive still leaves open, stated rather than implied.** A stranger can
 _seed_ a field the person left empty, and it will read as theirs. That is a
@@ -110,8 +111,59 @@ or destruction — and closing it entirely would mean a repeat changed nothing a
 all, which breaks the ordinary case of someone coming back to add the answer
 they skipped. It closes properly with the same confirmation link.
 
-**No email is sent** (A8, owner). The response is the only acknowledgement, and
-the card says so in place.
+**One email is sent — on a first join only** (t-37, 16 September 2026,
+reversing A8's "no email this phase"). See
+[the confirmation](#the-confirmation-email) below. The card's copy is written
+to be true whether or not one went out, because the response cannot say.
+
+### The confirmation email
+
+`lib/app/waitlist/confirmation.ts` sends
+`components/app/emails/waitlist-confirmation.tsx` — Lelañea's chrome
+([`emails.md`](./emails.md)), "you are on the list", the three beats the landing
+page's "An invitation" card excerpts (`the_initiation` `[7, 10)`, by position),
+and the build's plain lines: we will write when we open, there is no date, this
+is the only email until then.
+
+Four rules, each with a reason:
+
+- **From the route, inside Next's `after()`.** It runs once the 200 has gone,
+  so a bounced or unconfigured mailer can neither block nor fail the join — and
+  it cannot be timed. An awaited send only on a first join would have made the
+  response slower for an address not yet on the list: the membership oracle by
+  another channel.
+- **On a first join only.** The address is unverified. On every accepted
+  submission the form would put five emails an hour per IP into any chosen
+  inbox; on `created` the most it can ever cause is one email per address
+  **string**, ever (the schema lower-cases and trims, so case and whitespace
+  variants are one row; plus-addressing and Gmail dots are distinct strings,
+  so per **inbox** the bound is the form's 5/hour/IP). A repeat, a re-join
+  against a removed entry and a honeypot hit all send nothing. The route test
+  pins each. Two conditions on that bound, both pre-existing: the limiter is
+  in-process (per instance, reset on restart), and it is keyed on the leftmost
+  `X-Forwarded-For` — if the deployment's proxy does not overwrite that header,
+  the caller chooses the key and only "once per string" remains
+  ([`../security/gotchas.md`](../security/gotchas.md)). This is the first
+  surface where that trust bounds mail to third parties, not just our own
+  resources.
+- **Only a first name is reflected, and only if it looks like one.** `name` is
+  free text from an anonymous form; reflected into mail from our real sender to
+  an unverified address, a URL as a "name" would arrive as a clickable link.
+  `firstNameOf` accepts letters, marks, an apostrophe or a hyphen, at most
+  forty; anything else gets the impersonal greeting.
+- **No unsubscribe, no preferences, no footer link** — owner ruling. One
+  transactional acknowledgement of something the person just asked for is not a
+  list they need a way off. **Trigger to revisit:** the first _unsolicited_
+  send — "we are opening", a progress note — is marketing and needs a way out.
+  Whoever builds that send revisits this. The schema already carries a
+  withdrawal (`removedAt`, written by the admin path); what it lacks is a
+  self-serve way to set it, which is the signed link above.
+- **The footer says why it arrived and that nothing more will**, because
+  someone else may have typed the address.
+
+The leaf's own log line carries the entry id, never the address. The platform's
+`sendEmail` logs its recipient on every send — Sunrise's, pre-existing, and the
+same for every auth email.
 
 ### Rate limiting — two layers
 
