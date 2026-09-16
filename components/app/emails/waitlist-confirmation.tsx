@@ -63,8 +63,10 @@ export interface WaitlistConfirmationEmailProps {
 }
 
 /**
- * What a first name may look like, to be reflected into mail: letters (any
- * script, with combining marks), an apostrophe or a hyphen, at most forty.
+ * What a first name may look like, to be reflected into mail: a letter first,
+ * then letters (any script, with combining marks), an apostrophe or a hyphen,
+ * at most forty. The leading letter is what keeps `---` or `''` from being
+ * greeted.
  *
  * Deliberately narrow. `name` is free text from an anonymous form, and the
  * address it goes to is unverified — so anything reflected here is
@@ -74,7 +76,7 @@ export interface WaitlistConfirmationEmailProps {
  * auto-links. Nothing that fails this is a first name anyone is owed a
  * greeting by; the impersonal line stands in. Pinned by a test.
  */
-const FIRST_NAME = /^[\p{L}\p{M}'’-]{1,40}$/u;
+const FIRST_NAME = /^\p{L}[\p{L}\p{M}'’-]{0,39}$/u;
 
 /** First whitespace-separated part of a name if it looks like one, else `null`. */
 export function firstNameOf(name: string | null | undefined): string | null {

@@ -77,6 +77,9 @@ describe('firstNameOf', () => {
     ['x'.repeat(41), null],
     ['Ada1', null],
     ['<b>Ada</b>', null],
+    ['---', null],
+    ["''", null],
+    ['-Ada', null],
   ])('%j → %j', (input, expected) => {
     expect(firstNameOf(input)).toBe(expected);
   });

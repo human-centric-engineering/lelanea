@@ -44,9 +44,13 @@ export interface WaitlistConfirmationInput {
   name?: string | null;
 }
 
-/** Where the lotus and any link back in resolve from. */
+/**
+ * Where the lotus resolves from. `NEXT_PUBLIC_APP_URL` is required by the env
+ * schema (`z.string().url()`, no `.optional()`), so there is no fallback to
+ * write: one that existed here was dead code, and a test of it tested nothing.
+ */
 function appOrigin(): string {
-  return env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL;
+  return env.NEXT_PUBLIC_APP_URL;
 }
 
 export async function sendWaitlistConfirmation(input: WaitlistConfirmationInput): Promise<void> {
