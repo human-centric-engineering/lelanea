@@ -66,6 +66,7 @@
 
 import { prisma } from '@/lib/db/client';
 import {
+  CORPUS_AGENT_SLUG_PREFIX,
   DOCUMENT_PURPOSES,
   TOOL_PATH_PURPOSES,
   UNGRANTABLE_SENSITIVITIES,
@@ -84,12 +85,14 @@ import {
 export const APP_SCOPE = 'app';
 
 /**
- * The slug prefix marking an agent as one of Lelañea's own.
+ * Re-exported, not defined here.
  *
- * Exported so the test can build an agent that participates without repeating
- * the string, and so a future change has one place to happen.
+ * It moved to `designation.ts` — which imports nothing — because this module
+ * imports `@/lib/db/client`, and that builds a connection pool at import time.
+ * A consumer wanting only the string was paying for a `pg.Pool` to get it. The
+ * re-export keeps this module the one place to look for the agent-side rule.
  */
-export const CORPUS_AGENT_SLUG_PREFIX = 'lelanea-';
+export { CORPUS_AGENT_SLUG_PREFIX };
 
 /** Is this agent one of hers — i.e. one the corpus rule should widen? */
 export function isCorpusAgent(slug: string | null | undefined): boolean {

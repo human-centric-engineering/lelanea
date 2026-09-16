@@ -1,6 +1,159 @@
 ---
 name: app-voice
-description: Designating her material — what each document is for, and the rule that keeps voice-only material off the tool path.
+description: The always-on core of how she sounds, and the designation rule that keeps voice-only material off the tool path.
+---
+
+# How she sounds: the core, and what may be quoted
+
+Two halves of one feature, doing different jobs. The **core** is a page of
+authored text that rides on every prompt — the part that does not depend on
+anything being found. The **designation rule** is what decides which of her
+documents a retrieval tool is allowed to quote back at someone. Read the core
+first; it is the thing a person actually meets.
+
+# The always-on core
+
+Retrieval is probabilistic. Identity should not be.
+
+If the only thing carrying her voice is a nearest-neighbour lookup, then the
+turns where retrieval finds nothing — a greeting, a refusal, a short clarifying
+question — are exactly the turns that sound like a generic assistant. Those are
+also the first turns a new person reads.
+
+So the core is present on every single turn regardless of what else happens:
+identity, cadence, how she grounds a claim, and what she declines.
+
+## Where it lives, and why it is a content file
+
+`content/lelanea_voice_fingerprint.json`, the seventh file under `content/`,
+with a Zod schema in `lib/app/content/schemas.ts` and
+`getVoiceFingerprint()` in `lib/app/content/index.ts`.
+
+It is her authored words, and this repo already has one rule for those:
+`.context/app/planning/README.md` says the content files govern _"anything
+authored by Lelanea, which is never paraphrased in the build"_, and
+`lib/app/eslint.config.mjs` fails any import of `content/*.json` from outside
+`lib/app/content/**`. A loose TypeScript constant in a new directory would be a
+second authoring path for her voice — which is the thing that rule exists to
+prevent.
+
+### It is the one content file that is a DRAFT
+
+The six files beside it are transcriptions of documents she wrote, corrected for
+typography and nothing else. This one was **drafted from** them, in her register.
+No volume of corpus produces this text; a model can draft it, and that draft is a
+good use of the material, but the draft is an input to her reading it rather than
+a substitute.
+
+The file says so about itself. `fingerprint.provenance` is a required block
+carrying `status: 'drafted_from_corpus'` and `awaitingSignOffFrom`, it is
+**served** rather than withheld like `reviewNotes`, and a case in
+`tests/unit/lib/app/content/voice-fingerprint.test.ts` pins the name in it. That
+case is **meant to be edited** — once, on the day she signs the core off.
+
+Her sign-off is a feature-level check before ship (`fp3b`), not a criterion any
+pull request can satisfy.
+
+## Four authored blocks onto three columns
+
+`AiAgentProfile` carries exactly the three columns this needs, and
+`lib/orchestration/agents/resolve-effective-prompt.ts` composes them in a fixed
+order (persona → instructions → guardrails → brand voice) with per-field
+`override` / `append` against the agent. `lib/app/voice/fingerprint.ts` does the
+projection:
+
+| Authored block             | Column                   |
+| -------------------------- | ------------------------ |
+| `identity`                 | `persona`                |
+| `grounding` + `boundaries` | `guardrails`             |
+| `cadence`                  | `brandVoiceInstructions` |
+
+The mapping is **code rather than data**. Put it in the JSON and an author can
+route a block to the wrong column — and a persona in the guardrails slot is not a
+validation error, it is a subtly worse prompt nobody can see.
+
+`grounding` joins `boundaries` rather than `cadence` because its load-bearing
+half is a rule, not a manner: _answer from her material; where you have nothing,
+say so._
+
+**Every heading and label is authored too** — `boundaries.howYouDeclineHeading`,
+`cadence.reachesForLabel` and `cadence.avoidsLabel` included. Each is copy the
+model reads, so a string literal in `fingerprint.ts` would be her words arriving
+through a second authoring path — the exact thing the content seam and its
+ESLint rule exist to prevent. It also means a core authored in another `locale`
+translates whole, rather than emitting two English labels into an otherwise
+translated section.
+
+**Every beat gets its own line.** The single-line cadence runs through her
+written work and is authored, not an artifact of transcription. A block whose
+beats are all empty emits **nothing at all**, not a bare heading: a heading with
+nothing under it reads to a model as a section that exists and has nothing to
+say, and it would defeat the seed's emptiness guard by keeping every section
+truthy.
+
+## The version travels in the prompt
+
+The last line of the persona is a marker —
+`Voice fingerprint: lelanea_voice_fingerprint_core v1.0` — so an evaluation can
+attribute an output to the text that produced it without being told out of band
+which version was live. `readFingerprintVersion()` reads it back out.
+
+Version identity travels with the authored file and the seed, never with a
+database timestamp, so the same version resolves identically in every
+environment. The schema constrains the string to `major.minor[.patch]`, because a
+version that cannot be ordered cannot be compared and `"v2 draft"` is not a
+version.
+
+The marker rides **with** the identity rather than beside it. Emitted on its own
+it would stamp a version onto an empty persona, and an evaluation would then
+attribute an output to a version of her voice that never reached it.
+
+## The agent, and the profile it inherits from
+
+`prisma/seeds/app-lelanea/003-voice-fingerprint.ts` writes two rows:
+
+- **`AiAgentProfile` `lelanea-voice-core`** — a **pure code projection**,
+  reconciled on every run. No operator is meant to hand-edit her voice in the
+  admin UI. (That is the opposite call from the designation tags below, whose
+  names and descriptions _are_ operator-owned — a tag name is a label, this text
+  is the artefact.)
+- **`AiAgent` `lelanea-guide`** — the first agent that speaks as her. Created
+  once, with **three** columns reconciled afterwards, for two different reasons.
+  `profileId` and `knowledgeAccessMode` because both are load-bearing invariants
+  rather than preferences; `systemInstructions` because
+  `SYSTEM_AGENT_PROTECTED_FIELDS` covers it — so no operator can set it, and a
+  write-once field would be unreachable by _anyone_ after the first create.
+  Everything else — name, description, temperature — is left to whoever edits
+  it. `isActive` is on that protected list too, so a system agent cannot be
+  deactivated through the admin at all; activation is not among the things an
+  operator owns here.
+
+**The agent's own persona / brand voice / guardrails columns are left NULL**, so
+the profile is what speaks. Sunrise's per-field resolution defaults to
+`override`, so a second copy of her voice on the agent would silently win and
+then drift. A case in `tests/unit/lib/app/voice/fingerprint.test.ts` records that
+hazard rather than leaving it to be rediscovered.
+
+A profile rather than the agent's own columns because the core is one artefact
+shared by every agent that speaks as her. Writing it onto each agent would make a
+change to her voice an N-place edit, and the places would drift.
+
+## What the core is not
+
+The other two layers of the fingerprint — context-selected overlays and
+retrieved exemplars — are later work, and a user's voice leanings are a filter
+over those. **Neither may reach what is in the core.** It is the invariant that
+no preference and no retrieval result can soften.
+
+The seed **binds no capabilities**: `search_knowledge_base` and the exemplar
+contributor are t-27's. The mode below is set now so the rule is already live
+when the tool arrives, rather than being something somebody has to remember.
+
+It also leaves `visibility` at the platform default (`internal`). Widening it
+belongs to whichever task builds the surface a member talks to; shipping a
+publicly reachable agent ahead of that surface would be a live endpoint nobody
+had designed.
+
 ---
 
 # Training material: what a document is for
@@ -81,7 +234,10 @@ no provenance column.
 ### Whose agents
 
 An agent participates when its slug starts with `lelanea-`
-(`CORPUS_AGENT_SLUG_PREFIX`). A contributor can only **widen** a restricted
+(`CORPUS_AGENT_SLUG_PREFIX`, defined in `designation.ts` and re-exported here —
+it is vocabulary, and it has to live in a module that imports nothing, because
+`corpus-access.ts` imports `@/lib/db/client` and that builds a `pg.Pool` at
+import time). A contributor can only **widen** a restricted
 agent, so firing for every restricted agent on the install would hand her corpus
 to the platform's own seeded agents — the pattern advisor, the quiz master, the
 evaluation judges — because they happen to be restricted.
@@ -105,11 +261,37 @@ may quote: No** for it, because `isQuotable()` is a pure function of tags and
 knows nothing about any agent's mode.
 
 Nothing here can enforce that, because a contributor can only widen and never
-narrows: the rule is inert rather than wrong. It is a **hard requirement on
-t-26**, the task that creates the first `lelanea-` agent, that it is created
-`restricted` explicitly and that a test asserts so through the real resolver. The
-**Agent may quote** column's own help text names the precondition, so the surface
-does not assert more than it can deliver.
+narrows: the rule is inert rather than wrong. The **Agent may quote** column's own
+help text names the precondition, so the surface does not assert more than it can
+deliver.
+
+**The precondition is met.** `003-voice-fingerprint.ts` creates
+`lelanea-guide` with `knowledgeAccessMode: 'restricted'` written explicitly into
+the `create`, never left to the column default, and
+`tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts` runs the seed
+against a stateful fake world and then asks Sunrise's real
+`resolveAgentDocumentAccess` what it makes of every `lelanea-`-slugged agent the
+seed left behind. Reverting the mode fails that file; so does dropping the column
+from the `create`.
+
+**One residual, stated rather than discovered.**
+`SYSTEM_AGENT_PROTECTED_FIELDS` is `['slug', 'systemInstructions', 'isActive']` —
+it does **not** cover `knowledgeAccessMode` — so an admin PATCH can still flip
+her agent to `full` after the seed has run, and the failure is as silent as it
+ever was. Widening the platform's protected list is Sunrise's call, not a leaf's.
+
+The seed is the remedy, which is why that column is reconciled on every run
+rather than set once at creation — but **`npm run db:seed` alone will not do
+it**. The runner skips any unit whose content hash is unchanged, and correcting a
+row that drifted underneath it is exactly the case where nothing in the tree has
+changed. Clear the unit's history row first:
+
+```sql
+DELETE FROM seed_history WHERE name = 'app-lelanea/003-voice-fingerprint';
+```
+
+then `npm run db:seed`. Worth knowing before trusting a re-seed to fix any
+drifted row, here or anywhere else.
 
 ### `client` is vocabulary without a mechanism behind it, deliberately
 
@@ -122,16 +304,19 @@ touch.
 
 ## The files
 
-| File                                                    | What it is                                                           |
-| ------------------------------------------------------- | -------------------------------------------------------------------- |
-| `lib/app/voice/designation.ts`                          | The vocabulary, the slugs, and the rule as a pure function           |
-| `lib/app/voice/corpus-access.ts`                        | The rule against the database, and which agents it widens            |
-| `lib/app/voice/designation-admin.ts`                    | The admin list and the partitioned write                             |
-| `lib/app/voice/endpoint.ts`                             | The paths, so components do not hardcode them                        |
-| `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus` |
-| `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                    |
-| `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                         |
-| `components/app/admin/designation-table.tsx`            | The table                                                            |
+| File                                                    | What it is                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `content/lelanea_voice_fingerprint.json`                | The authored core — her identity, cadence, grounding and hard nos       |
+| `lib/app/voice/fingerprint.ts`                          | The projection onto the three profile columns, and the version marker   |
+| `prisma/seeds/app-lelanea/003-voice-fingerprint.ts`     | The profile and the first `lelanea-` agent                              |
+| `lib/app/voice/designation.ts`                          | The vocabulary, the slugs, the agent prefix, and the rule as a function |
+| `lib/app/voice/corpus-access.ts`                        | The rule against the database, and which agents it widens               |
+| `lib/app/voice/designation-admin.ts`                    | The admin list and the partitioned write                                |
+| `lib/app/voice/endpoint.ts`                             | The paths, so components do not hardcode them                           |
+| `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus`    |
+| `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                       |
+| `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                            |
+| `components/app/admin/designation-table.tsx`            | The table                                                               |
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
 `GET`/`PATCH .../designations/:documentId`. Page: `/admin/app/knowledge`
@@ -167,7 +352,39 @@ the list's filter and `corpus-access.test.ts` pins the rule's.
 for 60 seconds. Without `invalidateAllAgentAccess()`, a document just marked
 `voice` stays quotable for up to a minute — which is the minute that matters.
 
-## The seed
+## The seeds
+
+Two units, and they classify their rows in **opposite** directions (`fp4`). Worth
+holding both in mind before editing either.
+
+`prisma/seeds/app-lelanea/003-voice-fingerprint.ts` treats the profile's three
+text columns as a **pure code projection** and reconciles them on every run: they
+are the artefact itself, and nobody is meant to hand-edit her voice in the admin.
+The agent beside it is **split** — `profileId`, `knowledgeAccessMode` and
+`systemInstructions` are reconciled; its name, description and temperature are
+written once and then belong to whoever edits them. (`isActive` belongs to
+nobody here: it is protected, so a system agent cannot be deactivated through
+the admin at all.)
+
+It re-runs when either `content/lelanea_voice_fingerprint.json` or
+`lib/app/voice/fingerprint.ts` changes (`hashInputs`), so a new line in her
+identity or a change to which block lands in which column reaches the database
+rather than leaving it a version behind. On a database already carrying the
+current version it issues **no write at all**.
+
+It also refuses to write when an authored block came back empty — by
+**throwing**, which is the part that matters. It checks the four authored
+**blocks** as well as the three composed **columns**, because the mapping is 4→3
+and the coarse check cannot see a block go missing: `grounding` and `boundaries`
+share `guardrails`, so losing her grounding rule alone still leaves that column
+populated. `prisma/runner.ts` upserts the
+`SeedHistory` row the moment `run()` resolves and logs `✓ applied`, so a quiet
+`return` would bank the aborted run as a success and every later `db:seed` would
+skip the unit, leaving a fresh install with no profile and no agent until
+somebody deleted the history row by hand. The strict schema makes an empty source
+hard to reach today, but the loader's own docblock says the file moves behind a
+database the first time copy has to change without a deploy, and on that day the
+guard is the only thing between a bad read and a profile with no voice in it.
 
 `prisma/seeds/app-lelanea/002-knowledge-designation.ts` creates a missing tag and
 **never rewrites an existing one**. The slug is code — the rule addresses these
@@ -196,6 +413,9 @@ on purpose and the development command reads that divergence as drift.
 
 | File                                                                | Proves                                                                |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/fingerprint.test.ts`                      | The core reaches the prompt with nothing retrieved — load-bearing     |
+| `tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts`     | The seed's writes, its idempotence, and `restricted` via the resolver |
+| `tests/unit/lib/app/content/voice-fingerprint.test.ts`              | The authored file parses, and still says it is awaiting sign-off      |
 | `tests/unit/lib/app/voice/corpus-access.test.ts`                    | The rule end to end through Sunrise's resolver — the load-bearing one |
 | `tests/unit/lib/app/voice/designation.test.ts`                      | The vocabulary, the slugs, the safe reading of a conflict             |
 | `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy         |
@@ -208,8 +428,12 @@ for free on an empty set — so every absence claim in it sits after a presence
 claim. Reverting the rule fails it: add `'voice'` to `TOOL_PATH_PURPOSES` and two
 cases go red; empty `UNGRANTABLE_SENSITIVITIES` and two others do.
 
-## Not this task
+## Not yet built
 
 The context contributor that reads voice-designated material and labels it by
-origin is t-27, and the always-on core of how she sounds is t-26. This task ships
-the vocabulary, the rule and the surface — the mechanism — and seeds no agent.
+origin is t-27, along with `search_knowledge_base` on her agent and the retrieved
+exemplars. The sign-off and review path — nothing about how she sounds changing
+without her hearing it first — is t-28.
+
+Context-selected overlays, and the user's voice leanings that filter them, are
+later still. Neither may reach the core.

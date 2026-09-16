@@ -1,14 +1,22 @@
 /**
  * Zod schemas for Lelañea's authored content.
  *
- * The six files under `content/` are Lelañea Fulton's own words, transcribed and
- * corrected only for typography. They are **not** a draft for the build to
- * improve on, so nothing here coerces, defaults or repairs — every schema is a
- * `strictObject`, and an unknown key fails validation rather than being dropped.
- * That strictness is the point: it turns a silent edit to an authored file into
- * a red CI run (`tests/unit/lib/app/content/schemas.test.ts` parses all six real
- * files), which is the only cheap way to notice that content drifted away from
- * what the renderers and the API contract expect.
+ * Six of the seven files under `content/` are Lelañea Fulton's own words,
+ * transcribed and corrected only for typography. They are **not** a draft for
+ * the build to improve on, so nothing here coerces, defaults or repairs — every
+ * schema is a `strictObject`, and an unknown key fails validation rather than
+ * being dropped. That strictness is the point: it turns a silent edit to an
+ * authored file into a red CI run, which is the only cheap way to notice that
+ * content drifted away from what the renderers and the API contract expect.
+ *
+ * The seventh — the voice fingerprint's always-on core, at the bottom of this
+ * file — is the exception that proves the rule: it WAS drafted, from the other
+ * six, and carries a required `provenance` block saying so. Its schema is no
+ * looser for it.
+ *
+ * Every real file is parsed by a test: `schemas.test.ts` for the three served
+ * collections, `values.test.ts` for the Release-2 files, and
+ * `voice-fingerprint.test.ts` for the core.
  *
  * Strict on structure, permissive on prose. Free-text values (`surface`,
  * `textFormat`, headings, notes) are `z.string()`, because new authored copy
@@ -414,6 +422,122 @@ export const discoveryQuestionsFileSchema = discoveryQuestionsFileBase.superRefi
 });
 
 // ============================================================================
+// Voice fingerprint — the always-on core
+// ============================================================================
+//
+// The seventh file, and the only one that is NOT a transcription. The six
+// beside it are Lelañea's own documents, corrected for typography and nothing
+// else. This one was DRAFTED from them, in her register, and carries its own
+// provenance saying so — `awaitingSignOffFrom` is a required field precisely so
+// the file cannot quietly pretend to be the other kind.
+//
+// It lives here rather than as a TypeScript constant because it is her authored
+// words: `.context/app/planning/README.md` says the content files govern
+// "anything authored by Lelanea, which is never paraphrased in the build", and a
+// parallel authoring path for her voice is exactly what that rule exists to
+// prevent.
+
+/**
+ * One beat of the core. Its own line in the composed prompt, never joined.
+ *
+ * `.trim()` before `.min(1)` because the projection filters beats on
+ * `line.trim().length > 0`: without it a line of `" "` parsed clean and then
+ * silently vanished from the prompt, so the schema and the projection disagreed
+ * about what counts as a beat. The schema is the half that should be strict.
+ * Caught by /code-review.
+ */
+const voiceLinesSchema = z.array(z.string().trim().min(1)).min(1);
+
+/**
+ * `major.minor`, optionally `.patch`.
+ *
+ * Constrained rather than free text because an evaluation attributes an output
+ * to a fingerprint version by reading this string back out of the composed
+ * prompt. A version that cannot be ordered cannot be compared, and "v2 draft"
+ * is not a version.
+ */
+const fingerprintVersionSchema = z.string().regex(/^\d+\.\d+(\.\d+)?$/, {
+  message: 'version must be major.minor or major.minor.patch, e.g. "1.0" or "1.0.1"',
+});
+
+export const voiceFingerprintFileSchema = z.strictObject({
+  fingerprint: z.strictObject({
+    /**
+     * No whitespace, because the id goes into the prompt's version marker and
+     * `readFingerprintVersion()` matches it as `\S+`. An id with a space in it
+     * composed a marker that looked right and read back as `null` — attribution
+     * silently lost rather than failing. Constraining the id makes the round
+     * trip structural instead of something a test has to remember to cover.
+     * Caught by /code-review.
+     */
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9][a-z0-9_-]*$/, {
+        message: 'id must be a lowercase slug with no whitespace — it goes into the prompt',
+      }),
+    title: z.string().min(1),
+    /** Which layer of the fingerprint this file is. Only the core exists today. */
+    layer: z.literal('core'),
+    version: fingerprintVersionSchema,
+    locale: z.string().min(1),
+    textFormat: z.string().min(1),
+    provenance: z.strictObject({
+      status: z.literal('drafted_from_corpus'),
+      awaitingSignOffFrom: z.string().min(1),
+      note: z.string().min(1),
+    }),
+    sourceFiles: z.array(z.string().min(1)),
+    notes: z.array(z.string().min(1)),
+  }),
+  identity: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+  }),
+  cadence: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+    /**
+     * The words she reaches for, and — just as tellingly — the ones she avoids.
+     *
+     * Each list carries its own label for the same reason every block carries
+     * its own heading: the label is copy the model reads. As TypeScript string
+     * literals they were a second authoring path for her words, and a core
+     * authored in another `locale` would have emitted two English labels into an
+     * otherwise translated section with no way to change them.
+     */
+    reachesForLabel: z.string().min(1),
+    reachesFor: z.array(z.string().trim().min(1)).min(1),
+    avoidsLabel: z.string().min(1),
+    avoids: z.array(z.string().trim().min(1)).min(1),
+  }),
+  grounding: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+  }),
+  boundaries: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+    /**
+     * What she declines is one thing; HOW she declines it is the other half, and
+     * it carries its own heading for the same reason every other block does —
+     * the heading is copy the model reads, so it is authored here rather than
+     * written into the projection. A string literal in TypeScript would be a
+     * second authoring path for her words, which is what the content seam and
+     * its ESLint rule exist to prevent. Caught by /code-review.
+     */
+    howYouDeclineHeading: z.string().min(1),
+    howYouDecline: voiceLinesSchema,
+  }),
+  reviewNotes: z.array(
+    z.strictObject({
+      scope: z.string().min(1),
+      note: z.string().min(1),
+    })
+  ),
+});
+
+// ============================================================================
 // Release 2 — validated here, not served. See the file header.
 // ============================================================================
 
@@ -728,3 +852,4 @@ export type DiscoveryQuestionsFile = z.infer<typeof discoveryQuestionsFileSchema
 export type ValuesModuleFile = z.infer<typeof valuesModuleFileSchema>;
 export type ValuesReferenceFrameworkFile = z.infer<typeof valuesReferenceFrameworkFileSchema>;
 export type ValueExplorationsFile = z.infer<typeof valueExplorationsFileSchema>;
+export type VoiceFingerprintFile = z.infer<typeof voiceFingerprintFileSchema>;

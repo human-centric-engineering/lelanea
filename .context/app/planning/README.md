@@ -24,6 +24,13 @@ framework, and the value explorations themselves. Transcribed from Lelanea
 Fulton's own material and corrected only for typography. Not a draft for the
 build to improve on.
 
+A seventh file sits beside them and is a different kind of thing:
+`lelanea_voice_fingerprint.json`, the always-on core of the voice fingerprint
+(§5). It was drafted *from* the six in her register rather than transcribed from
+anything she wrote, so it carries a `provenance` block naming her as the person
+who has yet to sign it off. Until she has, it is a proposal — the one file here
+that is a draft for her to correct.
+
 Nothing reads those files directly. They are validated against Zod schemas and
 served through `lib/app/content` and `/api/v1/app/content/*`, so that a native
 client later renders the same copy through the same API rather than growing a

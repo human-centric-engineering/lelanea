@@ -1,8 +1,12 @@
 /**
  * The one way in to Lelañea's authored content.
  *
- * Six JSON files under `content/` hold Lelañea Fulton's own words. Nothing
- * outside this folder reads them: an ESLint rule in `lib/app/eslint.config.mjs`
+ * Seven JSON files under `content/` hold Lelañea Fulton's words. Six are
+ * transcriptions of documents she wrote; the seventh — the voice fingerprint's
+ * always-on core — was drafted FROM those in her register and carries a
+ * `provenance` block saying so, because a drafted file sitting silently beside
+ * six transcribed ones is the one way this seam could start lying. Nothing
+ * outside this folder reads any of them: an ESLint rule in `lib/app/eslint.config.mjs`
  * fails any import of `@/content/*.json` from elsewhere, so a page that wants
  * the mission statement asks for it here instead of pasting it. That is the
  * whole point of the seam — the platform strategy is that authored content is
@@ -20,7 +24,8 @@
  * is called and memoises the result for the life of the process. A malformed
  * file therefore throws from the accessor rather than at import time, which
  * keeps an unrelated route from failing to load; CI catches it first either way
- * (`tests/unit/lib/app/content/schemas.test.ts` parses all six real files).
+ * (`tests/unit/lib/app/content/schemas.test.ts` and its siblings parse every
+ * real file).
  *
  * **What is deliberately not exposed.** `reviewNotes` (editorial notes to the
  * humans maintaining the copy, e.g. "the effective date is still unfilled") and
@@ -38,6 +43,7 @@
 import rawFoundationalDocuments from '@/content/lelanea_foundational_documents.json';
 import rawJourneyStructure from '@/content/lelanea_module_structure.json';
 import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
+import rawVoiceFingerprint from '@/content/lelanea_voice_fingerprint.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   foundationalDocumentsFileSchema,
@@ -52,6 +58,8 @@ import {
   type PhaseTier,
   type Produces,
   type DiscoveryQuestionsFile,
+  voiceFingerprintFileSchema,
+  type VoiceFingerprintFile,
 } from '@/lib/app/content/schemas';
 
 // ============================================================================
@@ -194,6 +202,43 @@ export interface DiscoveryQuestionSet {
   questions: readonly DeepReadonly<DiscoveryQuestion>[];
 }
 
+/** One named block of the voice core: a heading and its beats, in authored order. */
+export interface VoiceCoreSection {
+  heading: string;
+  /** Each entry is a beat. Joined with a newline, never with a space. */
+  lines: readonly string[];
+}
+
+/**
+ * The always-on core of the voice fingerprint.
+ *
+ * The one shape in this module that is NOT destined for a screen. It is a prompt
+ * ingredient: `lib/app/voice/fingerprint.ts` projects these four blocks onto the
+ * three inheritable `AiAgentProfile` columns, and every turn carries them
+ * whether or not retrieval finds anything.
+ *
+ * `provenance` is served rather than withheld — unlike `reviewNotes`, which are
+ * working notes about the words. Who has and has not signed this text off is a
+ * fact about the artefact that any caller putting it in front of a model, or
+ * attributing an output to it, needs to be able to read.
+ */
+export interface VoiceFingerprintCore {
+  collection: ContentCollectionMeta;
+  provenance: DeepReadonly<VoiceFingerprintFile['fingerprint']['provenance']>;
+  identity: VoiceCoreSection;
+  cadence: VoiceCoreSection & {
+    readonly reachesForLabel: string;
+    readonly reachesFor: readonly string[];
+    readonly avoidsLabel: string;
+    readonly avoids: readonly string[];
+  };
+  grounding: VoiceCoreSection;
+  boundaries: VoiceCoreSection & {
+    readonly howYouDeclineHeading: string;
+    readonly howYouDecline: readonly string[];
+  };
+}
+
 // ============================================================================
 // Parse-once caches
 // ============================================================================
@@ -221,10 +266,12 @@ let foundationalIndexView: FoundationalDocumentIndex | null = null;
 const foundationalDetailViews = new Map<string, FoundationalDocumentDetail>();
 let journeyStructureView: JourneyStructure | null = null;
 let discoveryQuestionSetView: DiscoveryQuestionSet | null = null;
+let voiceFingerprintView: VoiceFingerprintCore | null = null;
 
 let foundationalDocumentsCache: FoundationalDocumentsFile | null = null;
 let journeyStructureCache: JourneyStructureFile | null = null;
 let discoveryQuestionsCache: DiscoveryQuestionsFile | null = null;
+let voiceFingerprintCache: VoiceFingerprintFile | null = null;
 
 function foundationalDocumentsFile(): FoundationalDocumentsFile {
   foundationalDocumentsCache ??= deepFreezeParsed(
@@ -243,6 +290,11 @@ function discoveryQuestionsFile(): DiscoveryQuestionsFile {
     discoveryQuestionsFileSchema.parse(rawDiscoveryQuestions)
   );
   return discoveryQuestionsCache;
+}
+
+function voiceFingerprintFile(): VoiceFingerprintFile {
+  voiceFingerprintCache ??= deepFreezeParsed(voiceFingerprintFileSchema.parse(rawVoiceFingerprint));
+  return voiceFingerprintCache;
 }
 
 // ============================================================================
@@ -504,4 +556,52 @@ export function getDiscoveryQuestions(): DiscoveryQuestionSet {
     questions: file.questions.map(toQuestionView),
   });
   return discoveryQuestionSetView;
+}
+
+// ============================================================================
+// Voice fingerprint
+// ============================================================================
+
+/**
+ * The always-on core of how she sounds: identity, cadence, how she grounds a
+ * claim, and what she declines.
+ *
+ * Not a screen payload. `lib/app/voice/fingerprint.ts` is the only caller that
+ * should matter — it projects this onto the three inheritable profile columns,
+ * and `prisma/seeds/app-lelanea/003-voice-fingerprint.ts` writes the result.
+ *
+ * Read the `provenance` block before putting this in front of anyone. The six
+ * files beside this one are Lelañea's own documents; this one was drafted from
+ * them in her register and is a proposal until she has signed it off.
+ */
+export function getVoiceFingerprint(): VoiceFingerprintCore {
+  if (voiceFingerprintView) return voiceFingerprintView;
+
+  const file = voiceFingerprintFile();
+  voiceFingerprintView = deepFreezeParsed({
+    collection: {
+      id: file.fingerprint.id,
+      title: file.fingerprint.title,
+      version: file.fingerprint.version,
+      locale: file.fingerprint.locale,
+    },
+    provenance: file.fingerprint.provenance,
+    identity: { heading: file.identity.heading, lines: file.identity.lines },
+    cadence: {
+      heading: file.cadence.heading,
+      lines: file.cadence.lines,
+      reachesForLabel: file.cadence.reachesForLabel,
+      reachesFor: file.cadence.reachesFor,
+      avoidsLabel: file.cadence.avoidsLabel,
+      avoids: file.cadence.avoids,
+    },
+    grounding: { heading: file.grounding.heading, lines: file.grounding.lines },
+    boundaries: {
+      heading: file.boundaries.heading,
+      lines: file.boundaries.lines,
+      howYouDeclineHeading: file.boundaries.howYouDeclineHeading,
+      howYouDecline: file.boundaries.howYouDecline,
+    },
+  });
+  return voiceFingerprintView;
 }
