@@ -1,7 +1,7 @@
 /**
  * Unit Tests: authored-content schemas
  *
- * The load-bearing test of this feature. It parses all six real files under
+ * The load-bearing test of this feature. It parses the transcribed files under
  * `content/` through the accessors that ship, so an edit to authored copy that
  * changes its shape — a renamed key, a document dropped from `suggestedOrder`,
  * a question deleted without updating `questionCount` — fails here rather than
@@ -22,7 +22,9 @@
  * content-independent and can be kept as they are.
  *
  * Release-2 files (Values module, framework, explorations) are parsed in
- * `values.test.ts`, which mirrors the module that loads them.
+ * `values.test.ts`, which mirrors the module that loads them. The seventh file —
+ * the voice fingerprint's always-on core, drafted rather than transcribed — is
+ * parsed in `voice-fingerprint.test.ts`, which also pins its provenance.
  *
  * @see lib/app/content/schemas.ts
  */
@@ -46,7 +48,7 @@ describe('authored content schemas', () => {
   // 1. Every real file validates
   // ---------------------------------------------------------------------------
 
-  describe('the six real files', () => {
+  describe('the transcribed files', () => {
     it('parses the foundational documents, all seven of them', () => {
       const index = listFoundationalDocuments();
 

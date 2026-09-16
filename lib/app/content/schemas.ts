@@ -414,6 +414,83 @@ export const discoveryQuestionsFileSchema = discoveryQuestionsFileBase.superRefi
 });
 
 // ============================================================================
+// Voice fingerprint — the always-on core
+// ============================================================================
+//
+// The seventh file, and the only one that is NOT a transcription. The six
+// beside it are Lelañea's own documents, corrected for typography and nothing
+// else. This one was DRAFTED from them, in her register, and carries its own
+// provenance saying so — `awaitingSignOffFrom` is a required field precisely so
+// the file cannot quietly pretend to be the other kind.
+//
+// It lives here rather than as a TypeScript constant because it is her authored
+// words: `.context/app/planning/README.md` says the content files govern
+// "anything authored by Lelanea, which is never paraphrased in the build", and a
+// parallel authoring path for her voice is exactly what that rule exists to
+// prevent.
+
+/** One beat of the core. Its own line in the composed prompt, never joined. */
+const voiceLinesSchema = z.array(z.string().min(1)).min(1);
+
+/**
+ * `major.minor`, optionally `.patch`.
+ *
+ * Constrained rather than free text because an evaluation attributes an output
+ * to a fingerprint version by reading this string back out of the composed
+ * prompt. A version that cannot be ordered cannot be compared, and "v2 draft"
+ * is not a version.
+ */
+const fingerprintVersionSchema = z.string().regex(/^\d+\.\d+(\.\d+)?$/, {
+  message: 'version must be major.minor or major.minor.patch, e.g. "1.0" or "1.0.1"',
+});
+
+export const voiceFingerprintFileSchema = z.strictObject({
+  fingerprint: z.strictObject({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    /** Which layer of the fingerprint this file is. Only the core exists today. */
+    layer: z.literal('core'),
+    version: fingerprintVersionSchema,
+    locale: z.string().min(1),
+    textFormat: z.string().min(1),
+    provenance: z.strictObject({
+      status: z.literal('drafted_from_corpus'),
+      awaitingSignOffFrom: z.string().min(1),
+      note: z.string().min(1),
+    }),
+    sourceFiles: z.array(z.string().min(1)),
+    notes: z.array(z.string().min(1)),
+  }),
+  identity: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+  }),
+  cadence: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+    /** The words she reaches for, and — just as tellingly — the ones she avoids. */
+    reachesFor: z.array(z.string().min(1)).min(1),
+    avoids: z.array(z.string().min(1)).min(1),
+  }),
+  grounding: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+  }),
+  boundaries: z.strictObject({
+    heading: z.string().min(1),
+    lines: voiceLinesSchema,
+    /** What she declines is one thing; HOW she declines it is the other half. */
+    howYouDecline: voiceLinesSchema,
+  }),
+  reviewNotes: z.array(
+    z.strictObject({
+      scope: z.string().min(1),
+      note: z.string().min(1),
+    })
+  ),
+});
+
+// ============================================================================
 // Release 2 — validated here, not served. See the file header.
 // ============================================================================
 
@@ -728,3 +805,4 @@ export type DiscoveryQuestionsFile = z.infer<typeof discoveryQuestionsFileSchema
 export type ValuesModuleFile = z.infer<typeof valuesModuleFileSchema>;
 export type ValuesReferenceFrameworkFile = z.infer<typeof valuesReferenceFrameworkFileSchema>;
 export type ValueExplorationsFile = z.infer<typeof valueExplorationsFileSchema>;
+export type VoiceFingerprintFile = z.infer<typeof voiceFingerprintFileSchema>;

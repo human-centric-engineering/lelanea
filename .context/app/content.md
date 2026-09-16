@@ -1,7 +1,15 @@
 # Authored Content — `content/`, `lib/app/content`, `/api/v1/app/content`
 
-Lelañea Fulton's own words: six JSON files, validated against Zod schemas, served
+Lelañea Fulton's words: seven JSON files, validated against Zod schemas, served
 through the versioned API. **Never paraphrased in the build.**
+
+**Six are transcriptions; the seventh is not.** `lelanea_voice_fingerprint.json`
+holds the always-on core of the voice fingerprint, drafted _from_ the other six
+and from the product description rather than transcribed from a document she
+wrote. It carries a `provenance` block saying so and naming who has yet to sign
+it off, and that block is **served** rather than withheld — a drafted file
+sitting silently beside six transcribed ones is the one way this seam could start
+lying about whose words it holds. See [`voice.md`](./voice.md).
 
 **Locations:** `content/*.json` (the words) · `lib/app/content/` (schemas +
 loader) · `app/api/v1/app/content/` (the HTTP surface) ·
@@ -46,6 +54,7 @@ may not touch Node built-ins.
 | `getJourneyStructure()`           | five tiers, seventeen modules, their phases        |
 | `getDiscoveryQuestions()`         | the thirty onboarding questions + pacing           |
 | `getFoundationalCollectionMeta()` | collection id, title, version, locale              |
+| `getVoiceFingerprint()`           | the always-on voice core, and its provenance       |
 | `findPlaceholders(text)`          | merge fields in a string, deduplicated             |
 | `listDeclaredPlaceholders()`      | placeholders the documents declare                 |
 | `listOccurringPlaceholders()`     | placeholders actually present in the prose         |
