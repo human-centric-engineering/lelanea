@@ -89,6 +89,13 @@ export function initLeafSubjectSources(): void {
           'What you acknowledged at the gate — the disclaimer, the terms of use, and that you are eighteen or over — with the version of each you agreed to and when.',
       },
     ],
+    excluded: [
+      {
+        model: 'AppKnowledgeDesignation',
+        reason:
+          'A note about one of Lela\u00f1ea\u2019s own uploaded documents \u2014 what it is for, and on what terms we may use it. It holds nothing about you.',
+      },
+    ],
   });
 }
 
