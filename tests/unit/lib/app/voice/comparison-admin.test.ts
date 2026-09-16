@@ -317,3 +317,79 @@ describe('getVoiceComparison', () => {
     expect(hello?.answers.find((a) => a.arm === 'fingerprint')?.brandVoiceScore).toBeNull();
   });
 });
+
+describe('rows that do not look the way this file expects', () => {
+  /**
+   * Every one of these is a `Json` column or a hand-written FK doing what it is
+   * allowed to do. None of them should take down the page whose job is to show
+   * her answers — and none of them should be rendered as though it were fine.
+   */
+  it('reports a missing run as `unknown` rather than guessing a status', async () => {
+    // The arm's FK to `ai_evaluation_run` cascades, so this is a race rather
+    // than a resting state — but a list that rendered `queued` for a run that
+    // is gone would be inventing a fact about a comparison nobody can resume.
+    world.runs = world.runs.filter((run) => run.id !== 'run-a2');
+
+    const list = await listVoiceComparisons();
+    const bare = list.find((entry) => entry.id === 'cmp-a')?.arms.find((arm) => arm.arm === 'bare');
+
+    expect(bare?.status).toBe('unknown');
+    expect(bare?.progress).toEqual({ casesTotal: 0, casesDone: 0, casesFailed: 0 });
+    expect(bare?.brandVoiceMean).toBeNull();
+  });
+
+  it('leaves a case with no columns rather than dropping it, when its run is gone', async () => {
+    world.runs = world.runs.filter((run) => run.id !== 'run-a1' && run.id !== 'run-a2');
+
+    const detail = await getVoiceComparison(['cmp-a']);
+
+    // The columns still exist — an arm row survives until its FK cascades — but
+    // there is no run to read answers from. A case shown with no answers reads
+    // as "nothing came back", which is exactly what happened.
+    expect(detail.columns).toHaveLength(2);
+    expect(detail.cases.every((entry) => entry.answers.length === 0)).toBe(true);
+  });
+
+  it('shows a case whose metadata lost its key under a synthetic one', async () => {
+    // Better than dropping it: the reader can see something is wrong with the
+    // case, rather than the comparison quietly being one question shorter.
+    world.cases[0].metadata = { kind: 'greeting' };
+
+    const detail = await getVoiceComparison(['cmp-a']);
+
+    expect(detail.cases.map((entry) => entry.key)).toContain('position-0');
+    const synthetic = detail.cases.find((entry) => entry.key === 'position-0');
+    expect(synthetic?.probe).toBe('');
+  });
+
+  it('falls back to `unknown` for a kind it cannot read', async () => {
+    world.cases[0].metadata = { key: 'hello', probe: 'p' };
+
+    const detail = await getVoiceComparison(['cmp-a']);
+
+    expect(detail.cases.find((entry) => entry.key === 'hello')?.kind).toBe('unknown');
+  });
+
+  it('renders an object-shaped case input rather than `[object Object]`', async () => {
+    // `AiDatasetCase.input` is `Json` to carry workflow inputs as well as chat
+    // messages. Nothing here writes one, but the platform's own capture helpers
+    // can, and a prompt column reading `[object Object]` is a question nobody
+    // can evaluate an answer against.
+    world.cases[0].input = { message: 'Hi.' };
+
+    const detail = await getVoiceComparison(['cmp-a']);
+
+    expect(detail.cases.find((entry) => entry.key === 'hello')?.prompt).toBe('{"message":"Hi."}');
+  });
+
+  it('labels an arm name the vocabulary does not know with the name itself', async () => {
+    // `arm` is a `String` so a third arm can be added without a migration. Until
+    // this file learns its label, showing the raw name beats showing nothing —
+    // and beats showing it under one of the two labels it is not.
+    world.comparisons[0].arms[0].arm = 'ablation';
+
+    const list = await listVoiceComparisons();
+
+    expect(list[0]?.arms.map((arm) => arm.label)).toContain('ablation');
+  });
+});
