@@ -570,7 +570,10 @@ What the platform closes (all Sunrise's, none of it ours to maintain):
 | Any user insert, incl. OAuth   | `databaseHooks.user.create.before` — default-deny unless invited or the first human on an empty DB |
 | `/signup` (the page)           | `proxy.ts` redirects to `/login`; the login page hides its sign-up link                            |
 
-What stays open, on purpose: `accept-invite` (wrapped in `runInvitedSignup`),
+What stays open, on purpose: the **first human on an empty database** (API
+only — the page redirect does not know about it; see
+[`local-dev.md`](./local-dev.md#the-first-account-on-an-empty-database)), and
+`accept-invite` (wrapped in `runInvitedSignup`),
 sent by an admin from `/admin/users/invite` through `POST /api/v1/users/invite`
 (`withAdminAuth`), whose email is ours ([`emails.md`](./emails.md)). Verified
 end to end with the mode on before it was flipped.

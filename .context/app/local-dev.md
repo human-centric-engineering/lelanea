@@ -112,6 +112,25 @@ names any of the three left set.
 Provider keys (OpenAI, Resend, Google OAuth) are deliberately **not** inherited
 from Daybreak — add Lelañea's own when a feature first needs one.
 
+## The first account on an empty database
+
+`.env.example` sets `SIGNUP_MODE="invite_only"` (t-38), so a fresh clone runs
+closed — and `/signup` redirects to `/login`, whose notice tells you to join the
+waitlist. **That is the wrong door for you.** The platform admits the **first
+human** on an empty database and makes them `ADMIN` — but only at the API; the
+page redirect does not know about the exemption (`sunrise#796`). So, once:
+
+```bash
+curl -sk https://lelanea.test/api/auth/sign-up/email \
+  -H 'content-type: application/json' -H 'origin: https://lelanea.test' \
+  -d '{"email":"you@example.com","password":"a-real-password","name":"Your Name"}'
+```
+
+Then sign in at `/login`. Every account after that is by invitation from
+`/admin/users/invite`. If you would rather sign up through the page, set
+`SIGNUP_MODE=open` in `.env.local` for that one signup and put it back — the
+deployed environment must always be `invite_only`.
+
 ## Running alongside a Daybreak checkout
 
 Both repos ship the same Sunrise-owned `docker-compose.yml`, which hardcodes
