@@ -3,6 +3,9 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoginForm } from '@/components/forms/login-form';
+// LELAÑEA divergence (row 15): what to say when signup is closed. Upstream has
+// no seam for it — see the notice's docblock and the divergence ledger.
+import { InviteOnlyNotice } from '@/components/app/site/invite-only-notice';
 import { BRAND } from '@/lib/brand';
 import { isInviteOnly } from '@/lib/auth/signup-mode';
 
@@ -39,6 +42,7 @@ export default function LoginPage() {
             </Link>
           </div>
         )}
+        {isInviteOnly() && <InviteOnlyNotice />}
 
         {/* Password Reset Link */}
         <div className="text-center text-sm">
