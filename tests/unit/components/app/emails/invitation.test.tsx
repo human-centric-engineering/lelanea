@@ -61,6 +61,19 @@ describe('InvitationEmail', () => {
     expect(html).toContain(`expires on <!-- -->${expected}`);
   });
 
+  it('says nothing about how sign-in is set up — the accept page does that', async () => {
+    // "Accepting sets a password for …" was false once the page offered Google,
+    // and it made the next sentence read as "asked what [the password] is".
+    const html = await render(<InvitationEmail {...PROPS} />);
+    expect(html.toLowerCase()).not.toContain('password');
+    // The first-time-open sentence stands alone, and comes before the action.
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const firstOpen = text.indexOf('The first time you open');
+    const action = text.indexOf('Accept the invitation');
+    expect(firstOpen).toBeGreaterThan(-1);
+    expect(action).toBeGreaterThan(firstOpen);
+  });
+
   it('promises nothing the product does not have', async () => {
     const html = await render(<InvitationEmail {...PROPS} />);
     for (const phrase of ['dashboard', 'collaborating', 'your team', 'excited to have you']) {
