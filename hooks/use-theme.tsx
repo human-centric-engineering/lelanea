@@ -38,10 +38,10 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
  *
  * Upstream persisted the resolved SYSTEM preference to `localStorage` on first
  * paint, so from the second visit onward "hasn't chosen yet" was stored exactly
- * like "chose light", and a later OS switch was never followed. In vanilla
- * Sunrise that is invisible — both themes are near-greyscale. On Lelañea the
- * two are oyster white and near-black charcoal, so it is the difference between
- * the app tracking your machine and ignoring it.
+ * like "chose light", and a later OS switch was never followed. That shows on
+ * any deployment — Sunrise's own white and near-black included — to anyone
+ * whose OS preference changes after their first visit; it is the difference
+ * between the app tracking your machine and ignoring it.
  *
  * Decision D4: the system preference is the DEFAULT; only the toggle persists a
  * choice. So this reads storage without writing to it, and follows the OS for
