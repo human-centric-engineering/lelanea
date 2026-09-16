@@ -258,7 +258,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const sections = getRegisteredNavSections();
       expect(sections).toHaveLength(1);
       expect(sections[0]?.title).toBe('Lelañea');
-      expect(sections[0]?.items?.map((item) => item.href)).toEqual(['/admin/app/waitlist']);
+      expect(sections[0]?.items?.map((item) => item.href)).toEqual([
+        '/admin/app/waitlist',
+        '/admin/app/knowledge',
+      ]);
     },
   },
   {
@@ -494,9 +497,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §05 t-25 fills this with ONE contributor — the
+    // rule that keeps voice-designated material off `search_knowledge_base`.
+    //
+    // The row keeps asserting only that init returns cleanly, which is all it
+    // ever asserted: the resolver exports no way to READ back its registry, and
+    // adding one would be an edit to a Sunrise-owned file for a test's
+    // convenience. WHICH contributor is registered, and that there is exactly
+    // one, is pinned in tests/unit/lib/app/voice/corpus-access.test.ts against a
+    // mocked registry — named here so the pin is findable from the seam.
     seam: 'lib/app/knowledge-access-contributors.ts',
     risk: 'a stray contributor would widen every restricted agent’s document access',
-    // Behavioural reach into the resolver is covered by resolveAgentDocumentAccess.test.ts.
     assert: () => expect(initAppKnowledgeAccessContributors()).toBeUndefined(),
   },
   {
