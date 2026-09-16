@@ -1,9 +1,21 @@
 /**
- * Which of her documents the agent's search tool may see.
+ * Which of her documents each path may see — the two rules, against the database.
  *
- * `lib/app/voice/designation.ts` says what the rule IS; this is where it is
- * applied to the database, and it is the only thing standing between a
- * voice-only document and `search_knowledge_base` quoting it back at someone.
+ * `lib/app/voice/designation.ts` says what the rules ARE; this is where they are
+ * applied, and the first of them is the only thing standing between a voice-only
+ * document and `search_knowledge_base` quoting it back at someone.
+ *
+ * Two sets over one corpus, taking the opposite half of the vocabulary each:
+ *
+ * | Set                             | Purposes            | Consumer                            |
+ * | ------------------------------- | ------------------- | ----------------------------------- |
+ * | {@link resolveQuotableDocumentIds} | `knowledge`, `both` | the agent's search tool, which quotes |
+ * | {@link resolveVoiceDocumentIds}    | `voice`, `both`     | the context contributor, register only |
+ *
+ * `sensitivity-client` is admitted by neither — the deferral is about the model
+ * seeing the words at all, and it sees them either way. Everything below the
+ * "Who this widens" heading is about the first set: only it feeds Sunrise's
+ * access resolver, and only it can widen an agent.
  *
  * ## Composed live, never materialised
  *
@@ -28,7 +40,8 @@
  *
  * Participation is therefore a property of the agent: {@link isCorpusAgent}, the
  * `lelanea-` slug prefix. A prefix rather than an allowlist constant because the
- * agents themselves do not exist yet — t-26 and t-27 create them — and an
+ * agents themselves did not exist when the rule was written — t-26 creates the
+ * first — and an
  * allowlist would ship empty, making this mechanism dark until somebody
  * remembered to come back and add a string (`HB9`). The prefix is live the moment
  * the first `lelanea-…` agent is created, with nothing to remember.

@@ -112,13 +112,17 @@ export function composeVoiceContext(
 ): string {
   const content = getVoiceOverlays();
 
-  // Never empty in either branch. A blank body reads to the model as a section
-  // that exists and has nothing to say, and reads to whoever is debugging the
-  // prompt as a loader that failed — two wrong answers for the price of one.
-  const register =
-    overlay === null
-      ? block(content.coreOnly.heading, content.coreOnly.lines)
-      : block(overlay.heading, overlay.lines);
+  // Core-only means core-only: the authored fallback body and NOTHING else.
+  //
+  // Never empty — a blank body reads to the model as a section that exists and
+  // has nothing to say, and to whoever is debugging the prompt as a loader that
+  // failed — and equally never carrying the "no passage was found" note, because
+  // with no overlay there was no authored query and nothing was looked for. A
+  // block that reported an empty search it never ran would be the small dishonesty
+  // this whole feature is about not committing.
+  if (overlay === null) return block(content.coreOnly.heading, content.coreOnly.lines);
+
+  const register = block(overlay.heading, overlay.lines);
 
   const examples =
     exemplars.length === 0

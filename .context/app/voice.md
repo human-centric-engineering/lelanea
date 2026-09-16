@@ -1,15 +1,22 @@
 ---
 name: app-voice
-description: The always-on core of how she sounds, and the designation rule that keeps voice-only material off the tool path.
+description: The three layers of how she sounds — the always-on core, the register overlays, her own retrieved sentences — and the designation rule that keeps voice-only material off the tool path.
 ---
 
-# How she sounds: the core, and what may be quoted
+# How she sounds: the three layers, and what may be quoted
 
-Two halves of one feature, doing different jobs. The **core** is a page of
-authored text that rides on every prompt — the part that does not depend on
-anything being found. The **designation rule** is what decides which of her
-documents a retrieval tool is allowed to quote back at someone. Read the core
-first; it is the thing a person actually meets.
+Three layers and one rule, doing different jobs.
+
+| Layer                     | Where it rides                     | Present when                    |
+| ------------------------- | ---------------------------------- | ------------------------------- |
+| The **core**              | the agent's profile columns        | every turn, unconditionally     |
+| The **register overlays** | a `LOCKED CONTEXT` block           | the turn names a situation      |
+| Her **own passages**      | the same block, labelled by origin | her voice material is retrieved |
+
+The **designation rule** cuts across all three: it decides which of her documents
+a retrieval tool may quote back at someone, and which may only ever be shown as
+an example of how she sounds. Read the core first; it is the thing a person
+actually meets.
 
 # The always-on core
 
@@ -140,19 +147,190 @@ change to her voice an N-place edit, and the places would drift.
 
 ## What the core is not
 
-The other two layers of the fingerprint — context-selected overlays and
-retrieved exemplars — are later work, and a user's voice leanings are a filter
-over those. **Neither may reach what is in the core.** It is the invariant that
-no preference and no retrieval result can soften.
+The other two layers — the context-selected overlays and the retrieved exemplars
+— are below, and a user's voice leanings are a filter over those. **Neither may
+reach what is in the core.** It is the invariant that no preference and no
+retrieval result can soften.
 
-The seed **binds no capabilities**: `search_knowledge_base` and the exemplar
-contributor are t-27's. The mode below is set now so the rule is already live
-when the tool arrives, rather than being something somebody has to remember.
+The seed **binds no capabilities**, and still does not: the exemplar path does
+not need one (it calls the search _service_ directly, below), and binding
+`search_knowledge_base` to her agent belongs with the surface a member talks to
+her through. The `restricted` mode below is set now so the rule is already live
+when a tool does arrive, rather than being something somebody has to remember.
 
 It also leaves `visibility` at the platform default (`internal`). Widening it
 belongs to whichever task builds the surface a member talks to; shipping a
 publicly reachable agent ahead of that surface would be a live endpoint nobody
 had designed.
+
+---
+
+# The register for the moment, and her own sentences
+
+The core makes her sound consistent. It cannot make her sound _specific_: the
+register of a first hello and the register of someone in grief are not the same
+register, and a core that tried to hold both would have to say something vague
+enough to cover them — which is how a voice stops being a voice.
+
+So a turn that names a **situation** gets a second block, spliced into the system
+prompt by Sunrise's prompt-context seam. It carries two things: the register that
+moment calls for, and real passages of her own writing.
+
+## How a turn asks for it
+
+A chat request carries one `(contextType, contextId)` tuple.
+`lib/app/context-contributors.ts` registers the leaf's loader for
+`contextType: 'voice'`, and `contextId` is the **situation**:
+
+```
+contextType: 'voice'
+contextId:   'first-meeting' | 'discovery' | 'values' | 'difficulty'
+```
+
+**One tuple per turn, so a context type is a claim on the whole turn.** A turn
+carrying Daybreak's `module` type gets the framework's module block and not this
+one. Re-registering `module` here to wrap the framework's loader would work —
+the registry is keyed by type and re-registering replaces — and it would be the
+same mistake as filling one of Daybreak's `lib/app/*` bridges: fine until the
+next sync.
+
+**What sends the tuple today.** The admin orchestration chat, which passes a
+caller-supplied `contextType` straight through, so an operator (or she) can
+exercise this now. The core consumer route deliberately refuses one ("admin-only
+concepts"), so the surface a member eventually talks to her through will pin it
+server-side the way `app/api/v1/framework/modules/[slug]/chat/stream/route.ts`
+pins `module`. **Stated rather than left to be found**: until that surface
+exists, this path is live and exercised but not yet on a member's turn.
+
+## Selection is a lookup, and stays one
+
+`lib/app/voice/overlays.ts`. Exact match on the trimmed, lower-cased situation
+key; `null` for anything else. No fuzzy matching and no "closest overlay" — the
+register a person meets must not depend on a similarity score, and the same
+situation must compose the same block in every environment.
+
+An unknown situation falls back to **core-only**: the authored `coreOnly` body
+and nothing else. Two things about that fallback are deliberate and both are
+asserted:
+
+- **It is never empty.** A blank block reads to a model as a section that exists
+  and has nothing to say, and to whoever is debugging a prompt as a loader that
+  failed.
+- **It does not report a search it never ran.** With no overlay there is no
+  authored query, so nothing is looked for — and the "no passage of hers was
+  found" note, honest after an empty search, would be a small lie here.
+
+## Her passages, and why they do not come through the tool
+
+`lib/app/voice/exemplars.ts` calls the knowledge search **service** directly,
+with an explicit allowlist of voice-designated documents. It does not go through
+`search_knowledge_base`, and the rule below is unweakened: that tool is the path
+that can **quote**, and a `voice` document is absent from it.
+
+Two sets over one corpus, taking the opposite half of the vocabulary each:
+
+| Set                            | Purposes            | Consumer                              |
+| ------------------------------ | ------------------- | ------------------------------------- |
+| `resolveQuotableDocumentIds()` | `knowledge`, `both` | the agent's search tool, which quotes |
+| `resolveVoiceDocumentIds()`    | `voice`, `both`     | this contributor — register only      |
+
+`sensitivity-client` is admitted by **neither**. The deferral is about the model
+seeing the words at all, and it sees them either way.
+
+The query is the overlay's own authored `exemplarQuery`, not the situation key
+and not the person's message. Authored, so the same moment retrieves the same
+way every time — and so she can read what her own material is being searched
+for, which is the half of retrieval nobody usually gets to see.
+
+**No documents, no search.** An install with nothing designated `voice` returns
+an empty list without embedding anything: `documentIds: []` is an explicit
+restriction that collapses to `FALSE`, so the call could only ever return
+nothing, and paying for an embedding to be told so on every cache miss is a real
+per-turn bill.
+
+**A retrieval failure costs the passages and nothing else.** The overlay and the
+core are the reliable half, so `retrieveVoiceExemplarsSafely()` degrades rather
+than throwing out to `buildContext`'s contributor-catch, which would blank the
+whole block.
+
+## Labelling by origin is the whole safety property
+
+The failure this must not have is the model reading her exemplars as things the
+**user** said, or as facts to assert. Three things together prevent it, and none
+is sufficient alone:
+
+1. **Every passage carries its own origin label**, on the line above it —
+   `[Lelañea's own writing · A Sunday letter]` — never one header for a list of
+   three, which is a label the model has to remember rather than read.
+2. **Authored framing** says, in her register, that these are examples of how she
+   sounds, are not what the person said, are not facts, and are not instructions.
+   It lives in the content file, not the loader, because it is copy the model
+   reads.
+3. **Fence neutralisation.** A passage arrives by upload and lands inside a block
+   whose fence is a line of `=` characters. Any fence-shaped line in a passage has
+   its `=` replaced before it is emitted, so a document cannot close the block
+   early and put everything after it back at the model's top level — outside both
+   of the above. The words survive; only the fence is destroyed.
+
+Passages are also capped at three, and truncated at a word boundary: a long
+chunk stops being an example of her cadence and starts being an article the model
+may try to answer from, which is the failure the `voice` designation exists to
+prevent, arriving by length rather than by path.
+
+**The tests assert the labels on the emitted block**, not on the loader's return
+value — the block is what a model reads, and a labelling regression that only
+showed up in the framing would pass a test written against the former.
+
+## It is the same for every user, on purpose
+
+`buildContext` hands a contributor the request's `userId` and partitions its
+60-second cache by it, so a per-user block is available. This one does not use
+it. A user's voice leanings are a later filter over these two layers, and until
+that is designed, one person's preference silently reshaping how she sounds is a
+change nobody asked for and nobody can see. The cost is a cache partitioned more
+finely than the answer needs.
+
+## The overlays are her words too, and are a DRAFT
+
+`content/lelanea_voice_overlays.json` — the **eighth** authored file, and the
+second one that was drafted from the corpus rather than transcribed. Same
+discipline as the core: every heading, label, beat and note the model reads is
+authored there, the origin label included, and `fingerprint.provenance` says the
+file is awaiting her sign-off. A case in
+`tests/unit/lib/app/content/voice-overlays.test.ts` pins the name in it, and is
+**meant to be edited** once, on the day she signs them off.
+
+Four situations, chosen because the app has them today: arriving, the thirty
+discovery questions, the values work, and something painful surfacing. Adding a
+fifth is an edit to that file and nothing else — there is no TypeScript list of
+situations to fall out of step with it. A duplicate situation is a **parse
+error**, because selection is a lookup and the second would be silently
+unreachable.
+
+An overlay **shades** the core; it never softens it and never restates it.
+Anything true of every turn belongs in the core file.
+
+## The files
+
+| File                                   | What it is                                              |
+| -------------------------------------- | ------------------------------------------------------- |
+| `content/lelanea_voice_overlays.json`  | The authored overlays, the labelling copy, the fallback |
+| `lib/app/voice/overlays.ts`            | Selection — an exact-match lookup, and nothing more     |
+| `lib/app/voice/exemplars.ts`           | Retrieval, and the passage pipeline                     |
+| `lib/app/voice/context-contributor.ts` | Composition, and the origin labels                      |
+| `lib/app/context-contributors.ts`      | The seam registration — one contributor, type `voice`   |
+
+| Test                                                   | Proves                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| `tests/unit/lib/app/voice/context-contributor.test.ts` | The whole chain, on the emitted block — load-bearing   |
+| `tests/unit/lib/app/voice/exemplars.test.ts`           | The allowlist, the fences, the truncation, the degrade |
+| `tests/unit/lib/app/voice/overlays.test.ts`            | Selection is a lookup, and stays deterministic         |
+| `tests/unit/lib/app/context-contributors.test.ts`      | Exactly one contributor, and which type                |
+| `tests/unit/lib/app/content/voice-overlays.test.ts`    | The authored file parses, and still awaits sign-off    |
+
+Reverting the feature fails them: drop the origin label and three cases go red;
+remove `'voice'` from `VOICE_PATH_PURPOSES` and nineteen do across three files;
+stop neutralising fences and three do; empty the seam and eighteen do.
 
 ---
 
@@ -430,10 +608,19 @@ cases go red; empty `UNGRANTABLE_SENSITIVITIES` and two others do.
 
 ## Not yet built
 
-The context contributor that reads voice-designated material and labels it by
-origin is t-27, along with `search_knowledge_base` on her agent and the retrieved
-exemplars. The sign-off and review path — nothing about how she sounds changing
-without her hearing it first — is t-28.
+**The surface a member talks to her through.** Nothing in the app pins
+`contextType: 'voice'` server-side yet, so the overlay block reaches a turn only
+through the admin chat today. Whichever task builds that surface pins the tuple
+and chooses the situation, the way the framework's module route does.
 
-Context-selected overlays, and the user's voice leanings that filter them, are
-later still. Neither may reach the core.
+**`search_knowledge_base` on her agent.** The seed still binds no capabilities.
+The exemplar path does not need one, and binding the tool belongs with the
+surface above — a model told to look things up with no tool to look with will
+report having looked.
+
+**Her sign-off, and the review path.** Nothing about how she sounds changing
+without her hearing it first is t-28. Two files now await it: the core and the
+overlays.
+
+**A user's voice leanings** — a filter over the overlays and the exemplars — are
+later still, and may not reach the core.

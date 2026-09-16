@@ -335,6 +335,17 @@ describe('when no overlay matches the situation', () => {
     expect(body).not.toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
   });
 
+  it('does not report an empty search it never ran', async () => {
+    // The "no passage of hers was found" note is honest after a search that came
+    // back empty, and a small lie when nothing was looked for — which is the
+    // core-only case, because there is no authored query without an overlay.
+    const body = bodyOf(await buildContext(VOICE_CONTEXT_TYPE, UNKNOWN_SITUATION));
+
+    expect(body).toContain(CONTENT.coreOnly.heading);
+    expect(body).not.toContain(CONTENT.exemplars.noneFoundNote);
+    expect(body).not.toContain(CONTENT.exemplars.heading);
+  });
+
   it('offers no passages, and spends no embedding looking for them', async () => {
     const block = await buildContext(VOICE_CONTEXT_TYPE, UNKNOWN_SITUATION);
 

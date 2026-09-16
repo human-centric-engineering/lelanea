@@ -44,8 +44,8 @@
  *   - its sensitivity is not `client`.
  *
  * Everything else reaches the prompt, if at all, through the context
- * contributor t-27 builds: read directly, labelled by origin, never presented as
- * a retrieved answer.
+ * contributor in `lib/app/voice/context-contributor.ts`: read directly, labelled
+ * by origin, never presented as a retrieved answer.
  *
  * ### Why this is a document-level rule and not a tag grant
  *

@@ -115,12 +115,15 @@ export function readFingerprintVersion(prompt: string): string | null {
  * copy with nothing keeping it in step.
  *
  * **It must not instruct a lookup until there is a tool to do it with.** The
- * seed binds no capabilities — `search_knowledge_base` is t-27's — and the agent
- * is created active, so an operator can chat with it from the first run. An
- * earlier draft said "look before you answer from memory", which asked a model
- * with no tool to perform a retrieval; the usual result is a confident claim to
- * have consulted her material. t-27 adds the tool AND the clause, together.
- * Caught by /code-review.
+ * seed still binds no capabilities, and the agent is created active, so an
+ * operator can chat with it from the first run. An earlier draft said "look
+ * before you answer from memory", which asked a model with no tool to perform a
+ * retrieval; the usual result is a confident claim to have consulted her
+ * material. Whichever task binds `search_knowledge_base` adds the tool AND the
+ * clause, together. Caught by /code-review.
+ *
+ * t-27's exemplar path does NOT change this: it pushes her passages into the
+ * prompt from outside the turn, so the model is never asked to go and look.
  */
 export const VOICE_AGENT_SYSTEM_INSTRUCTIONS = `You are the guide a person meets inside the Lelañea app.
 
