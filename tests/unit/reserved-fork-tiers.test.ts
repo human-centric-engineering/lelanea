@@ -238,6 +238,11 @@ describe('reserved fork tiers', () => {
       // §06 t-15 — the acknowledgement ledger.
       'enum AppAcknowledgementKind {',
       'model AppAcknowledgement {',
+      // §07 t-25 — the licensing note per designated document. Accounted for in
+      // `initLeafSubjectSources()` as an EXCLUSION rather than a section: the row
+      // is about one of her files, and the only thing on it that touches a person
+      // is `designatedBy`, the id of the admin who last set it.
+      'model AppKnowledgeDesignation {',
     ]);
   });
 

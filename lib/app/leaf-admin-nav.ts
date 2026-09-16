@@ -20,6 +20,19 @@
  * it. The section below is the entry point to the surface that closes that:
  * `/admin/app/waitlist`, behind the admin layout's own role check.
  *
+ * ## And the second item, for the same reason
+ *
+ * §05 t-25 records what each uploaded document is FOR — quotable knowledge, or
+ * voice-only material the agent may imitate but never quote. That designation is
+ * written as tags and a note, and it decides what `search_knowledge_base` can
+ * reach; an operator with no way to SEE it has no way to tell a document nobody
+ * has designated (which reaches nothing) from one designated as knowledge (which
+ * reaches everything). `/admin/app/knowledge` is that surface.
+ *
+ * **"Training material", not "Her material".** The label names what an operator
+ * is looking at — the corpus the agent is trained on — rather than whose it is,
+ * which the section heading above it already says.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -30,14 +43,16 @@
  * looking at this sidebar is reading three tiers at once, and the tier a link
  * belongs to is the first thing worth knowing.
  *
- * Pinned in `tests/unit/lib/app/defaults.test.ts` — both here and on the
- * `lib/app/admin-nav.ts` bridge, which now registers two sections rather than
- * one (`HB2`: pin the new value, never delete the row).
+ * Pinned in `tests/unit/lib/app/defaults.test.ts` — both here (one section, now
+ * TWO items, in this order) and on the `lib/app/admin-nav.ts` bridge, which
+ * registers two sections rather than one (`HB2`: pin the new value, never delete
+ * the row).
  */
 
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Library } from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
+import { DESIGNATION_ADMIN_PAGE } from '@/lib/app/voice/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
@@ -48,6 +63,12 @@ export function initLeafAdminNav(): void {
         label: 'Waitlist',
         icon: ClipboardList,
         description: 'Who asked to be told when a place opens, and what they said',
+      },
+      {
+        href: DESIGNATION_ADMIN_PAGE,
+        label: 'Training material',
+        icon: Library,
+        description: 'What each document is for, and whether the agent may quote it',
       },
     ],
   });

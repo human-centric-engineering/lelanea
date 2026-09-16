@@ -39,4 +39,18 @@ export function registerLeafDriftProbes(): void {
     // gate, and one re-created with `SET NULL` would fail on the NOT NULL column.
     probe: constraintExists('app_acknowledgement_userId_fkey', 'ON DELETE CASCADE'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_knowledge_designation_documentId_fkey (hand-written FK \u2192 ai_knowledge_document)',
+    kind: 'FK constraint',
+    table: 'app_knowledge_designation',
+    // Third of the three, and the first pointing at a Sunrise table rather than
+    // `user`. The definition is asserted, not just the existence, for the same
+    // reason as the other two: `ON DELETE CASCADE` is what stops a deleted
+    // document leaving its licensing note behind as an orphan row keyed on an id
+    // nothing resolves \u2014 and a constraint re-created with `NO ACTION` would pass
+    // an existence check while making `deleteDocument()` fail with `P2003` for
+    // every document anyone had ever designated.
+    probe: constraintExists('app_knowledge_designation_documentId_fkey', 'ON DELETE CASCADE'),
+  });
 }

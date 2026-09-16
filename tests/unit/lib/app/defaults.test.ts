@@ -258,7 +258,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const sections = getRegisteredNavSections();
       expect(sections).toHaveLength(1);
       expect(sections[0]?.title).toBe('Lelañea');
-      expect(sections[0]?.items?.map((item) => item.href)).toEqual(['/admin/app/waitlist']);
+      expect(sections[0]?.items?.map((item) => item.href)).toEqual([
+        '/admin/app/waitlist',
+        '/admin/app/knowledge',
+      ]);
     },
   },
   {
@@ -359,7 +362,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // coverage guard enforces — and a table added without a decision fails
       // here rather than only in that guard.
       const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
-      expect(appModels).toEqual(['AppAcknowledgement', 'AppWaitlistEntry']);
+      expect(appModels).toEqual([
+        'AppAcknowledgement',
+        'AppKnowledgeDesignation',
+        'AppWaitlistEntry',
+      ]);
 
       // Reading the registry triggers the lazy init, which runs the bridge:
       // framework tier first, then this seam. `initLeafSubjectSources()` is
@@ -383,9 +390,30 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         section: 'acknowledgements',
         disposition: 'export',
       });
-      // Nothing of ours is excluded: both tables hold personal data. (The
-      // registry also holds the framework tier's exclusions, so filter to ours.)
-      expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([]);
+      // ONE of ours is excluded, and only one. `AppKnowledgeDesignation` holds a
+      // note about a FILE she uploaded — what it is for, and on what terms we may
+      // use it; the other two hold personal data and must never join this list.
+      // (The registry also holds the framework tier's exclusions, so filter to
+      // ours.)
+      expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([
+        'AppKnowledgeDesignation',
+      ]);
+      // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
+      // is what lets them tell "we hold nothing about you" apart from "we decided
+      // not to give it to you". An empty or placeholder reason would pass the
+      // coverage guard and fail that reader.
+      //
+      // It has to be true for EVERY subject who could read it, and this row was
+      // pinned on a sentence that was not: "it holds nothing about you" is false
+      // for an administrator, because `designatedBy` retains the id of whoever
+      // last set the designation — deliberately without an FK, so the note
+      // survives that person's account. Raised by /code-review on t-25. The
+      // assertion now pins the disclosure rather than the reassurance, because
+      // the reassurance is the half that was wrong.
+      const designation = excluded.find((entry) => entry.model === 'AppKnowledgeDesignation');
+      expect(designation?.reason).toMatch(/says nothing about you/i);
+      expect(designation?.reason).toMatch(/administrator/i);
+      expect(designation?.reason).toMatch(/account id/i);
 
       // The collector's half of the same contract: every section this seam
       // DECLARES must appear in what it RETURNS, as an array, even when the
@@ -494,9 +522,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §05 t-25 fills this with ONE contributor — the
+    // rule that keeps voice-designated material off `search_knowledge_base`.
+    //
+    // The row keeps asserting only that init returns cleanly, which is all it
+    // ever asserted: the resolver exports no way to READ back its registry, and
+    // adding one would be an edit to a Sunrise-owned file for a test's
+    // convenience. WHICH contributor is registered, and that there is exactly
+    // one, is pinned in tests/unit/lib/app/voice/corpus-access.test.ts against a
+    // mocked registry — named here so the pin is findable from the seam.
     seam: 'lib/app/knowledge-access-contributors.ts',
     risk: 'a stray contributor would widen every restricted agent’s document access',
-    // Behavioural reach into the resolver is covered by resolveAgentDocumentAccess.test.ts.
     assert: () => expect(initAppKnowledgeAccessContributors()).toBeUndefined(),
   },
   {

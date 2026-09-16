@@ -40,7 +40,14 @@
  * 3. The declaration case expects the framework models plus ours.
  *
  * A future leaf table adds one entry to `LEAF_SECTIONS` / `LEAF_MODELS` below
- * and nothing else here changes.
+ * and nothing else here changes — **if it is exported**. §07 t-25 showed the
+ * other half: `AppKnowledgeDesignation` is registered as an EXCLUSION, so it
+ * appears in neither list and instead lands in `getAppExcludedSubjectSources()`,
+ * which this file previously pinned to the framework's rows alone. Hence
+ * `LEAF_EXCLUDED_MODELS`. The framework's own exclusion rows are still asserted
+ * verbatim, reason text included; ours are matched by model, because the reason
+ * is `leaf-data-export.ts`'s to word and restating it here would make every
+ * copy-edit a two-file change.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -103,6 +110,8 @@ const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 /** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
 const LEAF_SECTIONS = ['waitlist', 'acknowledgements'];
 const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement'];
+/** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
+const LEAF_EXCLUDED_MODELS = ['AppKnowledgeDesignation'];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
 
@@ -425,7 +434,19 @@ describe('collectAppSubjectData bridge', () => {
     ).toEqual(
       [...FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.model), ...LEAF_MODELS].sort()
     );
-    expect(getAppExcludedSubjectSources()).toEqual(FRAMEWORK_EXCLUDED_SOURCES);
+    // LELAÑEA: the framework's exclusions PLUS the leaf's. Ours by model (the
+    // reason is `leaf-data-export.ts`'s wording), the framework's verbatim — so
+    // a framework row losing or changing its reason still fails here.
+    expect(
+      getAppExcludedSubjectSources()
+        .map((entry) => entry.model)
+        .sort()
+    ).toEqual(
+      [...FRAMEWORK_EXCLUDED_SOURCES.map((entry) => entry.model), ...LEAF_EXCLUDED_MODELS].sort()
+    );
+    expect(getAppExcludedSubjectSources()).toEqual(
+      expect.arrayContaining(FRAMEWORK_EXCLUDED_SOURCES)
+    );
 
     __resetAppSubjectSourceRegistryForTests();
   });

@@ -155,3 +155,54 @@ model AppAcknowledgement {
   @@index([userId])
   @@map("app_acknowledgement")
 }
+
+/// What one knowledge document is FOR, in the part that cannot be a tag.
+///
+/// Purpose and sensitivity are managed `KnowledgeTag` rows — that is what lets
+/// them drive Sunrise's own tagging surfaces and its per-agent grant machinery.
+/// The licensing note is free text about ONE document, and `KnowledgeTag` has no
+/// per-document value column, so it has nowhere to live in the taxonomy without
+/// minting a tag per note.
+///
+/// **And it cannot live in `AiKnowledgeDocument.metadata` either.** That column
+/// is REPLACED wholesale by `lib/orchestration/knowledge/document-manager.ts` on
+/// ingest, retry and re-chunk — a note an admin typed would disappear the first
+/// time a document was re-processed, with no error and nothing in the log to
+/// connect the loss to the cause. Hence a leaf table: `app_*`, ours, and outside
+/// every write path the platform owns.
+///
+/// **`documentId` is a plain scalar with no Prisma `@relation`** — a fork table
+/// must not add a reverse field to a Sunrise-owned model (CUSTOMIZATION.md §5),
+/// and `AiKnowledgeDocument` lives in `prisma/schema/orchestration-knowledge.prisma`.
+/// The foreign key is hand-written in the `app_knowledge_designation` migration
+/// with `ON DELETE CASCADE` — the note is *about* the document and means nothing
+/// without it — and pinned by a drift probe in `lib/app/leaf-db-drift.ts` so a
+/// future `migrate dev` cannot quietly drop it.
+///
+/// Holds no personal data: every column is about a file she uploaded, not about
+/// a person. Declared as an EXCLUSION with that reason in
+/// `lib/app/leaf-data-export.ts`, which is what the Art. 15 bundle shows a data
+/// subject verbatim.
+///
+/// The row is the document's designation, so `documentId` is the primary key:
+/// one designation per document, and a re-designation is an update rather than a
+/// second row. There is deliberately no history here — what a document is for is
+/// current state, and the audit log already records who changed it.
+model AppKnowledgeDesignation {
+  /// Hand-written FK → `ai_knowledge_document`. See the note above.
+  documentId   String   @id
+  /// Free-text attribution / permission note: whose words these are, and on what
+  /// terms we may use them. Null means nobody has said yet — which is different
+  /// from "no restriction", and the admin surface says so.
+  licensing    String?  @db.Text
+  /// Who last set it, for the same reason the audit log exists. Deliberately NOT
+  /// a relation and NOT a foreign key: it is an admin's id on an operational
+  /// note, the row survives that admin's account, and a `user` FK here would
+  /// make `eraseUser()` fail or silently rewrite the record of who designated
+  /// what. Rendered as an id, resolved by the admin list when it can.
+  designatedBy String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("app_knowledge_designation")
+}
