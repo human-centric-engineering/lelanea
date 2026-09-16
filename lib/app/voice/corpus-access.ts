@@ -69,6 +69,7 @@ import {
   CORPUS_AGENT_SLUG_PREFIX,
   DOCUMENT_PURPOSES,
   TOOL_PATH_PURPOSES,
+  VOICE_PATH_PURPOSES,
   UNGRANTABLE_SENSITIVITIES,
   purposeTagSlug,
   sensitivityTagSlug,
@@ -146,6 +147,60 @@ export async function resolveQuotableDocumentIds(): Promise<string[]> {
       scope: APP_SCOPE,
       tags: { some: { tag: { slug: { in: qualifyingTagSlugs() } } } },
       NOT: { tags: { some: { tag: { slug: { in: disqualifyingTagSlugs() } } } } },
+    },
+    select: { id: true },
+  });
+  return documents.map((document) => document.id);
+}
+
+/**
+ * Tag slugs that DISQUALIFY a document from the voice path.
+ *
+ * Derived the same way as {@link disqualifyingTagSlugs} and from the same two
+ * sources — every purpose outside {@link VOICE_PATH_PURPOSES} (today,
+ * `knowledge`) and every ungrantable sensitivity (today, `client`) — so a
+ * purpose added to the vocabulary without being added to either path is excluded
+ * from both by default.
+ */
+export function voiceDisqualifyingTagSlugs(): string[] {
+  return [
+    ...DOCUMENT_PURPOSES.filter((purpose) => !VOICE_PATH_PURPOSES.includes(purpose)).map(
+      purposeTagSlug
+    ),
+    ...UNGRANTABLE_SENSITIVITIES.map(sensitivityTagSlug),
+  ];
+}
+
+/** Tag slugs that QUALIFY a document for the voice path, before disqualifiers. */
+export function voiceQualifyingTagSlugs(): string[] {
+  return VOICE_PATH_PURPOSES.map(purposeTagSlug);
+}
+
+/**
+ * The documents that may be shown to the model as EXAMPLES OF HER REGISTER.
+ *
+ * The same SQL shape as {@link resolveQuotableDocumentIds} over the other half
+ * of the vocabulary, and `tests/unit/lib/app/voice/corpus-access.test.ts`
+ * asserts it against `isVoiceExemplar()` over every combination rather than
+ * trusting the two to have stayed in step.
+ *
+ * **This set is NOT a widening of what the agent can quote.** Nothing returned
+ * here reaches `search_knowledge_base`; it reaches the context contributor,
+ * which labels every passage by origin and tells the model in her own authored
+ * words that these are examples of how she sounds and not answers to give. A
+ * `voice` document is in this set and absent from the quotable one, which is the
+ * property t-25 shipped and this task must not weaken.
+ *
+ * Same `scope: 'app'` filter, for the same reason: `system`-scoped seed material
+ * is the platform's bundled reference, is searchable by every agent whatever any
+ * rule says, and is emphatically not an example of how she writes.
+ */
+export async function resolveVoiceDocumentIds(): Promise<string[]> {
+  const documents = await prisma.aiKnowledgeDocument.findMany({
+    where: {
+      scope: APP_SCOPE,
+      tags: { some: { tag: { slug: { in: voiceQualifyingTagSlugs() } } } },
+      NOT: { tags: { some: { tag: { slug: { in: voiceDisqualifyingTagSlugs() } } } } },
     },
     select: { id: true },
   });

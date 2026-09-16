@@ -44,8 +44,13 @@
  * ---------------------------------------------------------------------------
  * `leaf-bootstrap.ts` (the seventeen journey modules and the waitlist's
  * erasure hook), `leaf-data-export.ts` (the
- * waitlist's Art. 15 declaration and collector) and `leaf-admin-nav.ts` (the
- * "Lelañea" sidebar section) assert the FILLED value. Pinning is what keeps the
+ * waitlist's Art. 15 declaration and collector), `leaf-admin-nav.ts` (the
+ * "Lelañea" sidebar section) and `context-contributors.ts` (her voice block)
+ * assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
+ * its row still asserts only that its init returns cleanly — the resolver
+ * exports no way to read its registry back, and adding one would be an edit to a
+ * Sunrise-owned file for a test's convenience; it is pinned by registration in
+ * `tests/unit/lib/app/knowledge-access-contributors.test.ts` instead. Pinning is what keeps the
  * protection for every seam still empty, and turns each row into a guard on the
  * thing we filled it with — see `HB2`.
  *
@@ -86,6 +91,7 @@ vi.mock('@/lib/db/client', () => ({
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
 import { initAppCapabilities } from '@/lib/app/capabilities';
 import { initAppContextContributors } from '@/lib/app/context-contributors';
+import { VOICE_CONTEXT_TYPE, loadVoiceContext } from '@/lib/app/voice/context-contributor';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
@@ -221,10 +227,35 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(initAppCapabilities()).toBeUndefined(),
   },
   {
+    // PINNED, not deleted (`HB2`). §05 t-27 fills this with ONE contributor: her
+    // voice block — the register a moment calls for, plus real passages of her
+    // writing labelled by origin.
+    //
+    // The registry is core's and core exports no getter for it, so this reads
+    // the `globalThis` store the context-builder docblock says it deliberately
+    // keeps there. A DELTA rather than a snapshot, because the same store is
+    // shared with the framework's own `module` registration and with whatever a
+    // sibling row's `initApp()` has already put in it: what is pinned is that
+    // OUR seam adds exactly one type, and which function is behind it.
+    //
+    // Behavioural reach into `buildContext` is
+    // tests/unit/lib/app/voice/context-contributor.test.ts; the registration
+    // itself, against a mocked registrar, is
+    // tests/unit/lib/app/context-contributors.test.ts.
     seam: 'lib/app/context-contributors.ts',
     risk: 'a stray contributor would inject prompt context into every chat turn',
-    // Behavioural reach into buildContext is covered by context-builder.test.ts.
-    assert: () => expect(initAppContextContributors()).toBeUndefined(),
+    assert: () => {
+      const registry = (globalThis as { sunriseChatContextContributors?: Map<string, unknown> })
+        .sunriseChatContextContributors;
+      registry?.delete(VOICE_CONTEXT_TYPE);
+      const before = new Set(registry?.keys() ?? []);
+
+      expect(initAppContextContributors()).toBeUndefined();
+
+      const added = [...(registry?.keys() ?? [])].filter((type) => !before.has(type));
+      expect(added).toEqual([VOICE_CONTEXT_TYPE]);
+      expect(registry?.get(VOICE_CONTEXT_TYPE)).toBe(loadVoiceContext);
+    },
   },
   {
     seam: 'lib/app/admin-nav.ts',

@@ -537,6 +537,114 @@ export const voiceFingerprintFileSchema = z.strictObject({
   ),
 });
 
+/**
+ * A situation key, as a chat request's `contextId` carries it.
+ *
+ * The same character class the platform already uses for a slug
+ * (`slugSchema` in `lib/validations/common.ts`), because a situation is
+ * addressed over the wire: a route pins `contextType: 'voice'` /
+ * `contextId: '<situation>'`, and the selector matches on this string. An
+ * authored key with a space or a capital in it would be a key nothing could
+ * ever send, and the failure would be a silent fall back to core-only rather
+ * than an error.
+ */
+const voiceSituationSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
+  message: 'situation must be a lowercase hyphenated key — it arrives as a request contextId',
+});
+
+/**
+ * The context-selected overlays — content/lelanea_voice_overlays.json
+ *
+ * The fingerprint's second layer. Same authored-file discipline as the core
+ * beside it: every heading, label and line the model reads is authored here,
+ * never a string literal in the loader, because they are her words (or words
+ * about her words) and the content seam exists so there is exactly one path for
+ * those.
+ *
+ * `layer` is a literal, as the core's is, so the two files can never be handed
+ * to the wrong reader. `exemplarQuery` is authored rather than derived from the
+ * situation key so retrieval for one moment is deterministic and reviewable —
+ * she can read what her material is being searched for, which is the half of
+ * retrieval nobody usually gets to see.
+ */
+export const voiceOverlaysFileSchema = z
+  .strictObject({
+    fingerprint: z.strictObject({
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9_-]*$/, {
+          message: 'id must be a lowercase slug with no whitespace',
+        }),
+      title: z.string().min(1),
+      layer: z.literal('overlays'),
+      version: fingerprintVersionSchema,
+      locale: z.string().min(1),
+      textFormat: z.string().min(1),
+      provenance: z.strictObject({
+        status: z.literal('drafted_from_corpus'),
+        awaitingSignOffFrom: z.string().min(1),
+        note: z.string().min(1),
+      }),
+      sourceFiles: z.array(z.string().min(1)),
+      notes: z.array(z.string().min(1)),
+    }),
+    overlays: z
+      .array(
+        z.strictObject({
+          situation: voiceSituationSchema,
+          label: z.string().min(1),
+          /** A note to whoever reviews these. Validated, never sent to the model. */
+          when: z.string().min(1),
+          heading: z.string().min(1),
+          lines: voiceLinesSchema,
+          exemplarQuery: z.string().trim().min(1),
+        })
+      )
+      .min(1),
+    exemplars: z.strictObject({
+      heading: z.string().min(1),
+      /**
+       * The origin label carried by EVERY emitted passage.
+       *
+       * The one string in this file that is a safety property rather than copy:
+       * it is what tells the model her writing from the person's. It is
+       * authored here for the same reason as everything else, and pinned by a
+       * test on the emitted block rather than on the loader's return value.
+       */
+      originLabel: z.string().min(1),
+      lines: voiceLinesSchema,
+      noneFoundNote: z.string().min(1),
+    }),
+    /** The body emitted when no overlay matches — never empty, by construction. */
+    coreOnly: z.strictObject({
+      heading: z.string().min(1),
+      lines: voiceLinesSchema,
+    }),
+    reviewNotes: z.array(
+      z.strictObject({
+        scope: z.string().min(1),
+        note: z.string().min(1),
+      })
+    ),
+  })
+  .superRefine((file, ctx) => {
+    // Two overlays on one situation is not a validation nicety: selection is a
+    // lookup, so the second would be unreachable and whoever authored it would
+    // have no way to tell from the file that their lines never ship.
+    const seen = new Set<string>();
+    for (const [index, overlay] of file.overlays.entries()) {
+      if (seen.has(overlay.situation)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['overlays', index, 'situation'],
+          message: `duplicate situation "${overlay.situation}" — only the first would ever be selected`,
+        });
+      }
+      seen.add(overlay.situation);
+    }
+  });
+
 // ============================================================================
 // Release 2 — validated here, not served. See the file header.
 // ============================================================================
@@ -853,3 +961,4 @@ export type ValuesModuleFile = z.infer<typeof valuesModuleFileSchema>;
 export type ValuesReferenceFrameworkFile = z.infer<typeof valuesReferenceFrameworkFileSchema>;
 export type ValueExplorationsFile = z.infer<typeof valueExplorationsFileSchema>;
 export type VoiceFingerprintFile = z.infer<typeof voiceFingerprintFileSchema>;
+export type VoiceOverlaysFile = z.infer<typeof voiceOverlaysFileSchema>;

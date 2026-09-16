@@ -170,6 +170,22 @@ export const TOOL_PATH_PURPOSES: readonly DocumentPurpose[] = ['knowledge', 'bot
 export const UNGRANTABLE_SENSITIVITIES: readonly DocumentSensitivity[] = ['client'];
 
 /**
+ * The purposes whose documents may be shown to the model as EXAMPLES OF HER
+ * REGISTER — the context-contributor path, not the tool path.
+ *
+ * The mirror image of {@link TOOL_PATH_PURPOSES}, and the pair is the whole
+ * point of the vocabulary: `voice` is here and absent there, `knowledge` is
+ * there and absent here, and `both` is in both because it carries her knowledge
+ * AND her register. A document is therefore never silently in neither.
+ *
+ * Adding `'knowledge'` here would put a reference note in front of the model as
+ * an example of how she sounds, which is the harmless direction. Removing
+ * `'voice'` is the one that matters: it would make this whole path dark while
+ * everything still passed.
+ */
+export const VOICE_PATH_PURPOSES: readonly DocumentPurpose[] = ['voice', 'both'];
+
+/**
  * Human-readable copy for the admin surface. Kept beside the vocabulary so a
  * value added to either family cannot ship without the sentence that explains
  * it — `tests/unit/lib/app/voice/designation.test.ts` pins the correspondence.
@@ -221,6 +237,31 @@ export interface DocumentDesignation {
 export function isQuotable(designation: DocumentDesignation): boolean {
   if (designation.purpose === null) return false;
   if (!TOOL_PATH_PURPOSES.includes(designation.purpose)) return false;
+  if (
+    designation.sensitivity !== null &&
+    UNGRANTABLE_SENSITIVITIES.includes(designation.sensitivity)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * May this document be shown to the model as an example of her register?
+ *
+ * The contributor path's rule, as one pure function, exactly as
+ * {@link isQuotable} is the tool path's — so the two can be read side by side
+ * and asserted against each other over the whole vocabulary rather than trusted
+ * to have been written on the same afternoon.
+ *
+ * The sensitivity half is the SAME list, deliberately. `client` material is
+ * deferred, and a rule that let it through here because it is "only" being shown
+ * as a register example would be the leak the deferral exists to prevent — the
+ * model sees the words either way.
+ */
+export function isVoiceExemplar(designation: DocumentDesignation): boolean {
+  if (designation.purpose === null) return false;
+  if (!VOICE_PATH_PURPOSES.includes(designation.purpose)) return false;
   if (
     designation.sensitivity !== null &&
     UNGRANTABLE_SENSITIVITIES.includes(designation.sensitivity)

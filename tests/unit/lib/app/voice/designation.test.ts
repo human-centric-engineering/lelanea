@@ -27,7 +27,9 @@ import {
   SENSITIVITY_TAG_SLUGS,
   TOOL_PATH_PURPOSES,
   UNGRANTABLE_SENSITIVITIES,
+  VOICE_PATH_PURPOSES,
   isQuotable,
+  isVoiceExemplar,
   purposeFromTagSlug,
   purposeTagSlug,
   readDesignation,
@@ -114,6 +116,81 @@ describe('the rule', () => {
   it('never admits voice, at any sensitivity', () => {
     for (const sensitivity of [...DOCUMENT_SENSITIVITIES, null]) {
       expect(isQuotable({ purpose: 'voice', sensitivity, licensing: null })).toBe(false);
+    }
+  });
+});
+
+describe('isVoiceExemplar — the other path over the same corpus', () => {
+  it('admits voice and both, and never knowledge', () => {
+    // The mirror image of the tool path's list. `voice` being here is what makes
+    // this path exist at all; removing it would leave the mechanism dark while
+    // everything still passed.
+    expect(VOICE_PATH_PURPOSES).toEqual(['voice', 'both']);
+    expect(VOICE_PATH_PURPOSES).not.toContain('knowledge');
+  });
+
+  it('admits her voice material, and `both` with it', () => {
+    expect(isVoiceExemplar({ purpose: 'voice', sensitivity: 'public', licensing: null })).toBe(
+      true
+    );
+    expect(isVoiceExemplar({ purpose: 'voice', sensitivity: 'private', licensing: null })).toBe(
+      true
+    );
+    // `both` carries her knowledge AND her register, so it is on both paths.
+    expect(isVoiceExemplar({ purpose: 'both', sensitivity: null, licensing: null })).toBe(true);
+  });
+
+  it('never shows a knowledge-only document as an example of how she writes', () => {
+    for (const sensitivity of [...DOCUMENT_SENSITIVITIES, null]) {
+      expect(isVoiceExemplar({ purpose: 'knowledge', sensitivity, licensing: null })).toBe(false);
+    }
+  });
+
+  it('refuses `sensitivity: client` here too, at any purpose', () => {
+    // The deferral is about the model seeing the words at all. A rule that let
+    // client material through because it was "only" an example of register would
+    // be the leak the deferral exists to prevent, arriving by the other door.
+    expect(isVoiceExemplar({ purpose: 'voice', sensitivity: 'client', licensing: null })).toBe(
+      false
+    );
+    expect(isVoiceExemplar({ purpose: 'both', sensitivity: 'client', licensing: null })).toBe(
+      false
+    );
+  });
+
+  it('treats an undesignated document as reaching nothing', () => {
+    expect(isVoiceExemplar({ purpose: null, sensitivity: null, licensing: null })).toBe(false);
+    expect(isVoiceExemplar({ purpose: null, sensitivity: 'public', licensing: null })).toBe(false);
+  });
+});
+
+describe('the two paths, read together', () => {
+  it('cover the vocabulary between them, so no purpose falls through both', () => {
+    // The pair is the point of the vocabulary: `voice` is on one path and not the
+    // other, `knowledge` the reverse, `both` on both. A purpose added to neither
+    // would be a document an operator had designated that reached nothing at
+    // all — deny-by-default is right for an UNDESIGNATED document and wrong for a
+    // designated one, and the difference is invisible on the admin surface.
+    for (const purpose of DOCUMENT_PURPOSES) {
+      const designation = { purpose, sensitivity: 'public' as const, licensing: null };
+      expect({ purpose, reaches: isQuotable(designation) || isVoiceExemplar(designation) }).toEqual(
+        { purpose, reaches: true }
+      );
+    }
+  });
+
+  it('keeps `voice` on exactly one of them — the one that cannot quote', () => {
+    const voice = { purpose: 'voice' as const, sensitivity: null, licensing: null };
+
+    expect(isQuotable(voice)).toBe(false);
+    expect(isVoiceExemplar(voice)).toBe(true);
+  });
+
+  it('agrees that `client` reaches neither', () => {
+    for (const purpose of [...DOCUMENT_PURPOSES, null]) {
+      const designation = { purpose, sensitivity: 'client' as const, licensing: null };
+      expect(isQuotable(designation)).toBe(false);
+      expect(isVoiceExemplar(designation)).toBe(false);
     }
   });
 });
