@@ -51,9 +51,19 @@
  * cache by it, so a per-user block is available. This one does not use it. A
  * user's voice leanings are a later filter over the overlays and the exemplars,
  * and until that is designed, one person's preference silently reshaping how she
- * sounds is a change nobody asked for and nobody can see. The cost of ignoring
- * it is a cache partitioned more finely than the answer needs — one embedding
- * per situation per user per minute rather than per situation per minute.
+ * sounds is a change nobody asked for and nobody can see.
+ *
+ * The cost is a cache partitioned more finely than the answer needs: one
+ * embedding per cache miss per user, rather than one per situation. **And per
+ * SPELLING of a situation, not per situation** — `normaliseSituation` runs
+ * inside this contributor, which is BELOW the cache, so `first-meeting` and
+ * `First-Meeting` select the same overlay through two cache entries and two
+ * embeddings. The tolerance is worth more than the duplicate: a hand-typed key
+ * that silently fell back to core-only would be a wrong answer that looks like a
+ * right one, and a route pinning the key server-side sends one spelling anyway.
+ * Stated because an earlier draft of this docblock claimed the cost was one
+ * embedding per situation per user, which is not what the code does. Caught by
+ * /code-review.
  *
  * @see .context/app/voice.md
  * @see lib/orchestration/chat/context-builder.ts — the seam, the cache, the framing

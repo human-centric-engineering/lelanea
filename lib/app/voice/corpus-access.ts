@@ -167,21 +167,35 @@ export async function resolveQuotableDocumentIds(): Promise<string[]> {
 }
 
 /**
- * Tag slugs that DISQUALIFY a document from the voice path.
+ * Tag slugs that DISQUALIFY a document from the voice path: the ungrantable
+ * sensitivities, and nothing else.
  *
- * Derived the same way as {@link disqualifyingTagSlugs} and from the same two
- * sources — every purpose outside {@link VOICE_PATH_PURPOSES} (today,
- * `knowledge`) and every ungrantable sensitivity (today, `client`) — so a
- * purpose added to the vocabulary without being added to either path is excluded
- * from both by default.
+ * **The asymmetry with {@link disqualifyingTagSlugs} is `readDesignation`'s
+ * safest-reading rule, in SQL.** A document can carry two purpose tags — the
+ * platform's own tag modal knows nothing about these families and will happily
+ * put both on one row — and when it does, `readDesignation` resolves the pair to
+ * `voice`, because the cost of being wrong that way is a passage that is never
+ * quoted and the cost the other way is her Substack pasted into a reply as an
+ * answer.
+ *
+ * So on the TOOL path a second `purpose-voice` tag is disqualifying: it makes
+ * the document less quotable. On THIS path a second tag cannot make a document
+ * less of a voice example, so nothing about a purpose disqualifies it here. A
+ * document tagged `purpose-voice` and `purpose-knowledge` is semantically what
+ * `purpose-both` says: it reaches this path, and not the one that can quote.
+ *
+ * The first version derived these the same way the tool path's are derived —
+ * "every purpose outside {@link VOICE_PATH_PURPOSES}" — which excluded that
+ * document from BOTH paths while the admin surface showed it as `Voice`. It
+ * reached nothing, silently, exactly as if nobody had designated it. Caught by
+ * /code-review.
+ *
+ * The safe-by-default property that derivation bought is not lost: it lives in
+ * {@link voiceQualifyingTagSlugs} instead. A purpose added to the vocabulary and
+ * to neither path still qualifies a document for nothing on its own.
  */
 export function voiceDisqualifyingTagSlugs(): string[] {
-  return [
-    ...DOCUMENT_PURPOSES.filter((purpose) => !VOICE_PATH_PURPOSES.includes(purpose)).map(
-      purposeTagSlug
-    ),
-    ...UNGRANTABLE_SENSITIVITIES.map(sensitivityTagSlug),
-  ];
+  return [...UNGRANTABLE_SENSITIVITIES.map(sensitivityTagSlug)];
 }
 
 /** Tag slugs that QUALIFY a document for the voice path, before disqualifiers. */

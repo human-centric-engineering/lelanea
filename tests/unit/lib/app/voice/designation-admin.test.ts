@@ -45,8 +45,13 @@ vi.mock('@/lib/orchestration/knowledge/resolveAgentDocumentAccess', () => ({
   invalidateAllAgentAccess: vi.fn(),
 }));
 
+vi.mock('@/lib/orchestration/chat/context-builder', () => ({
+  clearContextCache: vi.fn(),
+}));
+
 import { prisma } from '@/lib/db/client';
 import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
+import { clearContextCache } from '@/lib/orchestration/chat/context-builder';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { setDesignation, listDesignatedDocuments } from '@/lib/app/voice/designation-admin';
 import { purposeTagSlug, sensitivityTagSlug } from '@/lib/app/voice/designation';
@@ -173,6 +178,22 @@ describe('setDesignation', () => {
     await setDesignation(DOC, { purpose: 'voice' }, ADMIN);
 
     expect(invalidateAllAgentAccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts the PROMPT-BLOCK cache too, so a re-designated document stops being quoted now', async () => {
+    // Two sixty-second caches, not one. `resolveAgentDocumentAccess` memoises
+    // which documents an agent may SEARCH; `buildContext` memoises the framed
+    // block — her retrieved passages, already in it — per
+    // `(contextType, contextId, userId)`. The first version of the voice
+    // contributor left the second behind, so a document re-marked
+    // `sensitivity-client` went on reaching the system prompt of every
+    // conversation whose block was built in the preceding minute. Caught by
+    // /code-review.
+    documentReadsBackAs([purposeTagSlug('voice'), sensitivityTagSlug('client')]);
+
+    await setDesignation(DOC, { sensitivity: 'client' }, ADMIN);
+
+    expect(clearContextCache).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a document that does not exist, before writing anything', async () => {

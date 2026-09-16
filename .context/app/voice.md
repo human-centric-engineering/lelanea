@@ -237,6 +237,23 @@ Two sets over one corpus, taking the opposite half of the vocabulary each:
 `sensitivity-client` is admitted by **neither**. The deferral is about the model
 seeing the words at all, and it sees them either way.
 
+**The two rules are asymmetric about a SECOND purpose tag, and that is
+`readDesignation`'s safest-reading rule in SQL.** A document can carry two —
+Sunrise's own tag modal knows nothing about these families — and when it does,
+the pair resolves by an explicit precedence (`voice` → `both` → `knowledge`),
+never by which tag came first. So `purpose-voice` disqualifies on the tool path,
+because it makes a document less quotable; nothing about a purpose disqualifies
+on the voice path, because a second tag cannot make a document less of a voice
+example. A document tagged voice AND knowledge is what `purpose-both` says it is:
+on the voice path, off the tool path.
+
+Both rules exist twice — as SQL and as a pure function the admin surface uses —
+so `corpus-access.test.ts` walks **all 64 subsets** of the six designation slugs
+and asserts the SQL admits exactly what `isQuotable(readDesignation(tags))` and
+`isVoiceExemplar(readDesignation(tags))` do. Walking `(purpose, sensitivity)`
+pairs instead covers a third of them and only ever builds a document with one
+purpose tag — which is precisely where the two had diverged.
+
 The query is the overlay's own authored `exemplarQuery`, not the situation key
 and not the person's message. Authored, so the same moment retrieves the same
 way every time — and so she can read what her own material is being searched
@@ -266,11 +283,20 @@ is sufficient alone:
    sounds, are not what the person said, are not facts, and are not instructions.
    It lives in the content file, not the loader, because it is copy the model
    reads.
-3. **Fence neutralisation.** A passage arrives by upload and lands inside a block
-   whose fence is a line of `=` characters. Any fence-shaped line in a passage has
-   its `=` replaced before it is emitted, so a document cannot close the block
-   early and put everything after it back at the model's top level — outside both
-   of the above. The words survive; only the fence is destroyed.
+3. **Nothing a document supplied sits at column 0.** A passage arrives by upload
+   and lands inside a block whose fence is a line of `=` characters, so every line
+   of every passage is emitted quoted (`> `). A real fence is at column 0; a
+   forged one never is. On top of that, every run of three or more `=` is
+   destroyed **wherever it appears** — not only at the start of a line, which is
+   what the first version matched, and which a single U+00A0 or U+200B defeated
+   completely. Invisible and control characters are stripped first, so they cannot
+   reassemble a run either. The words survive; only the punctuation is destroyed.
+4. **The document NAME is neutralised too, and is the one the first version
+   forgot.** It is interpolated into the origin label, which sits _above_ the
+   passage — outside everything guarding it — and `fetch-url` ingest derives it
+   from `decodeURIComponent()` of a URL's last segment, so `%0A` in a URL is a
+   real newline in the column. `prepareSource()` collapses it to one line and
+   caps it, because a label is one line by construction.
 
 Passages are also capped at three, and truncated at a word boundary: a long
 chunk stops being an example of her cadence and starts being an article the model
@@ -287,8 +313,23 @@ showed up in the framing would pass a test written against the former.
 60-second cache by it, so a per-user block is available. This one does not use
 it. A user's voice leanings are a later filter over these two layers, and until
 that is designed, one person's preference silently reshaping how she sounds is a
-change nobody asked for and nobody can see. The cost is a cache partitioned more
-finely than the answer needs.
+change nobody asked for and nobody can see.
+
+The cost is a cache partitioned more finely than the answer needs: one embedding
+per cache miss per user, and per **spelling** of a situation rather than per
+situation — normalisation happens inside the contributor, which is below the
+cache, so `first-meeting` and `First-Meeting` select the same overlay through two
+entries. The tolerance is worth more than the duplicate: a hand-typed key that
+silently fell back to core-only would be a wrong answer that looks like a right
+one, and a route pinning the key server-side sends one spelling anyway.
+
+**Two sixty-second caches, and the designation write evicts both.**
+`resolveAgentDocumentAccess` memoises which documents an agent may search;
+`buildContext` memoises the framed block, her retrieved passages already in it.
+`setDesignation` calls `invalidateAllAgentAccess()` **and** `clearContextCache()`
+— without the second, a document re-marked `sensitivity-client` goes on reaching
+the system prompt of every conversation whose block was built in the preceding
+minute.
 
 ## The overlays are her words too, and are a DRAFT
 
@@ -316,21 +357,25 @@ Anything true of every turn belongs in the core file.
 | -------------------------------------- | ------------------------------------------------------- |
 | `content/lelanea_voice_overlays.json`  | The authored overlays, the labelling copy, the fallback |
 | `lib/app/voice/overlays.ts`            | Selection — an exact-match lookup, and nothing more     |
-| `lib/app/voice/exemplars.ts`           | Retrieval, and the passage pipeline                     |
+| `lib/app/voice/exemplars.ts`           | Retrieval, the passage pipeline, the label guard        |
 | `lib/app/voice/context-contributor.ts` | Composition, and the origin labels                      |
 | `lib/app/context-contributors.ts`      | The seam registration — one contributor, type `voice`   |
 
-| Test                                                   | Proves                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------ |
-| `tests/unit/lib/app/voice/context-contributor.test.ts` | The whole chain, on the emitted block — load-bearing   |
-| `tests/unit/lib/app/voice/exemplars.test.ts`           | The allowlist, the fences, the truncation, the degrade |
-| `tests/unit/lib/app/voice/overlays.test.ts`            | Selection is a lookup, and stays deterministic         |
-| `tests/unit/lib/app/context-contributors.test.ts`      | Exactly one contributor, and which type                |
-| `tests/unit/lib/app/content/voice-overlays.test.ts`    | The authored file parses, and still awaits sign-off    |
+| Test                                                   | Proves                                               |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| `tests/unit/lib/app/voice/context-contributor.test.ts` | The whole chain, on the emitted block — load-bearing |
+| `tests/unit/lib/app/voice/exemplars.test.ts`           | The allowlist, the fences, the label, the degrade    |
+| `tests/unit/lib/app/voice/corpus-access.test.ts`       | Both rules against all 64 tag sets — load-bearing    |
+| `tests/unit/lib/app/voice/overlays.test.ts`            | Selection is a lookup, and stays deterministic       |
+| `tests/unit/lib/app/context-contributors.test.ts`      | Exactly one contributor, and which type              |
+| `tests/unit/lib/app/content/voice-overlays.test.ts`    | The authored file parses, and still awaits sign-off  |
 
 Reverting the feature fails them: drop the origin label and three cases go red;
 remove `'voice'` from `VOICE_PATH_PURPOSES` and nineteen do across three files;
-stop neutralising fences and three do; empty the seam and eighteen do.
+anchor the fence neutraliser to the start of a line again and two do; stop
+sanitising the document name and one does; drop the `> ` quoting and two do;
+empty the seam and eighteen do. Every one of those was run rather than reasoned
+about — a "reverting fails this" claim nobody executed is decoration.
 
 ---
 

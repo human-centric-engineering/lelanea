@@ -17,6 +17,7 @@
 
 import { describe, it, expect } from 'vitest';
 
+import type { DocumentPurpose } from '@/lib/app/voice/designation';
 import {
   DESIGNATION_TAG_SLUGS,
   DOCUMENT_PURPOSES,
@@ -161,6 +162,60 @@ describe('isVoiceExemplar — the other path over the same corpus', () => {
   it('treats an undesignated document as reaching nothing', () => {
     expect(isVoiceExemplar({ purpose: null, sensitivity: null, licensing: null })).toBe(false);
     expect(isVoiceExemplar({ purpose: null, sensitivity: 'public', licensing: null })).toBe(false);
+  });
+});
+
+describe('a document carrying two purpose tags', () => {
+  it('resolves by precedence, not by which tag came first', () => {
+    // Sunrise's own tag modal knows nothing about these families and will put
+    // both on one row, so this is the real case rather than a contrived one.
+    // The first version resolved `voice` explicitly and then fell through to
+    // `purposes[0]`, which left every OTHER pair to tag order —
+    // `purpose-knowledge` + `purpose-both` read as one or the other according to
+    // nothing, and the two readings put the document on different paths. Caught
+    // by /code-review.
+    const pairs: [DocumentPurpose, DocumentPurpose, DocumentPurpose][] = [
+      ['voice', 'knowledge', 'voice'],
+      ['voice', 'both', 'voice'],
+      ['both', 'knowledge', 'both'],
+    ];
+
+    for (const [first, second, expected] of pairs) {
+      expect(readDesignation([purposeTagSlug(first), purposeTagSlug(second)], null).purpose).toBe(
+        expected
+      );
+      // The same answer with the tags the other way round — which is the whole
+      // point, and the half the first version got wrong.
+      expect(readDesignation([purposeTagSlug(second), purposeTagSlug(first)], null).purpose).toBe(
+        expected
+      );
+    }
+  });
+
+  it('resolves `client` over any laxer sensitivity, whichever order they arrive in', () => {
+    for (const laxer of ['public', 'private'] as const) {
+      expect(
+        readDesignation([sensitivityTagSlug('client'), sensitivityTagSlug(laxer)], null).sensitivity
+      ).toBe('client');
+      expect(
+        readDesignation([sensitivityTagSlug(laxer), sensitivityTagSlug('client')], null).sensitivity
+      ).toBe('client');
+    }
+  });
+
+  it('can still read every single value in the vocabulary', () => {
+    // The guard on the precedence lists covering the vocabulary: a value added
+    // to `DOCUMENT_PURPOSES` and not to the precedence reads back as `null`,
+    // which would make the document reach nothing while the admin surface showed
+    // the operator's answer.
+    for (const purpose of DOCUMENT_PURPOSES) {
+      expect(readDesignation([purposeTagSlug(purpose)], null).purpose).toBe(purpose);
+    }
+    for (const sensitivity of DOCUMENT_SENSITIVITIES) {
+      expect(readDesignation([sensitivityTagSlug(sensitivity)], null).sensitivity).toBe(
+        sensitivity
+      );
+    }
   });
 });
 

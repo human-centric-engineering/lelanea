@@ -126,9 +126,12 @@ import {
 import {
   DOCUMENT_PURPOSES,
   DOCUMENT_SENSITIVITIES,
+  PURPOSE_TAG_SLUGS,
+  SENSITIVITY_TAG_SLUGS,
   isQuotable,
   isVoiceExemplar,
   purposeTagSlug,
+  readDesignation,
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
 import {
@@ -429,10 +432,112 @@ describe('the query and the pure rule agree', () => {
     expect(qualifyingTagSlugs()).not.toContain(purposeTagSlug('voice'));
   });
 
-  it('derives the voice path’s disqualifiers the same way, from the same two sources', () => {
-    expect(voiceDisqualifyingTagSlugs()).toContain(purposeTagSlug('knowledge'));
-    expect(voiceDisqualifyingTagSlugs()).toContain(sensitivityTagSlug('client'));
+  it('disqualifies a document from the voice path on sensitivity ALONE', () => {
+    // The asymmetry with the tool path is `readDesignation`'s safest-reading
+    // rule in SQL, not an oversight: a second purpose tag cannot make a document
+    // LESS of a voice example, so no purpose disqualifies it here. Deriving
+    // these the way the tool path's are derived excluded a voice+knowledge
+    // document from both paths while the admin surface showed it as `Voice`.
+    expect(voiceDisqualifyingTagSlugs()).toEqual([sensitivityTagSlug('client')]);
+    expect(voiceDisqualifyingTagSlugs()).not.toContain(purposeTagSlug('knowledge'));
+    // The safe-by-default property lives in the QUALIFYING list instead: a
+    // purpose on neither path qualifies a document for nothing on its own.
     expect(voiceQualifyingTagSlugs()).toEqual([purposeTagSlug('voice'), purposeTagSlug('both')]);
     expect(voiceQualifyingTagSlugs()).not.toContain(purposeTagSlug('knowledge'));
+  });
+});
+
+describe('the SQL and the pure rules agree on every tag set an operator can make', () => {
+  /**
+   * Every subset of the six designation slugs — 64 of them, including the ones
+   * that carry two purposes at once.
+   *
+   * The two cases above walk the vocabulary as `(purpose, sensitivity)` PAIRS,
+   * which is not the same population: it can only ever build a document with one
+   * purpose tag, so it says "every combination" while covering a third of them.
+   * A document with two purpose tags is not hypothetical — Sunrise's own tag
+   * modal knows nothing about these families and will put both on one row, which
+   * is the case `readDesignation` exists to resolve — and it is exactly where
+   * the voice path's SQL and its pure rule had diverged. Caught by /code-review.
+   */
+  function everyTagSet(): string[][] {
+    const slugs = [...PURPOSE_TAG_SLUGS, ...SENSITIVITY_TAG_SLUGS];
+    return Array.from({ length: 1 << slugs.length }, (_unused, mask) =>
+      slugs.filter((_slug, bit) => (mask & (1 << bit)) !== 0)
+    );
+  }
+
+  /** The rule as the admin surface computes it: read the tags, then judge. */
+  function seedEveryTagSet(): string[][] {
+    const sets = everyTagSet();
+    world.documents = sets.map((tagSlugs, index) => ({
+      id: `doc-${index}`,
+      scope: APP_SCOPE,
+      tagSlugs,
+    }));
+    return sets;
+  }
+
+  it('the voice path admits exactly what `isVoiceExemplar(readDesignation(tags))` does', async () => {
+    const sets = seedEveryTagSet();
+
+    const documentIds = await resolveVoiceDocumentIds();
+
+    for (const [index, tagSlugs] of sets.entries()) {
+      const id = `doc-${index}`;
+      expect({ id, tagSlugs, inSet: documentIds.includes(id) }).toEqual({
+        id,
+        tagSlugs,
+        inSet: isVoiceExemplar(readDesignation(tagSlugs, null)),
+      });
+    }
+
+    // fp6: the walk is not vacuous in either direction.
+    expect(documentIds.length).toBeGreaterThan(0);
+    expect(documentIds.length).toBeLessThan(sets.length);
+  });
+
+  it('the tool path admits exactly what `isQuotable(readDesignation(tags))` does', async () => {
+    // The tool path already agreed; asserting it is what keeps it agreeing, and
+    // it is the guard that would have caught the voice path's divergence had it
+    // existed when that rule was written.
+    const sets = seedEveryTagSet();
+
+    const documentIds = await toolPathDocumentIds(HER_AGENT);
+
+    for (const [index, tagSlugs] of sets.entries()) {
+      const id = `doc-${index}`;
+      expect({ id, tagSlugs, inSet: documentIds.includes(id) }).toEqual({
+        id,
+        tagSlugs,
+        inSet: isQuotable(readDesignation(tagSlugs, null)),
+      });
+    }
+
+    expect(documentIds.length).toBeGreaterThan(0);
+    expect(documentIds.length).toBeLessThan(sets.length);
+  });
+
+  it('puts a document carrying BOTH purpose tags on the voice path and off the tool path', async () => {
+    // The divergence, named. `readDesignation` resolves the conflict to `voice`,
+    // so this is what "resolved to voice" has to mean on both paths.
+    world.documents = [
+      {
+        id: 'doc-dual',
+        scope: APP_SCOPE,
+        tagSlugs: [purposeTagSlug('voice'), purposeTagSlug('knowledge')],
+      },
+      {
+        id: 'doc-plain',
+        scope: APP_SCOPE,
+        tagSlugs: [purposeTagSlug('knowledge')],
+      },
+    ];
+
+    expect(await resolveVoiceDocumentIds()).toEqual(['doc-dual']);
+    // Guarded by a presence claim, so the absence is not free.
+    const toolPath = await toolPathDocumentIds(HER_AGENT);
+    expect(toolPath).toContain('doc-plain');
+    expect(toolPath).not.toContain('doc-dual');
   });
 });
