@@ -42,6 +42,7 @@ import {
   VOICE_ARM_AGENT_SLUGS,
   VOICE_ARM_LABELS,
   goldenSetDatasetId,
+  isVoiceArm,
 } from '@/lib/app/voice/golden-set';
 import { getVoiceGoldenSet } from '@/lib/app/content';
 import { serviceAccountWhere } from '@/lib/auth/account';
@@ -155,8 +156,12 @@ async function main(): Promise<void> {
       });
       check(armRows.length === 2, 'both arm rows landed against the hand-written FK');
       check(
+        // `isVoiceArm` rather than a cast: `arm` is a `String` column, so a row
+        // holding something the vocabulary does not know must fail this check
+        // rather than index into the map as `undefined` and compare equal to
+        // nothing.
         armRows.every(
-          (row) => row.agentSlug === VOICE_ARM_AGENT_SLUGS[row.arm as 'fingerprint' | 'bare']
+          (row) => isVoiceArm(row.arm) && row.agentSlug === VOICE_ARM_AGENT_SLUGS[row.arm]
         ),
         'each arm row names the agent its arm is supposed to use'
       );
