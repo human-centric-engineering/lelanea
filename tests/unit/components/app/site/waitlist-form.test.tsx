@@ -146,7 +146,13 @@ describe('WaitlistForm', () => {
 
       expect(await screen.findByText('you are on the list')).toBeTruthy();
       expect(screen.getByText(/Rest here for a moment before you go/)).toBeTruthy();
-      expect(screen.getByText(/We will write to ada@example.com when a place opens/)).toBeTruthy();
+      // Names the address, and is true whether this was a first join (a
+      // confirmation is on its way) or a repeat (nothing is) — the response is
+      // uniform, so the card cannot know which (t-37).
+      expect(
+        screen.getByText(/a note confirming it is on its way to ada@example.com/)
+      ).toBeTruthy();
+      expect(screen.getByText(/We will write again when a place opens/)).toBeTruthy();
       // The form is gone, so a second submission is not possible from here.
       expect(screen.queryByRole('button', { name: 'Join the waitlist' })).toBeNull();
     });

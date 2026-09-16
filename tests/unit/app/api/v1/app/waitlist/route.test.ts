@@ -19,13 +19,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
-const { joinWaitlistMock, checkMock, routeLog } = vi.hoisted(() => ({
-  joinWaitlistMock: vi.fn(),
-  checkMock: vi.fn(),
-  routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+const { joinWaitlistMock, checkMock, routeLog, afterMock, sendConfirmationMock } = vi.hoisted(
+  () => ({
+    joinWaitlistMock: vi.fn(),
+    checkMock: vi.fn(),
+    routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    afterMock: vi.fn(),
+    sendConfirmationMock: vi.fn(),
+  })
+);
 
 vi.mock('@/lib/app/waitlist/service', () => ({ joinWaitlist: joinWaitlistMock }));
+vi.mock('@/lib/app/waitlist/confirmation', () => ({
+  sendWaitlistConfirmation: sendConfirmationMock,
+}));
+// `after()` is Next's post-response hook, and the real one throws outside a
+// request scope. Captured rather than run, so the cases below can assert WHAT
+// was scheduled and that nothing ran inline.
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: afterMock,
+}));
 vi.mock('@/lib/app/waitlist/rate-limit', () => ({ waitlistLimiter: { check: checkMock } }));
 vi.mock('@/lib/security/ip', () => ({ getClientIP: () => '203.0.113.7' }));
 // `tests/setup.ts` mocks `getRouteLogger` globally; this narrows it so the
@@ -289,5 +303,61 @@ describe('POST /api/v1/app/waitlist', () => {
     // would be asserting the platform's behaviour through our route. What this
     // case holds is that the failure is not mistaken for a honeypot and quietly
     // answered 200, which is the shape the catch block above it makes possible.
+  });
+
+  describe('the confirmation email (t-37)', () => {
+    it('schedules one after the response, on a FIRST join, with the entry and the answers', async () => {
+      await POST(request({ email: 'Ada@Example.com', name: 'Ada Lovelace' }));
+
+      // Scheduled through `after()`, never awaited inline: the row is written
+      // and the 200 gone before it runs, so a mailer failure cannot fail the
+      // join — and an address not yet on the list cannot be told apart by a
+      // slower response.
+      expect(afterMock).toHaveBeenCalledTimes(1);
+      expect(sendConfirmationMock).not.toHaveBeenCalled();
+
+      const scheduled = afterMock.mock.calls[0][0] as () => unknown;
+      await scheduled();
+      expect(sendConfirmationMock).toHaveBeenCalledWith({
+        entryId: 'entry-1',
+        email: 'ada@example.com',
+        name: 'Ada Lovelace',
+      });
+    });
+
+    it('passes a null name through when none was given', async () => {
+      await POST(request({ email: 'ada@example.com' }));
+      await (afterMock.mock.calls[0][0] as () => unknown)();
+      expect(sendConfirmationMock).toHaveBeenCalledWith(expect.objectContaining({ name: null }));
+    });
+
+    it('sends nothing on a repeat — one email per address, ever', async () => {
+      // The address is unverified. On every accepted submission this route
+      // would put five emails an hour per IP into any chosen inbox; on first
+      // join the most it can ever cause is one.
+      joinWaitlistMock.mockResolvedValue({ created: false, removed: false, entryId: 'entry-1' });
+      await POST(request({ email: 'ada@example.com' }));
+      expect(afterMock).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing to an address that asked to be removed', async () => {
+      joinWaitlistMock.mockResolvedValue({ created: false, removed: true, entryId: 'entry-1' });
+      await POST(request({ email: 'ada@example.com' }));
+      expect(afterMock).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing on a honeypot hit', async () => {
+      await POST(request({ email: 'ada@example.com', website: 'https://spam.example' }));
+      expect(afterMock).not.toHaveBeenCalled();
+    });
+
+    it('answers a first join and a repeat identically, confirmation or not', async () => {
+      const first = await POST(request({ email: 'ada@example.com' }));
+      joinWaitlistMock.mockResolvedValue({ created: false, removed: false, entryId: 'entry-1' });
+      const repeat = await POST(request({ email: 'ada@example.com' }));
+
+      expect(first.status).toBe(repeat.status);
+      expect(await first.json()).toEqual(await repeat.json());
+    });
   });
 });

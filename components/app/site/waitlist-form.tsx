@@ -170,9 +170,14 @@ export function WaitlistForm() {
         <p className="brand-display mt-3 text-[30px] leading-[1.25]">
           Thank you. Rest here for a moment before you go.
         </p>
+        {/*
+          True of both cases the uniform response hides: a first join sends a
+          confirmation (t-37), a repeat sends nothing — so "if this is your
+          first time" rather than a promise the repeat cannot keep.
+        */}
         <p className="text-muted-foreground mt-[14px] text-[15px] leading-[1.65]">
-          We will write to {joinedEmail} when a place opens. Nothing else will arrive from us in the
-          meantime.
+          If this is your first time joining, a note confirming it is on its way to {joinedEmail}.
+          We will write again when a place opens, and nothing else in the meantime.
         </p>
       </div>
     );

@@ -50,7 +50,7 @@
  * @see lib/app/waitlist/service.ts · components/app/site/waitlist-form.tsx
  */
 
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 import { successResponse } from '@/lib/api/responses';
 import { handleAPIError } from '@/lib/api/errors';
 import { validateRequestBody } from '@/lib/api/validation';
@@ -60,6 +60,7 @@ import { createRateLimitResponse, getRateLimitHeaders } from '@/lib/security/rat
 import { isHoneypotFilled, waitlistWithHoneypotSchema } from '@/lib/validations/app-waitlist';
 import { waitlistLimiter } from '@/lib/app/waitlist/rate-limit';
 import { resolveJoinLocale } from '@/lib/app/waitlist/locale';
+import { sendWaitlistConfirmation } from '@/lib/app/waitlist/confirmation';
 import { joinWaitlist } from '@/lib/app/waitlist/service';
 
 /** What every accepted request answers with — a join, a re-join, or a bot. */
@@ -137,6 +138,19 @@ export async function POST(request: NextRequest): Promise<Response> {
           intent: body.intent !== undefined,
         },
       });
+    }
+
+    // 5. The confirmation (t-37, reversing A8) — on a FIRST join only, and after
+    //    the response has gone. `after()` is what keeps both rules the route
+    //    already holds: the send can neither block nor fail the join, and it
+    //    cannot be timed — an awaited send only on `created` would make the
+    //    response slower for an address not yet on the list, which is the
+    //    membership oracle by another channel. See `confirmation.ts` for why
+    //    first-join-only (an unverified address; one email per address, ever).
+    if (created) {
+      after(() =>
+        sendWaitlistConfirmation({ entryId, email: body.email, name: body.name ?? null })
+      );
     }
 
     return successResponse({ message: ACCEPTED }, undefined, { headers });
