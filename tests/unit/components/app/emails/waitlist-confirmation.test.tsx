@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WaitlistConfirmationEmail, {
   CONFIRMATION_BEATS,
+  firstNameOf,
 } from '@/components/app/emails/waitlist-confirmation';
 import * as sections from '@/lib/app/content/sections';
 import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
@@ -60,6 +61,27 @@ describe('WaitlistConfirmationEmail — what they have joined, in her words', ()
   });
 });
 
+describe('firstNameOf', () => {
+  it.each([
+    ['Ada Lovelace', 'Ada'],
+    ['Zoë', 'Zoë'],
+    ['Núria Pérez-Bosch', 'Núria'],
+    ["O'Brien", "O'Brien"],
+    ['李 明', '李'],
+    ['', null],
+    ['   ', null],
+    [null, null],
+    ['https://evil.example/claim', null],
+    ['ada@example.com', null],
+    ['Click here: free', 'Click'], // a plain word; the sentence never follows it
+    ['x'.repeat(41), null],
+    ['Ada1', null],
+    ['<b>Ada</b>', null],
+  ])('%j → %j', (input, expected) => {
+    expect(firstNameOf(input)).toBe(expected);
+  });
+});
+
 describe('WaitlistConfirmationEmail — what happens next, in ours', () => {
   it('addresses them by first name when one was given, and plainly when not', async () => {
     expect(await render(<WaitlistConfirmationEmail {...PROPS} />)).toContain(
@@ -71,6 +93,18 @@ describe('WaitlistConfirmationEmail — what happens next, in ours', () => {
     expect(await render(<WaitlistConfirmationEmail {...PROPS} name="   " />)).toContain(
       'You are on the list.'
     );
+  });
+
+  it('reflects nothing that is not a first name — a URL as a name gets the plain greeting', async () => {
+    // The address is unverified and the sender is ours: a "name" of
+    // https://evil.example/claim would arrive as a clickable link at the top
+    // of a branded email to someone who never typed it. React escapes HTML;
+    // it cannot stop a mail client auto-linking a bare URL.
+    const html = await render(
+      <WaitlistConfirmationEmail {...PROPS} name="https://evil.example/claim" />
+    );
+    expect(html).not.toContain('evil.example');
+    expect(html).toContain('You are on the list.');
   });
 
   it('promises to write when we open, admits there is no date, and invents none', async () => {

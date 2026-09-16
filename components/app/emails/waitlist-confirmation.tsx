@@ -39,7 +39,10 @@ import { BRAND } from '@/lib/brand';
  * A stranger can type anyone's address, so the footer says why this arrived and
  * that nothing more will — the honest minimum for mail to an address nobody has
  * proved they own. The send is on first join only (see `confirmation.ts`), so
- * one email per address is the most this can ever cause.
+ * one email per address STRING is the most this can ever cause — per inbox it
+ * is bounded by the form's 5/hour/IP, since plus-addressing makes new strings.
+ * And the only free text that reaches the body is the first name, constrained
+ * above so it cannot carry a link or a sentence.
  *
  * ## Read at render time
  *
@@ -59,11 +62,24 @@ export interface WaitlistConfirmationEmailProps {
   baseUrl: string;
 }
 
-/** First whitespace-separated part of a name, or `null` for none. */
-function firstNameOf(name: string | null | undefined): string | null {
-  const trimmed = name?.trim();
-  if (!trimmed) return null;
-  return trimmed.split(/\s+/)[0] ?? null;
+/**
+ * What a first name may look like, to be reflected into mail: letters (any
+ * script, with combining marks), an apostrophe or a hyphen, at most forty.
+ *
+ * Deliberately narrow. `name` is free text from an anonymous form, and the
+ * address it goes to is unverified — so anything reflected here is
+ * attacker-chosen text at the top of a message from Lelañea's real sender, to a
+ * person who may never have typed it. A URL as a "name" would arrive as a
+ * clickable link. React escapes HTML; it cannot un-link what a mail client
+ * auto-links. Nothing that fails this is a first name anyone is owed a
+ * greeting by; the impersonal line stands in. Pinned by a test.
+ */
+const FIRST_NAME = /^[\p{L}\p{M}'’-]{1,40}$/u;
+
+/** First whitespace-separated part of a name if it looks like one, else `null`. */
+export function firstNameOf(name: string | null | undefined): string | null {
+  const first = name?.trim().split(/\s+/)[0];
+  return first && FIRST_NAME.test(first) ? first : null;
 }
 
 function InvitationBeats(): React.ReactElement {

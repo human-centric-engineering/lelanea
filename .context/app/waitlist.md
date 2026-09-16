@@ -134,9 +134,23 @@ Four rules, each with a reason:
   another channel.
 - **On a first join only.** The address is unverified. On every accepted
   submission the form would put five emails an hour per IP into any chosen
-  inbox; on `created` the most it can ever cause is one email per address,
-  ever. A repeat, a re-join against a removed entry and a honeypot hit all send
-  nothing. The route test pins each.
+  inbox; on `created` the most it can ever cause is one email per address
+  **string**, ever (the schema lower-cases and trims, so case and whitespace
+  variants are one row; plus-addressing and Gmail dots are distinct strings,
+  so per **inbox** the bound is the form's 5/hour/IP). A repeat, a re-join
+  against a removed entry and a honeypot hit all send nothing. The route test
+  pins each. Two conditions on that bound, both pre-existing: the limiter is
+  in-process (per instance, reset on restart), and it is keyed on the leftmost
+  `X-Forwarded-For` — if the deployment's proxy does not overwrite that header,
+  the caller chooses the key and only "once per string" remains
+  ([`../security/gotchas.md`](../security/gotchas.md)). This is the first
+  surface where that trust bounds mail to third parties, not just our own
+  resources.
+- **Only a first name is reflected, and only if it looks like one.** `name` is
+  free text from an anonymous form; reflected into mail from our real sender to
+  an unverified address, a URL as a "name" would arrive as a clickable link.
+  `firstNameOf` accepts letters, marks, an apostrophe or a hyphen, at most
+  forty; anything else gets the impersonal greeting.
 - **No unsubscribe, no preferences, no footer link** — owner ruling. One
   transactional acknowledgement of something the person just asked for is not a
   list they need a way off. **Trigger to revisit:** the first _unsolicited_
