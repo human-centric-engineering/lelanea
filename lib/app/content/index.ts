@@ -231,7 +231,10 @@ export interface VoiceFingerprintCore {
     readonly avoids: readonly string[];
   };
   grounding: VoiceCoreSection;
-  boundaries: VoiceCoreSection & { readonly howYouDecline: readonly string[] };
+  boundaries: VoiceCoreSection & {
+    readonly howYouDeclineHeading: string;
+    readonly howYouDecline: readonly string[];
+  };
 }
 
 // ============================================================================
@@ -592,6 +595,7 @@ export function getVoiceFingerprint(): VoiceFingerprintCore {
     boundaries: {
       heading: file.boundaries.heading,
       lines: file.boundaries.lines,
+      howYouDeclineHeading: file.boundaries.howYouDeclineHeading,
       howYouDecline: file.boundaries.howYouDecline,
     },
   });

@@ -19,11 +19,17 @@
  * and the difference is that a tag name is a label, while this text is the
  * artefact itself.
  *
- * **The agent is split.** Two columns are code-owned and reconciled —
- * `profileId` and `knowledgeAccessMode` — because both are load-bearing
- * invariants rather than preferences (see below). Everything else on the agent is
- * written once at creation and never rewritten, so an operator who renames it,
- * retunes its temperature or deactivates it keeps that.
+ * **The agent is split.** Three columns are code-owned and reconciled.
+ * `profileId` and `knowledgeAccessMode` because both are load-bearing
+ * invariants rather than preferences (see below); `systemInstructions` for the
+ * opposite reason — `SYSTEM_AGENT_PROTECTED_FIELDS` covers it, so no operator
+ * can set it and a write-once field would be unreachable by anyone after the
+ * first create.
+ *
+ * Everything else is written once and never rewritten, so an operator who
+ * renames it or retunes its temperature keeps that. Note that `isActive` is on
+ * the protected list too: a system agent cannot be deactivated through the
+ * admin at all, so "activation" is not among the things left to an operator.
  *
  * **Idempotent, and no timestamp churn.** Every write is preceded by a
  * comparison; a re-run on a database already holding the current version issues
@@ -124,13 +130,22 @@ const unit: SeedUnit = {
     const sections = composeFingerprintProfileSections(core);
 
     if (!sectionsArePopulated(sections)) {
-      // Abort rather than write. A partial projection would replace a populated
+      // THROW, not return. A partial projection would replace a populated
       // section with an empty one, and an agent with no guardrails is a worse
-      // state than an agent a version behind.
-      logger.warn('⏭  voice fingerprint: a composed section was empty — nothing written', {
+      // state than an agent a version behind — so the write is refused either
+      // way. But `prisma/runner.ts` upserts the `SeedHistory` row with the
+      // current content hash as soon as `run()` RESOLVES, and logs
+      // `✓ applied`. A quiet return would therefore bank the aborted run as a
+      // success and every later `db:seed` would skip the unit, leaving a fresh
+      // install with no profile and no agent, permanently, until somebody
+      // deleted the history row by hand. An abort designed to be loud would
+      // have been the quietest possible failure. Caught by /code-review.
+      logger.error('voice fingerprint: a composed section was empty — refusing to write', {
         version: core.collection.version,
       });
-      return;
+      throw new Error(
+        `Voice fingerprint v${core.collection.version} composed an empty section — refusing to write a profile with no voice in it.`
+      );
     }
 
     const admin = await prisma.user.findFirst({
@@ -142,10 +157,24 @@ const unit: SeedUnit = {
     }
 
     // ---- The profile: pure code projection, fully reconciled ----------------
+    // Every column this unit owns, projected in one place so the create, the
+    // comparison and the update cannot disagree about what "current" means.
+    // `description` carries the version, so it MUST be reconciled: leaving it
+    // out (the first version of this) left the admin showing "v1.0" beside a
+    // v1.1 persona, under a sentence claiming the row is overwritten by the
+    // seed. Caught by /code-review.
+    const profileProjection = {
+      name: core.collection.title,
+      description: `The always-on core of the voice fingerprint, v${core.collection.version}. Authored in content/lelanea_voice_fingerprint.json and reconciled by this seed — edits made here are overwritten.`,
+      ...sections,
+    };
+
     const existingProfile = await prisma.aiAgentProfile.findUnique({
       where: { slug: VOICE_PROFILE_SLUG },
       select: {
         id: true,
+        name: true,
+        description: true,
         persona: true,
         guardrails: true,
         brandVoiceInstructions: true,
@@ -157,11 +186,9 @@ const unit: SeedUnit = {
       const created = await prisma.aiAgentProfile.create({
         data: {
           slug: VOICE_PROFILE_SLUG,
-          name: core.collection.title,
-          description: `The always-on core of the voice fingerprint, v${core.collection.version}. Authored in content/lelanea_voice_fingerprint.json and reconciled by this seed — edits made here are overwritten.`,
           isSystem: true,
           createdBy: admin.id,
-          ...sections,
+          ...profileProjection,
         },
         select: { id: true },
       });
@@ -169,17 +196,16 @@ const unit: SeedUnit = {
       logger.info(`🗣️  Created voice profile ${VOICE_PROFILE_SLUG} v${core.collection.version}`);
     } else {
       profileId = existingProfile.id;
-      const unchanged =
-        existingProfile.persona === sections.persona &&
-        existingProfile.guardrails === sections.guardrails &&
-        existingProfile.brandVoiceInstructions === sections.brandVoiceInstructions;
+      const unchanged = (
+        Object.keys(profileProjection) as (keyof typeof profileProjection)[]
+      ).every((column) => existingProfile[column] === profileProjection[column]);
 
       if (unchanged) {
         logger.info(`⏭  voice profile already at v${core.collection.version}`);
       } else {
         await prisma.aiAgentProfile.update({
           where: { id: profileId },
-          data: sections,
+          data: profileProjection,
         });
         logger.info(`🗣️  Updated voice profile to v${core.collection.version}`);
       }
@@ -188,7 +214,7 @@ const unit: SeedUnit = {
     // ---- The agent: created once, two columns reconciled forever after ------
     const existingAgent = await prisma.aiAgent.findUnique({
       where: { slug: VOICE_AGENT_SLUG },
-      select: { id: true, profileId: true, knowledgeAccessMode: true },
+      select: { id: true, profileId: true, knowledgeAccessMode: true, systemInstructions: true },
     });
 
     if (!existingAgent) {
@@ -226,6 +252,18 @@ const unit: SeedUnit = {
     if (existingAgent.profileId !== profileId) corrections.profileId = profileId;
     if (existingAgent.knowledgeAccessMode !== REQUIRED_KNOWLEDGE_ACCESS_MODE) {
       corrections.knowledgeAccessMode = REQUIRED_KNOWLEDGE_ACCESS_MODE;
+    }
+    // Reconciled for the opposite reason to the other two. `systemInstructions`
+    // is in `SYSTEM_AGENT_PROTECTED_FIELDS`, so the PATCH route rejects any
+    // change to it on a system agent and the version-restore route skips it —
+    // which means there is no operator edit here to preserve, and a
+    // write-once field would be unreachable by ANYONE after the first create.
+    // Editing `VOICE_AGENT_SYSTEM_INSTRUCTIONS` re-runs this unit via
+    // `hashInputs`, and before this line the re-run found the other two columns
+    // correct, logged "already restricted and linked", and left the old
+    // instructions in place with no error and no remedy. Caught by /code-review.
+    if (existingAgent.systemInstructions !== VOICE_AGENT_SYSTEM_INSTRUCTIONS) {
+      corrections.systemInstructions = VOICE_AGENT_SYSTEM_INSTRUCTIONS;
     }
 
     if (Object.keys(corrections).length === 0) {

@@ -287,19 +287,19 @@ touch.
 
 ## The files
 
-| File                                                    | What it is                                                            |
-| ------------------------------------------------------- | --------------------------------------------------------------------- |
-| `content/lelanea_voice_fingerprint.json`                | The authored core — her identity, cadence, grounding and hard nos     |
-| `lib/app/voice/fingerprint.ts`                          | The projection onto the three profile columns, and the version marker |
-| `prisma/seeds/app-lelanea/003-voice-fingerprint.ts`     | The profile and the first `lelanea-` agent                            |
-| `lib/app/voice/designation.ts`                          | The vocabulary, the slugs, and the rule as a pure function            |
-| `lib/app/voice/corpus-access.ts`                        | The rule against the database, and which agents it widens             |
-| `lib/app/voice/designation-admin.ts`                    | The admin list and the partitioned write                              |
-| `lib/app/voice/endpoint.ts`                             | The paths, so components do not hardcode them                         |
-| `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus`  |
-| `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                     |
-| `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                          |
-| `components/app/admin/designation-table.tsx`            | The table                                                             |
+| File                                                    | What it is                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `content/lelanea_voice_fingerprint.json`                | The authored core — her identity, cadence, grounding and hard nos       |
+| `lib/app/voice/fingerprint.ts`                          | The projection onto the three profile columns, and the version marker   |
+| `prisma/seeds/app-lelanea/003-voice-fingerprint.ts`     | The profile and the first `lelanea-` agent                              |
+| `lib/app/voice/designation.ts`                          | The vocabulary, the slugs, the agent prefix, and the rule as a function |
+| `lib/app/voice/corpus-access.ts`                        | The rule against the database, and which agents it widens               |
+| `lib/app/voice/designation-admin.ts`                    | The admin list and the partitioned write                                |
+| `lib/app/voice/endpoint.ts`                             | The paths, so components do not hardcode them                           |
+| `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus`    |
+| `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                       |
+| `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                            |
+| `components/app/admin/designation-table.tsx`            | The table                                                               |
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
 `GET`/`PATCH .../designations/:documentId`. Page: `/admin/app/knowledge`
@@ -353,11 +353,15 @@ identity or a change to which block lands in which column reaches the database
 rather than leaving it a version behind. On a database already carrying the
 current version it issues **no write at all**.
 
-It also refuses to write a composed section that came back empty. The strict
-schema makes that hard to reach today — but the loader's own docblock says the
-file moves behind a database the first time copy has to change without a deploy,
-and on that day the guard is the only thing between a bad read and a profile with
-no voice in it.
+It also refuses to write a composed section that came back empty — by
+**throwing**, which is the part that matters. `prisma/runner.ts` upserts the
+`SeedHistory` row the moment `run()` resolves and logs `✓ applied`, so a quiet
+`return` would bank the aborted run as a success and every later `db:seed` would
+skip the unit, leaving a fresh install with no profile and no agent until
+somebody deleted the history row by hand. The strict schema makes an empty source
+hard to reach today, but the loader's own docblock says the file moves behind a
+database the first time copy has to change without a deploy, and on that day the
+guard is the only thing between a bad read and a profile with no voice in it.
 
 `prisma/seeds/app-lelanea/002-knowledge-designation.ts` creates a missing tag and
 **never rewrites an existing one**. The slug is code — the rule addresses these

@@ -12,7 +12,13 @@
  * `prisma/seeds/app-lelanea/003-voice-fingerprint.ts` writes them onto an
  * `AiAgentProfile`, Sunrise's `resolveEffectivePrompt` inherits them onto her
  * agent, and `composeSystemPromptString` joins them. Nothing here reads a
- * database, and nothing here looks anything up.
+ * database, and nothing here looks anything up — **including transitively**,
+ * which is the half that has to be defended rather than asserted. The slug
+ * prefix is imported from `designation.ts` rather than `corpus-access.ts` for
+ * exactly that reason: the latter pulls in `@/lib/db/client`, which builds a
+ * `pg.Pool` at import time. `tests/unit/lib/app/voice/fingerprint.test.ts` walks
+ * the whole `@/` closure and fails if anything on it reaches the database or the
+ * knowledge layer.
  *
  * ## Four authored blocks onto three columns
  *
@@ -52,7 +58,7 @@
  */
 
 import { getVoiceFingerprint, type VoiceFingerprintCore } from '@/lib/app/content';
-import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/corpus-access';
+import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/designation';
 
 /**
  * The profile her agents inherit from.
@@ -165,7 +171,7 @@ export function composeFingerprintProfileSections(
   const guardrails = [
     block(core.grounding.heading, core.grounding.lines),
     block(core.boundaries.heading, core.boundaries.lines),
-    block('How you say no', core.boundaries.howYouDecline),
+    block(core.boundaries.howYouDeclineHeading, core.boundaries.howYouDecline),
   ]
     .filter(Boolean)
     .join('\n\n');

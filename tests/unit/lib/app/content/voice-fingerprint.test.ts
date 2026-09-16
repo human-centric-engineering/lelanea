@@ -58,7 +58,12 @@ function validFingerprintFile() {
     identity: { heading: 'Who you are', lines: ['a'] },
     cadence: { heading: 'How you sound', lines: ['a'], reachesFor: ['x'], avoids: ['y'] },
     grounding: { heading: 'How you ground', lines: ['a'] },
-    boundaries: { heading: 'What you decline', lines: ['a'], howYouDecline: ['a'] },
+    boundaries: {
+      heading: 'What you decline',
+      lines: ['a'],
+      howYouDeclineHeading: 'How you say no',
+      howYouDecline: ['a'],
+    },
     reviewNotes: [],
   };
 }
@@ -72,6 +77,24 @@ describe('the authored core', () => {
     expect(core.grounding.lines.length).toBeGreaterThan(0);
     expect(core.boundaries.lines.length).toBeGreaterThan(0);
     expect(core.boundaries.howYouDecline.length).toBeGreaterThan(0);
+  });
+
+  it('authors every heading the prompt shows, including the decline block', () => {
+    // All four headings are copy the model reads. `howYouDeclineHeading` was a
+    // string literal in `fingerprint.ts` until /code-review pointed out it was
+    // her words arriving through a second authoring path — the exact thing the
+    // content seam exists to prevent.
+    const core = getVoiceFingerprint();
+
+    for (const heading of [
+      core.identity.heading,
+      core.cadence.heading,
+      core.grounding.heading,
+      core.boundaries.heading,
+      core.boundaries.howYouDeclineHeading,
+    ]) {
+      expect(heading.length).toBeGreaterThan(0);
+    }
   });
 
   it('names the words she reaches for and the ones she avoids', () => {

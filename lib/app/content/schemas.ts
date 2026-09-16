@@ -479,7 +479,15 @@ export const voiceFingerprintFileSchema = z.strictObject({
   boundaries: z.strictObject({
     heading: z.string().min(1),
     lines: voiceLinesSchema,
-    /** What she declines is one thing; HOW she declines it is the other half. */
+    /**
+     * What she declines is one thing; HOW she declines it is the other half, and
+     * it carries its own heading for the same reason every other block does —
+     * the heading is copy the model reads, so it is authored here rather than
+     * written into the projection. A string literal in TypeScript would be a
+     * second authoring path for her words, which is what the content seam and
+     * its ESLint rule exist to prevent. Caught by /code-review.
+     */
+    howYouDeclineHeading: z.string().min(1),
     howYouDecline: voiceLinesSchema,
   }),
   reviewNotes: z.array(

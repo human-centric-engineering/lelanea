@@ -207,6 +207,7 @@ import unit, {
 } from '@/prisma/seeds/app-lelanea/003-voice-fingerprint';
 import {
   VOICE_AGENT_SLUG,
+  VOICE_AGENT_SYSTEM_INSTRUCTIONS,
   VOICE_PROFILE_SLUG,
   composeFingerprintProfileSections,
   readFingerprintVersion,
@@ -327,6 +328,37 @@ describe('a re-run', () => {
     expect(writes.agentUpdate).toBe(1);
   });
 
+  it('reconciles systemInstructions, which no operator is able to set', async () => {
+    // The opposite reason to the other two reconciled columns.
+    // `SYSTEM_AGENT_PROTECTED_FIELDS` covers `systemInstructions`, so the PATCH
+    // route rejects any change on a system agent and the version-restore route
+    // skips it. There is no operator edit to preserve — and a write-once field
+    // would be unreachable by ANYONE after the first create, so editing the
+    // constant would re-run this unit, find the other columns correct, log
+    // "already restricted and linked", and silently keep the old text.
+    await runSeed();
+    world.agents[0].systemInstructions = 'a stale instruction set from an older version';
+
+    await runSeed();
+
+    expect(world.agents[0].systemInstructions).toBe(VOICE_AGENT_SYSTEM_INSTRUCTIONS);
+    expect(writes.agentUpdate).toBe(1);
+  });
+
+  it('reconciles the profile description, which carries the version', async () => {
+    // The description embeds the version AND claims "edits made here are
+    // overwritten". Leaving it out of the write made both halves false at once:
+    // the admin showed v1.0 beside a v1.1 persona, under a sentence saying
+    // otherwise.
+    await runSeed();
+    world.profiles[0].description = 'The always-on core of the voice fingerprint, v0.9. Stale.';
+
+    await runSeed();
+
+    expect(world.profiles[0].description).toContain(`v${getVoiceFingerprint().collection.version}`);
+    expect(writes.profileUpdate).toBe(1);
+  });
+
   it('leaves the operator-owned columns alone', async () => {
     await runSeed();
     world.agents[0].name = 'Lelañea (renamed by an operator)';
@@ -364,11 +396,10 @@ describe('safe on empty', () => {
     world.profiles[0].persona = operatorText;
 
     sectionsOverride = { persona: '', guardrails: '', brandVoiceInstructions: '' };
-    await runSeed();
+    await expect(runSeed()).rejects.toThrow(/empty section/i);
 
     expect(writes.profileUpdate).toBe(0);
     expect(world.profiles[0].persona).toBe(operatorText);
-    expect(vi.mocked(logger.warn)).toHaveBeenCalled();
 
     // And the counterfactual: the same stale row, the same second run, with the
     // real projection back. This is what proves the no-write above was the guard
@@ -378,6 +409,22 @@ describe('safe on empty', () => {
 
     expect(writes.profileUpdate).toBe(1);
     expect(world.profiles[0].persona).not.toBe(operatorText);
+  });
+
+  it('rejects rather than returning, because a resolved run is banked as applied', async () => {
+    // Not a style preference. `prisma/runner.ts` upserts the `SeedHistory` row
+    // with the current content hash the moment `run()` RESOLVES, and logs
+    // "✓ applied". A quiet `return` would record the aborted run as a success,
+    // every later `db:seed` would skip the unit on an unchanged hash, and a
+    // fresh install would sit with no profile and no agent until somebody
+    // deleted the history row by hand — turning the loudest-by-design abort
+    // into the quietest possible failure. Caught by /code-review.
+    sectionsOverride = { persona: '', guardrails: '', brandVoiceInstructions: '' };
+
+    await expect(runSeed()).rejects.toThrow();
+    expect(writes.profileCreate).toBe(0);
+    expect(writes.agentCreate).toBe(0);
+    expect(vi.mocked(logger.error)).toHaveBeenCalled();
   });
 });
 

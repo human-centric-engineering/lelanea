@@ -47,7 +47,7 @@
  * @see lib/orchestration/agents/resolve-effective-prompt.ts
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
@@ -246,7 +246,8 @@ describe('an empty block never reaches the prompt as a bare heading', () => {
 });
 
 describe('no knowledge retrieval is in this path', () => {
-  const PATH_MODULES = [
+  /** The three modules that turn the authored core into a system prompt. */
+  const ROOTS = [
     'lib/app/voice/fingerprint.ts',
     'lib/app/content/index.ts',
     'lib/orchestration/agents/resolve-effective-prompt.ts',
@@ -256,33 +257,79 @@ describe('no knowledge retrieval is in this path', () => {
     return readFileSync(join(process.cwd(), relativePath), 'utf-8');
   }
 
-  /** Every module specifier the file imports from. */
+  /** Every module specifier a file imports from, static and dynamic. */
   function importsOf(relativePath: string): string[] {
     return [...sourceOf(relativePath).matchAll(/from\s+'([^']+)'|import\(\s*'([^']+)'/g)].map(
       (match) => match[1] ?? match[2]
     );
   }
 
-  it('reads real source, and the specifier regex still matches something', () => {
-    // fp6: the assertions below are all "does not contain", and would pass for
-    // free on an unreadable path or a regex that had stopped matching. Note that
-    // ZERO imports is the right answer for `resolve-effective-prompt.ts` — it is
-    // pure and isomorphic by design — so the population is established on the
-    // source itself, and the regex is proved against the files that do import.
-    for (const path of PATH_MODULES) {
-      expect(sourceOf(path).length).toBeGreaterThan(0);
+  /** `@/x/y` to the file on disk, trying the same extensions the bundler does. */
+  function resolveAlias(specifier: string): string | null {
+    if (!specifier.startsWith('@/')) return null;
+    const base = specifier.slice(2);
+    for (const candidate of [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`, base]) {
+      if (existsSync(join(process.cwd(), candidate))) return candidate;
     }
-    expect(importsOf('lib/app/voice/fingerprint.ts').length).toBeGreaterThan(0);
-    expect(importsOf('lib/app/content/index.ts').length).toBeGreaterThan(0);
-  });
+    return null;
+  }
 
-  it('touches neither the database nor the knowledge layer', () => {
-    for (const path of PATH_MODULES) {
-      for (const specifier of importsOf(path)) {
-        expect(specifier).not.toMatch(/knowledge|vector|embedding/i);
-        expect(specifier).not.toMatch(/^@\/lib\/db(\/|$)/);
+  /**
+   * Every `@/` module reachable from the roots, and every specifier seen on the
+   * way — including the ones that resolve to nothing on disk (`@/content/*.json`,
+   * bare packages), which still have to be inspected.
+   */
+  function closure(): { modules: Set<string>; specifiers: Set<string> } {
+    const modules = new Set<string>();
+    const specifiers = new Set<string>();
+    const queue = [...ROOTS];
+
+    while (queue.length > 0) {
+      const current = queue.shift() as string;
+      if (modules.has(current)) continue;
+      modules.add(current);
+
+      for (const specifier of importsOf(current)) {
+        specifiers.add(specifier);
+        const resolved = resolveAlias(specifier);
+        if (resolved && resolved.endsWith('.ts') && !modules.has(resolved)) queue.push(resolved);
       }
     }
+    return { modules, specifiers };
+  }
+
+  it('walks past the roots — a one-hop check is what made this pass while false', () => {
+    // fp6, and the reason this block was rewritten. The first version scanned
+    // only each root's OWN import list, so it reported clean while the property
+    // was already violated one hop away: `fingerprint.ts` imported the slug
+    // prefix from `corpus-access.ts`, which imports `@/lib/db/client`, which
+    // builds a `pg.Pool` at import time. A guard that cannot see the edge it
+    // exists to catch is worse than no guard, because it reads as coverage.
+    const { modules } = closure();
+
+    expect(modules.size).toBeGreaterThan(ROOTS.length);
+    expect(modules).toContain('lib/app/content/schemas.ts');
+    expect(modules).toContain('lib/app/voice/designation.ts');
+  });
+
+  it('reaches neither the database nor the knowledge layer, anywhere in the closure', () => {
+    const { modules, specifiers } = closure();
+
+    for (const specifier of specifiers) {
+      expect(specifier, `reached from one of: ${[...modules].join(', ')}`).not.toMatch(
+        /knowledge|vector|embedding/i
+      );
+      expect(specifier).not.toMatch(/^@\/lib\/db(\/|$)/);
+      expect(specifier).not.toMatch(/^(pg|@prisma\/client)$/);
+    }
+  });
+
+  it('would fail if a database module were one hop away', () => {
+    // The counterfactual, run rather than asserted: `corpus-access.ts` is the
+    // module the prefix used to come from, and it is still one hop from the
+    // database. If this ever stops holding, the case above has stopped meaning
+    // anything and this one says so first.
+    expect(importsOf('lib/app/voice/corpus-access.ts')).toContain('@/lib/db/client');
   });
 });
 

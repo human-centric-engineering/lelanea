@@ -81,6 +81,27 @@
  */
 
 /** What a document is for. */
+/**
+ * The slug prefix marking an agent as one of Lelañea's own.
+ *
+ * Vocabulary, so it lives here beside the tag slugs rather than in
+ * `corpus-access.ts` — which re-exports it, and which was its first home.
+ *
+ * **It is here specifically because this module imports nothing.**
+ * `corpus-access.ts` imports `@/lib/db/client`, and that module builds a
+ * `pg.Pool` and a `PrismaClient` at import time — so a consumer that wanted only
+ * this string literal was instantiating a connection pool to get it. The prompt
+ * composer in `lib/app/voice/fingerprint.ts` is exactly that consumer, and it is
+ * the kind of module an effective-prompt preview or an edge route would want,
+ * where a transitive `pg` import is a broken bundle rather than a slow one.
+ * Caught by /code-review on the t-26 branch.
+ *
+ * A prefix rather than an allowlist constant because her agents did not exist
+ * when the rule was written: an allowlist would have shipped empty and left the
+ * mechanism dark until somebody remembered to add a string (`HB9`).
+ */
+export const CORPUS_AGENT_SLUG_PREFIX = 'lelanea-';
+
 export const DOCUMENT_PURPOSES = ['knowledge', 'voice', 'both'] as const;
 export type DocumentPurpose = (typeof DOCUMENT_PURPOSES)[number];
 
