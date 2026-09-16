@@ -362,7 +362,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // coverage guard enforces — and a table added without a decision fails
       // here rather than only in that guard.
       const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
-      expect(appModels).toEqual(['AppAcknowledgement', 'AppWaitlistEntry']);
+      expect(appModels).toEqual([
+        'AppAcknowledgement',
+        'AppKnowledgeDesignation',
+        'AppWaitlistEntry',
+      ]);
 
       // Reading the registry triggers the lazy init, which runs the bridge:
       // framework tier first, then this seam. `initLeafSubjectSources()` is
@@ -386,9 +390,20 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         section: 'acknowledgements',
         disposition: 'export',
       });
-      // Nothing of ours is excluded: both tables hold personal data. (The
-      // registry also holds the framework tier's exclusions, so filter to ours.)
-      expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([]);
+      // ONE of ours is excluded, and only one. `AppKnowledgeDesignation` holds a
+      // note about a FILE she uploaded — what it is for, and on what terms we may
+      // use it — and nothing about a person; the other two hold personal data and
+      // must never join this list. (The registry also holds the framework tier's
+      // exclusions, so filter to ours.)
+      expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([
+        'AppKnowledgeDesignation',
+      ]);
+      // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
+      // is what lets them tell "we hold nothing about you" apart from "we decided
+      // not to give it to you". An empty or placeholder reason would pass the
+      // coverage guard and fail that reader.
+      const designation = excluded.find((entry) => entry.model === 'AppKnowledgeDesignation');
+      expect(designation?.reason).toMatch(/holds nothing about you/i);
 
       // The collector's half of the same contract: every section this seam
       // DECLARES must appear in what it RETURNS, as an array, even when the

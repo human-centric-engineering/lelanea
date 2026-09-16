@@ -145,6 +145,51 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
+  /**
+   * §05 t-25 — the designation note's FK, and the first of the three pointing at
+   * a SUNRISE table rather than `user`.
+   *
+   * `app_knowledge_designation.documentId` references `ai_knowledge_document`
+   * (the MAPPED table name, not the model — `B11`). `ON DELETE CASCADE` is what
+   * stops a deleted document leaving its licensing note behind as an orphan row
+   * keyed on an id nothing resolves.
+   */
+  it('registers the leaf designation FK probe', () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_knowledge_designation');
+
+    expect(probe, 'the designation FK probe is not registered').toBeDefined();
+    expect(probe?.name).toContain('app_knowledge_designation_documentId_fkey');
+    expect(probe?.kind).toBe('FK constraint');
+  });
+
+  it('passes on the CASCADE FK the designation migration writes', async () => {
+    queryRaw.mockResolvedValueOnce([
+      {
+        def: 'FOREIGN KEY ("documentId") REFERENCES "ai_knowledge_document"(id) ON DELETE CASCADE ON UPDATE CASCADE',
+      },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_knowledge_designation');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+  });
+
+  it('FAILS when the designation FK has drifted to NO ACTION', async () => {
+    // The failure this one is actually for: `deleteDocument()` would start
+    // failing with P2003 for every document anyone had ever designated, and an
+    // existence-only probe would have gone green on it.
+    queryRaw.mockResolvedValueOnce([
+      {
+        def: 'FOREIGN KEY ("documentId") REFERENCES "ai_knowledge_document"(id) ON DELETE NO ACTION',
+      },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_knowledge_designation');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
   it('keeps the framework probes when the leaf registers its own', () => {
     registerAppDriftProbes();
     const tables = getAppDriftProbes().map((p) => p.table);
@@ -155,5 +200,6 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     expect(tables).toContain('framework_node_embedding');
     expect(tables).toContain('app_waitlist_entry');
     expect(tables).toContain('app_acknowledgement');
+    expect(tables).toContain('app_knowledge_designation');
   });
 });
