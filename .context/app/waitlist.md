@@ -554,6 +554,38 @@ joined.
 `npm run db:migrate:deploy`.** The schema and the database diverge here on
 purpose, and `migrate dev` reads that divergence as drift and "corrects" it.
 
+## The door beside it is shut — `SIGNUP_MODE=invite_only`
+
+A waitlist is only a front door if the other doors are closed. Until t-38 the
+public header's **Log in** led to a page offering signup, and anyone could walk
+past the list. Now `SIGNUP_MODE="invite_only"` in `.env.example` — **and it has
+to be set in the deployed environment too**: the schema defaults to `open`, so
+an unset variable there silently reopens the door.
+
+What the platform closes (all Sunrise's, none of it ours to maintain):
+
+| Path                           | Closed by                                                                                          |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/sign-up/email` | `signupModeBeforeHook` in `lib/auth/config.ts`                                                     |
+| Any user insert, incl. OAuth   | `databaseHooks.user.create.before` — default-deny unless invited or the first human on an empty DB |
+| `/signup` (the page)           | `proxy.ts` redirects to `/login`; the login page hides its sign-up link                            |
+
+What stays open, on purpose: the **first human on an empty database** (API
+only — the page redirect does not know about it; see
+[`local-dev.md`](./local-dev.md#the-first-account-on-an-empty-database)), and
+`accept-invite` (wrapped in `runInvitedSignup`),
+sent by an admin from `/admin/users/invite` through `POST /api/v1/users/invite`
+(`withAdminAuth`), whose email is ours ([`emails.md`](./emails.md)). Verified
+end to end with the mode on before it was flipped.
+
+**What was ours to add:** the sentence. The platform's closed state says
+nothing, so a stranger who typed `/signup` landed on "Welcome back" with no
+form and no reason. `components/app/site/invite-only-notice.tsx` — "Accounts
+are by invitation for now. Join the waitlist to hear when we open." — is mounted
+by one line in the login page ([divergence row 15](./divergences.md),
+`sunrise#796`). The header's **Log in** link stays: closing signup is the fix,
+and the link is a real door for the invited (owner ruling, 16 September 2026).
+
 ## Known gaps
 
 - **There is no removal mechanism**, and the card no longer claims one. The

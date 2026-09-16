@@ -57,6 +57,12 @@ import styles from '@/components/app/site/site.module.css';
  * worst case is a moment of offering the way in to someone already in, and
  * this is the marketing surface where signed-out is overwhelmingly the norm.
  *
+ * **Under `SIGNUP_MODE=invite_only` the link stays** (t-38, owner ruling,
+ * 16 September 2026). Closing signup is the fix — `/login` can no longer mint
+ * an account — so the link is a legitimate door for the people we invite, and
+ * hiding it makes returning users hunt. "Join the waitlist" beside it stays the
+ * front door for everyone else.
+ *
  * ## The wordmark comes from the brand seam
  *
  * Both the visible text and the link's accessible name read `BRAND.name`, for
