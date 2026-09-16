@@ -44,8 +44,8 @@
  *   - its sensitivity is not `client`.
  *
  * Everything else reaches the prompt, if at all, through the context
- * contributor t-27 builds: read directly, labelled by origin, never presented as
- * a retrieved answer.
+ * contributor in `lib/app/voice/context-contributor.ts`: read directly, labelled
+ * by origin, never presented as a retrieved answer.
  *
  * ### Why this is a document-level rule and not a tag grant
  *
@@ -170,6 +170,22 @@ export const TOOL_PATH_PURPOSES: readonly DocumentPurpose[] = ['knowledge', 'bot
 export const UNGRANTABLE_SENSITIVITIES: readonly DocumentSensitivity[] = ['client'];
 
 /**
+ * The purposes whose documents may be shown to the model as EXAMPLES OF HER
+ * REGISTER — the context-contributor path, not the tool path.
+ *
+ * The mirror image of {@link TOOL_PATH_PURPOSES}, and the pair is the whole
+ * point of the vocabulary: `voice` is here and absent there, `knowledge` is
+ * there and absent here, and `both` is in both because it carries her knowledge
+ * AND her register. A document is therefore never silently in neither.
+ *
+ * Adding `'knowledge'` here would put a reference note in front of the model as
+ * an example of how she sounds, which is the harmless direction. Removing
+ * `'voice'` is the one that matters: it would make this whole path dark while
+ * everything still passed.
+ */
+export const VOICE_PATH_PURPOSES: readonly DocumentPurpose[] = ['voice', 'both'];
+
+/**
  * Human-readable copy for the admin surface. Kept beside the vocabulary so a
  * value added to either family cannot ship without the sentence that explains
  * it — `tests/unit/lib/app/voice/designation.test.ts` pins the correspondence.
@@ -231,6 +247,63 @@ export function isQuotable(designation: DocumentDesignation): boolean {
 }
 
 /**
+ * May this document be shown to the model as an example of her register?
+ *
+ * The contributor path's rule, as one pure function, exactly as
+ * {@link isQuotable} is the tool path's — so the two can be read side by side
+ * and asserted against each other over the whole vocabulary rather than trusted
+ * to have been written on the same afternoon.
+ *
+ * The sensitivity half is the SAME list, deliberately. `client` material is
+ * deferred, and a rule that let it through here because it is "only" being shown
+ * as a register example would be the leak the deferral exists to prevent — the
+ * model sees the words either way.
+ */
+export function isVoiceExemplar(designation: DocumentDesignation): boolean {
+  if (designation.purpose === null) return false;
+  if (!VOICE_PATH_PURPOSES.includes(designation.purpose)) return false;
+  if (
+    designation.sensitivity !== null &&
+    UNGRANTABLE_SENSITIVITIES.includes(designation.sensitivity)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Which purpose wins when a document carries more than one tag from the family.
+ *
+ * **Precedence, not vocabulary order and not the order the tags happen to be in
+ * on the row.** The first version resolved `voice` explicitly — the safety
+ * property — and then fell through to `purposes[0]`, which made the answer for
+ * every OTHER pair depend on tag order: `purpose-knowledge` + `purpose-both`
+ * read as `knowledge` or as `both` according to nothing in particular, and the
+ * two readings put the document on different paths. Caught by /code-review, by
+ * an assertion walking tag SETS rather than `(purpose, sensitivity)` pairs.
+ *
+ * The order here is what each value means, read from narrowest use to widest:
+ *
+ * - **`voice`** first, and this is the safety property: a document carrying
+ *   `purpose-voice` at all is never quotable, whatever else is on it. Being
+ *   wrong this way costs a passage that is never quoted; being wrong the other
+ *   way is her Substack pasted into a reply as an answer.
+ * - **`both`** next, because it is the union: a document tagged `both` AND
+ *   `knowledge` is what `both` already says it is, and reading it as `knowledge`
+ *   would drop the half the operator added the second tag for.
+ * - **`knowledge`** last, as the value that claims least.
+ *
+ * Derived from nothing, deliberately — `DOCUMENT_PURPOSES` is the vocabulary in
+ * authoring order, and re-ordering it for a UI must not silently re-order this.
+ * `tests/unit/lib/app/voice/designation.test.ts` pins the two lists as the same
+ * SET, so a value added to the vocabulary and not to the precedence fails.
+ */
+const PURPOSE_PRECEDENCE: readonly DocumentPurpose[] = ['voice', 'both', 'knowledge'];
+
+/** The same, for sensitivity: `client` wins, then the narrower of the rest. */
+const SENSITIVITY_PRECEDENCE: readonly DocumentSensitivity[] = ['client', 'private', 'public'];
+
+/**
  * Read a designation out of a document's tag slugs plus its licensing note.
  *
  * Tolerant on purpose: a document can carry two purpose tags, because Sunrise's
@@ -238,14 +311,14 @@ export function isQuotable(designation: DocumentDesignation): boolean {
  * one row. The admin surface shows a single selected value rather than
  * pretending the conflict away.
  *
- * **A conflict resolves to the SAFEST reading, not to the first tag found.**
+ * **A conflict resolves by an explicit precedence, not by the first tag found.**
  * With both `purpose-knowledge` and `purpose-voice` present the document reads
  * as `voice`; with both `sensitivity-client` and a laxer one it reads as
  * `client`. Being wrong in that direction costs a passage that is never quoted.
  * Being wrong in the other costs her Substack pasted into a reply as an answer.
- * Vocabulary order is NOT what decides this — see the code below, which names
- * the narrow value explicitly so re-ordering `DOCUMENT_PURPOSES` cannot invert
- * the safety property.
+ * Vocabulary order is NOT what decides this — see {@link PURPOSE_PRECEDENCE},
+ * which is its own list so re-ordering `DOCUMENT_PURPOSES` cannot invert the
+ * safety property, and so no pair is left to tag order.
  */
 export function readDesignation(
   tagSlugs: readonly string[],
@@ -259,14 +332,11 @@ export function readDesignation(
     .filter((value): value is DocumentSensitivity => value !== null);
 
   return {
-    // Conflicts resolve to the SAFEST reading, not the first one found: a
-    // document somehow carrying both `purpose-voice` and `purpose-knowledge` is
-    // read as `voice`, because the cost of being wrong in that direction is a
-    // passage that is never quoted, and in the other it is her Substack pasted
-    // into a reply as an answer.
-    purpose: purposes.includes('voice') ? 'voice' : (purposes[0] ?? null),
+    // Conflicts resolve by an explicit PRECEDENCE, never by which tag happened
+    // to come first. See {@link PURPOSE_PRECEDENCE}.
+    purpose: PURPOSE_PRECEDENCE.find((value) => purposes.includes(value)) ?? null,
     // Same direction: any `client` tag wins over a laxer one.
-    sensitivity: sensitivities.includes('client') ? 'client' : (sensitivities[0] ?? null),
+    sensitivity: SENSITIVITY_PRECEDENCE.find((value) => sensitivities.includes(value)) ?? null,
     licensing,
   };
 }

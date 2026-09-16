@@ -33,6 +33,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
+import { clearContextCache } from '@/lib/orchestration/chat/context-builder';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
 import {
   PURPOSE_TAG_SLUGS,
@@ -285,6 +286,31 @@ export async function setDesignation(
   // `invalidateAll` rather than per-agent for the same reason Sunrise's own tag
   // route does it: the affected set is every agent the rule widens.
   invalidateAllAgentAccess();
+
+  // And the OTHER sixty-second cache, which the first version of the voice
+  // contributor left behind. `buildContext` memoises the FRAMED BLOCK — her
+  // retrieved passages included — per `(contextType, contextId, userId)`, so a
+  // document re-designated `sensitivity-client` here goes on reaching the system
+  // prompt of every conversation whose block was built in the preceding minute.
+  // That is the same "one minute that matters" as above, on the path where the
+  // material in question is her client transcripts. Caught by /code-review.
+  //
+  // Whole-cache rather than targeted: a designation is not scoped to a situation
+  // or a user, so the affected entries are every `voice` block for every user —
+  // and the platform exports no way to enumerate its keys. The cost is a rebuild
+  // of the framework's `module` blocks too, which is one extra query on the next
+  // turn that asks for one.
+  //
+  // **It clears THIS process's cache, and that is the honest limit of it.**
+  // `buildContext`'s cache is a plain module-scoped `Map`, unlike the contributor
+  // registry twelve lines above it in the same file, which Sunrise deliberately
+  // backs with `globalThis` because Turbopack loads `instrumentation.ts` in a
+  // separate module graph. So on more than one instance, a designation made
+  // through instance A leaves instance B serving the cached block — with that
+  // document's passage still in it — for up to the remaining TTL. An
+  // `upstream-gap` for Sunrise (the file is identical in all three tiers), not
+  // something a leaf can close. Caught by /code-review.
+  clearContextCache();
 
   const after = await getDesignation(documentId);
   // The document existed at the top of this function and the FK cascades only on

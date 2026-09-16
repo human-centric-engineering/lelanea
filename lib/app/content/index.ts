@@ -1,11 +1,12 @@
 /**
  * The one way in to Lelañea's authored content.
  *
- * Seven JSON files under `content/` hold Lelañea Fulton's words. Six are
- * transcriptions of documents she wrote; the seventh — the voice fingerprint's
- * always-on core — was drafted FROM those in her register and carries a
- * `provenance` block saying so, because a drafted file sitting silently beside
- * six transcribed ones is the one way this seam could start lying. Nothing
+ * Eight JSON files under `content/` hold Lelañea Fulton's words. Six are
+ * transcriptions of documents she wrote; the other two — the voice fingerprint's
+ * always-on core and its context-selected overlays — were drafted FROM those in
+ * her register and each carries a `provenance` block saying so, because a
+ * drafted file sitting silently beside six transcribed ones is the one way this
+ * seam could start lying. Nothing
  * outside this folder reads any of them: an ESLint rule in `lib/app/eslint.config.mjs`
  * fails any import of `@/content/*.json` from elsewhere, so a page that wants
  * the mission statement asks for it here instead of pasting it. That is the
@@ -44,6 +45,7 @@ import rawFoundationalDocuments from '@/content/lelanea_foundational_documents.j
 import rawJourneyStructure from '@/content/lelanea_module_structure.json';
 import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
 import rawVoiceFingerprint from '@/content/lelanea_voice_fingerprint.json';
+import rawVoiceOverlays from '@/content/lelanea_voice_overlays.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   foundationalDocumentsFileSchema,
@@ -60,6 +62,8 @@ import {
   type DiscoveryQuestionsFile,
   voiceFingerprintFileSchema,
   type VoiceFingerprintFile,
+  voiceOverlaysFileSchema,
+  type VoiceOverlaysFile,
 } from '@/lib/app/content/schemas';
 
 // ============================================================================
@@ -239,6 +243,54 @@ export interface VoiceFingerprintCore {
   };
 }
 
+/**
+ * One register overlay: the situation it answers to, and the beats it adds.
+ *
+ * `situation` is the key a chat request carries as its `contextId`, so it is the
+ * wire vocabulary as well as the authored one. `when` is a note to whoever
+ * reviews the file and is deliberately NOT part of what reaches a prompt —
+ * served because a reviewer needs it, emitted nowhere.
+ */
+export interface VoiceOverlay {
+  situation: string;
+  label: string;
+  when: string;
+  heading: string;
+  /** Each entry is a beat. Joined with a newline, never with a space. */
+  lines: readonly string[];
+  /** What her voice material is searched for in this moment. Authored, not derived. */
+  exemplarQuery: string;
+}
+
+/**
+ * The context-selected layer of the fingerprint: the overlays, the copy that
+ * labels a retrieved passage as hers, and the body used when no overlay matches.
+ *
+ * Like {@link VoiceFingerprintCore} this is a prompt ingredient rather than a
+ * screen payload, and `provenance` is served for the same reason: these lines
+ * were drafted in her register and are a proposal until she has signed them off.
+ *
+ * `exemplars` and `coreOnly` are here — beside the overlays, in the authored
+ * file — rather than in the loader, because every one of their strings is text a
+ * model reads. `exemplars.originLabel` is the load-bearing one: it is what tells
+ * the model her writing from the person's.
+ */
+export interface VoiceOverlays {
+  collection: ContentCollectionMeta;
+  provenance: DeepReadonly<VoiceOverlaysFile['fingerprint']['provenance']>;
+  overlays: readonly VoiceOverlay[];
+  exemplars: {
+    readonly heading: string;
+    readonly originLabel: string;
+    readonly lines: readonly string[];
+    /** After a search that came back empty. */
+    readonly noneFoundNote: string;
+    /** After a search that could not be run — a different fact, and said so. */
+    readonly unavailableNote: string;
+  };
+  coreOnly: VoiceCoreSection;
+}
+
 // ============================================================================
 // Parse-once caches
 // ============================================================================
@@ -267,11 +319,13 @@ const foundationalDetailViews = new Map<string, FoundationalDocumentDetail>();
 let journeyStructureView: JourneyStructure | null = null;
 let discoveryQuestionSetView: DiscoveryQuestionSet | null = null;
 let voiceFingerprintView: VoiceFingerprintCore | null = null;
+let voiceOverlaysView: VoiceOverlays | null = null;
 
 let foundationalDocumentsCache: FoundationalDocumentsFile | null = null;
 let journeyStructureCache: JourneyStructureFile | null = null;
 let discoveryQuestionsCache: DiscoveryQuestionsFile | null = null;
 let voiceFingerprintCache: VoiceFingerprintFile | null = null;
+let voiceOverlaysCache: VoiceOverlaysFile | null = null;
 
 function foundationalDocumentsFile(): FoundationalDocumentsFile {
   foundationalDocumentsCache ??= deepFreezeParsed(
@@ -295,6 +349,11 @@ function discoveryQuestionsFile(): DiscoveryQuestionsFile {
 function voiceFingerprintFile(): VoiceFingerprintFile {
   voiceFingerprintCache ??= deepFreezeParsed(voiceFingerprintFileSchema.parse(rawVoiceFingerprint));
   return voiceFingerprintCache;
+}
+
+function voiceOverlaysFile(): VoiceOverlaysFile {
+  voiceOverlaysCache ??= deepFreezeParsed(voiceOverlaysFileSchema.parse(rawVoiceOverlays));
+  return voiceOverlaysCache;
 }
 
 // ============================================================================
@@ -604,4 +663,48 @@ export function getVoiceFingerprint(): VoiceFingerprintCore {
     },
   });
   return voiceFingerprintView;
+}
+
+/**
+ * The context-selected overlays, the labelling copy for a retrieved passage, and
+ * the core-only fallback body.
+ *
+ * Not a screen payload either. `lib/app/voice/overlays.ts` selects from this by
+ * situation and `lib/app/voice/context-contributor.ts` composes the block that
+ * reaches a prompt.
+ *
+ * Read `provenance` before putting any of it in front of anyone: these lines
+ * were drafted in her register from the corpus, exactly as the core was, and are
+ * a proposal until she has signed them off.
+ */
+export function getVoiceOverlays(): VoiceOverlays {
+  if (voiceOverlaysView) return voiceOverlaysView;
+
+  const file = voiceOverlaysFile();
+  voiceOverlaysView = deepFreezeParsed({
+    collection: {
+      id: file.fingerprint.id,
+      title: file.fingerprint.title,
+      version: file.fingerprint.version,
+      locale: file.fingerprint.locale,
+    },
+    provenance: file.fingerprint.provenance,
+    overlays: file.overlays.map((overlay) => ({
+      situation: overlay.situation,
+      label: overlay.label,
+      when: overlay.when,
+      heading: overlay.heading,
+      lines: overlay.lines,
+      exemplarQuery: overlay.exemplarQuery,
+    })),
+    exemplars: {
+      heading: file.exemplars.heading,
+      originLabel: file.exemplars.originLabel,
+      lines: file.exemplars.lines,
+      noneFoundNote: file.exemplars.noneFoundNote,
+      unavailableNote: file.exemplars.unavailableNote,
+    },
+    coreOnly: { heading: file.coreOnly.heading, lines: file.coreOnly.lines },
+  });
+  return voiceOverlaysView;
 }

@@ -76,9 +76,12 @@
  *
  * ## What this unit deliberately does not do
  *
- * **It binds no capabilities.** `search_knowledge_base` is t-27's, along with the
- * exemplar contributor. The mode is set now so that the rule is already live when
- * the tool arrives, rather than being something somebody has to remember.
+ * **It binds no capabilities**, and still does not. The exemplar path added in
+ * t-27 does not need one — it calls the knowledge search service directly, from
+ * outside the turn — and binding `search_knowledge_base` belongs with the surface
+ * a member talks to her through. The mode is set now so that the rule is already
+ * live when a tool does arrive, rather than being something somebody has to
+ * remember.
  *
  * **It leaves `visibility` at the platform default (`internal`).** Widening it is
  * the job of whichever task builds the surface a member talks to, and shipping a

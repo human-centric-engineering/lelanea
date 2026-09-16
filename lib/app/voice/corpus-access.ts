@@ -1,9 +1,21 @@
 /**
- * Which of her documents the agent's search tool may see.
+ * Which of her documents each path may see — the two rules, against the database.
  *
- * `lib/app/voice/designation.ts` says what the rule IS; this is where it is
- * applied to the database, and it is the only thing standing between a
- * voice-only document and `search_knowledge_base` quoting it back at someone.
+ * `lib/app/voice/designation.ts` says what the rules ARE; this is where they are
+ * applied, and the first of them is the only thing standing between a voice-only
+ * document and `search_knowledge_base` quoting it back at someone.
+ *
+ * Two sets over one corpus, taking the opposite half of the vocabulary each:
+ *
+ * | Set                             | Purposes            | Consumer                            |
+ * | ------------------------------- | ------------------- | ----------------------------------- |
+ * | {@link resolveQuotableDocumentIds} | `knowledge`, `both` | the agent's search tool, which quotes |
+ * | {@link resolveVoiceDocumentIds}    | `voice`, `both`     | the context contributor, register only |
+ *
+ * `sensitivity-client` is admitted by neither — the deferral is about the model
+ * seeing the words at all, and it sees them either way. Everything below the
+ * "Who this widens" heading is about the first set: only it feeds Sunrise's
+ * access resolver, and only it can widen an agent.
  *
  * ## Composed live, never materialised
  *
@@ -28,7 +40,8 @@
  *
  * Participation is therefore a property of the agent: {@link isCorpusAgent}, the
  * `lelanea-` slug prefix. A prefix rather than an allowlist constant because the
- * agents themselves do not exist yet — t-26 and t-27 create them — and an
+ * agents themselves did not exist when the rule was written — t-26 creates the
+ * first — and an
  * allowlist would ship empty, making this mechanism dark until somebody
  * remembered to come back and add a string (`HB9`). The prefix is live the moment
  * the first `lelanea-…` agent is created, with nothing to remember.
@@ -69,6 +82,7 @@ import {
   CORPUS_AGENT_SLUG_PREFIX,
   DOCUMENT_PURPOSES,
   TOOL_PATH_PURPOSES,
+  VOICE_PATH_PURPOSES,
   UNGRANTABLE_SENSITIVITIES,
   purposeTagSlug,
   sensitivityTagSlug,
@@ -146,6 +160,74 @@ export async function resolveQuotableDocumentIds(): Promise<string[]> {
       scope: APP_SCOPE,
       tags: { some: { tag: { slug: { in: qualifyingTagSlugs() } } } },
       NOT: { tags: { some: { tag: { slug: { in: disqualifyingTagSlugs() } } } } },
+    },
+    select: { id: true },
+  });
+  return documents.map((document) => document.id);
+}
+
+/**
+ * Tag slugs that DISQUALIFY a document from the voice path: the ungrantable
+ * sensitivities, and nothing else.
+ *
+ * **The asymmetry with {@link disqualifyingTagSlugs} is `readDesignation`'s
+ * safest-reading rule, in SQL.** A document can carry two purpose tags — the
+ * platform's own tag modal knows nothing about these families and will happily
+ * put both on one row — and when it does, `readDesignation` resolves the pair to
+ * `voice`, because the cost of being wrong that way is a passage that is never
+ * quoted and the cost the other way is her Substack pasted into a reply as an
+ * answer.
+ *
+ * So on the TOOL path a second `purpose-voice` tag is disqualifying: it makes
+ * the document less quotable. On THIS path a second tag cannot make a document
+ * less of a voice example, so nothing about a purpose disqualifies it here. A
+ * document tagged `purpose-voice` and `purpose-knowledge` is semantically what
+ * `purpose-both` says: it reaches this path, and not the one that can quote.
+ *
+ * The first version derived these the same way the tool path's are derived —
+ * "every purpose outside {@link VOICE_PATH_PURPOSES}" — which excluded that
+ * document from BOTH paths while the admin surface showed it as `Voice`. It
+ * reached nothing, silently, exactly as if nobody had designated it. Caught by
+ * /code-review.
+ *
+ * The safe-by-default property that derivation bought is not lost: it lives in
+ * {@link voiceQualifyingTagSlugs} instead. A purpose added to the vocabulary and
+ * to neither path still qualifies a document for nothing on its own.
+ */
+export function voiceDisqualifyingTagSlugs(): string[] {
+  return [...UNGRANTABLE_SENSITIVITIES.map(sensitivityTagSlug)];
+}
+
+/** Tag slugs that QUALIFY a document for the voice path, before disqualifiers. */
+export function voiceQualifyingTagSlugs(): string[] {
+  return VOICE_PATH_PURPOSES.map(purposeTagSlug);
+}
+
+/**
+ * The documents that may be shown to the model as EXAMPLES OF HER REGISTER.
+ *
+ * The same SQL shape as {@link resolveQuotableDocumentIds} over the other half
+ * of the vocabulary, and `tests/unit/lib/app/voice/corpus-access.test.ts`
+ * asserts it against `isVoiceExemplar()` over every combination rather than
+ * trusting the two to have stayed in step.
+ *
+ * **This set is NOT a widening of what the agent can quote.** Nothing returned
+ * here reaches `search_knowledge_base`; it reaches the context contributor,
+ * which labels every passage by origin and tells the model in her own authored
+ * words that these are examples of how she sounds and not answers to give. A
+ * `voice` document is in this set and absent from the quotable one, which is the
+ * property t-25 shipped and this task must not weaken.
+ *
+ * Same `scope: 'app'` filter, for the same reason: `system`-scoped seed material
+ * is the platform's bundled reference, is searchable by every agent whatever any
+ * rule says, and is emphatically not an example of how she writes.
+ */
+export async function resolveVoiceDocumentIds(): Promise<string[]> {
+  const documents = await prisma.aiKnowledgeDocument.findMany({
+    where: {
+      scope: APP_SCOPE,
+      tags: { some: { tag: { slug: { in: voiceQualifyingTagSlugs() } } } },
+      NOT: { tags: { some: { tag: { slug: { in: voiceDisqualifyingTagSlugs() } } } } },
     },
     select: { id: true },
   });
