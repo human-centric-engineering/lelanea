@@ -3,7 +3,7 @@ name: app-voice
 description: Designating her material — what each document is for, and the rule that keeps voice-only material off the tool path.
 ---
 
-# Her material: what a document is for
+# Training material: what a document is for
 
 The knowledge base holds two different kinds of thing wearing the same file
 extension. Some of it is what Lelañea **knows** — a method note, a framework, a
@@ -48,6 +48,20 @@ A document may reach `search_knowledge_base` — the tool path, the one that can
 Everything else reaches the prompt, if at all, through the context contributor,
 read directly and labelled by origin so the model can tell her register from her
 answers. An **undesignated** document reaches nothing: deny by default.
+
+### Her uploads only — `scope: 'app'`
+
+Both the rule and the admin list filter to `scope: 'app'`. `scope: 'system'` is
+the platform's own pre-loaded seed corpus (the bundled Agentic Design Patterns
+reference), and `resolveAgentDocumentAccess` returns `includeSystemScope: true`
+unconditionally — so a system document is searchable by **every** agent
+regardless of grants, and no contributor can take that away.
+
+Designating one would therefore be theatre. The first version of the page listed
+Agentic Design Patterns with an **Agent may quote: No** badge, which was simply
+untrue: an operator who marked it `voice` would reasonably have believed it had
+stopped being quotable. Excluding it is the honest answer (`B31`), not a
+tidiness filter.
 
 ### Why it is a document-level rule and not a tag grant
 
@@ -100,18 +114,19 @@ touch.
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
 `GET`/`PATCH .../designations/:documentId`. Page: `/admin/app/knowledge`
-("Her material" in the Lelañea admin section).
+("Training material" in the Lelañea admin section).
 
 ## The surface
 
-`/admin/app/knowledge` lists every knowledge document with its purpose,
-sensitivity, licensing note, and an **Agent may quote** column showing the
-consequence of the answer on the same screen.
+`/admin/app/knowledge` — **Training material** in the Lelañea admin section —
+lists every document uploaded into this install with its purpose, sensitivity,
+licensing note, and an **Agent may quote** column showing the consequence of the
+answer on the same screen.
 
-The first control is the filter for documents **nobody has answered for**. That
-is the point of the page rather than a convenience: an undesignated document
-reaches nothing, but on screen it looks exactly like one that reaches everything,
-and that confusion is what this feature exists to remove.
+The first control is the **Undesignated documents** filter. That is the point of
+the page rather than a convenience: an undesignated document reaches nothing, but
+on screen it looks exactly like one that reaches everything, and that confusion
+is what this feature exists to remove.
 
 ## Two properties worth knowing before you change anything
 
@@ -120,6 +135,12 @@ many an admin has put on the document through
 `/admin/orchestration/knowledge`. The removal pass touches only the six slugs
 this feature owns — never `deleteMany({ documentId })`, which is the obvious
 shape and throws away every unrelated tag with nothing to report it.
+
+**The list and the rule must agree on scope.** Both filter to `scope: 'app'`.
+If one drifts, the page starts making claims about documents the rule does not
+govern — which is the defect the surface exists to prevent, on the surface that
+exists to prevent it. `tests/unit/lib/app/voice/designation-admin.test.ts` pins
+the list's filter and `corpus-access.test.ts` pins the rule's.
 
 **The write evicts the resolver's cache.** `resolveAgentDocumentAccess` memoises
 for 60 seconds. Without `invalidateAllAgentAccess()`, a document just marked

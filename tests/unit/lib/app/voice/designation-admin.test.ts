@@ -50,6 +50,7 @@ import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveA
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { setDesignation, listDesignatedDocuments } from '@/lib/app/voice/designation-admin';
 import { purposeTagSlug, sensitivityTagSlug } from '@/lib/app/voice/designation';
+import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
 
 type Mocked = ReturnType<typeof vi.fn>;
 /**
@@ -261,5 +262,23 @@ describe('listDesignatedDocuments', () => {
       purposeTagSlug('voice'),
       purposeTagSlug('both'),
     ]);
+  });
+
+  it('lists her uploads only, never the platform’s pre-loaded corpus', async () => {
+    // Not cosmetic. A `system`-scoped document is searchable by every agent
+    // whatever anyone designates it (`includeSystemScope: true` in the resolver),
+    // so listing one beside an `Agent may quote` badge states an answer this
+    // feature has no power over — which is exactly what the first version did,
+    // showing the bundled Agentic Design Patterns reference as "No".
+    db.aiKnowledgeDocument.findMany.mockResolvedValueOnce([]);
+    db.aiKnowledgeDocument.count.mockResolvedValueOnce(0);
+    db.appKnowledgeDesignation.findMany.mockResolvedValueOnce([]);
+
+    await listDesignatedDocuments({ undesignatedOnly: false, page: 1, limit: 25 });
+
+    expect(db.aiKnowledgeDocument.findMany.mock.calls[0]?.[0]?.where.scope).toBe(APP_SCOPE);
+    // And the COUNT takes the same filter, or the pager would report a total the
+    // rows cannot add up to.
+    expect(db.aiKnowledgeDocument.count.mock.calls[0]?.[0]?.where.scope).toBe(APP_SCOPE);
   });
 });

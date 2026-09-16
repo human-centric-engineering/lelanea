@@ -29,6 +29,10 @@
  * has designated (which reaches nothing) from one designated as knowledge (which
  * reaches everything). `/admin/app/knowledge` is that surface.
  *
+ * **"Training material", not "Her material".** The label names what an operator
+ * is looking at — the corpus the agent is trained on — rather than whose it is,
+ * which the section heading above it already says.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -62,7 +66,7 @@ export function initLeafAdminNav(): void {
       },
       {
         href: DESIGNATION_ADMIN_PAGE,
-        label: 'Her material',
+        label: 'Training material',
         icon: Library,
         description: 'What each document is for, and whether the agent may quote it',
       },

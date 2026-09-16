@@ -41,6 +41,18 @@
  * carrying that tag INCLUDING one also marked `sensitivity-client` — the material
  * the owner deferred. See the header of `designation.ts`.
  *
+ * ## System-scoped documents are out of this entirely
+ *
+ * `AiKnowledgeDocument.scope = 'system'` is the platform's own pre-loaded seed
+ * material — the bundled Agentic Design Patterns reference. The resolver returns
+ * `includeSystemScope: true` unconditionally, so a system document is searchable
+ * by EVERY agent regardless of grants, and no contributor can take that away.
+ *
+ * Designating one would therefore be theatre: the surface would record an answer
+ * the mechanism cannot act on, and an operator who marked it `voice` would
+ * reasonably believe it had stopped being quotable (`B31`). So the rule filters
+ * to `scope: 'app'` — her material — and the admin surface lists the same set.
+ *
  * ## Cache
  *
  * `resolveAgentDocumentAccess` memoises its answer for 60 seconds. Designating a
@@ -60,6 +72,16 @@ import {
   purposeTagSlug,
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
+
+/**
+ * The `AiKnowledgeDocument.scope` value for material uploaded into this install,
+ * as opposed to `'system'` — the platform's own pre-loaded seed corpus.
+ *
+ * Exported because the admin surface must list exactly the set this rule governs.
+ * A page that showed a system document beside an `Agent may quote` badge would be
+ * stating an answer the rule has no power over.
+ */
+export const APP_SCOPE = 'app';
 
 /**
  * The slug prefix marking an agent as one of Lelañea's own.
@@ -114,6 +136,11 @@ export function qualifyingTagSlugs(): string[] {
 export async function resolveQuotableDocumentIds(): Promise<string[]> {
   const documents = await prisma.aiKnowledgeDocument.findMany({
     where: {
+      // Her material only. A `system`-scoped document is searchable by every
+      // agent whatever this returns (see the header), so contributing one would
+      // add nothing — and omitting the filter would make the set LOOK like it
+      // governed documents it does not.
+      scope: APP_SCOPE,
       tags: { some: { tag: { slug: { in: qualifyingTagSlugs() } } } },
       NOT: { tags: { some: { tag: { slug: { in: disqualifyingTagSlugs() } } } } },
     },

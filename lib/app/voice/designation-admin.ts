@@ -33,6 +33,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
+import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
 import {
   DESIGNATION_TAG_SLUGS,
   isQuotable,
@@ -69,11 +70,17 @@ export interface DesignatedDocument {
   quotable: boolean;
 }
 
-/** The admin list: every knowledge document, newest first, with its designation. */
+/** The admin list: every document SHE uploaded, newest first, with its designation. */
 export async function listDesignatedDocuments(
   query: DesignationAdminQuery
 ): Promise<{ documents: DesignatedDocument[]; total: number }> {
-  const where: Prisma.AiKnowledgeDocumentWhereInput = {};
+  // Her material only, never the platform's pre-loaded seed corpus. A
+  // `system`-scoped document is searchable by every agent whatever anyone
+  // designates it (`includeSystemScope: true` in the resolver), so listing one
+  // here with an `Agent may quote` badge would state an answer this feature has
+  // no power over — and the first version of this page did exactly that, showing
+  // the bundled Agentic Design Patterns reference as "No".
+  const where: Prisma.AiKnowledgeDocumentWhereInput = { scope: APP_SCOPE };
 
   if (query.q) {
     where.OR = [

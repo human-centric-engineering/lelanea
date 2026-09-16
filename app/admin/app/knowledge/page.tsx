@@ -9,7 +9,7 @@ import type { DesignatedDocument } from '@/lib/app/voice/designation-admin';
 import type { PaginationMeta } from '@/types/api';
 
 export const metadata: Metadata = {
-  title: 'Her material',
+  title: 'Training material',
   description: 'What each document is for, and whether the agent may quote it',
 };
 
@@ -62,7 +62,7 @@ async function getFirstPage(): Promise<{
 }
 
 /**
- * Designating her material (§05 t-25).
+ * Designating the training material (§05 t-25).
  *
  * The knowledge base takes her documents in; this page records what each one is
  * FOR. The distinction it exists to capture is between something she knows —
@@ -79,12 +79,13 @@ export default async function KnowledgeDesignationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Her material</h2>
+        <h2 className="text-lg font-semibold">Training material</h2>
         <p className="text-muted-foreground text-sm">
-          Every document in the knowledge base, and what it is for. A document marked{' '}
+          Every document uploaded into this knowledge base, and what it is for. A document marked{' '}
           <strong>Voice</strong> shows how she sounds rather than what she knows: the agent may
           learn its register but can never retrieve it or quote it. Anything with no purpose yet
-          reaches nothing at all.
+          reaches nothing at all. The platform&rsquo;s own pre-loaded reference material is not
+          listed — every agent can already search it, so designating it would change nothing.
         </p>
       </div>
 

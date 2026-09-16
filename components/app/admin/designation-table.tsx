@@ -3,6 +3,13 @@
 /**
  * What every document she uploaded is FOR, and whether the agent may quote it.
  *
+ * Lists `scope: 'app'` documents only — the material uploaded into this install,
+ * never the platform's pre-loaded seed corpus. That is not a tidiness filter: a
+ * `system`-scoped document is searchable by every agent whatever anyone
+ * designates it, so showing one beside an `Agent may quote` badge states an
+ * answer this feature has no power over. The first version listed the bundled
+ * Agentic Design Patterns reference as "No", which was simply untrue.
+ *
  * The knowledge base at `/admin/orchestration/knowledge` can already take her
  * material in — the uploader, the bulk upload, fetch-from-URL and the parsers all
  * ship with the platform. What it cannot show is the distinction this feature
@@ -277,7 +284,7 @@ export function DesignationTable({
             onCheckedChange={onUndesignatedChange}
           />
           <Label htmlFor="undesignated-only" className="cursor-pointer">
-            Only ones nobody has answered for
+            Undesignated documents
           </Label>
           <FieldHelp title="Undesignated documents">
             A document with no purpose reaches nothing — not the search tool, not the voice
@@ -356,8 +363,8 @@ export function DesignationTable({
                 {loadFailed
                   ? 'The list could not be loaded, so this is not an answer about what is there.'
                   : appliedUndesignatedOnly
-                    ? 'Every document has a purpose. Nothing is waiting on an answer.'
-                    : 'No documents yet. Upload her material under AI Orchestration → Knowledge.'}
+                    ? 'Every document has a purpose. Nothing is undesignated.'
+                    : 'No training material yet. Upload it under AI Orchestration → Knowledge.'}
               </TableCell>
             </TableRow>
           )}

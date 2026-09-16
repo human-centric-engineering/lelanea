@@ -40,6 +40,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface FakeDocument {
   id: string;
+  /** `'app'` for her uploads, `'system'` for the platform's pre-loaded corpus. */
+  scope: string;
   tagSlugs: string[];
 }
 
@@ -57,7 +59,8 @@ const world = {
 /**
  * Evaluate the ONE where-shape `resolveQuotableDocumentIds()` issues:
  *
- *   { tags: { some: { tag: { slug: { in: A } } } },
+ *   { scope: 'app',
+ *     tags: { some: { tag: { slug: { in: A } } } },
  *     NOT: { tags: { some: { tag: { slug: { in: B } } } } } }
  *
  * Narrow on purpose. A general Prisma emulator would be a second database to get
@@ -67,18 +70,23 @@ const world = {
  */
 function evaluateDocumentWhere(where: unknown): FakeDocument[] {
   const clause = where as {
+    scope?: string;
     tags?: { some?: { tag?: { slug?: { in?: string[] } } } };
     NOT?: { tags?: { some?: { tag?: { slug?: { in?: string[] } } } } };
   };
   const qualifying = clause.tags?.some?.tag?.slug?.in;
   const disqualifying = clause.NOT?.tags?.some?.tag?.slug?.in;
-  if (!Array.isArray(qualifying) || !Array.isArray(disqualifying)) {
+  // `scope` is required, not optional. Dropping it from the query would silently
+  // widen the rule to the platform's seed corpus, and an optional read here would
+  // let that change pass — the shape IS the thing under test.
+  if (!Array.isArray(qualifying) || !Array.isArray(disqualifying) || !clause.scope) {
     throw new Error(
       `The fake does not understand this where-clause — the rule's query shape changed: ${JSON.stringify(where)}`
     );
   }
   return world.documents.filter(
     (document) =>
+      document.scope === clause.scope &&
       document.tagSlugs.some((slug) => qualifying.includes(slug)) &&
       !document.tagSlugs.some((slug) => disqualifying.includes(slug))
   );
@@ -123,6 +131,7 @@ import {
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
 import {
+  APP_SCOPE,
   CORPUS_AGENT_SLUG_PREFIX,
   disqualifyingTagSlugs,
   isCorpusAgent,
@@ -149,17 +158,37 @@ function seedWorld(): void {
     { id: PLATFORM_AGENT, slug: 'pattern-advisor', knowledgeAccessMode: 'restricted' },
   ];
   world.documents = [
-    { id: 'doc-knowledge', tagSlugs: [purposeTagSlug('knowledge'), sensitivityTagSlug('public')] },
-    { id: 'doc-voice', tagSlugs: [purposeTagSlug('voice'), sensitivityTagSlug('public')] },
-    { id: 'doc-both', tagSlugs: [purposeTagSlug('both'), sensitivityTagSlug('private')] },
+    {
+      id: 'doc-knowledge',
+      scope: APP_SCOPE,
+      tagSlugs: [purposeTagSlug('knowledge'), sensitivityTagSlug('public')],
+    },
+    {
+      id: 'doc-voice',
+      scope: APP_SCOPE,
+      tagSlugs: [purposeTagSlug('voice'), sensitivityTagSlug('public')],
+    },
+    {
+      id: 'doc-both',
+      scope: APP_SCOPE,
+      tagSlugs: [purposeTagSlug('both'), sensitivityTagSlug('private')],
+    },
     {
       id: 'doc-client',
+      scope: APP_SCOPE,
       tagSlugs: [purposeTagSlug('knowledge'), sensitivityTagSlug('client')],
     },
-    { id: 'doc-undesignated', tagSlugs: [] },
+    { id: 'doc-undesignated', scope: APP_SCOPE, tagSlugs: [] },
     // Tagged through the platform's own modal with something unrelated — the rule
     // must not read an unknown tag as an answer.
-    { id: 'doc-other-tag', tagSlugs: ['onboarding'] },
+    { id: 'doc-other-tag', scope: APP_SCOPE, tagSlugs: ['onboarding'] },
+    // The platform's own pre-loaded corpus, designated `knowledge` by an operator
+    // who did not know it made no difference. See the case below.
+    {
+      id: 'doc-system',
+      scope: 'system',
+      tagSlugs: [purposeTagSlug('knowledge'), sensitivityTagSlug('public')],
+    },
   ];
 }
 
@@ -207,6 +236,19 @@ describe('the tool-path document set for one of her agents', () => {
     // which is the half a tag grant could not express.
     expect(documentIds).toContain('doc-knowledge');
     expect(documentIds).not.toContain('doc-client');
+  });
+
+  it('contributes no `system`-scoped document, whatever it is designated', async () => {
+    // `doc-system` carries `purpose: knowledge`, so the tag filter alone would
+    // admit it. It is excluded by scope instead — and the point is not tidiness:
+    // the resolver returns `includeSystemScope: true` unconditionally, so that
+    // document is searchable by every agent regardless of what this returns.
+    // Contributing it would add nothing while making the set look as though it
+    // governed material it does not (`B31`).
+    const documentIds = await toolPathDocumentIds(HER_AGENT);
+
+    expect(documentIds).toContain('doc-knowledge');
+    expect(documentIds).not.toContain('doc-system');
   });
 
   it('admits nothing nobody has designated', async () => {
@@ -258,6 +300,7 @@ describe('the query and the pure rule agree', () => {
 
     world.documents = combinations.map(({ purpose, sensitivity }) => ({
       id: `doc-${purpose ?? 'none'}-${sensitivity ?? 'none'}`,
+      scope: APP_SCOPE,
       tagSlugs: [
         ...(purpose ? [purposeTagSlug(purpose)] : []),
         ...(sensitivity ? [sensitivityTagSlug(sensitivity)] : []),

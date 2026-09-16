@@ -199,7 +199,7 @@ describe('the empty state', () => {
     render(<DesignationTable initialDocuments={[]} initialMeta={META} initialLoadFailed />);
 
     expect(screen.getByText(/could not be loaded/i)).toBeTruthy();
-    expect(screen.queryByText(/No documents yet/i)).toBeNull();
+    expect(screen.queryByText(/No training material yet/i)).toBeNull();
   });
 
   it('says nothing is waiting on an answer when the undesignated filter is empty', async () => {
@@ -216,11 +216,11 @@ describe('the empty state', () => {
 
     render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
 
-    await user.click(screen.getByLabelText('Only ones nobody has answered for'));
+    await user.click(screen.getByLabelText('Undesignated documents'));
 
     // A different sentence from the general empty state, because "no documents"
     // and "none left undesignated" are opposite pieces of news.
-    expect(await screen.findByText(/Nothing is waiting on an answer/i)).toBeTruthy();
+    expect(await screen.findByText(/Nothing is undesignated/i)).toBeTruthy();
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toContain('undesignatedOnly=true');
   });
