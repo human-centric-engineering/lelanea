@@ -29,11 +29,29 @@
  *
  * ## Reverting the rule fails this file
  *
- * Drop the origin label from `labelled()` and two cases go red. Remove `'voice'`
- * from `VOICE_PATH_PURPOSES` and `her passage reaches the prompt` fails on an
- * empty allowlist. Stop neutralising fences in `exemplars.ts` and the forged-fence
- * case fails. Make the core-only branch return `''` and the fallback case fails on
- * the emptiness assertion rather than on a missing string.
+ * Drop the origin label from `labelled()` and three cases go red. Remove
+ * `'voice'` from `VOICE_PATH_PURPOSES` and `her passage reaches the prompt` fails
+ * on an empty allowlist. Stop neutralising fences in `exemplars.ts` and the
+ * forged-fence case fails. Make the core-only branch return `''` and the fallback
+ * case fails on the emptiness assertion rather than on a missing string.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this drives the REAL `lib/app/context-contributors.ts` seam
+ * ---------------------------------------------------------------------------
+ * Nothing here mocks `@/lib/app/content` or the seam that registers this
+ * contributor: the whole point is that the auto-wired init reaches `buildContext`
+ * on a real turn, and a mock would make that unprovable.
+ *
+ * **What a fork should expect.** Upstream the context-contributor seam is empty
+ * and there is no `content/lelanea_voice_overlays.json`, so this file fails at
+ * import. That is the seam being unfilled, not a defect.
+ *
+ * **What to do.** Rewrite it against YOUR contributor rather than deleting it,
+ * and keep the two properties whatever you register: that the block is framed for
+ * your type without anyone calling the init by hand, and that the fallback body
+ * is non-empty. If your fork registers no contributor, assert the platform's
+ * `No context loader for type` placeholder explicitly instead of removing the
+ * file — an absence asserted is evidence, and an absent test is not.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
