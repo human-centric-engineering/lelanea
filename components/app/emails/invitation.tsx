@@ -80,10 +80,16 @@ export default function InvitationEmail({
         around the work of Lelañea Fulton — a conversation with a coach, at your own pace.
       </Text>
 
+      {/*
+        Nothing here about HOW you sign in. A first version said "Accepting sets
+        a password for {email}" — false the moment the accept page offered
+        Google, and it made the next sentence read as "you will be asked what
+        [the password] is" (t-45). The accept page explains its own options, and
+        any sentence about them here goes stale with the next provider.
+      */}
       <Text style={styles.text} className="lelanea-text">
-        Accepting sets a password for {inviteeEmail}. The first time you open {BRAND.name} you will
-        be asked to read what it is and what it is not, and to agree to the terms — and then the
-        conversation begins.
+        The first time you open {BRAND.name} you will be asked to read what it is and what it is
+        not, and to agree to the terms — and then the conversation begins.
       </Text>
 
       <Section style={styles.buttonRow}>
