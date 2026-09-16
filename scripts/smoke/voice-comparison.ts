@@ -27,6 +27,16 @@
  * Exit 0 on every assertion passing, 1 otherwise; skipped (exit 0, says so) with
  * no database.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this runs the real `lib/app/content` seam, it does not assert on it
+ * ---------------------------------------------------------------------------
+ * `getVoiceGoldenSet()` reads Lelañea's authored prompts, so this script is
+ * about a fork-owned artefact from end to end, not a platform contract. In a
+ * fork with its own `content/` the accessor does not exist and the import fails
+ * at load — which is the right failure, because there is nothing here to run.
+ * Delete the script and its `smoke:voice-comparison` entry alongside the
+ * feature, or rewrite it against your own golden set. There is nothing to pin.
+ *
  * @see lib/app/voice/comparison.ts
  * @see .context/app/voice.md
  */
