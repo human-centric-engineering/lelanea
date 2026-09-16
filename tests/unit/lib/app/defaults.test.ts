@@ -392,9 +392,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       });
       // ONE of ours is excluded, and only one. `AppKnowledgeDesignation` holds a
       // note about a FILE she uploaded — what it is for, and on what terms we may
-      // use it — and nothing about a person; the other two hold personal data and
-      // must never join this list. (The registry also holds the framework tier's
-      // exclusions, so filter to ours.)
+      // use it; the other two hold personal data and must never join this list.
+      // (The registry also holds the framework tier's exclusions, so filter to
+      // ours.)
       expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([
         'AppKnowledgeDesignation',
       ]);
@@ -402,8 +402,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // is what lets them tell "we hold nothing about you" apart from "we decided
       // not to give it to you". An empty or placeholder reason would pass the
       // coverage guard and fail that reader.
+      //
+      // It has to be true for EVERY subject who could read it, and this row was
+      // pinned on a sentence that was not: "it holds nothing about you" is false
+      // for an administrator, because `designatedBy` retains the id of whoever
+      // last set the designation — deliberately without an FK, so the note
+      // survives that person's account. Raised by /code-review on t-25. The
+      // assertion now pins the disclosure rather than the reassurance, because
+      // the reassurance is the half that was wrong.
       const designation = excluded.find((entry) => entry.model === 'AppKnowledgeDesignation');
-      expect(designation?.reason).toMatch(/holds nothing about you/i);
+      expect(designation?.reason).toMatch(/says nothing about you/i);
+      expect(designation?.reason).toMatch(/administrator/i);
+      expect(designation?.reason).toMatch(/account id/i);
 
       // The collector's half of the same contract: every section this seam
       // DECLARES must appear in what it RETURNS, as an array, even when the

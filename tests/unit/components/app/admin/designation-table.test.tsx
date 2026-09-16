@@ -25,6 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { DesignationTable } from '@/components/app/admin/designation-table';
 import type { DesignatedDocument } from '@/lib/app/voice/designation-admin';
 import { DESIGNATION_ADMIN_ENDPOINT } from '@/lib/app/voice/endpoint';
+import { LICENSING_MAX } from '@/lib/validations/app-knowledge-designation';
 import type { PaginationMeta } from '@/types/api';
 
 function doc(overrides: Partial<DesignatedDocument> = {}): DesignatedDocument {
@@ -223,5 +224,189 @@ describe('the empty state', () => {
     expect(await screen.findByText(/Nothing is undesignated/i)).toBeTruthy();
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toContain('undesignatedOnly=true');
+  });
+});
+
+describe('the filters and the requests they send', () => {
+  it('cancels a pending search keystroke when the undesignated switch is flipped', async () => {
+    // The seq guard alone does not cover this: the pending debounce is the LATER
+    // request. Type, flip the switch inside the 300 ms window, and the toggle's
+    // fetch goes out first while the debounce fires afterwards carrying the
+    // `undesignatedOnly` value captured BEFORE the flip — so the stale one wins,
+    // the table shows every document, and the switch still reads "on".
+    const user = userEvent.setup({ delay: null });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [],
+        meta: { page: 1, limit: 25, total: 0, totalPages: 0 },
+      }),
+    });
+
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
+
+    await user.type(screen.getByLabelText('Search'), 'method');
+    await user.click(screen.getByLabelText('Undesignated documents'));
+
+    // Real timers, and a real wait past the 300 ms window — the file's other
+    // interaction tests run on real timers, and swapping halfway through leaks
+    // fake ones into every case after it.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    // If the toggle did not clear the pending debounce, a SECOND request goes out
+    // here carrying the pre-flip filter, and the seq guard lets it win.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('undesignatedOnly=true');
+  });
+
+  it('does not send a search of pure whitespace', async () => {
+    // `q` is `.trim().min(1)` server-side, so a space bar's worth of "search" is
+    // a 400 and an error banner over a table that was fine.
+    const user = userEvent.setup({ delay: null });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [], meta: { ...META, total: 0, totalPages: 0 } }),
+    });
+
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
+
+    await user.type(screen.getByLabelText('Search'), '   ');
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).not.toContain('q=');
+  });
+});
+
+describe('the licensing note', () => {
+  it('keeps the typed note on screen when the save fails', async () => {
+    // The text an admin loses this way is the one they just typed out of a
+    // permission email. Closing the editor before the write lands made any
+    // failure — including the 400 the length cap returns — unrecoverable.
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Something broke.' },
+      }),
+    });
+
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
+
+    await user.click(screen.getByRole('button', { name: /add a note/i }));
+    const textarea = screen.getByLabelText('Licensing note for The long way round');
+    await user.type(textarea, 'Hers, CC BY.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    // Still editing, and the words are still there.
+    const after = screen.getByLabelText('Licensing note for The long way round');
+    expect((after as HTMLTextAreaElement).value).toBe('Hers, CC BY.');
+  });
+
+  it('closes the editor once the save lands', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          designation: {
+            purpose: 'knowledge',
+            sensitivity: 'public',
+            licensing: 'Hers, CC BY.',
+            quotable: true,
+          },
+        },
+      }),
+    });
+
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
+
+    await user.click(screen.getByRole('button', { name: /add a note/i }));
+    await user.type(screen.getByLabelText('Licensing note for The long way round'), 'Hers, CC BY.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Licensing note for The long way round')).toBeNull()
+    );
+    expect(within(rowFor('The long way round')).getByText('Hers, CC BY.')).toBeTruthy();
+  });
+
+  it('stops the admin typing past the length the server will accept', async () => {
+    // The cap enforced where it can be obeyed rather than only where it is
+    // checked. Read from the schema, not written out here: the two drifting apart
+    // is the defect, so a test restating the number would pass through it.
+    const user = userEvent.setup();
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
+
+    await user.click(screen.getByRole('button', { name: /add a note/i }));
+
+    const textarea = screen.getByLabelText('Licensing note for The long way round');
+    expect(textarea.getAttribute('maxlength')).toBe(String(LICENSING_MAX));
+  });
+});
+
+describe('two saves at once', () => {
+  it('re-enables each row on its own save, not on whichever finishes first', async () => {
+    // One `savingId` slot misreported this: change a purpose on row A, change one
+    // on row B before A resolves, and A's `finally` cleared the slot — so B's row
+    // un-dimmed and its selects re-enabled while B's PATCH was still in flight.
+    const user = userEvent.setup();
+
+    let releaseA: (() => void) | undefined;
+    const designation = {
+      purpose: 'voice',
+      sensitivity: 'public',
+      licensing: null,
+      quotable: false,
+    };
+    const response = {
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { designation } }),
+    };
+
+    fetchMock
+      // Row A's save hangs until we let it go.
+      .mockImplementationOnce(
+        async () => new Promise((resolve) => (releaseA = () => resolve(response)))
+      )
+      .mockResolvedValue(response);
+
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({ id: 'a', name: 'A method note' }),
+          doc({ id: 'b', name: 'A talk' }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Purpose of A method note'));
+    await user.click(await screen.findByRole('option', { name: 'Voice' }));
+
+    await user.click(screen.getByLabelText('Purpose of A talk'));
+    await user.click(await screen.findByRole('option', { name: 'Voice' }));
+
+    // B has landed; A has not. B is free, A is still locked.
+    await waitFor(() =>
+      expect(screen.getByLabelText('Purpose of A talk').hasAttribute('disabled')).toBe(false)
+    );
+    expect(screen.getByLabelText('Purpose of A method note').hasAttribute('disabled')).toBe(true);
+
+    releaseA?.();
+    await waitFor(() =>
+      expect(screen.getByLabelText('Purpose of A method note').hasAttribute('disabled')).toBe(false)
+    );
   });
 });

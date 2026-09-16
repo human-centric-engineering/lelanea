@@ -30,7 +30,7 @@ vi.mock('@/lib/db/client', () => {
   };
   return {
     prisma: {
-      aiKnowledgeDocument: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+      aiKnowledgeDocument: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn() },
       appKnowledgeDesignation: { findUnique: vi.fn(), findMany: vi.fn() },
       knowledgeTag: { findMany: vi.fn() },
       // Forwards to the same stubs, so a call inside the transaction is visible
@@ -63,7 +63,7 @@ type TagFindMany = Mock<
   (args: { where: { slug: { in: string[] } } }) => Promise<Array<{ id: string; slug: string }>>
 >;
 const db = prisma as unknown as {
-  aiKnowledgeDocument: { findUnique: Mocked; findMany: Mocked; count: Mocked };
+  aiKnowledgeDocument: { findFirst: Mocked; findMany: Mocked; count: Mocked };
   appKnowledgeDesignation: { findUnique: Mocked; findMany: Mocked };
   knowledgeTag: { findMany: TagFindMany };
   __tx: {
@@ -77,7 +77,7 @@ const ADMIN = 'admin-1';
 
 /** The read-back `setDesignation` performs after writing. */
 function documentReadsBackAs(tagSlugs: string[]): void {
-  db.aiKnowledgeDocument.findUnique
+  db.aiKnowledgeDocument.findFirst
     // The existence check at the top of setDesignation.
     .mockResolvedValueOnce({ id: DOC })
     // getDesignation's read afterwards.
@@ -176,7 +176,7 @@ describe('setDesignation', () => {
   });
 
   it('refuses a document that does not exist, before writing anything', async () => {
-    db.aiKnowledgeDocument.findUnique.mockResolvedValueOnce(null);
+    db.aiKnowledgeDocument.findFirst.mockResolvedValueOnce(null);
 
     await expect(setDesignation('nope', { purpose: 'voice' }, ADMIN)).rejects.toBeInstanceOf(
       NotFoundError
@@ -184,8 +184,49 @@ describe('setDesignation', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('looks the document up scoped to her uploads, so a system document cannot be designated', async () => {
+    // The list filtering to `scope: 'app'` and the WRITE not doing so was `B31`
+    // again on the surface built to prevent it: the PATCH succeeded, the tag was
+    // stored, an audit entry was logged, and the response said `quotable: false`
+    // — while `resolveAgentDocumentAccess` returns `includeSystemScope: true`
+    // unconditionally and the document stayed searchable by every agent. An
+    // operator who marked it `voice` would reasonably have believed it stopped
+    // being quotable.
+    //
+    // Asserted on the WHERE rather than on the outcome, because the outcome with
+    // a stubbed client is whatever the stub returns: dropping `scope` from the
+    // query is the revert, and it is the query that has to carry it.
+    documentReadsBackAs([purposeTagSlug('voice')]);
+
+    await setDesignation(DOC, { purpose: 'voice' }, ADMIN);
+
+    expect(db.aiKnowledgeDocument.findFirst.mock.calls[0]?.[0]?.where).toEqual({
+      id: DOC,
+      scope: APP_SCOPE,
+    });
+    // And the read-back afterwards, which is `getDesignation` — same filter, or
+    // the write is refused and the answer is still given.
+    expect(db.aiKnowledgeDocument.findFirst.mock.calls[1]?.[0]?.where).toEqual({
+      id: DOC,
+      scope: APP_SCOPE,
+    });
+  });
+
+  it('refuses to designate a system-scoped document at all', async () => {
+    // Scoped-out reads as absent: `findFirst` matches nothing, and the caller
+    // turns that into a 404. "This exists but is not yours to designate" is not a
+    // distinction worth leaking, and a 404 is the honest answer either way.
+    db.aiKnowledgeDocument.findFirst.mockResolvedValueOnce(null);
+
+    await expect(setDesignation('system-doc', { purpose: 'voice' }, ADMIN)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(invalidateAllAgentAccess).not.toHaveBeenCalled();
+  });
+
   it('names the remedy when the vocabulary has not been seeded', async () => {
-    db.aiKnowledgeDocument.findUnique.mockResolvedValueOnce({ id: DOC });
+    db.aiKnowledgeDocument.findFirst.mockResolvedValueOnce({ id: DOC });
     db.knowledgeTag.findMany.mockResolvedValueOnce([]);
 
     // `HB10`: a guard that rejects with "not found" and nothing else is advice.
@@ -257,11 +298,42 @@ describe('listDesignatedDocuments', () => {
     const where = db.aiKnowledgeDocument.findMany.mock.calls[0]?.[0]?.where;
     // A document marked `sensitivity-public` with no purpose is still one nobody
     // has answered for — the rule cannot decide about it, so it reaches nothing.
-    expect(where.tags.none.tag.slug.in).toEqual([
-      purposeTagSlug('knowledge'),
-      purposeTagSlug('voice'),
-      purposeTagSlug('both'),
+    expect(where.AND).toEqual([
+      {
+        tags: {
+          none: {
+            tag: {
+              slug: {
+                in: [purposeTagSlug('knowledge'), purposeTagSlug('voice'), purposeTagSlug('both')],
+              },
+            },
+          },
+        },
+      },
     ]);
+  });
+
+  it('ANDs purpose with undesignatedOnly rather than letting one win silently', async () => {
+    // The pair is a contradiction and `designationAdminQuerySchema` rejects it on
+    // the wire — but this function is also called directly, and it used to answer
+    // a caller who passed both by discarding `undesignatedOnly` and returning the
+    // purpose matches. A wrong answer presented as an answer. ANDed, the
+    // contradiction returns nothing, which is true.
+    db.aiKnowledgeDocument.findMany.mockResolvedValueOnce([]);
+    db.aiKnowledgeDocument.count.mockResolvedValueOnce(0);
+    db.appKnowledgeDesignation.findMany.mockResolvedValueOnce([]);
+
+    await listDesignatedDocuments({
+      purpose: 'knowledge',
+      undesignatedOnly: true,
+      page: 1,
+      limit: 25,
+    });
+
+    const where = db.aiKnowledgeDocument.findMany.mock.calls[0]?.[0]?.where;
+    expect(where.AND).toHaveLength(2);
+    expect(where.AND[0].tags.some.tag.slug).toBe(purposeTagSlug('knowledge'));
+    expect(where.AND[1].tags.none.tag.slug.in).toContain(purposeTagSlug('knowledge'));
   });
 
   it('lists her uploads only, never the platform’s pre-loaded corpus', async () => {

@@ -90,6 +90,27 @@ A prefix rather than an allowlist constant because the agents do not exist yet:
 an allowlist would ship empty and leave the mechanism dark until somebody
 remembered to add a string.
 
+### The precondition: the agent must be `restricted`, or none of this runs
+
+`resolveAgentDocumentAccess` short-circuits — `if (agent.knowledgeAccessMode !==
+'restricted') return { mode: 'full' }` — and that `return` is **above**
+`collectAccessContributions()`. `search_knowledge_base` likewise only applies a
+document filter when `access.mode === 'restricted'`. The platform default is
+`full`, in the Prisma column and in `agentCreateSchema` both.
+
+So an agent left on the default never consults this rule at all: it searches the
+whole corpus, and voice-only or `sensitivity-client` material is quoted exactly
+as if none of this had shipped — while `/admin/app/knowledge` still shows **Agent
+may quote: No** for it, because `isQuotable()` is a pure function of tags and
+knows nothing about any agent's mode.
+
+Nothing here can enforce that, because a contributor can only widen and never
+narrows: the rule is inert rather than wrong. It is a **hard requirement on
+t-26**, the task that creates the first `lelanea-` agent, that it is created
+`restricted` explicitly and that a test asserts so through the real resolver. The
+**Agent may quote** column's own help text names the precondition, so the surface
+does not assert more than it can deliver.
+
 ### `client` is vocabulary without a mechanism behind it, deliberately
 
 Client transcripts are **deferred**, not excluded (owner ruling, applied at

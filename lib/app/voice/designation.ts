@@ -212,13 +212,19 @@ export function isQuotable(designation: DocumentDesignation): boolean {
 /**
  * Read a designation out of a document's tag slugs plus its licensing note.
  *
- * Tolerant on purpose: a document carrying two purpose tags (possible through
- * Sunrise's own tag modal, which knows nothing about these families) resolves to
- * the FIRST in vocabulary order, and the admin surface shows one selected value
- * rather than pretending the conflict away. `knowledge` before `voice` would be
- * the unsafe direction, so `DOCUMENT_PURPOSES` orders the narrow reading first:
- * with both `knowledge` and `voice` present the document is read as
- * `knowledge`… and it is `isQuotable` that decides, so see the note below.
+ * Tolerant on purpose: a document can carry two purpose tags, because Sunrise's
+ * own tag modal knows nothing about these families and will happily put both on
+ * one row. The admin surface shows a single selected value rather than
+ * pretending the conflict away.
+ *
+ * **A conflict resolves to the SAFEST reading, not to the first tag found.**
+ * With both `purpose-knowledge` and `purpose-voice` present the document reads
+ * as `voice`; with both `sensitivity-client` and a laxer one it reads as
+ * `client`. Being wrong in that direction costs a passage that is never quoted.
+ * Being wrong in the other costs her Substack pasted into a reply as an answer.
+ * Vocabulary order is NOT what decides this — see the code below, which names
+ * the narrow value explicitly so re-ordering `DOCUMENT_PURPOSES` cannot invert
+ * the safety property.
  */
 export function readDesignation(
   tagSlugs: readonly string[],

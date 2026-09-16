@@ -28,8 +28,16 @@ import { DOCUMENT_PURPOSES, DOCUMENT_SENSITIVITIES } from '@/lib/app/voice/desig
 /** How many documents the designation list shows per page. */
 export const DESIGNATION_ADMIN_PAGE_SIZE = 25;
 
-/** Longest licensing note we will store. Long enough for a permission email's gist. */
-const LICENSING_MAX = 2000;
+/**
+ * Longest licensing note we will store. Long enough for a permission email's gist.
+ *
+ * Exported because the textarea must carry the SAME number as a `maxLength`.
+ * Without it the cap is discovered by pasting a long note, submitting, and
+ * getting a 400 back — and the admin surface then has to be careful not to throw
+ * the typed text away on that rejection. Stopping the twenty-first hundred
+ * character from being typed is the kinder half of the same rule.
+ */
+export const LICENSING_MAX = 2000;
 
 /**
  * The licensing note: trimmed, capped, and `null` when blank.
@@ -67,15 +75,21 @@ export type DesignationUpdate = z.infer<typeof designationUpdateSchema>;
  * in the knowledge base looking like knowledge, so "show me the ones I have not
  * answered for" needs to be one click rather than a scan.
  */
-export const designationAdminQuerySchema = z.object({
-  q: z.string().trim().min(1).max(200).optional(),
-  purpose: z.enum(DOCUMENT_PURPOSES).optional(),
-  undesignatedOnly: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(DESIGNATION_ADMIN_PAGE_SIZE),
-});
+export const designationAdminQuerySchema = z
+  .object({
+    q: z.string().trim().min(1).max(200).optional(),
+    purpose: z.enum(DOCUMENT_PURPOSES).optional(),
+    undesignatedOnly: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().max(100).default(DESIGNATION_ADMIN_PAGE_SIZE),
+  })
+  .refine((query) => !(query.purpose && query.undesignatedOnly), {
+    message:
+      'purpose and undesignatedOnly contradict each other — a document with a purpose is designated. Ask for one or the other.',
+    path: ['undesignatedOnly'],
+  });
 
 export type DesignationAdminQuery = z.infer<typeof designationAdminQuerySchema>;

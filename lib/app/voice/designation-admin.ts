@@ -35,7 +35,8 @@ import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
 import {
-  DESIGNATION_TAG_SLUGS,
+  PURPOSE_TAG_SLUGS,
+  SENSITIVITY_TAG_SLUGS,
   isQuotable,
   purposeTagSlug,
   readDesignation,
@@ -89,19 +90,29 @@ export async function listDesignatedDocuments(
     ];
   }
 
+  // Both filters, ANDed, rather than one winning silently.
+  //
+  // `purpose` and `undesignatedOnly` together are a contradiction, and the query
+  // schema rejects the pair on the wire so an operator gets a sentence rather
+  // than a table. This function is also called directly, though, and an `else if`
+  // here meant a caller passing both got the purpose matches back with
+  // `undesignatedOnly` quietly discarded — a wrong answer presented as an
+  // answer. ANDed, the contradiction returns nothing, which is true.
+  const tagFilters: Prisma.AiKnowledgeDocumentWhereInput[] = [];
+
   if (query.purpose) {
-    where.tags = { some: { tag: { slug: purposeTagSlug(query.purpose) } } };
-  } else if (query.undesignatedOnly) {
+    tagFilters.push({ tags: { some: { tag: { slug: purposeTagSlug(query.purpose) } } } });
+  }
+
+  if (query.undesignatedOnly) {
     // "Nobody has answered for this one yet" is the absence of a PURPOSE tag —
     // not the absence of every designation tag. A document marked
     // `sensitivity-public` with no purpose is still undesignated in the sense
     // that matters: the rule cannot decide about it, so it reaches nothing.
-    where.tags = {
-      none: {
-        tag: { slug: { in: DESIGNATION_TAG_SLUGS.filter((s) => s.startsWith('purpose-')) } },
-      },
-    };
+    tagFilters.push({ tags: { none: { tag: { slug: { in: [...PURPOSE_TAG_SLUGS] } } } } });
   }
+
+  if (tagFilters.length > 0) where.AND = tagFilters;
 
   const [rows, total] = await Promise.all([
     prisma.aiKnowledgeDocument.findMany({
@@ -151,11 +162,22 @@ export async function listDesignatedDocuments(
   return { documents, total };
 }
 
-/** One document's designation, or `null` when the document does not exist. */
+/**
+ * One document's designation, or `null` when the document does not exist —
+ * or is not hers.
+ *
+ * Scoped to `APP_SCOPE` for the same reason the list is, and it has to be said
+ * twice because these are two lookups rather than one: a `system`-scoped
+ * document is searchable by every agent whatever anyone designates it, so
+ * answering about one here would state a `quotable` verdict the rule has no
+ * power over. Out of scope is indistinguishable from absent on purpose — the
+ * caller turns `null` into a 404, and "this document exists but is not yours to
+ * designate" is not a distinction worth leaking.
+ */
 export async function getDesignation(documentId: string): Promise<DocumentDesignation | null> {
   const [document, note] = await Promise.all([
-    prisma.aiKnowledgeDocument.findUnique({
-      where: { id: documentId },
+    prisma.aiKnowledgeDocument.findFirst({
+      where: { id: documentId, scope: APP_SCOPE },
       select: { tags: { select: { tag: { select: { slug: true } } } } },
     }),
     prisma.appKnowledgeDesignation.findUnique({
@@ -186,8 +208,14 @@ export async function setDesignation(
   update: DesignationUpdate,
   adminId: string
 ): Promise<DocumentDesignation> {
-  const document = await prisma.aiKnowledgeDocument.findUnique({
-    where: { id: documentId },
+  // Scoped, and this is the load-bearing one of the three scope filters. The
+  // list showing a `system` document was a cosmetic lie; WRITING one is a
+  // functional one — the tag is stored, the audit log records a designation, and
+  // the response says `quotable: false` while `resolveAgentDocumentAccess`
+  // returns `includeSystemScope: true` and keeps the document searchable by
+  // every agent. That is `B31` again, on the surface built to prevent it.
+  const document = await prisma.aiKnowledgeDocument.findFirst({
+    where: { id: documentId, scope: APP_SCOPE },
     select: { id: true },
   });
   if (!document) throw new NotFoundError(`Document ${documentId} not found`);
@@ -212,10 +240,17 @@ export async function setDesignation(
 
   // Which of the six slugs this write replaces. A field left `undefined` is not
   // in either list, so its existing tag survives untouched.
-  const familySlugs = (prefix: string) => DESIGNATION_TAG_SLUGS.filter((s) => s.startsWith(prefix));
+  //
+  // Taken from the exported per-family lists rather than re-derived by prefix
+  // here. A local `startsWith('purpose-')` duplicates a constant `designation.ts`
+  // keeps private, and drifting the two fails in the UNSAFE direction with
+  // nothing to report it: `slugsToClear` silently becomes empty while
+  // `slugsToApply` stays correct, so setting a purpose ADDS the new tag without
+  // removing the old one and the document ends up carrying both
+  // `purpose-knowledge` and `purpose-voice`.
   const slugsToClear: string[] = [
-    ...(update.purpose !== undefined ? familySlugs('purpose-') : []),
-    ...(update.sensitivity !== undefined ? familySlugs('sensitivity-') : []),
+    ...(update.purpose !== undefined ? PURPOSE_TAG_SLUGS : []),
+    ...(update.sensitivity !== undefined ? SENSITIVITY_TAG_SLUGS : []),
   ];
   const slugsToApply = wantedSlugs;
 

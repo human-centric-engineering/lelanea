@@ -16,6 +16,25 @@
  * The behavioural half (that the registration actually reaches
  * `resolveAgentDocumentAccess`, and what it resolves to) is
  * `tests/unit/lib/app/voice/corpus-access.test.ts`.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/knowledge-access-contributors.ts`
+ * ---------------------------------------------------------------------------
+ * The registry is mocked; the SEAM is not. That is the point of the file — it
+ * asserts what Lelañea's own seam registers — but it means the expectations
+ * below are ours, not the platform's.
+ *
+ * **What a fork should expect.** Upstream that seam is empty: `initApp…()`
+ * registers nothing, so `registered` is `[]` and every case here fails with
+ * nothing to read. That failure is the seam being unfilled, not a defect.
+ *
+ * **What to do.** Pin YOUR contributors here rather than deleting the cases.
+ * Keep the count assertion whatever you register, because it is the only thing
+ * in the suite that catches a second contributor arriving by accident — and a
+ * contributor can only WIDEN a restricted agent's document set, so an unnoticed
+ * one silently adds documents to every agent the first already reaches. If your
+ * fork deliberately registers none, assert `[]` explicitly instead of removing
+ * the case: an empty registry asserted is evidence, and an absent test is not.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

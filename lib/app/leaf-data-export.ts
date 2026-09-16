@@ -91,9 +91,17 @@ export function initLeafSubjectSources(): void {
     ],
     excluded: [
       {
+        // The reason is read by the data subject, so it has to be true for
+        // EVERY subject who could read it \u2014 including an administrator. The
+        // row carries `designatedBy`, the id of the admin who last set the
+        // designation, deliberately without an FK so the note survives that
+        // person's account. "It holds nothing about you" was therefore wrong
+        // for exactly the people who work here, and the reason is what lets a
+        // subject tell "we hold nothing" apart from "we decided not to give it
+        // to you" \u2014 so it says what is actually retained.
         model: 'AppKnowledgeDesignation',
         reason:
-          'A note about one of Lela\u00f1ea\u2019s own uploaded documents \u2014 what it is for, and on what terms we may use it. It holds nothing about you.',
+          'A note about one of Lela\u00f1ea\u2019s own uploaded documents \u2014 what it is for, and on what terms we may use it. It says nothing about you; if you are an administrator here, it retains the account id of whoever last set that note, and nothing else.',
       },
     ],
   });
