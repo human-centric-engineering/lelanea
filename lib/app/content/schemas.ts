@@ -1,7 +1,7 @@
 /**
  * Zod schemas for Lelañea's authored content.
  *
- * Six of the seven files under `content/` are Lelañea Fulton's own words,
+ * Six of the nine files under `content/` are Lelañea Fulton's own words,
  * transcribed and corrected only for typography. They are **not** a draft for
  * the build to improve on, so nothing here coerces, defaults or repairs — every
  * schema is a `strictObject`, and an unknown key fails validation rather than
@@ -9,14 +9,17 @@
  * authored file into a red CI run, which is the only cheap way to notice that
  * content drifted away from what the renderers and the API contract expect.
  *
- * The seventh — the voice fingerprint's always-on core, at the bottom of this
- * file — is the exception that proves the rule: it WAS drafted, from the other
- * six, and carries a required `provenance` block saying so. Its schema is no
- * looser for it.
+ * The other three are the voice fingerprint's, at the bottom of this file, and
+ * they are the exception that proves the rule: the always-on core and the
+ * register overlays were DRAFTED from the other six, and the golden set holds
+ * prompts a person puts TO her rather than words of hers at all. Each carries a
+ * required `provenance` block saying so, and none of their schemas is looser
+ * for it.
  *
  * Every real file is parsed by a test: `schemas.test.ts` for the three served
  * collections, `values.test.ts` for the Release-2 files, and
- * `voice-fingerprint.test.ts` for the core.
+ * `voice-fingerprint.test.ts` / `voice-overlays.test.ts` / `voice-golden-set.test.ts`
+ * for the three voice files.
  *
  * Strict on structure, permissive on prose. Free-text values (`surface`,
  * `textFormat`, headings, notes) are `z.string()`, because new authored copy
@@ -656,6 +659,133 @@ export const voiceOverlaysFileSchema = z
     }
   });
 
+/**
+ * The moments the golden set must cover, and the reason each is in the list.
+ *
+ * Not decoration: the file's own `superRefine` below fails when one of these is
+ * missing, so the coverage the feature promises is structural rather than
+ * something a reviewer has to count by hand. A set that quietly lost its
+ * retrieval-empty case would still parse, still seed, still run — and would stop
+ * asking the one question that proves the core carries a turn on its own.
+ */
+export const GOLDEN_SET_REQUIRED_KINDS = [
+  'greeting',
+  'decline',
+  'grounded-claim',
+  'retrieval-empty',
+] as const;
+
+export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];
+
+/**
+ * The golden set — content/lelanea_voice_golden_set.json
+ *
+ * The fixed prompts every change to her voice is heard through before it ships.
+ *
+ * They are not her words, which is the one thing that makes this file different
+ * from the two beside it: a prompt here is what a PERSON says to her. It is
+ * authored in the content seam anyway, because the set decides which moments she
+ * is ever heard in — and a probe set an engineer can silently retune is the same
+ * failure the feature exists to prevent, one level out.
+ *
+ * **There is no `expectedOutput` field, deliberately.** Whether an answer reads
+ * as her is her judgement on a deployed build; a reference answer here would
+ * invite a grader to score a string comparison and report a number for it. The
+ * platform's reference-required graders are therefore unusable against this
+ * dataset, which is correct rather than a gap.
+ *
+ * `control` is the other arm: the bare model's whole system prompt, authored so
+ * that what the comparison is comparing AGAINST is as readable, and as much
+ * hers to change, as what it is comparing.
+ */
+export const voiceGoldenSetFileSchema = z
+  .strictObject({
+    goldenSet: z.strictObject({
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9_-]*$/, {
+          message: 'id must be a lowercase slug with no whitespace',
+        }),
+      title: z.string().min(1),
+      layer: z.literal('golden-set'),
+      version: fingerprintVersionSchema,
+      locale: z.string().min(1),
+      provenance: z.strictObject({
+        status: z.literal('drafted_from_corpus'),
+        awaitingSignOffFrom: z.string().min(1),
+        note: z.string().min(1),
+      }),
+      notes: z.array(z.string().min(1)),
+    }),
+    dataset: z.strictObject({
+      name: z.string().min(1),
+      description: z.string().min(1),
+      tags: z.array(z.string().trim().min(1)),
+    }),
+    control: z.strictObject({
+      name: z.string().min(1),
+      description: z.string().min(1),
+      /**
+       * Trimmed to non-empty because `composeSections()` omits a falsy section
+       * entirely: an instruction of `" "` would compose to an EMPTY system
+       * prompt, and the arms-differ guard would then be comparing her core
+       * against nothing rather than against a bare model. The schema is the half
+       * that should be strict.
+       */
+      systemInstructions: z.string().trim().min(1),
+    }),
+    prompts: z
+      .array(
+        z.strictObject({
+          /**
+           * The case's stable name. A slug because the comparison surface
+           * addresses a case by it in a URL, and because it is what a person
+           * says out loud when they report that one of them regressed.
+           */
+          key: voiceSituationSchema,
+          kind: z.enum(GOLDEN_SET_REQUIRED_KINDS),
+          /** What this prompt is probing. Shown to whoever reads the comparison. */
+          probe: z.string().min(1),
+          prompt: z.string().trim().min(1),
+        })
+      )
+      .min(1),
+    reviewNotes: z.array(
+      z.strictObject({
+        scope: z.string().min(1),
+        note: z.string().min(1),
+      })
+    ),
+  })
+  .superRefine((file, ctx) => {
+    // A duplicate key is a parse error for the same reason a duplicate overlay
+    // situation is: the surface addresses a case by key, so the second would be
+    // unreachable and whoever authored it would have no way to tell from the
+    // file that their prompt is never read.
+    const seen = new Set<string>();
+    for (const [index, entry] of file.prompts.entries()) {
+      if (seen.has(entry.key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['prompts', index, 'key'],
+          message: `duplicate prompt key "${entry.key}" — the comparison surface addresses a case by it`,
+        });
+      }
+      seen.add(entry.key);
+    }
+
+    const kinds = new Set(file.prompts.map((entry) => entry.kind));
+    const absent = GOLDEN_SET_REQUIRED_KINDS.filter((kind) => !kinds.has(kind));
+    if (absent.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['prompts'],
+        message: `the golden set must cover every moment: missing ${absent.join(', ')}`,
+      });
+    }
+  });
+
 // ============================================================================
 // Release 2 — validated here, not served. See the file header.
 // ============================================================================
@@ -973,3 +1103,4 @@ export type ValuesReferenceFrameworkFile = z.infer<typeof valuesReferenceFramewo
 export type ValueExplorationsFile = z.infer<typeof valueExplorationsFileSchema>;
 export type VoiceFingerprintFile = z.infer<typeof voiceFingerprintFileSchema>;
 export type VoiceOverlaysFile = z.infer<typeof voiceOverlaysFileSchema>;
+export type VoiceGoldenSetFile = z.infer<typeof voiceGoldenSetFileSchema>;

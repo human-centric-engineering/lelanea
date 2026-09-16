@@ -53,4 +53,26 @@ export function registerLeafDriftProbes(): void {
     // every document anyone had ever designated.
     probe: constraintExists('app_knowledge_designation_documentId_fkey', 'ON DELETE CASCADE'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_voice_comparison_arm_evaluationRunId_fkey (hand-written FK → ai_evaluation_run)',
+    kind: 'FK constraint',
+    table: 'app_voice_comparison_arm',
+    // Fourth of the four, and the second pointing at a Sunrise table. The
+    // definition is asserted for the same reason as the others: `ON DELETE
+    // CASCADE` is what stops a deleted evaluation run leaving an arm row behind
+    // that attributes outputs nothing can resolve — and an arm claiming a
+    // fingerprint version for a run that no longer exists is worse than no
+    // attribution, because the comparison surface would still render it. A
+    // constraint re-created with `NO ACTION` would pass an existence check while
+    // making every run deletion fail with `P2003`.
+    //
+    // Note the SIBLING constraint on this table —
+    // `app_voice_comparison_arm_comparisonId_fkey` — is NOT probed, and that is
+    // not an omission: both of its tables are ours and the relation is in
+    // `prisma/schema/app.prisma`, so Prisma can see it and will never emit a
+    // DROP for it. Probing it would imply this file is a list of every FK the
+    // fork has, which is exactly the wrong thing to believe about it.
+    probe: constraintExists('app_voice_comparison_arm_evaluationRunId_fkey', 'ON DELETE CASCADE'),
+  });
 }

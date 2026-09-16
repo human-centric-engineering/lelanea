@@ -103,6 +103,22 @@ export function initLeafSubjectSources(): void {
         reason:
           'A note about one of Lela\u00f1ea\u2019s own uploaded documents \u2014 what it is for, and on what terms we may use it. It says nothing about you; if you are an administrator here, it retains the account id of whoever last set that note, and nothing else.',
       },
+      {
+        // Unlike the designation row above, this pair genuinely retains nothing
+        // about anybody \u2014 not even an administrator's id. The admin who queued a
+        // comparison is recorded by the platform on the evaluation run itself,
+        // which is where a subject's own export already reaches it from; copying
+        // it down here would have created a second disclosure obligation for a
+        // fact already covered.
+        model: 'AppVoiceComparison',
+        reason:
+          'A record that somebody listened to Lela\u00f1ea\u2019s fixed set of test questions to check how she sounds \u2014 which version of her voice, and when. It holds no information about any person.',
+      },
+      {
+        model: 'AppVoiceComparisonArm',
+        reason:
+          'One half of such a check: the instructions the assistant was given before it answered the test questions, and nothing else. The questions are ours, not anyone\u2019s, and no answer or account is recorded here.',
+      },
     ],
   });
 }
