@@ -9,19 +9,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { sendEmailMock, log } = vi.hoisted(() => ({
+const { sendEmailMock, log, env } = vi.hoisted(() => ({
   sendEmailMock: vi.fn(),
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
-
-vi.mock('@/lib/email/send', () => ({ sendEmail: sendEmailMock }));
-vi.mock('@/lib/logging', () => ({ logger: log }));
-vi.mock('@/lib/env', () => ({
+  // One object, mutated per case, so the origin fallback can be driven
+  // without re-importing the module.
   env: {
     NEXT_PUBLIC_APP_URL: 'https://lelanea.example',
     BETTER_AUTH_URL: 'https://fallback.example',
   },
 }));
+
+vi.mock('@/lib/email/send', () => ({ sendEmail: sendEmailMock }));
+vi.mock('@/lib/logging', () => ({ logger: log }));
+vi.mock('@/lib/env', () => ({ env }));
 
 import WaitlistConfirmationEmail from '@/components/app/emails/waitlist-confirmation';
 import { sendWaitlistConfirmation } from '@/lib/app/waitlist/confirmation';
@@ -30,6 +31,7 @@ const INPUT = { entryId: 'entry-1', email: 'ada@example.com', name: 'Ada Lovelac
 
 beforeEach(() => {
   vi.clearAllMocks();
+  env.NEXT_PUBLIC_APP_URL = 'https://lelanea.example';
   sendEmailMock.mockResolvedValue({ success: true, status: 'sent', id: 'msg-1' });
 });
 
@@ -47,6 +49,12 @@ describe('sendWaitlistConfirmation', () => {
       email: 'ada@example.com',
       baseUrl: 'https://lelanea.example',
     });
+  });
+
+  it('falls back to the auth URL for the origin when the public one is unset', async () => {
+    env.NEXT_PUBLIC_APP_URL = undefined;
+    await sendWaitlistConfirmation(INPUT);
+    expect(sendEmailMock.mock.calls[0][0].react.props.baseUrl).toBe('https://fallback.example');
   });
 
   it('logs the entry id, never the address', async () => {
@@ -84,6 +92,15 @@ describe('sendWaitlistConfirmation', () => {
     expect(log.error).toHaveBeenCalledWith(
       'Waitlist confirmation threw',
       expect.objectContaining({ entryId: 'entry-1', error: 'network' })
+    );
+  });
+
+  it('logs a non-Error throw as a string, and does not throw', async () => {
+    sendEmailMock.mockRejectedValue('boom');
+    await expect(sendWaitlistConfirmation(INPUT)).resolves.toBeUndefined();
+    expect(log.error).toHaveBeenCalledWith(
+      'Waitlist confirmation threw',
+      expect.objectContaining({ error: 'boom' })
     );
   });
 });
