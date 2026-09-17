@@ -260,6 +260,7 @@ describe('collectWaitlistEntriesForExport', () => {
     const { entries, total } = await collectWaitlistEntriesForExport({
       q: undefined,
       includeRemoved: false,
+      includeJoined: false,
     });
 
     expect(findMany).toHaveBeenCalledWith(

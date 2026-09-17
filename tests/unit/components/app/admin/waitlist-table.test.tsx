@@ -699,7 +699,7 @@ describe('WaitlistTable', () => {
       // common case is one more click.
       const dialog = screen.getByRole('dialog');
       expect(within(dialog).getByText(/Invite ada@example\.com\?/)).toBeTruthy();
-      expect(within(dialog).getByLabelText('Name').value).toBe('Ada');
+      expect(within(dialog).getByDisplayValue('Ada')).toBeTruthy();
       await user.click(within(dialog).getByRole('button', { name: 'Send invitation' }));
 
       await waitFor(() =>
