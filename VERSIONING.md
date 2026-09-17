@@ -140,6 +140,21 @@ covered by the version contract.
   - `lib/app/leaf-data-export.ts` → `initLeafSubjectSources()` / `collectLeafSubjectData()` — the leaf's Art. 15 sources, via `data-export.ts`
   - `lib/app/leaf-db-drift.ts` → `registerLeafDriftProbes()` — the leaf's drift probes, via `db-drift.ts`
 
+  **Lelañea's own scaffolds** — LELAÑEA divergence, see
+  `.context/app/divergences.md` row 17. These are leaf-owned modules that live
+  under `lib/app/` because that is the tier the ESLint app-boundary rule and
+  the seams above are scoped to; they are absent from Sunrise and Daybreak,
+  and no upstream tier versions them. They are named here only because the
+  coverage guard classifies every subdirectory of `lib/app/` as one scaffold,
+  and a row is the guard's only exit. Their contract is ours:
+
+  - `lib/app/content/` — the authored content loader: foundational documents, discovery questions, journey structure
+  - `lib/app/gateway/` — the acknowledgement gate: kinds, current versions, a member's standing at the gate
+  - `lib/app/journey/` — the published journey map, its module registry and path helpers
+  - `lib/app/modules/` — the leaf's module definitions, registered with Daybreak's module registry
+  - `lib/app/voice/` — the voice corpus: designation, comparison, corpus access and the chat context contributor
+  - `lib/app/waitlist/` — the public waitlist: endpoint, service, confirmation email, locale and rate limit
+
   Outside `lib/app/` — **hand-maintained, so check it against the tree rather
   than trusting it.** The guard cannot derive this half, and a short list here
   is the same broken promise #732 was about:
