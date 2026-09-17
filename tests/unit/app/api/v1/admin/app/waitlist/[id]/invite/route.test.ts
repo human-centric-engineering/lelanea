@@ -118,7 +118,8 @@ function request(body: unknown = {}, id = ENTRY_ID) {
   const req = new Request(`https://lelanea.com/api/v1/admin/app/waitlist/${id}/invite`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' },
-    body: JSON.stringify(body),
+    // `undefined` sends no body at all — the headless-resend shape.
+    body: body === undefined ? undefined : JSON.stringify(body),
   }) as unknown as NextRequest;
   return [req, { params: Promise.resolve({ id }) }] as const;
 }
@@ -217,6 +218,41 @@ describe('POST /api/v1/admin/app/waitlist/:id/invite', () => {
       'Waitlist invitation resent',
       expect.objectContaining({ isResend: true })
     );
+  });
+
+  it('accepts a POST with no body at all, since the body is optional', async () => {
+    const response = await POST(...request(undefined));
+
+    // The documented headless resend is `POST` with nothing. The platform's
+    // `validateRequestBody` would have answered "Invalid JSON" before the row
+    // was read; the code review of t-47 caught the docblock promising otherwise.
+    expect(response.status).toBe(201);
+    expect(generateInvitationToken).toHaveBeenCalledWith(
+      'ada@example.com',
+      expect.objectContaining({ name: 'Ada' })
+    );
+  });
+
+  it('still refuses a body that is not JSON', async () => {
+    const req = new Request(`https://lelanea.com/api/v1/admin/app/waitlist/${ENTRY_ID}/invite`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' },
+      body: '{not json',
+    }) as unknown as NextRequest;
+
+    const response = await POST(req, { params: Promise.resolve({ id: ENTRY_ID }) });
+
+    expect(response.status).toBe(400);
+    expect(findWaitlistEntryForInvite).not.toHaveBeenCalled();
+  });
+
+  it('still refuses a name that is not a string', async () => {
+    const response = await POST(...request({ name: 42 }));
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as Body & { error?: { details?: { errors?: unknown[] } } };
+    expect(body.error?.details?.errors).toHaveLength(1);
+    expect(generateInvitationToken).not.toHaveBeenCalled();
   });
 
   it('takes the name from the body when the row has none', async () => {
@@ -366,6 +402,23 @@ describe('POST /api/v1/admin/app/waitlist/:id/invite', () => {
     // did not go, handing it over by another channel is the remedy.
     expect(body.data.link).toContain('token=fresh-token');
     expect(body.data.link).toContain('email=ada%40example.com');
+  });
+
+  it('reports the row as it holds it when a removal landed between the read and the stamp', async () => {
+    stampWaitlistEntryInvited.mockResolvedValue(false);
+
+    const response = await POST(...request());
+
+    // The invitation was minted and the email went — the person will accept
+    // it or not — but the row must not claim the list sent it, or it reads as
+    // Removed and Invited at once. The response says what the row holds.
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as Body;
+    expect(body.data.entry.invitedAt).toBeNull();
+    expect(routeLog.info).toHaveBeenCalledWith(
+      'Waitlist invitation sent',
+      expect.objectContaining({ stamped: false })
+    );
   });
 
   it('logs the entry id and the outcome, and nobody’s address or name', async () => {

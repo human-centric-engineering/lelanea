@@ -326,13 +326,19 @@ export async function findWaitlistEntryForInvite(id: string): Promise<WaitlistAd
  * is "when we last wrote to them", which a resend genuinely changes — it is
  * what tells an admin the reminder went, and the CSV column is named for it.
  *
- * `updateMany` rather than `update`, so a row deleted between the route's read
- * and this write is a count of zero rather than a thrown P2025. The route has
- * already sent the email by then; a vanished row is logged, not raised.
+ * **Conditioned on `removedAt: null`**, which the route has already checked
+ * and checks again here under the row lock: a removal landing between its read
+ * and this write would otherwise leave "Removed" and "Invited <today>" on one
+ * row — the pair the route refuses to create on purpose. A zero count means
+ * removed-meanwhile or deleted-meanwhile; either way the row does not claim
+ * the list sent an invitation, and the route logs it rather than raising.
+ *
+ * `updateMany` rather than `update`, so that zero is a count and not a thrown
+ * P2025, and so the condition lives in the WHERE where Postgres evaluates it.
  */
 export async function stampWaitlistEntryInvited(id: string, at: Date): Promise<boolean> {
   const { count } = await prisma.appWaitlistEntry.updateMany({
-    where: { id },
+    where: { id, removedAt: null },
     data: { invitedAt: at },
   });
   return count === 1;

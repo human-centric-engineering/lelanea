@@ -365,12 +365,14 @@ describe('stampWaitlistEntryInvited', () => {
     const call = update.mock.calls[0]?.[0] as { where: unknown; data: Record<string, unknown> };
     // No `invitedAt: null` in the WHERE, unlike the removal write — a resend is
     // meant to move it. The column records the latest send, and the CSV column
-    // is named for that.
-    expect(call.where).toEqual({ id: 'entry-1' });
+    // is named for that. But `removedAt: null` IS there: a removal landing
+    // between the route's read and this write must not produce a row that is
+    // both Removed and Invited.
+    expect(call.where).toEqual({ id: 'entry-1', removedAt: null });
     expect(call.data).toEqual({ invitedAt: at });
   });
 
-  it('reports a row that vanished between the read and the write, rather than throwing', async () => {
+  it('reports a row that was removed or vanished between the read and the write, rather than throwing', async () => {
     update.mockResolvedValue({ count: 0 });
 
     await expect(stampWaitlistEntryInvited('entry-1', new Date())).resolves.toBe(false);

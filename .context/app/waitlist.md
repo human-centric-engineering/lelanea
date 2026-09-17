@@ -571,7 +571,13 @@ route's rules on its own merits rather than copying its code (`fp5`):
   latest send — the badge reads "Invited <date>" — and it is set once the
   invitation exists, before the email is attempted, because the invitation IS
   the state: Sunrise's Invitations tab lists it from the same verification store
-  whether or not the email went. `emailStatus` in the response says whether it
+  whether or not the email went. The stamp is conditioned on `removedAt: null`
+  under the row lock, so a removal landing between the route's read and its
+  write cannot leave a row that is both Removed and Invited; the response then
+  reports the row as it holds it, and the log says `stamped: false`.
+- **The body is optional in fact.** `POST` with nothing is the headless resend
+  for a named row; the route reads the body itself rather than through
+  `validateRequestBody`, which refuses an empty body as "Invalid JSON". `emailStatus` in the response says whether it
   did, and the table says so out loud when it did not. The response also carries
   the invitation `link`, as the platform's route does, and the table offers a
   "Copy invitation link" only in that case — handing it over by another channel

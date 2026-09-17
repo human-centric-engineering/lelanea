@@ -72,9 +72,9 @@
 import { withAdminAuth } from '@/lib/auth/guards';
 import { successResponse } from '@/lib/api/responses';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/api/errors';
-import { validatePathParam, validateRequestBody } from '@/lib/api/validation';
+import { validatePathParam } from '@/lib/api/validation';
 import { cuidSchema } from '@/lib/validations/common';
-import { waitlistInviteSchema } from '@/lib/validations/app-waitlist';
+import { waitlistInviteSchema, type WaitlistInviteInput } from '@/lib/validations/app-waitlist';
 import { findWaitlistEntryForInvite, stampWaitlistEntryInvited } from '@/lib/app/waitlist/admin';
 import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 import { prisma } from '@/lib/db/client';
@@ -89,6 +89,37 @@ import { sendEmail } from '@/lib/email/send';
 import { resolveEmailTemplate } from '@/lib/email/registry';
 import { inviteLimiter, createRateLimitResponse } from '@/lib/security/rate-limit';
 import { getClientIP } from '@/lib/security/ip';
+
+/**
+ * `{ name?: string }`, with an absent or empty body reading as `{}`.
+ *
+ * `validateRequestBody` calls `request.json()` unconditionally, which throws on
+ * an empty body, so the platform helper would answer a body-less `POST` — the
+ * documented headless resend — with 400 "Invalid JSON" before the row was
+ * read. This reads the text first and parses only what is there; the error
+ * shapes are the helper's own, so a client sees the same envelope either way.
+ */
+async function readInviteBody(request: Request): Promise<WaitlistInviteInput> {
+  const text = (await request.text()).trim();
+  let raw: unknown = {};
+  if (text) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      throw new ValidationError('Invalid JSON in request body');
+    }
+  }
+  const parsed = waitlistInviteSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ValidationError('Invalid request body', {
+      errors: parsed.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+  return parsed.data;
+}
 
 /** The platform's invitation window; `generateInvitationToken` hard-codes the same. */
 const INVITATION_EXPIRY_DAYS = 7;
@@ -111,7 +142,10 @@ export const POST = withAdminAuth<{ id: string }>(async (request, session, { par
   const { id: rawId } = await params;
   const id = validatePathParam(rawId, cuidSchema, { label: 'waitlist entry id' });
 
-  const body = await validateRequestBody(request, waitlistInviteSchema);
+  // The body is optional in fact as well as in the schema: a headless resend
+  // for a named row is `POST` with nothing, and `validateRequestBody` would
+  // refuse the empty body as "Invalid JSON" before the row was ever read.
+  const body = await readInviteBody(request);
 
   const entry = await findWaitlistEntryForInvite(id);
   if (!entry) {
@@ -168,7 +202,12 @@ export const POST = withAdminAuth<{ id: string }>(async (request, session, { par
     : await generateInvitationToken(entry.email, metadata);
 
   // The invitation now exists, so the row says so — before the email, whose
-  // outcome is reported separately.
+  // outcome is reported separately. Conditioned on the row still being on the
+  // list: a second admin removing it between the read above and this write
+  // would otherwise leave "Removed" and "Invited <today>" on one row, the pair
+  // the refusal above exists to keep apart. The email still goes — the
+  // invitation is real and the person will accept it or not — but the row does
+  // not claim the list sent it. The code review of t-47 found the window.
   const stamped = await stampWaitlistEntryInvited(id, invitedAt);
 
   const appUrl = env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL;
@@ -195,15 +234,16 @@ export const POST = withAdminAuth<{ id: string }>(async (request, session, { par
     invitedBy: session.user.id,
     isResend: existingInvitation !== null,
     emailStatus: emailResult.status,
-    // False only if the row vanished between the read above and the stamp —
-    // the invitation still exists and the email still went, so it is a fact
-    // for the log rather than a failure for the caller.
+    // False if the row was removed (or deleted) between the read above and the
+    // stamp — the invitation still exists and the email still went, so it is
+    // a fact for the log rather than a failure for the caller.
     stamped,
   });
 
   return successResponse(
     {
-      entry: { ...entry, invitedAt: invitedAt.toISOString() },
+      // As stamped, not as assumed: an unstamped row reports what it holds.
+      entry: { ...entry, invitedAt: stamped ? invitedAt.toISOString() : entry.invitedAt },
       emailStatus: emailResult.status,
       expiresAt: expiresAt.toISOString(),
       link: invitationUrl,
