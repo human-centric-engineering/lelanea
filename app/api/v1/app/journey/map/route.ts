@@ -29,20 +29,30 @@ import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { getJourneyMap } from '@/lib/app/journey/map';
 
-export const GET = withAuth(async (request) => {
-  const log = await getRouteLogger(request);
-  const map = await getJourneyMap();
-  if (!map) throw new NotFoundError('No journey map is published');
+export const GET = withAuth(
+  async (request) => {
+    const log = await getRouteLogger(request);
+    const map = await getJourneyMap();
+    if (!map) throw new NotFoundError('No journey map is published');
 
-  const etag = computeETag(map);
-  const notModified = checkConditional(request, etag);
-  if (notModified) return notModified;
+    const etag = computeETag(map);
+    const notModified = checkConditional(request, etag);
+    if (notModified) return notModified;
 
-  log.info('Journey map served', {
-    version: map.version,
-    tierCount: map.tiers.length,
-    moduleCount: map.modules.length,
-  });
+    log.info('Journey map served', {
+      version: map.version,
+      tierCount: map.tiers.length,
+      moduleCount: map.modules.length,
+    });
 
-  return successResponse(map, undefined, { headers: { ETag: etag } });
-});
+    return successResponse(map, undefined, { headers: { ETag: etag } });
+  },
+  {
+    // Ownership: none to decide — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'nothing',
+      because:
+        'Serves the published journey map, one row per install and owned by nobody. Every member sees the same tiers and modules; `state` is a constant this phase. When per-user progress arrives this becomes a `self` read and the declaration moves with it.',
+    },
+  }
+);

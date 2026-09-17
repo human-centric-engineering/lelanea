@@ -31,7 +31,7 @@ follows.
 
 | `lib/app/journey/map.ts` | The published graph joined with the content: what the shell reads |
 | `lib/app/journey/paths.ts` | `/app/modules/<slug>`, and the `localStorage` key for the last one visited |
-| `app/api/v1/app/journey/map/route.ts` | `GET` — `withAuth`, ETag; 404 while unpublished; 500 when inconsistent |
+| `app/api/v1/app/journey/map/route.ts` | `GET` — `withAuth` with `ownership: 'nothing'` (one published map, owned by nobody; becomes `'self'` when per-user progress arrives), ETag; 404 while unpublished; 500 when inconsistent |
 | `components/app/shell/map-drawer.tsx` | The map drawer's body: five tiers, seventeen rows, `aria-current` |
 | `components/app/views/module-view.tsx` | A module's page: eyebrow, title, parts, placeholder, the tier's intent |
 | `components/app/views/module-actions.tsx` | "In Lelañea's own words" (opens resources) · "Talk about this part" (off) |

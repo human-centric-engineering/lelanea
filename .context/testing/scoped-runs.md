@@ -104,7 +104,8 @@ per-file, that file fails. A changed file with no test at all is reported **as
 report used to have.
 
 `vitest.config.ts`'s own `coverage.exclude` still wins over a CLI
-`--coverage.include` (verified against vitest 4.1.10), so layouts, `lib/env.ts`,
+`--coverage.include` (verified against vitest 4.1.10 and again against 5.0.1 on
+vite 8), so layouts, `lib/env.ts`,
 `types/**` and the rest stay exempt without a second exclusion list here to
 drift from the config.
 
@@ -215,12 +216,13 @@ the runner fetches `origin/main` by default and exits 1 rather than guessing.
 ## For forks
 
 **Declare your own entries in `lib/app/ci.ts`, not in the platform files.** It is
-a fork-owned scaffold that ships empty and exports two lists:
+a fork-owned scaffold that ships empty and exports three lists:
 
-| Export                  | Folded into                             | For                                                                     |
-| ----------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| `appCoverageExclusions` | `vitest.config.ts`'s `coverage.exclude` | a file the per-file floor cannot fairly gate — a `tsx` CLI entry point  |
-| `appAlwaysRunTests`     | `scripts/ci/scoped-tests.ts`'s list     | a test whose subject is the repository, which `--changed` never selects |
+| Export                          | Folded into                                               | For                                                                                                      |
+| ------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `appCoverageExclusions`         | `vitest.config.ts`'s `coverage.exclude`                   | a file the per-file floor cannot fairly gate — a `tsx` CLI entry point                                   |
+| `appAlwaysRunTests`             | `scripts/ci/scoped-tests.ts`'s list                       | a test whose subject is the repository, which `--changed` never selects                                  |
+| `appOwnerlessSurfaceExceptions` | `lib/orchestration/access/ownerless-surfaces.ts`'s roster | a fork file that reads `AiConversation` / `AiWorkflowExecution` / `AiMessage` with no caller to scope to |
 
 Before this existed, one fork script and one whole-tree test cost edits to three
 Sunrise-owned files — `vitest.config.ts`, `scripts/ci/missing-tests.ts` and

@@ -44,14 +44,14 @@ Daybreak reserves a leaf surface and keeps it empty for you — the same discipl
 inherits from Sunrise, applied one level down. **Fill the `leaf-*` files, not the
 bridges they delegate to.**
 
-| Fill this (yours)             | NOT this (Daybreak's) | Registers                                                       |
-| ----------------------------- | --------------------- | --------------------------------------------------------------- |
-| `lib/app/leaf-bootstrap.ts`   | `bootstrap.ts`        | one-time server boot work                                       |
-| `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        | admin sidebar sections                                          |
-| `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         | Prisma-unmodelled DB objects                                    |
-| `lib/app/leaf-data-export.ts` | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations |
-| `lib/app/leaf-brand.ts`       | `brand.ts`            | product name, legal entity, meta description                    |
-| `lib/app/leaf-ci.ts`          | `ci.ts`               | your own coverage exclusions and whole-tree always-run tests    |
+| Fill this (yours)             | NOT this (Daybreak's) | Registers                                                                                  |
+| ----------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `lib/app/leaf-bootstrap.ts`   | `bootstrap.ts`        | one-time server boot work                                                                  |
+| `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        | admin sidebar sections                                                                     |
+| `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         | Prisma-unmodelled DB objects                                                               |
+| `lib/app/leaf-data-export.ts` | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations                            |
+| `lib/app/leaf-brand.ts`       | `brand.ts`            | product name, legal entity, meta description                                               |
+| `lib/app/leaf-ci.ts`          | `ci.ts`               | your own coverage exclusions, whole-tree always-run tests and ownerless-surface exceptions |
 
 Each bridge runs Daybreak's registration and then calls your `leaf-*` hook. Filling a
 bridge directly collides with Daybreak on your next merge — and in the
@@ -61,12 +61,17 @@ framework's tables from every GDPR subject-access export.
 **`leaf-ci.ts` is where your CI declarations go** — a `tsx` CLI script of your own
 is structurally 0% and will fail the per-file coverage floor the first time anyone
 edits it, and a test whose subject is the repository is reached by no import chain,
-so a scoped run never selects it. Both lists append to Daybreak's, which append to
-Sunrise's, and every guard Sunrise wrote over those lists judges your entries in
-your checkout: a reason under 20 characters or a duplicate fails either list, and an
-always-run path must exist, be passable to `vitest` as an argument, and sit in a
-directory `vitest.config.ts` actually collects. See `lib/app/ci.ts` for two worked
-examples.
+so a scoped run never selects it. The third list, `leafOwnerlessSurfaceExceptions`
+(Sunrise 0.12.0), is for a route or job of yours that reads `AiConversation`,
+`AiWorkflowExecution` or `AiMessage` outside `lib/orchestration/access/` — the
+always-run roster test names your file the moment it lands, and this is where you say
+why, or you import the helper instead. All three lists append to Daybreak's, which
+append to Sunrise's, and every guard Sunrise wrote over those lists judges your
+entries in your checkout: a reason under 20 characters or a duplicate fails any of
+them, an always-run path must exist, be passable to `vitest` as an argument, and sit
+in a directory `vitest.config.ts` actually collects, and an ownerless-surface path
+must still read one of the three models (a `'known-gap'` also names what tracks the
+fix). See `lib/app/ci.ts` for the worked examples.
 
 **`leaf-brand.ts` is the one that OVERRIDES rather than appends.** Brand identity is
 single-valued: your name replaces Daybreak's, it does not compose with it. A

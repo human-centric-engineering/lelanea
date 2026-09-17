@@ -30,32 +30,42 @@ const feedbackRequestSchema = z.object({
   comment: z.string().min(1).max(2000).optional(),
 });
 
-export const POST = withAuth<{ slug: string }>(async (request, session, { params }) => {
-  const log = await getRouteLogger(request);
-  const { slug } = await params;
-  const body = await validateRequestBody(request, feedbackRequestSchema);
+export const POST = withAuth<{ slug: string }>(
+  async (request, session, { params }) => {
+    const log = await getRouteLogger(request);
+    const { slug } = await params;
+    const body = await validateRequestBody(request, feedbackRequestSchema);
 
-  // Reject an unknown module before writing, so an arbitrary slug can't inject a junk
-  // `module.feedback` event into the engagement stream.
-  if (!(await moduleExists(slug))) {
-    throw new NotFoundError(`Module "${slug}" not found`);
-  }
+    // Reject an unknown module before writing, so an arbitrary slug can't inject a junk
+    // `module.feedback` event into the engagement stream.
+    if (!(await moduleExists(slug))) {
+      throw new NotFoundError(`Module "${slug}" not found`);
+    }
 
-  await recordModuleEngagement({
-    userId: session.user.id,
-    moduleSlug: slug,
-    type: ENGAGEMENT_EVENT_TYPE.moduleFeedback,
-    payload: {
+    await recordModuleEngagement({
+      userId: session.user.id,
+      moduleSlug: slug,
+      type: ENGAGEMENT_EVENT_TYPE.moduleFeedback,
+      payload: {
+        rating: body.rating,
+        ...(body.comment !== undefined ? { comment: body.comment } : {}),
+      },
+    });
+
+    log.info('Module feedback recorded', {
+      moduleSlug: slug,
+      userId: session.user.id,
       rating: body.rating,
-      ...(body.comment !== undefined ? { comment: body.comment } : {}),
+    });
+
+    return successResponse({ recorded: true });
+  },
+  {
+    // Ownership: self-scoped by construction — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'self',
+      because:
+        "The only row this writes is a module.feedback engagement event keyed on the caller's own id; the module slug is a public URL segment, not a subject.",
     },
-  });
-
-  log.info('Module feedback recorded', {
-    moduleSlug: slug,
-    userId: session.user.id,
-    rating: body.rating,
-  });
-
-  return successResponse({ recorded: true });
-});
+  }
+);

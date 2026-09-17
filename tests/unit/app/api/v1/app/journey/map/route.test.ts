@@ -73,6 +73,19 @@ beforeEach(() => {
 });
 
 describe('GET /api/v1/app/journey/map', () => {
+  it("answers a non-admin member 200, not 'made no ownership decision'", async () => {
+    // Sunrise 0.12.0: `withAuth` refuses (500, `OwnershipDecisionMissingError`)
+    // any route that made no ownership decision for a caller the default
+    // policy narrows — every non-admin. The session is a plain USER, and the
+    // route declares `'nothing'`: one published map per install, owned by nobody.
+    const response = await GET(createRequest());
+    const body = (await response.json()) as { success: boolean; error?: { message: string } };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.error).toBeUndefined();
+  });
+
   it('serves the projection in the standard envelope with an ETag', async () => {
     const response = await GET(createRequest());
     const body = (await response.json()) as { success: boolean; data: typeof MAP };

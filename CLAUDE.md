@@ -5,7 +5,8 @@
 > This repository is **Lelañea**, an application built **on** the Daybreak
 > framework (`human-centric-engineering/daybreak`), which is itself built on the
 > Sunrise platform (`human-centric-engineering/sunrise`). Lelañea was cut from
-> Daybreak **`daybreak-v0.2.0`** (Sunrise 0.11.2).
+> Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.4.0`**
+> (Sunrise 0.12.0).
 >
 > **You are building an app. You are not developing Daybreak, and you are not
 > developing Sunrise.** Everything below this banner is **Sunrise's own platform
@@ -122,7 +123,7 @@
 >
 > ```bash
 > git fetch daybreak --tags
-> git merge daybreak-v0.3.0        # tags are prefixed `daybreak-v`
+> git merge daybreak-v0.4.0        # tags are prefixed `daybreak-v`
 > npm install && npm run db:migrate:status && npm run db:migrate:dev
 > npm run db:drift-check
 > ```
@@ -207,7 +208,7 @@ package.json.version` parity case is **removed**, with the reasoning recorded
 >   in place. Our version and the framework's are meant to diverge.
 > - `tests/unit/lib/app/defaults.test.ts` — **three rows are pinned** rather than
 >   deleted, so every seam still left empty keeps its protection:
->   `lib/app/leaf-brand.ts` (our brand values), `lib/app/leaf-ci.ts` (our four
+>   `lib/app/leaf-brand.ts` (our brand values), `lib/app/leaf-ci.ts` (our five
 >   always-run tests), and the `lib/app/ci.ts` **bridge** row, which asserts
 >   Daybreak's entries followed by ours. Pin the bridge row too whenever you fill
 >   a leaf seam it spreads: it is the only row that proves the bridge still
@@ -221,6 +222,14 @@ package.json.version` parity case is **removed**, with the reasoning recorded
 > Like this banner it sits **above** Sunrise's own documentation so an upstream
 > `CLAUDE.md` change merges cleanly beneath it. Regenerate it rather than
 > editing it by hand.
+>
+> **There is a second `hce-hub:bootstrap` block further down, under "MCP
+> Integration". It is Sunrise's, not ours.** Sunrise 0.12.0 added it to its own
+> `CLAUDE.md`, naming **Sunrise** (slug `sunrise`) as "this project", and it
+> merges through unchanged. It is inert here — but unlike Sunrise's other forks
+> we _do_ have the `hce-hub` server configured, so do not let it fool you:
+> Lelañea's project is the block directly below this banner (slug `lelanea`).
+> Never claim, plan or ship our work against Sunrise's Hub project.
 
 <!-- hce-hub:bootstrap — regenerate with the Hub's `get_project_bootstrap` tool and replace everything between these markers -->
 
@@ -339,6 +348,75 @@ Use for: diagnostics, route inspection, runtime errors, browser automation, Next
 ### Context7 (Library Docs)
 
 Use for external library docs: `resolve-library-id` → `query-docs`. Essential for current Next.js/Prisma/Tailwind patterns.
+
+> **The next section applies only when the `hce-hub` MCP server is configured
+> for this checkout.** Sunrise is open source: if you have forked it, or are
+> contributing without access to the HCE Hub, skip the whole section that
+> follows — including its "fix your MCP config" instruction. Nothing else in
+> this file depends on it; the development workflow without the Hub is
+> [`.context/workflow.md`](./.context/workflow.md).
+
+<!-- hce-hub:bootstrap — regenerate with the Hub's `get_project_bootstrap` tool and replace everything between these markers -->
+
+## This project is coordinated through the HCE Hub
+
+**Sunrise** · slug `sunrise` · project id `cmtd5heg2001804ky8pgo6odx` · host platform: Sunrise (the platform)
+
+The Hub is this project's **system of record** for planning and delivery.
+Claiming, planning, starting, completing and shipping are Hub tool calls over
+MCP — not files in this repo. If you do not already know what you are picking
+up, start with `next_task`. Your client's tool list is the current set;
+`model.verbs` in the core process groups them by what they are for.
+
+If those tools are not in your tool list at all, this repo's MCP config is
+missing or its key is wrong. Fix that before planning anything, rather than
+working around it.
+
+### Read the process from the Hub before you start work of any kind
+
+**This block is a pointer. It is not the process, and it is not a summary of
+one.** It carries this project's identity, where the process lives, and the
+little that has to survive the Hub being unreachable — nothing else. Working
+from this block alone means working without the rules it does not contain.
+
+So read the tiers below before you plan, size, **or start building** — most
+sessions do the last of those without doing the first two. What the Hub serves
+is the current version; this repo deliberately does not restate it, because a
+copy is the thing that goes stale.
+
+- `hub://process/core` · HCE process — core. **Read its `read.judgement` section first.**
+- `hub://process/sunrise-platform` · HCE process — working in Sunrise.
+
+Every rule is addressable by the id printed beside its heading (`fp1`,
+`flow.gates`, `read.judgement`). Cite them by id rather than re-explaining
+them.
+
+### The shape, if the Hub is unreachable
+
+Five lines, duplicated here on purpose because they almost never change:
+
+1. **Claim** the feature before working it — ownership is a feature-level thing.
+2. **Reconcile** the plan against the actual tree before sizing anything.
+3. **Plan** it into tasks, each with a done-when provable _at merge_.
+4. **Build**, look at it yourself, then run the gates, and open the PR last.
+5. **Close out** the feature, recording decisions as you make them.
+
+### Gates
+
+In this order. Read **exit codes**, not piped output — a pipeline that swallows
+a failure reports success.
+
+1. `/pre-pr` — the platform's own checklist (`npm run validate` plus a scoped
+   test run and the anti-pattern scans), including the public-surface checks.
+2. `/security-review`
+3. `/code-review`
+4. `npm run format`
+
+**The commands are here; the rules about running them are not.** What to do
+with a finding, when to stop reviewing, and what must never be amended are in
+`flow.gates` and `flow.review-rounds`.
+
+<!-- /hce-hub:bootstrap -->
 
 ## Essential Commands
 
@@ -573,8 +651,10 @@ All commands default to branch diff mode but accept file/folder paths. The test-
 | Checks & Gates           | `.context/architecture/checks.md`                         | "I found nothing" vs "I could not look" — the six channels, with the defect each one caused                                              |
 | Fork Init Seams          | `.context/architecture/fork-init-seams.md`                | The eleven `lib/app/*` seams; the rollback guarantee, the roster (derived, not written), and what per-registration isolation still needs |
 | Multi-Tenancy            | `.context/architecture/multi-tenancy.md`                  | Opt-in RLS retrofit playbook; single-tenant by default, `TENANCY_MODE` seam, fork-tier map, upstream-sync checklist                      |
+| Multi-Tenancy Design     | `.context/architecture/multi-tenancy-design.md`           | Binding design for the opt-in tenancy capability: the 2026-08-27 decisions, design principles, target architecture, assurance, spikes    |
 | Multi-Tenancy Research   | `.context/architecture/multi-tenancy-research.md`         | Gap analysis: five isolation planes, control/commercial planes, ownership matrix, fork merge surface, provisions for forks               |
 | Authentication           | `.context/auth/`                                          | better-auth, sessions, guards                                                                                                            |
+| Authorization            | `.context/auth/authorization.md`                          | The policy seam and its four chokepoints; tier/ownership/org inputs; the owner-scoped list recipe; what is **not** behind the seam yet   |
 | API                      | `.context/api/`                                           | Endpoints, responses, client                                                                                                             |
 | Database                 | `.context/database/`                                      | Prisma schema, migrations, seeding                                                                                                       |
 | Security                 | `.context/security/`                                      | Rate limiting, headers, CORS                                                                                                             |

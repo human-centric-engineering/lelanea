@@ -8,7 +8,7 @@ parent: README.md
 
 ```bash
 git fetch daybreak --tags
-git merge daybreak-v0.3.0        # tags are prefixed `daybreak-v`
+git merge daybreak-v0.4.0        # tags are prefixed `daybreak-v`
 npm install                      # the release may move dependencies
 npm run db:migrate:status
 npm run db:migrate:dev           # prod/CI: db:migrate:deploy
@@ -71,8 +71,8 @@ it the check resolves Sunrise's own URL, which is what we want.
 ## Verifying a sync landed
 
 ```bash
-git merge-base --is-ancestor daybreak-v0.3.0 HEAD && echo "in my history"
-git merge-base --is-ancestor v0.11.2 HEAD && echo "Sunrise ancestry intact"
+git merge-base --is-ancestor daybreak-v0.4.0 HEAD && echo "in my history"
+git merge-base --is-ancestor v0.12.0 HEAD && echo "Sunrise ancestry intact"
 ```
 
 **A closed issue is not a landed seam, and a landed seam is not a deleted shim.**
@@ -87,9 +87,12 @@ Both assert a property a leaf is _supposed_ to violate. **Do not restore them.**
 - `tests/unit/lib/daybreak-version.test.ts` — the `DAYBREAK_VERSION ===
 package.json.version` parity case is removed; our version and the framework's
   are meant to diverge.
-- `tests/unit/lib/app/defaults.test.ts` — the `lib/app/leaf-brand.ts` row is
-  pinned to our brand values rather than deleted, so the seams still empty keep
-  their protection. Update it whenever `leaf-brand.ts` changes.
+- `tests/unit/lib/app/defaults.test.ts` — three rows are pinned rather than
+  deleted, so the seams still empty keep their protection: `leaf-brand.ts` (our
+  brand values), `leaf-ci.ts` (our five always-run tests; the other two lists
+  pinned `[]`), and the `lib/app/ci.ts` bridge row (Daybreak's entries followed
+  by ours — the only row that proves the bridge still reaches the seam). Update
+  them whenever the seam they pin changes.
 
 ## One Daybreak guard deliberately unwired from CI
 

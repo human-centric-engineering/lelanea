@@ -18,6 +18,7 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 import { EVENTS, useAnalytics } from '@/lib/analytics';
 import { authClient } from '@/lib/auth/client';
+import { isPlatformAdmin } from '@/lib/auth/roles';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +36,7 @@ export interface AccountMenuUser {
    * provider — all of which the platform's `img-src` already allows.
    */
   image: string | null;
-  /** `'ADMIN'` shows the Admin row; anything else, including `null`, does not. */
+  /** The platform-admin role shows the Admin row; anything else, including `null`, does not. */
   role: string | null;
 }
 
@@ -187,7 +188,7 @@ export function AccountMenu({ user, initials, slim, onNavigate }: AccountMenuPro
 
   const rows = [
     ...ACCOUNT_MENU_LINKS,
-    ...(user.role === 'ADMIN' ? [{ href: '/admin', label: 'Admin', icon: Shield }] : []),
+    ...(isPlatformAdmin(user) ? [{ href: '/admin', label: 'Admin', icon: Shield }] : []),
   ];
 
   return (

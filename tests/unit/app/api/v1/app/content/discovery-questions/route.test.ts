@@ -70,6 +70,19 @@ describe('GET /api/v1/app/content/discovery-questions', () => {
     vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
   });
 
+  it("answers a non-admin member 200, not 'made no ownership decision'", async () => {
+    // Sunrise 0.12.0: `withAuth` refuses (500, `OwnershipDecisionMissingError`)
+    // any route that made no ownership decision for a caller the default
+    // policy narrows — every non-admin. The session is a plain USER, and the
+    // route declares `'nothing'`: published content, no per-user rows.
+    const response = await GET(createRequest());
+    const body = (await response.json()) as QuestionsBody & { error?: { message: string } };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.error).toBeUndefined();
+  });
+
   it('returns the thirty questions, numbered from one', async () => {
     const response = await GET(createRequest());
     const body = (await response.json()) as QuestionsBody;

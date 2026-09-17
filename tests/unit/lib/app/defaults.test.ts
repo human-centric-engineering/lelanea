@@ -129,8 +129,16 @@ import { APP_API_KEY_SCOPES } from '@/lib/app/api-key-scopes';
 import { listValidApiKeyScopes, CORE_API_KEY_SCOPES } from '@/lib/auth/api-key-scopes';
 import appEslintConfig from '@/lib/app/eslint.config.mjs';
 import { appFrameSrc } from '@/lib/app/csp';
-import { appCoverageExclusions, appAlwaysRunTests } from '@/lib/app/ci';
-import { leafCoverageExclusions, leafAlwaysRunTests } from '@/lib/app/leaf-ci';
+import {
+  appCoverageExclusions,
+  appAlwaysRunTests,
+  appOwnerlessSurfaceExceptions,
+} from '@/lib/app/ci';
+import {
+  leafCoverageExclusions,
+  leafAlwaysRunTests,
+  leafOwnerlessSurfaceExceptions,
+} from '@/lib/app/leaf-ci';
 import { occupiedTiers } from '@/lib/app/reserved-tiers';
 import { initAppUserCreatedHooks } from '@/lib/app/user-created';
 import {
@@ -146,6 +154,10 @@ import {
 } from '@/lib/privacy/subject-source-registry';
 import { getAppJobs, __resetAppJobsForTests } from '@/lib/orchestration/maintenance/app-jobs';
 import { getEffectiveRateLimitPolicy, RATE_LIMIT_POLICY } from '@/lib/security/rate-limit-policy';
+import {
+  hasProviderEligibilityResolver,
+  resolveEligibleProviders,
+} from '@/lib/orchestration/llm/provider-eligibility';
 import { getRegisteredNavSections, __resetNavRegistryForTests } from '@/lib/admin-nav/registry';
 import {
   listAppMcpResourceTypes,
@@ -161,6 +173,13 @@ import {
   getRegisteredAccountSections,
   __resetAccountSectionRegistryForTests,
 } from '@/lib/account-sections/registry';
+import { initAppAuthorizationPolicy } from '@/lib/app/authorization';
+import {
+  DEFAULT_AUTHORIZATION_POLICY,
+  getAuthorizationPolicy,
+  hasAppAuthorizationPolicy,
+  __resetAuthorizationPolicyForTests,
+} from '@/lib/auth/authorization';
 
 /**
  * One row per `lib/app/*` seam.
@@ -223,6 +242,42 @@ function modelsInSchemaFiles(predicate: (file: string) => boolean): string[] {
 }
 
 const SEAM_DEFAULTS: SeamDefault[] = [
+  {
+    seam: 'lib/app/authorization.ts',
+    risk: 'a stray policy would replace the authorization decision at every guarded request and every admin page — the one seam whose default registration would change who can reach what, on every install',
+    assert: () => {
+      initAppAuthorizationPolicy();
+      expect(hasAppAuthorizationPolicy()).toBe(false);
+      // BY IDENTITY: what runs must be Sunrise's own object, not something
+      // equivalent-looking. `getAuthorizationPolicy()` also runs the fork gate,
+      // so this covers the wiring as well as the value.
+      expect(getAuthorizationPolicy()).toBe(DEFAULT_AUTHORIZATION_POLICY);
+    },
+  },
+  {
+    seam: 'lib/app/llm-providers.ts',
+    risk: 'a stray eligibility rule would silently drop provider fallbacks on every install',
+    assert: async () => {
+      // `importActual`, NOT a plain import: tests/setup.ts pins this seam for
+      // every other file, and asserting the pin would prove nothing about what
+      // Sunrise actually ships. This is the file that must see the real one.
+      const seam =
+        await vi.importActual<typeof import('@/lib/app/llm-providers')>('@/lib/app/llm-providers');
+      await seam.registerAppProviderEligibility();
+      expect(hasProviderEligibilityResolver()).toBe(false);
+      // BY IDENTITY, not by deep equality: the default has to be the input
+      // array itself, which is what makes "byte-identical at single" a fact
+      // rather than a claim about equivalent-looking output.
+      const candidates = ['anthropic', 'openai'];
+      await expect(
+        resolveEligibleProviders(candidates, {
+          task: 'chat',
+          source: 'system',
+          primarySlug: 'anthropic',
+        })
+      ).resolves.toBe(candidates);
+    },
+  },
   {
     seam: 'lib/app/rate-limit.ts',
     risk: 'a stray tier or rule would re-cap every install',
@@ -839,11 +894,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(appFrameSrc).toEqual([]),
   },
   {
-    // PINNED (Daybreak fills this bridge). Upstream ships both lists empty and
-    // asserts exactly that; Daybreak declares the FRAMEWORK tier's two entries
+    // PINNED (Daybreak fills this bridge). Upstream ships all three lists empty
+    // and asserts exactly that; Daybreak declares the FRAMEWORK tier's entries
     // here and spreads the reserved leaf lists after them, so "registers
-    // nothing" is not this checkout's contract — "registers the framework's two,
-    // and nothing else" is.
+    // nothing" is not this checkout's contract — "registers the framework's
+    // entries, and nothing else" is. The third list (ownerless-surface
+    // exceptions, Sunrise 0.12.0) carries the framework's five by-design reads —
+    // the evaluation family (scoped by surface, not owner), the module
+    // workflow-binding dispatcher, and the framework's Art. 15 manifest.
     //
     // Pinned by VALUE rather than by length, because the risk below is about
     // WHICH path is exempted, and a count cannot see a pattern that changed.
@@ -852,7 +910,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // instance. Pin the leaf's additions here when that happens; do not delete
     // the row.
     seam: 'lib/app/ci.ts',
-    risk: 'a stray coverage exclusion would switch the per-file 80% floor OFF for that path on every install, and a stray always-run entry would make every scoped run load a test whose file the install may not even have — one silences a gate, the other breaks the gate that replaced it',
+    risk: 'a stray coverage exclusion would switch the per-file 80% floor OFF for that path on every install, a stray always-run entry would make every scoped run load a test whose file the install may not even have, and a stray ownerless-surface exception would let a route read rows nobody owns without the policy being asked — the first silences a gate, the second breaks the gate that replaced it, the third exempts a file from the authorization seam',
     assert: () => {
       expect(appCoverageExclusions.map((entry) => entry.pattern)).toEqual([
         'scripts/boundary/check.ts',
@@ -873,6 +931,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/app/shell-not-found-streaming.test.ts',
         'tests/unit/components/app/shell/chrome.test.tsx',
       ]);
+      expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
+        'lib/framework/facilitation/evaluation/conversation.ts',
+        'lib/framework/facilitation/evaluation/recent-conversations.ts',
+        'lib/framework/facilitation/evaluation/turns.ts',
+        'lib/framework/modules/workflow-bindings/dispatch.ts',
+        'lib/framework/privacy/export-sources.ts',
+      ]);
+      // Every framework entry is a settled design, not a gap awaiting a fix.
+      expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
+        Array<'by-design'>(5).fill('by-design')
+      );
     },
   },
   {
@@ -883,9 +952,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     seam: 'lib/app/leaf-ci.ts',
     risk: "a value here is Daybreak occupying the surface it reserves for a leaf, so the leaf's own entries would collide with it on every upgrade — the conflict Sunrise #759 removed one tier up, re-created one tier down",
     // PINNED (Lelañea fills this seam) — `HB2`. Daybreak keeps it empty; we do
-    // not. Pinned rather than deleted so the row still guards the half we have
-    // NOT filled: a coverage exclusion appearing here would switch the per-file
-    // 80% floor off for that path, and nothing else would notice.
+    // not. Pinned rather than deleted so the row still guards the two lists we
+    // have NOT filled: a coverage exclusion appearing here would switch the
+    // per-file 80% floor off for that path, and an ownerless-surface exception
+    // would exempt a file from the authorization seam — and nothing else would
+    // notice either.
     assert: () => {
       expect(leafCoverageExclusions).toEqual([]);
       expect(leafAlwaysRunTests.map((entry) => entry.path)).toEqual([
@@ -895,6 +966,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/app/shell-not-found-streaming.test.ts',
         'tests/unit/components/app/shell/chrome.test.tsx',
       ]);
+      expect(leafOwnerlessSurfaceExceptions).toEqual([]);
     },
   },
 ];
@@ -902,6 +974,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
 afterEach(() => {
   __resetNavRegistryForTests();
   __resetAccountSectionRegistryForTests();
+  __resetAuthorizationPolicyForTests();
 });
 
 describe('lib/app/ seams ship empty', () => {
