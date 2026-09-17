@@ -661,6 +661,72 @@ describe('the reload signal — going and looking again when something lands', (
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('is not thrown off by a designation she made in the meantime', async () => {
+    // The workflow the page is FOR: filter on, work the backlog, upload more.
+    // `save()` patches the row in place and never refetches, so the server's
+    // undesignated count falls while a remembered count does not — and every
+    // later upload then compares against a number that is too high. Here the
+    // upload's page comes back carrying a document that was not there before,
+    // so the honest answer is silence however the counts happen to line up.
+    const user = userEvent.setup();
+    const backlog = [
+      doc({ id: 'a', name: 'First', purpose: null, quotable: false }),
+      doc({ id: 'b', name: 'Second', purpose: null, quotable: false }),
+    ];
+
+    fetchMock.mockResolvedValueOnce(page(2, backlog));
+    // The PATCH for the designation she makes.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          designation: {
+            purpose: 'knowledge',
+            sensitivity: 'public',
+            licensing: null,
+            quotable: true,
+          },
+        },
+      }),
+    });
+    // The upload's reload: one row has left the filter, a new one has arrived,
+    // so the TOTAL is unchanged at 2 — exactly the collision a count cannot see.
+    fetchMock.mockResolvedValue(
+      page(2, [
+        doc({ id: 'c', name: 'Just added', purpose: null, quotable: false }),
+        doc({ id: 'b', name: 'Second', purpose: null, quotable: false }),
+      ])
+    );
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={backlog}
+        initialMeta={{ ...META, total: 2 }}
+        reloadSignal={{ token: 0, added: false }}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await user.click(within(rowFor('First')).getByRole('combobox', { name: /purpose/i }));
+    await user.click(await screen.findByRole('option', { name: /Knowledge/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <DesignationTable
+        initialDocuments={backlog}
+        initialMeta={{ ...META, total: 2 }}
+        reloadSignal={ADDED}
+      />
+    );
+
+    expect(await screen.findByText('Just added')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('drops the notice as soon as she changes what she is looking through', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(page(1, [doc()]));

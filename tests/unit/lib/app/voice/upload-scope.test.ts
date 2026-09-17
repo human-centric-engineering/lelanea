@@ -27,10 +27,13 @@
  *     in either tier pins it, and a Daybreak sync could change it with no diff
  *     in any TypeScript file at all, which is the one change no import graph and
  *     no reviewer's eye would connect to this page.
- *  2. **Every explicit write under `lib/`** — pinned by site AND by value, so
- *     the seeder's deliberate `'system'` stays distinguishable from the
- *     ingestion paths' `'app'`. A create site flipped from one to the other is
- *     the change that silently empties her list, and it is a one-word diff.
+ *  2. **Every explicit write under `lib/` and `app/`** — checked against what
+ *     its file is entitled to write, so the seeder's deliberate `'system'`
+ *     stays distinguishable from the ingestion paths' `'app'`. A create site
+ *     flipped from one to the other is the change that silently empties her
+ *     list, and it is a one-word diff. `app/` is in the scan because a route
+ *     handler creating a document directly is precisely the new ingestion path
+ *     worth noticing, and it would not be under `lib/`.
  *
  * Read from source rather than exercised through a mocked client on purpose:
  * there are four create sites across two files and a schema line, and no
@@ -51,21 +54,35 @@ const ROOT = process.cwd();
 const SCHEMA = join(ROOT, 'prisma/schema/orchestration-knowledge.prisma');
 
 /**
- * Every create site under `lib/`, by file and by the scope it writes.
+ * What each file is allowed to write, for the sites that write a literal at all.
  *
- * `scripts/` is deliberately out: a smoke script or a dev harness writing its
- * own fixture is not an ingestion path the uploader can reach, and pinning them
- * here would make this fail on work that cannot affect her list.
+ * A map rather than a pinned list of every site, and the difference matters. The
+ * first version deep-equalled the whole set, so **the test went red on changes
+ * its own docblock calls harmless**: a create site added without a `scope` was
+ * recorded as `null` and failed the comparison, and one refactored to
+ * `scope: APP_SCOPE` stopped being a literal and dropped out of it. Both are
+ * benign — the column defaults to `app` — and both would have turned an
+ * always-run, whole-tree test red across the repo on a Daybreak sync. Caught by
+ * /code-review.
+ *
+ * What is left is the property actually worth holding: **no file writes a scope
+ * it is not entitled to write.** The seeder's `'system'` is the one deliberate
+ * exception, and keeping it named here is what stops a one-word flip in
+ * `document-manager.ts` — the change that silently empties her list — from
+ * reading as just another create site.
+ *
+ * `scripts/` is deliberately out of the scan: a smoke script or a dev harness
+ * writing its own fixture is not an ingestion path the uploader can reach, and
+ * including them would fail this on work that cannot affect her list.
  */
-const EXPECTED_SITES: readonly { file: string; scope: string }[] = [
-  { file: 'lib/orchestration/knowledge/document-manager.ts', scope: APP_SCOPE },
-  { file: 'lib/orchestration/knowledge/document-manager.ts', scope: APP_SCOPE },
-  { file: 'lib/orchestration/knowledge/document-manager.ts', scope: APP_SCOPE },
+const ALLOWED_SCOPE_BY_FILE: Readonly<Record<string, string>> = {
+  // The three ingestion paths — text, binary, and the PDF pending-review row.
+  'lib/orchestration/knowledge/document-manager.ts': APP_SCOPE,
   // The bundled Agentic Design Patterns corpus, and the one site that SHOULD
   // differ: a `system` document is searchable by every agent whatever anyone
   // designates it, which is exactly why the table refuses to list one.
-  { file: 'lib/orchestration/knowledge/seeder.ts', scope: 'system' },
-];
+  'lib/orchestration/knowledge/seeder.ts': 'system',
+};
 
 /** Every `.ts` file under a directory, recursively. */
 function sourceFiles(dir: string): string[] {
@@ -118,19 +135,29 @@ describe('where a newly ingested document lands', () => {
     expect(scopeField![1]).toBe(APP_SCOPE);
   });
 
-  it('every explicit write under lib/ is the site and the value we expect', () => {
-    const found = sourceFiles(join(ROOT, 'lib'))
+  it('no ingestion path writes a scope its file is not entitled to write', () => {
+    const found = [...sourceFiles(join(ROOT, 'lib')), ...sourceFiles(join(ROOT, 'app'))]
       .flatMap((path) =>
         createCalls(readFileSync(path, 'utf8')).map((call) => ({
           file: path.slice(ROOT.length + 1),
           scope: /\bscope:\s*'([^']+)'/.exec(call)?.[1] ?? null,
         }))
       )
-      .sort((a, b) => a.file.localeCompare(b.file));
+      // Sites that write no string literal are not this test's business: an
+      // omitted `scope` takes the schema default, which the case above pins.
+      .filter((site): site is { file: string; scope: string } => site.scope !== null);
 
-    // Pinned by value, not by count. A count cannot see `'app'` become
-    // `'system'` at one site, which is the one-word diff that empties her list
-    // while every other assertion in this repo still passes.
-    expect(found).toEqual([...EXPECTED_SITES].sort((a, b) => a.file.localeCompare(b.file)));
+    // Establish the population BEFORE claiming anything about it. A scan that
+    // silently found nothing — a moved file, a changed call spelling — would
+    // make the assertion below pass on an empty array, which is the shape of a
+    // guard that has quietly stopped guarding (`fp6`).
+    for (const file of Object.keys(ALLOWED_SCOPE_BY_FILE)) {
+      expect(found.filter((site) => site.file === file).length).toBeGreaterThan(0);
+    }
+
+    // `app/` is scanned as well as `lib/`, because a route handler or a server
+    // action creating a document directly is exactly the new ingestion path this
+    // is here to notice, and it would not be under `lib/`.
+    expect(found.filter((site) => ALLOWED_SCOPE_BY_FILE[site.file] !== site.scope)).toEqual([]);
   });
 });

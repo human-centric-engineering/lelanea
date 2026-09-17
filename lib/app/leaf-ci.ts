@@ -133,7 +133,7 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
     path: 'tests/unit/lib/app/voice/upload-scope.test.ts',
     reason:
       'reads `prisma/schema/orchestration-knowledge.prisma` and every `.ts` ' +
-      'under `lib/` off disk, to pin the two things that decide where an ' +
+      'under `lib/` and `app/` off disk, to pin the two things that decide where an ' +
       'uploaded document lands: the `@default` on ' +
       '`AiKnowledgeDocument.scope`, and the scope each ' +
       '`aiKnowledgeDocument.create` site writes. The SCHEMA half is why this ' +

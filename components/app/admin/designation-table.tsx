@@ -181,13 +181,25 @@ export function DesignationTable({
     filter: boolean;
   } | null>(null);
   /**
-   * The row count the table last saw, for comparing against an upload's reload.
+   * The documents on screen when the current request went out, by id.
    *
-   * A ref rather than reading `meta` inside `fetchPage`: `meta` is state the
-   * fetch itself replaces, so a closure over it would compare the new total
-   * against the one captured when the callback was last built.
+   * **Identity, not a count — and the count was wrong.** The first version
+   * compared `meta.total` before and after an upload's reload. But `save()`
+   * patches a designated row in place and never refetches, so under the
+   * **Undesignated documents** filter the server's true count falls while the
+   * remembered one does not. Work the backlog for a few rows and every later
+   * upload compares against a number that is too high: the notice then fires
+   * about a document sitting visibly in the list, and gets steadily more wrong
+   * the longer she stays on the page. A failed fetch skewed it the same way for
+   * a different reason. Caught by /code-review.
+   *
+   * Ids have neither problem. The reload always asks for page 1 and the list is
+   * newest-first, so a document that IS in view is necessarily on that page —
+   * and one whose id was not there before is necessarily new.
    */
-  const lastTotalRef = useRef(initialMeta.total);
+  const visibleIdsRef = useRef<ReadonlySet<string>>(
+    new Set(initialDocuments.map((document) => document.id))
+  );
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   /**
    * Which request is the current one. Incremented on dispatch and checked before
@@ -205,7 +217,9 @@ export function DesignationTable({
 
   const fetchPage = useCallback(
     async (page: number, term: string, onlyUndesignated: boolean, afterAdd = false) => {
-      const totalBefore = lastTotalRef.current;
+      // Captured synchronously, before the await: what was on screen when THIS
+      // request went out, not whatever a later one has since installed.
+      const idsBefore = visibleIdsRef.current;
       const seq = requestSeqRef.current + 1;
       requestSeqRef.current = seq;
 
@@ -232,24 +246,22 @@ export function DesignationTable({
 
         setDocuments(parsed.data);
         const parsedMeta = parsePaginationMeta(parsed.meta);
-        if (parsedMeta) {
-          setMeta(parsedMeta);
-          lastTotalRef.current = parsedMeta.total;
-        }
+        if (parsedMeta) setMeta(parsedMeta);
         setAppliedUndesignatedOnly(onlyUndesignated);
         setLoadFailed(false);
+
+        const broughtSomethingNew = parsed.data.some((row) => !idsBefore.has(row.id));
+        visibleIdsRef.current = new Set(parsed.data.map((row) => row.id));
+
         // Three conditions, and dropping any one of them put something untrue on
         // screen in review. It has to follow an ADD (a discard refreshes too,
-        // and deletes a row); the corpus this view can see must not have grown
-        // (a filter check alone cries wolf on the common path — filter on,
-        // untagged upload — where the document IS in view); and something must
-        // actually be narrowing the view, or there is nothing to clear.
+        // and deletes a row); the page must have come back carrying no document
+        // it did not already have (a filter check alone cries wolf on the common
+        // path — filter on, untagged upload — where the new document IS in
+        // view); and something must actually be narrowing the view, or there is
+        // nothing to clear and nothing was added.
         const narrowedBySearch = term.trim() !== '';
-        const hidden =
-          afterAdd &&
-          (narrowedBySearch || onlyUndesignated) &&
-          parsedMeta !== null &&
-          parsedMeta.total <= totalBefore;
+        const hidden = afterAdd && (narrowedBySearch || onlyUndesignated) && !broughtSomethingNew;
         setAddedOutsideView(hidden ? { search: narrowedBySearch, filter: onlyUndesignated } : null);
       } catch {
         if (requestSeqRef.current !== seq) return;
