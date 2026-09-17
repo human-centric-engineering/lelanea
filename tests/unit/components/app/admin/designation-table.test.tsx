@@ -423,82 +423,146 @@ describe('two saves at once', () => {
   });
 });
 
-describe('reloadToken — going and looking again when something lands', () => {
-  function emptyPage(total: number) {
+describe('the reload signal — going and looking again when something lands', () => {
+  function page(total: number, documents: ReturnType<typeof doc>[] = []) {
     return {
       ok: true,
       status: 200,
       json: async () => ({
         success: true,
-        data: [],
+        data: documents,
         meta: { page: 1, limit: 25, total, totalPages: total === 0 ? 0 : 1 },
       }),
     };
   }
 
+  const ADDED = { token: 1, added: true };
+  const NOT_ADDED = { token: 1, added: false };
+
   it('does not fetch on mount — only when the token actually moves', () => {
-    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={7} />);
+    render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={META}
+        reloadSignal={{ token: 7, added: true }}
+      />
+    );
 
     // The server page already fetched page one. A mount-time request would
-    // duplicate it and would make the table flicker on every navigation.
+    // duplicate it and make the table flicker on every navigation.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('re-requests page one when the token is bumped', async () => {
-    fetchMock.mockResolvedValue(emptyPage(1));
+    fetchMock.mockResolvedValue(page(1, [doc()]));
 
     const { rerender } = render(
-      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={0} />
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={META}
+        reloadSignal={{ token: 0, added: false }}
+      />
     );
-    rerender(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={1} />);
+    rerender(
+      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadSignal={ADDED} />
+    );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toContain('page=1');
   });
 
-  it('says so when the upload landed outside the view she is looking through', async () => {
+  it('keeps the filter she is looking through when it refreshes', async () => {
     const user = userEvent.setup();
-    // One document in view before the upload, and one after: the corpus grew,
-    // but not the part of it she can see. Nothing else on screen would tell her
-    // — the upload zone clears its staged files and says nothing at all.
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        data: [doc()],
-        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
-      }),
-    });
+    fetchMock.mockResolvedValue(page(0));
 
     const { rerender } = render(
       <DesignationTable
         initialDocuments={[doc()]}
-        initialMeta={{ ...META, total: 1 }}
-        reloadToken={0}
+        initialMeta={META}
+        reloadSignal={{ token: 0, added: false }}
       />
     );
 
     await user.click(screen.getByLabelText('Undesignated documents'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    // Establish the notice is NOT already on screen, so the assertion after the
-    // upload is about the upload rather than about the component's initial state.
+
+    rerender(
+      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadSignal={ADDED} />
+    );
+
+    // The refresh must not silently widen the list back to everything: the whole
+    // reason the switch is on is that she is working through the undesignated
+    // backlog, and a document she just added belongs in it.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [url] = fetchMock.mock.calls[1] as [string];
+    expect(url).toContain('undesignatedOnly=true');
+  });
+
+  it('says so when the upload landed outside the filter she is looking through', async () => {
+    const user = userEvent.setup();
+    // One row in view before and one after: the corpus grew, but not the part of
+    // it she can see. Nothing else on screen would tell her — the upload zone
+    // clears its staged files and says nothing at all.
+    fetchMock.mockResolvedValue(page(1, [doc()]));
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={{ token: 0, added: false }}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    // Establish the notice is not already on screen, so what follows is about
+    // the upload rather than the component's initial state.
     expect(screen.queryByRole('status')).toBeNull();
 
     rerender(
       <DesignationTable
         initialDocuments={[doc()]}
         initialMeta={{ ...META, total: 1 }}
-        reloadToken={1}
+        reloadSignal={ADDED}
       />
     );
 
     const notice = await screen.findByRole('status');
-    expect(notice.textContent).toMatch(/Added/);
-    // The remedy, not the diagnosis (`HB10`) — and it names the filter that is
-    // actually on, so it does not send her to clear one she never set.
+    expect(notice.textContent).toMatch(/Nothing new in the list below/);
     expect(notice.textContent).toMatch(/Undesignated filter/);
+    // And NOT the search, which she never typed. The first version hard-coded
+    // "Clear the search" into the sentence, so the designed-for case — filter
+    // on, no search — told her to clear something that was not set.
+    expect(notice.textContent).not.toMatch(/search/);
+  });
+
+  it('names the search when the search is what is hiding it', async () => {
+    const user = userEvent.setup({ delay: null });
+    fetchMock.mockResolvedValue(page(1, [doc()]));
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={{ token: 0, added: false }}
+      />
+    );
+
+    await user.type(screen.getByLabelText('Search'), 'ledger');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={ADDED}
+      />
+    );
+
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toMatch(/clear the search/i);
+    expect(notice.textContent).not.toMatch(/Undesignated filter/);
   });
 
   it('stays quiet when the upload did land in view', async () => {
@@ -506,30 +570,16 @@ describe('reloadToken — going and looking again when something lands', () => {
     // that reasoned from "is a filter active?" rather than from the row count
     // would cry wolf here, on the most ordinary thing she does.
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        data: [doc()],
-        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
-      }),
-    });
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        data: [doc(), doc({ id: 'doc-2', name: 'Just added', purpose: null, quotable: false })],
-        meta: { page: 1, limit: 25, total: 2, totalPages: 1 },
-      }),
-    });
+    fetchMock.mockResolvedValueOnce(page(1, [doc()]));
+    fetchMock.mockResolvedValue(
+      page(2, [doc(), doc({ id: 'doc-2', name: 'Just added', purpose: null, quotable: false })])
+    );
 
     const { rerender } = render(
       <DesignationTable
         initialDocuments={[doc()]}
         initialMeta={{ ...META, total: 1 }}
-        reloadToken={0}
+        reloadSignal={{ token: 0, added: false }}
       />
     );
 
@@ -540,7 +590,7 @@ describe('reloadToken — going and looking again when something lands', () => {
       <DesignationTable
         initialDocuments={[doc()]}
         initialMeta={{ ...META, total: 1 }}
-        reloadToken={1}
+        reloadSignal={ADDED}
       />
     );
 
@@ -548,23 +598,54 @@ describe('reloadToken — going and looking again when something lands', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('drops the notice as soon as she changes what she is looking through', async () => {
+  it('says nothing when the refresh did not follow an ADD — a discard deletes a row', async () => {
+    // Discarding a PDF from the preview modal DELETES the document and still
+    // refreshes the table. Inferring "added" from the refresh made the page
+    // announce "Added" about a document that had just been destroyed, and the
+    // row count cannot tell the two apart: neither grew.
+    //
+    // The filter is turned on FIRST, deliberately. Without it this case is
+    // already silenced by the narrowed-view condition, so `added: false` would
+    // not be the thing carrying the assertion and flipping it back would leave
+    // the test green — decoration rather than a guard (`fp6`).
     const user = userEvent.setup();
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        data: [doc()],
-        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
-      }),
-    });
+    fetchMock.mockResolvedValue(page(1, [doc()]));
 
     const { rerender } = render(
       <DesignationTable
         initialDocuments={[doc()]}
         initialMeta={{ ...META, total: 1 }}
-        reloadToken={0}
+        reloadSignal={{ token: 0, added: false }}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={NOT_ADDED}
+      />
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('says nothing when nothing is narrowing the view', async () => {
+    // No search, no filter, and the count did not move — so nothing was added,
+    // and there is no remedy to offer. This is the bulk upload where every file
+    // errored: Sunrise's zone calls `onUploadComplete()` regardless and passes
+    // no result, so the zone's own error is the honest report, not ours.
+    fetchMock.mockResolvedValue(page(1, [doc()]));
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={{ token: 0, added: false }}
       />
     );
 
@@ -572,36 +653,42 @@ describe('reloadToken — going and looking again when something lands', () => {
       <DesignationTable
         initialDocuments={[doc()]}
         initialMeta={{ ...META, total: 1 }}
-        reloadToken={1}
+        reloadSignal={ADDED}
       />
     );
-    await screen.findByRole('status');
 
-    // Acting on the advice must retire it. A notice that outlived the filter it
-    // describes would be telling her to clear something she already cleared.
-    await user.click(screen.getByLabelText('Undesignated documents'));
-
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('keeps the filter she is looking through when it refreshes', async () => {
+  it('drops the notice as soon as she changes what she is looking through', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValue(emptyPage(0));
+    fetchMock.mockResolvedValue(page(1, [doc()]));
 
     const { rerender } = render(
-      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={0} />
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={{ token: 0, added: false }}
+      />
     );
 
     await user.click(screen.getByLabelText('Undesignated documents'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    rerender(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={1} />);
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadSignal={ADDED}
+      />
+    );
+    await screen.findByRole('status');
 
-    // The refresh must not silently widen the list back to everything: the whole
-    // reason she has that switch on is that she is working through the backlog
-    // of undesignated documents, and a document she just added belongs in it.
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const [url] = fetchMock.mock.calls[1] as [string];
-    expect(url).toContain('undesignatedOnly=true');
+    // Acting on the advice must retire it. A notice that outlived the filter it
+    // describes would be telling her to clear something already cleared.
+    await user.click(screen.getByLabelText('Undesignated documents'));
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
   });
 });

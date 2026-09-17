@@ -978,9 +978,24 @@ zone offers the whole taxonomy, so she can designate at upload and the
 **Undesignated documents** filter then correctly excludes what she just added; a
 search term does the same to a name that does not match. The zone clears its
 staged files and says nothing, so without this the table looks untouched and the
-upload reads as having failed. The check is a row-count comparison across the
-upload's own reload, not "is a filter on?" — the common path (filter on, untagged
-upload) puts the document _in_ view, and a filter check would cry wolf on it.
+upload reads as having failed.
+
+Three conditions, and dropping any one of them put something untrue on screen in
+review:
+
+| Condition                                                                       | What it stops                                                                                                                    |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| The refresh followed an **add** — the parent says so, the table cannot infer it | Discarding a PDF deletes the row and refreshes too; inferring from the refresh announced "Added" about a document just destroyed |
+| The visible row count did **not grow**                                          | A filter check alone cries wolf on the common path — filter on, untagged upload — where the document IS in view                  |
+| Something is actually **narrowing the view**                                    | With nothing filtering there is no remedy to offer, and nothing was added                                                        |
+
+The sentence names only the clauses actually active, so it never sends her to
+clear a search she never typed. And it is a fact followed by a conditional
+("Nothing new in the list below. If the upload succeeded, clear the …"), because
+one case is genuinely indistinguishable from here: Sunrise's zone calls
+`onUploadComplete()` after a bulk upload in which **every file errored**, and
+passes no result either way. The zone's own error sits directly above when that
+happens.
 
 **Nothing about scope is passed, because there is nothing to pass.**
 `lib/orchestration/knowledge/document-manager.ts` hardcodes `scope: 'app'` at all

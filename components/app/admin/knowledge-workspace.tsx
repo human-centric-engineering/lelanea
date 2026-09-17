@@ -116,9 +116,24 @@ export function KnowledgeWorkspace({
    * from `initialDocuments`, the list as it stood when the page was rendered on
    * the server, so the document just uploaded would be the one row missing.
    */
-  const [reloadToken, setReloadToken] = useState(0);
+  const [reloadSignal, setReloadSignal] = useState({ token: 0, added: false });
 
-  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+  /**
+   * Tell the table to look again, and whether anything was ADDED.
+   *
+   * The two are different facts and only this component knows the second: a
+   * discard DELETES the row and still has to refresh, and inferring "added" from
+   * the refresh alone made the table announce "Added" about a document that had
+   * just been destroyed. Caught by /code-review.
+   *
+   * A confirm reaches both callbacks — `onOpenChange(false)` with `false`, then
+   * `onConfirmed` with `true`. React batches them, the updaters run in order,
+   * and the additive one lands last, which is the correct answer for a confirm.
+   */
+  const refresh = useCallback(
+    (added: boolean) => setReloadSignal((signal) => ({ token: signal.token + 1, added })),
+    []
+  );
 
   const handlePdfPreview = useCallback((data: PdfPreviewData) => {
     setPdfPreview(data);
@@ -138,7 +153,10 @@ export function KnowledgeWorkspace({
           Drop a file here, then say what it is for in the table below. Nothing you add reaches the
           agent until it has a purpose.
         </p>
-        <DocumentUploadZone onUploadComplete={reload} onPdfPreview={handlePdfPreview} />
+        <DocumentUploadZone
+          onUploadComplete={() => refresh(true)}
+          onPdfPreview={handlePdfPreview}
+        />
       </section>
 
       {/*
@@ -161,19 +179,22 @@ export function KnowledgeWorkspace({
           // `pending_review` that the table would otherwise not show until
           // something else happened to refresh it. Invisible is the one thing
           // that state must not be.
-          reload();
+          //
+          // `added: false`, because this callback cannot tell a dismissal from
+          // a DISCARD — and a discard has just deleted the row.
+          refresh(false);
         }}
-        // Kept wired as well, deliberately. Confirm reaches `onOpenChange(false)`
-        // above first, so this is a second bump and one extra GET — the price of
-        // not depending on upstream continuing to close the dialog on confirm.
-        onConfirmed={reload}
+        // Kept wired as well, and it is what makes a confirm additive: the
+        // close above fires first with `added: false`, this lands after it with
+        // `true`, and React batches the pair into one refetch.
+        onConfirmed={() => refresh(true)}
       />
 
       <DesignationTable
         initialDocuments={initialDocuments}
         initialMeta={initialMeta}
         initialLoadFailed={initialLoadFailed}
-        reloadToken={reloadToken}
+        reloadSignal={reloadSignal}
       />
     </div>
   );

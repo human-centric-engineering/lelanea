@@ -100,16 +100,26 @@ interface DesignationTableProps {
    */
   initialLoadFailed?: boolean;
   /**
-   * Bumped by the surface above whenever something lands in the corpus.
+   * The surface above saying the corpus changed, and whether anything was ADDED.
    *
-   * The table owns its own fetching, so an upload it knows nothing about would
-   * otherwise leave it showing the list as it stood before — and the row missing
-   * is exactly the document she just added, which reads as the upload having
-   * failed. A counter rather than a callback handed upward: the parent says
-   * *something changed*, and the table decides what to re-request, which keeps
-   * the current search and filter rather than resetting them.
+   * The table owns its own fetching, so a change it knows nothing about would
+   * leave it showing the list as it stood before — and the row missing is
+   * exactly the document she just added, which reads as the upload having
+   * failed. The parent says *something happened*; the table decides what to
+   * re-request, which keeps the current search and filter rather than resetting
+   * them.
+   *
+   * **`added` is a separate fact from the bump, and conflating them put a lie on
+   * screen.** The first version inferred "something was added" from the bump
+   * alone and then from a row count — so discarding a PDF from the preview
+   * modal, which DELETES the row and refreshes, announced "Added" about a
+   * document that had just been destroyed. Only the parent knows which callback
+   * fired, so only the parent can answer this. Caught by /code-review.
+   *
+   * One object rather than two props, so the count and the intent cannot drift
+   * apart in a render.
    */
-  reloadToken?: number;
+  reloadSignal?: { token: number; added: boolean };
 }
 
 /**
@@ -128,7 +138,7 @@ export function DesignationTable({
   initialDocuments,
   initialMeta,
   initialLoadFailed = false,
-  reloadToken = 0,
+  reloadSignal,
 }: DesignationTableProps): React.ReactElement {
   const [documents, setDocuments] = useState(initialDocuments);
   const [meta, setMeta] = useState(initialMeta);
@@ -158,9 +168,18 @@ export function DesignationTable({
    * that does not match. Either way the zone clears its staged files and says
    * nothing, the table looks untouched, and the upload reads as having failed.
    * So the table says what happened instead (`HB10` — name the remedy, not the
-   * diagnosis). Caught by /code-review.
+   * diagnosis), and carries WHICH of the two is narrowing the view, so it never
+   * tells her to clear a search she never typed.
+   *
+   * **It is only set when the view is actually narrowed**, because that is the
+   * only state "it might be hidden" explains. With nothing filtering, a count
+   * that did not grow means nothing was added — which is the upload zone's own
+   * error to report, directly above, not the table's to guess at.
    */
-  const [addedOutsideView, setAddedOutsideView] = useState(false);
+  const [addedOutsideView, setAddedOutsideView] = useState<{
+    search: boolean;
+    filter: boolean;
+  } | null>(null);
   /**
    * The row count the table last saw, for comparing against an upload's reload.
    *
@@ -185,7 +204,7 @@ export function DesignationTable({
   }, []);
 
   const fetchPage = useCallback(
-    async (page: number, term: string, onlyUndesignated: boolean, afterUpload = false) => {
+    async (page: number, term: string, onlyUndesignated: boolean, afterAdd = false) => {
       const totalBefore = lastTotalRef.current;
       const seq = requestSeqRef.current + 1;
       requestSeqRef.current = seq;
@@ -219,13 +238,19 @@ export function DesignationTable({
         }
         setAppliedUndesignatedOnly(onlyUndesignated);
         setLoadFailed(false);
-        // Only an upload's own reload can answer this, and only by comparing:
-        // "did the corpus this view can see actually grow?" A filter check alone
-        // would cry wolf on the common path — the undesignated filter on, an
-        // untagged upload — where the new document IS in view.
-        setAddedOutsideView(
-          afterUpload ? parsedMeta !== null && parsedMeta.total <= totalBefore : false
-        );
+        // Three conditions, and dropping any one of them put something untrue on
+        // screen in review. It has to follow an ADD (a discard refreshes too,
+        // and deletes a row); the corpus this view can see must not have grown
+        // (a filter check alone cries wolf on the common path — filter on,
+        // untagged upload — where the document IS in view); and something must
+        // actually be narrowing the view, or there is nothing to clear.
+        const narrowedBySearch = term.trim() !== '';
+        const hidden =
+          afterAdd &&
+          (narrowedBySearch || onlyUndesignated) &&
+          parsedMeta !== null &&
+          parsedMeta.total <= totalBefore;
+        setAddedOutsideView(hidden ? { search: narrowedBySearch, filter: onlyUndesignated } : null);
       } catch {
         if (requestSeqRef.current !== seq) return;
         // Said out loud rather than swallowed: a table that keeps showing the
@@ -251,12 +276,12 @@ export function DesignationTable({
    * the toggle and both pager buttons — goes through here.
    */
   const dispatchFetch = useCallback(
-    (page: number, term: string, onlyUndesignated: boolean, afterUpload = false) => {
+    (page: number, term: string, onlyUndesignated: boolean, afterAdd = false) => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
       }
-      void fetchPage(page, term, onlyUndesignated, afterUpload);
+      void fetchPage(page, term, onlyUndesignated, afterAdd);
     },
     [fetchPage]
   );
@@ -286,12 +311,13 @@ export function DesignationTable({
    *
    * Page 1, because the list is newest-first and the new document is on it.
    */
-  const lastReloadToken = useRef(reloadToken);
+  const lastReloadToken = useRef(reloadSignal?.token ?? 0);
   useEffect(() => {
-    if (lastReloadToken.current === reloadToken) return;
-    lastReloadToken.current = reloadToken;
-    dispatchFetch(1, search, undesignatedOnly, true);
-  }, [reloadToken, search, undesignatedOnly, dispatchFetch]);
+    const token = reloadSignal?.token ?? 0;
+    if (lastReloadToken.current === token) return;
+    lastReloadToken.current = token;
+    dispatchFetch(1, search, undesignatedOnly, reloadSignal?.added ?? false);
+  }, [reloadSignal, search, undesignatedOnly, dispatchFetch]);
 
   /**
    * Save one answer about one document.
@@ -409,9 +435,22 @@ export function DesignationTable({
 
       {addedOutsideView && (
         <p role="status" className="text-muted-foreground text-sm">
-          Added — but it is not in the list below, because it does not match what you are looking
-          through. Clear the search{appliedUndesignatedOnly ? ' or the Undesignated filter' : ''} to
-          see it.
+          {/*
+            A fact, then a conditional. Nothing here can tell a document hidden
+            by the filter from an upload where every file errored — Sunrise's
+            zone calls `onUploadComplete()` either way and passes no result — so
+            the first sentence is true under both readings and the second does
+            not claim the upload succeeded. The zone's own error sits directly
+            above when it did not.
+          */}
+          Nothing new in the list below. If the upload succeeded, clear the{' '}
+          {[
+            addedOutsideView.search ? 'search' : null,
+            addedOutsideView.filter ? 'Undesignated filter' : null,
+          ]
+            .filter((clause): clause is string => clause !== null)
+            .join(' and the ')}{' '}
+          to see it.
         </p>
       )}
 
