@@ -579,7 +579,7 @@ route's rules on its own merits rather than copying its code (`fp5`):
   (`HB10`); Resend is the other.
 
 **What the platform logs on our behalf.** The route's own lines carry the entry
-id and the outcome, never the address, through `_shared/route-logger.ts` like
+id and the outcome, never the address, through `app/api/v1/admin/app/waitlist/_shared/route-logger.ts` like
 the rest of the surface. The platform's token helpers log the address themselves
 (`generateInvitationToken`, `updateInvitationToken`, `getValidInvitation` on
 error), exactly as they do under the platform's own invite route. Their blobs are
