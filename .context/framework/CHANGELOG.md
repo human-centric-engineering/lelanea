@@ -25,6 +25,125 @@ process.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-16
+
+> **Fourth tagged Daybreak release — the Sunrise 0.12.0 sync.** Daybreak moves from
+> Sunrise 0.11.2 to **0.12.0** in one merge ([#262](https://github.com/human-centric-engineering/daybreak/pull/262)).
+> Nothing a leaf already built changes meaning, but **four new Sunrise guards will
+> go red on your own files the first time you run the suite after merging** — each
+> by design, each with a one-line fix, all listed under the ⚠️ heading. Read that
+> section before you merge, not after.
+>
+> **Take this release rather than the commits behind it**, as with 0.3.0: the sync
+> merge and its three docs commits are one unit, and the tag is the point the
+> `Fork Sync Integrity` guard verified.
+>
+> **What Sunrise 0.12.0 is**, in one paragraph — the rest is in
+> [`../../CHANGELOG.md`](../../CHANGELOG.md) `[0.12.0]`: the **authorization policy
+> seam** (`lib/auth/authorization.ts` with three faces, `lib/app/authorization.ts` for
+> a fork to replace it, `ownership` declarations on `withAuth`/`withAdminAuth` —
+> Sunrise #366/#367), **Document Clean Up** for knowledge documents, **better-auth
+> 1.7.4** with the `Account.issuer` column retired, **vitest 5 / vite 8**, `zod`
+> declared, 30 dependency bumps, and **nine migrations** — four of which carry
+> May/June names and sort between ones you applied months ago; `prisma migrate
+> deploy` handles that, measured upstream and again here.
+
+### ⚠️ Changed — action required for existing leaf forks
+
+These are Sunrise 0.12.0's, not Daybreak's, but a leaf meets them through this
+release, and each one is a **failing test on your own files** rather than a
+behaviour change you can miss. Daybreak hit all four on its own framework files;
+the fixes below are the ones it applied.
+
+- **Every `withAuth` route you own needs an `ownership` declaration.** Sunrise's
+  guard now asks how a route decides *whose* rows it may read, and — for any caller
+  the policy narrows, which is every non-admin on a stock install — a route that
+  declared nothing is a **500** (`OwnershipDecisionMissingError`) and a failing
+  test. Four ways to answer, on the guard's second argument:
+  `{ decidedBy: 'policy' }` (you read `session.subjectFilter`),
+  `{ decidedBy: 'self', because }`, `{ decidedBy: 'resource', because }` or
+  `{ decidedBy: 'nothing', because }`. A consumer route keyed on `session.user.id`
+  is `'self'`; Daybreak's three surface routes are the worked examples
+  (`app/api/v1/framework/**`). `withAdminAuth` routes owe nothing under the default
+  policy. Full rule: `.context/auth/authorization.md`.
+- **Any file of yours that reads `AiConversation`, `AiMessage` or
+  `AiWorkflowExecution` outside `lib/orchestration/access/` fails the new roster
+  test** (`tests/unit/scripts/ci/ownerless-surfaces.test.ts`, always-run). Import
+  the helper if it is an admin surface; otherwise declare it in the new
+  `leafOwnerlessSurfaceExceptions` (see Added). No platform file to edit.
+- **Any raw SQL of yours (`$queryRaw*` / `$executeRaw*`) under `app/` or `lib/`
+  fails the new allowlist test** (`tests/unit/db-raw-sql-allowlist.test.ts`). There
+  is **no fork seam for this one yet** — add a row to the `ALLOWLIST` literal in that
+  Sunrise-owned test with the exact call count and a `why`, and expect a keep-mine
+  on each merge. Daybreak's three `framework_*` rows are there, marked, and Sunrise
+  [#799](https://github.com/human-centric-engineering/sunrise/issues/799) asks for
+  the seam.
+- **Any file you added under `lib/app/` must be named in the root `VERSIONING.md`
+  Covered list** (`tests/unit/versioning-seam-coverage.test.ts`). Daybreak's six
+  `leaf-*.ts` seams are now named there; your own scaffolds, if any, are yours to
+  add. It is a Sunrise-owned file whose fork note invites exactly this edit.
+
+Two more from upstream that announce themselves at type-check rather than in a
+test: a seed or importer that writes `Account.issuer` no longer compiles (delete
+the field; do not re-add the column), and `hasRole()` / `requireRole()` take
+`UserRole`, not `string`.
+
+**If you pin `lib/app/ci.ts`'s lists in `defaults.test.ts`**, see the Added entry —
+the bridge row gained a third assertion.
+
+### Added
+
+- **`leafOwnerlessSurfaceExceptions` in `lib/app/leaf-ci.ts`** — the third list the
+  leaf CI seam carries, mirroring the `appOwnerlessSurfaceExceptions` Sunrise 0.12.0
+  added to `lib/app/ci.ts`. Sunrise's new always-run test
+  (`tests/unit/scripts/ci/ownerless-surfaces.test.ts`) names every file under
+  `app/`, `lib/` and `components/` that reads `AiWorkflowExecution`,
+  `AiConversation` or `AiMessage` outside the `lib/orchestration/access/` helpers —
+  **including yours, the moment it exists**. Import the helper if the read is an
+  admin surface; otherwise declare the file here with a `disposition` and a reason
+  of at least 20 characters (a `'known-gap'` must also carry `tracking`). Shipped
+  empty for you.
+
+  Daybreak's framework tier declares **five**, all `'by-design'`: the evaluation
+  family (`conversation.ts`, `recent-conversations.ts`, `turns.ts` — scoped by
+  framework *surface*, not by owner, because a framework thread is always
+  user-owned and the sweep has no caller), the module workflow-binding dispatcher
+  (a row→workflow trigger, the scheduler's shape), and the framework's Art. 15
+  manifest (keyed on the subject). None is a gap awaiting a fix; the reasons are
+  on the entries.
+
+  **If your `defaults.test.ts` pins `lib/app/ci.ts`'s lists**, that row now also
+  pins `appOwnerlessSurfaceExceptions` to those five paths, and the `leaf-ci.ts`
+  row asserts the new leaf list is `[]`. Pin your values; don't delete either row
+  (#234).
+
+### Changed
+
+- **The framework conversation supervisor now attributes its judge-model cost rows
+  to the actor.** `superviseConversation()` writes `AiCostLog.userId` from
+  `actorUserId` — the admin on the supervise route, or the execution's user /
+  service account in `framework_eval_sweep` — alongside the `conversationId` it
+  already wrote. The column is Sunrise 0.12.0's (#708, `onDelete: SetNull`), so
+  erasing the actor detaches the row rather than deleting it, and the actor's
+  Art. 15 export now lists the spend their review caused. No caller change: both
+  callers already passed a real `User.id`.
+
+### Platform
+
+- **Sunrise v0.12.0** is the platform version as of this release, up from v0.11.2
+  at Daybreak 0.3.0 — one sync merge,
+  [#262](https://github.com/human-centric-engineering/daybreak/pull/262). Sunrise's
+  own changes are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md); only the
+  leaf-contract consequences are repeated above. Two things the sync recorded
+  rather than shipped: **Sunrise #366/#367 landed** (the authorization resolver
+  `lib/framework/shared/access.ts` has waited on since v1 — delegating to it is
+  board row 31 / issue-backlog Phase 6, not done in this release, so the
+  framework's `canRead` / `subjectScope` are unchanged), and **Sunrise #799 filed**
+  for the two test rosters above that still have no seam. Three Dependabot alerts
+  (`mysql2` ×2, `deepmerge-ts`) are open at the cut, pinned by the Prisma 7 CLI and
+  unreachable on a Postgres-only install; the fix is Prisma 8, which is on the
+  Sunrise board.
+
 ## [0.3.0] — 2026-09-11
 
 > **Third tagged Daybreak release. Additive, plus one fix you want.** Nothing a leaf
@@ -777,7 +896,8 @@ process.
   are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md). Only the
   leaf-contract consequence is repeated above.
 
-[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.3.0...HEAD
+[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.4.0...HEAD
+[0.4.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.4.0
 [0.3.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.3.0
 [0.2.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.2.0
 [0.1.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.1.0

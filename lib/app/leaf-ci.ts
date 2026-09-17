@@ -1,8 +1,9 @@
 /**
  * Leaf-app CI declarations — RESERVED, empty by default.
  *
- * A leaf app (a fork of Daybreak) declares its **own** coverage exclusions and
- * whole-tree always-run tests here. Daybreak keeps both lists empty: this is the
+ * A leaf app (a fork of Daybreak) declares its **own** coverage exclusions,
+ * whole-tree always-run tests and ownerless-surface exceptions here. Daybreak
+ * keeps all three lists empty: this is the
  * leaf's CI seam, reserved so a leaf's entries merge cleanly on a Daybreak
  * upgrade — the CI analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`.
@@ -18,7 +19,7 @@
  *
  * So `lib/app/ci.ts` becomes one of Daybreak's `lib/app/*` **bridges** (rostered
  * in CLAUDE.md's banner): it declares the
- * framework tier's entries and spreads these two lists after them. Both lists
+ * framework tier's entries and spreads these three lists after them. All three
  * are append-shaped, so the tiers compose rather than override — unlike
  * `lib/app/brand.ts`, where a leaf replaces Daybreak's value because brand
  * identity is single-valued.
@@ -32,15 +33,18 @@
  * has to name a file that **exists**, be something the runner can pass to
  * `vitest` as an argument, and sit in a directory `vitest.config.ts` actually
  * collects (`tests/e2e/**` is excluded there, so a spec declared inside it would
- * pass every other check and then silently never run).
+ * pass every other check and then silently never run). An ownerless-surface
+ * entry has to name a file that exists and still reads one of the three models
+ * outside `lib/orchestration/access/`, carry a reason of at least 20
+ * characters, and — if it is a `'known-gap'` — say what tracks the fix.
  *
- * See `lib/app/ci.ts` for the two worked examples and the types.
+ * See `lib/app/ci.ts` for the three worked examples and the types.
  */
 
 // RELATIVE for the same reason as the import in `ci.ts` — this module is reached
 // from `vitest.config.ts` at config-load time, before the `@/` alias exists.
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- see above; the @/ alias does not exist at vitest config-load time.
-import type { AppCoverageExclusion, AppAlwaysRunTest } from './ci';
+import type { AppCoverageExclusion, AppAlwaysRunTest, AppOwnerlessSurfaceException } from './ci';
 
 /** Coverage exclusions this LEAF adds. Daybreak ships this empty. */
 export const leafCoverageExclusions: AppCoverageExclusion[] = [];
@@ -130,3 +134,10 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'saw them together as a shell that could not decide. t-43.',
   },
 ];
+
+/**
+ * Files this LEAF allows to read `AiWorkflowExecution`, `AiConversation` or
+ * `AiMessage` outside the access helpers. Empty: no Lelañea file reads any of
+ * the three, and a file that starts to should import the helper first.
+ */
+export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [];

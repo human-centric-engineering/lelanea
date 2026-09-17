@@ -45,49 +45,59 @@ const surfaceChatRequestSchema = z.object({
   message: z.string().min(1),
 });
 
-export const POST = withAuth<{ role: string }>(async (request, session, { params }) => {
-  const userLimit = consumerChatLimiter.check(session.user.id);
-  if (!userLimit.success) return createRateLimitResponse(userLimit);
+export const POST = withAuth<{ role: string }>(
+  async (request, session, { params }) => {
+    const userLimit = consumerChatLimiter.check(session.user.id);
+    if (!userLimit.success) return createRateLimitResponse(userLimit);
 
-  const log = await getRouteLogger(request);
-  const { role } = await params;
-  const body = await validateRequestBody(request, surfaceChatRequestSchema);
-  const requestId = await getRequestId();
-  const visitorId = await getVisitorId();
+    const log = await getRouteLogger(request);
+    const { role } = await params;
+    const body = await validateRequestBody(request, surfaceChatRequestSchema);
+    const requestId = await getRequestId();
+    const visitorId = await getVisitorId();
 
-  // Resolve the role's bound-agent surface. An unknown/unbound role, or a role whose agent is
-  // inactive/non-public, yields null → an explicit 404 (no facilitation surface to open).
-  const surface = await resolveFacilitationSurface(session.user.id, role);
-  if (surface === null) {
-    throw new NotFoundError(`Facilitation seat "${role}" has no active agent to chat with`);
+    // Resolve the role's bound-agent surface. An unknown/unbound role, or a role whose agent is
+    // inactive/non-public, yields null → an explicit 404 (no facilitation surface to open).
+    const surface = await resolveFacilitationSurface(session.user.id, role);
+    if (surface === null) {
+      throw new NotFoundError(`Facilitation seat "${role}" has no active agent to chat with`);
+    }
+
+    // Honour the agent's per-agent RPM override (as the direct consumer route does), so the same
+    // agent enforces one cap regardless of entry surface.
+    const agentLimit = agentChatLimiter.check(
+      `${surface.agentId}:${session.user.id}`,
+      surface.rateLimitRpm ?? undefined
+    );
+    if (!agentLimit.success) return createRateLimitResponse(agentLimit);
+
+    log.info('Facilitation surface chat stream started', {
+      facilitationRole: role,
+      agentSlug: surface.agentSlug,
+      resumed: surface.conversationId !== undefined,
+      userId: session.user.id,
+    });
+
+    const events = streamChat({
+      message: body.message,
+      agentSlug: surface.agentSlug,
+      userId: session.user.id,
+      conversationId: surface.conversationId,
+      contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
+      contextId: role,
+      requestId,
+      visitorId,
+      signal: request.signal,
+    });
+
+    return sseResponse(events, { signal: request.signal });
+  },
+  {
+    // Ownership: self-scoped by construction — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'self',
+      because:
+        "The surface conversation it resumes and every row streamChat writes are keyed on the caller's own id; the role is a public URL segment, not a subject.",
+    },
   }
-
-  // Honour the agent's per-agent RPM override (as the direct consumer route does), so the same
-  // agent enforces one cap regardless of entry surface.
-  const agentLimit = agentChatLimiter.check(
-    `${surface.agentId}:${session.user.id}`,
-    surface.rateLimitRpm ?? undefined
-  );
-  if (!agentLimit.success) return createRateLimitResponse(agentLimit);
-
-  log.info('Facilitation surface chat stream started', {
-    facilitationRole: role,
-    agentSlug: surface.agentSlug,
-    resumed: surface.conversationId !== undefined,
-    userId: session.user.id,
-  });
-
-  const events = streamChat({
-    message: body.message,
-    agentSlug: surface.agentSlug,
-    userId: session.user.id,
-    conversationId: surface.conversationId,
-    contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
-    contextId: role,
-    requestId,
-    visitorId,
-    signal: request.signal,
-  });
-
-  return sseResponse(events, { signal: request.signal });
-});
+);

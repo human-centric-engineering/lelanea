@@ -55,62 +55,72 @@ const surfaceChatRequestSchema = z.object({
   message: z.string().min(1),
 });
 
-export const POST = withAuth<{ slug: string }>(async (request, session, { params }) => {
-  const userLimit = consumerChatLimiter.check(session.user.id);
-  if (!userLimit.success) return createRateLimitResponse(userLimit);
+export const POST = withAuth<{ slug: string }>(
+  async (request, session, { params }) => {
+    const userLimit = consumerChatLimiter.check(session.user.id);
+    if (!userLimit.success) return createRateLimitResponse(userLimit);
 
-  const log = await getRouteLogger(request);
-  const { slug } = await params;
-  const body = await validateRequestBody(request, surfaceChatRequestSchema);
-  const requestId = await getRequestId();
-  const visitorId = await getVisitorId();
+    const log = await getRouteLogger(request);
+    const { slug } = await params;
+    const body = await validateRequestBody(request, surfaceChatRequestSchema);
+    const requestId = await getRequestId();
+    const visitorId = await getVisitorId();
 
-  // Resolve the module's primary-agent surface. NotFoundError (unknown module) propagates to
-  // the standard 404; a bound-but-no-usable-agent module returns null → an explicit 404.
-  const surface = await resolveModuleSurface(session.user.id, slug);
-  if (surface === null) {
-    throw new NotFoundError(`Module "${slug}" has no active agent to chat with`);
-  }
+    // Resolve the module's primary-agent surface. NotFoundError (unknown module) propagates to
+    // the standard 404; a bound-but-no-usable-agent module returns null → an explicit 404.
+    const surface = await resolveModuleSurface(session.user.id, slug);
+    if (surface === null) {
+      throw new NotFoundError(`Module "${slug}" has no active agent to chat with`);
+    }
 
-  // Honour the agent's per-agent RPM override (as the direct consumer route does), so the
-  // same agent enforces one cap regardless of entry surface.
-  const agentLimit = agentChatLimiter.check(
-    `${surface.agentId}:${session.user.id}`,
-    surface.rateLimitRpm ?? undefined
-  );
-  if (!agentLimit.success) return createRateLimitResponse(agentLimit);
+    // Honour the agent's per-agent RPM override (as the direct consumer route does), so the
+    // same agent enforces one cap regardless of entry surface.
+    const agentLimit = agentChatLimiter.check(
+      `${surface.agentId}:${session.user.id}`,
+      surface.rateLimitRpm ?? undefined
+    );
+    if (!agentLimit.success) return createRateLimitResponse(agentLimit);
 
-  log.info('Module surface chat stream started', {
-    moduleSlug: slug,
-    agentSlug: surface.agentSlug,
-    resumed: surface.conversationId !== undefined,
-    userId: session.user.id,
-  });
-
-  // A fresh surface conversation (nothing to resume) is a module *entry* — record it as
-  // an engagement event and fire any `module.entered` workflow bindings. Fire-and-forget:
-  // the seam is best-effort and non-throwing, so instrumentation never blocks or breaks
-  // the chat stream. A resumed conversation is not a new entry, so it emits nothing.
-  if (surface.conversationId === undefined) {
-    void recordModuleEngagement({
-      userId: session.user.id,
+    log.info('Module surface chat stream started', {
       moduleSlug: slug,
-      type: ENGAGEMENT_EVENT_TYPE.moduleEntered,
+      agentSlug: surface.agentSlug,
+      resumed: surface.conversationId !== undefined,
+      userId: session.user.id,
     });
+
+    // A fresh surface conversation (nothing to resume) is a module *entry* — record it as
+    // an engagement event and fire any `module.entered` workflow bindings. Fire-and-forget:
+    // the seam is best-effort and non-throwing, so instrumentation never blocks or breaks
+    // the chat stream. A resumed conversation is not a new entry, so it emits nothing.
+    if (surface.conversationId === undefined) {
+      void recordModuleEngagement({
+        userId: session.user.id,
+        moduleSlug: slug,
+        type: ENGAGEMENT_EVENT_TYPE.moduleEntered,
+      });
+    }
+
+    const events = streamChat({
+      message: body.message,
+      agentSlug: surface.agentSlug,
+      userId: session.user.id,
+      conversationId: surface.conversationId,
+      contextType: MODULE_SURFACE_CONTEXT_TYPE,
+      contextId: slug,
+      scope: surface.scope, // { moduleSlug: slug } — the X5 write that enforces module scope
+      requestId,
+      visitorId,
+      signal: request.signal,
+    });
+
+    return sseResponse(events, { signal: request.signal });
+  },
+  {
+    // Ownership: self-scoped by construction — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'self',
+      because:
+        "The surface conversation it resumes, the module.entered event it records and every row streamChat writes are keyed on the caller's own id.",
+    },
   }
-
-  const events = streamChat({
-    message: body.message,
-    agentSlug: surface.agentSlug,
-    userId: session.user.id,
-    conversationId: surface.conversationId,
-    contextType: MODULE_SURFACE_CONTEXT_TYPE,
-    contextId: slug,
-    scope: surface.scope, // { moduleSlug: slug } — the X5 write that enforces module scope
-    requestId,
-    visitorId,
-    signal: request.signal,
-  });
-
-  return sseResponse(events, { signal: request.signal });
-});
+);

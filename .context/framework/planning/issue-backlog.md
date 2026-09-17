@@ -40,15 +40,15 @@ distributable; v1.3 makes it usable by the app that took the distribution).
 awaiting the seam". **Six of those Sunrise issues are closed and their seams are
 in this tree already**, merged with the v0.7.0/v0.8.0 syncs:
 
-| Ask                                                           | Upstream state    | Seam present in tree                                                  | Fork shim still carried                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **#398** `register(cap, { slug, guard })`                     | closed 2026-07-06 | ✅ `dispatcher.ts:133` + `CapabilityRegisterOptions`                  | ✅ `lib/framework/modules/capabilities/namespace.ts` (whole wrapper)                                                                                                                                                                                                                                                                                                               |
-| **#403** `registerAgentAccessContributor`                     | closed 2026-07-06 | ✅ `resolveAgentDocumentAccess.ts:75`, core-owned                     | ❌ already delegated — **row is just stale**                                                                                                                                                                                                                                                                                                                                       |
-| **#410** relocate `runStructuredCompletion` + open `phase`    | closed 2026-07-09 | ✅ `lib/orchestration/llm/structured-completion.ts`, `phase?: string` | ⚠️ partly delegated — `extract.ts:28` uses the new path but still omits `phase`                                                                                                                                                                                                                                                                                                    |
-| **#411** `CapabilityContext.customConfig`                     | closed 2026-07-09 | ✅ `capabilities/types.ts:65`                                         | ✅ `data-slots/capabilities/exposure.ts:59` still runs its own `aiAgentCapability.findFirst` **per capture**                                                                                                                                                                                                                                                                       |
-| **#415** `scope` on `consumerChatRequestSchema`               | closed 2026-07-09 | ✅ `lib/validations/orchestration.ts:4057`                            | ❌ **not a shim** — see the amended t-1.3 row below. The two framework routes resolve the agent server-side, tag `contextType`/`contextId` (which the core consumer route refuses) and emit `module.entered`; they were never a `scope`-threading shadow. Closed as _landed — no carry_ in [[upstream-asks]] (v1.3 Phase 1 t-1.3), with the real remaining ask filed in its place. |
-| **#416** find-or-resume by `(contextType, contextId)`         | closed 2026-07-09 | ✅ `chat/resume-conversation.ts` → `findResumableConversation`        | ❌ **delegated** — both surfaces call `findResumableConversation` (v1.3 Phase 1 t-1.4); row closed in [[upstream-asks]]                                                                                                                                                                                                                                                            |
-| **#366 / #367** tenancy · **#533** subject-access contributor | **open**          | —                                                                     | correctly carried; rows stay open                                                                                                                                                                                                                                                                                                                                                  |
+| Ask                                                           | Upstream state                                                                                 | Seam present in tree                                                                                           | Fork shim still carried                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#398** `register(cap, { slug, guard })`                     | closed 2026-07-06                                                                              | ✅ `dispatcher.ts:133` + `CapabilityRegisterOptions`                                                           | ✅ `lib/framework/modules/capabilities/namespace.ts` (whole wrapper)                                                                                                                                                                                                                                                                                                               |
+| **#403** `registerAgentAccessContributor`                     | closed 2026-07-06                                                                              | ✅ `resolveAgentDocumentAccess.ts:75`, core-owned                                                              | ❌ already delegated — **row is just stale**                                                                                                                                                                                                                                                                                                                                       |
+| **#410** relocate `runStructuredCompletion` + open `phase`    | closed 2026-07-09                                                                              | ✅ `lib/orchestration/llm/structured-completion.ts`, `phase?: string`                                          | ⚠️ partly delegated — `extract.ts:28` uses the new path but still omits `phase`                                                                                                                                                                                                                                                                                                    |
+| **#411** `CapabilityContext.customConfig`                     | closed 2026-07-09                                                                              | ✅ `capabilities/types.ts:65`                                                                                  | ✅ `data-slots/capabilities/exposure.ts:59` still runs its own `aiAgentCapability.findFirst` **per capture**                                                                                                                                                                                                                                                                       |
+| **#415** `scope` on `consumerChatRequestSchema`               | closed 2026-07-09                                                                              | ✅ `lib/validations/orchestration.ts:4057`                                                                     | ❌ **not a shim** — see the amended t-1.3 row below. The two framework routes resolve the agent server-side, tag `contextType`/`contextId` (which the core consumer route refuses) and emit `module.entered`; they were never a `scope`-threading shadow. Closed as _landed — no carry_ in [[upstream-asks]] (v1.3 Phase 1 t-1.3), with the real remaining ask filed in its place. |
+| **#416** find-or-resume by `(contextType, contextId)`         | closed 2026-07-09                                                                              | ✅ `chat/resume-conversation.ts` → `findResumableConversation`                                                 | ❌ **delegated** — both surfaces call `findResumableConversation` (v1.3 Phase 1 t-1.4); row closed in [[upstream-asks]]                                                                                                                                                                                                                                                            |
+| **#366 / #367** tenancy · **#533** subject-access contributor | **#366/#367 closed 2026-09-09** (landed Sunrise 0.12.0, synced 2026-09-16); #533 landed 0.10.0 | ✅ `lib/auth/authorization.ts` — `canRead` / `subjectScope` / `canAdminister`, `lib/app/authorization.ts` seam | **carried — delegation is Phase 6 (t-6.1)**; #533 delegated                                                                                                                                                                                                                                                                                                                        |
 
 Two consequences, both of which drive the phasing:
 
@@ -542,6 +542,49 @@ warn them: add a **"known leaf-sync gotchas"** section to
 
 ---
 
+## Phase 6 — Delegate the authorization seam (#366 / #367 landed)
+
+Opened 2026-09-16 on the Sunrise 0.12.0 sync. The two tenancy asks the ledger
+has carried since v1 — **#367** (intra-tenant ownership scope) and **#366**
+(org-admin tier axis) — closed on 2026-09-09 and their resolver shipped in
+0.12.0 as `lib/auth/authorization.ts`: a policy with three faces
+(`canAdminister` / `canRead` / `subjectScope`), the `lib/app/authorization.ts`
+seam a fork replaces it through, and `checkAuthorizationParity()`. The fork
+still carries its own [`lib/framework/shared/access.ts`](../../lib/framework/shared/access.ts)
+(`canRead` / `canWrite` / `subjectScope`), whose header promised to delegate
+"when #367's ownership resolver lands upstream". It has.
+
+### t-6.1 · `lib/framework/shared/access.ts` delegates `canRead` / `subjectScope` to core
+
+Delete the self-read + admin-support body of `canRead` and the `where` fragment
+`subjectScope` builds, and call core's `canRead(principal, resource, scope)` /
+`subjectScope(principal, scope)` instead, passing the framework's `AccessScope`
+as the `AuthorizationScope` (`ownership` / `tier` map by name). Keep the
+`canRead` ⇔ `subjectScope` parity test — core has its own
+(`checkAuthorizationParity`), and the framework's is what proves the two tiers
+agree. **Wire `canRead` and `subjectScope` ONLY — leave `canWrite`'s pinned
+grant alone** (the ledger row says why: #242/#159 pin every journey write to
+self-or-admin-support so a cohort _read_ widening never hands cohort readers the
+right to drive transitions; the predicates are value-identical until the
+resolver lands, so no test would catch a silent widening).
+
+The one design question, and it is the reason this is a task and not a sync
+chore: core's `canRead` takes an **`AuthorizationPrincipal`** — the guard's
+principal, with `credential` and `scopes` — and
+[`.context/auth/authorization.md`](../../.context/auth/authorization.md)
+("The principal comes from the guard — never rebuild it") is explicit that a
+handler must not reconstruct one from `session.user`. The framework's
+`JourneyViewer` is a framework-local shape built exactly that way. So either the
+framework's read seam starts taking `session.principal` (the callers are the
+journey/slot readers, all reached from guarded routes and the engine), or it
+maps `JourneyViewer` → principal and accepts the widening bug the doc names.
+The first is right; size the caller sweep before promoting.
+
+_Done when:_ `access.ts` imports `canRead` / `subjectScope` from
+`@/lib/auth/authorization` and has no ownership predicate of its own;
+`canWrite` is byte-identical; the parity test passes; the ledger row for
+#366/#367 moves to the Landed table.
+
 ## Sequencing at a glance
 
 ```
@@ -562,6 +605,9 @@ Phase 4  ──▶ t-4.1 #169  (needs t-1.1 + t-1.2)
 
 Phase 5  ──▶ its one carry-now row IS t-0.3; the rest is ledger hygiene —
              adopt-on-next-sync rows + watch rows + the leaf gotchas doc
+
+Phase 6  ──▶ t-6.1 #366/#367 delegate `canRead` / `subjectScope` (independent;
+             opened on the Sunrise 0.12.0 sync)
 ```
 
 **Schema impact:** none. No migration in any phase — `provenance` and `progress`
@@ -576,4 +622,4 @@ before it makes the replay larger and the repair harder to reason about.
 
 **Issue → task index:** #156 → t-2.1 · #157 → t-3.3 · #158 → t-3.4 · #159 → t-3.1
 · #160 → t-0.1 · #161 → t-4.2 · #162 → t-2.1 · #167 → t-2.2 · #168 → t-3.2 ·
-#169 → t-4.1. Upstream: Sunrise #539 → t-0.3.
+#169 → t-4.1. Upstream: Sunrise #539 → t-0.3 · Sunrise #366/#367 → t-6.1.

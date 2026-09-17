@@ -134,7 +134,10 @@ export async function superviseConversation(
   const provider = await getProvider(modelInfo.provider);
 
   // Provider-agnostic LLM shim (copied from the execution-review route). Bills cost per call as a
-  // side-effect, attributed to the framework conversation; the shared core treats this as opaque.
+  // side-effect, attributed to the framework conversation and to the admin (or service account)
+  // that triggered the review; the shared core treats this as opaque. `actorUserId` is always a
+  // real `User.id` — an admin session or `resolveActorUserId` in the sweep step — so it needs no
+  // synthetic-id guard (Sunrise #708).
   const llmCall: LlmCallShim = async (prompt, opts) => {
     const response = await provider.chat([{ role: 'user', content: prompt }], {
       model: modelId,
@@ -143,6 +146,7 @@ export async function superviseConversation(
     const cost = calculateCost(modelId, response.usage.inputTokens, response.usage.outputTokens);
     void logCost({
       conversationId,
+      userId: actorUserId,
       model: modelId,
       provider: modelInfo.provider,
       inputTokens: response.usage.inputTokens,
