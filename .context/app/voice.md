@@ -923,6 +923,58 @@ the point of the page rather than a convenience: an undesignated document reache
 nothing, but on screen it looks exactly like one that reaches everything, and
 that confusion is what this feature exists to remove.
 
+### `Agent may quote` answers TWO questions, and shows both
+
+The column used to be a boolean, and it said **Yes** about a PDF sitting in
+`pending_review` with zero chunks. That is the one claim the page exists not to
+make. It was not a wrong rule — the rule genuinely permits the document — it was
+a true half presented as the whole answer.
+
+Two axes, and they come apart routinely:
+
+| Axis  | Question                             | Computed by                                  |
+| ----- | ------------------------------------ | -------------------------------------------- |
+| _may_ | Does the designation PERMIT a quote? | `isQuotable()` in `designation.ts`           |
+| _can_ | Is there anything to retrieve?       | `retrievalState()` in `designation-admin.ts` |
+
+So the cell renders three answers rather than two:
+
+| What is true                            | The cell says                      |
+| --------------------------------------- | ---------------------------------- |
+| The rule denies it                      | **No**                             |
+| The rule permits it, and it has chunks  | **Yes**                            |
+| The rule permits it, and it has nothing | **Not yet** / **Nothing to quote** |
+
+`retrievalState()` is `retrievable` only for a document that is `ready` **and**
+has chunks; `failed` for one that never parsed; `empty` for a `ready` document
+the parser found no text in — a real state, since `document-manager.ts` writes
+`{ status: 'ready', chunkCount: 0 }` on three separate paths when chunking
+yields nothing; and `pending` for everything else, which is `processing`,
+`pending_review`, `cleaning`, **and any status a later Sunrise release adds**.
+That default is the safe direction: an unrecognised status must not fall into
+"the agent may quote this".
+
+**Chunks are the load-bearing half, not status.** `searchKnowledgeBase` selects
+from `ai_knowledge_chunk` joined to the document and never filters on
+`d.status`, so the chunk count is what actually decides whether a passage can
+come back. Status is carried because it is the only thing separating "wait" from
+"act", and the copy splits on exactly that: `pending` describes the wait and
+deliberately does not promise it ends — `pending_review` has no resume path in
+any tier ([`sunrise#807`](https://github.com/human-centric-engineering/sunrise/issues/807))
+— while `failed` and `empty` name the remedy, which is to upload the file again
+(`HB10`). The platform's dedupe deliberately does not return previously-failed
+documents, so re-uploading really is a retry.
+
+**Both verdicts are computed on the server and the cell only renders them.**
+Same reason as `quotable`: a `retrieval` derived in JSX from `status` and
+`chunkCount` is a second implementation that drifts from the first. A PATCH
+response carries `quotable` and not `retrieval`, because a designation write
+changes what the rule permits and never what has been chunked.
+
+**A `failed` document stays designatable.** Deny-by-default means a designation
+on it grants nothing, disabling the selects would create a state with no remedy
+on the page, and the answer she gives now is the right one for the re-upload.
+
 ### The uploader is Sunrise's, IMPORTED — not copied, not adapted (t-44)
 
 Until t-44 only the second act was here, and the table's empty state had to send
@@ -1111,18 +1163,19 @@ on purpose and the development command reads that divergence as drift.
 
 ## Tests
 
-| File                                                                | Proves                                                                |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `tests/unit/lib/app/voice/fingerprint.test.ts`                      | The core reaches the prompt with nothing retrieved — load-bearing     |
-| `tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts`     | The seed's writes, its idempotence, and `restricted` via the resolver |
-| `tests/unit/lib/app/content/voice-fingerprint.test.ts`              | The authored file parses, and still says it is awaiting sign-off      |
-| `tests/unit/lib/app/voice/corpus-access.test.ts`                    | The rule end to end through Sunrise's resolver — the load-bearing one |
-| `tests/unit/lib/app/voice/designation.test.ts`                      | The vocabulary, the slugs, the safe reading of a conflict             |
-| `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy         |
-| `tests/unit/lib/app/knowledge-access-contributors.test.ts`          | Exactly one contributor, and which one                                |
-| `tests/unit/prisma/seeds/app-lelanea/knowledge-designation.test.ts` | The seed writes nothing on a re-run                                   |
-| `tests/unit/components/app/admin/knowledge-workspace.test.tsx`      | The uploader is the platform's, and a PDF reaches its confirm step    |
-| `tests/unit/lib/app/voice/upload-scope.test.ts`                     | Every ingestion path writes the scope the table reads                 |
+| File                                                                | Proves                                                                     |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/fingerprint.test.ts`                      | The core reaches the prompt with nothing retrieved — load-bearing          |
+| `tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts`     | The seed's writes, its idempotence, and `restricted` via the resolver      |
+| `tests/unit/lib/app/content/voice-fingerprint.test.ts`              | The authored file parses, and still says it is awaiting sign-off           |
+| `tests/unit/lib/app/voice/corpus-access.test.ts`                    | The rule end to end through Sunrise's resolver — the load-bearing one      |
+| `tests/unit/lib/app/voice/designation.test.ts`                      | The vocabulary, the slugs, the safe reading of a conflict                  |
+| `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy, both axes   |
+| `tests/unit/lib/app/knowledge-access-contributors.test.ts`          | Exactly one contributor, and which one                                     |
+| `tests/unit/prisma/seeds/app-lelanea/knowledge-designation.test.ts` | The seed writes nothing on a re-run                                        |
+| `tests/unit/components/app/admin/knowledge-workspace.test.tsx`      | The uploader is the platform's, and a PDF reaches its confirm step         |
+| `tests/unit/components/app/admin/designation-table.test.tsx`        | The cell shows the server's two verdicts, and claims neither for the other |
+| `tests/unit/lib/app/voice/upload-scope.test.ts`                     | Every ingestion path writes the scope the table reads                      |
 
 The first of those is the one to re-read before changing the rule. It asserts a
 voice document is **absent** from the resolved set — an absence that would pass

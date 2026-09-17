@@ -15,6 +15,12 @@
  *    remove;
  *  - the empty state claiming "no documents yet" after a failed load (`HB9`).
  *
+ * And the one a plausible SECOND version still got wrong: the cell saying
+ * **Yes** about a document the rule permits and the search tool cannot reach —
+ * a PDF in `pending_review` with zero chunks. `quotable` and `retrieval` are
+ * two axes, the cell renders both, and it renders each from the server's
+ * verdict rather than from `status` and `chunkCount` in JSX.
+ *
  * @see components/app/admin/designation-table.tsx
  */
 
@@ -40,6 +46,7 @@ function doc(overrides: Partial<DesignatedDocument> = {}): DesignatedDocument {
     sensitivity: 'public',
     licensing: null,
     quotable: true,
+    retrieval: 'retrievable',
     ...overrides,
   };
 }
@@ -103,6 +110,136 @@ describe('what the row says', () => {
     render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} />);
 
     expect(screen.getByText('Add a note')).toBeTruthy();
+  });
+});
+
+describe('what the `Agent may quote` cell claims', () => {
+  // The bug: **Yes** about a document with nothing retrievable in it. The rule
+  // permits it and there is nothing there to permit, which is the one thing this
+  // column exists not to say.
+  //
+  // Every case below renders a ready, quotable document alongside, so the
+  // absence of "Yes" on the others is asserted against a population that
+  // demonstrably produces one (`fp6`).
+  const STATES = [
+    { retrieval: 'pending' as const, status: 'pending_review', label: 'Not yet' },
+    { retrieval: 'pending' as const, status: 'processing', label: 'Not yet' },
+    { retrieval: 'failed' as const, status: 'failed', label: 'Nothing to quote' },
+    { retrieval: 'empty' as const, status: 'ready', label: 'Nothing to quote' },
+  ];
+
+  for (const { retrieval, status, label } of STATES) {
+    it(`does not say the agent may quote a ${status} document with nothing in it`, () => {
+      render(
+        <DesignationTable
+          initialDocuments={[
+            doc({ id: 'reachable', name: 'A chunked method note' }),
+            doc({
+              id: 'unreachable',
+              name: 'Nothing in it yet',
+              status,
+              chunkCount: 0,
+              purpose: 'knowledge',
+              // The rule DOES permit it. That is the point — the claim the cell
+              // must not make is the one the permission alone would support.
+              quotable: true,
+              retrieval,
+            }),
+          ]}
+          initialMeta={{ ...META, total: 2 }}
+        />
+      );
+
+      const permitted = within(rowFor('A chunked method note'));
+      const nothingThere = within(rowFor('Nothing in it yet'));
+
+      // The positive claim is genuinely on screen...
+      expect(permitted.getByText('Yes')).toBeTruthy();
+      // ...and is NOT made about the document with nothing behind it.
+      expect(nothingThere.queryByText('Yes')).toBeNull();
+      expect(nothingThere.getByText(label)).toBeTruthy();
+    });
+  }
+
+  it('keeps the two axes apart rather than calling it a flat "No"', () => {
+    // A denied document and a permitted-but-empty one must not read the same.
+    // Collapsing them would hide which half is missing — and "No" about a
+    // document the rule permits is its own wrong answer, since chunking it
+    // changes nothing about the designation.
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({ id: 'denied', name: 'A Substack post', purpose: 'voice', quotable: false }),
+          doc({
+            id: 'waiting',
+            name: 'A PDF awaiting review',
+            status: 'pending_review',
+            chunkCount: 0,
+            quotable: true,
+            retrieval: 'pending',
+          }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    expect(within(rowFor('A Substack post')).getByText('No')).toBeTruthy();
+    expect(within(rowFor('A PDF awaiting review')).queryByText('No')).toBeNull();
+    expect(within(rowFor('A PDF awaiting review')).getByText('Not yet')).toBeTruthy();
+  });
+
+  it('names what to do about a document that will never have anything in it', () => {
+    // `HB10`: a cell that says "nothing to quote" and stops is a diagnosis. A
+    // failed parse has a remedy she can act on from the uploader directly above
+    // — the platform's dedupe deliberately does not return failed documents, so
+    // re-uploading really does retry.
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({ id: 'reachable', name: 'A chunked method note' }),
+          doc({
+            id: 'broken',
+            name: 'A talk recording',
+            status: 'failed',
+            chunkCount: 0,
+            quotable: true,
+            retrieval: 'failed',
+          }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    expect(within(rowFor('A talk recording')).getByText(/Upload it again/)).toBeTruthy();
+    expect(within(rowFor('A chunked method note')).queryByText(/Upload it again/)).toBeNull();
+  });
+
+  it('takes `retrieval` from the server too, rather than reading status in the cell', () => {
+    // The same property the `quotable` case above pins, on the second axis. A
+    // cell that reasoned from `status` and `chunkCount` would call this row
+    // retrievable — they say ready with twelve chunks — and would disagree with
+    // `retrievalState()` the moment either side changed its mind about what
+    // "ready" means.
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({ id: 'reachable', name: 'A chunked method note' }),
+          doc({
+            id: 'server-says-no',
+            name: 'Looks ready, is not',
+            status: 'ready',
+            chunkCount: 12,
+            quotable: true,
+            retrieval: 'pending',
+          }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    expect(within(rowFor('A chunked method note')).getByText('Yes')).toBeTruthy();
+    expect(within(rowFor('Looks ready, is not')).queryByText('Yes')).toBeNull();
+    expect(within(rowFor('Looks ready, is not')).getByText('Not yet')).toBeTruthy();
   });
 });
 

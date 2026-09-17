@@ -96,6 +96,7 @@ function doc(overrides: Partial<DesignatedDocument> = {}): DesignatedDocument {
     sensitivity: 'public',
     licensing: null,
     quotable: true,
+    retrieval: 'retrievable',
     ...overrides,
   };
 }
