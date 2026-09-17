@@ -457,6 +457,133 @@ describe('reloadToken — going and looking again when something lands', () => {
     expect(url).toContain('page=1');
   });
 
+  it('says so when the upload landed outside the view she is looking through', async () => {
+    const user = userEvent.setup();
+    // One document in view before the upload, and one after: the corpus grew,
+    // but not the part of it she can see. Nothing else on screen would tell her
+    // — the upload zone clears its staged files and says nothing at all.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [doc()],
+        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
+      }),
+    });
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={0}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    // Establish the notice is NOT already on screen, so the assertion after the
+    // upload is about the upload rather than about the component's initial state.
+    expect(screen.queryByRole('status')).toBeNull();
+
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={1}
+      />
+    );
+
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toMatch(/Added/);
+    // The remedy, not the diagnosis (`HB10`) — and it names the filter that is
+    // actually on, so it does not send her to clear one she never set.
+    expect(notice.textContent).toMatch(/Undesignated filter/);
+  });
+
+  it('stays quiet when the upload did land in view', async () => {
+    // The common path: the undesignated filter on, an untagged upload. A check
+    // that reasoned from "is a filter active?" rather than from the row count
+    // would cry wolf here, on the most ordinary thing she does.
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [doc()],
+        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
+      }),
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [doc(), doc({ id: 'doc-2', name: 'Just added', purpose: null, quotable: false })],
+        meta: { page: 1, limit: 25, total: 2, totalPages: 1 },
+      }),
+    });
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={0}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={1}
+      />
+    );
+
+    expect(await screen.findByText('Just added')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('drops the notice as soon as she changes what she is looking through', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [doc()],
+        meta: { page: 1, limit: 25, total: 1, totalPages: 1 },
+      }),
+    });
+
+    const { rerender } = render(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={0}
+      />
+    );
+
+    rerender(
+      <DesignationTable
+        initialDocuments={[doc()]}
+        initialMeta={{ ...META, total: 1 }}
+        reloadToken={1}
+      />
+    );
+    await screen.findByRole('status');
+
+    // Acting on the advice must retire it. A notice that outlived the filter it
+    // describes would be telling her to clear something she already cleared.
+    await user.click(screen.getByLabelText('Undesignated documents'));
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
   it('keeps the filter she is looking through when it refreshes', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(emptyPage(0));

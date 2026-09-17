@@ -962,14 +962,44 @@ PDF strands in a state the page offers no way out of, while `onUploadComplete()`
 fires and the table gains a row — so it reads as having worked. That is `HB10`:
 the remedy ships beside the guard.
 
+**The modal does not close that gap entirely.** It is an ordinary Radix dialog,
+so Escape, the X and an outside click all dismiss it, leaving the document in
+`pending_review` with no chunks — and **no tier has a resume path**, which is
+upstream gap 6 below. Refusing the dismissal is not available: Sunrise's own
+Discard button exits through the same `onOpenChange(false)` as the X, so a
+handler that rejected `false` would break Discard too. What this page does
+instead is refuse to let the state be _invisible_ — **every** exit from the modal
+reloads the table, so a dismissed PDF shows up at once as
+`0 chunks · pending_review` rather than sitting in the database where only the
+orchestration admin would have shown it.
+
+**An upload that lands outside the filter she is looking through says so.** The
+zone offers the whole taxonomy, so she can designate at upload and the
+**Undesignated documents** filter then correctly excludes what she just added; a
+search term does the same to a name that does not match. The zone clears its
+staged files and says nothing, so without this the table looks untouched and the
+upload reads as having failed. The check is a row-count comparison across the
+upload's own reload, not "is a filter on?" — the common path (filter on, untagged
+upload) puts the document _in_ view, and a filter check would cry wolf on it.
+
 **Nothing about scope is passed, because there is nothing to pass.**
 `lib/orchestration/knowledge/document-manager.ts` hardcodes `scope: 'app'` at all
 three of its create sites — text, binary, and the PDF pending-review row — which
-is exactly what `listDesignatedDocuments` filters on. That agreement crosses a
-tier boundary, so `tests/unit/lib/app/voice/upload-scope.test.ts` pins it: every
-create site, and their **number**, against `APP_SCOPE`. A fourth ingestion path
-arriving on a sync without the scope would otherwise show up as uploads that
-quietly never appear in the table.
+is exactly what `listDesignatedDocuments` filters on.
+
+`tests/unit/lib/app/voice/upload-scope.test.ts` pins that agreement across the
+tier boundary, and pins **two** halves, because two things decide where a
+document lands:
+
+| Half                                                                   | Why it is the risk                                                                                                                                               |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@default("app")` on `AiKnowledgeDocument.scope`                       | Changed by a schema edit with **no TypeScript diff at all** — no import graph, and no reviewer's eye, connects it to this page                                   |
+| Every `aiKnowledgeDocument.create` under `lib/`, by site **and value** | `'app'` → `'system'` is a one-word diff that empties her list while everything else still passes; the seeder's deliberate `'system'` has to stay distinguishable |
+
+An ingestion path that simply _omits_ `scope` is **not** a risk — it defaults to
+`app` and appears in the table normally. The first version of this guard said
+otherwise; /code-review pushed on its narrowness and the schema settled which
+half was actually unpinned.
 
 **What she can do at upload that the table would not have allowed.** The zone's
 tag picker offers the whole managed taxonomy, the six designation tags included,
@@ -1106,9 +1136,11 @@ says so in its own `provenance` block. That is a feature-level check before ship
 **A user's voice leanings** — a filter over the overlays and the exemplars — are
 later still, and may not reach the core.
 
-**Five `upstream-gap` findings for Sunrise**, every one on a file whose blob is
-identical in all three tiers (so Daybreak could not action any of them). The
-three-way blob check in `CLAUDE.md` is what established that, per finding:
+**Six `upstream-gap` findings for Sunrise.** The three-way blob check in
+`CLAUDE.md` is what established the tier for each — the first five are on files
+whose blob is identical in all three tiers, so Daybreak could not action any of
+them; the sixth spans three files, two identical across tiers and one where
+Daybreak has diverged but the defect is in Sunrise's copy as well:
 
 1. `formatLockedContext` interpolates the raw `contextId` into the block header,
    and `contextId` is validated as `z.string().max(100)` — so the fence is
@@ -1130,3 +1162,16 @@ three-way blob check in `CLAUDE.md` is what established that, per finding:
    evaluating a prompt its users never receive, and nothing reports the
    difference. Found by t-28, which can therefore hear the always-on core and
    neither of the other two layers.
+6. **A dismissed PDF preview is stranded, in every tier.** `uploadPdfDocument`
+   creates the row in `pending_review`, and it is chunked only by a POST to the
+   confirm route, which only `pdf-preview-modal.tsx` makes. That modal is
+   dismissible (Escape / X / outside click), and nothing re-opens it — the
+   preview data lives in React state and is gone. `manage-tab.tsx` offers a
+   `pending_review` row a **Review** button, and it opens the CHUNKS modal, which
+   has no confirm action and nothing to show for a document whose whole problem
+   is that it has no chunks. Deleting it is the only exit. `pdf-preview-modal.tsx`
+   and `document-chunks-modal.tsx` are byte-identical across all three tiers;
+   `manage-tab.tsx` has diverged in Daybreak, but Sunrise's copy carries the same
+   dead Review button — so all three belong to Sunrise. Found by t-44's
+   /code-review. This leaf mitigates the invisibility (the table reloads on every
+   modal exit) but cannot supply the missing resume path.

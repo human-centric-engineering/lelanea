@@ -132,14 +132,17 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
   {
     path: 'tests/unit/lib/app/voice/upload-scope.test.ts',
     reason:
-      'reads `lib/orchestration/knowledge/document-manager.ts` off disk and ' +
-      'asserts every `aiKnowledgeDocument.create` site writes the scope our ' +
-      'designation table filters on — plus how MANY such sites there are. It ' +
-      'imports one constant and nothing else, so the branch it exists to ' +
-      'catch reaches it through no module graph at all: the change is a ' +
-      'DAYBREAK SYNC altering a Sunrise file, which selects whatever imports ' +
-      'that file and never this. The failure is silent either way — uploads ' +
-      'from `/admin/app/knowledge` succeed, rows exist, and the list is simply ' +
-      'short. t-44.',
+      'reads `prisma/schema/orchestration-knowledge.prisma` and every `.ts` ' +
+      'under `lib/` off disk, to pin the two things that decide where an ' +
+      'uploaded document lands: the `@default` on ' +
+      '`AiKnowledgeDocument.scope`, and the scope each ' +
+      '`aiKnowledgeDocument.create` site writes. The SCHEMA half is why this ' +
+      'is on the list — a Daybreak sync can change that one word with no diff ' +
+      'in any TypeScript file, so no module graph connects it to anything, and ' +
+      'every upload from `/admin/app/knowledge` would then land somewhere the ' +
+      'designation table cannot see while the uploads themselves still ' +
+      'succeed. (An omitted `scope` is NOT the risk — it defaults to `app` and ' +
+      'shows up fine. /code-review pushed on this guard being too narrow; the ' +
+      'schema settled which half was actually unpinned.) t-44.',
   },
 ];

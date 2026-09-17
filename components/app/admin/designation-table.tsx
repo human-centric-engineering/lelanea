@@ -149,6 +149,26 @@ export function DesignationTable({
    * so B's row un-dims and its selects re-enable while B's PATCH is still going.
    */
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * Set when a reload triggered by an upload came back no longer than before.
+   *
+   * The upload zone above offers the whole managed taxonomy, so she can attach a
+   * purpose at upload — and then the **Undesignated documents** filter correctly
+   * excludes the document she just added. A search term does the same for a name
+   * that does not match. Either way the zone clears its staged files and says
+   * nothing, the table looks untouched, and the upload reads as having failed.
+   * So the table says what happened instead (`HB10` — name the remedy, not the
+   * diagnosis). Caught by /code-review.
+   */
+  const [addedOutsideView, setAddedOutsideView] = useState(false);
+  /**
+   * The row count the table last saw, for comparing against an upload's reload.
+   *
+   * A ref rather than reading `meta` inside `fetchPage`: `meta` is state the
+   * fetch itself replaces, so a closure over it would compare the new total
+   * against the one captured when the callback was last built.
+   */
+  const lastTotalRef = useRef(initialMeta.total);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   /**
    * Which request is the current one. Incremented on dispatch and checked before
@@ -165,7 +185,8 @@ export function DesignationTable({
   }, []);
 
   const fetchPage = useCallback(
-    async (page: number, term: string, onlyUndesignated: boolean) => {
+    async (page: number, term: string, onlyUndesignated: boolean, afterUpload = false) => {
+      const totalBefore = lastTotalRef.current;
       const seq = requestSeqRef.current + 1;
       requestSeqRef.current = seq;
 
@@ -192,9 +213,19 @@ export function DesignationTable({
 
         setDocuments(parsed.data);
         const parsedMeta = parsePaginationMeta(parsed.meta);
-        if (parsedMeta) setMeta(parsedMeta);
+        if (parsedMeta) {
+          setMeta(parsedMeta);
+          lastTotalRef.current = parsedMeta.total;
+        }
         setAppliedUndesignatedOnly(onlyUndesignated);
         setLoadFailed(false);
+        // Only an upload's own reload can answer this, and only by comparing:
+        // "did the corpus this view can see actually grow?" A filter check alone
+        // would cry wolf on the common path — the undesignated filter on, an
+        // untagged upload — where the new document IS in view.
+        setAddedOutsideView(
+          afterUpload ? parsedMeta !== null && parsedMeta.total <= totalBefore : false
+        );
       } catch {
         if (requestSeqRef.current !== seq) return;
         // Said out loud rather than swallowed: a table that keeps showing the
@@ -220,12 +251,12 @@ export function DesignationTable({
    * the toggle and both pager buttons — goes through here.
    */
   const dispatchFetch = useCallback(
-    (page: number, term: string, onlyUndesignated: boolean) => {
+    (page: number, term: string, onlyUndesignated: boolean, afterUpload = false) => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
       }
-      void fetchPage(page, term, onlyUndesignated);
+      void fetchPage(page, term, onlyUndesignated, afterUpload);
     },
     [fetchPage]
   );
@@ -259,7 +290,7 @@ export function DesignationTable({
   useEffect(() => {
     if (lastReloadToken.current === reloadToken) return;
     lastReloadToken.current = reloadToken;
-    dispatchFetch(1, search, undesignatedOnly);
+    dispatchFetch(1, search, undesignatedOnly, true);
   }, [reloadToken, search, undesignatedOnly, dispatchFetch]);
 
   /**
@@ -373,6 +404,14 @@ export function DesignationTable({
       {error && (
         <p role="alert" className="text-destructive text-sm">
           {error}
+        </p>
+      )}
+
+      {addedOutsideView && (
+        <p role="status" className="text-muted-foreground text-sm">
+          Added — but it is not in the list below, because it does not match what you are looking
+          through. Clear the search{appliedUndesignatedOnly ? ' or the Undesignated filter' : ''} to
+          see it.
         </p>
       )}
 

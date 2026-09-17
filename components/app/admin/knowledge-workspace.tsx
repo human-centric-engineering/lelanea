@@ -27,7 +27,7 @@
  * `onUploadComplete` + `onPdfPreview`, so it arrives with nothing
  * orchestration-specific attached and needs no seam to make it fit.
  *
- * ## The PDF modal is not optional here, and that is the finding
+ * ## The PDF modal is not optional here, and what it does NOT close
  *
  * `onPdfPreview` is an optional prop, which reads as "omit it and PDFs just
  * upload". They do not. A PDF lands in `pending_review` with its extracted text
@@ -37,6 +37,24 @@
  * still shows a row. That is `HB10`: the guard exists, the remedy has to ship
  * beside it. `PdfPreviewModal` is Sunrise's too, and imported for the same
  * reasons.
+ *
+ * **It does not close the gap entirely, and the first version of this docblock
+ * claimed it did.** The modal is an ordinary Radix dialog: Escape, the X and an
+ * outside click all dismiss it, and a dismissed PDF is left in `pending_review`
+ * with no chunks. Blocking dismissal is not available — Sunrise's Discard
+ * button exits through the same `onOpenChange(false)` as the X, so a handler
+ * that refused `false` would break Discard as well. **And there is no resume
+ * path in any tier**: `manage-tab.tsx` offers a `pending_review` row a *Review*
+ * button, and it opens the CHUNKS modal, which has no confirm action and — on a
+ * document whose whole problem is that it has no chunks — nothing to show.
+ * Deleting it is the only exit Sunrise has. Recorded as an `upstream-gap` in
+ * `.context/app/voice.md`; a leaf cannot close it.
+ *
+ * What this page does instead is refuse to let it be INVISIBLE. Every exit from
+ * the modal reloads the table, so a dismissed PDF appears immediately as
+ * `0 chunks · pending_review` rather than sitting in the database where the only
+ * surface that would have shown it is the orchestration admin this feature
+ * exists to stop sending her to. Caught by /code-review.
  *
  * ## Nothing is passed about scope, because there is nothing to pass
  *
@@ -131,7 +149,23 @@ export function KnowledgeWorkspace({
       <PdfPreviewModal
         data={pdfPreview}
         open={pdfPreviewOpen}
-        onOpenChange={setPdfPreviewOpen}
+        onOpenChange={() => {
+          // Takes no `open` argument, and that is not a shortcut: the modal is
+          // fully controlled and renders no `DialogTrigger`, so Radix can only
+          // ever call this with `false`. Branching on it would be a dead arm
+          // that coverage then asks for a contrived test to reach.
+          setPdfPreviewOpen(false);
+          // EVERY exit reloads, not just a confirmed one. Sunrise routes
+          // confirm, discard and dismiss through this one callback, and the
+          // dismissal is the case that matters: it leaves a real row in
+          // `pending_review` that the table would otherwise not show until
+          // something else happened to refresh it. Invisible is the one thing
+          // that state must not be.
+          reload();
+        }}
+        // Kept wired as well, deliberately. Confirm reaches `onOpenChange(false)`
+        // above first, so this is a second bump and one extra GET — the price of
+        // not depending on upstream continuing to close the dialog on confirm.
         onConfirmed={reload}
       />
 

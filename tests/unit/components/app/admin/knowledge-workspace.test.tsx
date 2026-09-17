@@ -188,4 +188,55 @@ describe('the two acts are joined up', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
     expect(screen.getByDisplayValue('The text as the parser read it.')).toBeTruthy();
   });
+
+  it('refreshes when the PDF modal is DISMISSED, not only when it is confirmed', async () => {
+    // The modal is an ordinary Radix dialog — Escape, the X and an outside click
+    // all close it, and Sunrise routes its own Discard button through the same
+    // callback, so refusing the close would break Discard too. The row is real
+    // by then: `pending_review`, no chunks, and stranded, because no tier has a
+    // resume path for one. It must at least be VISIBLE — left out of the table,
+    // the only surface that would show it is the orchestration admin this page
+    // exists to stop sending her to.
+    zone.impl = (props) => (
+      <button
+        type="button"
+        onClick={() =>
+          (props.onPdfPreview as undefined | ((data: unknown) => void))?.({
+            document: {
+              id: 'pdf-1',
+              name: 'A talk',
+              fileName: 'talk.pdf',
+              status: 'pending_review',
+            },
+            preview: {
+              extractedText: 'Parsed text.',
+              title: null,
+              author: null,
+              sectionCount: 1,
+              warnings: [],
+              pages: null,
+              requiresConfirmation: true,
+            },
+          })
+        }
+      >
+        upload a pdf
+      </button>
+    );
+
+    const user = userEvent.setup();
+    render(<KnowledgeWorkspace initialDocuments={[]} initialMeta={META} />);
+
+    await user.click(screen.getByRole('button', { name: 'upload a pdf' }));
+    await screen.findByRole('dialog');
+    // Establish nothing has been re-requested yet, so the assertion after the
+    // dismissal is about the dismissal and not about the render.
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('/designations');
+  });
 });
