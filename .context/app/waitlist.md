@@ -557,6 +557,15 @@ line carrying the entry id and never the address. `deleteWaitlistEntry` in
   points at Admin → Users for the rest — without that sentence an admin answering
   "delete everything" would stop here believing they had.
 - Refusing on either state would recreate the gap one state over.
+- **Every pending invitation for the address goes with it**, in the same
+  transaction. An invitation — from the row (t-47) or from Admin → Users →
+  Invite — wrote the person's email and name into the platform's `verification`
+  table with a link that creates an account for seven days; an erasure that left
+  that behind would be complete in name only, one table over, with a working way
+  in. The code review of t-48 found it. Deleted by identifier rather than through
+  `deleteInvitationToken`, which logs the address; the `invitation:` prefix is
+  the platform's private constant and `admin.test.ts` pins ours against what
+  `generateInvitationToken` really writes.
 
 **On the surface** it is in a per-row overflow menu — "Delete their data…" — on
 every row, and deliberately not a button beside Remove: it must not be the thing

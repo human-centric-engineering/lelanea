@@ -328,8 +328,34 @@ export async function setWaitlistEntryRemoved(
  * the other when a link exists. Refusing on either state would recreate the
  * gap one state over.
  *
- * `deleteMany` rather than `delete`, so an id nothing matches is a count of
- * zero — the route's 404 — rather than a thrown P2025.
+ * ## The invitation goes with it
+ *
+ * An invitation from the row (t-47) — or from Admin → Users → Invite — wrote
+ * the person's address AND their name into the platform's `verification`
+ * table, under `invitation:<email>`, with a link that creates an account for
+ * up to seven days. An erasure that deleted the row and left that would be
+ * reporting the erasure complete while the data sat one table over, with a
+ * working way in — the exact failure `setWaitlistEntryRemoved`'s docblock warns
+ * about for `removedAt`. The code review of t-48 found it. So the entry's
+ * address is read first and every `invitation:` row for it is deleted in the
+ * same transaction, whichever surface raised it: it is the person's data
+ * either way. Unconditional rather than gated on `invitedAt`, because the
+ * platform's own page never stamps that column.
+ *
+ * Deleted by identifier here rather than through the platform's
+ * `deleteInvitationToken`, which logs the address on success and on failure —
+ * a copy of the thing being erased, written at the moment of erasing it. The
+ * `invitation:` prefix is the platform's private constant; `admin.test.ts`
+ * pins ours against what `generateInvitationToken` actually writes, so the two
+ * cannot drift silently. Exact match on a lower-cased address, as both invite
+ * routes store it — never `mode: 'insensitive'` (see `subjectMatch()`).
+ *
+ * An accepted invitation was consumed on acceptance (single-use), so a linked
+ * row has none; the delete then matches nothing, which is fine.
+ *
+ * `deleteMany` for the entry rather than `delete`, so an id nothing matches is
+ * a count of zero — the route's 404 — rather than a thrown P2025; and the read
+ * before it is what tells "no such row" from "raced".
  *
  * **What this does NOT leave behind:** a receipt. The platform's
  * `DataErasureReceipt` requires a `subjectUserId`, which a waitlist-only
@@ -339,8 +365,23 @@ export async function setWaitlistEntryRemoved(
  * rotates — see the known gap in `.context/app/waitlist.md`.
  */
 export async function deleteWaitlistEntry(id: string): Promise<boolean> {
-  const { count } = await prisma.appWaitlistEntry.deleteMany({ where: { id } });
-  return count === 1;
+  const row = await prisma.appWaitlistEntry.findUnique({ where: { id }, select: { email: true } });
+  if (!row) return false;
+
+  const [, entry] = await prisma.$transaction([
+    prisma.verification.deleteMany({ where: { identifier: invitationIdentifier(row.email) } }),
+    prisma.appWaitlistEntry.deleteMany({ where: { id } }),
+  ]);
+  return entry.count === 1;
+}
+
+/**
+ * The `verification.identifier` the platform's invitation helpers write for an
+ * address — `lib/utils/invitation-token.ts` keeps its prefix private, so this is
+ * a copy, and `admin.test.ts` pins it against the real helper's write.
+ */
+export function invitationIdentifier(email: string): string {
+  return `invitation:${email}`;
 }
 
 /**

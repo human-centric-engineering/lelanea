@@ -15,21 +15,47 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { findMany, count, update, findUnique, deleteMany } = vi.hoisted(() => ({
+const {
+  findMany,
+  count,
+  update,
+  findUnique,
+  deleteMany,
+  verificationDeleteMany,
+  verificationCreate,
+  transaction,
+} = vi.hoisted(() => ({
   findMany: vi.fn(),
   count: vi.fn(),
   update: vi.fn(),
   findUnique: vi.fn(),
   deleteMany: vi.fn(),
+  verificationDeleteMany: vi.fn(),
+  verificationCreate: vi.fn(),
+  // The array form: the "queries" are whatever the delegates returned, so
+  // `$transaction([a, b])` resolves to `[a, b]` — which is what the real client
+  // does with the promises it is handed.
+  transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 }));
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appWaitlistEntry: { findMany, count, updateMany: update, findUnique, deleteMany } },
+  prisma: {
+    appWaitlistEntry: { findMany, count, updateMany: update, findUnique, deleteMany },
+    verification: { deleteMany: verificationDeleteMany, create: verificationCreate },
+    $transaction: transaction,
+  },
+}));
+// The invitation helper logs the address on every call; silenced here so the
+// prefix-parity case below can call the real thing.
+vi.mock('@/lib/logging', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { generateInvitationToken } from '@/lib/utils/invitation-token';
 import {
   setWaitlistEntryRemoved,
   deleteWaitlistEntry,
+  invitationIdentifier,
   stampWaitlistEntryInvited,
   findWaitlistEntryForInvite,
   buildWaitlistSearchWhere,
@@ -358,9 +384,13 @@ describe('setWaitlistEntryRemoved', () => {
 });
 
 describe('deleteWaitlistEntry (t-48)', () => {
-  it('deletes the row outright, by id and nothing else', async () => {
+  beforeEach(() => {
+    findUnique.mockResolvedValue({ email: 'ada@example.com' });
     deleteMany.mockResolvedValue({ count: 1 });
+    verificationDeleteMany.mockResolvedValue({ count: 0 });
+  });
 
+  it('deletes the row outright, by id and nothing else', async () => {
     await expect(deleteWaitlistEntry('entry-1')).resolves.toBe(true);
 
     // A `delete`, not an `updateMany` — this is the one path on the surface
@@ -371,7 +401,53 @@ describe('deleteWaitlistEntry (t-48)', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('reports an id nothing matches as false, rather than throwing', async () => {
+  it('deletes every pending invitation for the address in the same transaction', async () => {
+    verificationDeleteMany.mockResolvedValue({ count: 1 });
+
+    await deleteWaitlistEntry('entry-1');
+
+    // An invitation wrote the address AND the name into `verification`, with a
+    // link that creates an account. Left behind, the erasure would be complete
+    // in name only — one table over, with a working way in. The code review of
+    // t-48 found it.
+    expect(verificationDeleteMany).toHaveBeenCalledWith({
+      where: { identifier: 'invitation:ada@example.com' },
+    });
+    // Exact match. `mode: 'insensitive'` is an ILIKE, and `_`/`%` in a local
+    // part would then delete a stranger's invitation.
+    expect(JSON.stringify(verificationDeleteMany.mock.calls)).not.toContain('insensitive');
+    // Both deletes in ONE transaction, so a failure leaves neither half done.
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the same identifier the platform helper writes', async () => {
+    // The prefix is private to `lib/utils/invitation-token.ts`; this is the
+    // parity pin. Drive the REAL helper against the mocked client and compare
+    // what it wrote with what our delete matches on.
+    verificationCreate.mockResolvedValue({});
+    await generateInvitationToken('ada@example.com', {
+      name: 'Ada',
+      role: 'USER',
+      invitedBy: 'admin-1',
+      invitedAt: '2026-09-17T00:00:00.000Z',
+    });
+
+    const written = verificationCreate.mock.calls[0]?.[0] as {
+      data: { identifier: string };
+    };
+    expect(written.data.identifier).toBe(invitationIdentifier('ada@example.com'));
+  });
+
+  it('reports an id nothing matches as false, and touches nothing', async () => {
+    findUnique.mockResolvedValue(null);
+
+    await expect(deleteWaitlistEntry('entry-1')).resolves.toBe(false);
+
+    expect(transaction).not.toHaveBeenCalled();
+    expect(verificationDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reports a row that vanished between the read and the delete as false', async () => {
     deleteMany.mockResolvedValue({ count: 0 });
 
     await expect(deleteWaitlistEntry('entry-1')).resolves.toBe(false);
