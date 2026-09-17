@@ -252,8 +252,9 @@ export async function collectWaitlistEntriesForExport(filter: WaitlistAdminFilte
  * deliberately blind to this column.
  *
  * Anyone reaching for this function to satisfy a "please delete my data" request
- * is in the wrong place: that is `eraseUser()`, and for someone with no account
- * there is no self-service path at all yet (see `.context/app/waitlist.md`).
+ * is in the wrong place: that is `deleteWaitlistEntry` below (t-48) — or, for
+ * someone with an account, `eraseUser()`. There is still no self-service path
+ * for a waitlist-only person (see `.context/app/waitlist.md`).
  *
  * ## Idempotent, and deliberately not a toggle
  *

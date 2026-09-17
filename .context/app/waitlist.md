@@ -413,15 +413,17 @@ deliberate:
 
 The **confirmation dialog says this out loud** — "this does not delete their
 data" — because the honest risk is not a misclick. It is an admin believing they
-have answered a "delete my data" request.
+have answered a "delete my data" request. Since t-48 it also names the act that
+does: "Delete their data, in the row's menu" (below).
 
-### `PATCH`, not `DELETE`
+### Removal is `PATCH`, not `DELETE`
 
 One route (`/api/v1/admin/app/waitlist/[id]`) taking `{ removed: boolean }`, which
 does both directions with one schema. `DELETE` is the obvious verb and the wrong
-one: nothing is deleted, and on this surface that distinction decides a GDPR
-answer, so a verb claiming a deletion is a verb that will eventually be read as
-having performed one.
+one for removal: nothing is deleted, and on this surface that distinction decides
+a GDPR answer, so a verb claiming a deletion is a verb that will eventually be
+read as having performed one. That reasoning is exactly what makes `DELETE` the
+right verb for erasure on the same path — see "Erasing someone".
 
 **The body is the state to REACH, not a toggle.** Two admins acting on the same
 row in the same minute would otherwise leave it in whichever state arrived last,
@@ -530,6 +532,51 @@ it.
 inserted. Anything already consuming a file from t-8 reads by column position as
 often as by name, so a new column in the middle silently shifts every field after
 it.
+
+## Erasing someone (t-48)
+
+John, 16 September 2026: _"it says deleting people from the waitlist is a
+different action from removing them, but there's no way to delete them."_ He was
+right. The removal dialog's "different act" was `eraseUser()`, which needs a
+`User` row — and nobody who only joined the waitlist has one. So an Art. 17
+request from a waitlist-only person had no operator path at all; the only answer
+was a hand-written SQL statement, which is what t-24's Remove was shipped to
+retire. A bug, not an enhancement: the surface promised something the product
+could not do for its entire population.
+
+**`DELETE /api/v1/admin/app/waitlist/[id]`** hard-deletes the row — email, name,
+answers, everything — `withAdminAuth`, 404 for an id nothing matches, and a log
+line carrying the entry id and never the address. `deleteWaitlistEntry` in
+`lib/app/waitlist/admin.ts` is a `deleteMany` by id with **no other clause**:
+
+- **A removed row is erased too.** Removed is a product state; the row is still
+  held in full and is still the subject's data.
+- **A linked row (t-46) is erased too, and only its waitlist answers.** The
+  account's own erasure is `eraseUser()`, whose hook would also have reached this
+  row; the two paths are independent. The dialog says so when a link exists and
+  points at Admin → Users for the rest — without that sentence an admin answering
+  "delete everything" would stop here believing they had.
+- Refusing on either state would recreate the gap one state over.
+
+**On the surface** it is in a per-row overflow menu — "Delete their data…" — on
+every row, and deliberately not a button beside Remove: it must not be the thing
+a hand reaches for. The confirmation is the removal dialog's mirror ("This erases
+their email address and everything they told us. There is no undo. Use this to
+answer a request to have their data deleted; to stop writing to them, use
+Remove.") and a plain two-click `AlertDialog`, not a typed word: it is one row,
+and a typed confirmation on every erasure trains dismissal of the one that
+matters. Erasing the last row on a page reuses the corrective re-read Remove
+already had.
+
+**What it does not leave behind: a receipt.** The platform's `DataErasureReceipt`
+requires a `subjectUserId`, which a waitlist-only person does not have, and
+writing an entry id into a column named for a user id would be a lie a later
+reader believes. The record that a request was honoured is the route's log line,
+which rotates — listed under Known gaps.
+
+This is the **admin's** way to erase on request. Idea #18 — a signed unsubscribe
+token — is the **subject's** own way off the list, and they are not the same
+work.
 
 ## Inviting someone, and the row coming off the list on its own
 
@@ -779,7 +826,14 @@ and the link is a real door for the invited (owner ruling, 16 September 2026).
   window and a scheduled purge (`.context/orchestration/retention.md` is the
   platform's precedent), and it is a task of its own rather than something to bolt
   onto a soft delete.
-- **An admin still cannot EDIT an entry**, only remove and restore it. Correcting
+- **An erasure from the row leaves no durable receipt.** `eraseUser()` writes a
+  `DataErasureReceipt` (hashed email, actor, time) so "did you erase me?" can be
+  answered without the data; the waitlist-only path (t-48) cannot, because the
+  model requires a `subjectUserId`. Its only record is the route's log line,
+  which rotates. The shape of the fix is a nullable `subjectUserId` plus a
+  subject kind on the platform model, or a leaf receipt table — a task of its
+  own.
+- **An admin still cannot EDIT an entry**, only remove, restore and erase it. Correcting
   an answer on someone's behalf is the same unverified-write problem as the public
   route's, and the same signed confirmation link closes both.
 - **An export leaves no durable audit row.** The record that a complete copy of
