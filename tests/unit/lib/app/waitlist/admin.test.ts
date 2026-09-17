@@ -15,19 +15,21 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { findMany, count, update, findUnique } = vi.hoisted(() => ({
+const { findMany, count, update, findUnique, deleteMany } = vi.hoisted(() => ({
   findMany: vi.fn(),
   count: vi.fn(),
   update: vi.fn(),
   findUnique: vi.fn(),
+  deleteMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appWaitlistEntry: { findMany, count, updateMany: update, findUnique } },
+  prisma: { appWaitlistEntry: { findMany, count, updateMany: update, findUnique, deleteMany } },
 }));
 
 import {
   setWaitlistEntryRemoved,
+  deleteWaitlistEntry,
   stampWaitlistEntryInvited,
   findWaitlistEntryForInvite,
   buildWaitlistSearchWhere,
@@ -352,6 +354,27 @@ describe('setWaitlistEntryRemoved', () => {
     // the read happens either way and is the only thing that can tell them apart.
     await expect(setWaitlistEntryRemoved('nope', true)).resolves.toBeNull();
     expect(findUnique).toHaveBeenCalled();
+  });
+});
+
+describe('deleteWaitlistEntry (t-48)', () => {
+  it('deletes the row outright, by id and nothing else', async () => {
+    deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(deleteWaitlistEntry('entry-1')).resolves.toBe(true);
+
+    // A `delete`, not an `updateMany` — this is the one path on the surface
+    // that IS the erasure. And no `removedAt: null` or `userId: null` in the
+    // WHERE: a removed row is still held in full, and a linked row's waitlist
+    // answers are erased here and only here.
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: 'entry-1' } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('reports an id nothing matches as false, rather than throwing', async () => {
+    deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(deleteWaitlistEntry('entry-1')).resolves.toBe(false);
   });
 });
 

@@ -18,20 +18,21 @@ import {
   mockUnauthenticatedUser,
 } from '@/tests/helpers/auth';
 
-const { setWaitlistEntryRemoved, routeLog } = vi.hoisted(() => ({
+const { setWaitlistEntryRemoved, deleteWaitlistEntry, routeLog } = vi.hoisted(() => ({
   setWaitlistEntryRemoved: vi.fn(),
+  deleteWaitlistEntry: vi.fn(),
   routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
-vi.mock('@/lib/app/waitlist/admin', () => ({ setWaitlistEntryRemoved }));
+vi.mock('@/lib/app/waitlist/admin', () => ({ setWaitlistEntryRemoved, deleteWaitlistEntry }));
 vi.mock('@/app/api/v1/admin/app/waitlist/_shared/route-logger', () => ({
   getWaitlistRouteLogger: () => Promise.resolve(routeLog),
 }));
 
 import { auth } from '@/lib/auth/config';
-import { PATCH } from '@/app/api/v1/admin/app/waitlist/[id]/route';
+import { PATCH, DELETE } from '@/app/api/v1/admin/app/waitlist/[id]/route';
 
 /** A real cuid shape — `cuidSchema` rejects anything else. */
 const ENTRY_ID = 'cmtso8tdu000p0bgmhn1v7lao';
@@ -63,9 +64,17 @@ function request(body: unknown, id = ENTRY_ID) {
   return [req, { params: Promise.resolve({ id }) }] as const;
 }
 
+function deleteRequest(id = ENTRY_ID) {
+  const req = new Request(`https://lelanea.com/api/v1/admin/app/waitlist/${id}`, {
+    method: 'DELETE',
+  }) as unknown as NextRequest;
+  return [req, { params: Promise.resolve({ id }) }] as const;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   setWaitlistEntryRemoved.mockResolvedValue(ENTRY);
+  deleteWaitlistEntry.mockResolvedValue(true);
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
 });
 
@@ -179,5 +188,83 @@ describe('PATCH /api/v1/admin/app/waitlist/:id', () => {
       'Waitlist entry restored',
       expect.objectContaining({ removed: false })
     );
+  });
+});
+
+describe('DELETE /api/v1/admin/app/waitlist/:id (t-48)', () => {
+  it('answers 401 when nobody is signed in, and erases nothing', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
+
+    const response = await DELETE(...deleteRequest());
+
+    expect(response.status).toBe(401);
+    expect(deleteWaitlistEntry).not.toHaveBeenCalled();
+  });
+
+  it('answers 403 for a signed-in non-admin, and erases nothing', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
+
+    const response = await DELETE(...deleteRequest());
+
+    // Erasure is the one act on this surface that cannot be undone; it is
+    // admin-only for the same reason the list is.
+    expect(response.status).toBe(403);
+    expect(deleteWaitlistEntry).not.toHaveBeenCalled();
+  });
+
+  it('erases the row and answers with its id', async () => {
+    const response = await DELETE(...deleteRequest());
+
+    expect(response.status).toBe(200);
+    expect(deleteWaitlistEntry).toHaveBeenCalledWith(ENTRY_ID);
+    const body = (await response.json()) as { success: boolean; data: { id: string } };
+    expect(body.success).toBe(true);
+    // The id and nothing else — the address must not survive the erasure in a
+    // response any more than in a log.
+    expect(body.data).toEqual({ id: ENTRY_ID });
+  });
+
+  it('does not read the row first — removed and linked rows are erased alike', async () => {
+    await DELETE(...deleteRequest());
+
+    // No `findUnique` before the delete, so there is no state the route could
+    // refuse on. A refusal on `removedAt` or `userId` would recreate, one state
+    // over, exactly the gap this route closes: a request with no operator path.
+    expect(deleteWaitlistEntry).toHaveBeenCalledTimes(1);
+    expect(deleteWaitlistEntry.mock.calls[0]).toEqual([ENTRY_ID]);
+  });
+
+  it('answers 404 for an id nothing matches, rather than a cheerful 200', async () => {
+    deleteWaitlistEntry.mockResolvedValue(false);
+
+    const response = await DELETE(...deleteRequest());
+
+    // An admin answering a request needs to know whether THIS click did it.
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects an id that is not a cuid, before touching the table', async () => {
+    const response = await DELETE(...deleteRequest('not-a-cuid'));
+
+    expect(response.status).toBe(400);
+    expect(deleteWaitlistEntry).not.toHaveBeenCalled();
+  });
+
+  it('logs the entry id, and nobody’s address', async () => {
+    await DELETE(...deleteRequest());
+
+    const logged = JSON.stringify(routeLog.info.mock.calls);
+    expect(logged).not.toContain('ada@example.com');
+    expect(routeLog.info).toHaveBeenCalledWith('Waitlist entry erased', { entryId: ENTRY_ID });
+  });
+
+  it('logs nothing when there was nothing to erase', async () => {
+    deleteWaitlistEntry.mockResolvedValue(false);
+
+    await DELETE(...deleteRequest());
+
+    // The log line is the only record the request was honoured; a line for a
+    // 404 would say it was when it was not.
+    expect(routeLog.info).not.toHaveBeenCalled();
   });
 });
