@@ -304,6 +304,45 @@ export async function setWaitlistEntryRemoved(
 }
 
 /**
+ * Erase a waitlist entry outright — the admin's answer to "please delete my
+ * data" from someone who has no account (t-48).
+ *
+ * ## The gap this closes
+ *
+ * `setWaitlistEntryRemoved` is a product state and says so; the platform's
+ * erasure, `eraseUser()`, needs a `User` row. Nobody who only joined the
+ * waitlist has one, so until this existed an Art. 17 request from a
+ * waitlist-only person had no operator path — the removal dialog named "a
+ * different act" that the surface could not perform for its whole population,
+ * and the only real answer was a hand-written SQL statement, which is exactly
+ * what t-24's Remove was shipped to retire.
+ *
+ * ## Deletes regardless of `removedAt` or `userId`
+ *
+ * A removed row is still held in full and is still the subject's data. A row
+ * linked to an account (t-46) is erased here too, and only here: this deletes
+ * the waitlist answers and nothing else. The account's own erasure is
+ * `eraseUser()`, whose hook (`eraseWaitlistEntriesForUser`) would also have
+ * reached this row — the two paths are independent and the dialog points at
+ * the other when a link exists. Refusing on either state would recreate the
+ * gap one state over.
+ *
+ * `deleteMany` rather than `delete`, so an id nothing matches is a count of
+ * zero — the route's 404 — rather than a thrown P2025.
+ *
+ * **What this does NOT leave behind:** a receipt. The platform's
+ * `DataErasureReceipt` requires a `subjectUserId`, which a waitlist-only
+ * person does not have, and writing an entry id into a column named for a
+ * user id would be a lie a later reader believes. The record that the request
+ * was honoured is the route's log line (entry id, never the address), which
+ * rotates — see the known gap in `.context/app/waitlist.md`.
+ */
+export async function deleteWaitlistEntry(id: string): Promise<boolean> {
+  const { count } = await prisma.appWaitlistEntry.deleteMany({ where: { id } });
+  return count === 1;
+}
+
+/**
  * The row an invitation is about, as the invite route needs to see it: the
  * address to write to, the name to greet by, and the two states that refuse.
  *

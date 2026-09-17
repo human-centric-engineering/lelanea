@@ -41,7 +41,9 @@ import {
   ChevronRight,
   Copy,
   Download,
+  MoreHorizontal,
   RotateCcw,
+  Trash2,
   Search,
   Send,
   UserMinus,
@@ -66,6 +68,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -117,6 +125,20 @@ interface WaitlistTableProps {
 interface PendingRemoval {
   id: string;
   email: string;
+}
+
+/**
+ * What the ERASURE confirmation is asking about.
+ *
+ * `linked` changes the copy: a row that became an account (t-46) is erased
+ * here as the waitlist answers only, and the dialog has to say where the rest
+ * of that person's data is erased — or the admin believes they have answered
+ * the whole request.
+ */
+interface PendingErasure {
+  id: string;
+  email: string;
+  linked: boolean;
 }
 
 /**
@@ -246,6 +268,7 @@ export function WaitlistTable({
    */
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
+  const [pendingErasure, setPendingErasure] = useState<PendingErasure | null>(null);
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
   /** The name field of the invitation dialog, seeded from the row when it opens. */
   const [inviteName, setInviteName] = useState('');
@@ -414,6 +437,34 @@ export function WaitlistTable({
             : removed
               ? 'That entry was not removed. Try again.'
               : 'That entry was not restored. Try again.'
+        );
+      } finally {
+        setMutatingId(null);
+      }
+    },
+    [appliedFilters, appliedSearch, fetchPage, meta.page]
+  );
+
+  /**
+   * Erase an entry outright — the answer to "please delete my data" from
+   * someone with no account (t-48).
+   *
+   * Re-fetches the page the way `setRemoved` does, and for the same reason: the
+   * row is gone whatever the filters say, so the totals move, and erasing the
+   * last row on the last page must not strand the admin past the end —
+   * `fetchPage` already re-reads the last page that exists.
+   */
+  const eraseEntry = useCallback(
+    async (id: string) => {
+      setMutatingId(id);
+      setError(null);
+      setNotice(null);
+      try {
+        await apiClient.delete(`${WAITLIST_ADMIN_ENDPOINT}/${id}`);
+        await fetchPage(meta.page, appliedSearch, appliedFilters);
+      } catch (err) {
+        setError(
+          err instanceof APIClientError ? err.message : 'That entry was not erased. Try again.'
         );
       } finally {
         setMutatingId(null);
@@ -687,67 +738,105 @@ export function WaitlistTable({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {entry.removedAt ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={mutatingId === entry.id}
-                        onClick={() => {
-                          // A plain undo when the admin is reversing their own
-                          // action: no ceremony, and itself undoable by removing
-                          // again. A dialog in every direction trains people to
-                          // dismiss the one that matters.
-                          //
-                          // But a re-submission changes what the click MEANS. The
-                          // form proves nothing about who submitted it, so restoring
-                          // on the strength of one may be putting someone back on a
-                          // list they asked to leave, at a stranger's instigation.
-                          // That is the gap the security review found between D9's
-                          // code and D9's surface, and this is where it closes.
-                          if (entry.rejoinRequests > 0) {
-                            setPendingRestore({
-                              id: entry.id,
-                              email: entry.email,
-                              rejoinRequests: entry.rejoinRequests,
-                            });
-                            return;
-                          }
-                          void setRemoved(entry.id, false);
-                        }}
-                      >
-                        <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
-                        Restore
-                      </Button>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1">
-                        {/*
+                    <div className="flex items-center justify-end gap-1">
+                      {entry.removedAt ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={mutatingId === entry.id}
+                          onClick={() => {
+                            // A plain undo when the admin is reversing their own
+                            // action: no ceremony, and itself undoable by removing
+                            // again. A dialog in every direction trains people to
+                            // dismiss the one that matters.
+                            //
+                            // But a re-submission changes what the click MEANS. The
+                            // form proves nothing about who submitted it, so restoring
+                            // on the strength of one may be putting someone back on a
+                            // list they asked to leave, at a stranger's instigation.
+                            // That is the gap the security review found between D9's
+                            // code and D9's surface, and this is where it closes.
+                            if (entry.rejoinRequests > 0) {
+                              setPendingRestore({
+                                id: entry.id,
+                                email: entry.email,
+                                rejoinRequests: entry.rejoinRequests,
+                              });
+                              return;
+                            }
+                            void setRemoved(entry.id, false);
+                          }}
+                        >
+                          <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
+                          Restore
+                        </Button>
+                      ) : (
+                        <>
+                          {/*
                           No Invite once they have joined — the route would 409,
                           and the button would be an offer to write to someone who
                           is already in. Remove stays: it is still their row.
                         */}
-                        {!entry.joinedAt && (
+                          {!entry.joinedAt && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={mutatingId === entry.id}
+                              onClick={() => openInvite(entry)}
+                            >
+                              <Send className="mr-1.5 h-4 w-4" aria-hidden />
+                              {entry.invitedAt ? 'Resend' : 'Invite'}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="text-destructive hover:text-destructive"
                             disabled={mutatingId === entry.id}
-                            onClick={() => openInvite(entry)}
+                            onClick={() => setPendingRemoval({ id: entry.id, email: entry.email })}
                           >
-                            <Send className="mr-1.5 h-4 w-4" aria-hidden />
-                            {entry.invitedAt ? 'Resend' : 'Invite'}
+                            <UserMinus className="mr-1.5 h-4 w-4" aria-hidden />
+                            Remove
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          disabled={mutatingId === entry.id}
-                          onClick={() => setPendingRemoval({ id: entry.id, email: entry.email })}
-                        >
-                          <UserMinus className="mr-1.5 h-4 w-4" aria-hidden />
-                          Remove
-                        </Button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                      {/*
+                      Erasure lives in an overflow menu, on every row, and is
+                      deliberately NOT a button in the row: it must not be the
+                      thing a hand reaches for beside Remove. One extra click is
+                      the whole of the friction, and it is the right amount — a
+                      typed confirmation on every erasure would train dismissal of
+                      the one that matters.
+                    */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            disabled={mutatingId === entry.id}
+                            aria-label={`More actions for ${entry.email}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() =>
+                              setPendingErasure({
+                                id: entry.id,
+                                email: entry.email,
+                                linked: entry.userId !== null,
+                              })
+                            }
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                            Delete their data…
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -797,8 +886,10 @@ export function WaitlistTable({
         The copy names the person and says what removal IS and IS NOT, because
         the honest risk here is not a misclick: it is an admin believing they
         have answered a "delete my data" request. They have not — the row keeps
-        the address and the answers, and the only thing that erases them is
-        account erasure.
+        the address and the answers. The act that does erase them is Delete, in
+        the row's menu (t-48), and the last sentence points at it by name: until
+        it existed the dialog named "a different act" the surface could not
+        perform for anyone on the list.
       */}
       <AlertDialog
         open={pendingRemoval !== null}
@@ -816,7 +907,8 @@ export function WaitlistTable({
               <br />
               <strong>This does not delete their data.</strong> The entry keeps their email address
               and everything they told us. If they have asked to have their data erased, that is a
-              different act and this is not it.
+              different act — <strong>Delete their data</strong>, in the row’s menu — and this is
+              not it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -882,6 +974,58 @@ export function WaitlistTable({
               }}
             >
               Put back on the list
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/*
+        The erasure confirmation — the removal dialog's mirror. Where that one
+        says "this does not delete their data", this one says it does, and that
+        there is no undo, and which of the two acts each request is for.
+
+        A linked row (t-46) gets one more sentence: this erases the waitlist
+        answers only, and the account's own erasure is elsewhere. Without it an
+        admin answering a "delete everything" request would stop here believing
+        they had.
+      */}
+      <AlertDialog
+        open={pendingErasure !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingErasure(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete everything we hold about {pendingErasure?.email}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This erases their email address and everything they told us.{' '}
+              <strong>There is no undo.</strong> Use this to answer a request to have their data
+              deleted; to stop writing to them, use Remove instead.
+              {pendingErasure?.linked && (
+                <>
+                  <br />
+                  <br />
+                  <strong>They have an account.</strong> This deletes only what they gave us on the
+                  waitlist. Erasing the account itself — and everything else we hold — is done from
+                  Admin → Users, and a request to delete their data usually means both.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep their data</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const target = pendingErasure;
+                setPendingErasure(null);
+                if (target) void eraseEntry(target.id);
+              }}
+            >
+              Delete their data
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
