@@ -105,7 +105,12 @@ const ENTRY = {
 
 interface Body {
   success: boolean;
-  data: { entry: { invitedAt: string | null }; emailStatus: string; expiresAt: string };
+  data: {
+    entry: { invitedAt: string | null };
+    emailStatus: string;
+    expiresAt: string;
+    link: string;
+  };
   error?: { code: string; message: string; details?: { reason?: string; field?: string } };
 }
 
@@ -357,6 +362,10 @@ describe('POST /api/v1/admin/app/waitlist/:id/invite', () => {
     const body = (await response.json()) as Body;
     expect(body.data.emailStatus).toBe('failed');
     expect(stampWaitlistEntryInvited).toHaveBeenCalledTimes(1);
+    // And the link travels, as the platform's route returns it: when the email
+    // did not go, handing it over by another channel is the remedy.
+    expect(body.data.link).toContain('token=fresh-token');
+    expect(body.data.link).toContain('email=ada%40example.com');
   });
 
   it('logs the entry id and the outcome, and nobody’s address or name', async () => {

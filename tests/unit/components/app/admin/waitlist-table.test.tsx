@@ -679,6 +679,7 @@ describe('WaitlistTable', () => {
         entry: entry({ invitedAt: '2026-09-17T09:00:00.000Z' }),
         emailStatus: 'sent',
         expiresAt: '2026-09-24T09:00:00.000Z',
+        link: 'https://lelanea.com/accept-invite?token=t&email=ada%40example.com',
       });
     });
 
@@ -799,17 +800,32 @@ describe('WaitlistTable', () => {
         entry: entry({ invitedAt: '2026-09-17T09:00:00.000Z' }),
         emailStatus: 'failed',
         expiresAt: '2026-09-24T09:00:00.000Z',
+        link: 'https://lelanea.com/accept-invite?token=t&email=ada%40example.com',
       });
       render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
 
       await user.click(screen.getByRole('button', { name: 'Invite' }));
       await user.click(screen.getByRole('button', { name: 'Send invitation' }));
 
-      // The badge alone would read as "they have it". The invitation exists and
-      // Resend is the remedy, so the notice names it.
+      // The badge alone would read as "they have it". The invitation exists;
+      // Resend and the link are the remedies, so the notice names both.
       await waitFor(() =>
         expect(screen.getByRole('status').textContent).toContain('the email did not send')
       );
+      expect(screen.getByRole('button', { name: 'Copy invitation link' })).toBeTruthy();
+    });
+
+    it('does not offer the link when the email went', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      await user.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toBeTruthy());
+      // A live credential on screen is for the case with no other channel, not
+      // the default.
+      expect(screen.queryByRole('button', { name: 'Copy invitation link' })).toBeNull();
     });
 
     it('surfaces the server’s refusal, and re-reads the row that moved', async () => {

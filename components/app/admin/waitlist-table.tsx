@@ -39,6 +39,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   RotateCcw,
   Search,
@@ -88,6 +89,7 @@ import {
   waitlistAdminInviteEndpoint,
 } from '@/lib/app/waitlist/endpoint';
 import { apiClient, APIClientError } from '@/lib/api/client';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import type { EmailStatus } from '@/lib/email/send';
 
 /** How much of a long answer is shown before the row offers the rest. */
@@ -147,6 +149,18 @@ interface InviteResult {
   entry: WaitlistAdminEntry;
   emailStatus: EmailStatus;
   expiresAt: string;
+  link: string;
+}
+
+/**
+ * The outcome of the last invitation, which is not an error even when the
+ * email did not go: the invitation exists either way. `link` is kept only when
+ * it did not, so the admin can hand it over some other way — the one remedy
+ * that does not depend on the thing that just failed (`HB10`).
+ */
+interface InviteNotice {
+  text: string;
+  link: string | null;
 }
 
 /**
@@ -238,12 +252,8 @@ export function WaitlistTable({
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /**
-   * The outcome of the last invitation, which is not an error even when the
-   * email did not go: the invitation exists either way, and what the admin
-   * needs to know is whether to expect the person to have received it.
-   */
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<InviteNotice | null>(null);
+  const { copied, copy } = useCopyToClipboard();
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   /**
    * Which request is the current one. Incremented on dispatch, checked before
@@ -433,13 +443,20 @@ export function WaitlistTable({
           body: { name },
         });
         // Said out loud when the email did NOT go, because the badge alone reads
-        // as "they have it". The invitation exists and Resend is the remedy.
+        // as "they have it". The invitation exists; Resend and the link are the
+        // remedies.
         setNotice(
           result.emailStatus === 'sent'
-            ? `Invitation sent to ${result.entry.email}.`
+            ? { text: `Invitation sent to ${result.entry.email}.`, link: null }
             : result.emailStatus === 'disabled'
-              ? `Invitation created for ${result.entry.email}, but no email was sent — email is not configured here.`
-              : `Invitation created for ${result.entry.email}, but the email did not send. Try “Resend”.`
+              ? {
+                  text: `Invitation created for ${result.entry.email}, but no email was sent — email is not configured here. Send them the link yourself.`,
+                  link: result.link,
+                }
+              : {
+                  text: `Invitation created for ${result.entry.email}, but the email did not send. Try “Resend”, or send them the link yourself.`,
+                  link: result.link,
+                }
         );
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
@@ -534,9 +551,23 @@ export function WaitlistTable({
         </p>
       )}
       {notice && (
-        <p role="status" className="text-muted-foreground text-sm">
-          {notice}
-        </p>
+        <div
+          role="status"
+          className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm"
+        >
+          <span>{notice.text}</span>
+          {notice.link && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void copy(notice.link ?? '')}
+            >
+              <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {copied ? 'Copied' : 'Copy invitation link'}
+            </Button>
+          )}
+        </div>
       )}
 
       <div className="rounded-md border">

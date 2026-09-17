@@ -572,8 +572,11 @@ route's rules on its own merits rather than copying its code (`fp5`):
   invitation exists, before the email is attempted, because the invitation IS
   the state: Sunrise's Invitations tab lists it from the same verification store
   whether or not the email went. `emailStatus` in the response says whether it
-  did, and the table says so out loud when it did not; Resend is the remedy
-  (`HB10`).
+  did, and the table says so out loud when it did not. The response also carries
+  the invitation `link`, as the platform's route does, and the table offers a
+  "Copy invitation link" only in that case — handing it over by another channel
+  is the one remedy that does not depend on the thing that just failed
+  (`HB10`); Resend is the other.
 
 **What the platform logs on our behalf.** The route's own lines carry the entry
 id and the outcome, never the address, through `_shared/route-logger.ts` like

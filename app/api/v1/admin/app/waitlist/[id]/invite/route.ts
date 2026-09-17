@@ -11,8 +11,11 @@
  * rather than sending "Hi ,". A name in the body wins over the row's, so an
  * admin can correct one without editing the entry.
  *
- * Responds 201 with `{ entry, emailStatus, expiresAt }` — the row as it now
- * stands (`invitedAt` stamped) and whether the email actually went. Refuses:
+ * Responds 201 with `{ entry, emailStatus, expiresAt, link }` — the row as it
+ * now stands (`invitedAt` stamped), whether the email actually went, and the
+ * invitation link itself, as the platform's route returns it: when the email
+ * did not go, handing the link over by another channel is the only remedy that
+ * does not depend on the thing that just failed (`HB10`). Refuses:
  * 404 for an id nothing matches; 409 for a removed row, for a row that has
  * already joined, and for an address that already has an account; 400 for no
  * name; 429 from the invitation limiter.
@@ -203,6 +206,7 @@ export const POST = withAdminAuth<{ id: string }>(async (request, session, { par
       entry: { ...entry, invitedAt: invitedAt.toISOString() },
       emailStatus: emailResult.status,
       expiresAt: expiresAt.toISOString(),
+      link: invitationUrl,
     },
     undefined,
     { status: 201 }
