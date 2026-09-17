@@ -96,6 +96,12 @@ explorations — is validated but not served, and lives in
 All four carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
 all four keep the platform's `private, no-cache` default.
 
+The `withAuth` route declares `ownership: { decidedBy: 'nothing' }` (Sunrise
+0.12.0's authorization seam — `.context/auth/authorization.md`): it serves
+published content and has no per-user rows to narrow. The declaration is
+load-bearing, not decoration — without it the guard answers every non-admin
+member 500 (`OwnershipDecisionMissingError`).
+
 The ETag is recomputed per request and deliberately not memoised, even though
 the payloads are constant for the life of the process. `computeETag` lives in
 `lib/api/etag.ts`, which imports `node:crypto`; caching it inside

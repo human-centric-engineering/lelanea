@@ -91,6 +91,13 @@ identity acts; a key acts _as_ its owner, which is exactly the property that
 makes it wrong here. The read refuses too, so a client cannot read the gate as
 proof the key may proceed.
 
+Both verbs declare `ownership: { decidedBy: 'self' }` (Sunrise 0.12.0's
+authorization seam — `.context/auth/authorization.md`): every read and write is
+keyed on `session.user.id`. Not `'policy'` — `subjectScope` widens to `{}` for
+a platform admin, which on a self endpoint would hand an admin everyone else's
+gate status. The declaration is load-bearing: without it the guard answers
+every non-admin member 500 (`OwnershipDecisionMissingError`).
+
 - `GET /api/v1/app/acknowledgements` — the caller's `GateStatus`: `complete`,
   `outstanding[]`, and `kinds[]` each with `requiredVersion`, `documentId`
   (`null` for `age_18`), `satisfied`, `acknowledgedAt`.
