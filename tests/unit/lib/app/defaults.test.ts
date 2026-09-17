@@ -920,16 +920,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // Daybreak's two, declared in the bridge itself.
         'tests/unit/prisma/framework-boot-seed.test.ts',
         'tests/unit/scripts/release/changelog-structure.test.ts',
-        // LELAÑEA's five, spread after them from `leaf-ci.ts`. Pinned here as
+        // LELAÑEA's six, spread after them from `leaf-ci.ts`. Pinned here as
         // well as on the row below because this row is what proves the bridge
         // actually REACHES the leaf seam — the leaf row alone would still pass
         // if the spread were dropped, and every scoped run would then silently
-        // stop loading these five.
+        // stop loading these six.
         'tests/unit/components/app/ui/tokens-only.test.ts',
         'tests/unit/app/public/authored-provenance.test.ts',
         'tests/unit/context/app-docs-paths.test.ts',
         'tests/unit/app/shell-not-found-streaming.test.ts',
         'tests/unit/components/app/shell/chrome.test.tsx',
+        'tests/unit/lib/app/voice/upload-scope.test.ts',
       ]);
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
         'lib/framework/facilitation/evaluation/conversation.ts',
@@ -965,6 +966,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/context/app-docs-paths.test.ts',
         'tests/unit/app/shell-not-found-streaming.test.ts',
         'tests/unit/components/app/shell/chrome.test.tsx',
+        'tests/unit/lib/app/voice/upload-scope.test.ts',
       ]);
       expect(leafOwnerlessSurfaceExceptions).toEqual([]);
     },

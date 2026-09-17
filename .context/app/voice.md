@@ -903,6 +903,7 @@ touch.
 | `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus`    |
 | `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                       |
 | `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                            |
+| `components/app/admin/knowledge-workspace.tsx`          | The uploader above the table, and the two joined up                     |
 | `components/app/admin/designation-table.tsx`            | The table                                                               |
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
@@ -912,14 +913,126 @@ Routes: `GET /api/v1/admin/app/knowledge/designations` and
 ## The surface
 
 `/admin/app/knowledge` — **Training material** in the Lelañea admin section —
-lists every document uploaded into this install with its purpose, sensitivity,
-licensing note, and an **Agent may quote** column showing the consequence of the
-answer on the same screen.
+is one page doing two things. At the top she **adds** material; under it she says
+what each document is **for**, with its purpose, sensitivity, licensing note and
+an **Agent may quote** column showing the consequence of the answer on the same
+screen.
 
-The first control is the **Undesignated documents** filter. That is the point of
-the page rather than a convenience: an undesignated document reaches nothing, but
-on screen it looks exactly like one that reaches everything, and that confusion
-is what this feature exists to remove.
+The first control on the table is the **Undesignated documents** filter. That is
+the point of the page rather than a convenience: an undesignated document reaches
+nothing, but on screen it looks exactly like one that reaches everything, and
+that confusion is what this feature exists to remove.
+
+### The uploader is Sunrise's, IMPORTED — not copied, not adapted (t-44)
+
+Until t-44 only the second act was here, and the table's empty state had to send
+her to **AI Orchestration → Knowledge** to put anything in it — a tier of the
+admin she has no other reason to visit, built for someone operating an agent
+platform rather than someone curating a corpus.
+
+`components/app/admin/knowledge-workspace.tsx` closes that by importing two
+Sunrise-owned components and rendering them above the table:
+
+| Imported                                                            | Why it is there                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------- |
+| `components/admin/orchestration/knowledge/document-upload-zone.tsx` | The uploader: parsers, size and batch caps, tags  |
+| `components/admin/orchestration/knowledge/pdf-preview-modal.tsx`    | The confirm step a PDF cannot be ingested without |
+
+**Importing beats copying, and the reason is not tidiness.** Both files are
+Sunrise's. Imported, the platform's parsers, its 50 MB / ten-file limits, its PDF
+flow and every future improvement merge through, and this leaf carries no row in
+[`divergences.md`](./divergences.md). Copied or adapted, we would own a file
+forever and re-solve it on every sync (`sunrise.divergences`); editing the
+platform's copy so it fits one leaf is what `HB7` exists to stop. If it ever
+genuinely cannot be reused without a change, that change is a **generic seam
+carried in the platform file**, with a ledger row and an upstream issue (`B19`,
+`B7`) — not a fork-specific edit, and not a copy.
+
+**Nothing had to be hidden, which is not what the plan assumed.** The premise was
+that the app surface would have to suppress a scope selector and a built-in
+reference panel. Neither is in the upload zone: the scope segmented control lives
+in `knowledge-view.tsx` and the _Agentic Design Patterns_ panel in
+`manage-tab.tsx`, both siblings. `DocumentUploadZone`'s whole surface is
+`onUploadComplete` + `onPdfPreview`.
+
+**`onPdfPreview` is optional in the type and not optional here.** A PDF lands in
+`pending_review` with its extracted text in `metadata` and is chunked only when
+something POSTs the confirm route. Render the zone without the modal and every
+PDF strands in a state the page offers no way out of, while `onUploadComplete()`
+fires and the table gains a row — so it reads as having worked. That is `HB10`:
+the remedy ships beside the guard.
+
+**The modal does not close that gap entirely.** It is an ordinary Radix dialog,
+so Escape, the X and an outside click all dismiss it, leaving the document in
+`pending_review` with no chunks — and **no tier has a resume path**, which is
+upstream gap 6 below. Refusing the dismissal is not available: Sunrise's own
+Discard button exits through the same `onOpenChange(false)` as the X, so a
+handler that rejected `false` would break Discard too. What this page does
+instead is refuse to let the state be _invisible_ — **every** exit from the modal
+reloads the table, so a dismissed PDF shows up at once as
+`0 chunks · pending_review` rather than sitting in the database where only the
+orchestration admin would have shown it.
+
+**An upload that lands outside the filter she is looking through says so.** The
+zone offers the whole taxonomy, so she can designate at upload and the
+**Undesignated documents** filter then correctly excludes what she just added; a
+search term does the same to a name that does not match. The zone clears its
+staged files and says nothing, so without this the table looks untouched and the
+upload reads as having failed.
+
+Three conditions, and dropping any one of them put something untrue on screen in
+review:
+
+| Condition                                                                       | What it stops                                                                                                                    |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| The refresh followed an **add** — the parent says so, the table cannot infer it | Discarding a PDF deletes the row and refreshes too; inferring from the refresh announced "Added" about a document just destroyed |
+| The visible row count did **not grow**                                          | A filter check alone cries wolf on the common path — filter on, untagged upload — where the document IS in view                  |
+| Something is actually **narrowing the view**                                    | With nothing filtering there is no remedy to offer, and nothing was added                                                        |
+
+The sentence names only the clauses actually active, so it never sends her to
+clear a search she never typed. And it is a fact followed by a conditional
+("Nothing new in the list below. If the upload succeeded, clear the …"), because
+one case is genuinely indistinguishable from here: Sunrise's zone calls
+`onUploadComplete()` after a bulk upload in which **every file errored**, and
+passes no result either way. The zone's own error sits directly above when that
+happens.
+
+**Nothing about scope is passed, because there is nothing to pass.**
+`lib/orchestration/knowledge/document-manager.ts` hardcodes `scope: 'app'` at all
+three of its create sites — text, binary, and the PDF pending-review row — which
+is exactly what `listDesignatedDocuments` filters on.
+
+`tests/unit/lib/app/voice/upload-scope.test.ts` pins that agreement across the
+tier boundary, and pins **two** halves, because two things decide where a
+document lands:
+
+| Half                                                                                                       | Why it is the risk                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@default("app")` on `AiKnowledgeDocument.scope`                                                           | Changed by a schema edit with **no TypeScript diff at all** — no import graph, and no reviewer's eye, connects it to this page                                                                                                                                                                                                                           |
+| Every `aiKnowledgeDocument.create` under `lib/` and `app/`, against what its file is **entitled** to write | `'app'` → `'system'` is a one-word diff that empties her list while everything else still passes; the seeder's deliberate `'system'` has to stay distinguishable. Checked as an entitlement rather than a pinned list of sites, so a benign change — a site that omits `scope`, or one refactored to the constant — does not turn an always-run test red |
+
+An ingestion path that simply _omits_ `scope` is **not** a risk — it defaults to
+`app` and appears in the table normally. The first version of this guard said
+otherwise; /code-review pushed on its narrowness and the schema settled which
+half was actually unpinned.
+
+**What she can do at upload that the table would not have allowed.** The zone's
+tag picker offers the whole managed taxonomy, the six designation tags included,
+so she can attach `purpose-knowledge` and `purpose-voice` to one document — a
+pair `setDesignation`'s partitioned write cannot produce. It reads safely:
+`readDesignation` resolves a conflict by an explicit precedence in which `voice`
+wins, so the pair reads as `voice` and the document is not quotable. Narrowing
+the picker would mean forking the platform component to remove a state that
+already resolves in the safe direction, and that the table below shows as a
+single value she can change.
+
+**Still only on the orchestration surface**, deliberately: bulk upload as its own
+flow, re-chunking, keyword enrichment, the embedding views and the graph. An
+operator who needs them still has that page; this did not remove it. Capturing
+purpose and sensitivity _at_ upload is a real improvement and is deliberately
+out — it needs the designation write to run inside the upload transaction, and
+getting that wrong leaves a document ingested and undesignated with nothing to
+report it.
 
 ## Two properties worth knowing before you change anything
 
@@ -1008,6 +1121,8 @@ on purpose and the development command reads that divergence as drift.
 | `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy         |
 | `tests/unit/lib/app/knowledge-access-contributors.test.ts`          | Exactly one contributor, and which one                                |
 | `tests/unit/prisma/seeds/app-lelanea/knowledge-designation.test.ts` | The seed writes nothing on a re-run                                   |
+| `tests/unit/components/app/admin/knowledge-workspace.test.tsx`      | The uploader is the platform's, and a PDF reaches its confirm step    |
+| `tests/unit/lib/app/voice/upload-scope.test.ts`                     | Every ingestion path writes the scope the table reads                 |
 
 The first of those is the one to re-read before changing the rule. It asserts a
 voice document is **absent** from the resolved set — an absence that would pass
@@ -1036,9 +1151,11 @@ says so in its own `provenance` block. That is a feature-level check before ship
 **A user's voice leanings** — a filter over the overlays and the exemplars — are
 later still, and may not reach the core.
 
-**Five `upstream-gap` findings for Sunrise**, every one on a file whose blob is
-identical in all three tiers (so Daybreak could not action any of them). The
-three-way blob check in `CLAUDE.md` is what established that, per finding:
+**Six `upstream-gap` findings for Sunrise.** The three-way blob check in
+`CLAUDE.md` is what established the tier for each — the first five are on files
+whose blob is identical in all three tiers, so Daybreak could not action any of
+them; the sixth spans three files, two identical across tiers and one where
+Daybreak has diverged but the defect is in Sunrise's copy as well:
 
 1. `formatLockedContext` interpolates the raw `contextId` into the block header,
    and `contextId` is validated as `z.string().max(100)` — so the fence is
@@ -1060,3 +1177,21 @@ three-way blob check in `CLAUDE.md` is what established that, per finding:
    evaluating a prompt its users never receive, and nothing reports the
    difference. Found by t-28, which can therefore hear the always-on core and
    neither of the other two layers.
+6. **A dismissed PDF preview is stranded, in every tier.** `uploadPdfDocument`
+   creates the row in `pending_review`, and it is chunked only by a POST to the
+   confirm route, which only `pdf-preview-modal.tsx` makes. That modal is
+   dismissible (Escape / X / outside click), and nothing re-opens it — the
+   preview data lives in React state and is gone. `manage-tab.tsx` offers a
+   `pending_review` row a **Review** button, and it opens the CHUNKS modal, which
+   has no confirm action and nothing to show for a document whose whole problem
+   is that it has no chunks. Deleting it is the only exit. `pdf-preview-modal.tsx`
+   and `document-chunks-modal.tsx` are byte-identical across all three tiers;
+   `manage-tab.tsx` has diverged in Daybreak, but Sunrise's copy carries the same
+   dead Review button — so all three belong to Sunrise. Found by t-44's
+   /code-review and filed as
+   [sunrise#807](https://github.com/human-centric-engineering/sunrise/issues/807)
+   — **the only one of the six that is filed**; the other five are recorded here
+   and not yet raised. This leaf mitigates the invisibility (the table reloads on
+   every modal exit) but cannot supply the missing resume path. The extracted
+   text is already persisted in `metadata.extractedText`, so the material for a
+   resume exists; nothing in any admin reads it back.

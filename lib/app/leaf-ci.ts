@@ -57,7 +57,7 @@ export const leafCoverageExclusions: AppCoverageExclusion[] = [];
  * import chain reaches it and `--changed` never selects it. The branch that
  * breaks each one is precisely the branch a scoped run would not have chosen.
  *
- * These four lived in `scripts/ci/scoped-tests.ts` until Daybreak 0.3.0 — a
+ * The first four lived in `scripts/ci/scoped-tests.ts` until Daybreak 0.3.0 — a
  * Sunrise-owned file, carried as Row 4 of `.context/app/divergences.md`. The
  * seam arriving is what retired that row; the entries and their reasons did not
  * change.
@@ -132,6 +132,22 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'with a radius of its own, which reaches this through no module graph at ' +
       'all. The four radii it replaced each looked deliberate alone; the owner ' +
       'saw them together as a shell that could not decide. t-43.',
+  },
+  {
+    path: 'tests/unit/lib/app/voice/upload-scope.test.ts',
+    reason:
+      'reads `prisma/schema/orchestration-knowledge.prisma` and every `.ts` ' +
+      'under `lib/` and `app/` off disk, to pin the two things that decide where an ' +
+      'uploaded document lands: the `@default` on ' +
+      '`AiKnowledgeDocument.scope`, and the scope each ' +
+      '`aiKnowledgeDocument.create` site writes. The SCHEMA half is why this ' +
+      'is on the list — a Daybreak sync can change that one word with no diff ' +
+      'in any TypeScript file, so no module graph connects it to anything, and ' +
+      'every upload from `/admin/app/knowledge` would then land somewhere the ' +
+      'designation table cannot see while the uploads themselves still ' +
+      'succeed. (An omitted `scope` is NOT the risk — it defaults to `app` and ' +
+      'shows up fine. /code-review pushed on this guard being too narrow; the ' +
+      'schema settled which half was actually unpinned.) t-44.',
   },
 ];
 

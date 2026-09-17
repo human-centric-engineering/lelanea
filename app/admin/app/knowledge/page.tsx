@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
-import { DesignationTable } from '@/components/app/admin/designation-table';
+import { KnowledgeWorkspace } from '@/components/app/admin/knowledge-workspace';
 import { DESIGNATION_ADMIN_ENDPOINT } from '@/lib/app/voice/endpoint';
 import { DESIGNATION_ADMIN_PAGE_SIZE } from '@/lib/validations/app-knowledge-designation';
 import { parsePaginationMeta } from '@/lib/validations/common';
@@ -62,12 +62,17 @@ async function getFirstPage(): Promise<{
 }
 
 /**
- * Designating the training material (§05 t-25).
+ * Her training material: adding it, and saying what it is for (§05 t-25, t-44).
  *
- * The knowledge base takes her documents in; this page records what each one is
- * FOR. The distinction it exists to capture is between something she knows —
- * which the agent may retrieve and quote — and something that only shows how she
- * sounds, which must never be quoted back at anyone as though it were an answer.
+ * One page, two acts. The uploader at the top is Sunrise's own, imported rather
+ * than copied; the table under it records what each document is FOR. The
+ * distinction it exists to capture is between something she knows — which the
+ * agent may retrieve and quote — and something that only shows how she sounds,
+ * which must never be quoted back at anyone as though it were an answer.
+ *
+ * Until t-44 the second act lived here and the first did not, so the empty state
+ * had to send her to AI Orchestration → Knowledge — a tier of the admin she has
+ * no other reason to visit.
  *
  * `/admin/**` is the `admin` surface (`lib/app/surface.ts`), which the brand
  * theme deliberately does not reach — so this page keeps Sunrise's admin chrome
@@ -81,11 +86,11 @@ export default async function KnowledgeDesignationPage() {
       <div>
         <h2 className="text-lg font-semibold">Training material</h2>
         <p className="text-muted-foreground text-sm">
-          Every document uploaded into this knowledge base, and what it is for. A document marked{' '}
-          <strong>Voice</strong> shows how she sounds rather than what she knows: the agent may
-          learn its register but can never retrieve it or quote it. Anything with no purpose yet
-          reaches nothing at all. The platform&rsquo;s own pre-loaded reference material is not
-          listed — every agent can already search it, so designating it would change nothing.
+          Add a document, then say what it is for. A document marked <strong>Voice</strong> shows
+          how she sounds rather than what she knows: the agent may learn its register but can never
+          retrieve it or quote it. Anything with no purpose yet reaches nothing at all. The
+          platform&rsquo;s own pre-loaded reference material is not listed — every agent can already
+          search it, so designating it would change nothing.
         </p>
       </div>
 
@@ -96,7 +101,7 @@ export default async function KnowledgeDesignationPage() {
         </p>
       )}
 
-      <DesignationTable
+      <KnowledgeWorkspace
         initialDocuments={documents}
         initialMeta={meta}
         initialLoadFailed={loadError}
