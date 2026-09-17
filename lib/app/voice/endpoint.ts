@@ -14,3 +14,12 @@ export const DESIGNATION_ADMIN_ENDPOINT = '/api/v1/admin/app/knowledge/designati
 
 /** Where an admin designates her documents. The nav seam and the page both name it here. */
 export const DESIGNATION_ADMIN_PAGE = '/admin/app/knowledge';
+
+/** Where a comparison is queued and listed. */
+export const VOICE_COMPARISON_ENDPOINT = '/api/v1/admin/app/voice/comparisons';
+
+/** What a run would use and roughly cost, read once before anything is queued. */
+export const VOICE_PREFLIGHT_ENDPOINT = '/api/v1/admin/app/voice/preflight';
+
+/** Where two arms' answers are read back, side by side. */
+export const VOICE_COMPARISON_PAGE = '/admin/app/voice';

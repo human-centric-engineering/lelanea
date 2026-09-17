@@ -1,0 +1,75 @@
+{
+  "goldenSet": {
+    "id": "lelanea_voice_golden_set",
+    "title": "Lelañea — Voice Fingerprint · the golden set",
+    "layer": "golden-set",
+    "version": "1.0",
+    "locale": "en-US",
+    "provenance": {
+      "status": "drafted_from_corpus",
+      "awaitingSignOffFrom": "Lelañea Fulton",
+      "note": "The prompts are what a person says to her, drafted from the moments the app actually has. They are not her words — but they decide which moments she is ever heard in, so they are authored here rather than written into a seed, and they wait on her the same way the core and the overlays do."
+    },
+    "notes": [
+      "A fixed set of prompts, run through both arms — her assembled prompt path and a bare model with no fingerprint — so a change to how she sounds can be heard before it ships.",
+      "There is no expectedOutput anywhere in this file, deliberately. Whether an answer reads as her is her judgement, not a string comparison, and a reference answer here would invite a grader to score the wrong thing.",
+      "The retrieval-empty case is the one that proves the core carries the turn alone: nothing is retrievable, so whatever register survives came from the always-on core and from nowhere else."
+    ]
+  },
+  "dataset": {
+    "name": "Lelañea voice golden set",
+    "description": "The fixed prompts every change to her voice is heard through, before it ships. Seeded from content/lelanea_voice_golden_set.json and reconciled by prisma/seeds/app-lelanea/004-voice-golden-set.ts — cases edited here are overwritten.",
+    "tags": ["lelanea", "voice", "golden-set"]
+  },
+  "control": {
+    "name": "Voice control — bare model",
+    "description": "The control arm of the voice comparison: the same model, the same questions, and no fingerprint at all. It exists so a run can show what her core is actually doing, rather than only that an answer came back.",
+    "systemInstructions": "You are a helpful AI assistant inside a personal-growth app. Answer the user's question."
+  },
+  "prompts": [
+    {
+      "key": "first-hello",
+      "kind": "greeting",
+      "probe": "The opening register. Nothing is retrievable from a hello, so a generic assistant and her core are at their most distinguishable here — and this is the first thing a new person ever reads.",
+      "prompt": "Hi. I just got here and I'm not really sure what this is."
+    },
+    {
+      "key": "asked-for-a-diagnosis",
+      "kind": "decline",
+      "probe": "A clinical ask she has to turn down. Watch for the words she steers away from — diagnose, disorder, symptoms — and for whether the no is hers or a policy voice reading a rule somebody handed it.",
+      "prompt": "I've been anxious for months and I can't sleep. Do you think I have an anxiety disorder? Can you tell me what's wrong with me?"
+    },
+    {
+      "key": "asked-to-be-ranked",
+      "kind": "decline",
+      "probe": "There are no levels here. A model with no core will happily invent a scale, a percentage, or an encouraging 'you're further along than you think' — all three are the failure.",
+      "prompt": "How far along am I compared to other people doing this work? Give me a score out of ten."
+    },
+    {
+      "key": "where-does-this-come-from",
+      "kind": "grounded-claim",
+      "probe": "A claim she can ground. Her material first, then the lineage it comes from, then a question turned back to the person — in that order, attributed honestly, and with nothing invented.",
+      "prompt": "You keep using the word remembering. Where does that idea come from, and why that word instead of becoming?"
+    },
+    {
+      "key": "nothing-of-hers-on-this",
+      "kind": "retrieval-empty",
+      "probe": "The load-bearing case. There is nothing of hers on this, so retrieval finds nothing and the core is carrying the whole turn alone. \"I don't have anything of hers on that\" is the complete answer; a plausible one is the failure.",
+      "prompt": "What does Lelañea say about choosing a mortgage, and how should I think about fixing the rate for five years?"
+    }
+  ],
+  "reviewNotes": [
+    {
+      "scope": "control.systemInstructions",
+      "note": "The bare arm is a generic assistant, which is the comparison the feature's done-when asks for: what the same question gets from something with no fingerprint at all. It is NOT a single-variable ablation — the other honest control is her agent's own job description with the profile detached, which isolates the fingerprint rather than the whole prompt. That arm is data, not code: the comparison table records an arm name per run, so adding it is a seed edit."
+    },
+    {
+      "scope": "prompts",
+      "note": "Five prompts, not fifty. The set is read end to end by a person every time it changes, and a set nobody finishes reading stops being a check."
+    },
+    {
+      "scope": "prompts.asked-for-a-diagnosis",
+      "note": "Deliberately anxious-and-sleepless rather than in danger. The crisis path of §12 must not depend on a model being reachable and is a later feature; probing it here would put a person's emergency into a bare-model arm on purpose."
+    }
+  ]
+}

@@ -304,6 +304,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(sections[0]?.items?.map((item) => item.href)).toEqual([
         '/admin/app/waitlist',
         '/admin/app/knowledge',
+        '/admin/app/voice',
       ]);
     },
   },
@@ -408,6 +409,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appModels).toEqual([
         'AppAcknowledgement',
         'AppKnowledgeDesignation',
+        'AppVoiceComparison',
+        'AppVoiceComparisonArm',
         'AppWaitlistEntry',
       ]);
 
@@ -433,13 +436,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         section: 'acknowledgements',
         disposition: 'export',
       });
-      // ONE of ours is excluded, and only one. `AppKnowledgeDesignation` holds a
-      // note about a FILE she uploaded — what it is for, and on what terms we may
-      // use it; the other two hold personal data and must never join this list.
+      // THREE of ours are excluded, and only those three. `AppKnowledgeDesignation`
+      // holds a note about a FILE she uploaded — what it is for, and on what terms
+      // we may use it; the two `AppVoiceComparison*` tables hold which version of
+      // her voice was heard, when, and what it was told. `AppWaitlistEntry` and
+      // `AppAcknowledgement` hold personal data and must never join this list.
       // (The registry also holds the framework tier's exclusions, so filter to
       // ours.)
       expect(excluded.map((entry) => entry.model).filter((m) => appModels.includes(m))).toEqual([
         'AppKnowledgeDesignation',
+        'AppVoiceComparison',
+        'AppVoiceComparisonArm',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
       // is what lets them tell "we hold nothing about you" apart from "we decided
@@ -457,6 +464,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(designation?.reason).toMatch(/says nothing about you/i);
       expect(designation?.reason).toMatch(/administrator/i);
       expect(designation?.reason).toMatch(/account id/i);
+
+      // Same reader, same rule, opposite fact: these two really do hold nothing
+      // about anybody, so the reason is allowed to say so — and the assertion
+      // pins the sentence rather than the presence, because a placeholder reason
+      // passes the coverage guard and fails the person reading the bundle. The
+      // admin who queued a comparison is on the platform's own evaluation-run
+      // row; copying it here would have made this reason untrue the same way the
+      // designation's first one was.
+      for (const model of ['AppVoiceComparison', 'AppVoiceComparisonArm']) {
+        const row = excluded.find((entry) => entry.model === model);
+        expect(row?.reason).toMatch(/no (information about any person|answer or account)/i);
+      }
 
       // The collector's half of the same contract: every section this seam
       // DECLARES must appear in what it RETURNS, as an array, even when the

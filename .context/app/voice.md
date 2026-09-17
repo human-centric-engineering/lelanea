@@ -1,9 +1,9 @@
 ---
 name: app-voice
-description: The three layers of how she sounds — the always-on core, the register overlays, her own retrieved sentences — and the designation rule that keeps voice-only material off the tool path.
+description: The three layers of the voice — the always-on core, the register overlays, her own retrieved sentences — the designation rule that keeps voice-only material off the tool path, and the golden set she is heard through before anything changes.
 ---
 
-# How she sounds: the three layers, and what may be quoted
+# Voice: the three layers, and what may be quoted
 
 Three layers and one rule, doing different jobs.
 
@@ -435,6 +435,314 @@ about — a "reverting fails this" claim nobody executed is decoration.
 
 ---
 
+# Nothing changes without her hearing it first
+
+A voice fingerprint is tuned by editing prose, and prose edits have no compiler.
+Change a clause in the core to fix one awkward reply and three other replies
+quietly get worse — nothing fails, nothing is logged, and there is no way to
+notice except by reading everything again.
+
+So there is a fixed set of questions, asked twice: once through her assembled
+prompt, once through a model told nothing about her. Both answers stay attached
+to the version of her core that produced them.
+
+## What is Sunrise's, and what is ours
+
+Sunrise already ships the harness — `AiDataset`, `AiEvaluationRun`,
+`AiEvaluationCaseResult`, a lease-claiming worker that drains a run on the
+maintenance tick, and judge agents to score one. **None of it is reimplemented.**
+A comparison is two ordinary platform runs.
+
+What the platform has no notion of is an **arm**. A run records which agent
+answered and nothing about which version of her voice that agent was wearing, and
+`AiEvaluationRun` has no free column to put it in. `AppVoiceComparison` /
+`AppVoiceComparisonArm` record the missing half.
+
+**It is stored rather than derived**, and that is the decision to understand
+before changing anything here. Reading the version off the profile at render time
+is right until the core changes — after which every historical run silently
+re-attributes itself to the new version, and "v1.0 beside v1.1" becomes v1.1
+beside itself. The composed **system prompt** is stored whole beside it, because
+the version string is a claim and the prompt is the evidence.
+
+## The two arms
+
+| Arm           | Agent                | Wears                                     |
+| ------------- | -------------------- | ----------------------------------------- |
+| `fingerprint` | `lelanea-guide`      | the profile — her core, marker and all    |
+| `bare`        | `voice-control-bare` | the authored `control.systemInstructions` |
+
+**The control's slug does not start with `lelanea-`, and that is load-bearing.**
+That prefix is what `isCorpusAgent()` matches, so a control named
+`lelanea-control` would be handed her designated corpus the moment anything bound
+`search_knowledge_base` — and the arm meant to show what a bare model does with
+her questions would start answering out of her documents, with the comparison
+still calling it the bare arm. Nothing about that would fail.
+
+**Running only the assembled arm** would tell you an output exists, not that the
+fingerprint did anything. That is why the control is not optional.
+
+## The guard is the point
+
+Every way this feature fails is silent. A profile detached from her agent, a
+control pointed at her profile, both arms resolving to the same agent, a model
+pinned on one side through the admin form — none throws, none logs, and every one
+produces two walls of plausible prose that look exactly like a comparison in
+which her fingerprint changed nothing.
+
+So `assertArmsComparable()` composes **both** prompts before anything is queued
+and refuses unless all four hold:
+
+| Check                                                 | The misconfiguration it catches                |
+| ----------------------------------------------------- | ---------------------------------------------- |
+| the fingerprint arm's prompt carries a version marker | the profile came detached from her agent       |
+| the bare arm's prompt carries none                    | somebody pointed the control at her profile    |
+| the two prompts differ                                | both arms are the same agent, or the same text |
+| provider, model and temperature match                 | the comparison is silently a model comparison  |
+
+Each refusal names the arm and the remedy (`HB10`). The whole queue is one
+transaction, so a refusal leaves no runs behind — a half-queued comparison would
+drain anyway and spend real money on answers nothing could read back.
+
+The version is read out of the **composed prompt**, never off the content file.
+Reading the file answers "which version is authored"; reading the prompt answers
+"which version is this agent about to be told", and only the second is something
+an output can honestly be attributed to.
+
+## The golden set is a ninth content file, and a versioned dataset
+
+`content/lelanea_voice_golden_set.json`. It is the odd one out of the nine: the
+prompts are what a PERSON says to her, not her words. It is authored in the
+content seam anyway, because the set decides which moments she is ever heard in —
+and a probe set an engineer can silently retune is the same failure this feature
+exists to prevent, one level out.
+
+Five prompts, covering four moments, and the coverage is **structural**: the
+schema's `superRefine` fails a file missing any of `greeting`, `decline`,
+`grounded-claim` or `retrieval-empty`. The last is the load-bearing one — nothing
+is retrievable behind it, so whatever register survives came from the core alone.
+
+**There is no `expectedOutput` anywhere**, deliberately. Whether an answer reads
+as her is her judgement on a deployed build; a reference answer would invite a
+grader to score a string comparison and report a number for it. Every
+reference-required grader is therefore structurally unusable against this
+dataset, which is correct rather than a gap.
+
+**The dataset id carries the version** — `lelanea-voice-golden-set-v1.0` — because
+a case cannot be deleted once a run has scored it: `AiEvaluationCaseResult
+.datasetCase` declares no `onDelete`, so Prisma's default `Restrict` applies. So
+`004-voice-golden-set.ts` reconciles a version nothing has run yet, and
+**refuses** one something has, naming the remedy: bump `goldenSet.version`, which
+mints a new dataset beside the old one. Reconciling instead would re-caption every
+historical answer with a question it was never asked.
+
+## The judge is pinned to HER voice on both arms
+
+One metric: `eval-judge-brand-voice`, a platform-seeded judge. Sunrise's own
+run-create route pins `subjectBrandVoice` from _the subject agent's_ brand voice,
+which for the control is null — the judge would fall back to a generic rubric and
+score the bare arm against nothing in particular. Both arms are pinned to the
+FINGERPRINT arm's brand voice instead, because the question asked of both is the
+same one: _does this sound like her?_ A number that cannot be compared with the
+other arm's is worse than no number.
+
+A comparison refuses to queue if that judge is missing or inactive, rather than
+coming back unscored — two walls of text look exactly like a scored comparison.
+
+## The surface
+
+`/admin/app/voice` — **Voice** in the Lelañea admin section. The set is called
+_the voice test set_ on screen: "golden set" is the term in this document, in the
+content file and in the schema, and it stays there, but it is jargon on an
+operator page. One button queues a comparison, a dialog shows the authored
+questions and the control's whole system prompt before anything has been run; a picker puts a second one's columns in the same table,
+which is how two versions are read side by side. Each comparison brings its own
+bare arm, so a drop that both versions share is the model having a different day
+rather than her voice changing.
+
+**The page is two sections, and the split is the point.** A **Run** panel is
+everything above the fold: what a run would ask, what it would cost, and the
+button. Under it, **Results** carries the two pickers and everything about
+reading runs. The pickers used to sit in the same row of controls as the button,
+which put "which run am I reading" beside "spend money on a new one" — two
+different jobs, one of which is reversible. An admin arriving to run the test now
+meets only the invitation.
+
+**A run in flight is shown in motion.** Once an arm is draining, the Run panel
+stops being an invitation and becomes the run: a bar per arm advancing as cases
+land, the drained-of-expected count, and a pulse. The motion is what separates a
+page still attached to the run from one that has quietly stopped polling — a
+static count reads identically in both. Every animation is a stock Tailwind
+utility (`animate-ping`, `animate-pulse`, `animate-spin`) because custom
+keyframes would have to be added to `app/globals.css`, which is Sunrise's; all of
+them drop out under `prefers-reduced-motion`, and every fact they decorate is
+written out in text as well.
+
+Three things it shows that a scoreboard would not: **the prompt each column was
+given** (stored at queue time, so it is what produced the answers even if her core
+has since changed), **what each question was probing**, and **that a run is not
+finished** — answers arrive a case at a time as the worker drains, so a missing
+answer says whether it is "not yet" or "it failed" rather than leaving somebody
+looking at a half-empty table.
+
+### `completed` does not mean there is a result here
+
+Two counting traps, both of which render a failed arm as a working one. They are
+the same mistake at two levels, so fix them together or not at all.
+
+**`casesDone` is cases ATTEMPTED.** A case that failed still writes a result row,
+so the questions actually answered are `casesDone - casesFailed`. Reading
+`casesTotal` as "answered" because the run says `completed` is what produced
+`answered all 5, 5 failed` — a self-contradiction whose first half is simply
+false, on the one surface whose job is to say whether her voice has been checked.
+`armStatusLine()` now gives the all-failed case a sentence of its own rather than
+a count, because a reader scanning a column of numbers does not stop to subtract.
+
+**A failed case's `subjectOutput` is an empty STRING, not null.** So
+`output === null` passes it through as a real answer and the cell renders an
+empty paragraph — a column that says nothing at all, which reads as "still
+coming" forever. The check is on trimmed length.
+
+Both exist because upstream records a run in which **every** case failed as
+`status: 'completed'` with `errorMessage` null and `summary.scoredCount: 0` —
+filed as `sunrise#801`. Until that lands, `completed` is not evidence of a
+result and this surface has to do the arithmetic itself.
+
+### Before the press, and after it
+
+**The button says what it spends.** `GET /api/v1/admin/app/voice/preflight` reads
+back the model that would answer, the number of questions, and a planning-grade
+USD range for the whole comparison — both arms answering every case, and the
+judge scoring every answer. It is the platform's own
+`estimateEvaluationRunCost` called once per arm — scoped to the calling admin,
+since that is the ownership column its empirical calibration reads past runs
+through — and added, rather than one arm doubled: the two are only guaranteed equal while the arms stay comparable, which
+is the thing `assertArmsComparable` refuses to assume. A model with no published
+rate prices at $0, so `pricingKnown: false` travels with the number and the
+surface says "cost unknown" instead of a figure that reads as free. Every part of
+it can come back null — an unseeded set, a missing judge — and the route still
+answers 200, because this is a line above a button and the page is the
+comparisons.
+
+**A run can be stopped.** `POST /api/v1/admin/app/voice/comparisons/:id/cancel`
+flips both arms' runs to `cancelled`. The platform does the actual stopping:
+`run-worker.ts` re-reads status between cases and exits, and `markTerminal` is
+guarded by `status='running'`, so a tick already mid-case finishes that one and
+can never revert the row. It is the COMPARISON that stops, not a run — cancelling
+one arm leaves a full column beside a truncated one, which is the shape of a
+result rather than of an abandoned run, and it does not stop the spend either. An
+arm that finished in the same tick comes back in `alreadyFinished` rather than
+failing the call: the button lives on a polling surface, so that race is
+ordinary.
+
+### The page polls one endpoint, and that is a cap, not a preference
+
+Every route under `/api/v1/admin/` is on the platform's `admin` tier — 30
+requests a minute, keyed on the admin's user id (`lib/security/rate-limit-policy.ts`).
+The board originally polled the list AND the detail every four seconds, which is
+exactly 30/min: a run long enough to be worth watching spent its whole life at
+the cap, and the operator watched it through a "Too many requests" banner. It now
+reads the detail alone every five seconds — 12/min — and falls back to the list's
+statuses only when the detail is absent, which is what keeps a dropped request
+from ending the polling for good. A 429 pauses it for a minute rather than
+retrying into an empty bucket.
+
+**Answers are joined by case KEY, not by position.** Two versions of the set are
+allowed to reorder, drop and add prompts — that is what a version is — so a
+positional join would line the greeting up against the decline and render it as a
+regression. A question one version asked and the other did not renders as a gap,
+because a case silently missing from a comparison reads as a case that passed.
+
+**A key can be kept while its prompt is reworded**, and then no single wording is
+entitled to head the row. A case whose wording differs across the comparisons on
+screen is flagged (`promptVaries`), the heading says so, and each column carries
+the question it was actually asked. `mixedGoldenSets` already says the two sets
+differ _somewhere_; that is not the same claim.
+
+**An arm can outlive its run.** `AiEvaluationRun.user` cascades, so erasing the
+admin who queued a comparison deletes their runs — and the arm rows survive it
+(`ON DELETE SET NULL`), keeping the stored prompt, the version and the record
+that the check happened. The arm then reports `run-deleted` rather than an empty
+progress bar that reads exactly like `queued`, and every cell in its column says
+the answers are gone rather than that they have not arrived. The column stays in
+the grid: dropping it would slide every other answer one heading to the left.
+
+## What the comparison cannot check
+
+**It hears the CORE, not the overlays or the exemplars.** Sunrise's subject-case
+runner (`lib/orchestration/evaluations/run-cases/agent-case.ts`) calls
+`drainStreamChat` with no `contextType` / `contextId`, so no prompt-context
+contributor fires on an evaluation turn — including ours. Layers two and three of
+the fingerprint are not covered, and no configuration here can cover them. It is
+a Sunrise gap; the blob is identical in all three tiers, so Daybreak could not
+action it either. Listed with the others below.
+
+**Whether an answer reads as her is hers to say.** This ships the set, both arms
+and the surface that makes the judgement cheap to make. Her verdict is the
+feature's done-when, checked before ship (`fp3b`), not something any pull request
+could satisfy.
+
+**The dataset is owned by the install, not by a person** (`userId: null`), so it
+does not appear in the platform's own dataset list at
+`/admin/orchestration/evaluations/datasets`, which filters on the session user.
+The runs DO appear in the platform's run list, because they carry the queuing
+admin's id.
+
+## The files
+
+| File                                               | What it is                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| `content/lelanea_voice_golden_set.json`            | The authored prompts, the control's prompt, the dataset copy |
+| `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases       |
+| `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                               |
+| `lib/app/voice/comparison-admin.ts`                | The list and the join-by-key read                            |
+| `prisma/seeds/app-lelanea/004-voice-golden-set.ts` | The dataset, its cases, and the control agent                |
+| `components/app/admin/voice-comparison.tsx`        | The board                                                    |
+| `prisma/schema/app.prisma`                         | `AppVoiceComparison` + `AppVoiceComparisonArm`               |
+
+Routes: `GET`/`POST /api/v1/admin/app/voice/comparisons` and
+`GET .../comparisons/:id?against=<id>`. Page: `/admin/app/voice`.
+
+## The migration
+
+`prisma/migrations/20260916140000_app_voice_comparison` — apply with
+`npm run db:migrate:deploy`, not `migrate dev`. The FK from the arm to
+`ai_evaluation_run` is hand-written (a fork table must not add a reverse relation
+field to a Sunrise-owned model), so the schema and the database diverge on
+purpose and the development command reads that divergence as drift.
+`lib/app/leaf-db-drift.ts` pins the constraint and its `ON DELETE SET NULL`. The
+comparison → arm FK is NOT probed: both tables are ours, Prisma can see the
+relation, and it will never emit a DROP for it.
+
+**`SET NULL` and not `CASCADE`, which is the opposite of the obvious choice.** An
+arm attributing a run that no longer exists sounds like the thing to avoid, and
+cascading is how you avoid it — but the run's own FK to `User` cascades, so
+`CASCADE` here meant that erasing one administrator destroyed the prompt, the
+version and the evidence of every comparison they had ever queued, leaving an
+`AppVoiceComparison` parent the surface still rendered with no arms at all. The
+per-case answers go either way (`ai_evaluation_case_result` hangs off the run and
+is Sunrise's to cascade); what must not go is the half these tables were added
+for, none of which is about that administrator. A null means one specific thing —
+the run that produced these answers is gone — and the surface says so.
+
+## Tests
+
+| File                                                           | Proves                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/comparison.test.ts`                  | The arms are two arms, on the composed prompts — load-bearing |
+| `tests/unit/lib/app/voice/comparison-admin.test.ts`            | The join is on the question, and a gap renders as a gap       |
+| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts` | The seed's writes, its idempotence, and the freeze            |
+| `tests/unit/lib/app/content/voice-golden-set.test.ts`          | The set covers every moment, and still awaits sign-off        |
+
+Reverting the implementation fails them, and this was run rather than reasoned
+about: delete the identical-prompt check and one case goes red; delete the two
+version-marker checks and three do; delete the provider/model/temperature check
+and three do; re-prefix the control `lelanea-` and one does; drop the seed's
+freeze check, its control reconciliation, or its throw-on-empty and one each
+does; join the read layer on position instead of key and one does.
+
+---
+
 # Training material: what a document is for
 
 The knowledge base holds two different kinds of thing wearing the same file
@@ -719,15 +1027,18 @@ The exemplar path does not need one, and binding the tool belongs with the
 surface above — a model told to look things up with no tool to look with will
 report having looked.
 
-**Her sign-off, and the review path.** Nothing about how she sounds changing
-without her hearing it first is t-28. Two files now await it: the core and the
-overlays.
+**Her sign-off.** The review path is built — the golden set, both arms and the
+board above. What is not done is the judgement it exists to make cheap: three
+files now await her, the core, the overlays and the golden set itself, and each
+says so in its own `provenance` block. That is a feature-level check before ship
+(`fp3b`), not something a pull request can satisfy.
 
 **A user's voice leanings** — a filter over the overlays and the exemplars — are
 later still, and may not reach the core.
 
-**Two `upstream-gap` issues for Sunrise**, both on files whose blob is identical
-in all three tiers (so Daybreak could not action either):
+**Five `upstream-gap` findings for Sunrise**, every one on a file whose blob is
+identical in all three tiers (so Daybreak could not action any of them). The
+three-way blob check in `CLAUDE.md` is what established that, per finding:
 
 1. `formatLockedContext` interpolates the raw `contextId` into the block header,
    and `contextId` is validated as `z.string().max(100)` — so the fence is
@@ -742,3 +1053,10 @@ in all three tiers (so Daybreak could not action either):
    stops answering rather than erroring hangs whatever awaits it. This feature
    works around it with its own race (`RETRIEVAL_TIMEOUT_MS`); every other caller
    on the turn path — `search_knowledge_base` included — does not.
+5. `lib/orchestration/evaluations/run-cases/agent-case.ts` calls
+   `drainStreamChat` with no `contextType` /
+   `contextId`, so **no prompt-context contributor fires on an evaluation turn**.
+   Any fork whose voice, tenancy or module context rides on that seam is
+   evaluating a prompt its users never receive, and nothing reports the
+   difference. Found by t-28, which can therefore hear the always-on core and
+   neither of the other two layers.

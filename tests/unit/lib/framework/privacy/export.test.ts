@@ -111,7 +111,11 @@ const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 const LEAF_SECTIONS = ['waitlist', 'acknowledgements'];
 const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement'];
 /** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
-const LEAF_EXCLUDED_MODELS = ['AppKnowledgeDesignation'];
+const LEAF_EXCLUDED_MODELS = [
+  'AppKnowledgeDesignation',
+  'AppVoiceComparison',
+  'AppVoiceComparisonArm',
+];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
 

@@ -1,11 +1,13 @@
 /**
  * The one way in to Lelañea's authored content.
  *
- * Eight JSON files under `content/` hold Lelañea Fulton's words. Six are
- * transcriptions of documents she wrote; the other two — the voice fingerprint's
- * always-on core and its context-selected overlays — were drafted FROM those in
- * her register and each carries a `provenance` block saying so, because a
- * drafted file sitting silently beside six transcribed ones is the one way this
+ * Nine JSON files under `content/` hold Lelañea Fulton's words. Six are
+ * transcriptions of documents she wrote; the voice fingerprint's always-on core
+ * and its context-selected overlays were drafted FROM those in her register; and
+ * the ninth — the golden set — is the odd one out, holding the prompts a PERSON
+ * puts to her rather than words of hers at all. Each of the three carries a
+ * `provenance` block saying what it is, because a file that is not a
+ * transcription sitting silently beside six that are is the one way this
  * seam could start lying. Nothing
  * outside this folder reads any of them: an ESLint rule in `lib/app/eslint.config.mjs`
  * fails any import of `@/content/*.json` from elsewhere, so a page that wants
@@ -46,6 +48,7 @@ import rawJourneyStructure from '@/content/lelanea_module_structure.json';
 import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
 import rawVoiceFingerprint from '@/content/lelanea_voice_fingerprint.json';
 import rawVoiceOverlays from '@/content/lelanea_voice_overlays.json';
+import rawVoiceGoldenSet from '@/content/lelanea_voice_golden_set.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   foundationalDocumentsFileSchema,
@@ -64,6 +67,9 @@ import {
   type VoiceFingerprintFile,
   voiceOverlaysFileSchema,
   type VoiceOverlaysFile,
+  voiceGoldenSetFileSchema,
+  type GoldenSetKind,
+  type VoiceGoldenSetFile,
 } from '@/lib/app/content/schemas';
 
 // ============================================================================
@@ -320,12 +326,14 @@ let journeyStructureView: JourneyStructure | null = null;
 let discoveryQuestionSetView: DiscoveryQuestionSet | null = null;
 let voiceFingerprintView: VoiceFingerprintCore | null = null;
 let voiceOverlaysView: VoiceOverlays | null = null;
+let voiceGoldenSetView: VoiceGoldenSet | null = null;
 
 let foundationalDocumentsCache: FoundationalDocumentsFile | null = null;
 let journeyStructureCache: JourneyStructureFile | null = null;
 let discoveryQuestionsCache: DiscoveryQuestionsFile | null = null;
 let voiceFingerprintCache: VoiceFingerprintFile | null = null;
 let voiceOverlaysCache: VoiceOverlaysFile | null = null;
+let voiceGoldenSetCache: VoiceGoldenSetFile | null = null;
 
 function foundationalDocumentsFile(): FoundationalDocumentsFile {
   foundationalDocumentsCache ??= deepFreezeParsed(
@@ -354,6 +362,11 @@ function voiceFingerprintFile(): VoiceFingerprintFile {
 function voiceOverlaysFile(): VoiceOverlaysFile {
   voiceOverlaysCache ??= deepFreezeParsed(voiceOverlaysFileSchema.parse(rawVoiceOverlays));
   return voiceOverlaysCache;
+}
+
+function voiceGoldenSetFile(): VoiceGoldenSetFile {
+  voiceGoldenSetCache ??= deepFreezeParsed(voiceGoldenSetFileSchema.parse(rawVoiceGoldenSet));
+  return voiceGoldenSetCache;
 }
 
 // ============================================================================
@@ -707,4 +720,93 @@ export function getVoiceOverlays(): VoiceOverlays {
     coreOnly: { heading: file.coreOnly.heading, lines: file.coreOnly.lines },
   });
   return voiceOverlaysView;
+}
+
+/**
+ * One prompt of the golden set: what is asked, and what asking it is for.
+ *
+ * `probe` is a note to whoever reads the comparison — why this prompt is in the
+ * set at all — and unlike the overlays' `when` it IS shown on a surface, beside
+ * the two answers. Reading two outputs without knowing what the prompt was
+ * testing is how a comparison becomes a vibe.
+ *
+ * `prompt` is the only member that ever reaches a model, and it reaches it as a
+ * USER turn. Nothing in this file is instruction.
+ */
+export interface VoiceGoldenPrompt {
+  key: string;
+  kind: GoldenSetKind;
+  probe: string;
+  prompt: string;
+}
+
+/**
+ * The fixed set every change to her voice is heard through, and the bare model
+ * it is heard against.
+ *
+ * Not a prompt ingredient and not a screen payload — both, which is why the
+ * whole file is served. `prisma/seeds/app-lelanea/004-voice-golden-set.ts`
+ * projects `prompts` onto dataset rows and `control` onto the bare arm's agent;
+ * `lib/app/voice/comparison.ts` queues the two runs and the admin surface reads
+ * `probe` back beside their outputs.
+ *
+ * `provenance` is served for the same reason as the core's and the overlays':
+ * these prompts were drafted rather than dictated, and are a proposal until she
+ * has read them.
+ */
+export interface VoiceGoldenSet {
+  collection: ContentCollectionMeta;
+  provenance: DeepReadonly<VoiceGoldenSetFile['goldenSet']['provenance']>;
+  dataset: {
+    readonly name: string;
+    readonly description: string;
+    readonly tags: readonly string[];
+  };
+  /** The bare arm's whole system prompt, authored so the control is readable too. */
+  control: {
+    readonly name: string;
+    readonly description: string;
+    readonly systemInstructions: string;
+  };
+  prompts: readonly VoiceGoldenPrompt[];
+}
+
+/**
+ * The golden set: the prompts, the dataset they are seeded as, and the control.
+ *
+ * `collection.version` is the golden set's OWN version, not the fingerprint's.
+ * The two move independently on purpose — re-authoring the probe set is not a
+ * change to how she sounds, and a shared version would make each look like the
+ * other had changed.
+ */
+export function getVoiceGoldenSet(): VoiceGoldenSet {
+  if (voiceGoldenSetView) return voiceGoldenSetView;
+
+  const file = voiceGoldenSetFile();
+  voiceGoldenSetView = deepFreezeParsed({
+    collection: {
+      id: file.goldenSet.id,
+      title: file.goldenSet.title,
+      version: file.goldenSet.version,
+      locale: file.goldenSet.locale,
+    },
+    provenance: file.goldenSet.provenance,
+    dataset: {
+      name: file.dataset.name,
+      description: file.dataset.description,
+      tags: file.dataset.tags,
+    },
+    control: {
+      name: file.control.name,
+      description: file.control.description,
+      systemInstructions: file.control.systemInstructions,
+    },
+    prompts: file.prompts.map((entry) => ({
+      key: entry.key,
+      kind: entry.kind,
+      probe: entry.probe,
+      prompt: entry.prompt,
+    })),
+  });
+  return voiceGoldenSetView;
 }

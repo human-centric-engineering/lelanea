@@ -220,3 +220,122 @@ model AppKnowledgeDesignation {
 
   @@map("app_knowledge_designation")
 }
+
+/// One time somebody listened to the whole golden set through both arms.
+///
+/// Sunrise already has the harness — `AiDataset`, `AiEvaluationRun`,
+/// `AiEvaluationCaseResult`, a worker that drains a run and judge agents to
+/// score one — and none of it knows what an ARM is. A run records which agent
+/// answered; it records nothing about which version of her voice that agent was
+/// wearing at the time, and there is no free column on `AiEvaluationRun` to put
+/// it in. So the two runs queued together, and what each was told, are recorded
+/// here.
+///
+/// **Why it has to be stored rather than derived.** The obvious alternative is
+/// to read the fingerprint version off the agent's profile whenever the surface
+/// renders. That answer is right only until the core changes — after which every
+/// historical run silently re-attributes itself to the new version, and the one
+/// comparison this feature exists to make (v1.0's answers beside v1.1's) becomes
+/// a comparison of v1.1 with itself. The whole point is that outputs stay
+/// attached to the words that produced them.
+///
+/// Holds no personal data — a version string, a hash and a timestamp. The run it
+/// points at carries the admin who queued it, which is Sunrise's record and not
+/// duplicated here. Declared as an EXCLUSION with that reason in
+/// `lib/app/leaf-data-export.ts`.
+model AppVoiceComparison {
+  id                 String   @id @default(cuid())
+  /// The golden set's own version at queue time — `content/lelanea_voice_golden_set.json`.
+  ///
+  /// Separate from any arm's `fingerprintVersion`, and the pair is what makes a
+  /// result readable a month later: her voice and the questions it was heard
+  /// through move independently, so "which answers am I looking at" needs both.
+  goldenSetVersion   String
+  /// The dataset hash pinned onto every arm's run at queue time.
+  ///
+  /// Sunrise's worker fails a run whose dataset changed after submission, so
+  /// this is not a second guard — it is what lets the surface say WHY two
+  /// comparisons are not comparable, instead of showing them side by side as
+  /// though they were.
+  datasetContentHash String
+  createdAt          DateTime @default(now())
+
+  arms AppVoiceComparisonArm[]
+
+  @@index([createdAt])
+  @@map("app_voice_comparison")
+}
+
+/// One arm of a comparison: the agent that answered, and the prompt it was given.
+///
+/// `systemPrompt` is the composed prompt itself, not a hash of it. It is the
+/// evidence: `fingerprintVersion` beside it is a claim, and a claim about which
+/// version produced an answer is exactly the sort of thing that should be
+/// checkable by reading rather than trusted. It also means the bare arm's
+/// control prompt is on the screen next to the answers it produced, which is the
+/// half of an A/B comparison people usually have to take on faith.
+///
+/// **`arm` is a String, not an enum.** Two values exist today (`fingerprint` and
+/// `bare`) and `lib/app/voice/comparison.ts` owns the vocabulary. A third — her
+/// agent with the profile detached, which isolates the fingerprint rather than
+/// the whole prompt — is a change to that file and a re-queue, not a migration
+/// on a table holding history. An enum would price the experiment at a schema
+/// change.
+///
+/// **`evaluationRunId` is a plain scalar with no Prisma `@relation`** — a fork
+/// table must not add a reverse field to a Sunrise-owned model
+/// (CUSTOMIZATION.md §5). The foreign key is hand-written — created in the
+/// `app_voice_comparison` migration, given its current delete action in
+/// `app_voice_comparison_arm_run_set_null` — and pinned by a drift probe in
+/// `lib/app/leaf-db-drift.ts` so a future `migrate dev` cannot quietly drop it.
+/// The correction is a second migration rather than an edit to the first
+/// because the first had already been applied, and a migration Prisma has
+/// recorded is never re-run: editing it would have left every existing database
+/// on the old action while failing its next `migrate deploy` on the checksum.
+///
+/// **`ON DELETE SET NULL`, not `CASCADE`, and the reason is the whole point of
+/// this table.** `AiEvaluationRun.user` is `onDelete: Cascade`, so erasing the
+/// admin who queued a comparison deletes their runs. Under `CASCADE` that took
+/// this row with them — the stored prompt, the version, the record that the
+/// check happened at all — and left an `AppVoiceComparison` the surface still
+/// rendered with no arms and no explanation. The answers go either way, because
+/// `AiEvaluationCaseResult` hangs off the run and is Sunrise's to cascade. What
+/// must not go is the half this table exists for: nothing here is about the
+/// admin, so their erasure has no business destroying it. Caught by
+/// /code-review.
+///
+/// A null therefore means one specific thing — *the run that produced these
+/// answers no longer exists* — and the surface says so rather than reporting
+/// the case as not yet answered.
+model AppVoiceComparisonArm {
+  id                 String   @id @default(cuid())
+  comparisonId       String
+  /// `fingerprint` | `bare`. See the note above.
+  arm                String
+  /// The agent that answered this arm's cases, by slug.
+  agentSlug          String
+  /// Read back out of `systemPrompt` at queue time by `readFingerprintVersion()`.
+  ///
+  /// Null is the bare arm's honest answer rather than a missing value: a prompt
+  /// with no version marker in it is a prompt that never carried her core. It is
+  /// also the assertion the queue-time guard makes — a bare arm that came back
+  /// with a version is a misconfiguration, and the run is refused rather than
+  /// queued.
+  fingerprintVersion String?
+  /// What this arm was actually told, composed at queue time.
+  systemPrompt       String   @db.Text
+  /// Hand-written FK → `ai_evaluation_run`. Null once that run has been
+  /// deleted — see the note above. `@unique` still holds: Postgres admits
+  /// several nulls in a unique index, and `@@unique([comparisonId, arm])` is
+  /// what actually keeps one row per arm.
+  evaluationRunId    String?  @unique
+  createdAt          DateTime @default(now())
+
+  comparison AppVoiceComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+
+  /// One row per arm per comparison — a second `bare` row would mean two runs
+  /// claiming to be the same control, and the surface would pick one silently.
+  @@unique([comparisonId, arm])
+  @@index([comparisonId])
+  @@map("app_voice_comparison_arm")
+}

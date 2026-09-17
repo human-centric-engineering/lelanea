@@ -53,4 +53,34 @@ export function registerLeafDriftProbes(): void {
     // every document anyone had ever designated.
     probe: constraintExists('app_knowledge_designation_documentId_fkey', 'ON DELETE CASCADE'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_voice_comparison_arm_evaluationRunId_fkey (hand-written FK → ai_evaluation_run)',
+    kind: 'FK constraint',
+    table: 'app_voice_comparison_arm',
+    // Fourth of the four, and the second pointing at a Sunrise table. The
+    // definition is asserted for the same reason as the others, and here the
+    // action is the opposite of the obvious one: `ON DELETE SET NULL` is what
+    // keeps this row — the stored prompt, the version, the record that the check
+    // happened — when the run it points at is deleted. `AiEvaluationRun.user`
+    // cascades, so erasing the admin who queued a comparison deletes their runs;
+    // under `CASCADE` that destroyed the evidence too, and none of it is about
+    // that admin. A constraint re-created with `CASCADE` would pass an existence
+    // check while quietly restoring exactly that; one re-created with `NO ACTION`
+    // would make every run deletion fail with `P2003`.
+    //
+    // The constraint is created by the `app_voice_comparison` migration with
+    // `CASCADE` and corrected by `app_voice_comparison_arm_run_set_null`. This
+    // probe is what makes that second migration verifiable: it asserts the
+    // ACTION, not just the constraint's existence, so a database that only ever
+    // ran the first one fails the drift check instead of passing it.
+    //
+    // Note the SIBLING constraint on this table —
+    // `app_voice_comparison_arm_comparisonId_fkey` — is NOT probed, and that is
+    // not an omission: both of its tables are ours and the relation is in
+    // `prisma/schema/app.prisma`, so Prisma can see it and will never emit a
+    // DROP for it. Probing it would imply this file is a list of every FK the
+    // fork has, which is exactly the wrong thing to believe about it.
+    probe: constraintExists('app_voice_comparison_arm_evaluationRunId_fkey', 'ON DELETE SET NULL'),
+  });
 }
