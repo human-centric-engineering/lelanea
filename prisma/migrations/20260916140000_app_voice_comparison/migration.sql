@@ -24,19 +24,10 @@
 -- The FK from the arm to `ai_evaluation_run` is HAND-WRITTEN below, because a
 -- fork table must not add a reverse relation field to a Sunrise-owned model
 -- (CUSTOMIZATION.md §5) and `AiEvaluationRun` lives in
--- prisma/schema/orchestration-evaluation.prisma. Note the reference names the
--- MAPPED TABLE `ai_evaluation_run`, not the model name (`B11`).
---
--- `ON DELETE SET NULL`, not `CASCADE`. `AiEvaluationRun.user` is
--- `onDelete: Cascade`, so erasing the admin who queued a comparison deletes
--- their runs — and under `CASCADE` that took this row with them, destroying the
--- stored prompt, the version and the record that the check ever happened, while
--- leaving an `app_voice_comparison` parent the surface still rendered with no
--- arms. The per-case ANSWERS go either way (`ai_evaluation_case_result` hangs
--- off the run and is Sunrise's to cascade); what must not go is the half this
--- table was added for, none of which is about the admin. A null here means one
--- specific thing — the run that produced these answers is gone — and the
--- surface says so.
+-- prisma/schema/orchestration-evaluation.prisma. `ON DELETE CASCADE`: an arm
+-- attributes a run's outputs, and without the run it attributes nothing. Note the
+-- reference names the MAPPED TABLE `ai_evaluation_run`, not the model name
+-- (`B11`).
 --
 -- Prisma cannot see that constraint (it computes desired state from a schema with
 -- no `@relation` for it), so a future `migrate dev` will emit a DROP for it.
@@ -79,7 +70,7 @@ CREATE TABLE "app_voice_comparison_arm" (
     "agentSlug" TEXT NOT NULL,
     "fingerprintVersion" TEXT,
     "systemPrompt" TEXT NOT NULL,
-    "evaluationRunId" TEXT,
+    "evaluationRunId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "app_voice_comparison_arm_pkey" PRIMARY KEY ("id")
@@ -104,8 +95,8 @@ ALTER TABLE "app_voice_comparison_arm"
     ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey — hand-written; the core `AiEvaluationRun` model maps to table
--- "ai_evaluation_run". SET NULL, deliberately — see the header.
+-- "ai_evaluation_run".
 ALTER TABLE "app_voice_comparison_arm"
     ADD CONSTRAINT "app_voice_comparison_arm_evaluationRunId_fkey"
     FOREIGN KEY ("evaluationRunId") REFERENCES "ai_evaluation_run"("id")
-    ON DELETE SET NULL ON UPDATE CASCADE;
+    ON DELETE CASCADE ON UPDATE CASCADE;

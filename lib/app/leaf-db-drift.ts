@@ -69,6 +69,12 @@ export function registerLeafDriftProbes(): void {
     // check while quietly restoring exactly that; one re-created with `NO ACTION`
     // would make every run deletion fail with `P2003`.
     //
+    // The constraint is created by the `app_voice_comparison` migration with
+    // `CASCADE` and corrected by `app_voice_comparison_arm_run_set_null`. This
+    // probe is what makes that second migration verifiable: it asserts the
+    // ACTION, not just the constraint's existence, so a database that only ever
+    // ran the first one fails the drift check instead of passing it.
+    //
     // Note the SIBLING constraint on this table —
     // `app_voice_comparison_arm_comparisonId_fkey` — is NOT probed, and that is
     // not an omission: both of its tables are ours and the relation is in

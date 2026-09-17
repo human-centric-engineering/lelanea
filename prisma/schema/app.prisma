@@ -270,9 +270,14 @@ model AppVoiceComparison {
 ///
 /// **`evaluationRunId` is a plain scalar with no Prisma `@relation`** — a fork
 /// table must not add a reverse field to a Sunrise-owned model
-/// (CUSTOMIZATION.md §5). The foreign key is hand-written in the
-/// `app_voice_comparison` migration and pinned by a drift probe in
+/// (CUSTOMIZATION.md §5). The foreign key is hand-written — created in the
+/// `app_voice_comparison` migration, given its current delete action in
+/// `app_voice_comparison_arm_run_set_null` — and pinned by a drift probe in
 /// `lib/app/leaf-db-drift.ts` so a future `migrate dev` cannot quietly drop it.
+/// The correction is a second migration rather than an edit to the first
+/// because the first had already been applied, and a migration Prisma has
+/// recorded is never re-run: editing it would have left every existing database
+/// on the old action while failing its next `migrate deploy` on the checksum.
 ///
 /// **`ON DELETE SET NULL`, not `CASCADE`, and the reason is the whole point of
 /// this table.** `AiEvaluationRun.user` is `onDelete: Cascade`, so erasing the
