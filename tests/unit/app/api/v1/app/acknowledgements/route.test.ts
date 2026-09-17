@@ -115,6 +115,31 @@ beforeEach(() => {
   stubLedger();
 });
 
+describe('ownership (Sunrise 0.12.0 authorization seam)', () => {
+  // `withAuth` now asks every route how it decides WHOSE rows it reads, and a
+  // route that declared nothing answers 500 (`OwnershipDecisionMissingError`)
+  // for any caller the default policy narrows — which is every non-admin. The
+  // session above is a plain USER, so these two cases are exactly the caller
+  // that would have been refused. Both verbs are declared `'self'`.
+  it("GET answers a non-admin member 200, not 'made no ownership decision'", async () => {
+    const response = await GET(createRequest());
+    const body = (await response.json()) as StatusBody;
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.error).toBeUndefined();
+  });
+
+  it("POST answers a non-admin member 201, not 'made no ownership decision'", async () => {
+    const response = await POST(createRequest({ kind: 'disclaimer' }, 'POST'));
+    const body = (await response.json()) as StatusBody;
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.error).toBeUndefined();
+  });
+});
+
 describe('GET /api/v1/app/acknowledgements', () => {
   it('is behind auth: 401 with no session', async () => {
     vi.mocked(auth.api.getSession).mockResolvedValue(null);

@@ -29,7 +29,7 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { withAuth, type AuthSession } from '@/lib/auth/guards';
+import { withAuth, type AuthSession, type WithAuthOptions } from '@/lib/auth/guards';
 import { isApiKeySession } from '@/lib/auth/api-keys';
 import { successResponse } from '@/lib/api/responses';
 import { ForbiddenError, handleAPIError } from '@/lib/api/errors';
@@ -45,6 +45,21 @@ function assertPersonPresent(session: AuthSession): void {
   }
 }
 
+/**
+ * Ownership: self-scoped by construction — see `RouteOwnership` in
+ * `lib/auth/guards.ts`. Both verbs key every read and write on
+ * `session.user.id`; there is no row here that belongs to anybody else. Not
+ * `'policy'`: `subjectScope` widens to `{}` for a platform admin, which on a
+ * self endpoint would hand an admin everyone else's gate status.
+ */
+const OWNERSHIP: WithAuthOptions = {
+  ownership: {
+    decidedBy: 'self',
+    because:
+      "Every read and write is keyed on the caller's own id — the gate status is the caller's, and an acknowledgement is recorded for the caller. Nothing here names another subject.",
+  },
+};
+
 export const GET = withAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
   try {
@@ -55,7 +70,7 @@ export const GET = withAuth(async (request: NextRequest, session: AuthSession) =
   } catch (error) {
     return handleAPIError(error);
   }
-});
+}, OWNERSHIP);
 
 export const POST = withAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
@@ -75,4 +90,4 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
   } catch (error) {
     return handleAPIError(error);
   }
-});
+}, OWNERSHIP);

@@ -23,18 +23,28 @@ import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { getDiscoveryQuestions } from '@/lib/app/content';
 
-export const GET = withAuth(async (request) => {
-  const log = await getRouteLogger(request);
-  const questions = getDiscoveryQuestions();
+export const GET = withAuth(
+  async (request) => {
+    const log = await getRouteLogger(request);
+    const questions = getDiscoveryQuestions();
 
-  const etag = computeETag(questions);
-  const notModified = checkConditional(request, etag);
-  if (notModified) return notModified;
+    const etag = computeETag(questions);
+    const notModified = checkConditional(request, etag);
+    if (notModified) return notModified;
 
-  log.info('Discovery questions served', {
-    version: questions.collection.version,
-    questionCount: questions.questions.length,
-  });
+    log.info('Discovery questions served', {
+      version: questions.collection.version,
+      questionCount: questions.questions.length,
+    });
 
-  return successResponse(questions, undefined, { headers: { ETag: etag } });
-});
+    return successResponse(questions, undefined, { headers: { ETag: etag } });
+  },
+  {
+    // Ownership: none to decide — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'nothing',
+      because:
+        'Serves the published question collection, which is authored content compiled into the build. There are no per-user rows: every member reads the same thirty questions, and narrowing would have nothing to narrow.',
+    },
+  }
+);
