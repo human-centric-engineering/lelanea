@@ -87,6 +87,7 @@ import {
 } from '@/lib/utils/invitation-token';
 import { sendEmail } from '@/lib/email/send';
 import { resolveEmailTemplate } from '@/lib/email/registry';
+import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
 import { inviteLimiter, createRateLimitResponse } from '@/lib/security/rate-limit';
 import { getClientIP } from '@/lib/security/ip';
 
@@ -192,7 +193,7 @@ export const POST = withAdminAuth<{ id: string }>(async (request, session, { par
   const invitedAt = new Date();
   const metadata = {
     name,
-    role: 'USER',
+    role: DEFAULT_USER_ROLE,
     invitedBy: session.user.id,
     invitedAt: invitedAt.toISOString(),
   };
