@@ -84,6 +84,7 @@ import {
   VOICE_ARM_AGENT_SLUGS,
   VOICE_ARM_LABELS,
   goldenSetDatasetId,
+  isVoiceArm,
   type VoiceArm,
 } from '@/lib/app/voice/golden-set';
 import {
@@ -264,19 +265,19 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
 
   if (fingerprint.fingerprintVersion === null) {
     throw new ValidationError(
-      `The ${VOICE_ARM_LABELS.fingerprint} arm's system prompt carries no fingerprint version, which means "${fingerprint.agentSlug}" is not wearing her voice profile — every answer it gives would be a bare answer filed as hers. ${RESEED_REMEDY}`
+      `The ${VOICE_ARM_LABELS.fingerprint} arm's system prompt carries no fingerprint version, which means "${fingerprint.agentSlug}" is not carrying the voice profile — every answer it gives would be a bare answer filed as a voice answer. ${RESEED_REMEDY}`
     );
   }
 
   if (bare.fingerprintVersion !== null) {
     throw new ValidationError(
-      `The ${VOICE_ARM_LABELS.bare} arm's system prompt carries fingerprint v${bare.fingerprintVersion}, so the control is wearing her voice and the comparison would be her against herself. Detach the profile from "${bare.agentSlug}" in /admin/orchestration/agents.`
+      `The ${VOICE_ARM_LABELS.bare} arm's system prompt carries fingerprint v${bare.fingerprintVersion}, so the control is carrying the voice profile too and the comparison would be the voice against itself. Detach the profile from "${bare.agentSlug}" in /admin/orchestration/agents.`
     );
   }
 
   if (fingerprint.systemPrompt === bare.systemPrompt) {
     throw new ValidationError(
-      `Both arms would run the identical system prompt, so the comparison would report no difference no matter what her core says. Check that "${fingerprint.agentSlug}" and "${bare.agentSlug}" are different agents. ${RESEED_REMEDY}`
+      `Both arms would run the identical system prompt, so the comparison would report no difference no matter what the voice core says. Check that "${fingerprint.agentSlug}" and "${bare.agentSlug}" are different agents. ${RESEED_REMEDY}`
     );
   }
 
@@ -459,4 +460,94 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
   });
 
   return result;
+}
+
+/** What a stop did, so the surface can say it rather than guess. */
+export interface CancelledComparison {
+  comparisonId: string;
+  /** Arms whose run this call moved to `cancelled`. */
+  cancelled: VoiceArm[];
+  /** Arms already terminal — completed, failed, or cancelled by someone else. */
+  alreadyFinished: VoiceArm[];
+}
+
+/**
+ * Stop a comparison that is still draining.
+ *
+ * ## Why this exists rather than the operator cancelling two runs
+ *
+ * A comparison is two platform runs, and the platform's own cancel route takes
+ * one run id. Cancelling one arm and not the other does not stop the spend — it
+ * produces a comparison with a full column and a truncated one, which is the
+ * shape of a real result rather than of an abandoned run. Whatever the reason
+ * for stopping, it applies to both arms, so this is the unit that can be stopped.
+ *
+ * ## The platform does the stopping; this only flips the rows
+ *
+ * `run-worker.ts` re-reads `status` before each case and breaks out when it is
+ * no longer `running`, and `markTerminal` / `releaseLease` are both guarded by a
+ * `status: 'running'` predicate — so a tick already mid-case finishes that case,
+ * writes it, and then exits, and can never revert the row to completed. Nothing
+ * here needs to interrupt anything; setting the status IS the mechanism.
+ *
+ * ## An arm already finished is not an error
+ *
+ * The button is on a polling surface, so the honest race is somebody pressing
+ * stop on the tick that the last case lands. Refusing the whole call in that
+ * state would report a failure for a comparison that is simply already over.
+ * Terminal arms are reported back as terminal and the rest are stopped.
+ */
+export async function cancelVoiceComparison(
+  comparisonId: string,
+  userId: string
+): Promise<CancelledComparison> {
+  const arms = await prisma.appVoiceComparisonArm.findMany({
+    where: { comparisonId },
+    select: { arm: true, evaluationRunId: true },
+  });
+
+  if (arms.length === 0) {
+    throw new ValidationError(
+      `No voice comparison "${comparisonId}" in this install, so there is nothing to stop.`
+    );
+  }
+
+  const runIds = arms
+    .map((entry) => entry.evaluationRunId)
+    .filter((id): id is string => id !== null);
+
+  // Scoped to the caller's own runs for the same reason the platform's cancel
+  // route is: `AiEvaluationRun.userId` is the ownership column, and one admin
+  // stopping another's run is a thing the platform does not let them do.
+  const live = await prisma.aiEvaluationRun.findMany({
+    where: { id: { in: runIds }, userId, status: { in: ['queued', 'running'] } },
+    select: { id: true },
+  });
+  const liveIds = new Set(live.map((run) => run.id));
+
+  if (liveIds.size > 0) {
+    await prisma.aiEvaluationRun.updateMany({
+      where: { id: { in: [...liveIds] } },
+      data: { status: 'cancelled', completedAt: new Date(), lockedBy: null, lockedAt: null },
+    });
+  }
+
+  const cancelled: VoiceArm[] = [];
+  const alreadyFinished: VoiceArm[] = [];
+  for (const entry of arms) {
+    const arm = isVoiceArm(entry.arm) ? entry.arm : null;
+    if (arm === null) continue;
+    // A deleted run has no id and nothing to stop; it belongs with the finished
+    // rather than being silently dropped from both lists.
+    if (entry.evaluationRunId !== null && liveIds.has(entry.evaluationRunId)) cancelled.push(arm);
+    else alreadyFinished.push(arm);
+  }
+
+  logger.info('Voice comparison stopped', {
+    comparisonId,
+    cancelled: cancelled.length,
+    alreadyFinished: alreadyFinished.length,
+  });
+
+  return { comparisonId, cancelled, alreadyFinished };
 }

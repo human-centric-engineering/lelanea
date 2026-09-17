@@ -13,6 +13,11 @@
  * other did not has to render as an empty column rather than vanishing, because a
  * case silently missing from a comparison reads as a case that passed.
  *
+ * Two more gaps, both of which render as a working page: an arm whose run has
+ * been deleted (`ON DELETE SET NULL` keeps the prompt and the version; nothing
+ * keeps the answers), and a question two versions worded differently under the
+ * same key. Each has its own suite below.
+ *
  * @see lib/app/voice/comparison-admin.ts
  */
 
@@ -37,7 +42,7 @@ const world = {
       agentSlug: string;
       fingerprintVersion: string | null;
       systemPrompt: string;
-      evaluationRunId: string;
+      evaluationRunId: string | null;
     }[];
   }[],
   runs: [] as FakeRun[],
@@ -76,8 +81,10 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
+import { prisma } from '@/lib/db/client';
 import { getVoiceComparison, listVoiceComparisons } from '@/lib/app/voice/comparison-admin';
-import { BRAND_VOICE_JUDGE_SLUG } from '@/lib/app/voice/golden-set';
+import { VOICE_RUN_DELETED_STATUS } from '@/lib/validations/app-voice-comparison';
+import { BRAND_VOICE_JUDGE_SLUG, VOICE_ARM_LABELS } from '@/lib/app/voice/golden-set';
 
 const PROGRESS = { casesTotal: 2, casesDone: 2, casesFailed: 0 };
 
@@ -223,15 +230,16 @@ describe('listVoiceComparisons', () => {
     const fingerprint = list
       .find((entry) => entry.id === 'cmp-a')
       ?.arms.find((arm) => arm.arm === 'fingerprint');
-    expect(fingerprint?.label).toBe('Her voice · v1.0');
+    expect(fingerprint?.label).toBe(`${VOICE_ARM_LABELS.fingerprint} · v1.0`);
     expect(fingerprint?.brandVoiceMean).toBe(0.9);
     expect(fingerprint?.status).toBe('completed');
 
     // The bare arm carries no version, so its label carries none either — a
-    // column headed `Bare model · v1.0` would be a lie on the one column whose
-    // whole job is to have no fingerprint.
+    // bare column headed `· v1.0` would be a lie on the one column whose whole
+    // job is to have no fingerprint. Through the constant, not the wording: the
+    // rule is the behaviour, the label text is copy.
     const bare = list.find((entry) => entry.id === 'cmp-a')?.arms.find((arm) => arm.arm === 'bare');
-    expect(bare?.label).toBe('Bare model');
+    expect(bare?.label).toBe(VOICE_ARM_LABELS.bare);
     expect(bare?.fingerprintVersion).toBeNull();
     expect(bare?.brandVoiceMean).toBeNull();
   });
@@ -325,9 +333,10 @@ describe('rows that do not look the way this file expects', () => {
    * her answers — and none of them should be rendered as though it were fine.
    */
   it('reports a missing run as `unknown` rather than guessing a status', async () => {
-    // The arm's FK to `ai_evaluation_run` cascades, so this is a race rather
-    // than a resting state — but a list that rendered `queued` for a run that
-    // is gone would be inventing a fact about a comparison nobody can resume.
+    // A non-null id whose row is absent is a race, not a resting state: the FK
+    // nulls the column on delete, so the next read reports `run-deleted`. Either
+    // way a list that rendered `queued` for a run that is gone would be inventing
+    // a fact about a comparison nobody can resume.
     world.runs = world.runs.filter((run) => run.id !== 'run-a2');
 
     const list = await listVoiceComparisons();
@@ -338,16 +347,23 @@ describe('rows that do not look the way this file expects', () => {
     expect(bare?.brandVoiceMean).toBeNull();
   });
 
-  it('leaves a case with no columns rather than dropping it, when its run is gone', async () => {
+  it('keeps every column in the row when a run is gone, so the answers stay under their own headings', async () => {
     world.runs = world.runs.filter((run) => run.id !== 'run-a1' && run.id !== 'run-a2');
 
     const detail = await getVoiceComparison(['cmp-a']);
 
-    // The columns still exist — an arm row survives until its FK cascades — but
-    // there is no run to read answers from. A case shown with no answers reads
-    // as "nothing came back", which is exactly what happened.
+    // The columns still exist — the arm rows outlive their runs — and each case
+    // keeps one cell per column. Dropping the cells instead, which is what this
+    // used to do, left the surface laying N answers across a grid built for the
+    // columns it still rendered: every remaining answer slides one heading to the
+    // left, and a comparison that silently re-attributes answers is worse than
+    // one that renders nothing.
     expect(detail.columns).toHaveLength(2);
-    expect(detail.cases.every((entry) => entry.answers.length === 0)).toBe(true);
+    for (const entry of detail.cases) {
+      expect(entry.answers).toHaveLength(2);
+      expect(entry.answers.every((answer) => answer.output === null)).toBe(true);
+      expect(entry.answers.every((answer) => answer.runDeleted)).toBe(true);
+    }
   });
 
   it('shows a case whose metadata lost its key under a synthetic one', async () => {
@@ -391,5 +407,119 @@ describe('rows that do not look the way this file expects', () => {
     const list = await listVoiceComparisons();
 
     expect(list[0]?.arms.map((arm) => arm.label)).toContain('ablation');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An arm that outlived its run
+// ---------------------------------------------------------------------------
+
+describe('an arm whose run has been deleted', () => {
+  /**
+   * `AiEvaluationRun.user` cascades, so erasing the admin who queued a comparison
+   * deletes their runs. The arm rows are `ON DELETE SET NULL` precisely so the
+   * prompt, the version and the record that the check happened survive that —
+   * none of which is about the admin. What this suite pins is that the surviving
+   * half is not then rendered as a comparison waiting for answers.
+   */
+  beforeEach(() => {
+    world.comparisons[0].arms = world.comparisons[0].arms.map((arm) => ({
+      ...arm,
+      evaluationRunId: null,
+    }));
+    world.runs = world.runs.filter((run) => run.id !== 'run-a1' && run.id !== 'run-a2');
+  });
+
+  it('says the run is gone instead of showing a queued arm with nothing in it', async () => {
+    const list = await listVoiceComparisons();
+    const arms = list.find((entry) => entry.id === 'cmp-a')?.arms ?? [];
+
+    expect(arms).toHaveLength(2);
+    for (const arm of arms) {
+      // `queued` and `run-deleted` carry identical counters. Only one of them is
+      // worth waiting for.
+      expect(arm.status).toBe(VOICE_RUN_DELETED_STATUS);
+      expect(arm.evaluationRunId).toBeNull();
+      expect(arm.brandVoiceMean).toBeNull();
+    }
+    // The label still carries the version the arm was wearing — that is the fact
+    // the row was kept to hold.
+    expect(arms.map((arm) => arm.label)).toContain(`${VOICE_ARM_LABELS.fingerprint} · v1.0`);
+  });
+
+  it('never asks the database for a run id that is null', async () => {
+    await listVoiceComparisons();
+    await getVoiceComparison(['cmp-a']);
+
+    // `{ in: [null] }` is not a query Prisma will accept on a non-nullable id,
+    // and a comparison whose runs are gone is exactly when the page is most
+    // needed.
+    for (const call of vi.mocked(prisma.aiEvaluationRun.findMany).mock.calls) {
+      const ids = (call[0] as { where: { id: { in: string[] } } }).where.id.in;
+      expect(ids.every((id) => typeof id === 'string')).toBe(true);
+    }
+  });
+
+  it('keeps the prompt each column was given, and marks the answers as gone', async () => {
+    const detail = await getVoiceComparison(['cmp-a']);
+
+    expect(detail.columns.map((column) => column.systemPrompt).sort()).toEqual([
+      'bare prompt',
+      'her prompt v1.0',
+    ]);
+    for (const entry of detail.cases) {
+      expect(entry.answers).toHaveLength(2);
+      for (const answer of entry.answers) {
+        expect(answer.runDeleted).toBe(true);
+        expect(answer.output).toBeNull();
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A question two versions worded differently
+// ---------------------------------------------------------------------------
+
+describe('a key whose prompt was reworded between versions', () => {
+  it('flags the case and gives each answer the wording its own version asked', async () => {
+    // Keeping the key is what makes the two versions comparable at all, so
+    // rewording under it is a legitimate edit. Heading both columns with one
+    // wording is not: half the answers on that row were given the other one.
+    world.cases = world.cases.map((entry) =>
+      entry.datasetId === 'set-v1.1' && entry.position === 0
+        ? { ...entry, input: 'Tell me what is wrong with me.' }
+        : entry
+    );
+
+    const detail = await getVoiceComparison(['cmp-a', 'cmp-b']);
+    const decline = detail.cases.find((entry) => entry.key === 'decline');
+
+    expect(decline?.promptVaries).toBe(true);
+    expect(decline?.answers.find((a) => a.comparisonId === 'cmp-a')?.prompt).toBe('Diagnose me.');
+    expect(decline?.answers.find((a) => a.comparisonId === 'cmp-b')?.prompt).toBe(
+      'Tell me what is wrong with me.'
+    );
+  });
+
+  it('leaves the flag down when both versions asked it the same way', async () => {
+    const detail = await getVoiceComparison(['cmp-a', 'cmp-b']);
+    const decline = detail.cases.find((entry) => entry.key === 'decline');
+
+    // Both datasets carry `Diagnose me.` under this key, so the heading is
+    // entitled to speak for the whole row — and the surface keeps its one-line
+    // question rather than repeating it per column for nothing.
+    expect(decline?.promptVaries).toBe(false);
+    expect(decline?.prompt).toBe('Diagnose me.');
+  });
+
+  it('gives no wording to a column whose version never asked the question', async () => {
+    const detail = await getVoiceComparison(['cmp-a', 'cmp-b']);
+    const ranking = detail.cases.find((entry) => entry.key === 'ranking');
+
+    // v1.0 does not have this question at all. Null rather than the other
+    // version's wording: the gap is the fact.
+    expect(ranking?.answers.find((a) => a.comparisonId === 'cmp-a')?.prompt).toBeNull();
+    expect(ranking?.answers.find((a) => a.comparisonId === 'cmp-b')?.prompt).toBe('Rank me.');
   });
 });

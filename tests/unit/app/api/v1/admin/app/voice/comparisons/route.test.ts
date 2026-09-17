@@ -133,15 +133,15 @@ describe('POST', () => {
     // and what to do about it. A route that flattened this to "could not queue"
     // would leave an operator with a diagnosis they cannot act on (`HB10`).
     queueVoiceComparison.mockRejectedValue(
-      new ValidationError(
-        'The Bare model arm’s system prompt carries fingerprint v1.0, so the control is wearing her voice.'
-      )
+      // A sentinel rather than the guard's real wording: the route's job is to
+      // pass the message through, which any distinctive string proves.
+      new ValidationError('FIXTURE REFUSAL: the arm and the remedy, in the guard’s own words.')
     );
 
     const response = await POST(postRequest());
 
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { message: string } };
-    expect(body.error.message).toContain('the control is wearing her voice');
+    expect(body.error.message).toContain('FIXTURE REFUSAL');
   });
 });

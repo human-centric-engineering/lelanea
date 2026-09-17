@@ -35,3 +35,20 @@ export const voiceComparisonQuerySchema = z.object({
 });
 
 export type VoiceComparisonQuery = z.infer<typeof voiceComparisonQuerySchema>;
+
+/**
+ * The `status` an arm reports once the run behind it is gone.
+ *
+ * Deliberately not one of the platform's own statuses: `AiEvaluationRun.status`
+ * has no value for "deleted", because the row that would carry it is what was
+ * deleted. The arm outlives its run on purpose, so this is the word for the half
+ * that did not — distinct from `queued`, which the same absent numbers would
+ * otherwise look exactly like.
+ *
+ * It lives here rather than in `comparison-admin.ts` for the same reason
+ * `endpoint.ts` exists: the board that renders this status is a client
+ * component, and that module imports Prisma — which builds a `pg.Pool` at
+ * import time and cannot be bundled for a browser. A status the client
+ * compares against is part of the wire contract, so this is its home.
+ */
+export const VOICE_RUN_DELETED_STATUS = 'run-deleted';

@@ -26,6 +26,15 @@
  * Silently reconciling the second case would quietly re-caption every historical
  * answer with a question it was never asked.
  *
+ * **The freeze is about the CASES, and only the cases.** `contentHash` is
+ * `hashDatasetCases(cases)` — it says nothing about the dataset's own name,
+ * description or tags, none of which any answer was given. So those are
+ * reconciled on the unchanged-cases path as well, whether or not that version has
+ * run: editing `dataset.description` in the content file changes the unit's
+ * `hashInputs` (so the unit re-runs) but not the content hash, and a unit that
+ * took the "already at v…" branch and returned would leave the stale words in the
+ * row for good while logging that everything was current.
+ *
  * ## The control agent
  *
  * `voice-control-bare` — deliberately NOT `lelanea-`-prefixed, because that
@@ -156,8 +165,34 @@ const unit: SeedUnit = {
 
     const existingDataset = await prisma.aiDataset.findUnique({
       where: { id: datasetId },
-      select: { id: true, contentHash: true, name: true, description: true, caseCount: true },
+      // Every column here is compared below. `caseCount` is the one exception and
+      // it is not selected: it is a function of the cases, so an equal
+      // `contentHash` already settles it.
+      select: {
+        id: true,
+        contentHash: true,
+        name: true,
+        description: true,
+        tags: true,
+        source: true,
+      },
     });
+
+    /** The projection's non-case columns that the stored row disagrees with. */
+    function staleDatasetFields(row: {
+      name: string;
+      description: string | null;
+      tags: string[];
+      source: string;
+    }): string[] {
+      const stale = (['name', 'description', 'source'] as const).filter(
+        (field) => row[field] !== datasetProjection[field]
+      );
+      const tagsDiffer =
+        row.tags.length !== datasetProjection.tags.length ||
+        row.tags.some((tag, index) => tag !== datasetProjection.tags[index]);
+      return tagsDiffer ? [...stale, 'tags'] : stale;
+    }
 
     if (!existingDataset) {
       await prisma.aiDataset.create({
@@ -178,7 +213,24 @@ const unit: SeedUnit = {
         `🎧 Created golden set ${datasetId} (${cases.length} prompts, hash ${contentHash.slice(0, 8)})`
       );
     } else if (existingDataset.contentHash === contentHash) {
-      logger.info(`⏭  golden set already at v${goldenSet.collection.version}`);
+      // The questions are current; the words ABOUT them may not be. Reconciling
+      // them here is safe whether or not the version has run — a name, a
+      // description and a tag list are not what any answer was given.
+      const stale = staleDatasetFields(existingDataset);
+      if (stale.length === 0) {
+        logger.info(`⏭  golden set already at v${goldenSet.collection.version}`);
+      } else {
+        await prisma.aiDataset.update({
+          where: { id: datasetId },
+          data: {
+            name: datasetProjection.name,
+            description: datasetProjection.description,
+            tags: datasetProjection.tags,
+            source: datasetProjection.source,
+          },
+        });
+        logger.info(`🎧 Corrected golden set ${datasetId}`, { fields: stale });
+      }
     } else if (await datasetIsFrozen(prisma, datasetId)) {
       // Refuse rather than reconcile. Deleting a scored case would fail with
       // P2003 anyway; the point of catching it here is to say WHY, and to name

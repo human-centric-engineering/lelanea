@@ -1,9 +1,9 @@
 ---
 name: app-voice
-description: The three layers of how she sounds — the always-on core, the register overlays, her own retrieved sentences — the designation rule that keeps voice-only material off the tool path, and the golden set she is heard through before anything changes.
+description: The three layers of the voice — the always-on core, the register overlays, her own retrieved sentences — the designation rule that keeps voice-only material off the tool path, and the golden set she is heard through before anything changes.
 ---
 
-# How she sounds: the three layers, and what may be quoted
+# Voice: the three layers, and what may be quoted
 
 Three layers and one rule, doing different jobs.
 
@@ -551,11 +551,32 @@ coming back unscored — two walls of text look exactly like a scored comparison
 
 ## The surface
 
-`/admin/app/voice` — **How she sounds** in the Lelañea admin section. One button
-queues a comparison; a picker puts a second one's columns in the same table,
+`/admin/app/voice` — **Voice** in the Lelañea admin section. The set is called
+_the voice test set_ on screen: "golden set" is the term in this document, in the
+content file and in the schema, and it stays there, but it is jargon on an
+operator page. One button queues a comparison, a dialog shows the authored
+questions and the control's whole system prompt before anything has been run; a picker puts a second one's columns in the same table,
 which is how two versions are read side by side. Each comparison brings its own
 bare arm, so a drop that both versions share is the model having a different day
 rather than her voice changing.
+
+**The page is two sections, and the split is the point.** A **Run** panel is
+everything above the fold: what a run would ask, what it would cost, and the
+button. Under it, **Results** carries the two pickers and everything about
+reading runs. The pickers used to sit in the same row of controls as the button,
+which put "which run am I reading" beside "spend money on a new one" — two
+different jobs, one of which is reversible. An admin arriving to run the test now
+meets only the invitation.
+
+**A run in flight is shown in motion.** Once an arm is draining, the Run panel
+stops being an invitation and becomes the run: a bar per arm advancing as cases
+land, the drained-of-expected count, and a pulse. The motion is what separates a
+page still attached to the run from one that has quietly stopped polling — a
+static count reads identically in both. Every animation is a stock Tailwind
+utility (`animate-ping`, `animate-pulse`, `animate-spin`) because custom
+keyframes would have to be added to `app/globals.css`, which is Sunrise's; all of
+them drop out under `prefers-reduced-motion`, and every fact they decorate is
+written out in text as well.
 
 Three things it shows that a scoreboard would not: **the prompt each column was
 given** (stored at queue time, so it is what produced the answers even if her core
@@ -564,11 +585,87 @@ finished** — answers arrive a case at a time as the worker drains, so a missin
 answer says whether it is "not yet" or "it failed" rather than leaving somebody
 looking at a half-empty table.
 
+### `completed` does not mean there is a result here
+
+Two counting traps, both of which render a failed arm as a working one. They are
+the same mistake at two levels, so fix them together or not at all.
+
+**`casesDone` is cases ATTEMPTED.** A case that failed still writes a result row,
+so the questions actually answered are `casesDone - casesFailed`. Reading
+`casesTotal` as "answered" because the run says `completed` is what produced
+`answered all 5, 5 failed` — a self-contradiction whose first half is simply
+false, on the one surface whose job is to say whether her voice has been checked.
+`armStatusLine()` now gives the all-failed case a sentence of its own rather than
+a count, because a reader scanning a column of numbers does not stop to subtract.
+
+**A failed case's `subjectOutput` is an empty STRING, not null.** So
+`output === null` passes it through as a real answer and the cell renders an
+empty paragraph — a column that says nothing at all, which reads as "still
+coming" forever. The check is on trimmed length.
+
+Both exist because upstream records a run in which **every** case failed as
+`status: 'completed'` with `errorMessage` null and `summary.scoredCount: 0` —
+filed as `sunrise#801`. Until that lands, `completed` is not evidence of a
+result and this surface has to do the arithmetic itself.
+
+### Before the press, and after it
+
+**The button says what it spends.** `GET /api/v1/admin/app/voice/preflight` reads
+back the model that would answer, the number of questions, and a planning-grade
+USD range for the whole comparison — both arms answering every case, and the
+judge scoring every answer. It is the platform's own
+`estimateEvaluationRunCost` called once per arm — scoped to the calling admin,
+since that is the ownership column its empirical calibration reads past runs
+through — and added, rather than one arm doubled: the two are only guaranteed equal while the arms stay comparable, which
+is the thing `assertArmsComparable` refuses to assume. A model with no published
+rate prices at $0, so `pricingKnown: false` travels with the number and the
+surface says "cost unknown" instead of a figure that reads as free. Every part of
+it can come back null — an unseeded set, a missing judge — and the route still
+answers 200, because this is a line above a button and the page is the
+comparisons.
+
+**A run can be stopped.** `POST /api/v1/admin/app/voice/comparisons/:id/cancel`
+flips both arms' runs to `cancelled`. The platform does the actual stopping:
+`run-worker.ts` re-reads status between cases and exits, and `markTerminal` is
+guarded by `status='running'`, so a tick already mid-case finishes that one and
+can never revert the row. It is the COMPARISON that stops, not a run — cancelling
+one arm leaves a full column beside a truncated one, which is the shape of a
+result rather than of an abandoned run, and it does not stop the spend either. An
+arm that finished in the same tick comes back in `alreadyFinished` rather than
+failing the call: the button lives on a polling surface, so that race is
+ordinary.
+
+### The page polls one endpoint, and that is a cap, not a preference
+
+Every route under `/api/v1/admin/` is on the platform's `admin` tier — 30
+requests a minute, keyed on the admin's user id (`lib/security/rate-limit-policy.ts`).
+The board originally polled the list AND the detail every four seconds, which is
+exactly 30/min: a run long enough to be worth watching spent its whole life at
+the cap, and the operator watched it through a "Too many requests" banner. It now
+reads the detail alone every five seconds — 12/min — and falls back to the list's
+statuses only when the detail is absent, which is what keeps a dropped request
+from ending the polling for good. A 429 pauses it for a minute rather than
+retrying into an empty bucket.
+
 **Answers are joined by case KEY, not by position.** Two versions of the set are
 allowed to reorder, drop and add prompts — that is what a version is — so a
 positional join would line the greeting up against the decline and render it as a
 regression. A question one version asked and the other did not renders as a gap,
 because a case silently missing from a comparison reads as a case that passed.
+
+**A key can be kept while its prompt is reworded**, and then no single wording is
+entitled to head the row. A case whose wording differs across the comparisons on
+screen is flagged (`promptVaries`), the heading says so, and each column carries
+the question it was actually asked. `mixedGoldenSets` already says the two sets
+differ _somewhere_; that is not the same claim.
+
+**An arm can outlive its run.** `AiEvaluationRun.user` cascades, so erasing the
+admin who queued a comparison deletes their runs — and the arm rows survive it
+(`ON DELETE SET NULL`), keeping the stored prompt, the version and the record
+that the check happened. The arm then reports `run-deleted` rather than an empty
+progress bar that reads exactly like `queued`, and every cell in its column says
+the answers are gone rather than that they have not arrived. The column stays in
+the grid: dropping it would slide every other answer one heading to the left.
 
 ## What the comparison cannot check
 
@@ -613,9 +710,20 @@ Routes: `GET`/`POST /api/v1/admin/app/voice/comparisons` and
 `ai_evaluation_run` is hand-written (a fork table must not add a reverse relation
 field to a Sunrise-owned model), so the schema and the database diverge on
 purpose and the development command reads that divergence as drift.
-`lib/app/leaf-db-drift.ts` pins the constraint and its `ON DELETE CASCADE`. The
+`lib/app/leaf-db-drift.ts` pins the constraint and its `ON DELETE SET NULL`. The
 comparison → arm FK is NOT probed: both tables are ours, Prisma can see the
 relation, and it will never emit a DROP for it.
+
+**`SET NULL` and not `CASCADE`, which is the opposite of the obvious choice.** An
+arm attributing a run that no longer exists sounds like the thing to avoid, and
+cascading is how you avoid it — but the run's own FK to `User` cascades, so
+`CASCADE` here meant that erasing one administrator destroyed the prompt, the
+version and the evidence of every comparison they had ever queued, leaving an
+`AppVoiceComparison` parent the surface still rendered with no arms at all. The
+per-case answers go either way (`ai_evaluation_case_result` hangs off the run and
+is Sunrise's to cascade); what must not go is the half these tables were added
+for, none of which is about that administrator. A null means one specific thing —
+the run that produced these answers is gone — and the surface says so.
 
 ## Tests
 

@@ -22,6 +22,11 @@
  * was never asked, which is a worse outcome than a loud failure and an
  * indistinguishable one from a correct comparison.
  *
+ * The freeze is about the CASES. The dataset's own name, description and tags are
+ * not what any answer was given, and `contentHash` says nothing about them — so
+ * they are reconciled on the unchanged-cases path, frozen version included, and
+ * the suite below pins that they reach the row at all.
+ *
  * ## 3. The control is reconciled back to bare
  *
  * An operator who attaches her profile to the control produces a comparison of
@@ -368,6 +373,65 @@ describe('the authored prompts changed', () => {
     // history row banked as applied.
     expect(writes.caseDeleteMany).toBe(0);
     expect(world.cases).toHaveLength(goldenSet.prompts.length);
+  });
+});
+
+describe('the words ABOUT the questions changed', () => {
+  /**
+   * `contentHash` is `hashDatasetCases(cases)` — it moves when a PROMPT changes
+   * and not when the dataset's description does. Editing the description in the
+   * content file therefore re-runs the unit (it is a `hashInputs` file) and lands
+   * on the "already at v…" branch, where a unit that simply logged and returned
+   * would leave the stale words in the row for good.
+   */
+  function staleWordsInTheRow(): void {
+    world.datasets[0].description = 'A description somebody edited in the admin UI.';
+    world.datasets[0].tags = ['stale'];
+  }
+
+  it('reconciles the description and tags without touching a single case', async () => {
+    await runSeed();
+    staleWordsInTheRow();
+    for (const key of Object.keys(writes) as (keyof typeof writes)[]) writes[key] = 0;
+
+    await runSeed();
+
+    expect(world.datasets[0]?.description).toBe(goldenSet.dataset.description);
+    expect(world.datasets[0]?.tags).toEqual([...goldenSet.dataset.tags]);
+    expect(writes.datasetUpdate).toBe(1);
+    // The questions were current, and re-writing them is the one thing that
+    // cannot be undone once answers hang off them.
+    expect(writes.caseDeleteMany).toBe(0);
+    expect(writes.caseCreateMany).toBe(0);
+  });
+
+  it('reconciles them on a version that has already been run, rather than refusing', async () => {
+    await runSeed();
+    staleWordsInTheRow();
+    world.runs.push({ id: 'run-1', datasetId });
+
+    // The freeze exists because an answer is only readable beside the question
+    // that produced it. A tag list is not a question, and nothing was answered
+    // against the description.
+    await expect(runSeed()).resolves.toBeUndefined();
+
+    expect(world.datasets[0]?.description).toBe(goldenSet.dataset.description);
+    expect(writes.caseDeleteMany).toBe(0);
+  });
+
+  it('names what it corrected', async () => {
+    await runSeed();
+    staleWordsInTheRow();
+    vi.mocked(logger.info).mockClear();
+
+    await runSeed();
+
+    // A silent correction of a row an operator may have edited on purpose is how
+    // the next person concludes the seed is not running at all.
+    const corrected = vi
+      .mocked(logger.info)
+      .mock.calls.find(([message]) => String(message).includes('Corrected golden set'));
+    expect(corrected?.[1]).toEqual({ fields: ['description', 'tags'] });
   });
 });
 

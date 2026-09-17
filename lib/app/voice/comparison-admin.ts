@@ -17,6 +17,22 @@
  * present in one version and absent from the other is shown with the gap
  * visible rather than quietly dropped.
  *
+ * ## Two states this file refuses to render as one
+ *
+ * **An arm whose run has been deleted.** `AiEvaluationRun.user` cascades, so
+ * erasing the admin who queued a comparison deletes their runs; the arm rows
+ * survive it (`ON DELETE SET NULL`) carrying the prompt and the version, which is
+ * what this table was added for. A null `evaluationRunId` therefore means one
+ * specific thing — *the run that produced these answers no longer exists* — and
+ * it is reported as that, not as an empty progress bar that reads "not yet".
+ *
+ * **A question two versions worded differently.** The merge key is the authored
+ * `key`, and a version is free to keep a key while rewording its prompt. Showing
+ * one wording above both versions' answers would be a claim this file has no
+ * basis for, so a case whose wording differs across the datasets on screen is
+ * flagged (`promptVaries`) and each answer carries the wording its own version
+ * actually asked.
+ *
  * @see lib/app/voice/comparison.ts
  * @see .context/app/voice.md
  */
@@ -26,6 +42,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/client';
 import { NotFoundError } from '@/lib/api/errors';
 import { BRAND_VOICE_JUDGE_SLUG, VOICE_ARM_LABELS, isVoiceArm } from '@/lib/app/voice/golden-set';
+import { VOICE_RUN_DELETED_STATUS } from '@/lib/validations/app-voice-comparison';
 
 /** How many comparisons the surface lists. Small on purpose — this is a log, not a table. */
 export const VOICE_COMPARISON_LIST_LIMIT = 25;
@@ -87,12 +104,17 @@ const caseMetadataSchema = z
 
 export interface VoiceComparisonArmView {
   arm: string;
-  /** `Her voice · v1.0` / `Bare model` — what a column is headed. */
+  /** `Voice profile · v1.0` / `Bare model` — what a column is headed. */
   label: string;
   agentSlug: string;
   fingerprintVersion: string | null;
-  evaluationRunId: string;
-  /** `queued` | `running` | `completed` | `failed` | `cancelled`, as the platform set it. */
+  /** Null once the run behind this arm has been deleted — the arm outlives it. */
+  evaluationRunId: string | null;
+  /**
+   * `queued` | `running` | `completed` | `failed` | `cancelled`, as the platform
+   * set it — or `run-deleted` (`VOICE_RUN_DELETED_STATUS`) once there is no run
+   * left to have set anything.
+   */
   status: string;
   progress: { casesTotal: number; casesDone: number; casesFailed: number };
   /** Mean brand-voice score across the run, once it has completed. */
@@ -115,11 +137,26 @@ export interface VoiceComparisonAnswer {
   arm: string;
   label: string;
   fingerprintVersion: string | null;
+  /**
+   * The wording THIS column's version of the golden set used.
+   *
+   * Only read by the surface when the case is flagged `promptVaries`; null when
+   * that version never asked this question, or when the run is gone and there is
+   * no dataset left to say which wording it was given.
+   */
+  prompt: string | null;
   /** Null until the worker has drained this case — or if it never asked it. */
   output: string | null;
   errorMessage: string | null;
   brandVoiceScore: number | null;
   brandVoiceReasoning: string | null;
+  /**
+   * True when the run that produced this answer has been deleted.
+   *
+   * A blank cell otherwise means "not yet"; this one means the answer existed and
+   * is gone, which is a different thing to tell somebody reading the table.
+   */
+  runDeleted: boolean;
 }
 
 export interface VoiceComparisonCase {
@@ -127,7 +164,22 @@ export interface VoiceComparisonCase {
   key: string;
   kind: string;
   probe: string;
+  /**
+   * The wording the first version on screen gave this question.
+   *
+   * Only a safe heading for the whole row while `promptVaries` is false; when it
+   * is true the versions disagree and each answer carries its own.
+   */
   prompt: string;
+  /**
+   * True when the comparisons on screen worded this question differently under
+   * the same key.
+   *
+   * Rewording a prompt without bumping its key is a legitimate edit — the key is
+   * what makes the two versions comparable at all. What is not legitimate is one
+   * wording rendered above answers that were given a different one.
+   */
+  promptVaries: boolean;
   answers: VoiceComparisonAnswer[];
 }
 
@@ -166,6 +218,62 @@ function columnId(comparisonId: string, arm: string): string {
   return `${comparisonId}:${arm}`;
 }
 
+/** The arm columns both reads select. */
+interface ArmRow {
+  arm: string;
+  agentSlug: string;
+  fingerprintVersion: string | null;
+  evaluationRunId: string | null;
+}
+
+/** The run columns both reads need; the detail selects `datasetId` on top. */
+interface RunRow {
+  id: string;
+  status: string;
+  progress: unknown;
+  summary: unknown;
+}
+
+/**
+ * The run behind an arm, if there still is one.
+ *
+ * Null id and missing row are not the same thing and are not collapsed here: the
+ * first is the FK having done its job, the second is a read race between the two
+ * queries this file makes. `armStatus` tells them apart; every other caller only
+ * cares that there are no numbers.
+ */
+function runOf<T extends RunRow>(arm: ArmRow, runById: Map<string, T>): T | undefined {
+  return arm.evaluationRunId === null ? undefined : runById.get(arm.evaluationRunId);
+}
+
+function armStatus(arm: ArmRow, run: RunRow | undefined): string {
+  if (arm.evaluationRunId === null) return VOICE_RUN_DELETED_STATUS;
+  // A non-null id with no row is a race, not a state: the FK nulls the column on
+  // delete, so the next read of this arm reports `run-deleted`. Said as `unknown`
+  // rather than guessed at in either direction.
+  return run?.status ?? 'unknown';
+}
+
+/** One arm, as both the list and the detail's summary block report it. */
+function toArmView(arm: ArmRow, run: RunRow | undefined): VoiceComparisonArmView {
+  const summary = summarySchema.parse(run?.summary ?? {});
+  return {
+    arm: arm.arm,
+    label: armLabel(arm.arm, arm.fingerprintVersion),
+    agentSlug: arm.agentSlug,
+    fingerprintVersion: arm.fingerprintVersion,
+    evaluationRunId: arm.evaluationRunId,
+    status: armStatus(arm, run),
+    progress: progressSchema.parse(run?.progress ?? {}),
+    brandVoiceMean: summary.stats?.[BRAND_VOICE_JUDGE_SLUG]?.mean ?? null,
+  };
+}
+
+/** The run ids worth querying — an arm whose run is gone has nothing to look up. */
+function runIdsOf(arms: readonly ArmRow[]): string[] {
+  return arms.map((arm) => arm.evaluationRunId).filter((id): id is string => id !== null);
+}
+
 // ---------------------------------------------------------------------------
 // The list
 // ---------------------------------------------------------------------------
@@ -189,7 +297,7 @@ export async function listVoiceComparisons(
   if (comparisons.length === 0) return [];
 
   const runs = await prisma.aiEvaluationRun.findMany({
-    where: { id: { in: comparisons.flatMap((c) => c.arms.map((a) => a.evaluationRunId)) } },
+    where: { id: { in: runIdsOf(comparisons.flatMap((c) => c.arms)) } },
     select: { id: true, status: true, progress: true, summary: true },
   });
   const runById = new Map(runs.map((run) => [run.id, run]));
@@ -199,23 +307,7 @@ export async function listVoiceComparisons(
     goldenSetVersion: comparison.goldenSetVersion,
     datasetContentHash: comparison.datasetContentHash,
     createdAt: comparison.createdAt,
-    arms: comparison.arms.map((arm) => {
-      const run = runById.get(arm.evaluationRunId);
-      const summary = summarySchema.parse(run?.summary ?? {});
-      return {
-        arm: arm.arm,
-        label: armLabel(arm.arm, arm.fingerprintVersion),
-        agentSlug: arm.agentSlug,
-        fingerprintVersion: arm.fingerprintVersion,
-        evaluationRunId: arm.evaluationRunId,
-        // A run row the platform deleted leaves the arm behind only until the
-        // FK cascades, so this is a race rather than a state — reported as
-        // `unknown` rather than guessed at.
-        status: run?.status ?? 'unknown',
-        progress: progressSchema.parse(run?.progress ?? {}),
-        brandVoiceMean: summary.stats?.[BRAND_VOICE_JUDGE_SLUG]?.mean ?? null,
-      };
-    }),
+    arms: comparison.arms.map((arm) => toArmView(arm, runOf(arm, runById))),
   }));
 }
 
@@ -248,7 +340,7 @@ export async function getVoiceComparison(
   const armRows = comparisons.flatMap((comparison) =>
     comparison.arms.map((arm) => ({ comparison, arm }))
   );
-  const runIds = armRows.map(({ arm }) => arm.evaluationRunId);
+  const runIds = runIdsOf(armRows.map(({ arm }) => arm));
 
   const runs = await prisma.aiEvaluationRun.findMany({
     where: { id: { in: runIds } },
@@ -260,7 +352,10 @@ export async function getVoiceComparison(
     prisma.aiDatasetCase.findMany({
       where: { datasetId: { in: [...new Set(runs.map((run) => run.datasetId))] } },
       select: { datasetId: true, position: true, input: true, metadata: true },
-      orderBy: { position: 'asc' },
+      // `datasetId` as the tie-break, not decoration: two versions give the same
+      // question the same position, and without it which of them seeds the case's
+      // heading is whatever order Postgres happened to return.
+      orderBy: [{ position: 'asc' }, { datasetId: 'asc' }],
     }),
     prisma.aiEvaluationCaseResult.findMany({
       where: { runId: { in: runIds } },
@@ -286,11 +381,14 @@ export async function getVoiceComparison(
     kind: string;
     probe: string;
     prompt: string;
+    promptVaries: boolean;
     answers: VoiceComparisonAnswer[];
   }
   const shells = new Map<string, CaseShell>();
   /** `(datasetId, key)` → the position that dataset gives the case. */
   const positionByDatasetAndKey = new Map<string, number>();
+  /** `(datasetId, key)` → the wording that dataset gives the case. */
+  const promptByDatasetAndKey = new Map<string, string>();
 
   for (const row of datasetCases) {
     const metadata = caseMetadataSchema.parse(row.metadata ?? {});
@@ -298,16 +396,25 @@ export async function getVoiceComparison(
     // under a synthetic key is better than a case silently missing from the
     // comparison — the reader can see something is wrong with it.
     const key = metadata.key ?? `position-${row.position}`;
+    const prompt = typeof row.input === 'string' ? row.input : JSON.stringify(row.input);
     positionByDatasetAndKey.set(`${row.datasetId}:${key}`, row.position);
+    promptByDatasetAndKey.set(`${row.datasetId}:${key}`, prompt);
 
-    if (!shells.has(key)) {
+    const shell = shells.get(key);
+    if (!shell) {
       shells.set(key, {
         key,
         kind: metadata.kind ?? 'unknown',
         probe: metadata.probe ?? '',
-        prompt: typeof row.input === 'string' ? row.input : JSON.stringify(row.input),
+        prompt,
+        promptVaries: false,
         answers: [],
       });
+    } else if (shell.prompt !== prompt) {
+      // Same key, different words. The heading loses the right to speak for the
+      // whole row; `mixedGoldenSets` already says the two sets differ somewhere,
+      // which is not the same as saying THIS question was reworded.
+      shell.promptVaries = true;
     }
   }
 
@@ -322,10 +429,34 @@ export async function getVoiceComparison(
   }));
 
   for (const { comparison, arm } of armRows) {
-    const run = runById.get(arm.evaluationRunId);
-    if (!run) continue;
+    const run = runOf(arm, runById);
+    const cell = {
+      columnId: columnId(comparison.id, arm.arm),
+      comparisonId: comparison.id,
+      arm: arm.arm,
+      label: armLabel(arm.arm, arm.fingerprintVersion),
+      fingerprintVersion: arm.fingerprintVersion,
+    };
 
     for (const [shellKey, shell] of shells) {
+      // No run: the column still exists — its prompt and its version are the half
+      // this table was added to keep — but every cell says the answers are gone
+      // rather than leaving the gap that means "not yet". Skipping the arm
+      // entirely, which is what this used to do, also took the column out of the
+      // grid and silently re-aligned every other answer under the wrong heading.
+      if (!run) {
+        shell.answers.push({
+          ...cell,
+          prompt: null,
+          output: null,
+          errorMessage: null,
+          brandVoiceScore: null,
+          brandVoiceReasoning: null,
+          runDeleted: true,
+        });
+        continue;
+      }
+
       // Which position does THIS arm's dataset give the case? Two golden-set
       // versions can order the same prompt differently, which is exactly why the
       // lookup goes through the key rather than assuming the positions agree.
@@ -338,15 +469,13 @@ export async function getVoiceComparison(
       const brandVoice = scores[BRAND_VOICE_JUDGE_SLUG];
 
       shell.answers.push({
-        columnId: columnId(comparison.id, arm.arm),
-        comparisonId: comparison.id,
-        arm: arm.arm,
-        label: armLabel(arm.arm, arm.fingerprintVersion),
-        fingerprintVersion: arm.fingerprintVersion,
+        ...cell,
+        prompt: promptByDatasetAndKey.get(`${run.datasetId}:${shellKey}`) ?? null,
         output: result?.subjectOutput ?? null,
         errorMessage: result?.errorMessage ?? null,
         brandVoiceScore: brandVoice?.score ?? null,
         brandVoiceReasoning: brandVoice?.reasoning ?? null,
+        runDeleted: false,
       });
     }
   }
@@ -356,20 +485,7 @@ export async function getVoiceComparison(
     goldenSetVersion: comparison.goldenSetVersion,
     datasetContentHash: comparison.datasetContentHash,
     createdAt: comparison.createdAt,
-    arms: comparison.arms.map((arm) => {
-      const run = runById.get(arm.evaluationRunId);
-      const summary = summarySchema.parse(run?.summary ?? {});
-      return {
-        arm: arm.arm,
-        label: armLabel(arm.arm, arm.fingerprintVersion),
-        agentSlug: arm.agentSlug,
-        fingerprintVersion: arm.fingerprintVersion,
-        evaluationRunId: arm.evaluationRunId,
-        status: run?.status ?? 'unknown',
-        progress: progressSchema.parse(run?.progress ?? {}),
-        brandVoiceMean: summary.stats?.[BRAND_VOICE_JUDGE_SLUG]?.mean ?? null,
-      };
-    }),
+    arms: comparison.arms.map((arm) => toArmView(arm, runOf(arm, runById))),
   }));
 
   return {

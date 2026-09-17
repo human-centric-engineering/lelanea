@@ -5,8 +5,8 @@
  *
  * Its whole job is `getComparisons()` — fetch, validate, or fall back — and then
  * handing the list to the board. So the branches ARE the page, and the one that
- * matters is the failure: the board's empty state says "Nothing has been run
- * through the golden set yet", which on a broken fetch is a false statement
+ * matters is the failure: the board's empty state says "The voice test has not
+ * been run yet", which on a broken fetch is a false statement
  * about the product on the surface whose only job is to answer that question
  * (`HB9`). The page carries `loadError` so the two are told apart.
  *

@@ -191,9 +191,11 @@ async function main(): Promise<void> {
         'each question has a column per arm, empty until the worker drains'
       );
     } finally {
-      // The runs go with it: `ON DELETE CASCADE` on the arm's FK removes the arm
-      // rows, and the runs are deleted here explicitly because the cascade runs
-      // the other way — an arm depends on a run, not the reverse.
+      // Both deletes are needed, and neither implies the other. Deleting the runs
+      // only NULLS the arms' `evaluationRunId` (`ON DELETE SET NULL` — the arm
+      // outlives its run on purpose, so erasing an admin cannot destroy a
+      // comparison's evidence); what removes the arm rows is deleting the
+      // comparison, whose own FK cascades and is ours.
       await prisma.aiEvaluationRun.deleteMany({
         where: { id: { in: queued.arms.map((arm) => arm.evaluationRunId) } },
       });

@@ -79,9 +79,9 @@ export function initLeafAdminNav(): void {
       },
       {
         href: VOICE_COMPARISON_PAGE,
-        label: 'How she sounds',
+        label: 'Voice',
         icon: AudioLines,
-        description: 'Her voice against a bare model, over the same fixed questions',
+        description: 'The assembled voice against a bare model, over the same fixed questions',
       },
     ],
   });

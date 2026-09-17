@@ -58,7 +58,7 @@ export function goldenSetDatasetId(version: string): string {
 export const VOICE_CONTROL_AGENT_SLUG = 'voice-control-bare';
 
 /**
- * The judge that scores how close an answer sits to her brand voice.
+ * The judge that scores how close an answer sits to the brand voice.
  *
  * A platform-seeded agent (`prisma/seeds/016-evaluation-judges.ts`), and the one
  * metric a comparison attaches. It is what turns "visibly does not" into a
@@ -71,7 +71,7 @@ export const BRAND_VOICE_JUDGE_SLUG = 'eval-judge-brand-voice';
  * The arm names, as stored.
  *
  * A TypeScript union over a `String` column rather than a Prisma enum: a third
- * arm — her agent with the profile detached, which isolates the fingerprint
+ * arm — the voice agent with the profile detached, which isolates the fingerprint
  * rather than the whole prompt — should cost an edit here and a re-queue, not a
  * migration on a table holding history.
  */
@@ -80,7 +80,7 @@ export type VoiceArm = (typeof VOICE_ARMS)[number];
 
 /** How an arm is labelled wherever a person reads one. */
 export const VOICE_ARM_LABELS: Record<VoiceArm, string> = {
-  fingerprint: 'Her voice',
+  fingerprint: 'Voice profile',
   bare: 'Bare model',
 };
 

@@ -322,7 +322,10 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
     };
 
     await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
-      /the control is wearing her voice/i
+      // Matched on the structural fact, not the sentence: the other arm-prompt
+      // branch says "carries NO fingerprint version", so this still
+      // discriminates when the wording is edited.
+      /carries fingerprint v/i
     );
   });
 

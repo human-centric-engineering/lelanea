@@ -271,10 +271,23 @@ model AppVoiceComparison {
 /// **`evaluationRunId` is a plain scalar with no Prisma `@relation`** — a fork
 /// table must not add a reverse field to a Sunrise-owned model
 /// (CUSTOMIZATION.md §5). The foreign key is hand-written in the
-/// `app_voice_comparison` migration with `ON DELETE CASCADE` — an arm is
-/// meaningless without the run whose outputs it attributes — and pinned by a
-/// drift probe in `lib/app/leaf-db-drift.ts` so a future `migrate dev` cannot
-/// quietly drop it.
+/// `app_voice_comparison` migration and pinned by a drift probe in
+/// `lib/app/leaf-db-drift.ts` so a future `migrate dev` cannot quietly drop it.
+///
+/// **`ON DELETE SET NULL`, not `CASCADE`, and the reason is the whole point of
+/// this table.** `AiEvaluationRun.user` is `onDelete: Cascade`, so erasing the
+/// admin who queued a comparison deletes their runs. Under `CASCADE` that took
+/// this row with them — the stored prompt, the version, the record that the
+/// check happened at all — and left an `AppVoiceComparison` the surface still
+/// rendered with no arms and no explanation. The answers go either way, because
+/// `AiEvaluationCaseResult` hangs off the run and is Sunrise's to cascade. What
+/// must not go is the half this table exists for: nothing here is about the
+/// admin, so their erasure has no business destroying it. Caught by
+/// /code-review.
+///
+/// A null therefore means one specific thing — *the run that produced these
+/// answers no longer exists* — and the surface says so rather than reporting
+/// the case as not yet answered.
 model AppVoiceComparisonArm {
   id                 String   @id @default(cuid())
   comparisonId       String
@@ -292,8 +305,11 @@ model AppVoiceComparisonArm {
   fingerprintVersion String?
   /// What this arm was actually told, composed at queue time.
   systemPrompt       String   @db.Text
-  /// Hand-written FK → `ai_evaluation_run`. See the note above.
-  evaluationRunId    String   @unique
+  /// Hand-written FK → `ai_evaluation_run`. Null once that run has been
+  /// deleted — see the note above. `@unique` still holds: Postgres admits
+  /// several nulls in a unique index, and `@@unique([comparisonId, arm])` is
+  /// what actually keeps one row per arm.
+  evaluationRunId    String?  @unique
   createdAt          DateTime @default(now())
 
   comparison AppVoiceComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
