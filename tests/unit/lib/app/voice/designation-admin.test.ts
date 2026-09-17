@@ -53,7 +53,11 @@ import { prisma } from '@/lib/db/client';
 import { invalidateAllAgentAccess } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
 import { clearContextCache } from '@/lib/orchestration/chat/context-builder';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
-import { setDesignation, listDesignatedDocuments } from '@/lib/app/voice/designation-admin';
+import {
+  setDesignation,
+  listDesignatedDocuments,
+  retrievalState,
+} from '@/lib/app/voice/designation-admin';
 import { purposeTagSlug, sensitivityTagSlug } from '@/lib/app/voice/designation';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
 
@@ -373,5 +377,128 @@ describe('listDesignatedDocuments', () => {
     // And the COUNT takes the same filter, or the pager would report a total the
     // rows cannot add up to.
     expect(db.aiKnowledgeDocument.count.mock.calls[0]?.[0]?.where.scope).toBe(APP_SCOPE);
+  });
+});
+
+describe('retrievalState — whether there is anything to retrieve', () => {
+  // The OTHER axis from `isQuotable()`. The bug this pins: the admin list said
+  // the agent may quote a `pending_review` document with zero chunks, which the
+  // rule does permit and which the search tool cannot reach a word of.
+  //
+  // Every negative case sits beside the positive one so the claim is not an
+  // absence passing on an empty set (`fp6`).
+  it('is retrievable only when the document is ready AND has chunks', () => {
+    expect(retrievalState({ status: 'ready', chunkCount: 12 })).toBe('retrievable');
+    expect(retrievalState({ status: 'ready', chunkCount: 1 })).toBe('retrievable');
+  });
+
+  it('is `empty` for a ready document the parser found nothing in', () => {
+    // A real state, not a hypothetical: `document-manager.ts` writes
+    // `{ status: 'ready', chunkCount: 0 }` on three separate paths when chunking
+    // yields nothing, so "ready" on its own is not an answer.
+    expect(retrievalState({ status: 'ready', chunkCount: 0 })).toBe('empty');
+    expect(retrievalState({ status: 'ready', chunkCount: 12 })).toBe('retrievable');
+  });
+
+  it('is `failed` for a document that never parsed', () => {
+    expect(retrievalState({ status: 'failed', chunkCount: 0 })).toBe('failed');
+  });
+
+  it('is `pending` for every status that is not yet ready', () => {
+    // The five the CHECK constraint on `ai_knowledge_document.status` allows,
+    // minus the two answered above.
+    expect(retrievalState({ status: 'processing', chunkCount: 0 })).toBe('pending');
+    expect(retrievalState({ status: 'pending_review', chunkCount: 0 })).toBe('pending');
+    expect(retrievalState({ status: 'cleaning', chunkCount: 0 })).toBe('pending');
+  });
+
+  it('treats an unrecognised status with nothing in it as pending', () => {
+    // The safe direction on a platform sync: a status a later Sunrise release
+    // adds must not default into "the agent may quote this".
+    expect(retrievalState({ status: 'quarantined', chunkCount: 0 })).toBe('pending');
+  });
+
+  // The order of the two checks, which a first draft had the wrong way round.
+  //
+  // `rechunkDocument`'s catch writes `{ status: 'failed' }` and leaves every
+  // existing chunk and the old `chunkCount` in place, and `searchKnowledge`
+  // never filters on `d.status` — so the agent goes on quoting the document.
+  // Deciding on status first would render "Nothing to quote. Upload it again"
+  // about a document being quoted right now, and the re-upload would create a
+  // second row while the original's chunks stayed searchable.
+  //
+  // Reverting the order fails all three of these.
+  it('says retrievable when the chunks are still there, whatever the status says', () => {
+    expect(retrievalState({ status: 'failed', chunkCount: 9 })).toBe('retrievable');
+    expect(retrievalState({ status: 'processing', chunkCount: 9 })).toBe('retrievable');
+    expect(retrievalState({ status: 'quarantined', chunkCount: 40 })).toBe('retrievable');
+    // And the same statuses with nothing behind them still read as they should,
+    // so this is not the chunk check swallowing the status one.
+    expect(retrievalState({ status: 'failed', chunkCount: 0 })).toBe('failed');
+    expect(retrievalState({ status: 'processing', chunkCount: 0 })).toBe('pending');
+  });
+});
+
+describe('the list carries both axes', () => {
+  it('reports retrieval alongside quotable, so neither can be inferred from the other', async () => {
+    // The four combinations that matter, in one list: permitted and reachable,
+    // permitted and NOT reachable (the bug), denied and reachable, denied and
+    // not. `quotable` must be blind to status and `retrieval` blind to the
+    // designation — a single field could not say all four.
+    db.aiKnowledgeDocument.findMany.mockResolvedValueOnce([
+      {
+        id: 'ready-knowledge',
+        name: 'A method note',
+        fileName: 'method.md',
+        status: 'ready',
+        chunkCount: 9,
+        createdAt: new Date('2026-01-01'),
+        tags: [{ tag: { slug: purposeTagSlug('knowledge') } }],
+      },
+      {
+        id: 'awaiting-knowledge',
+        name: 'A PDF she just uploaded',
+        fileName: 'talk.pdf',
+        status: 'pending_review',
+        chunkCount: 0,
+        createdAt: new Date('2026-01-02'),
+        tags: [{ tag: { slug: purposeTagSlug('knowledge') } }],
+      },
+      {
+        id: 'ready-voice',
+        name: 'A Substack post',
+        fileName: 'post.md',
+        status: 'ready',
+        chunkCount: 4,
+        createdAt: new Date('2026-01-03'),
+        tags: [{ tag: { slug: purposeTagSlug('voice') } }],
+      },
+      {
+        id: 'failed-voice',
+        name: 'A talk recording',
+        fileName: 'talk.wav',
+        status: 'failed',
+        chunkCount: 0,
+        createdAt: new Date('2026-01-04'),
+        tags: [{ tag: { slug: purposeTagSlug('voice') } }],
+      },
+    ]);
+    db.aiKnowledgeDocument.count.mockResolvedValueOnce(4);
+    db.appKnowledgeDesignation.findMany.mockResolvedValueOnce([]);
+
+    const { documents } = await listDesignatedDocuments({
+      undesignatedOnly: false,
+      page: 1,
+      limit: 25,
+    });
+
+    expect(documents.map((d) => [d.id, d.quotable, d.retrieval])).toEqual([
+      ['ready-knowledge', true, 'retrievable'],
+      // The one the bug was about: the rule permits it, and there is nothing
+      // there to permit.
+      ['awaiting-knowledge', true, 'pending'],
+      ['ready-voice', false, 'retrievable'],
+      ['failed-voice', false, 'failed'],
+    ]);
   });
 });

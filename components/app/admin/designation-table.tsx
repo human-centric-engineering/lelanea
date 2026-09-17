@@ -19,6 +19,22 @@
  * table is where that answer is given, and the `Agent may quote` column is where
  * the consequence of giving it is visible on the same screen.
  *
+ * ## `Agent may quote` answers two questions, and says so when they disagree
+ *
+ * The rule says whether the agent MAY quote a document; the document's own
+ * ingestion decides whether there is anything to quote. They are different
+ * axes and they come apart routinely — a PDF sitting in `pending_review` with
+ * zero chunks is permitted by the rule and reachable by nothing. The cell
+ * rendered "Yes" for that, which is the same shape of untrue claim as the
+ * `system`-scoped row above, from the other direction: the rule permits it, and
+ * there is nothing there to permit.
+ *
+ * So the cell renders THREE answers, from two server-computed verdicts it never
+ * re-derives — `quotable` from `isQuotable()` and `retrieval` from
+ * `retrievalState()`. Collapsing them into one boolean is the tempting fix and
+ * the wrong one: it hides which half is missing, and the next reader
+ * reasonably makes the grant rule depend on ingestion state.
+ *
  * ## The undesignated filter is the point of the page, not a convenience
  *
  * A document nobody has answered for reaches nothing — the rule is
@@ -42,7 +58,7 @@
 
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Ban, ChevronLeft, ChevronRight, Quote, Search } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, CircleSlash, Quote, Search } from 'lucide-react';
 
 import {
   Table,
@@ -70,7 +86,7 @@ import { ClientDate } from '@/components/ui/client-date';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
-import type { DesignatedDocument } from '@/lib/app/voice/designation-admin';
+import type { DesignatedDocument, RetrievalState } from '@/lib/app/voice/designation-admin';
 import { DESIGNATION_ADMIN_ENDPOINT } from '@/lib/app/voice/endpoint';
 import { LICENSING_MAX } from '@/lib/validations/app-knowledge-designation';
 import {
@@ -87,6 +103,63 @@ const COLUMN_COUNT = 6;
 
 /** The `<Select>` value standing for "no answer". Radix rejects `''` as an item value. */
 const UNSET = '__unset__';
+
+/**
+ * What the `Agent may quote` cell says when the rule permits the document and
+ * there is nothing of it to retrieve.
+ *
+ * A lookup keyed on the server's `retrieval` verdict, never a derivation from
+ * `status` and `chunkCount`. That distinction is the whole point of the cell:
+ * the moment the component reasons about ingestion itself, this surface and
+ * `retrievalState()` can disagree about what "ready" means, in the same way a
+ * `quotable` computed in JSX would drift from `isQuotable()`.
+ *
+ * `retrievable` is absent because it is the only state with nothing to
+ * apologise for, and `Record<Exclude<…>>` is what makes adding a fifth state to
+ * {@link RetrievalState} a type error here rather than a silent `undefined` in
+ * a table cell.
+ *
+ * Kept short on purpose — the column's own `FieldHelp` carries the long form,
+ * and a sentence in a table cell widens the column it sits in.
+ *
+ * The copy separates the two things she can do about it. `pending` is a wait —
+ * and deliberately does not promise the wait ends, because `pending_review` has
+ * no resume path in any tier (upstream `sunrise#807`); the row's own
+ * `· N chunks · status` line beside the name says which state it is actually
+ * in. `failed` and `empty` are hers to act on, so they name the act (`HB10`).
+ *
+ * **Each reason leads with an act she can perform from THIS page**, which is
+ * the upload zone directly above. Deleting a document is only available in AI
+ * Orchestration → Knowledge — the tier this page exists to stop sending her to
+ * — so the fact that a re-upload leaves the original row behind is in the
+ * column's help rather than at the front of a table cell.
+ *
+ * **The two acts are different, and saying "upload it again" to both was
+ * wrong.** `uploadDocument` dedupes on `{ fileHash, status: 'ready' }`, and an
+ * `empty` document IS `ready` — so re-uploading the same file returns the
+ * existing row, re-processes nothing, and reports success while the cell goes
+ * on saying "Nothing to quote". That is a remedy that quietly does nothing,
+ * which is what `HB10` is about. A `failed` document is genuinely retried by a
+ * re-upload, because the dedupe deliberately skips failed rows. Caught by
+ * /code-review.
+ */
+const RETRIEVAL_COPY: Record<
+  Exclude<RetrievalState, 'retrievable'>,
+  { label: string; reason: string }
+> = {
+  pending: {
+    label: 'Not yet',
+    reason: 'Permitted, but nothing is chunked yet — see the status by the name.',
+  },
+  failed: {
+    label: 'Nothing to quote',
+    reason: 'Permitted, but it never parsed. Upload it again to retry.',
+  },
+  empty: {
+    label: 'Nothing to quote',
+    reason: 'Permitted, but no text was found in it. Upload a readable copy instead.',
+  },
+};
 
 interface DesignationTableProps {
   initialDocuments: Row[];
@@ -340,6 +413,11 @@ export function DesignationTable({
    * with what was sent — `quotable` is the server's to compute, and a client that
    * guessed it would be a second implementation of the rule.
    *
+   * `retrieval` is deliberately NOT in the response and is left as it stands on
+   * the row: a designation write changes what the rule permits, never what has
+   * been chunked. Recomputing it here would be the client deriving the axis the
+   * cell exists not to derive.
+   *
    * Returns whether the write landed, so a caller holding unsaved text the admin
    * typed can keep it on a failure rather than discarding it into a banner.
    */
@@ -517,6 +595,26 @@ export function DesignationTable({
                   <strong>full</strong> access searches everything and is not governed by this
                   column at all.
                 </p>
+                <p className="mt-2">
+                  <strong>Two separate questions, and both have to hold.</strong> The designation
+                  says whether the agent <em>may</em> quote it; the document itself decides whether
+                  there is anything to quote. A document still being processed, one waiting on a
+                  preview it will never get, and one that failed to parse all have no text in the
+                  search index — so a permitted document with nothing behind it reads{' '}
+                  <strong>Not yet</strong> or <strong>Nothing to quote</strong> rather than{' '}
+                  <strong>Yes</strong>.
+                </p>
+                <p className="mt-2">
+                  A document whose chunks are still in the index reads <strong>Yes</strong> even if
+                  its status says <em>failed</em> — a re-chunk that fell over leaves the old text
+                  searchable, and the agent is still quoting it.
+                </p>
+                <p className="mt-2">
+                  <strong>Uploading again adds a document; it does not replace one.</strong> The
+                  original row stays in this list, still saying the same thing. Remove it from{' '}
+                  <strong>AI Orchestration → Knowledge</strong>, which is also the only place a
+                  document can be deleted.
+                </p>
               </FieldHelp>
             </TableHead>
             <TableHead>Added</TableHead>
@@ -650,16 +748,39 @@ export function DesignationTable({
               </TableCell>
 
               <TableCell>
-                {document.quotable ? (
+                {/*
+                  Three answers, because there are two axes and they can
+                  disagree. `quotable` is the rule's verdict and `retrieval` is
+                  ingestion's; a document permitted by the first with nothing
+                  behind the second used to render "Yes", which is the one thing
+                  this column exists not to say.
+                */}
+                {!document.quotable ? (
+                  <Badge variant="outline" className="text-muted-foreground gap-1">
+                    <Ban className="h-3 w-3" aria-hidden="true" />
+                    No
+                  </Badge>
+                ) : document.retrieval === 'retrievable' ? (
                   <Badge variant="default" className="gap-1">
                     <Quote className="h-3 w-3" aria-hidden="true" />
                     Yes
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-muted-foreground gap-1">
-                    <Ban className="h-3 w-3" aria-hidden="true" />
-                    No
-                  </Badge>
+                  <>
+                    <Badge variant="secondary" className="gap-1">
+                      <CircleSlash className="h-3 w-3" aria-hidden="true" />
+                      {RETRIEVAL_COPY[document.retrieval].label}
+                    </Badge>
+                    {/*
+                      Capped, because a table column sizes to its widest cell:
+                      an unconstrained sentence here drags this column wide and
+                      squeezes the two selects an admin actually uses. The
+                      fuller explanation is in the column's own help.
+                    */}
+                    <p className="text-muted-foreground mt-1 max-w-52 text-xs">
+                      {RETRIEVAL_COPY[document.retrieval].reason}
+                    </p>
+                  </>
                 )}
               </TableCell>
 

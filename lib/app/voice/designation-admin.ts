@@ -24,6 +24,20 @@
  * a guard that says "not found" and nothing else is advice rather than a
  * mechanism (`HB10`).
  *
+ * ## Two axes, kept apart — *may* and *can*
+ *
+ * A row carries both `quotable` and `retrieval`, and they answer different
+ * questions. `isQuotable()` is the grant rule: whether the designation PERMITS
+ * `search_knowledge_base` to quote the document. `retrievalState()` is
+ * ingestion: whether there is a chunk for it to find. The surface said "Yes"
+ * about a `pending_review` document with zero chunks because it had only the
+ * first, and the first is true of that document — the rule does permit it, and
+ * there is nothing there to permit.
+ *
+ * Collapsing them into one boolean is the tempting fix and the wrong one: it
+ * would put the grant rule's answer and ingestion state behind the same name,
+ * and the next reader would reasonably make `isQuotable()` consult status.
+ *
  * @see lib/app/voice/designation.ts — the vocabulary and the rule
  * @see prisma/seeds/app-lelanea/002-knowledge-designation.ts — where the tags come from
  */
@@ -51,6 +65,70 @@ import type {
   DesignationUpdate,
 } from '@/lib/validations/app-knowledge-designation';
 
+/**
+ * Whether the agent's search tool has anything of this document to retrieve.
+ *
+ * The OTHER axis, and the reason this type exists. {@link isQuotable} answers
+ * *may* — a permission, derived from purpose and sensitivity. This answers
+ * *can* — whether there is a chunk in the database for `search_knowledge_base`
+ * to find. A document sitting in `pending_review` with zero chunks is permitted
+ * by the rule and reachable by nothing, and the admin surface said "Yes" about
+ * exactly that.
+ *
+ * Kept apart from the grant rule on purpose. Folding retrieval into
+ * `isQuotable()` would make the rule the agent obeys depend on ingestion state,
+ * so a document would silently leave and re-enter the permitted set as it was
+ * re-chunked — and `lib/app/voice/designation.ts` is deliberately a pure
+ * function of the designation, which is what lets the contributor, the surface
+ * and the test all read the same sentence.
+ *
+ * - `retrievable` — it has chunks. The tool can reach it, whatever the status
+ *   column happens to say.
+ * - `pending` — no chunks, and not `ready` yet: `processing`, `pending_review`,
+ *   `cleaning`, or any status a later platform release adds. The safe default.
+ * - `failed` — no chunks, and the document did not parse.
+ * - `empty` — no chunks, and `ready`. The parser found nothing to chunk. A real
+ *   state: `document-manager.ts` writes `{ status: 'ready', chunkCount: 0 }` on
+ *   three separate paths when chunking yields nothing, so "ready" alone is not
+ *   an answer either.
+ */
+export type RetrievalState = 'retrievable' | 'pending' | 'failed' | 'empty';
+
+/**
+ * What the search tool can reach of one document.
+ *
+ * **Chunks are the load-bearing half, not status — and the ORDER below is that
+ * sentence made true.** `searchKnowledge` (and `searchKnowledgeWithEmbedding`)
+ * in `lib/orchestration/knowledge/search.ts` selects from `ai_knowledge_chunk`
+ * joined to the document, filtered on the chunk's own `embedding IS NOT NULL`
+ * and never on `d.status` — so the chunk count is what actually decides whether
+ * a passage can come back. (Every app-scope insert writes the chunk and its
+ * embedding in one transaction, so for this list the two conditions coincide;
+ * the only unembedded-chunk path is the system-scoped seeder this list already
+ * excludes.)
+ *
+ * Status is consulted only once the chunk count has said there is nothing, and
+ * a first draft had it the other way round. That draft was this bug inverted.
+ * `rechunkDocument`'s `catch` writes `{ status: 'failed' }` and leaves every
+ * existing chunk and the old `chunkCount` untouched — so a re-chunk whose
+ * embedding call rate-limits leaves a document the agent is still quoting
+ * verbatim, and a status-first reading would have called it "Nothing to quote"
+ * and told her to upload it again. That re-upload creates a SECOND document
+ * while the original's chunks stay searchable, which is worse than saying
+ * nothing. `processing` has the same window for the same reason. Caught by
+ * /code-review.
+ *
+ * Once there are no chunks, status is the only thing separating "not yet" from
+ * "not without doing something", which is the difference between a state she
+ * should wait out and one she has to act on.
+ */
+export function retrievalState(document: { status: string; chunkCount: number }): RetrievalState {
+  if (document.chunkCount > 0) return 'retrievable';
+  if (document.status === 'failed') return 'failed';
+  if (document.status !== 'ready') return 'pending';
+  return 'empty';
+}
+
 /** One row of the admin list: the document, what it is designated, and the consequence. */
 export interface DesignatedDocument {
   id: string;
@@ -63,13 +141,25 @@ export interface DesignatedDocument {
   sensitivity: DocumentSensitivity | null;
   licensing: string | null;
   /**
-   * Whether the agent's search tool may retrieve and quote this document.
+   * Whether the agent's search tool MAY retrieve and quote this document.
    *
    * Derived here rather than in the component, because it is the answer the page
    * exists to show and a second implementation of `isQuotable()` in JSX is how
    * the surface and the rule drift apart.
+   *
+   * It is a permission and nothing more. `true` beside a `retrieval` of
+   * anything but `retrievable` is not a contradiction — it is the honest pair,
+   * and the column has to render both or it asserts a quote that cannot happen.
    */
   quotable: boolean;
+  /**
+   * Whether there is anything of it to retrieve — see {@link RetrievalState}.
+   *
+   * Derived on the server for the same reason `quotable` is: the cell renders a
+   * verdict rather than reasoning from `status` and `chunkCount` in JSX, so the
+   * two surfaces cannot disagree about what "ready" means.
+   */
+  retrieval: RetrievalState;
 }
 
 /** The admin list: every document SHE uploaded, newest first, with its designation. */
@@ -157,6 +247,7 @@ export async function listDesignatedDocuments(
       createdAt: row.createdAt,
       ...designation,
       quotable: isQuotable(designation),
+      retrieval: retrievalState(row),
     };
   });
 
