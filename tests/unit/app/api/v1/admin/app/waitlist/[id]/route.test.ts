@@ -50,6 +50,8 @@ const ENTRY = {
   removedAt: '2026-09-11T12:00:00.000Z',
   rejoinRequestedAt: null,
   rejoinRequests: 0,
+  invitedAt: null,
+  joinedAt: null,
 };
 
 function request(body: unknown, id = ENTRY_ID) {

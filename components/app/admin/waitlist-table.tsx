@@ -443,11 +443,12 @@ export function WaitlistTable({
         );
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
+        // The row may have moved (a 409 says so); show it as it stands — and
+        // only THEN say why, because `fetchPage` clears the error on its way in.
+        await fetchPage(meta.page, appliedSearch, appliedFilters);
         setError(
           err instanceof APIClientError ? err.message : 'That invitation was not sent. Try again.'
         );
-        // The row may have moved (a 409 says so); show it as it stands.
-        await fetchPage(meta.page, appliedSearch, appliedFilters);
       } finally {
         setMutatingId(null);
       }

@@ -54,11 +54,19 @@ import {
   eraseWaitlistEntriesForUser,
   registerWaitlistErasureHook,
   WAITLIST_ERASURE_HOOK,
+  linkWaitlistEntryToUser,
+  registerWaitlistLinkHook,
+  WAITLIST_LINK_HOOK,
 } from '@/lib/app/waitlist/service';
 import {
   getErasureCleanupHooks,
   __resetErasureCleanupHooksForTests,
 } from '@/lib/privacy/erasure-hooks';
+import {
+  dispatchUserCreated,
+  __resetUserCreatedHooksForTests,
+  type UserCreatedContext,
+} from '@/lib/auth/user-created-hooks';
 
 /** The shape `eraseUser()` hands a hook: a transaction client and a user id. */
 function txContext() {
@@ -463,5 +471,130 @@ describe('registerWaitlistErasureHook', () => {
     registerWaitlistErasureHook();
 
     expect(getErasureCleanupHooks()).toHaveLength(1);
+  });
+});
+
+/** What `userCreateAfterHook` dispatches once a signup has created its row. */
+function newAccount(overrides: Partial<UserCreatedContext> = {}): UserCreatedContext {
+  return {
+    userId: 'user-1',
+    email: 'ada@example.com',
+    name: 'Ada',
+    signupMethod: 'email',
+    viaInvitation: true,
+    ...overrides,
+  };
+}
+
+describe('linkWaitlistEntryToUser (t-46)', () => {
+  beforeEach(() => {
+    findUnique.mockResolvedValue({ id: 'entry-1', userId: null });
+  });
+
+  it('links the row whose address matches, and stamps when they joined', async () => {
+    await linkWaitlistEntryToUser(newAccount());
+
+    const call = updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({ id: 'entry-1', userId: null });
+    expect(call.data.userId).toBe('user-1');
+    expect(call.data.joinedAt).toBeInstanceOf(Date);
+    // Exactly these two. `removedAt` and the re-join record are different
+    // states and are left as they were; the export discloses both.
+    expect(Object.keys(call.data).sort()).toEqual(['joinedAt', 'userId']);
+  });
+
+  it('matches on a lower-cased exact address, never on mode: insensitive', async () => {
+    await linkWaitlistEntryToUser(newAccount({ email: '  Ada@Example.COM ' }));
+
+    // The same rule as `subjectMatch()`, for the same reason: `insensitive`
+    // compiles to ILIKE, and `_` and `%` in a local part become wildcards — here
+    // that would link a stranger's row to this account.
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'ada@example.com' } })
+    );
+    expect(JSON.stringify(findUnique.mock.calls)).not.toContain('insensitive');
+  });
+
+  it('keys on the address, not on viaInvitation, so an OAuth acceptance links too', async () => {
+    await linkWaitlistEntryToUser(newAccount({ signupMethod: 'oauth', viaInvitation: false }));
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing, and logs nothing, when no row has that address', async () => {
+    findUnique.mockResolvedValue(null);
+
+    await linkWaitlistEntryToUser(newAccount());
+
+    // The ordinary case for an admin-created account, not an error.
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(mockLogger.info).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not move joinedAt on a row that is already linked', async () => {
+    findUnique.mockResolvedValue({ id: 'entry-1', userId: 'user-0' });
+
+    await linkWaitlistEntryToUser(newAccount());
+
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('logs the entry id and the user id, never the address', async () => {
+    await linkWaitlistEntryToUser(newAccount());
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'Waitlist entry linked to new account',
+      expect.objectContaining({ entryId: 'entry-1', userId: 'user-1' })
+    );
+    expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('ada@example.com');
+  });
+
+  it('stays silent when the conditioned write matched nothing', async () => {
+    // Linked by a concurrent dispatch between the read and the write.
+    updateMany.mockResolvedValue({ count: 0 });
+
+    await linkWaitlistEntryToUser(newAccount());
+
+    expect(mockLogger.info).not.toHaveBeenCalled();
+  });
+});
+
+describe('registerWaitlistLinkHook', () => {
+  beforeEach(() => {
+    __resetUserCreatedHooksForTests();
+    findUnique.mockResolvedValue({ id: 'entry-1', userId: null });
+  });
+
+  it('registers under a stable key, and the dispatcher reaches the table through it', async () => {
+    registerWaitlistLinkHook();
+
+    await dispatchUserCreated(newAccount());
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('is idempotent by key, so a repeated import under HMR does not link twice', async () => {
+    registerWaitlistLinkHook();
+    registerWaitlistLinkHook();
+
+    await dispatchUserCreated(newAccount());
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('cannot fail a signup: a throw is logged by the dispatcher and swallowed', async () => {
+    findUnique.mockRejectedValue(new Error('connection reset'));
+    registerWaitlistLinkHook();
+
+    await expect(dispatchUserCreated(newAccount())).resolves.toBeUndefined();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'user-created hook failed',
+      expect.objectContaining({ hook: WAITLIST_LINK_HOOK })
+    );
   });
 });

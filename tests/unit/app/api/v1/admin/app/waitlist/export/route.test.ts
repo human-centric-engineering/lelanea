@@ -67,6 +67,8 @@ const ENTRY = {
   removedAt: null,
   rejoinRequestedAt: null,
   rejoinRequests: 0,
+  invitedAt: null,
+  joinedAt: null,
   id: 'entry-1',
   email: 'ada@example.com',
   name: 'Ada',
@@ -168,7 +170,16 @@ describe('GET /api/v1/admin/app/waitlist/export', () => {
     expect(collectWaitlistEntriesForExport).toHaveBeenCalledWith({
       q: 'sleep',
       includeRemoved: false,
+      includeJoined: false,
     });
+  });
+
+  it('includes the joined entries in the file when, and only when, they are on screen', async () => {
+    await GET(request({ includeJoined: 'true' }));
+
+    expect(collectWaitlistEntriesForExport).toHaveBeenCalledWith(
+      expect.objectContaining({ includeJoined: true })
+    );
   });
 
   it('says in the filename when the file is only the first N', async () => {
