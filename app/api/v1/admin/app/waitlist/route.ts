@@ -10,6 +10,7 @@
  * Query parameters:
  *   - q               optional free-text search over email, name, heardFrom and intent
  *   - includeRemoved  default false — entries an admin took off the list are out
+ *   - includeJoined   default false — entries that became accounts are out too
  *   - page            default 1
  *   - limit           default 25, max 100
  *
@@ -70,6 +71,7 @@ export const GET = withAdminAuth(async (request, _session) => {
     page: query.page,
     searched: query.q !== undefined,
     includeRemoved: query.includeRemoved,
+    includeJoined: query.includeJoined,
   });
 
   return paginatedResponse(entries, {

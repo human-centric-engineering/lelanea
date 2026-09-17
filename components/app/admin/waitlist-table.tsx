@@ -20,13 +20,31 @@
  * than in `components/admin/` because ownership, not styling, decides the tier:
  * `components/admin/` is Sunrise's.
  *
+ * ## Invited → Joined (t-46, t-47)
+ *
+ * The list is where she decides who to let in, so the row carries the two
+ * states that follow: "Invited <date>" once an invitation has gone from here,
+ * and "Joined <date>" once the person accepted one and has an account. The
+ * first is written by the invite route; the second by the user-created hook,
+ * whichever surface the invitation came from. A joined row leaves the default
+ * list the way a removed one does, behind its own switch — hidden completely,
+ * it would be indistinguishable from a deleted one (`HB9`).
+ *
  * @see app/admin/app/waitlist/page.tsx — the server page that seeds it
  * @see .context/app/waitlist.md
  */
 
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, RotateCcw, Search, UserMinus } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  RotateCcw,
+  Search,
+  Send,
+  UserMinus,
+} from 'lucide-react';
 
 import {
   Table,
@@ -47,6 +65,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,8 +85,10 @@ import type { WaitlistAdminEntry } from '@/lib/app/waitlist/admin';
 import {
   WAITLIST_ADMIN_ENDPOINT,
   WAITLIST_ADMIN_EXPORT_ENDPOINT,
+  waitlistAdminInviteEndpoint,
 } from '@/lib/app/waitlist/endpoint';
 import { apiClient, APIClientError } from '@/lib/api/client';
+import type { EmailStatus } from '@/lib/email/send';
 
 /** How much of a long answer is shown before the row offers the rest. */
 const INTENT_PREVIEW_CHARS = 240;
@@ -87,6 +115,38 @@ interface WaitlistTableProps {
 interface PendingRemoval {
   id: string;
   email: string;
+}
+
+/**
+ * The two population switches, carried together so a fetch, the export link and
+ * the empty-state copy all read the same pair.
+ */
+interface Filters {
+  includeRemoved: boolean;
+  includeJoined: boolean;
+}
+
+const DEFAULT_FILTERS: Filters = { includeRemoved: false, includeJoined: false };
+
+/**
+ * What the invitation dialog is asking about.
+ *
+ * `name` is what the input starts with — the row's own, or empty when the
+ * person left it blank (D2) — and `resend` changes the copy: a second send is
+ * a reminder, and the dialog should say so rather than read as the first.
+ */
+interface PendingInvite {
+  id: string;
+  email: string;
+  name: string;
+  resend: boolean;
+}
+
+/** What `POST …/:id/invite` answers with — the part the table acts on. */
+interface InviteResult {
+  entry: WaitlistAdminEntry;
+  emailStatus: EmailStatus;
+  expiresAt: string;
 }
 
 /**
@@ -150,16 +210,19 @@ export function WaitlistTable({
   const [search, setSearch] = useState('');
   /** The term the rows on screen were fetched with — what the export must match. */
   const [appliedSearch, setAppliedSearch] = useState('');
-  /** Same, for the removed filter: the export has to match the screen on both. */
-  const [appliedIncludeRemoved, setAppliedIncludeRemoved] = useState(false);
+  /** Same, for the two switches: the export has to match the screen on all three. */
+  const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS);
   /**
    * Whether what is on screen is an answer at all. Seeded from the server render
    * and cleared by the first fetch that succeeds, so a search or a page change
    * that works stops the disclaimer without needing a reload.
    */
   const [loadFailed, setLoadFailed] = useState(initialLoadFailed);
-  /** False by default: the list is "who is waiting", and a removed entry is not. */
-  const [includeRemoved, setIncludeRemoved] = useState(false);
+  /**
+   * Both off by default: the list is "who is waiting", and neither a removed
+   * entry nor one that has joined is.
+   */
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   /**
    * The entry the confirmation dialog is asking about, or null when it is closed.
    *
@@ -169,9 +232,18 @@ export function WaitlistTable({
    */
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
+  /** The name field of the invitation dialog, seeded from the row when it opens. */
+  const [inviteName, setInviteName] = useState('');
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The outcome of the last invitation, which is not an error even when the
+   * email did not go: the invitation exists either way, and what the admin
+   * needs to know is whether to expect the person to have received it.
+   */
+  const [notice, setNotice] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   /**
    * Which request is the current one. Incremented on dispatch, checked before
@@ -199,7 +271,7 @@ export function WaitlistTable({
    * Assigned on every render, below.
    */
   const fetchPageRef = useRef<
-    ((page: number, term: string, withRemoved: boolean) => Promise<void>) | null
+    ((page: number, term: string, withFilters: Filters) => Promise<void>) | null
   >(null);
 
   useEffect(() => {
@@ -209,7 +281,7 @@ export function WaitlistTable({
   }, []);
 
   const fetchPage = useCallback(
-    async (page: number, term: string, withRemoved: boolean) => {
+    async (page: number, term: string, withFilters: Filters) => {
       const seq = requestSeqRef.current + 1;
       requestSeqRef.current = seq;
 
@@ -218,7 +290,8 @@ export function WaitlistTable({
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(meta.limit) });
         if (term) params.set('q', term);
-        if (withRemoved) params.set('includeRemoved', 'true');
+        if (withFilters.includeRemoved) params.set('includeRemoved', 'true');
+        if (withFilters.includeJoined) params.set('includeJoined', 'true');
 
         const response = await fetch(`${WAITLIST_ADMIN_ENDPOINT}?${params.toString()}`, {
           credentials: 'same-origin',
@@ -245,14 +318,14 @@ export function WaitlistTable({
         // below the page that just came back empty, so the condition cannot hold
         // a second time.
         if (page > 1 && parsed.data.length === 0 && parsedMeta && parsedMeta.total > 0) {
-          void fetchPageRef.current?.(Math.max(1, parsedMeta.totalPages), term, withRemoved);
+          void fetchPageRef.current?.(Math.max(1, parsedMeta.totalPages), term, withFilters);
           return;
         }
 
         setEntries(parsed.data);
         if (parsedMeta) setMeta(parsedMeta);
         setAppliedSearch(term);
-        setAppliedIncludeRemoved(withRemoved);
+        setAppliedFilters(withFilters);
         setLoadFailed(false);
       } catch {
         if (requestSeqRef.current !== seq) return;
@@ -280,26 +353,27 @@ export function WaitlistTable({
       setSearch(value);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       // 300ms, as elsewhere in the admin — responsive without a request per keystroke.
-      debounceRef.current = setTimeout(() => void fetchPage(1, value.trim(), includeRemoved), 300);
+      debounceRef.current = setTimeout(() => void fetchPage(1, value.trim(), filters), 300);
     },
-    [fetchPage, includeRemoved]
+    [fetchPage, filters]
   );
 
-  const handleToggleRemoved = useCallback(
-    (next: boolean) => {
-      setIncludeRemoved(next);
-      // Cancel any pending search first. `handleSearch` captured `includeRemoved`
-      // at keystroke time, so a timer armed seconds ago would fire AFTER this
+  const handleToggleFilter = useCallback(
+    (key: keyof Filters, next: boolean) => {
+      const nextFilters = { ...filters, [key]: next };
+      setFilters(nextFilters);
+      // Cancel any pending search first. `handleSearch` captured `filters` at
+      // keystroke time, so a timer armed seconds ago would fire AFTER this
       // fetch, win the sequence guard, and re-apply the old filter — leaving the
-      // switch reading on, the removed rows absent, and the export link silently
+      // switch reading on, the rows absent, and the export link silently
       // disagreeing with the screen. The code review of §03 t-24 found it.
       if (debounceRef.current) clearTimeout(debounceRef.current);
       // The LIVE term, not the applied one: whatever is in the box is what the
       // admin can see, and a half-typed search that has not fired yet is still
       // the search they are making.
-      void fetchPage(1, search.trim(), next);
+      void fetchPage(1, search.trim(), nextFilters);
     },
-    [fetchPage, search]
+    [fetchPage, filters, search]
   );
 
   /**
@@ -322,7 +396,7 @@ export function WaitlistTable({
         // takes an options bag, and passing the payload in its place sends an
         // empty PATCH that fails validation with a message about the wrong thing.
         await apiClient.patch(`${WAITLIST_ADMIN_ENDPOINT}/${id}`, { body: { removed } });
-        await fetchPage(meta.page, appliedSearch, appliedIncludeRemoved);
+        await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
         setError(
           err instanceof APIClientError
@@ -335,15 +409,65 @@ export function WaitlistTable({
         setMutatingId(null);
       }
     },
-    [appliedIncludeRemoved, appliedSearch, fetchPage, meta.page]
+    [appliedFilters, appliedSearch, fetchPage, meta.page]
   );
 
-  // Both applied filters, so the file is the screen. Built from the APPLIED values
+  /**
+   * Send, or re-send, the invitation.
+   *
+   * The name always travels: the dialog seeds it from the row and the admin can
+   * change it, so what is sent is what was on screen rather than whichever of
+   * the two the route would have preferred. Re-fetches the page afterwards so
+   * the "Invited" badge comes from the server's row, not from a guess.
+   *
+   * A 409 is the row having moved under the admin — removed, or joined — since
+   * the page loaded; the route's message says which, and the re-fetch shows it.
+   */
+  const sendInvite = useCallback(
+    async (id: string, name: string) => {
+      setMutatingId(id);
+      setError(null);
+      setNotice(null);
+      try {
+        const result = await apiClient.post<InviteResult>(waitlistAdminInviteEndpoint(id), {
+          body: { name },
+        });
+        // Said out loud when the email did NOT go, because the badge alone reads
+        // as "they have it". The invitation exists and Resend is the remedy.
+        setNotice(
+          result.emailStatus === 'sent'
+            ? `Invitation sent to ${result.entry.email}.`
+            : result.emailStatus === 'disabled'
+              ? `Invitation created for ${result.entry.email}, but no email was sent — email is not configured here.`
+              : `Invitation created for ${result.entry.email}, but the email did not send. Try “Resend”.`
+        );
+        await fetchPage(meta.page, appliedSearch, appliedFilters);
+      } catch (err) {
+        setError(
+          err instanceof APIClientError ? err.message : 'That invitation was not sent. Try again.'
+        );
+        // The row may have moved (a 409 says so); show it as it stands.
+        await fetchPage(meta.page, appliedSearch, appliedFilters);
+      } finally {
+        setMutatingId(null);
+      }
+    },
+    [appliedFilters, appliedSearch, fetchPage, meta.page]
+  );
+
+  const openInvite = useCallback((entry: WaitlistAdminEntry) => {
+    const name = entry.name ?? '';
+    setInviteName(name);
+    setPendingInvite({ id: entry.id, email: entry.email, name, resend: entry.invitedAt !== null });
+  }, []);
+
+  // All applied filters, so the file is the screen. Built from the APPLIED values
   // rather than the live ones: a half-typed search must not change what the button
   // would download.
   const exportParams = new URLSearchParams();
   if (appliedSearch) exportParams.set('q', appliedSearch);
-  if (appliedIncludeRemoved) exportParams.set('includeRemoved', 'true');
+  if (appliedFilters.includeRemoved) exportParams.set('includeRemoved', 'true');
+  if (appliedFilters.includeJoined) exportParams.set('includeJoined', 'true');
   const exportQuery = exportParams.toString();
   const exportHref = exportQuery
     ? `${WAITLIST_ADMIN_EXPORT_ENDPOINT}?${exportQuery}`
@@ -375,11 +499,21 @@ export function WaitlistTable({
           <div className="flex items-center gap-2">
             <Switch
               id="waitlist-show-removed"
-              checked={includeRemoved}
-              onCheckedChange={handleToggleRemoved}
+              checked={filters.includeRemoved}
+              onCheckedChange={(next) => handleToggleFilter('includeRemoved', next)}
             />
             <Label htmlFor="waitlist-show-removed" className="text-sm font-normal">
               Show removed
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="waitlist-show-joined"
+              checked={filters.includeJoined}
+              onCheckedChange={(next) => handleToggleFilter('includeJoined', next)}
+            />
+            <Label htmlFor="waitlist-show-joined" className="text-sm font-normal">
+              Show joined
             </Label>
           </div>
           {/* A plain anchor, not `next/link`: the response is an attachment, and a
@@ -398,18 +532,24 @@ export function WaitlistTable({
           {error}
         </p>
       )}
+      {notice && (
+        <p role="status" className="text-muted-foreground text-sm">
+          {notice}
+        </p>
+      )}
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-28">Joined</TableHead>
+              {/* "Added", not "Joined": joining is now a state of its own. */}
+              <TableHead className="w-28">Added</TableHead>
               <TableHead className="w-[22%]">Email</TableHead>
               <TableHead className="w-[14%]">Name</TableHead>
               <TableHead className="w-[16%]">Heard about us</TableHead>
               <TableHead>What they want</TableHead>
-              <TableHead className="w-20 text-center">Account</TableHead>
-              <TableHead className="w-28 text-right">
+              <TableHead className="w-32">Status</TableHead>
+              <TableHead className="w-44 text-right">
                 <span className="sr-only">Actions</span>
               </TableHead>
             </TableRow>
@@ -432,21 +572,21 @@ export function WaitlistTable({
                         // check whether somebody joined, and with the filter off a
                         // removed person reads as never having been there. The code
                         // review of §03 t-24 caught the branch order.
-                        appliedIncludeRemoved
+                        appliedFilters.includeRemoved && appliedFilters.includeJoined
                         ? 'Nobody on the list matches that.'
-                        : 'Nobody on the list matches that. If they were removed, “Show removed” will find them.'
-                      : appliedIncludeRemoved
-                        ? // Removed entries ARE included and there are still none, so
-                          // nobody has ever joined. This is the only empty state that
-                          // can honestly say that.
+                        : 'Nobody on the list matches that. If they were removed or have joined, the switches above will find them.'
+                      : appliedFilters.includeRemoved && appliedFilters.includeJoined
+                        ? // Removed AND joined entries are included and there are still
+                          // none, so nobody has ever signed up. This is the only empty
+                          // state that can honestly say that.
                           'Nobody has joined the waitlist yet.'
-                        : // The default filter hides removed entries, so an empty list
-                          // does NOT mean nobody joined — it means nobody is waiting.
-                          // Found by looking at the page with every entry removed,
-                          // where the old copy claimed nobody had joined while two
-                          // people had. Same false-claim problem as the failed-load
+                        : // The default filters hide removed and joined entries, so an
+                          // empty list does NOT mean nobody signed up — it means nobody
+                          // is waiting. Found by looking at the page with every entry
+                          // removed, where the old copy claimed nobody had joined while
+                          // two people had. Same false-claim problem as the failed-load
                           // case (`HB9`), reachable on any small list after a cleanup.
-                          'Nobody is on the list. If someone was removed, “Show removed” will find them.'}
+                          'Nobody is on the list. If someone was removed or has joined, the switches above will find them.'}
                 </TableCell>
               </TableRow>
             ) : (
@@ -496,8 +636,23 @@ export function WaitlistTable({
                   <TableCell className="text-sm">
                     {entry.intent ? <Answer text={entry.intent} /> : <Unanswered />}
                   </TableCell>
-                  <TableCell className="text-center text-sm">
-                    {entry.userId ? 'Linked' : <Unanswered />}
+                  <TableCell className="text-sm">
+                    {/*
+                      Joined wins over Invited: once they are in, when we last wrote
+                      to them is history. Neither claims the email was READ — only
+                      that it was sent, and that an account now exists.
+                    */}
+                    {entry.joinedAt ? (
+                      <Badge variant="secondary" className="font-normal whitespace-nowrap">
+                        Joined <ClientDate date={entry.joinedAt} className="ml-1" />
+                      </Badge>
+                    ) : entry.invitedAt ? (
+                      <Badge variant="outline" className="font-normal whitespace-nowrap">
+                        Invited <ClientDate date={entry.invitedAt} className="ml-1" />
+                      </Badge>
+                    ) : (
+                      <Unanswered />
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {entry.removedAt ? (
@@ -532,16 +687,34 @@ export function WaitlistTable({
                         Restore
                       </Button>
                     ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        disabled={mutatingId === entry.id}
-                        onClick={() => setPendingRemoval({ id: entry.id, email: entry.email })}
-                      >
-                        <UserMinus className="mr-1.5 h-4 w-4" aria-hidden />
-                        Remove
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {/*
+                          No Invite once they have joined — the route would 409,
+                          and the button would be an offer to write to someone who
+                          is already in. Remove stays: it is still their row.
+                        */}
+                        {!entry.joinedAt && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={mutatingId === entry.id}
+                            onClick={() => openInvite(entry)}
+                          >
+                            <Send className="mr-1.5 h-4 w-4" aria-hidden />
+                            {entry.invitedAt ? 'Resend' : 'Invite'}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={mutatingId === entry.id}
+                          onClick={() => setPendingRemoval({ id: entry.id, email: entry.email })}
+                        >
+                          <UserMinus className="mr-1.5 h-4 w-4" aria-hidden />
+                          Remove
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
@@ -563,7 +736,7 @@ export function WaitlistTable({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void fetchPage(meta.page - 1, appliedSearch, appliedIncludeRemoved)}
+            onClick={() => void fetchPage(meta.page - 1, appliedSearch, appliedFilters)}
             disabled={meta.page <= 1 || isLoading}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -575,7 +748,7 @@ export function WaitlistTable({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void fetchPage(meta.page + 1, appliedSearch, appliedIncludeRemoved)}
+            onClick={() => void fetchPage(meta.page + 1, appliedSearch, appliedFilters)}
             disabled={meta.page >= meta.totalPages || isLoading}
           >
             Next
@@ -681,6 +854,72 @@ export function WaitlistTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/*
+        The invitation. A `Dialog` rather than an `AlertDialog`, because it
+        carries a field: the invitation email greets the person by name, and a
+        waitlist entry's name is optional (D2), so the name is asked for here —
+        seeded from the row when it has one, so the common case is one click
+        and the nameless case is one word.
+
+        One dialog for both sends. A resend is the same act with different
+        copy, and the route treats it the same way.
+      */}
+      <Dialog
+        open={pendingInvite !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingInvite(null);
+        }}
+      >
+        <DialogContent>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const target = pendingInvite;
+              const name = inviteName.trim();
+              if (!target || !name) return;
+              setPendingInvite(null);
+              void sendInvite(target.id, name);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {pendingInvite?.resend
+                  ? `Send ${pendingInvite.email} the invitation again?`
+                  : `Invite ${pendingInvite?.email ?? ''}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {pendingInvite?.resend
+                  ? 'The earlier link stops working and a fresh one goes out. They will have seven days to accept it.'
+                  : 'They get an email with a link to create their account, good for seven days. Accepting it takes them off the waitlist.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-4">
+              <Label htmlFor="waitlist-invite-name">Name</Label>
+              <Input
+                id="waitlist-invite-name"
+                value={inviteName}
+                onChange={(event) => setInviteName(event.target.value)}
+                maxLength={100}
+              />
+              <p className="text-muted-foreground text-xs">
+                {pendingInvite && pendingInvite.name === ''
+                  ? 'They did not give one. The email greets them by it, so add one before sending.'
+                  : 'What the email greets them by.'}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPendingInvite(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={inviteName.trim() === ''}>
+                <Send className="mr-1.5 h-4 w-4" aria-hidden />
+                {pendingInvite?.resend ? 'Send again' : 'Send invitation'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

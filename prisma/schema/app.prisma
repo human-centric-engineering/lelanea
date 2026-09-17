@@ -64,8 +64,10 @@ model AppWaitlistEntry {
   /// When they submitted under the card's "used to tell you when a place opens,
   /// and for nothing else" notice. Server-set; there is no separate checkbox.
   consentedAt DateTime
-  /// Set if and when this entry is linked to an account. Hand-written FK — see
-  /// the note above.
+  /// The account this entry became, once the person accepted an invitation.
+  /// Written by the `user-created` hook in `lib/app/waitlist/service.ts`,
+  /// matched on the lower-cased email, together with `joinedAt`. Hand-written
+  /// FK — see the note above.
   userId      String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -91,6 +93,18 @@ model AppWaitlistEntry {
   rejoinRequestedAt DateTime?
   /// How many times a removed address has been submitted again. See above.
   rejoinRequests    Int       @default(0)
+  /// When an admin last sent this person an invitation from the list. Moved on
+  /// a resend — it records the latest send, and the CSV column is named for
+  /// that. Null means nobody has invited them from here; an invitation raised
+  /// from Sunrise's Admin → Users → Invite does not stamp it, and does not need
+  /// to for `joinedAt` to land.
+  invitedAt         DateTime?
+  /// When the person accepted an invitation and got an account. Set with
+  /// `userId`, by the hook. A joined entry is off the default list the way a
+  /// removed one is, and for the opposite reason: not "will not be written
+  /// to", but "already in". The two are different states — `removedAt` is left
+  /// alone when someone joins — and the Art. 15 export discloses which.
+  joinedAt          DateTime?
 
   @@index([userId])
   @@index([createdAt])
