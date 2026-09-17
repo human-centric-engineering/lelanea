@@ -214,6 +214,69 @@ describe('what the `Agent may quote` cell claims', () => {
     expect(within(rowFor('A chunked method note')).queryByText(/Upload it again/)).toBeNull();
   });
 
+  it('does not tell her to re-upload an `empty` document, where that does nothing', () => {
+    // `uploadDocument` dedupes on `{ fileHash, status: 'ready' }` and an `empty`
+    // document IS `ready`, so the same file comes back as the existing row with
+    // nothing re-processed — the upload reports success and the cell still says
+    // "Nothing to quote". A remedy that quietly does nothing is the `HB10` case,
+    // so `empty` names the act that works and `failed` keeps the one that does.
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({
+            id: 'blank',
+            name: 'An empty export',
+            status: 'ready',
+            chunkCount: 0,
+            quotable: true,
+            retrieval: 'empty',
+          }),
+          doc({
+            id: 'broken',
+            name: 'A talk recording',
+            status: 'failed',
+            chunkCount: 0,
+            quotable: true,
+            retrieval: 'failed',
+          }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    expect(within(rowFor('An empty export')).queryByText(/Upload it again/)).toBeNull();
+    expect(
+      within(rowFor('An empty export')).getByText(/Delete it and upload a readable copy/)
+    ).toBeTruthy();
+    // The one where a re-upload genuinely is a retry still says so.
+    expect(within(rowFor('A talk recording')).getByText(/Upload it again/)).toBeTruthy();
+  });
+
+  it('still says Yes when a failed rechunk left the old chunks searchable', () => {
+    // The inverted bug. `rechunkDocument`'s catch writes `failed` and leaves the
+    // chunks in place, and the agent goes on quoting them — so "Nothing to
+    // quote. Upload it again" here would be false AND would send her to create
+    // a second document while the original stayed searchable.
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({
+            id: 'stale',
+            name: 'A rechunk that fell over',
+            status: 'failed',
+            chunkCount: 9,
+            quotable: true,
+            retrieval: 'retrievable',
+          }),
+        ]}
+        initialMeta={META}
+      />
+    );
+
+    expect(within(rowFor('A rechunk that fell over')).getByText('Yes')).toBeTruthy();
+    expect(within(rowFor('A rechunk that fell over')).queryByText(/Upload it again/)).toBeNull();
+  });
+
   it('takes `retrieval` from the server too, rather than reading status in the cell', () => {
     // The same property the `quotable` case above pins, on the second axis. A
     // cell that reasoned from `status` and `chunkCount` would call this row

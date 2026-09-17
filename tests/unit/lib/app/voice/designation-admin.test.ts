@@ -412,12 +412,30 @@ describe('retrievalState — whether there is anything to retrieve', () => {
     expect(retrievalState({ status: 'cleaning', chunkCount: 0 })).toBe('pending');
   });
 
-  it('treats a status it does not recognise as pending, not as retrievable', () => {
-    // The safe direction, and the one that matters on a platform sync: a status
-    // a later Sunrise release adds must not default into "the agent may quote
-    // this". A chunk count it happens to carry does not buy it the benefit of
-    // the doubt either.
-    expect(retrievalState({ status: 'quarantined', chunkCount: 40 })).toBe('pending');
+  it('treats an unrecognised status with nothing in it as pending', () => {
+    // The safe direction on a platform sync: a status a later Sunrise release
+    // adds must not default into "the agent may quote this".
+    expect(retrievalState({ status: 'quarantined', chunkCount: 0 })).toBe('pending');
+  });
+
+  // The order of the two checks, which a first draft had the wrong way round.
+  //
+  // `rechunkDocument`'s catch writes `{ status: 'failed' }` and leaves every
+  // existing chunk and the old `chunkCount` in place, and `searchKnowledgeBase`
+  // never filters on `d.status` — so the agent goes on quoting the document.
+  // Deciding on status first would render "Nothing to quote. Upload it again"
+  // about a document being quoted right now, and the re-upload would create a
+  // second row while the original's chunks stayed searchable.
+  //
+  // Reverting the order fails all three of these.
+  it('says retrievable when the chunks are still there, whatever the status says', () => {
+    expect(retrievalState({ status: 'failed', chunkCount: 9 })).toBe('retrievable');
+    expect(retrievalState({ status: 'processing', chunkCount: 9 })).toBe('retrievable');
+    expect(retrievalState({ status: 'quarantined', chunkCount: 40 })).toBe('retrievable');
+    // And the same statuses with nothing behind them still read as they should,
+    // so this is not the chunk check swallowing the status one.
+    expect(retrievalState({ status: 'failed', chunkCount: 0 })).toBe('failed');
+    expect(retrievalState({ status: 'processing', chunkCount: 0 })).toBe('pending');
   });
 });
 

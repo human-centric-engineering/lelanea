@@ -82,31 +82,46 @@ import type {
  * function of the designation, which is what lets the contributor, the surface
  * and the test all read the same sentence.
  *
- * - `retrievable` — `ready`, with chunks. The only state the tool can reach.
- * - `pending` — not `ready` yet: `processing`, `pending_review`, `cleaning`, or
- *   any status a later platform release adds. The safe default.
- * - `failed` — the document did not parse. Nothing was ever chunked.
- * - `empty` — `ready`, and the parser found nothing to chunk. A real state:
- *   `document-manager.ts` writes `{ status: 'ready', chunkCount: 0 }` on three
- *   separate paths when chunking yields nothing, so "ready" alone is not an
- *   answer.
+ * - `retrievable` — it has chunks. The tool can reach it, whatever the status
+ *   column happens to say.
+ * - `pending` — no chunks, and not `ready` yet: `processing`, `pending_review`,
+ *   `cleaning`, or any status a later platform release adds. The safe default.
+ * - `failed` — no chunks, and the document did not parse.
+ * - `empty` — no chunks, and `ready`. The parser found nothing to chunk. A real
+ *   state: `document-manager.ts` writes `{ status: 'ready', chunkCount: 0 }` on
+ *   three separate paths when chunking yields nothing, so "ready" alone is not
+ *   an answer either.
  */
 export type RetrievalState = 'retrievable' | 'pending' | 'failed' | 'empty';
 
 /**
  * What the search tool can reach of one document.
  *
- * **Chunks are the load-bearing half, not status.** `searchKnowledgeBase`
- * selects from `ai_knowledge_chunk` joined to the document and never filters on
- * `d.status`, so a row's chunk count is what actually decides whether a passage
- * can come back. Status is carried too because it is the only thing that
- * separates "not yet" from "not ever without a re-upload", which is the
- * difference between a state she should wait out and one she has to act on.
+ * **Chunks are the load-bearing half, not status — and the ORDER below is that
+ * sentence made true.** `searchKnowledgeBase` selects from
+ * `ai_knowledge_chunk` joined to the document and never filters on `d.status`,
+ * so the chunk count is what actually decides whether a passage can come back.
+ *
+ * Status is consulted only once the chunk count has said there is nothing, and
+ * a first draft had it the other way round. That draft was this bug inverted.
+ * `rechunkDocument`'s `catch` writes `{ status: 'failed' }` and leaves every
+ * existing chunk and the old `chunkCount` untouched — so a re-chunk whose
+ * embedding call rate-limits leaves a document the agent is still quoting
+ * verbatim, and a status-first reading would have called it "Nothing to quote"
+ * and told her to upload it again. That re-upload creates a SECOND document
+ * while the original's chunks stay searchable, which is worse than saying
+ * nothing. `processing` has the same window for the same reason. Caught by
+ * /code-review.
+ *
+ * Once there are no chunks, status is the only thing separating "not yet" from
+ * "not without doing something", which is the difference between a state she
+ * should wait out and one she has to act on.
  */
 export function retrievalState(document: { status: string; chunkCount: number }): RetrievalState {
+  if (document.chunkCount > 0) return 'retrievable';
   if (document.status === 'failed') return 'failed';
   if (document.status !== 'ready') return 'pending';
-  return document.chunkCount > 0 ? 'retrievable' : 'empty';
+  return 'empty';
 }
 
 /** One row of the admin list: the document, what it is designated, and the consequence. */

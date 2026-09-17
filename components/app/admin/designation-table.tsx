@@ -127,6 +127,15 @@ const UNSET = '__unset__';
  * no resume path in any tier (upstream `sunrise#807`); the row's own
  * `· N chunks · status` line beside the name says which state it is actually
  * in. `failed` and `empty` are hers to act on, so they name the act (`HB10`).
+ *
+ * **The two acts are different, and saying "upload it again" to both was
+ * wrong.** `uploadDocument` dedupes on `{ fileHash, status: 'ready' }`, and an
+ * `empty` document IS `ready` — so re-uploading the same file returns the
+ * existing row, re-processes nothing, and reports success while the cell goes
+ * on saying "Nothing to quote". That is a remedy that quietly does nothing,
+ * which is what `HB10` is about. A `failed` document is genuinely retried by a
+ * re-upload, because the dedupe deliberately skips failed rows. Caught by
+ * /code-review.
  */
 const RETRIEVAL_COPY: Record<
   Exclude<RetrievalState, 'retrievable'>,
@@ -142,7 +151,7 @@ const RETRIEVAL_COPY: Record<
   },
   empty: {
     label: 'Nothing to quote',
-    reason: 'Permitted, but no text was found in it. Check the file and upload it again.',
+    reason: 'Permitted, but no text was found in it. Delete it and upload a readable copy.',
   },
 };
 

@@ -945,25 +945,37 @@ So the cell renders three answers rather than two:
 | The rule permits it, and it has chunks  | **Yes**                            |
 | The rule permits it, and it has nothing | **Not yet** / **Nothing to quote** |
 
-`retrievalState()` is `retrievable` only for a document that is `ready` **and**
-has chunks; `failed` for one that never parsed; `empty` for a `ready` document
-the parser found no text in — a real state, since `document-manager.ts` writes
-`{ status: 'ready', chunkCount: 0 }` on three separate paths when chunking
-yields nothing; and `pending` for everything else, which is `processing`,
-`pending_review`, `cleaning`, **and any status a later Sunrise release adds**.
-That default is the safe direction: an unrecognised status must not fall into
-"the agent may quote this".
+`retrievalState()` asks about chunks **first**, and only then about status:
+`retrievable` for anything with chunks; then, for a document with none,
+`failed` if it did not parse, `empty` if it is `ready` — a real state, since
+`document-manager.ts` writes `{ status: 'ready', chunkCount: 0 }` on three
+separate paths when chunking yields nothing — and `pending` for everything else,
+which is `processing`, `pending_review`, `cleaning`, **and any status a later
+Sunrise release adds**. That last default is the safe direction: an unrecognised
+status must not fall into "the agent may quote this".
 
-**Chunks are the load-bearing half, not status.** `searchKnowledgeBase` selects
-from `ai_knowledge_chunk` joined to the document and never filters on
-`d.status`, so the chunk count is what actually decides whether a passage can
-come back. Status is carried because it is the only thing separating "wait" from
-"act", and the copy splits on exactly that: `pending` describes the wait and
+**Chunks are the load-bearing half, not status, and that order is the
+correctness property.** `searchKnowledgeBase` selects from `ai_knowledge_chunk`
+joined to the document and never filters on `d.status`, so the chunk count is
+what actually decides whether a passage can come back. Reading status first is
+this bug inverted: `rechunkDocument`'s `catch` writes `{ status: 'failed' }` and
+leaves every existing chunk and the old `chunkCount` in place, so a re-chunk
+whose embedding call rate-limits leaves a document the agent is **still quoting
+verbatim** — and a status-first reading would have called it "Nothing to quote".
+`processing` has the same window for the same reason.
+
+Once there are no chunks, status is the only thing separating "wait" from "act",
+and the copy splits on exactly that (`HB10`). `pending` describes the wait and
 deliberately does not promise it ends — `pending_review` has no resume path in
-any tier ([`sunrise#807`](https://github.com/human-centric-engineering/sunrise/issues/807))
-— while `failed` and `empty` name the remedy, which is to upload the file again
-(`HB10`). The platform's dedupe deliberately does not return previously-failed
-documents, so re-uploading really is a retry.
+any tier ([`sunrise#807`](https://github.com/human-centric-engineering/sunrise/issues/807)).
+
+**The two acts are different, and one sentence for both was wrong.** A `failed`
+document is genuinely retried by a re-upload: `uploadDocument` dedupes on
+`{ fileHash, status: 'ready' }` and so deliberately skips failed rows. An
+`empty` document **is** `ready`, so the same re-upload returns the existing row,
+re-processes nothing, and reports success while the cell goes on saying
+"Nothing to quote" — a remedy that quietly does nothing. So `empty` says to
+delete it and upload a readable copy instead.
 
 **Both verdicts are computed on the server and the cell only renders them.**
 Same reason as `quotable`: a `retrieval` derived in JSX from `status` and
