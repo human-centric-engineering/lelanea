@@ -1,15 +1,30 @@
 /**
- * Waitlist — take someone off the list, or put them back (Admin)
+ * Waitlist — take someone off the list, put them back, or erase them (Admin)
  *
- * PATCH /api/v1/admin/app/waitlist/:id
+ * PATCH  /api/v1/admin/app/waitlist/:id — removal and restore
+ * DELETE /api/v1/admin/app/waitlist/:id — erasure (t-48)
  *
  * Authentication: admin, as for the list and the export.
  *
- * Request body: `{ "removed": true }` to take them off, `{ "removed": false }` to
+ * PATCH body: `{ "removed": true }` to take them off, `{ "removed": false }` to
  * put them back. Responds with the updated entry, 404 for an id nothing matches,
  * 400 for a body that is neither.
  *
- * ## Why PATCH and not DELETE
+ * DELETE: no body. Hard-deletes the row — email, name, answers, everything —
+ * whatever its `removedAt` or `userId`. Responds `{ success: true, data: { id } }`,
+ * 404 for an id nothing matches. There is no undo.
+ *
+ * ## Two verbs on one path, and why that is the point
+ *
+ * The section below rejected `DELETE` for *removal* because nothing was deleted.
+ * That same reasoning is what makes `DELETE` right for *erasure*: it deletes.
+ * Having both on one path is the contrast the removal dialog draws — "this does
+ * not delete their data … that is a different act" — made real. Until t-48 the
+ * different act was `eraseUser()`, which needs a `User` row nobody on the
+ * waitlist has, so the dialog named something the surface could not do for its
+ * entire population and an Art. 17 request had no operator path.
+ *
+ * ## Why removal is PATCH and not DELETE
  *
  * `DELETE` is the obvious verb and it is the wrong one here. Nothing is deleted:
  * the row survives holding the person's email, their name and what they said
@@ -54,7 +69,7 @@ import { NotFoundError } from '@/lib/api/errors';
 import { validatePathParam, validateRequestBody } from '@/lib/api/validation';
 import { cuidSchema } from '@/lib/validations/common';
 import { waitlistRemovalSchema } from '@/lib/validations/app-waitlist';
-import { setWaitlistEntryRemoved } from '@/lib/app/waitlist/admin';
+import { deleteWaitlistEntry, setWaitlistEntryRemoved } from '@/lib/app/waitlist/admin';
 import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 
 export const PATCH = withAdminAuth<{ id: string }>(async (request, _session, { params }) => {
@@ -86,4 +101,28 @@ export const PATCH = withAdminAuth<{ id: string }>(async (request, _session, { p
   });
 
   return successResponse(entry);
+});
+
+export const DELETE = withAdminAuth<{ id: string }>(async (request, _session, { params }) => {
+  const log = await getWaitlistRouteLogger(request);
+
+  const { id: rawId } = await params;
+  const id = validatePathParam(rawId, cuidSchema, { label: 'waitlist entry id' });
+
+  const erased = await deleteWaitlistEntry(id);
+
+  if (!erased) {
+    // Either already erased or never there. Both are a 404 rather than a
+    // cheerful 200: an admin answering a request needs to know whether THIS
+    // click did it.
+    throw new NotFoundError('Waitlist entry not found');
+  }
+
+  // The id and nothing else — the point of the erasure is that the address
+  // does not survive it, and a log line is a copy that would. This line is the
+  // only record the request was honoured; see `deleteWaitlistEntry` on why
+  // there is no receipt row.
+  log.info('Waitlist entry erased', { entryId: id });
+
+  return successResponse({ id });
 });

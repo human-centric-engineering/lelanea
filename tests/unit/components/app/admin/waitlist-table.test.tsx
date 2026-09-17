@@ -55,13 +55,14 @@ function listResponse(entries: WaitlistAdminEntry[], meta = META) {
   } as unknown as Response;
 }
 
-const { patch, post, APIClientErrorMock } = vi.hoisted(() => ({
+const { patch, post, del, APIClientErrorMock } = vi.hoisted(() => ({
   patch: vi.fn(),
   post: vi.fn(),
+  del: vi.fn(),
   APIClientErrorMock: class APIClientError extends Error {},
 }));
 vi.mock('@/lib/api/client', () => ({
-  apiClient: { patch, post },
+  apiClient: { patch, post, delete: del },
   APIClientError: APIClientErrorMock,
 }));
 
@@ -71,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchMock.mockResolvedValue(listResponse([entry()]));
   patch.mockResolvedValue({});
+  del.mockResolvedValue(undefined);
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -846,6 +848,159 @@ describe('WaitlistTable', () => {
       // A 409 means the row moved under the admin since the page loaded; the
       // re-fetch shows it as it stands rather than as it was.
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('erasing someone (t-48)', () => {
+    /** Open the row's overflow menu and choose Delete. */
+    async function chooseDelete(
+      user: ReturnType<typeof userEvent.setup>,
+      email = 'ada@example.com'
+    ) {
+      await user.click(screen.getByRole('button', { name: `More actions for ${email}` }));
+      await user.click(await screen.findByRole('menuitem', { name: /Delete their data/ }));
+    }
+
+    it('keeps Delete out of the row, behind the overflow menu', () => {
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      // Remove is a button a hand reaches for; erasure must not sit beside it
+      // looking the same. One extra click is the whole of the friction.
+      expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'More actions for ada@example.com' })).toBeTruthy();
+    });
+
+    it('confirms first, in the opposite direction to Remove', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await chooseDelete(user);
+
+      const dialog = screen.getByRole('alertdialog');
+      expect(
+        within(dialog).getByRole('heading', {
+          name: /Delete everything we hold about ada@example\.com\?/,
+        })
+      ).toBeTruthy();
+      // The removal dialog says "does not delete"; this one says it does, that
+      // there is no undo, and which act each request is for.
+      expect(within(dialog).getByText(/There is no undo/)).toBeTruthy();
+      expect(within(dialog).getByText(/to stop writing to them, use Remove/)).toBeTruthy();
+      expect(del).not.toHaveBeenCalled();
+    });
+
+    it('erases nobody when the dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await chooseDelete(user);
+      await user.click(screen.getByRole('button', { name: 'Keep their data' }));
+
+      expect(del).not.toHaveBeenCalled();
+    });
+
+    it('sends the DELETE once confirmed, and re-reads the page', async () => {
+      const user = userEvent.setup();
+      fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await chooseDelete(user);
+      await user.click(screen.getByRole('button', { name: 'Delete their data' }));
+
+      await waitFor(() => expect(del).toHaveBeenCalledWith(`${WAITLIST_ADMIN_ENDPOINT}/entry-1`));
+      // The row is gone whatever the filters say, so the page is re-read rather
+      // than patched.
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByText('ada@example.com')).toBeNull());
+    });
+
+    it('is offered on a removed row too — removed is still held', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-11T12:00:00.000Z' })]}
+          initialMeta={META}
+        />
+      );
+
+      await chooseDelete(user);
+
+      expect(screen.getByRole('alertdialog')).toBeTruthy();
+    });
+
+    it('says where the rest of a linked person’s data is erased', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ userId: 'user-1', joinedAt: '2026-09-16T09:00:00.000Z' })]}
+          initialMeta={META}
+        />
+      );
+
+      await chooseDelete(user);
+
+      // This erases the waitlist answers only. Without the sentence an admin
+      // answering "delete everything" would stop here believing they had.
+      const dialog = screen.getByRole('alertdialog');
+      expect(within(dialog).getByText(/They have an account/)).toBeTruthy();
+      expect(within(dialog).getByText(/Admin → Users/)).toBeTruthy();
+    });
+
+    it('does not mention an account on a row that has none', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await chooseDelete(user);
+
+      expect(screen.queryByText(/They have an account/)).toBeNull();
+    });
+
+    it('does not strand the admin past the end after erasing the last row on a page', async () => {
+      const user = userEvent.setup();
+      const onPageTwo = { page: 2, limit: 25, total: 26, totalPages: 2 };
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={onPageTwo} />);
+
+      fetchMock.mockResolvedValueOnce(
+        listResponse([], { page: 2, limit: 25, total: 25, totalPages: 1 })
+      );
+      fetchMock.mockResolvedValueOnce(
+        listResponse([entry({ id: 'survivor', email: 'still@here.test' })], {
+          page: 1,
+          limit: 25,
+          total: 25,
+          totalPages: 1,
+        })
+      );
+
+      await chooseDelete(user);
+      await user.click(screen.getByRole('button', { name: 'Delete their data' }));
+
+      // The same corrective re-read Remove uses (t-24), reused rather than
+      // re-derived.
+      await waitFor(() => expect(screen.getByText('still@here.test')).toBeTruthy());
+      expect(screen.getByText(/Page 1 of 1/)).toBeTruthy();
+    });
+
+    it('says so when the erasure failed, and keeps the row on screen', async () => {
+      const user = userEvent.setup();
+      del.mockRejectedValue(new APIClientErrorMock('Waitlist entry not found'));
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await chooseDelete(user);
+      await user.click(screen.getByRole('button', { name: 'Delete their data' }));
+
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('not found'));
+      expect(screen.getByText('ada@example.com')).toBeTruthy();
+    });
+
+    it('the removal dialog now names the act that erases', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+
+      // John, 16 September 2026: "it says deleting is a different action, but
+      // there's no way to delete them." Now there is, and the dialog says where.
+      expect(screen.getByText(/in the row’s menu/)).toBeTruthy();
     });
   });
 });
