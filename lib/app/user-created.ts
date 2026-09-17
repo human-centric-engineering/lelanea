@@ -24,6 +24,14 @@
  *
  * Full guide: CUSTOMIZATION.md §4 · .context/auth/overview.md
  */
+import { registerWaitlistLinkHook } from '@/lib/app/waitlist/service';
+
+/**
+ * Lelañea's one (t-46): the waitlist entry whose address matches the new
+ * account becomes that account. Upstream ships this empty; the row in
+ * `tests/unit/lib/app/defaults.test.ts` is PINNED to this registration rather
+ * than deleted, so a stray second one still fails there (`HB2`).
+ */
 export function initAppUserCreatedHooks(): void {
-  // No app user-created hooks by default.
+  registerWaitlistLinkHook();
 }

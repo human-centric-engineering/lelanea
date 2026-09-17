@@ -44,7 +44,7 @@ import type { WaitlistAdminFilter } from '@/lib/validations/app-waitlist';
  */
 export const WAITLIST_EXPORT_MAX_ROWS = 2000;
 
-/** The columns both reads select, and in the order the CSV writes them. */
+/** The columns every read here selects, and in the order the CSV writes them. */
 const ENTRY_SELECT = {
   id: true,
   email: true,
@@ -59,6 +59,8 @@ const ENTRY_SELECT = {
   removedAt: true,
   rejoinRequestedAt: true,
   rejoinRequests: true,
+  invitedAt: true,
+  joinedAt: true,
 } satisfies Prisma.AppWaitlistEntrySelect;
 
 /**
@@ -76,9 +78,9 @@ export interface WaitlistAdminEntry {
   locale: string;
   consentedAt: string;
   /**
-   * Null for everyone on the list today — nothing writes it yet (see
-   * `.context/app/waitlist.md`). Returned rather than flattened to a boolean so
-   * the column tells the truth the moment the profile-seeding link lands.
+   * The account this entry became, set with `joinedAt` by the user-created
+   * hook when someone with this address accepts an invitation (see
+   * `.context/app/waitlist.md`). Null until then.
    */
   userId: string | null;
   createdAt: string;
@@ -94,6 +96,16 @@ export interface WaitlistAdminEntry {
   rejoinRequestedAt: string | null;
   /** How many times it has been. Zero for everyone who was never removed. */
   rejoinRequests: number;
+  /** When an admin last sent them an invitation from the list; null if never. */
+  invitedAt: string | null;
+  /**
+   * When they accepted an invitation and got an account; null if they have not.
+   *
+   * Returned rather than filtered away for the reason `removedAt` is: the
+   * surface has to be able to SHOW that a row became an account, or a linked
+   * row is indistinguishable from a deleted one (`HB9`).
+   */
+  joinedAt: string | null;
 }
 
 /**
@@ -110,6 +122,8 @@ function toAdminEntry(row: StoredEntry): WaitlistAdminEntry {
     createdAt: row.createdAt.toISOString(),
     removedAt: row.removedAt?.toISOString() ?? null,
     rejoinRequestedAt: row.rejoinRequestedAt?.toISOString() ?? null,
+    invitedAt: row.invitedAt?.toISOString() ?? null,
+    joinedAt: row.joinedAt?.toISOString() ?? null,
   };
 }
 
@@ -129,12 +143,14 @@ function toAdminEntry(row: StoredEntry): WaitlistAdminEntry {
 export function buildWaitlistSearchWhere(
   filter: WaitlistAdminFilter
 ): Prisma.AppWaitlistEntryWhereInput {
-  // Removed entries are out unless asked for. Top-level beside the `OR`, which
-  // Prisma ANDs — so "show removed" widens the population and the search still
-  // applies within it, rather than the two filters fighting.
-  const onTheList: Prisma.AppWaitlistEntryWhereInput = filter.includeRemoved
-    ? {}
-    : { removedAt: null };
+  // Removed and joined entries are out unless asked for — one because they
+  // will not be written to, the other because they are already in. Top-level
+  // beside the `OR`, which Prisma ANDs — so either switch widens the population
+  // and the search still applies within it, rather than the filters fighting.
+  const onTheList: Prisma.AppWaitlistEntryWhereInput = {
+    ...(filter.includeRemoved ? {} : { removedAt: null }),
+    ...(filter.includeJoined ? {} : { joinedAt: null }),
+  };
 
   if (!filter.q) return onTheList;
 
@@ -169,12 +185,14 @@ const ENTRY_ORDER = [
 export async function listWaitlistEntries(query: {
   q?: string;
   includeRemoved?: boolean;
+  includeJoined?: boolean;
   page: number;
   limit: number;
 }): Promise<{ entries: WaitlistAdminEntry[]; total: number }> {
   const where = buildWaitlistSearchWhere({
     q: query.q,
     includeRemoved: query.includeRemoved ?? false,
+    includeJoined: query.includeJoined ?? false,
   });
 
   const [rows, total] = await Promise.all([
@@ -285,6 +303,47 @@ export async function setWaitlistEntryRemoved(
   return row ? toAdminEntry(row) : null;
 }
 
+/**
+ * The row an invitation is about, as the invite route needs to see it: the
+ * address to write to, the name to greet by, and the two states that refuse.
+ *
+ * Read in full through `ENTRY_SELECT` rather than a narrower select, so the
+ * route can answer with the row as it stands without a second read when it
+ * refuses — a 409 that names the state is more useful than one that does not.
+ */
+export async function findWaitlistEntryForInvite(id: string): Promise<WaitlistAdminEntry | null> {
+  const row = await prisma.appWaitlistEntry.findUnique({ where: { id }, select: ENTRY_SELECT });
+  return row ? toAdminEntry(row) : null;
+}
+
+/**
+ * Record that an invitation was sent from the list — `invitedAt`, moved on
+ * every send.
+ *
+ * Deliberately NOT conditioned on the column being null, unlike
+ * `setWaitlistEntryRemoved`'s write. The two timestamps mean different things:
+ * `removedAt` is the record of one act and must not drift, whereas `invitedAt`
+ * is "when we last wrote to them", which a resend genuinely changes — it is
+ * what tells an admin the reminder went, and the CSV column is named for it.
+ *
+ * **Conditioned on `removedAt: null`**, which the route has already checked
+ * and checks again here under the row lock: a removal landing between its read
+ * and this write would otherwise leave "Removed" and "Invited <today>" on one
+ * row — the pair the route refuses to create on purpose. A zero count means
+ * removed-meanwhile or deleted-meanwhile; either way the row does not claim
+ * the list sent an invitation, and the route logs it rather than raising.
+ *
+ * `updateMany` rather than `update`, so that zero is a count and not a thrown
+ * P2025, and so the condition lives in the WHERE where Postgres evaluates it.
+ */
+export async function stampWaitlistEntryInvited(id: string, at: Date): Promise<boolean> {
+  const { count } = await prisma.appWaitlistEntry.updateMany({
+    where: { id, removedAt: null },
+    data: { invitedAt: at },
+  });
+  return count === 1;
+}
+
 /** The CSV header, which is also the column contract the export test pins. */
 export const WAITLIST_CSV_COLUMNS = [
   'id',
@@ -303,6 +362,9 @@ export const WAITLIST_CSV_COLUMNS = [
   'removed_at',
   'rejoin_requested_at',
   'rejoin_requests',
+  // t-46/t-47, appended for the same reason.
+  'invited_at',
+  'joined_at',
 ] as const;
 
 /**
@@ -391,6 +453,8 @@ export function waitlistEntriesToCsv(entries: WaitlistAdminEntry[]): string {
         entry.removedAt ?? '',
         entry.rejoinRequestedAt ?? '',
         String(entry.rejoinRequests),
+        entry.invitedAt ?? '',
+        entry.joinedAt ?? '',
       ]
         .map(csvCell)
         .join(',')

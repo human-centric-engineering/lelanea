@@ -28,6 +28,8 @@ vi.mock('@/lib/db/client', () => ({
 
 import {
   setWaitlistEntryRemoved,
+  stampWaitlistEntryInvited,
+  findWaitlistEntryForInvite,
   buildWaitlistSearchWhere,
   collectWaitlistEntriesForExport,
   listWaitlistEntries,
@@ -54,6 +56,8 @@ function storedRow(overrides: Record<string, unknown> = {}) {
     removedAt: null,
     rejoinRequestedAt: null,
     rejoinRequests: 0,
+    invitedAt: null,
+    joinedAt: null,
     ...overrides,
   };
 }
@@ -73,6 +77,8 @@ function entry(overrides: Partial<WaitlistAdminEntry> = {}): WaitlistAdminEntry 
     removedAt: null,
     rejoinRequestedAt: null,
     rejoinRequests: 0,
+    invitedAt: null,
+    joinedAt: null,
     ...overrides,
   };
 }
@@ -136,33 +142,59 @@ beforeEach(() => {
 });
 
 describe('buildWaitlistSearchWhere', () => {
-  it('filters out removed entries when nothing else is asked for', () => {
-    // `{ removedAt: null }` and NOT `{ OR: [] }` — Prisma treats an empty `OR` as
-    // "match nothing", so an unfiltered list built that way comes back empty.
-    expect(buildWaitlistSearchWhere({ q: undefined, includeRemoved: false })).toEqual({
-      removedAt: null,
-    });
+  it('filters out removed and joined entries when nothing else is asked for', () => {
+    // `{ removedAt: null, joinedAt: null }` and NOT `{ OR: [] }` — Prisma treats
+    // an empty `OR` as "match nothing", so an unfiltered list built that way
+    // comes back empty.
+    expect(
+      buildWaitlistSearchWhere({ q: undefined, includeRemoved: false, includeJoined: false })
+    ).toEqual({ removedAt: null, joinedAt: null });
   });
 
-  it('drops the removal filter when removed entries are asked for', () => {
+  it('drops the removal filter when removed entries are asked for, and only that one', () => {
     // Not `removedAt: { not: null }` — "show removed" widens the population to
     // everyone rather than narrowing it to the removed. An admin who ticks the box
-    // is looking for context, not for a separate list.
-    expect(buildWaitlistSearchWhere({ q: undefined, includeRemoved: true })).toEqual({});
+    // is looking for context, not for a separate list. And the joined filter
+    // stays: the two switches are independent.
+    expect(
+      buildWaitlistSearchWhere({ q: undefined, includeRemoved: true, includeJoined: false })
+    ).toEqual({ joinedAt: null });
   });
 
-  it('keeps the removal filter alongside a search, rather than replacing it', () => {
-    const where = buildWaitlistSearchWhere({ q: 'sleep', includeRemoved: false });
+  it('drops the joined filter the same way round', () => {
+    expect(
+      buildWaitlistSearchWhere({ q: undefined, includeRemoved: false, includeJoined: true })
+    ).toEqual({ removedAt: null });
+  });
 
-    // Prisma ANDs the top-level clause with the `OR`, so the search applies WITHIN
-    // the live entries. Losing `removedAt` here would quietly resurrect removed
-    // people the moment anyone typed in the box.
+  it('is unfiltered only when both are asked for', () => {
+    expect(
+      buildWaitlistSearchWhere({ q: undefined, includeRemoved: true, includeJoined: true })
+    ).toEqual({});
+  });
+
+  it('keeps both filters alongside a search, rather than replacing them', () => {
+    const where = buildWaitlistSearchWhere({
+      q: 'sleep',
+      includeRemoved: false,
+      includeJoined: false,
+    });
+
+    // Prisma ANDs the top-level clauses with the `OR`, so the search applies
+    // WITHIN the live entries. Losing either here would quietly resurrect removed
+    // people, or re-list people who are already in, the moment anyone typed in
+    // the box.
     expect(where.removedAt).toBeNull();
+    expect(where.joinedAt).toBeNull();
     expect(where.OR).toHaveLength(4);
   });
 
   it('searches the answers as well as the address', () => {
-    const where = buildWaitlistSearchWhere({ q: 'sleep', includeRemoved: false });
+    const where = buildWaitlistSearchWhere({
+      q: 'sleep',
+      includeRemoved: false,
+      includeJoined: false,
+    });
 
     const fields = (where.OR as Record<string, unknown>[]).flatMap((clause) => Object.keys(clause));
     // `intent` is the column the list exists for, so "who mentioned sleep" has
@@ -210,7 +242,11 @@ describe('listWaitlistEntries', () => {
 
 describe('collectWaitlistEntriesForExport', () => {
   it('breaks ties too, because the cap makes the last row a decision', async () => {
-    await collectWaitlistEntriesForExport({ q: undefined, includeRemoved: false });
+    await collectWaitlistEntriesForExport({
+      q: undefined,
+      includeRemoved: false,
+      includeJoined: false,
+    });
 
     // A tie at row `WAITLIST_EXPORT_MAX_ROWS` decides who is in the file and who
     // is not, so an unstable sort there is the same defect with a worse symptom.
@@ -224,6 +260,7 @@ describe('collectWaitlistEntriesForExport', () => {
     const { entries, total } = await collectWaitlistEntriesForExport({
       q: undefined,
       includeRemoved: false,
+      includeJoined: false,
     });
 
     expect(findMany).toHaveBeenCalledWith(
@@ -318,13 +355,62 @@ describe('setWaitlistEntryRemoved', () => {
   });
 });
 
+describe('stampWaitlistEntryInvited', () => {
+  it('moves invitedAt to the given time, unconditionally', async () => {
+    update.mockResolvedValue({ count: 1 });
+    const at = new Date('2026-09-17T09:00:00.000Z');
+
+    await expect(stampWaitlistEntryInvited('entry-1', at)).resolves.toBe(true);
+
+    const call = update.mock.calls[0]?.[0] as { where: unknown; data: Record<string, unknown> };
+    // No `invitedAt: null` in the WHERE, unlike the removal write — a resend is
+    // meant to move it. The column records the latest send, and the CSV column
+    // is named for that. But `removedAt: null` IS there: a removal landing
+    // between the route's read and this write must not produce a row that is
+    // both Removed and Invited.
+    expect(call.where).toEqual({ id: 'entry-1', removedAt: null });
+    expect(call.data).toEqual({ invitedAt: at });
+  });
+
+  it('reports a row that was removed or vanished between the read and the write, rather than throwing', async () => {
+    update.mockResolvedValue({ count: 0 });
+
+    await expect(stampWaitlistEntryInvited('entry-1', new Date())).resolves.toBe(false);
+  });
+});
+
+describe('findWaitlistEntryForInvite', () => {
+  it('reads the whole row, including the two states the route refuses on', async () => {
+    findUnique.mockResolvedValue(
+      storedRow({
+        removedAt: new Date('2026-09-11T12:00:00.000Z'),
+        joinedAt: new Date('2026-09-16T09:00:00.000Z'),
+        invitedAt: new Date('2026-09-15T09:00:00.000Z'),
+      })
+    );
+
+    const entry = await findWaitlistEntryForInvite('entry-1');
+
+    expect(findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'entry-1' } }));
+    expect(entry?.removedAt).toBe('2026-09-11T12:00:00.000Z');
+    expect(entry?.joinedAt).toBe('2026-09-16T09:00:00.000Z');
+    expect(entry?.invitedAt).toBe('2026-09-15T09:00:00.000Z');
+  });
+
+  it('returns null for an id nothing matches', async () => {
+    findUnique.mockResolvedValue(null);
+
+    await expect(findWaitlistEntryForInvite('entry-1')).resolves.toBeNull();
+  });
+});
+
 describe('waitlistEntriesToCsv', () => {
   it('writes the agreed header, in the agreed order', () => {
     const [header] = csvRows(waitlistEntriesToCsv([]));
 
     expect(header).toBe(
       'id,email,name,heard_from,intent,source,locale,consented_at,user_id,created_at,' +
-        'removed_at,rejoin_requested_at,rejoin_requests'
+        'removed_at,rejoin_requested_at,rejoin_requests,invited_at,joined_at'
     );
     expect(header).toBe(WAITLIST_CSV_COLUMNS.join(','));
   });
@@ -341,8 +427,25 @@ describe('waitlistEntriesToCsv', () => {
     ]);
 
     expect(csvRows(csv)[1]).toBe(
-      'entry-1,ada@example.com,,,,form,en-US,2026-09-01T10:00:00.000Z,,2026-09-01T10:00:00.000Z,,,0'
+      'entry-1,ada@example.com,,,,form,en-US,2026-09-01T10:00:00.000Z,,2026-09-01T10:00:00.000Z,,,0,,'
     );
+  });
+
+  it('writes the invited and joined times at the end, so an older reader is not shifted', () => {
+    const csv = waitlistEntriesToCsv([
+      entry({
+        userId: 'user-1',
+        invitedAt: '2026-09-15T09:00:00.000Z',
+        joinedAt: '2026-09-16T09:00:00.000Z',
+      }),
+    ]);
+
+    const cells = csvRows(csv)[1]?.split(',') ?? [];
+    // Position, not just presence: anything consuming a t-8 file by column index
+    // keeps working only if the thirteen columns before these have not moved.
+    expect(cells).toHaveLength(WAITLIST_CSV_COLUMNS.length);
+    expect(cells[8]).toBe('user-1');
+    expect(cells.slice(-2)).toEqual(['2026-09-15T09:00:00.000Z', '2026-09-16T09:00:00.000Z']);
   });
 
   it('neutralises a formula a visitor typed into a free-text answer', () => {

@@ -39,6 +39,8 @@ function entry(overrides: Partial<WaitlistAdminEntry> = {}): WaitlistAdminEntry 
     removedAt: null,
     rejoinRequestedAt: null,
     rejoinRequests: 0,
+    invitedAt: null,
+    joinedAt: null,
     ...overrides,
   };
 }
@@ -53,10 +55,14 @@ function listResponse(entries: WaitlistAdminEntry[], meta = META) {
   } as unknown as Response;
 }
 
-const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
+const { patch, post, APIClientErrorMock } = vi.hoisted(() => ({
+  patch: vi.fn(),
+  post: vi.fn(),
+  APIClientErrorMock: class APIClientError extends Error {},
+}));
 vi.mock('@/lib/api/client', () => ({
-  apiClient: { patch },
-  APIClientError: class APIClientError extends Error {},
+  apiClient: { patch, post },
+  APIClientError: APIClientErrorMock,
 }));
 
 const fetchMock = vi.fn();
@@ -272,7 +278,7 @@ describe('WaitlistTable', () => {
     // as "never joined" for a person who is merely removed.
     await waitFor(() =>
       expect(
-        screen.getByText(/Nobody on the list matches that\. If they were removed/)
+        screen.getByText(/Nobody on the list matches that\. If they were removed or have joined/)
       ).toBeTruthy()
     );
     expect(screen.queryByText(/did not load, so this is not an answer/)).toBeNull();
@@ -588,7 +594,7 @@ describe('WaitlistTable', () => {
     expect(screen.getByText(/Nobody is on the list/)).toBeTruthy();
   });
 
-  it('does say nobody joined once removed entries are included and there are none', async () => {
+  it('does say nobody joined once removed AND joined entries are included and there are none', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(listResponse([], { ...META, total: 0, totalPages: 0 }));
     render(
@@ -596,8 +602,14 @@ describe('WaitlistTable', () => {
     );
 
     await user.click(screen.getByLabelText('Show removed'));
+    // One switch is not enough: with the joined still hidden, an empty list may
+    // be everyone having been let in.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Nobody has joined the waitlist yet.')).toBeNull();
 
-    // With the removed included and still nothing there, the stronger claim is the
+    await user.click(screen.getByLabelText('Show joined'));
+
+    // With both included and still nothing there, the stronger claim is the
     // true one — and it is the only state that can make it.
     await waitFor(() =>
       expect(screen.getByText('Nobody has joined the waitlist yet.')).toBeTruthy()
@@ -623,8 +635,217 @@ describe('WaitlistTable', () => {
     // has joined.
     await waitFor(() =>
       expect(
-        screen.getByText(/Nobody on the list matches that\. If they were removed/)
+        screen.getByText(/Nobody on the list matches that\. If they were removed or have joined/)
       ).toBeTruthy()
     );
+  });
+  describe('the joined filter', () => {
+    it('asks the API for joined entries when the toggle goes on, independently of removed', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByLabelText('Show joined'));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const url = String(fetchMock.mock.calls[0]?.[0]);
+      expect(url).toContain('includeJoined=true');
+      expect(url).not.toContain('includeRemoved=true');
+      expect(url).toContain('page=1');
+    });
+
+    it('points the export at both switches once they are applied', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByLabelText('Show removed'));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await user.click(screen.getByLabelText('Show joined'));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+      // The file has to be the screen. Turning the second switch on must not
+      // drop the first from the link — the filters travel as a pair.
+      await waitFor(() => {
+        const href = screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href');
+        expect(href).toContain('includeRemoved=true');
+        expect(href).toContain('includeJoined=true');
+        expect(href?.startsWith(WAITLIST_ADMIN_EXPORT_ENDPOINT)).toBe(true);
+      });
+    });
+  });
+
+  describe('inviting someone from the row', () => {
+    beforeEach(() => {
+      post.mockResolvedValue({
+        entry: entry({ invitedAt: '2026-09-17T09:00:00.000Z' }),
+        emailStatus: 'sent',
+        expiresAt: '2026-09-24T09:00:00.000Z',
+        link: 'https://lelanea.com/accept-invite?token=t&email=ada%40example.com',
+      });
+    });
+
+    it('offers Invite on a live row that has not been invited', () => {
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      expect(screen.getByRole('button', { name: 'Invite' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Resend' })).toBeNull();
+    });
+
+    it('sends the invitation with the row’s name, then re-reads the page', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      // The dialog names the person and seeds the name from the row, so the
+      // common case is one more click.
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText(/Invite ada@example\.com\?/)).toBeTruthy();
+      expect(within(dialog).getByDisplayValue('Ada')).toBeTruthy();
+      await user.click(within(dialog).getByRole('button', { name: 'Send invitation' }));
+
+      await waitFor(() =>
+        expect(post).toHaveBeenCalledWith(`${WAITLIST_ADMIN_ENDPOINT}/entry-1/invite`, {
+          body: { name: 'Ada' },
+        })
+      );
+      // The badge comes from the server's row, not from a guess: the page is
+      // re-fetched after the send.
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole('status').textContent).toContain(
+        'Invitation sent to ada@example.com'
+      );
+    });
+
+    it('asks for a name when the row has none, and will not send without one', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry({ name: null })]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      const dialog = screen.getByRole('dialog');
+
+      // The email greets by name, so an empty field cannot be sent.
+      const send = within(dialog).getByRole('button', { name: 'Send invitation' });
+      expect((send as HTMLButtonElement).disabled).toBe(true);
+      expect(within(dialog).getByText(/They did not give one/)).toBeTruthy();
+
+      await user.type(within(dialog).getByLabelText('Name'), 'Ada Lovelace');
+      await user.click(send);
+
+      await waitFor(() =>
+        expect(post).toHaveBeenCalledWith(expect.any(String), { body: { name: 'Ada Lovelace' } })
+      );
+    });
+
+    it('shows an Invited badge and reads Resend once an invitation has gone', async () => {
+      const user = userEvent.setup();
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ invitedAt: '2026-09-15T09:00:00.000Z' })]}
+          initialMeta={META}
+        />
+      );
+
+      expect(screen.getByText(/^Invited/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Resend' }));
+
+      // A second send is a reminder, and the dialog says so rather than reading
+      // as the first.
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText(/the invitation again\?/)).toBeTruthy();
+      await user.click(within(dialog).getByRole('button', { name: 'Send again' }));
+
+      await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    });
+
+    it('shows Joined, and no Invite, once they are in', () => {
+      render(
+        <WaitlistTable
+          initialEntries={[
+            entry({
+              userId: 'user-1',
+              invitedAt: '2026-09-15T09:00:00.000Z',
+              joinedAt: '2026-09-16T09:00:00.000Z',
+            }),
+          ]}
+          initialMeta={META}
+        />
+      );
+
+      // Joined wins over Invited: once they are in, when we last wrote to them
+      // is history. And no Invite: the route would 409, and the button would be
+      // an offer to write to someone who is already in. Remove stays.
+      expect(screen.getByText(/^Joined/)).toBeTruthy();
+      expect(screen.queryByText(/^Invited/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /Invite|Resend/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    });
+
+    it('offers no Invite on a removed row', () => {
+      render(
+        <WaitlistTable
+          initialEntries={[entry({ removedAt: '2026-09-11T12:00:00.000Z' })]}
+          initialMeta={META}
+        />
+      );
+
+      // Restore first — the route refuses a removed row, and the screen should
+      // not offer what the server will not do.
+      expect(screen.queryByRole('button', { name: /Invite|Resend/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Restore' })).toBeTruthy();
+    });
+
+    it('says so when the invitation was created but the email did not go', async () => {
+      const user = userEvent.setup();
+      post.mockResolvedValue({
+        entry: entry({ invitedAt: '2026-09-17T09:00:00.000Z' }),
+        emailStatus: 'failed',
+        expiresAt: '2026-09-24T09:00:00.000Z',
+        link: 'https://lelanea.com/accept-invite?token=t&email=ada%40example.com',
+      });
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      await user.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+      // The badge alone would read as "they have it". The invitation exists;
+      // Resend and the link are the remedies, so the notice names both.
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toContain('the email did not send')
+      );
+      expect(screen.getByRole('button', { name: 'Copy invitation link' })).toBeTruthy();
+    });
+
+    it('does not offer the link when the email went', async () => {
+      const user = userEvent.setup();
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      await user.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toBeTruthy());
+      // A live credential on screen is for the case with no other channel, not
+      // the default.
+      expect(screen.queryByRole('button', { name: 'Copy invitation link' })).toBeNull();
+    });
+
+    it('surfaces the server’s refusal, and re-reads the row that moved', async () => {
+      const user = userEvent.setup();
+      post.mockRejectedValue(
+        new APIClientErrorMock(
+          'This person was taken off the waitlist. Put them back on it before inviting them.'
+        )
+      );
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: 'Invite' }));
+      await user.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toContain('taken off the waitlist')
+      );
+      // A 409 means the row moved under the admin since the page loaded; the
+      // re-fetch shows it as it stands rather than as it was.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -50,6 +50,8 @@ const ENTRY = {
   removedAt: null,
   rejoinRequestedAt: null,
   rejoinRequests: 0,
+  invitedAt: null,
+  joinedAt: null,
   id: 'entry-1',
   email: 'ada@example.com',
   name: 'Ada',
@@ -115,7 +117,19 @@ describe('GET /api/v1/admin/app/waitlist', () => {
       limit: 25,
       q: undefined,
       includeRemoved: false,
+      includeJoined: false,
     });
+  });
+
+  it('passes the joined switch through, off by default and on when asked', async () => {
+    await GET(request({ includeJoined: 'true' }));
+
+    // Someone who accepted an invitation is not waiting, so the default list
+    // leaves them out — but hidden completely, a linked row would be
+    // indistinguishable from a deleted one (`HB9`), hence the switch.
+    expect(listWaitlistEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ includeJoined: true, includeRemoved: false })
+    );
   });
 
   it('passes the search term through to the query', async () => {

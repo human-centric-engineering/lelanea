@@ -30,9 +30,10 @@ import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
   // cannot reach the rows of anyone who joined before signing up — which is
-  // everyone, since nothing writes `userId` yet. Without this hook an erased
-  // account would leave that person's address, name and stated intent on a
-  // table nothing points at. See `lib/app/waitlist/service.ts`. First,
+  // everyone who has not accepted an invitation, since only the user-created
+  // hook (`lib/app/user-created.ts`) writes `userId`. Without this hook an
+  // erased account would leave that person's address, name and stated intent
+  // on a table nothing points at. See `lib/app/waitlist/service.ts`. First,
   // because it cannot fail and must not be skipped by anything below that can.
   registerWaitlistErasureHook();
 

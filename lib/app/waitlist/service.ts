@@ -16,7 +16,8 @@
  *
  * @see lib/app/leaf-data-export.ts — the Art. 15 declaration and collector
  * @see lib/app/leaf-bootstrap.ts — where the Art. 17 hook is registered
- * @see lib/app/waitlist/admin.ts — the admin read, and the removal write
+ * @see lib/app/user-created.ts — where the account-linking hook is registered
+ * @see lib/app/waitlist/admin.ts — the admin read, the removal and the invitation
  */
 
 import type { Prisma } from '@prisma/client';
@@ -24,6 +25,7 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { registerErasureCleanupHook } from '@/lib/privacy/erasure-hooks';
+import { registerUserCreatedHook, type UserCreatedContext } from '@/lib/auth/user-created-hooks';
 
 /**
  * Whether a rejected write is the unique-index violation on `email`.
@@ -240,10 +242,11 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
 /**
  * How a subject's own rows are matched, on both the Art. 15 and Art. 17 paths.
  *
- * The table has no user id for anyone who joined before signing up — which is
- * everyone today — so email is the real handle, and `userId` is matched as well
- * so an entry that was linked to an account and then had its address changed
- * still reaches its owner.
+ * The table has no user id for anyone who has not accepted an invitation —
+ * which is most of it — so email is the real handle. `userId` is matched as
+ * well, and since t-46 it is live: `linkWaitlistEntryToUser` writes it when an
+ * account is created for a matching address, so an entry that was linked and
+ * then had its account's address changed still reaches its owner.
  *
  * ## Lower-cased exact match, NOT `mode: 'insensitive'`
  *
@@ -312,11 +315,12 @@ export const WAITLIST_ERASURE_HOOK = 'lelanea:waitlist-entry';
  *
  * ## Why it re-reads the email inside the transaction
  *
- * The hook context carries only `userId`, and almost every row is matched by
- * email rather than by that id — nothing writes `userId` yet. The hook runs
- * INSIDE the erasure transaction and BEFORE `tx.user.delete()`, so the user row
- * is still there to read the address from. Matching on both is what makes this
- * work for an entry that was linked and one that never was.
+ * The hook context carries only `userId`, and a row is only linked to one if
+ * its person accepted an invitation (`linkWaitlistEntryToUser`) — everyone else
+ * is matched by email. The hook runs INSIDE the erasure transaction and BEFORE
+ * `tx.user.delete()`, so the user row is still there to read the address from.
+ * Matching on both is what makes this work for an entry that was linked and one
+ * that never was.
  *
  * A throw here rolls the whole erasure back, which is the contract for the
  * in-transaction phase and is the right failure: an erasure that reported
@@ -365,4 +369,70 @@ export function registerWaitlistErasureHook(): void {
     name: WAITLIST_ERASURE_HOOK,
     scrubInTransaction: eraseWaitlistEntriesForUser,
   });
+}
+
+/** The linking hook's key, exported so the wiring test can name it too. */
+export const WAITLIST_LINK_HOOK = 'lelanea:waitlist-link';
+
+/**
+ * When an account is created for an address on the list, the entry becomes
+ * that account: `userId` and `joinedAt` are set, and the row leaves the default
+ * list, export and count the way a removed one does.
+ *
+ * ## Keyed on email, not on how they arrived
+ *
+ * Signup is invite-only (t-38), so every new account came through an
+ * invitation — but `viaInvitation` is true only for a password acceptance
+ * (`lib/auth/config.ts`), and an OAuth acceptance would be missed. And the
+ * invitation may have been raised from Sunrise's Admin → Users → Invite rather
+ * than from the row, so `invitedAt` is not the key either. The address is the
+ * one thing every path shares.
+ *
+ * The match is the same **lower-cased exact** one `subjectMatch()` uses, for
+ * the same reason: never `mode: 'insensitive'` on this column. Two reads
+ * rather than one `update` — a `findUnique` for the id, then a `updateMany`
+ * conditioned on `userId: null` — so the ordinary case (an admin-created
+ * account with no row) is a null and not a thrown P2025 that the dispatcher
+ * would log as a failure, and so a second dispatch for the same account cannot
+ * move `joinedAt`.
+ *
+ * ## It links a REMOVED entry too, and leaves `removedAt` alone
+ *
+ * A removed person who accepts an invitation is unambiguously in. Joined and
+ * removed are different states — one is "already in", the other "will not be
+ * written to" — and both stay legible on the row; the Art. 15 export discloses
+ * both. The invite route refuses a removed row, so this case is reached only
+ * through the platform's own invite page, and it is still the right answer.
+ *
+ * Runs after the user row exists and cannot fail a signup: `dispatchUserCreated`
+ * logs and swallows a throw. Logs the entry id, never the address.
+ */
+export async function linkWaitlistEntryToUser(ctx: UserCreatedContext): Promise<void> {
+  const email = ctx.email.trim().toLowerCase();
+
+  const entry = await prisma.appWaitlistEntry.findUnique({
+    where: { email },
+    select: { id: true, userId: true },
+  });
+
+  // No row is the ordinary case for an account that did not come off the list,
+  // and an already-linked row is a repeat dispatch. Neither is worth a line.
+  if (!entry || entry.userId !== null) return;
+
+  const { count } = await prisma.appWaitlistEntry.updateMany({
+    where: { id: entry.id, userId: null },
+    data: { userId: ctx.userId, joinedAt: new Date() },
+  });
+
+  if (count === 1) {
+    logger.info('Waitlist entry linked to new account', { entryId: entry.id, userId: ctx.userId });
+  }
+}
+
+/**
+ * Wire the linking hook. Called from `initAppUserCreatedHooks()` the first time
+ * a signup dispatches; `registerUserCreatedHook` is idempotent by key.
+ */
+export function registerWaitlistLinkHook(): void {
+  registerUserCreatedHook(WAITLIST_LINK_HOOK, linkWaitlistEntryToUser);
 }

@@ -38,6 +38,14 @@ And the read surface, which landed a task later (t-8):
 | `app/admin/app/waitlist/page.tsx`               | The page, server-rendering the first page through the API |
 | `components/app/admin/waitlist-table.tsx`       | The table: search, pager, per-row "show all", export link |
 
+And the way off the list that is not a removal (t-46, t-47):
+
+| Piece                                                     | What it is                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| `app/api/v1/admin/app/waitlist/[id]/invite/route.ts`      | `POST` — send (or re-send) the invitation from the row              |
+| `lib/app/waitlist/service.ts` → `linkWaitlistEntryToUser` | The user-created hook: the row becomes the account, `joinedAt` set  |
+| `lib/app/user-created.ts`                                 | Where that hook is registered (the seam, pinned in `defaults.test`) |
+
 ## The fields, and why these four
 
 D2 (owner, §03) ruled the set: **email required; name, `heardFrom` and `intent`
@@ -523,17 +531,128 @@ inserted. Anything already consuming a file from t-8 reads by column position as
 often as by name, so a new column in the middle silently shifts every field after
 it.
 
+## Inviting someone, and the row coming off the list on its own
+
+The list is where she decides who to let in. Until t-47 letting someone in
+meant leaving it, opening Admin → Users → Invite, and retyping their name and
+address; nothing on the row recorded that it had happened, and until t-46
+nothing connected the account they then created back to the row — so they were
+still counted as waiting, still in the export, and would have been written to
+when a place opened. Two columns close that, and the row reads
+**Invited → Joined**.
+
+### `POST …/waitlist/:id/invite` — the platform's rules, re-derived
+
+Sunrise's invite flow is inlined in `POST /api/v1/users/invite`; there is no
+`inviteUser()` service, only the library under it (`lib/utils/invitation-token.ts`,
+the `invitation` email through `lib/app/emails.ts`, `sendEmail`,
+`inviteLimiter`). The route uses that library and takes each of the platform
+route's rules on its own merits rather than copying its code (`fp5`):
+
+- **Role is always `USER`.** Nobody is promoted to admin from a waitlist.
+- **A pending invitation is regenerated and resent, with no `?resend=true`.**
+  The platform's flag exists because its form is also how you find out whether
+  someone was already invited; here the row already says so, and the only
+  caller with one pending is the "Resend" button.
+- **`inviteLimiter` on the admin's IP**, first, before any read: the
+  email-bombing bound it exists for applies here identically.
+- **The name.** The email greets by it and `inviteUserSchema` requires one, but
+  a waitlist entry's is optional (D2). Resolution order is body → row → the
+  pending invitation's metadata; none of the three is a 400 with
+  `details.field = 'name'`. The dialog seeds the field from the row so the common
+  case is one click, and an admin can correct a name without editing the entry.
+- **Refusals.** 404 for no such row; 409 `removed` — restore first, because
+  "will not be written to" and "we just wrote to them" cannot both be true of
+  one row, and keeping them exclusive is what makes "Removed" mean what the
+  dialog says; 409 `joined`; 409 `account_exists` from a `User` lookup by
+  address, because Admin → Users → Invite can have let someone in without ever
+  touching the row.
+- **`invitedAt` is stamped on every send and moved on a resend.** It records the
+  latest send — the badge reads "Invited <date>" — and it is set once the
+  invitation exists, before the email is attempted, because the invitation IS
+  the state: Sunrise's Invitations tab lists it from the same verification store
+  whether or not the email went. The stamp is conditioned on `removedAt: null`
+  under the row lock, so a removal landing between the route's read and its
+  write cannot leave a row that is both Removed and Invited; the response then
+  reports the row as it holds it, and the log says `stamped: false`.
+- **The body is optional in fact.** `POST` with nothing is the headless resend
+  for a named row; the route reads the body itself rather than through
+  `validateRequestBody`, which refuses an empty body as "Invalid JSON". `emailStatus` in the response says whether it
+  did, and the table says so out loud when it did not. The response also carries
+  the invitation `link`, as the platform's route does, and the table offers a
+  "Copy invitation link" only in that case — handing it over by another channel
+  is the one remedy that does not depend on the thing that just failed
+  (`HB10`); Resend is the other.
+
+**What the platform logs on our behalf.** The route's own lines carry the entry
+id and the outcome, never the address, through `app/api/v1/admin/app/waitlist/_shared/route-logger.ts` like
+the rest of the surface. The platform's token helpers log the address themselves
+(`generateInvitationToken`, `updateInvitationToken`, `getValidInvitation` on
+error), exactly as they do under the platform's own invite route. Their blobs are
+identical in all three tiers, so that is Sunrise's to change and is not patched
+here; it is the same class of gap as `sunrise#685`.
+
+### The row becomes the account — `linkWaitlistEntryToUser`
+
+`lib/app/user-created.ts` registers one hook, dispatched from
+`userCreateAfterHook` last, after the invitation is redeemed. It finds the entry
+whose `email` equals the new account's address — **lower-cased exact**, the same
+match as `subjectMatch()` and for the same reason (below) — and sets `userId`
+and `joinedAt`, conditioned on `userId: null` so a repeat dispatch cannot move
+the stamp. No row is the ordinary case for an admin-created account and logs
+nothing; a link logs the entry id and the user id, never the address. The hook
+runs after the user row exists and cannot fail a signup: `dispatchUserCreated`
+logs and swallows a throw.
+
+**Keyed on the address, not on how they arrived.** Signup is invite-only (t-38),
+so every new account came through an invitation — but `viaInvitation` is true
+only for a password acceptance and would miss an OAuth one, and the invitation
+may have been raised from the platform's own page rather than from the row, so
+`invitedAt` is not the key either. The address is the one thing every path
+shares.
+
+**`joinedAt`, not `removedAt`, and the two are independent.** Removed means an
+admin took them off and they will not be written to; joined means they are in.
+Different state, different badge, and the Art. 15 export discloses which. The
+hook links a removed row too — a removed person who accepts an invitation is
+unambiguously in — and leaves `removedAt` and the re-join record as they were.
+(The invite route refuses a removed row, so that case is reached only through
+the platform's page, and it is still the right answer.)
+
+**Seeing them.** A joined row leaves the default list, export and count the way a
+removed one does, behind `includeJoined` and a "Show joined" switch — D10's
+reasoning transfers: hidden completely, a linked row is indistinguishable from a
+deleted one (`HB9`). The two switches are independent and both widen. The empty
+state can claim "nobody has joined the waitlist yet" only with both on. The table
+shows **Joined <date>** over **Invited <date>** (once they are in, when we last
+wrote to them is history) and offers no Invite on a joined or a removed row.
+
+**The CSV's two new columns are appended**, `invited_at` then `joined_at`, after
+`rejoin_requests` — `user_id` was already a column, and inserting beside it
+would shift every field after it for anyone reading a t-8 file by position.
+
+**The migration is hand-written** (`20260917100000_app_waitlist_entry_invited_joined`):
+two `ADD COLUMN`s, no index, no backfill — nobody had been invited by hand
+before this landed, so there was no existing account to link a row to. `B13`
+applies to this table, and generating twenty-one statements to strip was not
+worth it for two lines. Applied with `db:migrate:deploy`; the drift probe on the
+FK still passes.
+
 ## The two GDPR duties
 
 Neither is optional and neither is automatic, because **the table is keyed by
-email**. Everyone on it today joined before there was an account, so nothing
-that matches on `userId` reaches them. This is the same case as core's
-`ContactSubmission`, and the same reason no coverage guard could have found the
-table for us.
+email**. Everyone on it joined before there was an account, and only those who
+have since accepted an invitation carry a `userId` (t-46, above) — so for most
+of the table nothing that matches on `userId` reaches them. This is the same
+case as core's `ContactSubmission`, and the same reason no coverage guard could
+have found the table for us.
 
 ### How a subject's own rows are matched — the line to be careful with
 
 Both paths use `subjectMatch()`: `userId` **or** a **lower-cased exact** email.
+Since t-46 the `userId` arm is live — `linkWaitlistEntryToUser` writes the
+column — so a linked entry whose account later changed its address is still
+reached through the id.
 
 **Never `{ equals, mode: 'insensitive' }`.** On the Prisma Postgres connector
 that compiles to `ILIKE`, and Prisma does not escape the compared value — so
@@ -627,8 +746,9 @@ only — the page redirect does not know about it; see
 [`local-dev.md`](./local-dev.md#the-first-account-on-an-empty-database)), and
 `accept-invite` (wrapped in `runInvitedSignup`),
 sent by an admin from `/admin/users/invite` through `POST /api/v1/users/invite`
-(`withAdminAuth`), whose email is ours ([`emails.md`](./emails.md)). Verified
-end to end with the mode on before it was flipped.
+(`withAdminAuth`) — or, since t-47, from the waitlist row itself — whose email is
+ours ([`emails.md`](./emails.md)). Verified end to end with the mode on before
+it was flipped.
 
 **What was ours to add:** the sentence. The platform's closed state says
 nothing, so a stranger who typed `/signup` landed on "Welcome back" with no
@@ -648,10 +768,10 @@ and the link is a real door for the invited (owner ruling, 16 September 2026).
   (divergence row 7). It now reads "every email we send will have a one-click
   way off the list": true when it is read, and binding on whoever ships that
   email. Owner ruling, 10 September 2026.
-- **`userId` is never written.** The column and its FK exist for the
-  profile-seeding link, which is later work; nothing sets it today — so the admin
-  table's "Account" column reads `—` for everyone, correctly and uninformatively,
-  until that lands.
+- **`intent` does not yet seed the profile.** `userId` is now written when
+  someone accepts an invitation (t-46), which is the link that makes it
+  possible; carrying what they said they wanted into the account they then
+  created is still later work.
 - **A removed row is kept indefinitely.** Removal takes someone off the list and
   keeps their email, name and answers for as long as the row exists, with no
   purpose that needs them — which is a storage-limitation problem (Art. 5(1)(e))

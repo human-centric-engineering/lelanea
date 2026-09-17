@@ -26,5 +26,10 @@ export const WAITLIST_ENDPOINT = '/api/v1/app/waitlist';
 export const WAITLIST_ADMIN_ENDPOINT = '/api/v1/admin/app/waitlist';
 export const WAITLIST_ADMIN_EXPORT_ENDPOINT = '/api/v1/admin/app/waitlist/export';
 
+/** The per-row invitation: `POST` here sends (or re-sends) the invitation email. */
+export function waitlistAdminInviteEndpoint(id: string): string {
+  return `${WAITLIST_ADMIN_ENDPOINT}/${id}/invite`;
+}
+
 /** Where an admin reads the list. The nav seam and the page both name it here. */
 export const WAITLIST_ADMIN_PAGE = '/admin/app/waitlist';

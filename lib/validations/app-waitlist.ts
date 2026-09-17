@@ -200,6 +200,13 @@ export const waitlistAdminFilterSchema = z.object({
    * that only shows up when someone unchecks a box.
    */
   includeRemoved: queryBooleanSchema.optional().default(false),
+  /**
+   * Show entries that became accounts. Default false, for the same reason as
+   * `includeRemoved` and with the opposite meaning: a joined person is not
+   * waiting because they are already in. Hidden completely, a linked row would
+   * be indistinguishable from a deleted one (`HB9`), so the switch exists.
+   */
+  includeJoined: queryBooleanSchema.optional().default(false),
 });
 
 /**
@@ -213,6 +220,25 @@ export const waitlistRemovalSchema = z.object({
   removed: z.boolean({ error: 'Say whether this entry is removed: true or false.' }),
 });
 
+/**
+ * The body of an invitation sent from the list: a name, optional here because
+ * the row may already carry one.
+ *
+ * The invitation email greets the person by name and `inviteUserSchema`
+ * (the platform's) requires one, but a waitlist entry's `name` is optional (D2).
+ * So the route takes one from the body when the row has none, and refuses with a
+ * 400 when neither has it. The same length cap as the platform's invite form,
+ * because the value ends up in the same invitation metadata.
+ */
+export const waitlistInviteSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .max(100, 'Please keep the name under 100 characters.')
+    .optional()
+    .transform((value) => (value === undefined || value === '' ? undefined : value)),
+});
+
 /** The admin list query: the shared filter plus page/limit. */
 export const waitlistAdminQuerySchema = z.object({
   ...waitlistAdminFilterSchema.shape,
@@ -222,4 +248,5 @@ export const waitlistAdminQuerySchema = z.object({
 
 export type WaitlistAdminFilter = z.infer<typeof waitlistAdminFilterSchema>;
 export type WaitlistRemovalInput = z.infer<typeof waitlistRemovalSchema>;
+export type WaitlistInviteInput = z.infer<typeof waitlistInviteSchema>;
 export type WaitlistAdminQuery = z.infer<typeof waitlistAdminQuerySchema>;

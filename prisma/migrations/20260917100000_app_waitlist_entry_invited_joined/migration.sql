@@ -1,0 +1,31 @@
+-- §03 t-46 + t-47 — an admin can invite someone from the waitlist, and the row
+-- comes off the list on its own when they accept.
+--
+-- Two nullable columns, no index, no backfill. `invitedAt` is stamped by
+-- POST /api/v1/admin/app/waitlist/:id/invite and moved on a resend; `joinedAt`
+-- is set with `userId` by the user-created hook when an account is created for
+-- a matching address. Nobody had been invited by hand before this landed, so
+-- there is no existing account to link a row to. See prisma/schema/app.prisma.
+--
+-- NOT a removal. A joined entry keeps `removedAt` as it was; the two are
+-- different states and the Art. 15 export discloses both. The Art. 17 hook
+-- still DELETEs a joined row outright — it now reaches it by `userId` as well
+-- as by email.
+--
+-- HAND-WRITTEN rather than generated (B13). `--create-only` against this table
+-- emits the same drops the `20260911113753_app_waitlist_entry_removal`
+-- migration documents — our hand-written FK, the framework's FKs, the pgvector
+-- and tsvector indexes — because the generator diffs against a shadow database
+-- and drops whatever the schema cannot model. Two ADD COLUMNs are not worth
+-- generating twenty-one statements to strip.
+--
+-- NO INDEX on either column, for the reason `removedAt` has none: the hot
+-- predicate is `IS NULL`, which matches nearly every row.
+--
+-- APPLY WITH `npm run db:migrate:deploy`, not `migrate dev` — the schema and the
+-- database diverge on the FK by design, and the development command reads the
+-- divergence as drift and "corrects" it. Then `npm run db:drift-check`.
+
+-- AlterTable
+ALTER TABLE "app_waitlist_entry" ADD COLUMN     "invitedAt" TIMESTAMP(3),
+ADD COLUMN     "joinedAt" TIMESTAMP(3);

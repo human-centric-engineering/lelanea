@@ -84,7 +84,14 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
  */
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    appWaitlistEntry: { findMany: vi.fn(async () => []) },
+    appWaitlistEntry: {
+      findMany: vi.fn(async () => []),
+      // The user-created row below dispatches through the real seam; a null
+      // here is "no row has that address", the ordinary case, so the pin can
+      // assert the hook REACHED the table without pretending a row was linked.
+      findUnique: vi.fn(async () => null),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
     appAcknowledgement: { findMany: vi.fn(async () => []) },
   },
 }));
@@ -126,6 +133,11 @@ import { appCoverageExclusions, appAlwaysRunTests } from '@/lib/app/ci';
 import { leafCoverageExclusions, leafAlwaysRunTests } from '@/lib/app/leaf-ci';
 import { occupiedTiers } from '@/lib/app/reserved-tiers';
 import { initAppUserCreatedHooks } from '@/lib/app/user-created';
+import {
+  dispatchUserCreated,
+  __resetUserCreatedHooksForTests,
+} from '@/lib/auth/user-created-hooks';
+import { prisma } from '@/lib/db/client';
 import { collectLeafSubjectData, initLeafSubjectSources } from '@/lib/app/leaf-data-export';
 import {
   getAppSubjectSources,
@@ -640,9 +652,34 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). §03 t-46 fills this with ONE hook — the
+    // waitlist entry whose address matches the new account becomes that
+    // account. The registry exports no way to READ back its keys, so the pin
+    // is the dispatch: one signup reaches the waitlist table exactly once,
+    // with the address lower-cased. A second registration under another key
+    // would read it twice; a missing one, never. WHAT the hook does with a row
+    // is pinned in tests/unit/lib/app/waitlist/service.test.ts.
     seam: 'lib/app/user-created.ts',
-    risk: 'a stray hook would run on every signup on every install',
-    assert: () => expect(initAppUserCreatedHooks()).toBeUndefined(),
+    risk: 'a stray hook would run on every signup on every install; a MISSING one would leave every invited person on the waitlist after they joined',
+    assert: async () => {
+      __resetUserCreatedHooksForTests();
+      expect(initAppUserCreatedHooks()).toBeUndefined();
+
+      const findUnique = vi.mocked(prisma.appWaitlistEntry.findUnique);
+      findUnique.mockClear();
+      await dispatchUserCreated({
+        userId: 'user-1',
+        email: 'Ada@Example.com',
+        name: 'Ada',
+        signupMethod: 'email',
+        viaInvitation: true,
+      });
+
+      expect(findUnique).toHaveBeenCalledTimes(1);
+      expect(findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'ada@example.com' } })
+      );
+    },
   },
   {
     seam: 'lib/app/mcp-resources.ts',
