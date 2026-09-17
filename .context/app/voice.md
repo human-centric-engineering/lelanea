@@ -1188,5 +1188,10 @@ Daybreak has diverged but the defect is in Sunrise's copy as well:
    and `document-chunks-modal.tsx` are byte-identical across all three tiers;
    `manage-tab.tsx` has diverged in Daybreak, but Sunrise's copy carries the same
    dead Review button — so all three belong to Sunrise. Found by t-44's
-   /code-review. This leaf mitigates the invisibility (the table reloads on every
-   modal exit) but cannot supply the missing resume path.
+   /code-review and filed as
+   [sunrise#807](https://github.com/human-centric-engineering/sunrise/issues/807)
+   — **the only one of the six that is filed**; the other five are recorded here
+   and not yet raised. This leaf mitigates the invisibility (the table reloads on
+   every modal exit) but cannot supply the missing resume path. The extracted
+   text is already persisted in `metadata.extractedText`, so the material for a
+   resume exists; nothing in any admin reads it back.
