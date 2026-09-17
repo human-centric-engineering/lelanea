@@ -203,6 +203,18 @@ describe('the empty state', () => {
     expect(screen.queryByText(/No training material yet/i)).toBeNull();
   });
 
+  it('points at the uploader above, not at the orchestration admin (t-44)', () => {
+    // The stale sentence sent her to AI Orchestration → Knowledge, which is the
+    // split t-44 exists to close. Asserted in both directions: the new sentence
+    // present, and the route named nowhere on the surface — an absence claim
+    // that would pass for free if the empty state had not rendered at all, hence
+    // the first assertion.
+    render(<DesignationTable initialDocuments={[]} initialMeta={{ ...META, total: 0 }} />);
+
+    expect(screen.getByText(/No training material yet\. Add a document above/i)).toBeTruthy();
+    expect(screen.queryByText(/AI Orchestration/i)).toBeNull();
+  });
+
   it('says nothing is waiting on an answer when the undesignated filter is empty', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue({
@@ -408,5 +420,61 @@ describe('two saves at once', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Purpose of A method note').hasAttribute('disabled')).toBe(false)
     );
+  });
+});
+
+describe('reloadToken — going and looking again when something lands', () => {
+  function emptyPage(total: number) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: [],
+        meta: { page: 1, limit: 25, total, totalPages: total === 0 ? 0 : 1 },
+      }),
+    };
+  }
+
+  it('does not fetch on mount — only when the token actually moves', () => {
+    render(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={7} />);
+
+    // The server page already fetched page one. A mount-time request would
+    // duplicate it and would make the table flicker on every navigation.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('re-requests page one when the token is bumped', async () => {
+    fetchMock.mockResolvedValue(emptyPage(1));
+
+    const { rerender } = render(
+      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={0} />
+    );
+    rerender(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={1} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('page=1');
+  });
+
+  it('keeps the filter she is looking through when it refreshes', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(emptyPage(0));
+
+    const { rerender } = render(
+      <DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={0} />
+    );
+
+    await user.click(screen.getByLabelText('Undesignated documents'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    rerender(<DesignationTable initialDocuments={[doc()]} initialMeta={META} reloadToken={1} />);
+
+    // The refresh must not silently widen the list back to everything: the whole
+    // reason she has that switch on is that she is working through the backlog
+    // of undesignated documents, and a document she just added belongs in it.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [url] = fetchMock.mock.calls[1] as [string];
+    expect(url).toContain('undesignatedOnly=true');
   });
 });

@@ -903,6 +903,7 @@ touch.
 | `lib/app/knowledge-access-contributors.ts`              | The seam registration — one contributor, `lelanea:designated-corpus`    |
 | `lib/validations/app-knowledge-designation.ts`          | The wire contract                                                       |
 | `prisma/seeds/app-lelanea/002-knowledge-designation.ts` | Where the six tags come from                                            |
+| `components/app/admin/knowledge-workspace.tsx`          | The uploader above the table, and the two joined up                     |
 | `components/app/admin/designation-table.tsx`            | The table                                                               |
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
@@ -912,14 +913,81 @@ Routes: `GET /api/v1/admin/app/knowledge/designations` and
 ## The surface
 
 `/admin/app/knowledge` — **Training material** in the Lelañea admin section —
-lists every document uploaded into this install with its purpose, sensitivity,
-licensing note, and an **Agent may quote** column showing the consequence of the
-answer on the same screen.
+is one page doing two things. At the top she **adds** material; under it she says
+what each document is **for**, with its purpose, sensitivity, licensing note and
+an **Agent may quote** column showing the consequence of the answer on the same
+screen.
 
-The first control is the **Undesignated documents** filter. That is the point of
-the page rather than a convenience: an undesignated document reaches nothing, but
-on screen it looks exactly like one that reaches everything, and that confusion
-is what this feature exists to remove.
+The first control on the table is the **Undesignated documents** filter. That is
+the point of the page rather than a convenience: an undesignated document reaches
+nothing, but on screen it looks exactly like one that reaches everything, and
+that confusion is what this feature exists to remove.
+
+### The uploader is Sunrise's, IMPORTED — not copied, not adapted (t-44)
+
+Until t-44 only the second act was here, and the table's empty state had to send
+her to **AI Orchestration → Knowledge** to put anything in it — a tier of the
+admin she has no other reason to visit, built for someone operating an agent
+platform rather than someone curating a corpus.
+
+`components/app/admin/knowledge-workspace.tsx` closes that by importing two
+Sunrise-owned components and rendering them above the table:
+
+| Imported                                                            | Why it is there                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------- |
+| `components/admin/orchestration/knowledge/document-upload-zone.tsx` | The uploader: parsers, size and batch caps, tags  |
+| `components/admin/orchestration/knowledge/pdf-preview-modal.tsx`    | The confirm step a PDF cannot be ingested without |
+
+**Importing beats copying, and the reason is not tidiness.** Both files are
+Sunrise's. Imported, the platform's parsers, its 50 MB / ten-file limits, its PDF
+flow and every future improvement merge through, and this leaf carries no row in
+[`divergences.md`](./divergences.md). Copied or adapted, we would own a file
+forever and re-solve it on every sync (`sunrise.divergences`); editing the
+platform's copy so it fits one leaf is what `HB7` exists to stop. If it ever
+genuinely cannot be reused without a change, that change is a **generic seam
+carried in the platform file**, with a ledger row and an upstream issue (`B19`,
+`B7`) — not a fork-specific edit, and not a copy.
+
+**Nothing had to be hidden, which is not what the plan assumed.** The premise was
+that the app surface would have to suppress a scope selector and a built-in
+reference panel. Neither is in the upload zone: the scope segmented control lives
+in `knowledge-view.tsx` and the _Agentic Design Patterns_ panel in
+`manage-tab.tsx`, both siblings. `DocumentUploadZone`'s whole surface is
+`onUploadComplete` + `onPdfPreview`.
+
+**`onPdfPreview` is optional in the type and not optional here.** A PDF lands in
+`pending_review` with its extracted text in `metadata` and is chunked only when
+something POSTs the confirm route. Render the zone without the modal and every
+PDF strands in a state the page offers no way out of, while `onUploadComplete()`
+fires and the table gains a row — so it reads as having worked. That is `HB10`:
+the remedy ships beside the guard.
+
+**Nothing about scope is passed, because there is nothing to pass.**
+`lib/orchestration/knowledge/document-manager.ts` hardcodes `scope: 'app'` at all
+three of its create sites — text, binary, and the PDF pending-review row — which
+is exactly what `listDesignatedDocuments` filters on. That agreement crosses a
+tier boundary, so `tests/unit/lib/app/voice/upload-scope.test.ts` pins it: every
+create site, and their **number**, against `APP_SCOPE`. A fourth ingestion path
+arriving on a sync without the scope would otherwise show up as uploads that
+quietly never appear in the table.
+
+**What she can do at upload that the table would not have allowed.** The zone's
+tag picker offers the whole managed taxonomy, the six designation tags included,
+so she can attach `purpose-knowledge` and `purpose-voice` to one document — a
+pair `setDesignation`'s partitioned write cannot produce. It reads safely:
+`readDesignation` resolves a conflict by an explicit precedence in which `voice`
+wins, so the pair reads as `voice` and the document is not quotable. Narrowing
+the picker would mean forking the platform component to remove a state that
+already resolves in the safe direction, and that the table below shows as a
+single value she can change.
+
+**Still only on the orchestration surface**, deliberately: bulk upload as its own
+flow, re-chunking, keyword enrichment, the embedding views and the graph. An
+operator who needs them still has that page; this did not remove it. Capturing
+purpose and sensitivity _at_ upload is a real improvement and is deliberately
+out — it needs the designation write to run inside the upload transaction, and
+getting that wrong leaves a document ingested and undesignated with nothing to
+report it.
 
 ## Two properties worth knowing before you change anything
 
@@ -1008,6 +1076,8 @@ on purpose and the development command reads that divergence as drift.
 | `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy         |
 | `tests/unit/lib/app/knowledge-access-contributors.test.ts`          | Exactly one contributor, and which one                                |
 | `tests/unit/prisma/seeds/app-lelanea/knowledge-designation.test.ts` | The seed writes nothing on a re-run                                   |
+| `tests/unit/components/app/admin/knowledge-workspace.test.tsx`      | The uploader is the platform's, and a PDF reaches its confirm step    |
+| `tests/unit/lib/app/voice/upload-scope.test.ts`                     | Every ingestion path writes the scope the table reads                 |
 
 The first of those is the one to re-read before changing the rule. It asserts a
 voice document is **absent** from the resolved set — an absence that would pass

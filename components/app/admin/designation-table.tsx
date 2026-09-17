@@ -10,12 +10,14 @@
  * answer this feature has no power over. The first version listed the bundled
  * Agentic Design Patterns reference as "No", which was simply untrue.
  *
- * The knowledge base at `/admin/orchestration/knowledge` can already take her
- * material in — the uploader, the bulk upload, fetch-from-URL and the parsers all
- * ship with the platform. What it cannot show is the distinction this feature
- * turns on: whether a document is something she KNOWS or something that shows how
- * she SOUNDS. This table is where that answer is given, and the `Agent may quote`
- * column is where the consequence of giving it is visible on the same screen.
+ * The ingestion is the platform's — the uploader, the bulk upload,
+ * fetch-from-URL and the parsers all ship with Sunrise, and t-44 put its upload
+ * zone directly above this table so adding material and designating it are one
+ * page rather than two (`components/app/admin/knowledge-workspace.tsx`). What
+ * the platform cannot show is the distinction this feature turns on: whether a
+ * document is something she KNOWS or something that shows how she SOUNDS. This
+ * table is where that answer is given, and the `Agent may quote` column is where
+ * the consequence of giving it is visible on the same screen.
  *
  * ## The undesignated filter is the point of the page, not a convenience
  *
@@ -97,6 +99,17 @@ interface DesignationTableProps {
    * wrong one is the confident one (`HB9`).
    */
   initialLoadFailed?: boolean;
+  /**
+   * Bumped by the surface above whenever something lands in the corpus.
+   *
+   * The table owns its own fetching, so an upload it knows nothing about would
+   * otherwise leave it showing the list as it stood before — and the row missing
+   * is exactly the document she just added, which reads as the upload having
+   * failed. A counter rather than a callback handed upward: the parent says
+   * *something changed*, and the table decides what to re-request, which keeps
+   * the current search and filter rather than resetting them.
+   */
+  reloadToken?: number;
 }
 
 /**
@@ -115,6 +128,7 @@ export function DesignationTable({
   initialDocuments,
   initialMeta,
   initialLoadFailed = false,
+  reloadToken = 0,
 }: DesignationTableProps): React.ReactElement {
   const [documents, setDocuments] = useState(initialDocuments);
   const [meta, setMeta] = useState(initialMeta);
@@ -229,6 +243,24 @@ export function DesignationTable({
     setUndesignatedOnly(value);
     dispatchFetch(1, search, value);
   };
+
+  /**
+   * Go and look again when the surface above says the corpus changed.
+   *
+   * Compared against a ref rather than run on mount: the effect's dependency
+   * list has to carry `search` and `undesignatedOnly` — it reads both, and the
+   * point is that a refresh keeps the filters she is looking through — so
+   * without the guard every keystroke would fire a second, unfiltered-by-the-
+   * debounce request behind the one `onSearchChange` already scheduled.
+   *
+   * Page 1, because the list is newest-first and the new document is on it.
+   */
+  const lastReloadToken = useRef(reloadToken);
+  useEffect(() => {
+    if (lastReloadToken.current === reloadToken) return;
+    lastReloadToken.current = reloadToken;
+    dispatchFetch(1, search, undesignatedOnly);
+  }, [reloadToken, search, undesignatedOnly, dispatchFetch]);
 
   /**
    * Save one answer about one document.
@@ -416,7 +448,7 @@ export function DesignationTable({
                   ? 'The list could not be loaded, so this is not an answer about what is there.'
                   : appliedUndesignatedOnly
                     ? 'Every document has a purpose. Nothing is undesignated.'
-                    : 'No training material yet. Upload it under AI Orchestration → Knowledge.'}
+                    : 'No training material yet. Add a document above, and it appears here for you to say what it is for.'}
               </TableCell>
             </TableRow>
           )}
