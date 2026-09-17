@@ -53,7 +53,7 @@ export const leafCoverageExclusions: AppCoverageExclusion[] = [];
  * import chain reaches it and `--changed` never selects it. The branch that
  * breaks each one is precisely the branch a scoped run would not have chosen.
  *
- * These four lived in `scripts/ci/scoped-tests.ts` until Daybreak 0.3.0 — a
+ * The first four lived in `scripts/ci/scoped-tests.ts` until Daybreak 0.3.0 — a
  * Sunrise-owned file, carried as Row 4 of `.context/app/divergences.md`. The
  * seam arriving is what retired that row; the entries and their reasons did not
  * change.
@@ -128,5 +128,18 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'with a radius of its own, which reaches this through no module graph at ' +
       'all. The four radii it replaced each looked deliberate alone; the owner ' +
       'saw them together as a shell that could not decide. t-43.',
+  },
+  {
+    path: 'tests/unit/lib/app/voice/upload-scope.test.ts',
+    reason:
+      'reads `lib/orchestration/knowledge/document-manager.ts` off disk and ' +
+      'asserts every `aiKnowledgeDocument.create` site writes the scope our ' +
+      'designation table filters on — plus how MANY such sites there are. It ' +
+      'imports one constant and nothing else, so the branch it exists to ' +
+      'catch reaches it through no module graph at all: the change is a ' +
+      'DAYBREAK SYNC altering a Sunrise file, which selects whatever imports ' +
+      'that file and never this. The failure is silent either way — uploads ' +
+      'from `/admin/app/knowledge` succeed, rows exist, and the list is simply ' +
+      'short. t-44.',
   },
 ];

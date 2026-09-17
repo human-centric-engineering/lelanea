@@ -66,9 +66,7 @@ const DOCUMENT = {
 };
 
 /** What the stubbed workspace received, read back out of the DOM. */
-function propPassedDown(
-  attribute: 'data-documents' | 'data-meta' | 'data-load-failed'
-): unknown {
+function propPassedDown(attribute: 'data-documents' | 'data-meta' | 'data-load-failed'): unknown {
   const raw = screen.getByTestId('knowledge-workspace').getAttribute(attribute);
   if (raw === null) return undefined;
   return attribute === 'data-load-failed' ? raw : JSON.parse(raw);
