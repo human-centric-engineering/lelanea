@@ -246,7 +246,7 @@ describe('what the `Agent may quote` cell claims', () => {
 
     expect(within(rowFor('An empty export')).queryByText(/Upload it again/)).toBeNull();
     expect(
-      within(rowFor('An empty export')).getByText(/Delete it and upload a readable copy/)
+      within(rowFor('An empty export')).getByText(/Upload a readable copy instead/)
     ).toBeTruthy();
     // The one where a re-upload genuinely is a retry still says so.
     expect(within(rowFor('A talk recording')).getByText(/Upload it again/)).toBeTruthy();

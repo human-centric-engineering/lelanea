@@ -955,9 +955,12 @@ Sunrise release adds**. That last default is the safe direction: an unrecognised
 status must not fall into "the agent may quote this".
 
 **Chunks are the load-bearing half, not status, and that order is the
-correctness property.** `searchKnowledgeBase` selects from `ai_knowledge_chunk`
-joined to the document and never filters on `d.status`, so the chunk count is
-what actually decides whether a passage can come back. Reading status first is
+correctness property.** `searchKnowledge` in
+`lib/orchestration/knowledge/search.ts` selects from `ai_knowledge_chunk` joined
+to the document, filtered on the chunk's own `embedding IS NOT NULL` and never
+on `d.status`, so the chunk count is what actually decides whether a passage can
+come back. (`search_knowledge_base` is the agent-facing tool id, not the
+function — grep for the wrong one and the claim looks unverifiable.) Reading status first is
 this bug inverted: `rechunkDocument`'s `catch` writes `{ status: 'failed' }` and
 leaves every existing chunk and the old `chunkCount` in place, so a re-chunk
 whose embedding call rate-limits leaves a document the agent is **still quoting
@@ -975,7 +978,17 @@ document is genuinely retried by a re-upload: `uploadDocument` dedupes on
 `empty` document **is** `ready`, so the same re-upload returns the existing row,
 re-processes nothing, and reports success while the cell goes on saying
 "Nothing to quote" — a remedy that quietly does nothing. So `empty` says to
-delete it and upload a readable copy instead.
+upload a readable copy instead, which has a different `fileHash` and is
+therefore not deduped.
+
+**Each cell reason leads with an act she can perform from this page**, which is
+the upload zone above it. Neither act replaces the original row — a re-upload
+adds a document and leaves the old one in the list, still saying the same thing
+— and deleting is only available in AI Orchestration → Knowledge, the tier this
+page exists to stop sending her to. That caveat is in the column's `FieldHelp`
+rather than at the front of a table cell, because the cell copy is capped: a
+column sizes to its widest cell, and a sentence there squeezes the two selects
+she actually uses.
 
 **Both verdicts are computed on the server and the cell only renders them.**
 Same reason as `quotable`: a `retrieval` derived in JSX from `status` and

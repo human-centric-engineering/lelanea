@@ -128,6 +128,12 @@ const UNSET = '__unset__';
  * `· N chunks · status` line beside the name says which state it is actually
  * in. `failed` and `empty` are hers to act on, so they name the act (`HB10`).
  *
+ * **Each reason leads with an act she can perform from THIS page**, which is
+ * the upload zone directly above. Deleting a document is only available in AI
+ * Orchestration → Knowledge — the tier this page exists to stop sending her to
+ * — so the fact that a re-upload leaves the original row behind is in the
+ * column's help rather than at the front of a table cell.
+ *
  * **The two acts are different, and saying "upload it again" to both was
  * wrong.** `uploadDocument` dedupes on `{ fileHash, status: 'ready' }`, and an
  * `empty` document IS `ready` — so re-uploading the same file returns the
@@ -151,7 +157,7 @@ const RETRIEVAL_COPY: Record<
   },
   empty: {
     label: 'Nothing to quote',
-    reason: 'Permitted, but no text was found in it. Delete it and upload a readable copy.',
+    reason: 'Permitted, but no text was found in it. Upload a readable copy instead.',
   },
 };
 
@@ -597,6 +603,17 @@ export function DesignationTable({
                   search index — so a permitted document with nothing behind it reads{' '}
                   <strong>Not yet</strong> or <strong>Nothing to quote</strong> rather than{' '}
                   <strong>Yes</strong>.
+                </p>
+                <p className="mt-2">
+                  A document whose chunks are still in the index reads <strong>Yes</strong> even if
+                  its status says <em>failed</em> — a re-chunk that fell over leaves the old text
+                  searchable, and the agent is still quoting it.
+                </p>
+                <p className="mt-2">
+                  <strong>Uploading again adds a document; it does not replace one.</strong> The
+                  original row stays in this list, still saying the same thing. Remove it from{' '}
+                  <strong>AI Orchestration → Knowledge</strong>, which is also the only place a
+                  document can be deleted.
                 </p>
               </FieldHelp>
             </TableHead>

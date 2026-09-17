@@ -98,9 +98,14 @@ export type RetrievalState = 'retrievable' | 'pending' | 'failed' | 'empty';
  * What the search tool can reach of one document.
  *
  * **Chunks are the load-bearing half, not status — and the ORDER below is that
- * sentence made true.** `searchKnowledgeBase` selects from
- * `ai_knowledge_chunk` joined to the document and never filters on `d.status`,
- * so the chunk count is what actually decides whether a passage can come back.
+ * sentence made true.** `searchKnowledge` (and `searchKnowledgeWithEmbedding`)
+ * in `lib/orchestration/knowledge/search.ts` selects from `ai_knowledge_chunk`
+ * joined to the document, filtered on the chunk's own `embedding IS NOT NULL`
+ * and never on `d.status` — so the chunk count is what actually decides whether
+ * a passage can come back. (Every app-scope insert writes the chunk and its
+ * embedding in one transaction, so for this list the two conditions coincide;
+ * the only unembedded-chunk path is the system-scoped seeder this list already
+ * excludes.)
  *
  * Status is consulted only once the chunk count has said there is nothing, and
  * a first draft had it the other way round. That draft was this bug inverted.

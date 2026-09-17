@@ -421,7 +421,7 @@ describe('retrievalState — whether there is anything to retrieve', () => {
   // The order of the two checks, which a first draft had the wrong way round.
   //
   // `rechunkDocument`'s catch writes `{ status: 'failed' }` and leaves every
-  // existing chunk and the old `chunkCount` in place, and `searchKnowledgeBase`
+  // existing chunk and the old `chunkCount` in place, and `searchKnowledge`
   // never filters on `d.status` — so the agent goes on quoting the document.
   // Deciding on status first would render "Nothing to quote. Upload it again"
   // about a document being quoted right now, and the re-upload would create a
