@@ -156,10 +156,12 @@
 > All three tiers now have remote-tracking refs, so ownership is a lookup rather
 > than a guess. Compare the blob at one path across all three — **brace the
 > variable; a bare `$r:path` is a zsh modifier, not a path, and silently
-> resolves to nothing:**
+> resolves to nothing.** And keep `--multiple`: without it git reads the second
+> name as a _ref_ of the first remote, the fetch fails, and the loop below still
+> prints blob ids — from whatever was fetched last:
 >
 > ```bash
-> git fetch daybreak sunrise --quiet
+> git fetch --multiple daybreak sunrise --quiet
 > F=hooks/use-theme.tsx
 > for r in sunrise/main daybreak/main HEAD; do
 >   printf '%-16s %s\n' "$r" \
