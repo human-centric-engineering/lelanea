@@ -58,6 +58,7 @@
  */
 
 import { prisma } from '@/lib/db/client';
+import { isRecord } from '@/lib/utils';
 import { PINNED_MODEL, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
 import { GENERATION_PAUSED_FLAG } from '@/lib/app/agent/availability';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
@@ -198,8 +199,8 @@ async function readRoutes(cookie: string): Promise<Record<string, number>> {
 
 async function generationStatus(cookie: string): Promise<unknown> {
   const res = await fetch(`${BASE_URL}/api/v1/app/agent/status`, { headers: { cookie } });
-  const body = (await res.json()) as { data?: { generation?: unknown } };
-  return body.data?.generation;
+  const body: unknown = await res.json();
+  return isRecord(body) && isRecord(body.data) ? body.data.generation : undefined;
 }
 
 function userMessagesFor(turnId: string): Promise<number> {
@@ -222,8 +223,8 @@ async function restoreSharedRows(): Promise<void> {
   });
   await prisma.aiProviderConfig.deleteMany({ where: { slug: UNREACHABLE_PROVIDER } });
   const flag = await prisma.featureFlag.findUnique({ where: { name: GENERATION_PAUSED_FLAG } });
-  const metadata = flag?.metadata as { setBy?: unknown } | null | undefined;
-  if (flag?.enabled && metadata?.setBy === PAUSE_MARKER.setBy) {
+  const metadata = flag?.metadata;
+  if (flag?.enabled && isRecord(metadata) && metadata.setBy === PAUSE_MARKER.setBy) {
     await prisma.featureFlag.update({
       where: { name: GENERATION_PAUSED_FLAG },
       data: { enabled: false, metadata: {} },

@@ -79,4 +79,20 @@ describe('008-generation-pause-flag', () => {
       description: 'Paused during the provider incident — see the on-call log.',
     });
   });
+
+  it('leaves a switch that exists and is off exactly as it is, and says so', async () => {
+    flags.push({
+      name: GENERATION_PAUSED_FLAG,
+      enabled: false,
+      description: 'An admin wrote this.',
+    });
+
+    await run();
+
+    expect(prisma.featureFlag.create).not.toHaveBeenCalled();
+    expect(flags.filter((flag) => flag.name === GENERATION_PAUSED_FLAG)).toEqual([
+      { name: GENERATION_PAUSED_FLAG, enabled: false, description: 'An admin wrote this.' },
+    ]);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('(off); left as it is'));
+  });
 });

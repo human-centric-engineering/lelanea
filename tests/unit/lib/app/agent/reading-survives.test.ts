@@ -15,6 +15,13 @@
  * run as shipped. What no unit test can show — the same routes answering from a
  * running server with her model pointed at an unreachable endpoint — is in
  * `scripts/app/smoke-turn.ts`.
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/leaf-bootstrap` seam
+ * ---------------------------------------------------------------------------
+ * `initLeafApp()` registers Lelañea's modules so the journey map projects for
+ * real. A fork with a different journey, or none, changes what that route
+ * answers here; pin its own routes and statuses in `ALL_OK`.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
