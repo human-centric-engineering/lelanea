@@ -174,7 +174,7 @@ vi.mock('@/lib/db/client', () => {
                 (where.createdAt === undefined || m.createdAt >= where.createdAt.gte)
             );
             const row = rows.at(-1);
-            return row ? { id: row.id, content: row.content } : null;
+            return row ? { id: row.id, content: row.content, createdAt: row.createdAt } : null;
           }
         ),
       },
@@ -213,7 +213,7 @@ vi.mock('@/lib/db/client', () => {
 });
 
 import { runRecordedTurn, TURN_REPLY_UNAVAILABLE } from '@/lib/app/agent/turns';
-import { STALE_CLAIM_MS, claimTurn, recordTurnCompleted } from '@/lib/app/agent/turn-record';
+import { STALE_CLAIM_MS, claimTurn } from '@/lib/app/agent/turn-record';
 import { prisma } from '@/lib/db/client';
 import type {
   FacilitationTurn,
@@ -529,7 +529,7 @@ describe('when the record itself fails', () => {
     // Every settle write fails: the database hiccups after the claim.
     // Two settle writes per turn (start, then completed or failed). One-shot, so
     // the fake's real implementation is back for the next case.
-    vi.mocked(prisma.appTurn.update)
+    vi.mocked(prisma.appTurn.updateMany)
       .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'));
 
@@ -553,7 +553,7 @@ describe('when the record itself fails', () => {
     behaviour.outcome = 'error';
     // Two settle writes per turn (start, then completed or failed). One-shot, so
     // the fake's real implementation is back for the next case.
-    vi.mocked(prisma.appTurn.update)
+    vi.mocked(prisma.appTurn.updateMany)
       .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'));
 
@@ -593,6 +593,16 @@ describe('the edges of a claim', () => {
     const bare = (): AsyncIterable<ChatEvent> =>
       (async function* () {
         yield { type: 'start', conversationId: 'conv-user-1' };
+        // What the platform does before `done`: her reply is persisted.
+        db.conversationOwners.set('conv-user-1', 'user-1');
+        db.messages.push({
+          id: 'reply-1',
+          conversationId: 'conv-user-1',
+          role: 'assistant',
+          content: 'x',
+          metadata: null,
+          createdAt: new Date(),
+        });
         yield {
           type: 'done',
           tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -608,18 +618,9 @@ describe('the edges of a claim', () => {
       pricing: null,
       modelId: null,
       userMessageId: null,
+      assistantMessageId: 'reply-1',
     });
     // And a replay of it carries no invented model or provider.
-    db.messages.push({
-      id: 'late',
-      conversationId: 'conv-user-1',
-      role: 'assistant',
-      content: 'x',
-      metadata: null,
-      createdAt: new Date(),
-    });
-    db.conversationOwners.set('conv-user-1', 'user-1');
-    db.turns[0].assistantMessageId = 'late';
     const replayed = await take(turn);
     expect(replayed[0]).toEqual({ type: 'start', conversationId: 'conv-user-1' });
     expect(replayed.at(-1)).not.toHaveProperty('model');
@@ -670,22 +671,63 @@ describe('the edges of a claim', () => {
     ).rejects.toThrow(/lost its row/);
   });
 
-  it('a completed turn with no conversation links no reply', async () => {
-    await take(turnFor());
-    const [row] = db.turns;
+  it('a finished turn whose reply cannot be found is failed, so the id can run again', async () => {
+    const turn = turnFor();
+    // A stream that reaches `done` without the platform having written a reply.
+    const replyless = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        yield { type: 'start', conversationId: 'conv-user-1' };
+        yield {
+          type: 'done',
+          tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          costUsd: 0.0001,
+          model: PINNED_MODEL,
+          provider: 'openai',
+        };
+      })();
+    const result = await runRecordedTurn(turn, replyless);
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
 
-    await recordTurnCompleted(
-      { ...row, conversationId: null },
-      {
-        model: 'm',
-        provider: 'p',
-        inputTokens: 0,
-        outputTokens: 0,
-        costUsd: 0,
-        pricing: 'priced',
-      }
+    // Not `completed` with nothing to replay — that would error every retry forever.
+    expect(db.turns[0]).toMatchObject({ status: 'failed', errorCode: 'reply_not_linked' });
+    await take(turn);
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2 });
+  });
+
+  it("finds the reply by the person's message time, even when this server's clock runs ahead", async () => {
+    const turn = turnFor();
+    const stream = await streamOf(turn);
+    // The claim's own timestamp is well AFTER the rows the platform is about to
+    // write — the skew a `startedAt` bound would miss the reply under.
+    db.turns[0].startedAt = new Date(Date.now() + 60_000);
+    for (let next = await stream.next(); !next.done; next = await stream.next());
+
+    expect(db.turns[0].status).toBe('completed');
+    expect(db.turns[0].assistantMessageId).toBe(
+      db.messages.find((m) => m.role === 'assistant')?.id
     );
+  });
 
-    expect(db.turns[0].assistantMessageId).toBeNull();
+  it('an attempt that outlived its claim writes nothing over the attempt that replaced it', async () => {
+    const turn = turnFor();
+    const slow = await streamOf(turn); // attempt 1: claimed, still running
+    await slow.next(); // `start`
+    // Ten minutes pass; a retry takes the abandoned claim over and finishes.
+    db.turns[0].startedAt = new Date(Date.now() - STALE_CLAIM_MS - 1000);
+    behaviour.costUsd = 0.002;
+    await take(turn);
+    const replacement = { ...db.turns[0] };
+    expect(replacement).toMatchObject({ status: 'completed', attempts: 2, costUsd: 0.002 });
+
+    // Attempt 1 finally ends. Its settle names attempt 1, so it changes nothing.
+    behaviour.costUsd = 0.00063;
+    for (let next = await slow.next(); !next.done; next = await slow.next());
+
+    expect(db.turns[0]).toEqual(replacement);
+    expect(warn).toHaveBeenCalledWith(
+      'Agent turn outlived its claim; a later attempt owns the record',
+      expect.objectContaining({ attempts: 1 })
+    );
   });
 });

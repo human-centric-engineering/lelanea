@@ -139,11 +139,15 @@ async function* recorded(turn: AppTurn, events: ChatStream): ChatStream {
   try {
     for await (const event of events) {
       if (event.type === 'start') {
-        await recordTurnStarted(turn.id, {
+        await recordTurnStarted(turn, {
           conversationId: event.conversationId,
           userMessageId: event.messageId ?? null,
         }).catch((err: unknown) => logRecordFailure('start', turn, err));
-        turn = { ...turn, conversationId: event.conversationId };
+        turn = {
+          ...turn,
+          conversationId: event.conversationId,
+          userMessageId: event.messageId ?? null,
+        };
       } else if (event.type === 'done') {
         await settleCompleted(turn, event);
         settled = true;
@@ -154,7 +158,7 @@ async function* recorded(turn: AppTurn, events: ChatStream): ChatStream {
     }
   } finally {
     if (!settled) {
-      await recordTurnFailed(turn.id, errorCode ?? TURN_INCOMPLETE).catch((err: unknown) =>
+      await recordTurnFailed(turn, errorCode ?? TURN_INCOMPLETE).catch((err: unknown) =>
         logRecordFailure('failed', turn, err)
       );
     }
@@ -185,7 +189,18 @@ async function settleCompleted(
       costUsd: done.costUsd,
       pricing,
     };
-    await recordTurnCompleted(turn, outcome);
+    const settled = await recordTurnCompleted(turn, outcome);
+    if (settled === 'failed') {
+      logger.warn('Agent turn finished but its reply could not be linked; left re-runnable', {
+        turnId: turn.turnId,
+        seat: turn.seat,
+      });
+    } else if (settled === null) {
+      logger.warn('Agent turn outlived its claim; a later attempt owns the record', {
+        turnId: turn.turnId,
+        attempts: turn.attempts,
+      });
+    }
   } catch (err) {
     logRecordFailure('completed', turn, err);
   }

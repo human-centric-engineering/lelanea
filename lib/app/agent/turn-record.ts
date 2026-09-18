@@ -45,6 +45,9 @@ import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
  */
 export const STALE_CLAIM_MS = 10 * 60_000;
 
+/** The error code of a turn that finished but whose reply could not be found. */
+export const REPLY_NOT_LINKED = 'reply_not_linked';
+
 /** What a turn is asked for — the parts a repeat must match. */
 export interface TurnRequest {
   userId: string;
@@ -173,13 +176,28 @@ export async function claimTurn(
   return count === 1 ? { kind: 'claimed', turn } : { kind: 'in_flight', turn };
 }
 
+/**
+ * Which attempt a settle write belongs to.
+ *
+ * Every write after the claim names the attempt that made it, so an attempt
+ * that outlived `STALE_CLAIM_MS` and was taken over writes NOTHING when it
+ * finally ends — rather than overwriting the attempt that replaced it with its
+ * own model, tokens and cost, or marking a live re-run `failed` so a third
+ * request runs the model again. Found by /code-review.
+ */
+type TurnAttempt = Pick<AppTurn, 'id' | 'attempts'>;
+
+function attemptWhere(turn: TurnAttempt): { id: string; attempts: number; status: 'running' } {
+  return { id: turn.id, attempts: turn.attempts, status: 'running' };
+}
+
 /** The ids the platform reports when the turn starts. */
 export async function recordTurnStarted(
-  id: string,
+  turn: TurnAttempt,
   started: { conversationId: string; userMessageId: string | null }
 ): Promise<void> {
-  await prisma.appTurn.update({
-    where: { id },
+  await prisma.appTurn.updateMany({
+    where: attemptWhere(turn),
     data: { conversationId: started.conversationId, userMessageId: started.userMessageId },
   });
 }
@@ -220,40 +238,69 @@ export interface TurnOutcome {
 }
 
 /**
- * Settle a turn as completed.
+ * Settle a turn as completed — or as failed, when its reply cannot be found.
  *
  * The assistant message is found rather than reported: the platform's `done`
  * event carries no message id. It is the newest assistant row in the turn's
- * conversation written since this claim started — and the predicate is only
- * ambiguous for one person running two turns in one conversation at once, which
- * the seat's single conversation and the per-user rate limit make a client bug
- * rather than a use.
+ * conversation written at or after the person's own message for this turn.
+ * Bounded by that message's `createdAt`, not by this claim's `startedAt`: both
+ * message rows are stamped by the same writer, and `startedAt` is this server's
+ * clock — a skew between the two would miss the reply (found by /code-review).
+ * The predicate is only ambiguous for one person running two turns in one
+ * conversation at once, which the seat's single conversation and the per-user
+ * rate limit make a client bug rather than a use.
+ *
+ * **No reply found settles the turn `failed` (`reply_not_linked`)**, never
+ * `completed` with nothing to replay: a completed turn with no reply would
+ * answer every retry of that id with an error, forever. Failed, the id can run
+ * again — at the price of a second model call, which is the lesser wrong.
+ *
+ * Returns the status it wrote, or null when the attempt had been superseded.
  */
 export async function recordTurnCompleted(
-  turn: Pick<AppTurn, 'id' | 'userId' | 'startedAt' | 'conversationId'>,
+  turn: TurnAttempt & Pick<AppTurn, 'userId' | 'startedAt' | 'conversationId' | 'userMessageId'>,
   outcome: TurnOutcome
-): Promise<void> {
+): Promise<'completed' | 'failed' | null> {
+  const owned = { conversation: { userId: turn.userId } } as const;
+  const since =
+    (turn.userMessageId && turn.conversationId
+      ? (
+          await prisma.aiMessage.findFirst({
+            where: { id: turn.userMessageId, conversationId: turn.conversationId, ...owned },
+            select: { createdAt: true },
+          })
+        )?.createdAt
+      : undefined) ?? turn.startedAt;
+
   const assistant = turn.conversationId
     ? await prisma.aiMessage.findFirst({
         where: {
           conversationId: turn.conversationId,
           // The member's own thread and nobody else's — see the leaf's
           // ownerless-surface exception in lib/app/leaf-ci.ts.
-          conversation: { userId: turn.userId },
+          ...owned,
           role: 'assistant',
-          createdAt: { gte: turn.startedAt },
+          createdAt: { gte: since },
         },
         orderBy: { createdAt: 'desc' },
         select: { id: true },
       })
     : null;
 
-  await prisma.appTurn.update({
-    where: { id: turn.id },
+  if (!assistant) {
+    const { count } = await prisma.appTurn.updateMany({
+      where: attemptWhere(turn),
+      data: { status: 'failed', completedAt: new Date(), errorCode: REPLY_NOT_LINKED },
+    });
+    return count === 1 ? 'failed' : null;
+  }
+
+  const { count } = await prisma.appTurn.updateMany({
+    where: attemptWhere(turn),
     data: {
       status: 'completed',
       completedAt: new Date(),
-      assistantMessageId: assistant?.id ?? null,
+      assistantMessageId: assistant.id,
       modelId: outcome.model,
       providerSlug: outcome.provider,
       inputTokens: outcome.inputTokens,
@@ -263,12 +310,13 @@ export async function recordTurnCompleted(
       pricing: outcome.pricing,
     },
   });
+  return count === 1 ? 'completed' : null;
 }
 
 /** Settle a turn as failed, so the same id may run again. */
-export async function recordTurnFailed(id: string, errorCode: string): Promise<void> {
-  await prisma.appTurn.update({
-    where: { id },
+export async function recordTurnFailed(turn: TurnAttempt, errorCode: string): Promise<void> {
+  await prisma.appTurn.updateMany({
+    where: attemptWhere(turn),
     data: { status: 'failed', completedAt: new Date(), errorCode },
   });
 }

@@ -75,7 +75,11 @@ const client = {
     findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => {
       const row = world.agents.find((a) => a.id === where.id);
       if (!row) throw new Error('not found');
-      return { ...row, grantedTags: [], grantedDocuments: [] };
+      return {
+        ...row,
+        grantedTags: [] as { tagId: string }[],
+        grantedDocuments: [] as { documentId: string }[],
+      };
     }),
   },
   aiCapability: {
