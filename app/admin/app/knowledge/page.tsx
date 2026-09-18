@@ -87,8 +87,8 @@ export default async function KnowledgeDesignationPage() {
         <h2 className="text-lg font-semibold">Training material</h2>
         <p className="text-muted-foreground text-sm">
           Add a document, then say what it is for. A document marked <strong>Voice</strong> shows
-          how she sounds rather than what she knows: the agent may learn its register but can never
-          retrieve it or quote it. Anything with no purpose yet reaches nothing at all. The
+          how the AI should sound rather than what it knows: the AI may learn its register but can
+          never retrieve it or quote it. Anything with no purpose yet reaches nothing at all. The
           platform&rsquo;s own pre-loaded reference material is not listed — every agent can already
           search it, so designating it would change nothing.
         </p>

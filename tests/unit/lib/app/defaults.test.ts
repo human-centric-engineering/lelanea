@@ -93,6 +93,7 @@ vi.mock('@/lib/db/client', () => ({
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
     appAcknowledgement: { findMany: vi.fn(async () => []) },
+    appUserBudget: { findMany: vi.fn(async () => []) },
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
@@ -360,6 +361,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin/app/waitlist',
         '/admin/app/knowledge',
         '/admin/app/voice',
+        // §08 t-53 — the agent's deadlines and the monthly limits.
+        '/admin/app/agent',
       ]);
     },
   },
@@ -463,7 +466,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
       expect(appModels).toEqual([
         'AppAcknowledgement',
+        'AppAgentSettings',
         'AppKnowledgeDesignation',
+        'AppUserBudget',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
         'AppWaitlistEntry',
@@ -491,6 +496,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         section: 'acknowledgements',
         disposition: 'export',
       });
+      // §08 t-53 — a spending limit an admin set for one person is about that
+      // person, so it is exported to them, never excluded.
+      const budget = sources.find((entry) => entry.model === 'AppUserBudget');
+      expect(budget).toMatchObject({ section: 'budget', disposition: 'export' });
       // THREE of ours are excluded, and only those three. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
@@ -502,6 +511,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppKnowledgeDesignation',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
+        // §08 t-53 — the settings singleton: deadlines and the default limit.
+        // Who changed it is in the admin audit log, not on the row.
+        'AppAgentSettings',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
       // is what lets them tell "we hold nothing about you" apart from "we decided
@@ -527,7 +539,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // admin who queued a comparison is on the platform's own evaluation-run
       // row; copying it here would have made this reason untrue the same way the
       // designation's first one was.
-      for (const model of ['AppVoiceComparison', 'AppVoiceComparisonArm']) {
+      for (const model of ['AppVoiceComparison', 'AppVoiceComparisonArm', 'AppAgentSettings']) {
         const row = excluded.find((entry) => entry.model === model);
         expect(row?.reason).toMatch(/no (information about any person|answer or account)/i);
       }
@@ -547,6 +559,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(Object.keys(collected).sort()).toEqual(leafSections);
       expect(collected.waitlist).toEqual([]);
       expect(collected.acknowledgements).toEqual([]);
+      expect(collected.budget).toEqual([]);
     },
   },
   {

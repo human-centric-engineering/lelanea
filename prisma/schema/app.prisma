@@ -339,3 +339,64 @@ model AppVoiceComparisonArm {
   @@index([comparisonId])
   @@map("app_voice_comparison_arm")
 }
+
+/// The agent's deadlines and the default monthly spending ceiling — one row,
+/// operator-owned.
+///
+/// Owner ruling at claim (§08 t-53): no first words within 8 seconds and the app
+/// speaks up; a turn ends at 60 seconds; $5 per user per month to start — and
+/// all of it changeable by an admin, because with no revenue every conversation
+/// is pure cost and the right numbers will be learned from use. A constant that
+/// needs a deploy to change is the wrong shape for that.
+///
+/// **Created once, by the migration that creates the table** — an `INSERT` of the
+/// ruled defaults — and never written again by a seed or a boot (`fp4`). From
+/// then on the only writer is the admin surface. `lib/app/agent/settings.ts`
+/// holds the same three numbers as constants for one purpose only: answering if
+/// the row is somehow missing, and a test holds the migration's values to them.
+///
+/// **This row enforces nothing.** It is read per request by the resolvers in
+/// `lib/app/agent/settings.ts`; §08 t-55 applies the deadlines, f-safety acts on
+/// a ceiling being reached, f-budget shows it. See `.context/app/agent.md`.
+///
+/// Holds nothing about anyone — who changed it is recorded in the admin audit
+/// log, not here. Declared as an EXCLUSION in `lib/app/leaf-data-export.ts`.
+model AppAgentSettings {
+  /// Always `global`. A string key rather than a bare boolean so the singleton is
+  /// addressable by name, the way `AiOrchestrationSettings` is.
+  slug                     String   @id @default("global")
+  /// How long a turn may go without its first words before the app says so.
+  firstWordsDeadlineMs     Int
+  /// How long a whole turn may run before it is ended.
+  turnDeadlineMs           Int
+  /// What one person may spend in a calendar month, in USD, unless they carry
+  /// an override (`AppUserBudget`).
+  defaultMonthlyCeilingUsd Float
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("app_agent_settings")
+}
+
+/// One person's monthly spending ceiling, where it differs from the default.
+///
+/// **No row means the default applies.** Clearing an override deletes the row;
+/// it is never set to zero, because zero is a real answer ("this person may spend
+/// nothing") and must stay distinguishable from "no answer".
+///
+/// **`userId` is a plain scalar with no Prisma `@relation`** — a fork table must
+/// not add a reverse field to the Sunrise-owned `User` model (CUSTOMIZATION.md
+/// §5). The foreign key is hand-written in the `app_agent_settings` migration
+/// with `ON DELETE CASCADE` — a ceiling set for a person is about that person
+/// and goes with the account — and pinned by a drift probe in
+/// `lib/app/leaf-db-drift.ts`. Declared as a subject-data source in
+/// `lib/app/leaf-data-export.ts`.
+model AppUserBudget {
+  /// Hand-written FK → `user`. See the note above. One override per person.
+  userId            String   @id
+  monthlyCeilingUsd Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("app_user_budget")
+}

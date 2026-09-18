@@ -74,6 +74,7 @@ const findMany = {
   // LELAÑEA — the leaf tier's own tables, reached through the real leaf seam.
   appWaitlistEntry: vi.fn(),
   appAcknowledgement: vi.fn(),
+  appUserBudget: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -98,6 +99,7 @@ vi.mock('@/lib/db/client', () => ({
     },
     appWaitlistEntry: { findMany: (...a: unknown[]) => findMany.appWaitlistEntry(...a) },
     appAcknowledgement: { findMany: (...a: unknown[]) => findMany.appAcknowledgement(...a) },
+    appUserBudget: { findMany: (...a: unknown[]) => findMany.appUserBudget(...a) },
   },
 }));
 
@@ -108,13 +110,14 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
 /** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
-const LEAF_SECTIONS = ['waitlist', 'acknowledgements'];
-const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement'];
+const LEAF_SECTIONS = ['waitlist', 'acknowledgements', 'budget'];
+const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement', 'AppUserBudget'];
 /** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
 const LEAF_EXCLUDED_MODELS = [
   'AppKnowledgeDesignation',
   'AppVoiceComparison',
   'AppVoiceComparisonArm',
+  'AppAgentSettings',
 ];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
@@ -125,6 +128,7 @@ beforeEach(() => {
   // section KEY, and a leaf row here would only prove the stub returned it.
   findMany.appWaitlistEntry.mockResolvedValue([]);
   findMany.appAcknowledgement.mockResolvedValue([]);
+  findMany.appUserBudget.mockResolvedValue([]);
 
   // Personal-data sources return rows verbatim.
   findMany.userJourney.mockResolvedValue([{ id: 'j1', graphSlug: 'onboarding' }]);

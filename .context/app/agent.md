@@ -1,6 +1,6 @@
 ---
 name: app-agent
-description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, and what is known to be missing until the turn seam lands.
+description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, her deadlines and the monthly spending limits, and what is known to be missing until the turn seam lands.
 ---
 
 # The agent: what she runs on, and where she sits
@@ -10,7 +10,8 @@ her fingerprint profile (see [`voice.md`](./voice.md)). This doc is about the
 part of her that is not her voice: the model behind it, the seats she is bound
 to, and what happens around a turn.
 
-It grows with §08. What is here now is the pin and the seats.
+It grows with §08. What is here now is the pin, the seats, and the deadlines and
+spending limits.
 
 ## What is pinned
 
@@ -258,10 +259,88 @@ and evaluation-worker paths — reported as
 [`sunrise#813`](https://github.com/human-centric-engineering/sunrise/issues/813),
 which also carries the blended-rate and history-budget overrides described above.
 
+## Deadlines and monthly limits
+
+Owner ruling at claim (§08 t-53): no first words within **8 seconds** and the app
+speaks up; a turn ends at **60 seconds**; **$5** per person per month to start —
+and all of it changeable by an admin, limits per person especially. With no
+revenue every conversation is pure cost and the right numbers will be learned
+from use, so a constant that needs a deploy to change is the wrong shape. Sunrise
+has per-agent, global and per-turn caps and no per-user concept, so the store is
+ours.
+
+**Change them at `/admin/app/agent`** (Lelañea → Deadlines & budgets).
+
+| Setting                         | Stored in                             | Enforced by                                      |
+| ------------------------------- | ------------------------------------- | ------------------------------------------------ |
+| First-words deadline (8,000 ms) | `app_agent_settings`                  | §08 t-55 — the app says it is taking longer      |
+| Whole-turn deadline (60,000 ms) | `app_agent_settings`                  | §08 t-55 — the turn ends plainly, retryable      |
+| Default monthly limit ($5)      | `app_agent_settings`                  | f-safety acts on it; f-budget shows it           |
+| One person's own limit          | `app_user_budget`, one row per person | the same, through `getEffectiveMonthlyCeiling()` |
+
+**Nothing enforces any of these yet.** Until t-55, f-safety and f-budget land,
+what proves the write is the admin page reading it back and
+`tests/unit/lib/app/agent/settings.test.ts` (`HB9`). The page says so.
+
+### How a reader gets them
+
+`lib/app/agent/settings.ts`:
+
+- `getAgentDeadlines()` — `{ firstWordsDeadlineMs, turnDeadlineMs }`.
+- `getEffectiveMonthlyCeiling(userId)` — `{ ceilingUsd, source }`, where `source`
+  is `override` or `default`.
+
+Both read the database **on every call** (`B9`). Do not cache the result at
+module scope or across requests: a value captured once makes an admin's change
+take effect at the next deploy — the shape the ruling rejected — and on a
+serverless host in some instances and not others.
+
+### Who writes what (`fp4`)
+
+- **The settings row is created once, by its migration** (an `INSERT` of the
+  ruled values), and never written by a seed or a boot. The admin page is its only
+  writer from then on. `DEFAULT_AGENT_SETTINGS` in `settings.ts` holds the same
+  numbers only so the resolvers can answer — with a warning — if the row has been
+  deleted by hand; saving the page puts it back. A test holds the migration and
+  the constants equal. **Editing the constants changes nothing in a database that
+  already has the row**, which is every database.
+- **A person's own limit exists only while an admin wants one.** No row means the
+  default applies. **Clearing deletes the row — it is never set to zero**, because
+  zero is a real answer ("may spend nothing"). The `DELETE` is idempotent.
+- The API refuses a non-positive deadline, a first-words deadline that is not
+  shorter than the turn's, and a negative limit. Settings are written as a full
+  replacement of all three values, which is what lets the pair rule be checked at
+  the boundary. Deadlines are capped at 10 minutes and limits at $10,000 — bounds
+  on a typo, not policy.
+
+### Privacy
+
+A person's own limit is about them: `ON DELETE CASCADE` on a hand-written FK to
+`user` (pinned by a drift probe in `lib/app/leaf-db-drift.ts`), and exported to
+them as the `budget` section. The settings row holds nothing about anyone and is
+an exclusion with a reason they can read. **Who changed a value is in the admin
+audit log** (`app_agent_settings.update`, `app_user_budget.set`,
+`app_user_budget.clear`), deliberately not on the rows — that is what keeps the
+exclusion's reason true for an administrator too.
+
+### API
+
+| Route                                                | Does                                               |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| `GET/PUT /api/v1/admin/app/agent/settings`           | read / replace the three values                    |
+| `GET /api/v1/admin/app/agent/budgets`                | every account with its effective limit — one query |
+| `PUT/DELETE /api/v1/admin/app/agent/budgets/:userId` | set / clear one person's limit                     |
+
+All admin-only. The list's `?q=` is usually an email address, so every route on
+this surface logs without the request URL (`app/api/v1/admin/app/agent/_shared/route-logger.ts`, the same
+fix as the waitlist's; the platform gap is `sunrise#685`).
+
 ## After a deploy
 
 The pin, the matrix row and the seats are rows. They exist only where the seed
-has run: `npm run db:seed` against each database.
+has run: `npm run db:seed` against each database. The deadlines and the default
+limit are not seeded — their migration writes them, so `npm run db:migrate:deploy`
+is what puts them there.
 
 ## Tests
 
@@ -270,4 +349,6 @@ has run: `npm run db:seed` against each database.
 | `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written |
 | `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                  |
 | `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                 |
+| `tests/unit/lib/app/agent/settings.test.ts`                | A fresh store answers 8,000 ms / 60,000 ms / $5 and the migration writes exactly the code's values; a change to the store changes the next read; an override beats the default, zero is an override, a cleared one falls back by deleting the row; the admin list enriches from one overrides query                                              |
+| `tests/unit/lib/validations/app-agent-settings.test.ts`    | The three refusals: a non-positive deadline, first words not shorter than the turn, a negative limit                                                                                                                                                                                                                                             |
 | `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                       |

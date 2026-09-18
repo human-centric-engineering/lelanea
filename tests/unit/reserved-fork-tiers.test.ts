@@ -245,6 +245,10 @@ describe('reserved fork tiers', () => {
       'model AppKnowledgeDesignation {',
       'model AppVoiceComparison {',
       'model AppVoiceComparisonArm {',
+      // §08 t-53 — the agent's deadlines and default limit (an EXCLUSION: it is
+      // about nobody), and one person's own limit (a SOURCE: it is about them).
+      'model AppAgentSettings {',
+      'model AppUserBudget {',
     ]);
   });
 

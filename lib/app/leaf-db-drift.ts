@@ -83,4 +83,15 @@ export function registerLeafDriftProbes(): void {
     // fork has, which is exactly the wrong thing to believe about it.
     probe: constraintExists('app_voice_comparison_arm_evaluationRunId_fkey', 'ON DELETE SET NULL'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_user_budget_userId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_user_budget',
+    // `ON DELETE CASCADE` is the whole Art. 17 disposition for a person's own
+    // spending ceiling — no erasure hook stands behind it. Re-created with
+    // `NO ACTION`, `eraseUser()` would fail with `P2003` for anyone an admin had
+    // given a ceiling; with `SET NULL`, on the NOT NULL primary key.
+    probe: constraintExists('app_user_budget_userId_fkey', 'ON DELETE CASCADE'),
+  });
 }
