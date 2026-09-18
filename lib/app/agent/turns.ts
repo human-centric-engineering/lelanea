@@ -92,9 +92,16 @@ export function mintTurnId(): string {
 /**
  * The completed turn, told again — no model call, no cost row.
  *
- * The same frames a live turn ends with (`start`, the reply, `done`), so a
- * client that retried after losing the connection cannot tell the replay from
- * the answer it missed — which is the point.
+ * The frames a live turn ends with — `start`, the whole reply, its citations,
+ * `done` — so a duplicate of a turn that already finished gets the same answer.
+ *
+ * **What this does not cover: a connection lost MID-turn.** Daybreak's route
+ * hands the request's abort signal to `streamChat`, so a client that drops
+ * mid-answer aborts the model call itself; the turn ends `failed`, and its retry
+ * runs again (a second call, and the person's message twice). Carrying on
+ * server-side after a disconnect would mean the route not passing that signal —
+ * a change to Daybreak's route behaviour, not this seam's. Found by
+ * /code-review; recorded in `.context/app/agent.md`.
  */
 async function* replay(turn: AppTurn): ChatStream {
   const reply = await readTurnReply(turn);
@@ -112,7 +119,8 @@ async function* replay(turn: AppTurn): ChatStream {
     conversationId: turn.conversationId,
     ...(turn.userMessageId ? { messageId: turn.userMessageId } : {}),
   };
-  yield { type: 'content', delta: reply };
+  yield { type: 'content', delta: reply.text };
+  if (reply.citations.length > 0) yield { type: 'citations', citations: reply.citations };
   const inputTokens = turn.inputTokens ?? 0;
   const outputTokens = turn.outputTokens ?? 0;
   yield {

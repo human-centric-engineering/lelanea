@@ -341,13 +341,13 @@ row whose `messageId` is the turn's `assistantMessageId`.
 
 ### What a second request with the same id gets
 
-| The id's turn is…        | The request…                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| new                      | runs                                                                                 |
-| completed                | gets the recorded reply as `start` / `content` / `done` — no model call, no cost row |
-| still running            | `409`, `details.reason: TURN_IN_FLIGHT` — never raced                                |
-| failed, or abandoned     | runs again under the same id                                                         |
-| used for different words | `409`, `details.reason: TURN_ID_REUSED`                                              |
+| The id's turn is…        | The request…                                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| new                      | runs                                                                                                                                      |
+| completed                | gets the recorded reply — every pass of it, and its citations — as `start` / `content` / `citations` / `done`; no model call, no cost row |
+| still running            | `409`, `details.reason: TURN_IN_FLIGHT` — never raced                                                                                     |
+| failed, or abandoned     | runs again under the same id                                                                                                              |
+| used for different words | `409`, `details.reason: TURN_ID_REUSED`                                                                                                   |
 
 - **Scoped to the person.** `@@unique([userId, turnId])` is the claim; the same id
   from someone else is a new turn and says nothing about theirs.
@@ -363,6 +363,13 @@ row whose `messageId` is the turn's `assistantMessageId`.
 - **A turn that finishes with no reply to link** is settled `failed`
   (`reply_not_linked`), not `completed` — the id can run again rather than
   answering every retry with an error.
+- **A connection lost mid-turn is re-run, not replayed.** Daybreak's route hands
+  the request's abort signal to `streamChat`, so a client that drops mid-answer
+  aborts the model call; the turn ends `failed` and its retry runs again — a
+  second call, and the person's message twice. Replay covers a duplicate of a
+  turn that finished. Carrying a turn on after a disconnect means the route not
+  passing that signal, which is a change to Daybreak's route behaviour, not to
+  this seam — a question for §08 t-55, which owns what a turn does when it ends.
 - **A replay whose reply was deleted** ends in `turn_reply_unavailable` rather
   than inventing one.
 - **A retried failed turn leaves the person's message in the transcript twice.**
@@ -372,7 +379,7 @@ row whose `messageId` is the turn's `assistantMessageId`.
 ### A turn costed at nothing
 
 A turn that used tokens and came back at $0 — its model had no rate in the
-registry that priced it — is recorded as `pricing: unpriced` with **`costUsd`
+registry that priced it, or its provider reported no usage — is recorded as `pricing: unpriced` with **`costUsd`
 null**, never `0`, and logged at `warn` (`Agent turn was costed at nothing`). On a
 provider configured as local it is `local`, cost as reported: really free, and not
 the same fact.

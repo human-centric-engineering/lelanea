@@ -55,6 +55,7 @@ interface MessageRow {
   role: 'user' | 'assistant';
   content: string;
   metadata: Record<string, unknown> | null;
+  provenance?: Record<string, unknown> | null;
   createdAt: Date;
 }
 interface CostRow {
@@ -174,7 +175,39 @@ vi.mock('@/lib/db/client', () => {
                 (where.createdAt === undefined || m.createdAt >= where.createdAt.gte)
             );
             const row = rows.at(-1);
-            return row ? { id: row.id, content: row.content, createdAt: row.createdAt } : null;
+            return row
+              ? {
+                  id: row.id,
+                  content: row.content,
+                  createdAt: row.createdAt,
+                  provenance: row.provenance ?? null,
+                }
+              : null;
+          }
+        ),
+        findMany: vi.fn(
+          async ({
+            where,
+          }: {
+            where: {
+              conversationId: string;
+              conversation?: { userId: string };
+              role: string;
+              createdAt: { gte: Date; lte: Date };
+            };
+          }) => {
+            if (!where.conversation?.userId)
+              throw new Error('aiMessage read without an owner scope');
+            return db.messages
+              .filter(
+                (m) =>
+                  m.conversationId === where.conversationId &&
+                  db.conversationOwners.get(m.conversationId) === where.conversation?.userId &&
+                  m.role === where.role &&
+                  m.createdAt >= where.createdAt.gte &&
+                  m.createdAt <= where.createdAt.lte
+              )
+              .map((m) => ({ content: m.content }));
           }
         ),
       },
@@ -513,6 +546,24 @@ describe('a turn costed at nothing', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  it('a provider that reports no usage is unpriced, not a free turn', async () => {
+    behaviour = { model: PINNED_MODEL, provider: 'openai', outcome: 'answer', costUsd: 0 };
+    const turn = turnFor();
+    const noUsage = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        for await (const event of fakeRun(turn)({})) {
+          yield event.type === 'done'
+            ? { ...event, tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } }
+            : event;
+        }
+      })();
+    const result = await runRecordedTurn(turn, noUsage);
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
+
+    expect(db.turns[0]).toMatchObject({ pricing: 'unpriced', costUsd: null });
+  });
+
   it('is told apart from a genuinely free local model', async () => {
     db.providers.push({ slug: 'ollama', isLocal: true });
     behaviour = { model: 'llama-local-7b', provider: 'ollama', outcome: 'answer', costUsd: 0 };
@@ -603,6 +654,83 @@ describe('a request that ends before its stream is read', () => {
     for (let next = await stream.next(); !next.done; next = await stream.next());
 
     expect(db.turns[0].status).toBe('completed');
+  });
+});
+
+describe('a replay of a turn that used a tool', () => {
+  it('tells every pass of the reply again, and the sources it cited', async () => {
+    const turn = turnFor();
+    const citation = {
+      marker: 1,
+      chunkId: 'c1',
+      documentId: 'd1',
+      documentName: 'A Sunday letter',
+      contentHash: null,
+      documentVersion: null,
+      section: null,
+      patternNumber: null,
+      patternName: null,
+      excerpt: 'more to this life',
+      similarity: 0.9,
+    };
+    // Two passes, as the platform streams and persists them: text before the
+    // search, then the answer that cites what it found.
+    const withTool = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        db.conversationOwners.set('conv-user-1', 'user-1');
+        const at = Date.now();
+        db.messages.push({
+          id: 'u1',
+          conversationId: 'conv-user-1',
+          role: 'user',
+          content: turn.message,
+          metadata: null,
+          createdAt: new Date(at),
+        });
+        yield { type: 'start', conversationId: 'conv-user-1', messageId: 'u1' };
+        yield { type: 'content', delta: 'Let me look. ' };
+        db.messages.push({
+          id: 'a1',
+          conversationId: 'conv-user-1',
+          role: 'assistant',
+          content: 'Let me look. ',
+          metadata: null,
+          createdAt: new Date(at + 1),
+        });
+        yield { type: 'content', delta: 'She writes of more [1].' };
+        db.messages.push({
+          id: 'a2',
+          conversationId: 'conv-user-1',
+          role: 'assistant',
+          content: 'She writes of more [1].',
+          metadata: null,
+          provenance: { citations: [citation] },
+          createdAt: new Date(at + 2),
+        });
+        yield { type: 'citations', citations: [citation] };
+        yield {
+          type: 'done',
+          tokenUsage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+          costUsd: 0.0001,
+          model: PINNED_MODEL,
+          provider: 'openai',
+        };
+      })();
+    const live = await runRecordedTurn(turn, withTool);
+    if ('refused' in live) throw new Error('refused');
+    for await (const _event of live);
+    expect(db.turns[0].assistantMessageId).toBe('a2');
+
+    const replayed = await take(turn);
+
+    expect(replayed.find((e) => e.type === 'content')).toEqual({
+      type: 'content',
+      delta: 'Let me look. She writes of more [1].',
+    });
+    expect(replayed.find((e) => e.type === 'citations')).toEqual({
+      type: 'citations',
+      citations: [citation],
+    });
   });
 });
 
