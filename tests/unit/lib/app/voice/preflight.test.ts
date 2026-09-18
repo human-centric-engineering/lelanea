@@ -103,7 +103,8 @@ describe('getVoicePreflight', () => {
     const preflight = await getVoicePreflight(ADMIN);
 
     expect(preflight.modelId).toBe('claude-sonnet-5');
-    // The agents ship bound to no model so they resolve to the install default.
+    // Arms the model pin has not reached are bound to nothing and resolve to the
+    // install default.
     // Reporting the default as though it were the binding would hide the one
     // state `assertArmsComparable` checks for.
     expect(preflight.arms.map((entry) => entry.boundModel)).toEqual([null, null]);

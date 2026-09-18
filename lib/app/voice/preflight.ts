@@ -50,11 +50,12 @@ export interface VoicePreflightArm {
   /**
    * The model the arm is BOUND to, or `null` when it is bound to none.
    *
-   * Both voice agents ship with an empty `model` so they resolve to the install
-   * default — which is the point of the binding check in
-   * `assertArmsComparable`, and why `null` is reported rather than papered over
-   * with the default's name. `modelId` on the estimate carries what would
-   * actually answer.
+   * Both voice agents are created with an empty `model` and pinned afterwards
+   * by `005-agent-models.ts`, so `null` means an arm that pin has not reached —
+   * it would resolve to the install default. That is reported rather than
+   * papered over with the default's name, because one arm bound and one not is
+   * exactly the state `assertArmsComparable` checks for. `modelId` on the
+   * estimate carries what would actually answer.
    */
   boundModel: string | null;
 }
