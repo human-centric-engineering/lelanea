@@ -40,7 +40,7 @@ import {
   resolveFacilitationSurface,
   FACILITATION_SURFACE_CONTEXT_TYPE,
 } from '@/lib/framework/facilitation/agents/surface';
-// Lelañea divergence (.context/app/divergences.md Row 18): a leaf-fillable turn hook.
+// Lelañea divergence (.context/app/divergences.md Row 18; daybreak#265): a leaf-fillable turn hook.
 import { runFacilitationTurn } from '@/lib/framework/facilitation/agents/turn-hook';
 
 const surfaceChatRequestSchema = z.object({

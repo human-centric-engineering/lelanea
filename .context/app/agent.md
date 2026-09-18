@@ -1,6 +1,6 @@
 ---
 name: app-agent
-description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, her deadlines and the monthly spending limits, and what is known to be missing until the turn seam lands.
+description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, how she is reached, what every turn records (turn id, seat, fingerprint version, cost) and what a repeated turn gets, her deadlines and the monthly spending limits.
 ---
 
 # The agent: what she runs on, and where she sits
@@ -10,8 +10,8 @@ her fingerprint profile (see [`voice.md`](./voice.md)). This doc is about the
 part of her that is not her voice: the model behind it, the seats she is bound
 to, and what happens around a turn.
 
-It grows with §08. What is here now is the pin, the seats, and the deadlines and
-spending limits.
+It grows with §08. What is here now is the pin, the seats, how she is reached,
+what a turn records, and the deadlines and spending limits.
 
 ## What is pinned
 
@@ -180,9 +180,8 @@ leaf; until this ran, its role route answered 404 for every role.
   binding points at no row that only boot materialises. The role is checked
   against a constant in code, and the only row it needs is her agent.
 
-**She is still `internal`, with no capabilities, so the role route still answers 404.** That is deliberate. Widening her also opens Sunrise's general consumer chat
-route, which carries no turn id, no seat and no record of what produced a turn.
-Both land with the turn seam (§08 t-54), not before it.
+Until §08 t-54 she was `internal` with no capabilities, so the role route answered
+404 on both seats. See [How she is reached](#how-she-is-reached).
 
 ## How her model is priced
 
@@ -233,11 +232,13 @@ accepting $0 until the turn seam lands (which zeroes the golden-set costs on
 
 **A model an admin later pins through the agent form.** If that id is outside
 Sunrise's static map, it prices at $0 in a cold process for the same reason, and
-nothing here helps: the registration is for one named model. Pricing an arbitrary
-id on the chat path is the platform's gap, reported upstream; §08 t-54 carries
-the requirement that a miss on the turn path is surfaced rather than logged as
-free. Until then, **changing her model means checking the new id is in the static
-map, or adding its rate beside the pin.**
+the registration cannot help: it is for one named model. Pricing an arbitrary id
+on the chat path is the platform's gap, reported upstream. What §08 t-54 does is
+make the miss **visible**: the turn record says `unpriced` with no cost, and the
+log says so at `warn` — see [A turn costed at nothing](#a-turn-costed-at-nothing).
+So **changing her model still means checking the new id is in the static map, or
+adding its rate beside the pin** — but a turn that slips through is no longer
+recorded as free.
 
 **A cost typed onto the matrix row.** The row is seed-managed until an admin — or
 the model auditor's apply step — edits it, and from then on it is theirs. Give it
@@ -251,13 +252,151 @@ once per process so it does not put it back. After a _successful_ refresh that i
 harmless — OpenRouter lists this snapshot at the same rate, and delists one only
 when the provider retires the model. A _failed_ refresh leaves the registry as it
 was. Nothing on the chat path or in the evaluation worker refreshes at all; it
-takes an admin page sharing the module instance. §08 t-54 owns the turn path and
-can call `ensurePinnedModelPriced()` per turn, which closes even that.
+takes an admin page sharing the module instance. And the turn hook calls
+`ensurePinnedModelPriced()` before every facilitation turn (§08 t-54), which
+closes even that on the path a member takes.
 
 The seam fill goes when Sunrise prices an id outside its static map on the chat
 and evaluation-worker paths — reported as
 [`sunrise#813`](https://github.com/human-centric-engineering/sunrise/issues/813),
 which also carries the blended-rate and history-budget overrides described above.
+
+## How she is reached
+
+`prisma/seeds/app-lelanea/007-agent-reachable.ts` (§08 t-54) makes her `public` —
+Daybreak's facilitation surface refuses any agent that is not — and grants her
+`search_knowledge_base`. The tool arrived with the instruction to use it
+(`VOICE_AGENT_SYSTEM_INSTRUCTIONS`): an instruction to look with no tool produces
+a confident claim to have looked. Her `restricted` knowledge access still applies,
+so the tool sees only what t-25's designation rule lets her quote.
+
+- **Visibility is operator-owned.** The seed widens her only while she is still
+  `internal` and her timeline has no `Made reachable by members (seeded — §08)`
+  entry. Narrow her in the admin and a re-run leaves it; her seats answer 404
+  until she is public again.
+- **The grant is filled once.** A binding that exists — switched off included —
+  is an operator's and is left alone. Grants are not in the agent snapshot, so
+  restoring an earlier version does not take the tool away.
+
+The members' way in is `POST /api/v1/framework/facilitation/{onboarding|facilitator}/chat/stream`,
+body `{ message, turnId? }`.
+
+### Where else she can be reached
+
+**`public` also opens Sunrise's general consumer chat route** (`POST
+/api/v1/chat/stream`, by slug) and lists her in `GET /api/v1/chat/agents`. A turn
+there has no turn id, no seat, no turn record and none of her overlays — only her
+always-on core. **The leaf cannot close it**: that route consults the
+authorization seam with no resource, so there is no agent for a policy to refuse.
+Recorded on f-safety, which owns ceilings, with what it bypasses.
+
+## What a turn records
+
+Every turn on a facilitation seat goes through the turn hook — Daybreak's route
+hands it to `runFacilitationTurn()`, and `lib/app/leaf-bootstrap.ts` registers
+`runRecordedTurn()` (`lib/app/agent/turns.ts`) into it at boot. The seam is ours,
+carried in Daybreak's route: [`divergences.md`](./divergences.md) Row 18,
+[`daybreak#265`](https://github.com/human-centric-engineering/daybreak/issues/265).
+
+**The record is `app_turn`, one row per turn id per person** — the answer to
+"which model and which prompt produced this turn, and what did it cost":
+
+| Column                                   | Says                                                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `turnId`, `clientSupplied`               | the client's id, or one minted here (`srv_…`) when it sent none              |
+| `seat`, `agentSlug`                      | where the turn was taken, and who answered                                   |
+| `fingerprintVersion`                     | her voice version, read from her **composed** prompt at claim — null if none |
+| `model`, `provider`                      | what the platform reported on `done`                                         |
+| `inputTokens`, `outputTokens`, `costUsd` | the chat call; `costUsd` is null when `pricing` is `unpriced`                |
+| `pricing`                                | `priced`, `unpriced` or `local`                                              |
+| `userMessageId`, `assistantMessageId`    | the two `ai_message` rows — ids, never the words                             |
+| `status`, `attempts`, `errorCode`        | `running` / `completed` / `failed`; a re-run bumps `attempts`                |
+
+Also tagged: **the person's message** carries `{ turnId, seat, fingerprintVersion }`
+under `metadata.app`. The platform puts `messageMetadata` on the user row only;
+her reply has the model and provider as columns, and the turn row joins the two.
+
+### Which cost rows carry the turn (hypothesis b, checked at the call sites)
+
+`costLogMetadata` is `{ turnId, seat }`. Read in
+`lib/orchestration/chat/streaming-handler.ts`, `summarizer.ts`,
+`capabilities/dispatcher.ts` and `built-in/search-knowledge.ts`:
+
+| Cost row                                          | Tagged                                                                                                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the chat call, every tool-loop iteration          | yes                                                                                                                                                                                                   |
+| the rolling summary                               | yes                                                                                                                                                                                                   |
+| a tool dispatch (`search_knowledge_base` and any) | yes — the dispatcher merges it under its own `slug`/`success`                                                                                                                                         |
+| the embedding of a knowledge search query         | yes — `search-knowledge.ts` merges it under `kind: 'knowledge_search'`                                                                                                                                |
+| an attachment (`vision`)                          | yes (the facilitation route sends none today)                                                                                                                                                         |
+| **the embedding of her reply**                    | **no.** `queueMessageEmbedding()` takes only agent / conversation / user. Its row carries `metadata.messageId`, which is the turn's `assistantMessageId` — so it is joinable to the turn, not tagged. |
+
+So "every cost row carries the turn id" is **not** true, and nothing should be
+built as though it were: sum a turn's cost by `turnId` **plus** the reply-embedding
+row whose `messageId` is the turn's `assistantMessageId`.
+
+### What a second request with the same id gets
+
+| The id's turn is…        | The request…                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| new                      | runs                                                                                 |
+| completed                | gets the recorded reply as `start` / `content` / `done` — no model call, no cost row |
+| still running            | `409`, `details.reason: TURN_IN_FLIGHT` — never raced                                |
+| failed, or abandoned     | runs again under the same id                                                         |
+| used for different words | `409`, `details.reason: TURN_ID_REUSED`                                              |
+
+- **Scoped to the person.** `@@unique([userId, turnId])` is the claim; the same id
+  from someone else is a new turn and says nothing about theirs.
+- **No `turnId` behaves as before**: a minted id is never sent again, so every
+  request runs — but it is still recorded and tagged.
+- **Abandoned** means `running` for longer than `STALE_CLAIM_MS` (10 minutes, the
+  longest the platform lets a turn run). A client that disconnects still settles
+  the turn as `failed`; only a crashed process leaves it `running`. t-55 can
+  tighten this to the admin's turn deadline once that is enforced.
+- **A replay whose reply was deleted** ends in `turn_reply_unavailable` rather
+  than inventing one.
+- **A retried failed turn leaves the person's message in the transcript twice.**
+  The platform writes it before calling the model, on every call, and offers no
+  way to reuse the first. Recorded on f-conversation.
+
+### A turn costed at nothing
+
+A model with no rate in the registry the turn was priced from is recorded as
+`pricing: unpriced` with **`costUsd` null** — never `0` — and logged at `warn`
+(`Agent turn was costed at nothing`). A model on a provider configured as local is
+`local`, cost as reported: really free, and not the same fact. The platform's own
+cost row for an unpriced turn still says $0; the turn record is what knows better.
+
+### Sessions
+
+There are none, deliberately. Daybreak has no session concept and a facilitation
+conversation resumes forever, so turns are metered one by one with timestamps
+(`startedAt`, `completedAt`). A "sitting" is derivable later by whoever needs one
+(f-recap, f-journey-record) without a retrofit.
+
+### Privacy
+
+A turn record is about the person: `ON DELETE CASCADE` on a hand-written FK to
+`user` (drift probe in `lib/app/leaf-db-drift.ts`), and exported to them as the
+`turns` section. The message ids are deliberately not foreign keys: deleting a
+conversation keeps the metering and loses the words, and a replay says so.
+
+## Her voice on a seat
+
+Her overlays and exemplars reach a facilitation turn: `lib/app/context-contributors.ts`
+registers her voice block for `facilitation` (the type Daybreak's route pins) as
+well as `voice`. The seat picks the moment — `SEAT_SITUATIONS` in
+`lib/app/voice/context-contributor.ts`:
+
+| Seat          | Moment           |
+| ------------- | ---------------- |
+| `onboarding`  | `first-meeting`  |
+| `facilitator` | none — core-only |
+
+The facilitator seat is every moment after the first, and which one is a fact
+about the person's journey that no turn carries yet. Guessing would be inventing
+a register — the overlays' own rule is not to — so it gets the authored core-only
+block until a turn can say which moment it is.
 
 ## Deadlines and monthly limits
 
@@ -337,18 +476,29 @@ fix as the waitlist's; the platform gap is `sunrise#685`).
 
 ## After a deploy
 
-The pin, the matrix row and the seats are rows. They exist only where the seed
-has run: `npm run db:seed` against each database. The deadlines and the default
-limit are not seeded — their migration writes them, so `npm run db:migrate:deploy`
+The pin, the matrix row, the seats, her visibility and her search grant are rows.
+They exist only where the seed has run: `npm run db:seed` against each database —
+until it has, her seats answer 404. The deadlines, the default limit and the turn
+table are not seeded — their migrations write them, so `npm run db:migrate:deploy`
 is what puts them there.
+
+**The turn hook is registered at boot.** A server that booted before it existed
+runs every facilitation turn through the pass-through — unrecorded, and billed
+twice on a retry. `npm run smoke:app-turn` says so directly rather than failing
+on a symptom.
 
 ## Tests
 
-| File                                                       | Pins                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written |
-| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                  |
-| `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                 |
-| `tests/unit/lib/app/agent/settings.test.ts`                | A fresh store answers 8,000 ms / 60,000 ms / $5 and the migration writes exactly the code's values; a change to the store changes the next read; an override beats the default, zero is an override, a cleared one falls back by deleting the row; the admin list enriches from one overrides query                                              |
-| `tests/unit/lib/validations/app-agent-settings.test.ts`    | The three refusals: a non-positive deadline, first words not shorter than the turn, a negative limit                                                                                                                                                                                                                                             |
-| `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                       |
+| File                                                             | Pins                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts`       | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written                          |
+| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`        | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                                           |
+| `tests/unit/lib/app/agent/pinned-model.test.ts`                  | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                                          |
+| `tests/unit/lib/app/agent/settings.test.ts`                      | A fresh store answers 8,000 ms / 60,000 ms / $5 and the migration writes exactly the code's values; a change to the store changes the next read; an override beats the default, zero is an override, a cleared one falls back by deleting the row; the admin list enriches from one overrides query                                                                       |
+| `tests/unit/lib/app/agent/turns.test.ts`                         | Against a stateful fake: a completed turn replays with no model call and no cost row; in flight is refused; failed and abandoned re-run; another person's id neither collides nor leaks; a reused id with other words is refused; no id behaves as before; cost row and message are tagged; an unpriced turn is null-cost beside a priced one, and apart from a local one |
+| `tests/unit/app/api/v1/framework/facilitation/turn-seam.test.ts` | The route at rest calls `streamChat` with exactly its old arguments and ignores a `turnId`; wired, it hands a registered hook the turn, merges its extras, and turns a refusal into 409 before any stream                                                                                                                                                                 |
+| `tests/unit/lib/app/voice/context-contributor.test.ts`           | (§08 t-54 cases) the assembled system prompt of an onboarding seat turn carries the first-meeting register and her passages; the facilitator seat gets the core-only block                                                                                                                                                                                                |
+| `tests/unit/prisma/seeds/app-lelanea/agent-reachable.test.ts`    | Public as a timeline entry, search granted; a re-run writes nothing; an admin's narrowing and a switched-off grant stay; a missing agent or capability throws before writing                                                                                                                                                                                              |
+| `scripts/app/smoke-turn.ts` (`npm run smoke:app-turn`)           | Against a running server and the dev DB: one turn id sent twice through the real route is one model call, a cost row > 0 on her pinned model tagged with turn id and seat, one turn record, one user message                                                                                                                                                              |
+| `tests/unit/lib/validations/app-agent-settings.test.ts`          | The three refusals: a non-positive deadline, first words not shorter than the turn, a negative limit                                                                                                                                                                                                                                                                      |
+| `tests/unit/lib/app/voice/comparison.test.ts`                    | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                                                |

@@ -3,7 +3,7 @@
  * facilitation turn.
  *
  * **Carried by Lelañea ahead of Daybreak** (`.context/app/divergences.md`,
- * Row 18). The facilitation role route hands every turn to
+ * Row 18; proposed upstream as daybreak#265). The facilitation role route hands every turn to
  * {@link runFacilitationTurn} instead of calling `streamChat` itself. With
  * nothing registered it runs the turn exactly as the route always did.
  *
