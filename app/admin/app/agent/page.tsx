@@ -10,7 +10,7 @@ import type { PaginationMeta } from '@/types/api';
 
 export const metadata: Metadata = {
   title: 'Deadlines & budgets',
-  description: 'How long she may take to answer, and what each person may spend a month',
+  description: 'How long the AI may take to answer, and what each person may spend a month',
 };
 
 const EMPTY_META: PaginationMeta = {
@@ -75,8 +75,8 @@ export default async function AgentSettingsPage() {
       <div>
         <h2 className="text-lg font-semibold">Deadlines &amp; budgets</h2>
         <p className="text-muted-foreground text-sm">
-          How long she may take to answer, and what each person may spend on the model in a month.
-          These are stored here so they can change as real use shows what they should be.{' '}
+          How long the AI may take to answer, and what each person may spend on it in a month. These
+          are stored here so they can change as real use shows what they should be.{' '}
           <strong>Nothing enforces them yet</strong> — the deadlines take effect when honest failure
           lands, and the limits when the safety and budget features do.
         </p>

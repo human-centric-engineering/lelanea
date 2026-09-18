@@ -95,7 +95,7 @@ export function initLeafAdminNav(): void {
         href: AGENT_SETTINGS_PAGE,
         label: 'Deadlines & budgets',
         icon: Gauge,
-        description: 'How long she may take to answer, and what each person may spend a month',
+        description: 'How long the AI may take to answer, and what each person may spend a month',
       },
     ],
   });
