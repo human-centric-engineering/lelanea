@@ -1,6 +1,6 @@
 ---
 name: app-agent
-description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, how she is reached, what every turn records (turn id, seat, fingerprint version, cost) and what a repeated turn gets, her deadlines and the monthly spending limits.
+description: The one agent — which model she is pinned to and why, where an admin changes it, why there is no fallback, the two seats she holds, how she is reached, what every turn records (turn id, seat, fingerprint version, cost) and what a repeated turn gets, how a turn ends when she can't answer (the endings vocabulary, the deadlines, a dropped connection, the pause switch, the status read), and the monthly spending limits.
 ---
 
 # The agent: what she runs on, and where she sits
@@ -11,7 +11,8 @@ part of her that is not her voice: the model behind it, the seats she is bound
 to, and what happens around a turn.
 
 It grows with §08. What is here now is the pin, the seats, how she is reached,
-what a turn records, and the deadlines and spending limits.
+what a turn records, what happens when she can't answer, and the deadlines and
+spending limits.
 
 ## What is pinned
 
@@ -133,7 +134,7 @@ before it could speak as her.
 So: explicit provider, explicit model, empty fallback list. An explicit provider
 is never re-picked by the platform, and with no list there is nowhere to fail
 over to. When her model is unreachable the turn ends and says so, and everything
-readable stays readable — that behaviour is §08 t-55.
+readable stays readable — see [When she can't answer](#when-she-cant-answer).
 
 The seed never writes `fallbackProviders`. Empty is the column's default; a
 non-empty list is an operator's, and is logged as contradicting this ruling
@@ -353,31 +354,32 @@ row whose `messageId` is the turn's `assistantMessageId`.
   from someone else is a new turn and says nothing about theirs.
 - **No `turnId` behaves as before**: a minted id is never sent again, so every
   request runs — but it is still recorded and tagged.
-- **Abandoned** means `running` for longer than `STALE_CLAIM_MS` (10 minutes, the
-  longest the platform lets a turn run). A client that disconnects still settles
-  the turn as `failed` — mid-stream through the stream's own `finally`, and
-  before the stream began through the request's abort signal (`aborted`). A
-  settling write that fails is tried once more, so a database hiccup does not
-  hold the id; only a crashed process, or a database down for both tries, leaves
-  it `running`. A settle names its attempt, so an attempt
-  that outlived its claim writes nothing over the one that replaced it. t-55 can
-  tighten this to the admin's turn deadline once that is enforced.
+- **Abandoned** means `running` for longer than `staleClaimMs()` — the admin's
+  whole-turn deadline plus a minute's grace (`STALE_CLAIM_GRACE_MS`), read per
+  request. The deadline itself settles a turn that runs too long, so only a
+  crashed process, or a database down for both tries of a settle, leaves one
+  `running`. A settling write that fails is tried once more. A settle names its
+  attempt, so an attempt that outlived its claim writes nothing over the one
+  that replaced it. **Known limit:** the window is the deadline in force when the
+  _retry_ asks, not the one the running turn started under — an admin who cuts
+  the deadline sharply mid-turn can let a retry take over a turn that is still
+  running (two model calls for one id). Storing each turn's deadline would close
+  it; not done, for a rare operator action.
 - **A turn that finishes with no reply to link** is settled `failed`
   (`reply_not_linked`), not `completed` — the id can run again rather than
   answering every retry with an error.
-- **A connection lost mid-turn is re-run, not replayed.** Daybreak's route hands
-  the request's abort signal to `streamChat`, so a client that drops mid-answer
-  aborts the model call; the turn ends `failed` and its retry runs again — a
-  second call, and the person's message twice. Replay covers a duplicate of a
-  turn that finished. Carrying a turn on after a disconnect means the route not
-  passing that signal, which is a change to Daybreak's route behaviour, not to
-  this seam. **Owner ruling (18 Sept 2026): it will not stay this way** — the turn
-  is to finish server-side and replay on the retry; §08 t-55 builds it.
-- **A replay whose reply was deleted** ends in `turn_reply_unavailable` rather
-  than inventing one.
+- **A connection lost mid-turn is replayed, not re-run** (owner ruling, 18 Sept
+  2026; §08 t-55). The turn finishes server-side and is recorded `completed`, so
+  the retry gets the whole answer as a replay — one model call, one cost row, one
+  message from the person. See [A dropped connection](#a-dropped-connection).
+- **A replay whose reply was deleted** ends rather than inventing one — recorded
+  as `turn_reply_unavailable`, sent as the plain `unavailable` ending.
 - **A retried failed turn leaves the person's message in the transcript twice.**
   The platform writes it before calling the model, on every call, and offers no
   way to reuse the first. Recorded on f-conversation.
+
+- **While generation is paused**, a replay is still served — it calls no model.
+  Anything that would run the model gets the `paused` ending instead.
 
 ### A turn costed at nothing
 
@@ -405,6 +407,134 @@ A turn record is about the person: `ON DELETE CASCADE` on a hand-written FK to
 `user` (drift probe in `lib/app/leaf-db-drift.ts`), and exported to them as the
 `turns` section. The message ids are deliberately not foreign keys: deleting a
 conversation keeps the metering and loses the words, and a replay says so.
+
+## When she can't answer
+
+§08 t-55; product description §8.1. A person may be mid-sentence about their
+marriage when the provider rate-limits. Before this, the turn waited on a
+120-second library default and then surfaced whichever error code won. Now it
+ends within the admin's deadline, in plain words, and everything readable keeps
+working. **There is no fallback model** (see [Why there is no
+fallback](#why-there-is-no-fallback)): nothing is silently swapped, so there is
+nothing to disclose.
+
+### The endings — what f-conversation builds against
+
+Every frame from her seat reaches the browser through `toClientStream()`
+(`lib/app/agent/endings.ts`). A turn that ends without her answer ends on **one
+`error` frame whose `code` is one of three**:
+
+| `code`        | Means                                                        | Default copy says                                          |
+| ------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `unavailable` | she could not answer — every platform code but the two below | your message is kept; try again; the rest of the app works |
+| `timed_out`   | the whole-turn deadline passed (or the provider timed out)   | it was stopped; your message is kept; try again            |
+| `paused`      | an operator paused conversations on purpose                  | paused on purpose; everything you can read still works     |
+
+- **Unknown codes map to `unavailable`, never through.** The platform's code and
+  its text — written for an operator, and on some paths carrying a slug, a model
+  or an env var name — never reach the browser. The turn record keeps the
+  platform's code in `errorCode`, for diagnosis.
+- **The per-turn cost cap's own frame** (`budget_exceeded_per_turn`, which
+  carries spend figures) is replaced by `unavailable` as well.
+- **The agent's monthly `budget_warning`** (a dollar figure) is dropped: an
+  operator's number, not a member's. Other warnings pass through.
+- **"Try again" is real** (`HB10`): the client resends with the **same turn id**.
+  A failed or timed-out turn runs again under it; one that completed is replayed.
+- **Still thinking** is not an ending: `{ type: 'warning', code: 'still_thinking' }`,
+  sent once when no words have come by the first-words deadline. The turn goes on.
+- **The copy is neutral on purpose.** The words in her register, and the banner,
+  are f-conversation's. So is the misfit for `input_blocked` and the conversation
+  caps: they map to `unavailable`, whose "try again" will not help — the three-word
+  vocabulary has no word for "this message cannot be sent". The crisis path is
+  f-safety's and depends on none of this.
+
+### The deadlines
+
+Read per request from `app_agent_settings` (`getAgentDeadlines()`), so a change at
+`/admin/app/agent` applies to the next turn (`lib/app/agent/deadlines.ts`):
+
+- **First words** (8 s): no `content` yet → one `still_thinking` warning. Not an
+  abort — a slow answer is still her answer.
+- **Whole turn** (60 s): the model call is aborted through the seam's own signal,
+  the turn is settled `failed` with `errorCode: timed_out` **before** the reader is
+  told, and the reader gets `timed_out` at once. A retry sent the moment it arrives
+  is therefore a re-run, not a 409.
+- **Once the platform reports an outcome the deadline stands down.** A `done` (or
+  a failure) disarms it before the outcome is written, so a deadline passing
+  mid-write cannot say `timed_out` after a whole answer, nor leave a saved reply
+  on a failed turn that the retry would bill again.
+
+**What a timed-out turn leaves in the transcript** (hypothesis a, checked in
+`streaming-handler.ts`): the person's message, and the platform's error-marker
+assistant row — `[An error occurred and the response could not be completed.]`,
+`metadata: { error: true, errorCode: 'aborted' }`. Any words streamed before the
+deadline are **not** persisted; the marker is the only assistant row. The abort is
+classified as a client abort — the signal is aborted — so **no circuit-breaker
+failure is recorded**. A re-run under the same id writes the person's message a
+second time (the t-54 known limit, recorded on f-conversation), and a marker row
+that lands after the re-run's own message is possible if the aborted call is slow
+to unwind. f-conversation should hide `metadata.error` rows, or render them as the
+ending rather than as her words.
+
+### A dropped connection
+
+Owner ruling, 18 Sept 2026: a dropped connection does not stop her answer.
+
+- The seam passes **its own** abort signal to `streamChat`, replacing the
+  request's (`extras.signal` — a change to the turn seam, divergences Row 18). Only
+  the whole-turn deadline fires it.
+- The upstream is **pumped from the moment the turn starts**, independent of its
+  reader; the reader takes frames from a buffer. A reader that leaves detaches,
+  nothing more is buffered for it, and the pump runs on to `done` (or the
+  deadline). The turn is recorded `completed`, so the retry is a replay.
+- **The run is handed to the host** through `turn.keepAlive` — the route passes
+  Next's `after()` (hypothesis c). On Vercel a function may be frozen once its
+  response ends; `after()` keeps it alive until the turn settles, within the
+  route's max duration (the 60 s deadline is well inside it). `after` cannot be
+  imported under `lib/app/**`, which is why the route offers it rather than the
+  hook calling it. A host that refuses is logged and costs only that guarantee.
+- A request aborted **before** its stream is read no longer needs special
+  handling (t-54's `aborted` settle is gone): the turn is already running.
+
+### The pause switch
+
+`LELANEA_GENERATION_PAUSED`, a Sunrise feature flag (hypothesis b: it fits —
+DB-backed, admin-toggleable, no store of our own). **Flip it at `/admin/features`**.
+On, every turn on her seats gets the `paused` ending **before anything is claimed
+or any model is called** — no turn row, no cost row — and the same turn id simply
+runs once it is off. Replays are still served.
+
+- Created off by `prisma/seeds/app-lelanea/008-generation-pause-flag.ts`, and
+  **never written again**: an operator's pause survives a re-seed.
+- **Not the circuit breaker.** The breaker is per-process memory and holds nothing
+  between requests on a serverless host. Availability is learned from the switch
+  and from turn outcomes, both rows.
+- Fails open: a flag read that errors counts as not paused. A database that cannot
+  be read fails the turn by itself a moment later, as `unavailable`.
+
+### The status read
+
+`GET /api/v1/app/agent/status` (any member; `no-store`) →
+`{ generation: 'available' | 'unavailable' | 'paused' }`
+(`lib/app/agent/availability.ts`). What the conversation pane, and later a banner,
+ask:
+
+- `paused` — the switch is on.
+- `unavailable` — the most recent turn **anyone** finished in the last five minutes
+  failed because the model could not answer or ran out of time. A hint: the next
+  turn is still tried. Failures about the person's own turn (`input_blocked`, the
+  caps, `reply_not_linked`, `budget_exceeded_per_turn`) are skipped. Install-wide
+  and anonymous — it never says whose turn it was.
+- `available` — otherwise.
+
+Indexed by `app_turn.completedAt` (migration `20260920100000_app_turn_completed_at_idx`).
+
+### Everything readable stays readable
+
+The authored-content routes and the journey map touch no model and no pause:
+`tests/unit/lib/app/agent/reading-survives.test.ts` calls them with the provider
+layer throwing and with the switch on, and the smoke calls them on a running
+server in both states.
 
 ## Her voice on a seat
 
@@ -441,14 +571,15 @@ ours.
 
 | Setting                         | Stored in                             | Enforced by                                      |
 | ------------------------------- | ------------------------------------- | ------------------------------------------------ |
-| First-words deadline (8,000 ms) | `app_agent_settings`                  | §08 t-55 — the app says it is taking longer      |
-| Whole-turn deadline (60,000 ms) | `app_agent_settings`                  | §08 t-55 — the turn ends plainly, retryable      |
+| First-words deadline (8,000 ms) | `app_agent_settings`                  | `deadlines.ts` — a `still_thinking` warning      |
+| Whole-turn deadline (60,000 ms) | `app_agent_settings`                  | `deadlines.ts` — `timed_out`, failed, retryable  |
 | Default monthly limit ($5)      | `app_agent_settings`                  | f-safety acts on it; f-budget shows it           |
 | One person's own limit          | `app_user_budget`, one row per person | the same, through `getEffectiveMonthlyCeiling()` |
 
-**Nothing enforces any of these yet.** Until t-55, f-safety and f-budget land,
-what proves the write is the admin page reading it back and
-`tests/unit/lib/app/agent/settings.test.ts` (`HB9`). The page says so.
+**The deadlines are enforced** (§08 t-55, [When she can't answer](#when-she-cant-answer)).
+**The limits are not yet**: until f-safety and f-budget land, what proves that
+write is the admin page reading it back and
+`tests/unit/lib/app/agent/settings.test.ts` (`HB9`).
 
 ### How a reader gets them
 
@@ -505,7 +636,8 @@ fix as the waitlist's; the platform gap is `sunrise#685`).
 
 ## After a deploy
 
-The pin, the matrix row, the seats, her visibility and her search grant are rows.
+The pin, the matrix row, the seats, her visibility, her search grant and the
+pause switch are rows.
 They exist only where the seed has run: `npm run db:seed` against each database —
 until it has, her seats answer 404. The deadlines, the default limit and the turn
 table are not seeded — their migrations write them, so `npm run db:migrate:deploy`
@@ -518,16 +650,20 @@ on a symptom.
 
 ## Tests
 
-| File                                                             | Pins                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts`       | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written                          |
-| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`        | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                                           |
-| `tests/unit/lib/app/agent/pinned-model.test.ts`                  | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                                          |
-| `tests/unit/lib/app/agent/settings.test.ts`                      | A fresh store answers 8,000 ms / 60,000 ms / $5 and the migration writes exactly the code's values; a change to the store changes the next read; an override beats the default, zero is an override, a cleared one falls back by deleting the row; the admin list enriches from one overrides query                                                                       |
-| `tests/unit/lib/app/agent/turns.test.ts`                         | Against a stateful fake: a completed turn replays with no model call and no cost row; in flight is refused; failed and abandoned re-run; another person's id neither collides nor leaks; a reused id with other words is refused; no id behaves as before; cost row and message are tagged; an unpriced turn is null-cost beside a priced one, and apart from a local one |
-| `tests/unit/app/api/v1/framework/facilitation/turn-seam.test.ts` | The route at rest calls `streamChat` with exactly its old arguments and ignores a `turnId`; wired, it hands a registered hook the turn, merges its extras, and turns a refusal into 409 before any stream                                                                                                                                                                 |
-| `tests/unit/lib/app/voice/context-contributor.test.ts`           | (§08 t-54 cases) the assembled system prompt of an onboarding seat turn carries the first-meeting register and her passages; the facilitator seat gets the core-only block                                                                                                                                                                                                |
-| `tests/unit/prisma/seeds/app-lelanea/agent-reachable.test.ts`    | Public as a timeline entry, search granted; a re-run writes nothing; an admin's narrowing and a switched-off grant stay; a missing agent or capability throws before writing                                                                                                                                                                                              |
-| `scripts/app/smoke-turn.ts` (`npm run smoke:app-turn`)           | Against a running server and the dev DB: one turn id sent twice through the real route is one model call, a cost row > 0 on her pinned model tagged with turn id and seat, one turn record, one user message                                                                                                                                                              |
-| `tests/unit/lib/validations/app-agent-settings.test.ts`          | The three refusals: a non-positive deadline, first words not shorter than the turn, a negative limit                                                                                                                                                                                                                                                                      |
-| `tests/unit/lib/app/voice/comparison.test.ts`                    | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                                                |
+| File                                                             | Pins                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts`       | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written                                                                                                               |
+| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`        | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                                                                                                                                |
+| `tests/unit/lib/app/agent/pinned-model.test.ts`                  | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                                                                                                                               |
+| `tests/unit/lib/app/agent/settings.test.ts`                      | A fresh store answers 8,000 ms / 60,000 ms / $5 and the migration writes exactly the code's values; a change to the store changes the next read; an override beats the default, zero is an override, a cleared one falls back by deleting the row; the admin list enriches from one overrides query                                                                                                                                                            |
+| `tests/unit/lib/app/agent/turns.test.ts`                         | Against a stateful fake: a completed turn replays with no model call and no cost row; in flight is refused; failed and abandoned re-run; another person's id neither collides nor leaks; a reused id with other words is refused; no id behaves as before; cost row and message are tagged; an unpriced turn is null-cost beside a priced one, and apart from a local one                                                                                      |
+| `tests/unit/app/api/v1/framework/facilitation/turn-seam.test.ts` | The route at rest calls `streamChat` with exactly its old arguments and ignores a `turnId`; wired, it hands a registered hook the turn, merges its extras, and turns a refusal into 409 before any stream                                                                                                                                                                                                                                                      |
+| `tests/unit/lib/app/voice/context-contributor.test.ts`           | (§08 t-54 cases) the assembled system prompt of an onboarding seat turn carries the first-meeting register and her passages; the facilitator seat gets the core-only block                                                                                                                                                                                                                                                                                     |
+| `tests/unit/prisma/seeds/app-lelanea/agent-reachable.test.ts`    | Public as a timeline entry, search granted; a re-run writes nothing; an admin's narrowing and a switched-off grant stay; a missing agent or capability throws before writing                                                                                                                                                                                                                                                                                   |
+| `scripts/app/smoke-turn.ts` (`npm run smoke:app-turn`)           | Against a running server and the dev DB: one turn id sent twice through the real route is one model call, a cost row > 0 on her pinned model tagged with turn id and seat, one turn record, one user message; a connection dropped mid-answer still completes and replays; her model pointed at an unreachable endpoint ends `unavailable` with no provider text, keeps the message, reads stay 200 and the id re-runs; paused refuses with no row and no cost |
+| `tests/unit/lib/app/agent/turns.test.ts` (§08 t-55 cases)        | With fake timers: `still_thinking` at the first-words deadline and the turn carries on; `timed_out` at the whole-turn deadline, settled failed before the reader hears, the same id re-runs; changed settings apply to the next turn; a dropped reader still completes and replays; the model runs under the seam's signal; a provider error's slug and env name reach no frame; the pause refuses before any model call, replays still served                 |
+| `tests/unit/lib/app/agent/endings.test.ts`                       | Every code in the platform's registry (read from its source) maps into the vocabulary; unknown codes map to `unavailable`                                                                                                                                                                                                                                                                                                                                      |
+| `tests/unit/lib/app/agent/availability.test.ts`                  | Paused beats everything; the latest finished turn decides, within the window; a person's own turn trouble is not read as an outage                                                                                                                                                                                                                                                                                                                             |
+| `tests/unit/lib/app/agent/reading-survives.test.ts`              | Content and journey-map routes 200 with the provider layer throwing, and with the switch on                                                                                                                                                                                                                                                                                                                                                                    |
+| `tests/unit/lib/validations/app-agent-settings.test.ts`          | The three refusals: a non-positive deadline, first words not shorter than the turn, a negative limit                                                                                                                                                                                                                                                                                                                                                           |
+| `tests/unit/lib/app/voice/comparison.test.ts`                    | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                                                                                                                                     |

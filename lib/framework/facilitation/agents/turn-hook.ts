@@ -22,6 +22,15 @@
  *   route's graph and builds the error there.
  * - `clientTurnId` is the client's optional `turnId`, validated by the route and
  *   otherwise untouched. The route gives it no meaning of its own.
+ * - `extras.signal`, when the hook passes one, **replaces** the request's abort
+ *   signal on the `streamChat` call. With none, the call is aborted when the
+ *   client goes away, as it always was. A hook that owns the turn's lifetime —
+ *   one that lets a turn finish after its reader disconnects, and ends it on a
+ *   deadline of its own — passes its own.
+ * - `keepAlive(work)` asks the host to keep the request's function alive until
+ *   `work` settles, after the response has ended (the route passes Next's
+ *   `after()`). A hook that runs a turn on past its reader must hand it the run,
+ *   or a serverless host may freeze the function with the turn half-done.
  *
  * Register from the leaf's boot seam (`lib/app/leaf-bootstrap.ts`); the
  * framework does not import the leaf, so the leaf reaches in.
@@ -55,10 +64,21 @@ export interface FacilitationTurn {
    * iterates it, so nothing inside the stream can clean up.
    */
   signal?: AbortSignal;
+  /**
+   * Keep the request's function alive until `work` settles, after the response
+   * has ended. Absent where the host offers no such thing.
+   */
+  keepAlive?: (work: Promise<unknown>) => void;
 }
 
-/** What a hook may add to the turn's `streamChat` call. */
-export type FacilitationTurnExtras = Pick<ChatRequest, 'costLogMetadata' | 'messageMetadata'>;
+/**
+ * What a hook may add to the turn's `streamChat` call. A `signal` here replaces
+ * the request's own.
+ */
+export type FacilitationTurnExtras = Pick<
+  ChatRequest,
+  'costLogMetadata' | 'messageMetadata' | 'signal'
+>;
 
 /** The turn the route would have run, with the hook's extras merged in. */
 export type FacilitationTurnRun = (extras: FacilitationTurnExtras) => ChatStream;
