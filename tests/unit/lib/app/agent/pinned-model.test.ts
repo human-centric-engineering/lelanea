@@ -28,6 +28,15 @@
  * `tests/setup.ts` pins this seam to "registers nothing" for every file, so the
  * real one is read with `vi.importActual` — as `defaults.test.ts` does.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this reads the real `lib/app/llm-providers` seam, on purpose
+ * ---------------------------------------------------------------------------
+ * It asserts what LELAÑEA's fill of that seam does: register one pinned model's
+ * rate and no eligibility rule. A fork that fills the seam differently — or
+ * registers an eligibility rule there — will see "still registers no eligibility
+ * rule" fail, correctly. A fork without her pinned model should delete this file
+ * together with `lib/app/agent/pinned-model.ts` and the registration in the seam.
+ *
  * @see lib/app/agent/pinned-model.ts
  * @see lib/app/llm-providers.ts
  */
