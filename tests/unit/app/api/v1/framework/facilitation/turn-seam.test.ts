@@ -49,7 +49,6 @@ import { auth } from '@/lib/auth/config';
 import { streamChat } from '@/lib/orchestration/chat';
 import { sseResponse } from '@/lib/api/sse';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
-import { ConflictError } from '@/lib/api/errors';
 import {
   __resetFacilitationTurnHookForTests,
   registerFacilitationTurnHook,
@@ -189,9 +188,14 @@ describe('wired — the route reaches a registered hook', () => {
   });
 
   it('turns a refusal into 409 before any stream is opened', async () => {
-    runRecordedTurn.mockRejectedValue(
-      new ConflictError('This turn is still being answered.', { reason: 'TURN_IN_FLIGHT' })
-    );
+    // Returned, not thrown: the framework builds the ConflictError in the
+    // route's graph. A thrown one from a hook registered at boot is a different
+    // class and became a 500 on the running server (found by smoke:app-turn).
+    runRecordedTurn.mockResolvedValue({
+      refused: true,
+      message: 'This turn is still being answered.',
+      reason: 'TURN_IN_FLIGHT',
+    });
 
     const res = await POST(req({ message: 'hi', turnId: 'turn-abc' }), ctx());
 

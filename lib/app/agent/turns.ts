@@ -50,7 +50,6 @@
 
 import type { AppTurn } from '@prisma/client';
 
-import { ConflictError } from '@/lib/api/errors';
 import { logger } from '@/lib/logging';
 import type { ChatStream } from '@/lib/orchestration/chat/types';
 import type { ChatEvent } from '@/types/orchestration';
@@ -68,6 +67,7 @@ import {
 } from '@/lib/app/agent/turn-record';
 import type {
   FacilitationTurn,
+  FacilitationTurnRefusal,
   FacilitationTurnRun,
 } from '@/lib/framework/facilitation/agents/turn-hook';
 
@@ -203,13 +203,15 @@ function logRecordFailure(stage: string, turn: AppTurn, err: unknown): void {
 /**
  * Take one facilitation turn: claim its id, then replay, refuse or run it.
  *
- * Throws `ConflictError` for a refusal, BEFORE any stream exists, so the route
- * answers 409 rather than opening an event stream to say no.
+ * A refusal is RETURNED, before any stream exists, and the framework answers it
+ * as 409 rather than opening an event stream to say no. Returned rather than
+ * thrown because this runs from the boot graph, and an error class built here
+ * is not the one the route's error handler checks (see the seam's docblock).
  */
 export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
-): Promise<ChatStream> {
+): Promise<ChatStream | FacilitationTurnRefusal> {
   // Her pinned model's rate, in this module graph, before the model is called.
   // The provider-eligibility seam does this too, but it runs once per process
   // and an admin page's registry refresh drops the entry; once per turn closes
@@ -233,13 +235,17 @@ export async function runRecordedTurn(
 
   switch (claim.kind) {
     case 'mismatch':
-      throw new ConflictError('This turn id was already used for a different message.', {
+      return {
+        refused: true,
+        message: 'This turn id was already used for a different message.',
         reason: TURN_ID_REUSED,
-      });
+      };
     case 'in_flight':
-      throw new ConflictError('This turn is still being answered. Try again in a moment.', {
+      return {
+        refused: true,
+        message: 'This turn is still being answered. Try again in a moment.',
         reason: TURN_IN_FLIGHT,
-      });
+      };
     case 'completed':
       logger.info('Agent turn replayed', { turnId, seat: turn.role });
       return replay(claim.turn);

@@ -238,7 +238,10 @@ async function main(): Promise<void> {
     // 5. The same id with different words is a client bug, and is refused.
     console.log('\n4. The same id, different words');
     const reused = await takeTurn(cookie, TURN_ID, 'Something else entirely.');
-    check(reused.status === 409, `refused with 409 (${reused.raw.slice(0, 120)})`);
+    check(
+      reused.status === 409,
+      `refused with 409 (${reused.status}: ${reused.raw.slice(0, 400)})`
+    );
 
     console.log('\n✓ smoke:app-turn passed\n');
   } finally {

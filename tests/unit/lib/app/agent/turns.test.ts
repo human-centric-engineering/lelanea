@@ -212,7 +212,6 @@ import type {
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { PINNED_MODEL } from '@/lib/app/agent/pinned-model';
 import { __resetForTests as resetRegistry } from '@/lib/orchestration/llm/model-registry';
-import { ConflictError } from '@/lib/api/errors';
 import type { ChatEvent } from '@/types/orchestration';
 
 /** What the fake model should do on its next call. */
@@ -294,10 +293,20 @@ function turnFor(overrides: Partial<FacilitationTurn> = {}): FacilitationTurn {
   };
 }
 
+/** Start a turn that must not be refused, and hand back its stream. */
+async function streamOf(turn: FacilitationTurn): Promise<AsyncIterator<ChatEvent>> {
+  const result = await runRecordedTurn(turn, fakeRun(turn));
+  if ('refused' in result) throw new Error(`unexpected refusal: ${result.reason}`);
+  return result[Symbol.asyncIterator]();
+}
+
 /** Take a turn and read its stream to the end. */
 async function take(turn: FacilitationTurn): Promise<ChatEvent[]> {
   const events: ChatEvent[] = [];
-  for await (const event of await runRecordedTurn(turn, fakeRun(turn))) events.push(event);
+  const stream = await streamOf(turn);
+  for (let next = await stream.next(); !next.done; next = await stream.next()) {
+    events.push(next.value);
+  }
   return events;
 }
 
@@ -333,13 +342,16 @@ describe('a turn id', () => {
 
   it('a turn still in flight is refused, not raced', async () => {
     const turn = turnFor();
-    const firstStream = (await runRecordedTurn(turn, fakeRun(turn)))[Symbol.asyncIterator]();
+    const firstStream = await streamOf(turn);
     // Claimed, not yet finished: the model has not even been called.
     expect(db.turns[0].status).toBe('running');
 
-    await expect(runRecordedTurn(turn, fakeRun(turn))).rejects.toBeInstanceOf(ConflictError);
-    await expect(runRecordedTurn(turn, fakeRun(turn))).rejects.toMatchObject({
-      details: { reason: 'TURN_IN_FLIGHT' },
+    // A refusal VALUE, not a stream and not a thrown error — the framework turns
+    // it into a 409 in the route's own module graph.
+    await expect(runRecordedTurn(turn, fakeRun(turn))).resolves.toEqual({
+      refused: true,
+      message: expect.any(String),
+      reason: 'TURN_IN_FLIGHT',
     });
 
     // The first request is untouched by the refusal and still finishes.
@@ -367,7 +379,7 @@ describe('a turn id', () => {
 
   it('a stream that ends without an outcome leaves the turn failed, not running', async () => {
     const turn = turnFor();
-    const stream = (await runRecordedTurn(turn, fakeRun(turn)))[Symbol.asyncIterator]();
+    const stream = await streamOf(turn);
     await stream.next(); // `start` — then the client goes away
     await stream.return?.();
 
@@ -404,7 +416,7 @@ describe('a turn id', () => {
 
     await expect(
       runRecordedTurn(turnFor({ message: 'A different one.' }), fakeRun(turnFor()))
-    ).rejects.toMatchObject({ details: { reason: 'TURN_ID_REUSED' } });
+    ).resolves.toMatchObject({ refused: true, reason: 'TURN_ID_REUSED' });
     expect(modelCalls).toBe(1);
   });
 

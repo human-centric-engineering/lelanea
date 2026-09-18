@@ -13,8 +13,13 @@
  *   route's own arguments, plus whatever `costLogMetadata` / `messageMetadata`
  *   the hook passes. Call it at most once. Not calling it is how a hook answers a
  *   turn without the model — a replay of one it already answered.
- * - Throw an `APIError` to refuse the turn. It happens before any stream is
- *   opened, so the caller gets a status code, not an event stream saying no.
+ * - Resolve to a {@link FacilitationTurnRefusal} to refuse the turn: the caller
+ *   gets a 409 before any stream is opened, not an event stream saying no.
+ *   **Return it; do not throw an `APIError`.** The hook is registered from the
+ *   boot graph, so an error class it constructs is not the class the route's
+ *   error handler checks with `instanceof` — found by the dev-DB smoke, where a
+ *   thrown `ConflictError` became a 500. {@link runFacilitationTurn} runs in the
+ *   route's graph and builds the error there.
  * - `clientTurnId` is the client's optional `turnId`, validated by the route and
  *   otherwise untouched. The route gives it no meaning of its own.
  *
@@ -29,6 +34,7 @@
  * registry (`lib/framework/modules/registry.ts`, #160).
  */
 
+import { ConflictError } from '@/lib/api/errors';
 import type { ChatRequest, ChatStream } from '@/lib/orchestration/chat/types';
 
 /** One turn on a facilitation seat, as the route resolved it. */
@@ -51,10 +57,24 @@ export type FacilitationTurnExtras = Pick<ChatRequest, 'costLogMetadata' | 'mess
 /** The turn the route would have run, with the hook's extras merged in. */
 export type FacilitationTurnRun = (extras: FacilitationTurnExtras) => ChatStream;
 
+/** A hook's refusal: answered as 409, with `reason` in the error's details. */
+export interface FacilitationTurnRefusal {
+  refused: true;
+  message: string;
+  /** A stable code a client can branch on. */
+  reason: string;
+}
+
 export type FacilitationTurnHook = (
   turn: FacilitationTurn,
   run: FacilitationTurnRun
-) => Promise<ChatStream>;
+) => Promise<ChatStream | FacilitationTurnRefusal>;
+
+function isRefusal(
+  result: ChatStream | FacilitationTurnRefusal
+): result is FacilitationTurnRefusal {
+  return 'refused' in result && result.refused === true;
+}
 
 /** The behaviour with nothing registered: run the turn as the route always did. */
 export const passThroughFacilitationTurn: FacilitationTurnHook = (_turn, run) =>
@@ -74,12 +94,18 @@ export function getFacilitationTurnHook(): FacilitationTurnHook {
   return store.daybreakFacilitationTurnHook ?? passThroughFacilitationTurn;
 }
 
-/** Called by the facilitation route for every turn. */
-export function runFacilitationTurn(
+/**
+ * Called by the facilitation route for every turn. Throws `ConflictError` for a
+ * refusal — constructed here, in the route's module graph, so the route's error
+ * handler recognises it.
+ */
+export async function runFacilitationTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream> {
-  return getFacilitationTurnHook()(turn, run);
+  const result = await getFacilitationTurnHook()(turn, run);
+  if (isRefusal(result)) throw new ConflictError(result.message, { reason: result.reason });
+  return result;
 }
 
 /** Test-only: back to nothing registered. */
