@@ -365,7 +365,14 @@ function BudgetTable({
   }, [search, overriddenOnly, page, settingsRevision, load]);
 
   const replaceRow = (row: UserBudgetRow) => {
+    // A list read still in flight may predate this write; drop it rather than
+    // let it put the old value back.
+    requestSeqRef.current += 1;
+    setLoading(false);
     setUsers((current) => current.map((user) => (user.userId === row.userId ? row : user)));
+    // Cleared while showing only people with their own limit: they no longer
+    // belong on this view, and the count has changed. Re-read it.
+    if (overriddenOnly && row.overrideUsd === null) void load(search, overriddenOnly, page);
   };
 
   return (

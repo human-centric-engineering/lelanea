@@ -226,3 +226,152 @@ describe('the list', () => {
     await waitFor(() => expect(screen.getByText(/Nobody has their own limit/)).toBeInTheDocument());
   });
 });
+
+describe('the edges an admin can actually reach', () => {
+  it('checkSettings refuses blanks and values past the typo bounds', () => {
+    expect(checkSettings(8000, null, 5)).toMatch(/needs a number/);
+    expect(checkSettings(8000, 700_000, 5)).toMatch(/cannot be longer than 600 seconds/);
+    expect(checkSettings(8000, 60000, 20_000)).toMatch(/cannot be more than/);
+  });
+
+  it('a settings row that is not stored yet says so, and one that did not load disables the form', () => {
+    const { unmount } = render(
+      <AgentSettingsPanel
+        initialSettings={{ ...SETTINGS, updatedAt: null }}
+        initialUsers={[]}
+        initialMeta={META}
+        initialLoadFailed={false}
+      />
+    );
+    expect(screen.getByText(/Not stored yet/)).toBeInTheDocument();
+    unmount();
+
+    render(
+      <AgentSettingsPanel
+        initialSettings={null}
+        initialUsers={[]}
+        initialMeta={META}
+        initialLoadFailed={false}
+      />
+    );
+    expect(screen.getByText(/settings did not load/)).toBeInTheDocument();
+    expect(screen.getByLabelText('First words within (s)')).toHaveValue(null);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('a blank field is refused before sending', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await user.clear(screen.getByLabelText('Whole turn within (s)'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/needs a number/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('a refusal with no field detail shows the top-line message', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: false, error: { code: 'FORBIDDEN', message: 'Admins only.' } }),
+        { status: 403, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    renderPanel();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Admins only.'));
+  });
+
+  it('a save that never reached the server says nothing changed', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderPanel();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/did not save. Nothing was changed/)
+    );
+  });
+
+  it('a list reload that fails shows the banner rather than an empty table', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderPanel();
+    await user.type(screen.getByLabelText('Search people'), 'ad');
+    await waitFor(() => expect(screen.getByText(/The list did not load/)).toBeInTheDocument());
+    expect(screen.queryByText('No accounts match.')).not.toBeInTheDocument();
+  });
+
+  it('pages forward through the same list endpoint', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(ok([ADA], { page: 2, limit: 25, total: 30, totalPages: 2 }));
+    render(
+      <AgentSettingsPanel
+        initialSettings={SETTINGS}
+        initialUsers={[ADA]}
+        initialMeta={{ page: 1, limit: 25, total: 30, totalPages: 2 }}
+        initialLoadFailed={false}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(screen.getByText('Page 2 of 2')).toBeInTheDocument());
+    expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('page=2');
+  });
+
+  it('a row refuses a blank or oversized limit, and shows a server refusal or a failed send', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    const row = screen.getByText('ada@example.com').closest('tr')!;
+    const input = within(row).getByLabelText('Monthly limit for Ada');
+
+    await user.click(within(row).getByRole('button', { name: 'Set' }));
+    expect(within(row).getByRole('alert')).toHaveTextContent(/Enter an amount/);
+
+    await user.type(input, '20000');
+    await user.click(within(row).getByRole('button', { name: 'Set' }));
+    expect(within(row).getByRole('alert')).toHaveTextContent(/cannot be more than/);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.clear(input);
+    await user.type(input, '3');
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }),
+        { status: 404, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    await user.click(within(row).getByRole('button', { name: 'Set' }));
+    await waitFor(() => expect(within(row).getByRole('alert')).toHaveTextContent('User not found'));
+
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await user.click(within(row).getByRole('button', { name: 'Set' }));
+    await waitFor(() => expect(within(row).getByRole('alert')).toHaveTextContent(/did not save/));
+  });
+});
+
+describe('clearing while only own limits are shown', () => {
+  it('re-reads the list, so the cleared person leaves the filtered view', async () => {
+    const user = userEvent.setup();
+    const own = { ...ADA, overrideUsd: 12.5, effectiveCeilingUsd: 12.5 };
+    let cleared = false;
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        cleared = true;
+        return ok({ budget: ADA, cleared: true });
+      }
+      return cleared ? ok([], { ...META, total: 0, totalPages: 0 }) : ok([own], META);
+    });
+    renderPanel([own]);
+
+    await user.click(screen.getByLabelText('Only people with their own limit'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const row = screen.getByText('ada@example.com').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Clear' }));
+
+    await waitFor(() => expect(screen.getByText(/Nobody has their own limit/)).toBeInTheDocument());
+    const methods = fetchMock.mock.calls.map(
+      ([, init]) => (init as RequestInit | undefined)?.method ?? 'GET'
+    );
+    expect(methods).toEqual(['GET', 'DELETE', 'GET']);
+  });
+});

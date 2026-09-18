@@ -40,6 +40,7 @@ import type { AppUserBudget, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { isRecord } from '@/lib/utils';
 import type { AgentSettingsUpdate, UserBudgetQuery } from '@/lib/validations/app-agent-settings';
 
 /** The singleton's key. */
@@ -247,11 +248,22 @@ export async function setUserBudget(
   const user = await findUser(userId);
   if (!user) return null;
 
-  await prisma.appUserBudget.upsert({
-    where: { userId },
-    create: { userId, monthlyCeilingUsd },
-    update: { monthlyCeilingUsd },
-  });
+  try {
+    await prisma.appUserBudget.upsert({
+      where: { userId },
+      create: { userId, monthlyCeilingUsd },
+      update: { monthlyCeilingUsd },
+    });
+  } catch (error) {
+    // The account was erased between the lookup above and this write: the
+    // hand-written FK refuses the row. That is the same answer as not found,
+    // not a server error. Duck-typed on the code, as `lib/app/waitlist/service.ts`
+    // does, because the app boundary forbids a value import of `@prisma/client`.
+    if (isRecord(error) && error.code === 'P2003') {
+      return null;
+    }
+    throw error;
+  }
 
   const settings = await getAgentSettings();
   return toRow(user, monthlyCeilingUsd, settings.defaultMonthlyCeilingUsd);

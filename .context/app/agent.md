@@ -332,7 +332,7 @@ exclusion's reason true for an administrator too.
 | `PUT/DELETE /api/v1/admin/app/agent/budgets/:userId` | set / clear one person's limit                     |
 
 All admin-only. The list's `?q=` is usually an email address, so every route on
-this surface logs without the request URL (`_shared/route-logger.ts`, the same
+this surface logs without the request URL (`app/api/v1/admin/app/agent/_shared/route-logger.ts`, the same
 fix as the waitlist's; the platform gap is `sunrise#685`).
 
 ## After a deploy

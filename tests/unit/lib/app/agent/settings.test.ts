@@ -401,3 +401,17 @@ describe('the subject-access read', () => {
     await expect(findUserBudgetsForSubject({ userId: ADA })).resolves.toEqual([]);
   });
 });
+
+describe('an account erased mid-write', () => {
+  it('answers not-found rather than failing when the FK refuses the row', async () => {
+    vi.mocked(prisma.appUserBudget.upsert).mockRejectedValueOnce(
+      Object.assign(new Error('Foreign key constraint violated'), { code: 'P2003' })
+    );
+    await expect(setUserBudget(ADA, 3)).resolves.toBeNull();
+  });
+
+  it('still throws anything else', async () => {
+    vi.mocked(prisma.appUserBudget.upsert).mockRejectedValueOnce(new Error('connection lost'));
+    await expect(setUserBudget(ADA, 3)).rejects.toThrow('connection lost');
+  });
+});
