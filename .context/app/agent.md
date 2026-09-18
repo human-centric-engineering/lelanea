@@ -54,6 +54,9 @@ without the golden set being re-run and listened to). So the pin is
 - The seed writes her provider and model only where **both are still blank**. A
   value somebody set is never written over — including a half-set one, which
   also leaves the control blank, because there is no whole pair to follow.
+- **A pin somebody undid stays undone.** The seed leaves exactly one pin entry in
+  her timeline, so blank _with_ that entry behind it is an admin's restore to the
+  floating default, not a fresh agent — it is reported and left alone.
 - To change her model: `/admin/orchestration/agents` → `lelanea-guide` → Model.
   **Change `voice-control-bare` to the same pair**, or the next golden-set run is
   refused with a message naming the mismatch.
@@ -80,7 +83,12 @@ to choose for her, two states look alike and get opposite answers:
 | no active provider at all (a fresh install) | **pins, and warns.** `db:seed` always runs before setup, and the runner does not come back to an applied unit |
 | active providers, none under `openai`       | **writes nothing and throws.** She is working there, on the install default; the pin would break her          |
 
-The second is not recorded as applied, so it is tried again on the next seed, and
+The second is not recorded as applied, so it is tried again on the next seed —
+**and the runner stops at a throw, so every seed unit that sorts after this one
+waits with it**, the seats and Daybreak's own `framework/` units included. That
+cost is accepted: the alternative is a unit recorded as applied that pinned
+nothing, and an agent left floating with nobody told. The error says all of this,
+and
 the error names both ways out: configure OpenAI under the slug **`openai`**, or
 choose her model in the admin — after which the seed sees a decision already made,
 leaves it alone, and matches the control to it.
@@ -163,6 +171,10 @@ leaf; until this ran, its role route answered 404 for every role.
   unbind plus a rebind — so a seat another agent holds is an operator's decision,
   and is reported and left alone.
 - It never reads or writes the other four seats, and has no removal pass.
+- **Known limit: it cannot tell a seat left empty on purpose from one never
+  filled.** Unbind her and leave the seat empty, and the next re-run of this unit
+  (any edit to a file it hashes, Daybreak's `roles.ts` included) seats her again.
+  To keep her out of a seat, take the role out of `SEATED_ROLES`.
 - It does **not** run Daybreak's framework sync, as the journey-map seed does: a
   binding points at no row that only boot materialises. The role is checked
   against a constant in code, and the only row it needs is her agent.
@@ -225,6 +237,12 @@ id on the chat path is the platform's gap, reported upstream; §08 t-54 carries
 the requirement that a miss on the turn path is surfaced rather than logged as
 free. Until then, **changing her model means checking the new id is in the static
 map, or adding its rate beside the pin.**
+
+**A cost typed onto the matrix row.** The row is seed-managed until an admin — or
+the model auditor's apply step — edits it, and from then on it is theirs. Give it
+a cost and that single number overrides the split rate wherever a hydrate runs;
+`ensurePinnedModelPriced()` leaves any positive rate alone, deliberately, because
+the same rule is what lets OpenRouter's figure stand. Leave that cell empty.
 
 **A registry refresh.** `refreshFromOpenRouter()` rebuilds the registry from the
 static map plus OpenRouter's list, which drops our entry, and the seam is wired

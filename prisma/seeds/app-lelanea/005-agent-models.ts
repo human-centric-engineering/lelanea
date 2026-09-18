@@ -18,7 +18,9 @@
  * edit rather than a deploy. So the pin is written only where BOTH columns are
  * still blank — the state unit 003 creates — and a value somebody set is never
  * written over, including a half-set one (a provider with no model is an edit
- * too, and guessing the other half would be this seed deciding for them). The
+ * too, and guessing the other half would be this seed deciding for them). Nor is
+ * a blank she was RETURNED to: this unit leaves exactly one pin entry in her
+ * timeline, so blank-with-that-entry is an admin's restore, and stays. The
  * consequence, stated rather than discovered: editing `PINNED_MODEL` changes what
  * a fresh install gets and nothing on an install that already has a pin.
  *
@@ -76,7 +78,9 @@
  *   there, on the install default, and writing the pin would break her with a log
  *   line as the only notice. So the unit writes nothing to her and THROWS, naming
  *   the two ways out: not recorded as applied, tried again on the next seed, and
- *   she keeps answering in the meantime. The first version only warned. Caught by
+ *   she keeps answering in the meantime. The cost, accepted: the runner stops at
+ *   a throw, so every unit that sorts after this one waits too — the error says
+ *   so. The alternative is a unit recorded as applied that pinned nothing. The first version only warned. Caught by
  *   /code-review.
  *
  * Neither applies when somebody has already chosen her model — that provider is
@@ -179,11 +183,7 @@ async function writeBinding(
   changeSummary: string,
   actorId: string
 ): Promise<boolean> {
-  const { grantedTags, grantedDocuments, ...row } = agent;
-  const grants = {
-    grantedTagIds: grantedTags.map((grant) => grant.tagId),
-    grantedDocumentIds: grantedDocuments.map((grant) => grant.documentId),
-  };
+  const row = agent;
 
   return prisma.$transaction(async (tx) => {
     // The predicate, not the row read at the top of `run()`: see the header.
@@ -193,13 +193,31 @@ async function writeBinding(
     });
     if (count === 0) return false;
 
+    // Read AFTER the write, inside the transaction: the predicate vouches for two
+    // columns, and a snapshot built from the row read at the top of `run()` would
+    // record every other field as it was then — so a temperature an admin changed
+    // in between would be reverted by a later "restore to v2". Caught by
+    // /code-review.
+    const { grantedTags, grantedDocuments, ...fresh } = await tx.aiAgent.findUniqueOrThrow({
+      where: { id: row.id },
+      include: AGENT_INCLUDE,
+    });
+    const grants = {
+      grantedTagIds: grantedTags.map((grant) => grant.tagId),
+      grantedDocumentIds: grantedDocuments.map((grant) => grant.documentId),
+    };
+
     let version = await nextAgentVersionNumber(tx, row.id);
     if (version === 1) {
       await tx.aiAgentVersion.create({
         data: {
           agentId: row.id,
           version,
-          snapshot: asSnapshotJson(buildAgentSnapshot(row, grants)),
+          // How she was a moment ago: everything as it is now, minus the two
+          // columns the predicate proved were blank.
+          snapshot: asSnapshotJson(
+            buildAgentSnapshot({ ...fresh, provider: '', model: '' }, grants)
+          ),
           changeSummary: INITIAL_VERSION_SUMMARY,
           createdBy: row.createdBy ?? actorId,
         },
@@ -211,9 +229,7 @@ async function writeBinding(
       data: {
         agentId: row.id,
         version,
-        // `row` is how she was; with the binding laid over it, how she is. The
-        // predicate above is what makes that true of the two columns that matter.
-        snapshot: asSnapshotJson(buildAgentSnapshot({ ...row, ...binding }, grants)),
+        snapshot: asSnapshotJson(buildAgentSnapshot(fresh, grants)),
         changeSummary,
         createdBy: actorId,
       },
@@ -266,7 +282,18 @@ const unit: SeedUnit = {
     // ---- Is there anywhere for her turns to go? Asked before ANY write --------
     // See the header for why "none at all" and "some, but not this one" get
     // opposite answers. Only when this unit is about to choose for her.
-    const herIsBlank = hers.provider === '' && hers.model === '';
+    //
+    // "Blank" alone is not "never chosen". This unit writes exactly one pin entry
+    // into her timeline, so blank WITH that entry means somebody restored her to
+    // the floating default afterwards — an admin's act on operator-owned config,
+    // which the first version of this check re-pinned the next time a comment in
+    // a hashed file changed. Caught by /code-review.
+    const wasPinnedBefore =
+      (await prisma.aiAgentVersion.findFirst({
+        where: { agentId: hers.id, changeSummary: PIN_CHANGE_SUMMARY },
+        select: { version: true },
+      })) !== null;
+    const herIsBlank = hers.provider === '' && hers.model === '' && !wasPinnedBefore;
     if (herIsBlank) {
       const activeProviders = await prisma.aiProviderConfig.findMany({
         where: { isActive: true },
@@ -279,7 +306,7 @@ const unit: SeedUnit = {
           active: activeProviders.map((provider) => provider.slug),
         });
         throw new Error(
-          `She is to be pinned to the provider "${PINNED_PROVIDER}", and this install's active providers are ${activeProviders.map((provider) => `"${provider.slug}"`).join(', ')}. Writing the pin would end every one of her turns — there is no fallback, by design — so nothing was written and she is still answering on the install default. Either configure OpenAI under the slug "${PINNED_PROVIDER}", or choose her model in /admin/orchestration/agents (the control will follow it). Then run the seed again.`
+          `She is to be pinned to the provider "${PINNED_PROVIDER}", and this install's active providers are ${activeProviders.map((provider) => `"${provider.slug}"`).join(', ')}. Writing the pin would end every one of her turns — there is no fallback, by design — so nothing was written and she is still answering on the install default. Either configure OpenAI under the slug "${PINNED_PROVIDER}", or choose her model in /admin/orchestration/agents (the control will follow it). Then run the seed again — this also stops every seed unit that sorts after this one, until it passes.`
         );
       }
       if (!reachable) {
@@ -358,6 +385,10 @@ const unit: SeedUnit = {
         herBinding = { provider: current.provider, model: current.model };
         logger.info(`⏭  ${hers.slug} was given a model while this ran — left alone`, herBinding);
       }
+    } else if (wasPinnedBefore && hers.provider === '' && hers.model === '') {
+      logger.warn(
+        `${hers.slug} was pinned by this seed and has since been returned to the install default. That is somebody's decision and is left alone — she floats on whatever the default chat model is until a model is chosen for her in /admin/orchestration/agents.`
+      );
     } else {
       logger.info(`⏭  ${hers.slug} already has a model somebody chose — left alone`, herBinding);
     }

@@ -120,9 +120,14 @@ const tables = {
   },
   aiAgent: {
     findMany: vi.fn(async ({ where }: { where: { slug: { in: string[] }; deletedAt: null } }) =>
-      world.agents.filter(
-        (agent) => where.slug.in.includes(agent.slug) && agent.deletedAt === where.deletedAt
-      )
+      // COPIES, as a real read returns: the seed holds these across its writes,
+      // and a live reference would make "the row as it was read" and "the row as
+      // it is now" the same object — so no staleness bug could ever show here.
+      world.agents
+        .filter(
+          (agent) => where.slug.in.includes(agent.slug) && agent.deletedAt === where.deletedAt
+        )
+        .map((agent) => structuredClone(agent))
     ),
     // The seed's only write to an agent. The predicate is honoured, because the
     // point of it is the row that does NOT match.
@@ -154,8 +159,12 @@ const tables = {
     }),
   },
   aiAgentVersion: {
-    findFirst: vi.fn(async ({ where }: { where: { agentId: string } }) => {
-      const mine = world.versions.filter((version) => version.agentId === where.agentId);
+    findFirst: vi.fn(async ({ where }: { where: { agentId: string; changeSummary?: string } }) => {
+      const mine = world.versions.filter(
+        (version) =>
+          version.agentId === where.agentId &&
+          (where.changeSummary === undefined || version.changeSummary === where.changeSummary)
+      );
       if (mine.length === 0) return null;
       return { version: Math.max(...mine.map((version) => version.version)) };
     }),
@@ -592,6 +601,60 @@ describe('whether there is anywhere for her turns to go', () => {
     // Population: the run did the work the warning is about.
     expect(hers().provider).toBe(PINNED_PROVIDER);
     expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(false);
+  });
+});
+
+describe('a pin somebody undid', () => {
+  it('stays undone — blank with a pin entry behind it is a decision, not a fresh agent', async () => {
+    await runSeed();
+    // An admin restores her to v1, "Initial configuration": the floating default.
+    Object.assign(hers(), { provider: '', model: '' });
+    resetWrites();
+
+    // …and later a comment changes in a hashed file, so the unit runs again.
+    await runSeed();
+
+    expect(hers()).toMatchObject({ provider: '', model: '' });
+    expect(writes.agentUpdate).toBe(0);
+    expect(warnings().some((message) => message.includes('returned to the install default'))).toBe(
+      true
+    );
+  });
+
+  it('is not confused by history that is not a pin', async () => {
+    // Population for the case above: other entries in her timeline do not count.
+    world.versions.push({
+      agentId: hers().id,
+      version: 1,
+      snapshot: { model: '' },
+      changeSummary: 'Something an admin did',
+      createdBy: 'someone',
+    });
+
+    await runSeed();
+
+    expect(hers().model).toBe(PINNED_MODEL);
+  });
+});
+
+describe('an admin who edits something else while the seed is running', () => {
+  it('records what is actually there, so a later restore does not revert them', async () => {
+    // The predicate on the write vouches for two columns. Everything else in the
+    // snapshot has to be read after it, or v2 carries the temperature from the
+    // top of the run and "restore to v2" quietly undoes the admin's edit.
+    beforeAgentWrite = () => {
+      beforeAgentWrite = undefined;
+      hers().temperature = 0.2;
+    };
+
+    await runSeed();
+
+    const timeline = versionsOf(VOICE_AGENT_SLUG);
+    expect(timeline.at(-1)?.snapshot.model).toBe(PINNED_MODEL);
+    expect(timeline.at(-1)?.snapshot.temperature).toBe(0.2);
+    // v1 is how she was a moment before: the same, minus the pin.
+    expect(timeline[0]?.snapshot.temperature).toBe(0.2);
+    expect(timeline[0]?.snapshot.model).toBe('');
   });
 });
 

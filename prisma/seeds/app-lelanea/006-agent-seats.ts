@@ -22,6 +22,13 @@
  * **No removal pass.** Dropping a role from `SEATED_ROLES` stops this unit
  * filling that seat; it does not free it.
  *
+ * **Known limit: an emptied seat is refilled.** A seat left empty on purpose is
+ * indistinguishable, from here, from one never filled — telling them apart would
+ * mean reading the admin audit log for an unbind, and coupling a seed to it. So an
+ * admin who unbinds her and leaves the seat empty is re-seated the next time this
+ * unit re-runs. The way to keep her out of a seat is to take the role out of
+ * `SEATED_ROLES`. Found by /code-review; documented rather than built.
+ *
  * **Idempotent, no timestamp churn.** A seat she already holds is not written.
  *
  * **Safe on empty.** A missing agent THROWS rather than returning, because
