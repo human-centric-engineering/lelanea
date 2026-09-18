@@ -37,26 +37,23 @@
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
 import { PINNED_MODEL, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
-import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
-import { VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
 
 // The model and its price live in `pinned-model.ts`, which the provider seam
 // loads on the way to every model call and so must stay import-light.
 // Re-exported so everything about the pin is still reachable from one place.
 export { PINNED_MODEL, PINNED_MODEL_INFO, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
 
-/**
- * Both arms of the golden-set comparison, pinned to the SAME pair.
- *
- * Pinning her alone would leave the bare control floating on the install
- * default, and from then on the comparison would measure the two models rather
- * than the fingerprint. `assertArmsComparable` refuses to queue in that state;
- * pinning both here is what keeps it from arising.
- */
-export const PINNED_AGENT_SLUGS: readonly string[] = [VOICE_AGENT_SLUG, VOICE_CONTROL_AGENT_SLUG];
-
 /** What the version timeline says when the seed writes the pin. */
 export const PIN_CHANGE_SUMMARY = 'Pinned model and provider (seeded — §08)';
+
+/**
+ * What the bare control's timeline says when the seed sets its model.
+ *
+ * A different sentence from hers on purpose: the control is never pinned on its
+ * own account. It follows whatever she is on — the dev pin, or a model an admin
+ * chose for her — because a comparison on two models measures the models.
+ */
+export const CONTROL_FOLLOWS_SUMMARY = "Matched to lelanea-guide's model (seeded — §08)";
 
 /**
  * The provider-model matrix row for the pinned id.
@@ -71,9 +68,23 @@ export const PIN_CHANGE_SUMMARY = 'Pinned model and provider (seeded — §08)';
  * null.** The column is a single number applied to input and output alike, and
  * on hydrate a positive value OVERRIDES a split price already in the registry:
  * measured, the platform's blended $0.375 prices a 3,000-in / 300-out turn at
- * twice its true cost. Null falls through to whatever exact rate is there — ours
- * from `pinned-model.ts`, or OpenRouter's — and where neither is, the model reads
- * as unpriced, which the voice preflight flags rather than showing as cheap.
+ * twice its true cost. In the REGISTRY, null falls through to whatever exact rate
+ * is there — ours from `pinned-model.ts`, or OpenRouter's — and where neither is,
+ * the model reads as unpriced, which the voice preflight flags.
+ *
+ * The cost of that choice, accepted: the admin model list
+ * (`GET /api/v1/admin/orchestration/models`) does not merge, it lets the matrix
+ * row REPLACE the registry entry, so this model is listed there with no price
+ * beside an alias that shows one. A wrong number in every cost row is worse than
+ * a blank in a dropdown; the true rate is in `.context/app/agent.md`.
+ *
+ * **`contextLength` is `medium`, the conservative bucket.** The column is a
+ * coarse label the adapter turns into a token count — `high` is 200,000 — and on
+ * hydrate that positive number overrides the registry's 128,000. The chat
+ * handler uses it as the history-truncation budget, so `high` (what the
+ * platform's row for the alias says) budgets 200k against a 128k model and a long
+ * conversation is rejected by the provider instead of trimmed. No bucket means
+ * 128k; `medium` (32,000) trims early, which is the failure that loses nothing.
  */
 export const PINNED_MODEL_MATRIX_ROW = {
   slug: 'openai-gpt-4o-mini-2024-07-18',
@@ -87,35 +98,11 @@ export const PINNED_MODEL_MATRIX_ROW = {
   reasoningDepth: 'medium',
   latency: 'very_fast',
   costEfficiency: 'very_high',
-  contextLength: 'high',
+  contextLength: 'medium', // conservative on purpose — see above
   toolUse: 'moderate',
   bestRole: 'Her pinned voice model (dev)',
   costPerMillionTokens: null, // never a blended rate — see above
 } as const;
-
-/**
- * The default task models the side roles resolve through, and what fills them
- * when blank.
- *
- * `routing` is what the platform's conversation summariser asks for; `chat` is
- * what slot extraction, the facilitation supervisor and keyword enrichment ask
- * for. None of them speaks as her, so none needs her model — they sit on the
- * cheapest current one.
- *
- * The ALIAS here, deliberately, where her own pin is dated. A task default is
- * read by paths that look the model up by bare id in the in-memory registry —
- * the workflow LLM runner does it before any leaf seam has run, and THROWS
- * `unknown_model` on a miss. The static map knows the alias and not the snapshot,
- * and the snapshot is only registered where `lib/app/llm-providers.ts` has
- * already been wired; so a dated `chat` default would fail every workflow LLM
- * step in a cold process. Her own turns do not have that problem: an agent's
- * explicit model goes through the resolver, which wires the seam first.
- *
- * These roles extract and summarise; a repointed alias changes their cost before
- * it changes anything a person hears.
- */
-export const SIDE_ROLE_MODEL = 'gpt-4o-mini';
-export const SIDE_ROLE_TASKS = ['routing', 'chat'] as const;
 
 /** The two seats this leaf's seed owns. Every other seat is left to whoever binds it. */
 export const SEATED_ROLES: readonly string[] = [

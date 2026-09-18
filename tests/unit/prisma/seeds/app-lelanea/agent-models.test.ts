@@ -4,11 +4,16 @@
  *
  * ## 1. `fp4` — three kinds of row, three ownership rules
  *
- * The agents' provider and model are **operator-owned**: filled only where both
- * are still blank, because production's model is an admin edit and a re-seed
- * that undid it would make the pin impossible to change without a deploy. The
- * default task models are operator-owned **per key**. The matrix row is
+ * HER provider and model are **operator-owned**: filled only where both are
+ * still blank, because production's model is an admin edit and a re-seed that
+ * undid it would make the pin impossible to change without a deploy. The
+ * CONTROL's **follow hers** — it is an instrument, so a blank control is set to
+ * whatever she is on, never to the dev pin on its own account. The matrix row is
  * seed-managed under the platform's `isDefault` protocol.
+ *
+ * And one thing it must NOT write: the platform's default task models. The
+ * first version filled them, which pre-empted the setup wizard — see the seed's
+ * header.
  *
  * A re-run on a current database issues **no write at all** — the only shape of
  * "no timestamp churn" a harness with no database can check (`B9`).
@@ -67,18 +72,12 @@ interface FakeMatrixRow {
   [column: string]: unknown;
 }
 
-interface FakeSettings {
-  id: string;
-  slug: string;
-  defaultModels: unknown;
-}
-
 const world = {
   users: [{ id: 'service-account', accountType: 'SERVICE' }],
   agents: [] as FakeAgent[],
   versions: [] as FakeVersion[],
   matrix: [] as FakeMatrixRow[],
-  settings: null as FakeSettings | null,
+  providers: [] as { slug: string; isActive: boolean }[],
 };
 
 /** Every write the fake saw, so "a re-run writes nothing" is checkable. */
@@ -87,8 +86,7 @@ const writes = {
   versionCreate: 0,
   matrixCreate: 0,
   matrixUpdate: 0,
-  settingsCreate: 0,
-  settingsUpdate: 0,
+  settingsTouched: 0,
 };
 
 function totalWrites(): number {
@@ -176,19 +174,21 @@ const tables = {
       }
     ),
   },
+  aiProviderConfig: {
+    findFirst: vi.fn(
+      async ({ where }: { where: { slug: string; isActive: boolean } }) =>
+        world.providers.find(
+          (provider) => provider.slug === where.slug && provider.isActive === where.isActive
+        ) ?? null
+    ),
+  },
+  // Present ONLY so a seed that reached for the settings singleton is counted
+  // rather than crashing on `undefined` — this unit must not touch it at all.
   aiOrchestrationSettings: {
-    findUnique: vi.fn(async () => world.settings),
-    create: vi.fn(async ({ data }: { data: Omit<FakeSettings, 'id'> }) => {
-      writes.settingsCreate += 1;
-      world.settings = { id: 'settings-1', ...data };
-      return world.settings;
-    }),
-    update: vi.fn(async ({ data }: { data: Partial<FakeSettings> }) => {
-      writes.settingsUpdate += 1;
-      if (!world.settings) throw new Error('No settings row');
-      Object.assign(world.settings, data);
-      return world.settings;
-    }),
+    findUnique: vi.fn(async () => ((writes.settingsTouched += 1), null)),
+    create: vi.fn(async () => ((writes.settingsTouched += 1), null)),
+    update: vi.fn(async () => ((writes.settingsTouched += 1), null)),
+    upsert: vi.fn(async () => ((writes.settingsTouched += 1), null)),
   },
 };
 
@@ -202,12 +202,11 @@ const prisma = {
 import { logger } from '@/lib/logging';
 import unit from '@/prisma/seeds/app-lelanea/005-agent-models';
 import {
-  PINNED_AGENT_SLUGS,
+  CONTROL_FOLLOWS_SUMMARY,
   PINNED_MODEL,
   PINNED_MODEL_MATRIX_ROW,
   PINNED_PROVIDER,
   PIN_CHANGE_SUMMARY,
-  SIDE_ROLE_MODEL,
 } from '@/lib/app/agent/pins';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
@@ -240,10 +239,18 @@ function agent(slug: string): FakeAgent {
   return found;
 }
 
+const hers = (): FakeAgent => agent(VOICE_AGENT_SLUG);
+const control = (): FakeAgent => agent(VOICE_CONTROL_AGENT_SLUG);
+
 function versionsOf(slug: string): FakeVersion[] {
   return world.versions
     .filter((version) => version.agentId === agent(slug).id)
     .sort((a, b) => a.version - b.version);
+}
+
+/** The warnings the run logged, as their message strings. */
+function warnings(): string[] {
+  return vi.mocked(logger.warn).mock.calls.map(([message]) => String(message));
 }
 
 beforeEach(() => {
@@ -251,7 +258,7 @@ beforeEach(() => {
   world.agents = [blankAgent(VOICE_AGENT_SLUG), blankAgent(VOICE_CONTROL_AGENT_SLUG)];
   world.versions = [];
   world.matrix = [];
-  world.settings = null;
+  world.providers = [{ slug: PINNED_PROVIDER, isActive: true }];
   resetWrites();
 });
 
@@ -259,15 +266,10 @@ describe('a fresh install', () => {
   it('pins both arms to a dated model and an explicit provider, with no fallback', async () => {
     await runSeed();
 
-    // The slugs are asserted, not assumed: a roster that quietly lost the
-    // control would still "pin every agent on it".
-    expect([...PINNED_AGENT_SLUGS].sort()).toEqual(
-      [VOICE_AGENT_SLUG, VOICE_CONTROL_AGENT_SLUG].sort()
-    );
-    for (const slug of PINNED_AGENT_SLUGS) {
-      expect(agent(slug).provider).toBe(PINNED_PROVIDER);
-      expect(agent(slug).model).toBe(PINNED_MODEL);
-      expect(agent(slug).fallbackProviders).toEqual([]);
+    for (const arm of [hers(), control()]) {
+      expect(arm.provider).toBe(PINNED_PROVIDER);
+      expect(arm.model).toBe(PINNED_MODEL);
+      expect(arm.fallbackProviders).toEqual([]);
     }
   });
 
@@ -278,26 +280,30 @@ describe('a fresh install', () => {
     expect(PINNED_PROVIDER).not.toBe('');
   });
 
-  it('records the pin in the version timeline, over the blank state it replaced', async () => {
+  it('records each change in the version timeline, over the blank state it replaced', async () => {
     await runSeed();
 
-    for (const slug of PINNED_AGENT_SLUGS) {
-      const timeline = versionsOf(slug);
-      expect(timeline.map((version) => version.changeSummary)).toEqual([
-        INITIAL_VERSION_SUMMARY,
-        PIN_CHANGE_SUMMARY,
-      ]);
-      // v1 is what "restore" would return to, so it must be the state BEFORE the
-      // pin — not a second copy of the pinned one.
-      expect(timeline[0]?.snapshot.model).toBe('');
-      expect(timeline[1]?.snapshot.model).toBe(PINNED_MODEL);
-      expect(timeline[1]?.snapshot.provider).toBe(PINNED_PROVIDER);
-    }
+    const herTimeline = versionsOf(VOICE_AGENT_SLUG);
+    expect(herTimeline.map((version) => version.changeSummary)).toEqual([
+      INITIAL_VERSION_SUMMARY,
+      PIN_CHANGE_SUMMARY,
+    ]);
+    // v1 is the state BEFORE the pin — not a second copy of the pinned one.
+    expect(herTimeline[0]?.snapshot.model).toBe('');
+    expect(herTimeline[1]?.snapshot.model).toBe(PINNED_MODEL);
+    expect(herTimeline[1]?.snapshot.provider).toBe(PINNED_PROVIDER);
+
+    // The control's entry says what actually happened to it: it was matched to
+    // her, not pinned on its own account.
+    expect(versionsOf(VOICE_CONTROL_AGENT_SLUG).map((version) => version.changeSummary)).toEqual([
+      INITIAL_VERSION_SUMMARY,
+      CONTROL_FOLLOWS_SUMMARY,
+    ]);
   });
 
   it('numbers the pin after whatever history the agent already has', async () => {
     world.versions.push({
-      agentId: agent(VOICE_AGENT_SLUG).id,
+      agentId: hers().id,
       version: 4,
       snapshot: { model: '' },
       changeSummary: 'Something an admin did',
@@ -312,27 +318,29 @@ describe('a fresh install', () => {
     expect(timeline[1]?.changeSummary).toBe(PIN_CHANGE_SUMMARY);
   });
 
-  it('adds the dated id to the matrix as a seed-managed row', async () => {
+  it('adds the dated id to the matrix as a seed-managed row, with every column it names', async () => {
     await runSeed();
 
     expect(world.matrix).toHaveLength(1);
+    // The WHOLE row, not a sample of it: the seed derives its column list from
+    // this constant, and a column that dropped out of the derivation would be
+    // created nowhere.
     expect(world.matrix[0]).toMatchObject({
-      slug: PINNED_MODEL_MATRIX_ROW.slug,
-      providerSlug: PINNED_PROVIDER,
-      modelId: PINNED_MODEL,
+      ...PINNED_MODEL_MATRIX_ROW,
+      capabilities: [...PINNED_MODEL_MATRIX_ROW.capabilities],
       isDefault: true,
-      costPerMillionTokens: PINNED_MODEL_MATRIX_ROW.costPerMillionTokens,
     });
   });
 
-  it('fills the routing and chat defaults, creating the singleton if nothing has yet', async () => {
+  it('does not touch the platform’s default task models', async () => {
     await runSeed();
 
-    expect(world.settings?.slug).toBe('global');
-    expect(world.settings?.defaultModels).toEqual({
-      routing: SIDE_ROLE_MODEL,
-      chat: SIDE_ROLE_MODEL,
-    });
+    // Population: the run wrote — so "untouched" is a seed that wrote elsewhere,
+    // not one that did nothing.
+    expect(writes.agentUpdate).toBe(2);
+    // Filling them here pre-empts the setup wizard, which fills the same slots
+    // from the provider the operator actually configures. See the seed's header.
+    expect(writes.settingsTouched).toBe(0);
   });
 });
 
@@ -343,7 +351,6 @@ describe('a re-run', () => {
     expect(writes.agentUpdate).toBe(2);
     expect(writes.versionCreate).toBe(4);
     expect(writes.matrixCreate).toBe(1);
-    expect(writes.settingsCreate).toBe(1);
     resetWrites();
 
     await runSeed();
@@ -352,98 +359,84 @@ describe('a re-run', () => {
   });
 });
 
-describe('what an operator chose is never written over', () => {
-  it('leaves an admin-edited model alone, while still pinning the arm nobody touched', async () => {
-    agent(VOICE_AGENT_SLUG).provider = 'anthropic';
-    agent(VOICE_AGENT_SLUG).model = 'claude-sonnet-4';
+describe('the control follows her', () => {
+  it('takes the model an admin chose for her — not the dev pin', async () => {
+    hers().provider = 'anthropic';
+    hers().model = 'claude-sonnet-4';
 
     await runSeed();
 
-    // Population first: the seed DID pin in this run, so the survival below is
-    // not a seed that wrote to nobody.
-    expect(agent(VOICE_CONTROL_AGENT_SLUG).model).toBe(PINNED_MODEL);
-
-    expect(agent(VOICE_AGENT_SLUG).provider).toBe('anthropic');
-    expect(agent(VOICE_AGENT_SLUG).model).toBe('claude-sonnet-4');
+    // Hers is somebody's decision and survives untouched, with no entry.
+    expect(hers()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
     expect(versionsOf(VOICE_AGENT_SLUG)).toEqual([]);
+
+    // The first version of the seed pinned each arm independently, and wrote the
+    // dev pin here — a mismatch manufactured by the unit meant to prevent one.
+    expect(control()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
+    expect(versionsOf(VOICE_CONTROL_AGENT_SLUG).at(-1)?.changeSummary).toBe(
+      CONTROL_FOLLOWS_SUMMARY
+    );
+    expect(warnings().some((message) => message.includes('different models'))).toBe(false);
   });
 
   it.each([
     ['a provider with no model', { provider: 'anthropic', model: '' }],
     ['a model with no provider', { provider: '', model: 'claude-sonnet-4' }],
-  ])('treats %s as an edit too, and does not guess the other half', async (_label, edit) => {
-    Object.assign(agent(VOICE_AGENT_SLUG), edit);
+  ])(
+    'treats %s on her as an edit, guesses nothing, and leaves the control blank',
+    async (_label, edit) => {
+      Object.assign(hers(), edit);
+
+      await runSeed();
+
+      // Population: the run still wrote — the matrix row — so nothing below is a
+      // seed that bailed out early.
+      expect(writes.matrixCreate).toBe(1);
+
+      expect(hers()).toMatchObject(edit);
+      expect(control()).toMatchObject({ provider: '', model: '' });
+      expect(writes.agentUpdate).toBe(0);
+      expect(warnings().some((message) => message.includes('different models'))).toBe(true);
+    }
+  );
+
+  it('leaves a control somebody set alone, and says the arms differ', async () => {
+    control().provider = 'anthropic';
+    control().model = 'claude-haiku-4.5';
 
     await runSeed();
 
-    expect(agent(VOICE_CONTROL_AGENT_SLUG).model).toBe(PINNED_MODEL);
-    expect(agent(VOICE_AGENT_SLUG)).toMatchObject(edit);
+    // Population: she WAS pinned in this run.
+    expect(hers().model).toBe(PINNED_MODEL);
+
+    expect(control()).toMatchObject({ provider: 'anthropic', model: 'claude-haiku-4.5' });
+    expect(versionsOf(VOICE_CONTROL_AGENT_SLUG)).toEqual([]);
+    expect(warnings().some((message) => message.includes('different models'))).toBe(true);
   });
 
-  it('reports a fallback list rather than clearing it', async () => {
-    agent(VOICE_AGENT_SLUG).fallbackProviders = ['anthropic'];
+  it('says nothing when a control somebody set already matches her', async () => {
+    Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+    Object.assign(control(), { provider: 'anthropic', model: 'claude-sonnet-4' });
 
     await runSeed();
 
-    expect(agent(VOICE_AGENT_SLUG).model).toBe(PINNED_MODEL);
-    expect(agent(VOICE_AGENT_SLUG).fallbackProviders).toEqual(['anthropic']);
+    expect(writes.agentUpdate).toBe(0);
+    expect(warnings().some((message) => message.includes('different models'))).toBe(false);
+  });
+});
+
+describe('what an operator chose is never written over', () => {
+  it('reports a fallback list rather than clearing it', async () => {
+    hers().fallbackProviders = ['anthropic'];
+
+    await runSeed();
+
+    expect(hers().model).toBe(PINNED_MODEL);
+    expect(hers().fallbackProviders).toEqual(['anthropic']);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('no fallback'),
       expect.objectContaining({ fallbackProviders: ['anthropic'] })
     );
-  });
-
-  it('leaves admin-edited default task models alone, per key', async () => {
-    world.settings = {
-      id: 'settings-1',
-      slug: 'global',
-      defaultModels: { routing: 'claude-haiku-4.5', reasoning: 'gpt-5' },
-    };
-
-    await runSeed();
-
-    expect(world.settings.defaultModels).toEqual({
-      // The admin's, kept.
-      routing: 'claude-haiku-4.5',
-      // A key this unit does not own, carried through the write untouched.
-      reasoning: 'gpt-5',
-      // Population: the blank key WAS filled in the same write, so the two
-      // above survived a seed that wrote, not one that skipped.
-      chat: SIDE_ROLE_MODEL,
-    });
-  });
-
-  it('does not touch the settings row when both keys are already chosen', async () => {
-    world.settings = {
-      id: 'settings-1',
-      slug: 'global',
-      defaultModels: { routing: 'claude-haiku-4.5', chat: 'claude-haiku-4.5' },
-    };
-
-    await runSeed();
-
-    // Population: the run wrote elsewhere.
-    expect(writes.agentUpdate).toBe(2);
-    expect(writes.settingsUpdate).toBe(0);
-    expect(writes.settingsCreate).toBe(0);
-  });
-
-  it('keeps an operator’s other keys when one stored value is not a string', async () => {
-    // `parseStoredDefaults()` collapses this whole map to `{}`. Spreading that
-    // back would drop `reasoning` in order to fill two keys.
-    world.settings = {
-      id: 'settings-1',
-      slug: 'global',
-      defaultModels: { reasoning: 'gpt-5', audio: 42 },
-    };
-
-    await runSeed();
-
-    expect(world.settings.defaultModels).toMatchObject({
-      reasoning: 'gpt-5',
-      routing: SIDE_ROLE_MODEL,
-      chat: SIDE_ROLE_MODEL,
-    });
   });
 
   it('leaves a matrix row an admin has edited alone', async () => {
@@ -468,10 +461,12 @@ describe('what an operator chose is never written over', () => {
     const row = world.matrix[0];
     if (!row) throw new Error('The seed created no matrix row');
     row.costPerMillionTokens = 9;
+    row.contextLength = 'high';
 
     await runSeed();
 
     expect(row.costPerMillionTokens).toBe(PINNED_MODEL_MATRIX_ROW.costPerMillionTokens);
+    expect(row.contextLength).toBe(PINNED_MODEL_MATRIX_ROW.contextLength);
   });
 
   it('does not create a second row for a model an admin already added under their own slug', async () => {
@@ -491,7 +486,55 @@ describe('what an operator chose is never written over', () => {
     expect(writes.matrixCreate).toBe(0);
     expect(writes.matrixUpdate).toBe(0);
     // Population: the run still pinned.
-    expect(agent(VOICE_AGENT_SLUG).model).toBe(PINNED_MODEL);
+    expect(hers().model).toBe(PINNED_MODEL);
+  });
+});
+
+describe('a provider that is not there yet', () => {
+  const NO_PROVIDER = 'no active provider with that slug';
+
+  it('pins anyway — seeding runs before setup, and the runner does not come back', async () => {
+    world.providers = [];
+
+    await runSeed();
+
+    expect(hers().model).toBe(PINNED_MODEL);
+    expect(control().model).toBe(PINNED_MODEL);
+  });
+
+  it('but says so, and names the ways out', async () => {
+    world.providers = [];
+
+    await runSeed();
+
+    const said = warnings().find((message) => message.includes(NO_PROVIDER));
+    expect(said).toBeDefined();
+    expect(said).toContain('/admin/orchestration/agents');
+  });
+
+  it('counts an inactive provider as not there', async () => {
+    world.providers = [{ slug: PINNED_PROVIDER, isActive: false }];
+
+    await runSeed();
+
+    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(true);
+  });
+
+  it('is quiet when the provider exists', async () => {
+    await runSeed();
+
+    // Population: the run did the work the warning is about.
+    expect(hers().provider).toBe(PINNED_PROVIDER);
+    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(false);
+  });
+
+  it('is quiet when an admin has put her somewhere else — it is not our provider to check', async () => {
+    world.providers = [];
+    Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+
+    await runSeed();
+
+    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(false);
   });
 });
 
@@ -511,7 +554,7 @@ describe('an agent that is not there', () => {
     await expect(runSeed()).rejects.toThrow();
 
     expect(totalWrites()).toBe(0);
-    expect(agent(VOICE_AGENT_SLUG).model).toBe('');
+    expect(hers().model).toBe('');
   });
 });
 
@@ -519,13 +562,13 @@ describe('the two arms of the golden set', () => {
   it('resolve to the same provider and model through the platform’s resolver', async () => {
     await runSeed();
 
-    const [hers, control] = await Promise.all([
-      resolveAgentProviderAndModel(agent(VOICE_AGENT_SLUG)),
-      resolveAgentProviderAndModel(agent(VOICE_CONTROL_AGENT_SLUG)),
+    const [herPair, controlPair] = await Promise.all([
+      resolveAgentProviderAndModel(hers()),
+      resolveAgentProviderAndModel(control()),
     ]);
 
-    expect(hers).toEqual(control);
-    expect(hers).toEqual({ providerSlug: PINNED_PROVIDER, model: PINNED_MODEL, fallbacks: [] });
+    expect(herPair).toEqual(controlPair);
+    expect(herPair).toEqual({ providerSlug: PINNED_PROVIDER, model: PINNED_MODEL, fallbacks: [] });
   });
 });
 
