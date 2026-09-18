@@ -213,19 +213,35 @@ describe('the matrix row and the exact rate', () => {
 });
 
 describe('the matrix row and the context window', () => {
-  it('never budgets more history than the model can take', async () => {
+  // The chat handler trims history to `maxContext`. A positive count on the
+  // matrix row overrides the registry's on hydrate: `high` budgets 200k against a
+  // 128k model, and `medium` — tried first — made her budget depend on whether a
+  // hydrate or the leaf's registration wrote last. `n_a` is 0 and falls through.
+  it('is 128,000 when the matrix hydrates after the seam', async () => {
     await wireTheRealSeam();
-    expect(getModel(PINNED_MODEL)?.maxContext).toBe(128_000);
 
-    // A hydrate: the row's coarse label becomes a token count, and a positive one
-    // overrides what the registry had. The chat handler trims history to it.
     registerModels([matrixRowAsModelInfo(null)]);
 
-    const budget = getModel(PINNED_MODEL)?.maxContext ?? 0;
-    expect(budget).toBeGreaterThan(0);
-    // `high` — what the platform's row for the alias says — lands at 200,000
-    // here, and a long conversation is rejected by the provider instead of trimmed.
-    expect(budget).toBeLessThanOrEqual(128_000);
+    expect(getModel(PINNED_MODEL)?.maxContext).toBe(128_000);
+  });
+
+  it('is 128,000 when the matrix hydrates before the seam', async () => {
+    registerModels([matrixRowAsModelInfo(null)]);
+
+    await wireTheRealSeam();
+
+    expect(getModel(PINNED_MODEL)?.maxContext).toBe(128_000);
+  });
+
+  it('keeps what the agent form needs when the leaf replaces a hydrated entry', async () => {
+    registerModels([matrixRowAsModelInfo(null)]);
+
+    await wireTheRealSeam();
+
+    // An entry with no capabilities has the form greying out toggles until the
+    // next hydrate puts them back.
+    expect(getModel(PINNED_MODEL)?.capabilities).toEqual([...PINNED_MODEL_MATRIX_ROW.capabilities]);
+    expect(getModel(PINNED_MODEL)?.available).toBe(true);
   });
 });
 

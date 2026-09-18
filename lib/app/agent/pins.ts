@@ -36,7 +36,12 @@
  */
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
-import { PINNED_MODEL, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
+import {
+  PINNED_MODEL,
+  PINNED_MODEL_CAPABILITIES,
+  PINNED_MODEL_INFO,
+  PINNED_PROVIDER,
+} from '@/lib/app/agent/pinned-model';
 
 // The model and its price live in `pinned-model.ts`, which the provider seam
 // loads on the way to every model call and so must stay import-light.
@@ -78,27 +83,34 @@ export const CONTROL_FOLLOWS_SUMMARY = "Matched to lelanea-guide's model (seeded
  * beside an alias that shows one. A wrong number in every cost row is worse than
  * a blank in a dropdown; the true rate is in `.context/app/agent.md`.
  *
- * **`contextLength` is `medium`, the conservative bucket.** The column is a
- * coarse label the adapter turns into a token count — `high` is 200,000 — and on
- * hydrate that positive number overrides the registry's 128,000. The chat
- * handler uses it as the history-truncation budget, so `high` (what the
- * platform's row for the alias says) budgets 200k against a 128k model and a long
- * conversation is rejected by the provider instead of trimmed. No bucket means
- * 128k; `medium` (32,000) trims early, which is the failure that loses nothing.
+ * **`contextLength` is `n_a`, for the same reason the cost is null.** The column
+ * is a coarse label the adapter turns into a token count, and on hydrate a
+ * POSITIVE count overrides the registry's 128,000. The chat handler trims history
+ * to it. `high` — what the platform's row for the alias says — is 200,000 against
+ * a 128k model, so a long conversation is rejected by the provider instead of
+ * trimmed; `medium` (32,000), tried first, made her budget flip between 32k and
+ * 128k depending on whether a hydrate or the leaf's registration wrote last.
+ * `n_a` is 0, which falls through to the exact figure in every order — and where
+ * nothing exact exists, the handler reads 0 as "no token budget" rather than as
+ * a budget of nothing. No bucket means 128k, so none is claimed.
+ *
+ * **The slug and name are derived**, not typed out: change `PINNED_MODEL` and a
+ * NEW row is created under its own slug, instead of the old row being rewritten
+ * in place under a name that still describes the previous snapshot.
  */
 export const PINNED_MODEL_MATRIX_ROW = {
-  slug: 'openai-gpt-4o-mini-2024-07-18',
+  slug: `${PINNED_PROVIDER}-${PINNED_MODEL}`,
   providerSlug: PINNED_PROVIDER,
   modelId: PINNED_MODEL,
-  name: 'GPT-4o Mini (2024-07-18)',
+  name: PINNED_MODEL_INFO.name,
   description:
     'The dated snapshot of GPT-4o Mini that the voice golden set was signed off on. Pinned for her agent and the bare control so neither moves when the alias does.',
-  capabilities: ['chat', 'vision', 'documents'],
+  capabilities: PINNED_MODEL_CAPABILITIES,
   tierRole: 'infrastructure',
   reasoningDepth: 'medium',
   latency: 'very_fast',
   costEfficiency: 'very_high',
-  contextLength: 'medium', // conservative on purpose — see above
+  contextLength: 'n_a', // never a bucket the model does not fit — see above
   toolUse: 'moderate',
   bestRole: 'Her pinned voice model (dev)',
   costPerMillionTokens: null, // never a blended rate — see above

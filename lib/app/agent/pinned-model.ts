@@ -47,6 +47,9 @@ export const PINNED_PROVIDER = 'openai';
 /** A dated snapshot, never the alias that can be repointed. */
 export const PINNED_MODEL = 'gpt-4o-mini-2024-07-18';
 
+/** What the pinned model can take. One list, shared with its matrix row in `pins.ts`. */
+export const PINNED_MODEL_CAPABILITIES: readonly string[] = ['chat', 'vision', 'documents'];
+
 /**
  * The registry entry for the pinned snapshot.
  *
@@ -63,6 +66,11 @@ export const PINNED_MODEL_INFO: ModelInfo = {
   outputCostPerMillion: 0.6,
   maxContext: 128_000,
   supportsTools: true,
+  // Carried here as well as on the matrix row: `ensurePinnedModelPriced()` can
+  // replace an entry a hydrate put there, and an entry with no capabilities has
+  // the agent form greying out toggles until the next hydrate restores them.
+  available: true,
+  capabilities: [...PINNED_MODEL_CAPABILITIES],
 };
 
 /**

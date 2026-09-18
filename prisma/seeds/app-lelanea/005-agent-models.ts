@@ -61,15 +61,26 @@
  * it was created. That is an admin's deliberate act on operator-owned config,
  * and it now leaves an entry of its own.
  *
- * ## The provider may not exist yet, and the pin is written anyway
+ * ## Whether there is anywhere for her turns to go
  *
- * `db:seed` runs before anyone has configured a provider, on every fresh
- * install. Waiting for an `openai` provider would mean never pinning — the
- * runner records a unit as applied once and does not come back. And "she is
- * pinned to a provider this install cannot reach" is exactly the state the
- * no-fallback ruling chose over a silent substitute: her turns end and say so.
- * What it must not be is SILENT, so the unit says loudly when no active provider
- * carries the pinned slug, and names the two ways out.
+ * An explicit provider is never re-picked and there is no fallback, so a pin to
+ * a slug this install cannot reach ends every one of her turns. Two states look
+ * alike from here and are not:
+ *
+ * - **No active provider at all** — a fresh install. `db:seed` always runs before
+ *   setup, and the runner records a unit as applied once and does not come back,
+ *   so waiting would mean never pinning. The pin is written, and the unit says
+ *   loudly that nothing can serve it yet.
+ * - **Active providers, none under the pinned slug** — an install that is already
+ *   running, on Anthropic, or on OpenAI under a slug of its own. She is WORKING
+ *   there, on the install default, and writing the pin would break her with a log
+ *   line as the only notice. So the unit writes nothing to her and THROWS, naming
+ *   the two ways out: not recorded as applied, tried again on the next seed, and
+ *   she keeps answering in the meantime. The first version only warned. Caught by
+ *   /code-review.
+ *
+ * Neither applies when somebody has already chosen her model — that provider is
+ * theirs to have checked.
  *
  * ## Idempotent, safe on empty, no timestamp churn
  *
@@ -79,7 +90,15 @@
  * A missing agent THROWS. `prisma/runner.ts` records a unit as applied the moment
  * `run()` resolves, so a quiet return would bank "pinned nothing" as a success
  * and every later `db:seed` would skip it — see `003-voice-fingerprint.ts`. Both
- * agents are checked before anything is written.
+ * agents are checked before anything is written, and a soft-deleted agent counts
+ * as missing — the slug is unique, so units 003/004 will not recreate it, and
+ * unit 006 refuses it too.
+ *
+ * **The blank check is part of the write.** Her row is read at the top and
+ * written later; an admin who chose her model in between would have had it
+ * replaced by the dev pin. So the update carries the predicate itself —
+ * `provider: ''` and `model: ''` — and a write that matches no row writes no
+ * version either. Caught by /code-review.
  *
  * ## What this unit deliberately does not do
  *
@@ -146,10 +165,11 @@ const AGENT_INCLUDE = {
 type AgentWithGrants = Prisma.AiAgentGetPayload<{ include: typeof AGENT_INCLUDE }>;
 
 /**
- * Write a provider + model onto an agent, as an entry in its version timeline.
+ * Write a provider + model onto an agent that still has neither, as an entry in
+ * its version timeline. Resolves `false` when somebody got there first.
  *
  * One transaction: the update and its snapshot land together or not at all. An
- * agent with no history gets its current state recorded as v1 first, as the admin
+ * agent with no history gets its prior state recorded as v1 first, as the admin
  * route does for a legacy agent, so the change is a change FROM something.
  */
 async function writeBinding(
@@ -158,14 +178,21 @@ async function writeBinding(
   binding: { provider: string; model: string },
   changeSummary: string,
   actorId: string
-): Promise<void> {
+): Promise<boolean> {
   const { grantedTags, grantedDocuments, ...row } = agent;
   const grants = {
     grantedTagIds: grantedTags.map((grant) => grant.tagId),
     grantedDocumentIds: grantedDocuments.map((grant) => grant.documentId),
   };
 
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    // The predicate, not the row read at the top of `run()`: see the header.
+    const { count } = await tx.aiAgent.updateMany({
+      where: { id: row.id, provider: '', model: '' },
+      data: binding,
+    });
+    if (count === 0) return false;
+
     let version = await nextAgentVersionNumber(tx, row.id);
     if (version === 1) {
       await tx.aiAgentVersion.create({
@@ -180,16 +207,18 @@ async function writeBinding(
       version += 1;
     }
 
-    const updated = await tx.aiAgent.update({ where: { id: row.id }, data: binding });
     await tx.aiAgentVersion.create({
       data: {
         agentId: row.id,
         version,
-        snapshot: asSnapshotJson(buildAgentSnapshot(updated, grants)),
+        // `row` is how she was; with the binding laid over it, how she is. The
+        // predicate above is what makes that true of the two columns that matter.
+        snapshot: asSnapshotJson(buildAgentSnapshot({ ...row, ...binding }, grants)),
         changeSummary,
         createdBy: actorId,
       },
     });
+    return true;
   });
 }
 
@@ -215,7 +244,7 @@ const unit: SeedUnit = {
 
     // ---- Both agents, before anything is written ----------------------------
     const agents = await prisma.aiAgent.findMany({
-      where: { slug: { in: [VOICE_AGENT_SLUG, VOICE_CONTROL_AGENT_SLUG] } },
+      where: { slug: { in: [VOICE_AGENT_SLUG, VOICE_CONTROL_AGENT_SLUG] }, deletedAt: null },
       include: AGENT_INCLUDE,
     });
     const hers = agents.find((agent) => agent.slug === VOICE_AGENT_SLUG);
@@ -232,6 +261,32 @@ const unit: SeedUnit = {
       throw new Error(
         `Cannot pin a model on ${missing.join(' and ')}: no such agent. Units 003-voice-fingerprint and 004-voice-golden-set create them and sort before this one — check that they ran.`
       );
+    }
+
+    // ---- Is there anywhere for her turns to go? Asked before ANY write --------
+    // See the header for why "none at all" and "some, but not this one" get
+    // opposite answers. Only when this unit is about to choose for her.
+    const herIsBlank = hers.provider === '' && hers.model === '';
+    if (herIsBlank) {
+      const activeProviders = await prisma.aiProviderConfig.findMany({
+        where: { isActive: true },
+        select: { slug: true },
+      });
+      const reachable = activeProviders.some((provider) => provider.slug === PINNED_PROVIDER);
+      if (activeProviders.length > 0 && !reachable) {
+        logger.error('agent models: the pinned provider is not one this install has', {
+          pinned: PINNED_PROVIDER,
+          active: activeProviders.map((provider) => provider.slug),
+        });
+        throw new Error(
+          `She is to be pinned to the provider "${PINNED_PROVIDER}", and this install's active providers are ${activeProviders.map((provider) => `"${provider.slug}"`).join(', ')}. Writing the pin would end every one of her turns — there is no fallback, by design — so nothing was written and she is still answering on the install default. Either configure OpenAI under the slug "${PINNED_PROVIDER}", or choose her model in /admin/orchestration/agents (the control will follow it). Then run the seed again.`
+        );
+      }
+      if (!reachable) {
+        logger.warn(
+          `She is being pinned to the provider "${PINNED_PROVIDER}", and this install has no active provider yet — normal on a fresh database, where seeding runs before setup. Until OpenAI is configured under that slug her turns and every golden-set run end with "provider unavailable": there is no fallback, by design.`
+        );
+      }
     }
 
     // ---- The matrix row: seed-managed, the platform's protocol --------------
@@ -286,10 +341,23 @@ const unit: SeedUnit = {
 
     // ---- Her pin: operator-owned, filled only when blank --------------------
     let herBinding = { provider: hers.provider, model: hers.model };
-    if (hers.provider === '' && hers.model === '') {
-      herBinding = { provider: PINNED_PROVIDER, model: PINNED_MODEL };
-      await writeBinding(prisma, hers, herBinding, PIN_CHANGE_SUMMARY, admin.id);
-      logger.info(`📌 Pinned ${hers.slug} to ${PINNED_PROVIDER} / ${PINNED_MODEL}`);
+    if (herIsBlank) {
+      const pinned = { provider: PINNED_PROVIDER, model: PINNED_MODEL };
+      if (await writeBinding(prisma, hers, pinned, PIN_CHANGE_SUMMARY, admin.id)) {
+        herBinding = pinned;
+        logger.info(`📌 Pinned ${hers.slug} to ${PINNED_PROVIDER} / ${PINNED_MODEL}`);
+      } else {
+        // Somebody chose her model between the read and the write. Theirs stands;
+        // re-read it so the control follows what is actually there.
+        const current = await prisma.aiAgent.findUniqueOrThrow({
+          where: { id: hers.id },
+          select: { provider: true, model: true },
+        });
+        // The two columns, by name — never the row. What follows is written onto
+        // the control, and a binding that carried anything else would go with it.
+        herBinding = { provider: current.provider, model: current.model };
+        logger.info(`⏭  ${hers.slug} was given a model while this ran — left alone`, herBinding);
+      }
     } else {
       logger.info(`⏭  ${hers.slug} already has a model somebody chose — left alone`, herBinding);
     }
@@ -302,8 +370,11 @@ const unit: SeedUnit = {
 
     if (controlMatches) {
       logger.info(`⏭  ${control.slug} already on her model`);
-    } else if (controlIsBlank && herBindingIsWhole) {
-      await writeBinding(prisma, control, herBinding, CONTROL_FOLLOWS_SUMMARY, admin.id);
+    } else if (
+      controlIsBlank &&
+      herBindingIsWhole &&
+      (await writeBinding(prisma, control, herBinding, CONTROL_FOLLOWS_SUMMARY, admin.id))
+    ) {
       logger.info(
         `📌 Set ${control.slug} to her model, ${herBinding.provider} / ${herBinding.model}`
       );
@@ -318,19 +389,6 @@ const unit: SeedUnit = {
           [control.slug]: { provider: control.provider, model: control.model },
         }
       );
-    }
-
-    // ---- Is there anywhere for her turns to go? -----------------------------
-    if (herBinding.provider === PINNED_PROVIDER) {
-      const provider = await prisma.aiProviderConfig.findFirst({
-        where: { slug: PINNED_PROVIDER, isActive: true },
-        select: { id: true },
-      });
-      if (!provider) {
-        logger.warn(
-          `She is pinned to the provider "${PINNED_PROVIDER}", and this install has no active provider with that slug — normal on a fresh database, where seeding runs before setup. Until one exists her turns and every golden-set run end with "provider unavailable": there is no fallback, by design. Configure OpenAI under the slug "${PINNED_PROVIDER}", or choose her model (and the control's) in /admin/orchestration/agents.`
-        );
-      }
     }
   },
 };

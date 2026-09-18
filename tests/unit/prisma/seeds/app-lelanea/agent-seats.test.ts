@@ -38,20 +38,11 @@ const world = {
   bindings: [] as FakeBinding[],
 };
 
-/** Call order across modules, so "framework rows first" is checkable. */
-const calls: string[] = [];
-
-const syncFrameworkForSeed = vi.fn(async () => {
-  calls.push('syncFrameworkForSeed');
-});
-const initLeafApp = vi.fn();
-
 const getFacilitationBindingByRole = vi.fn(
   async (role: string) => world.bindings.find((binding) => binding.role === role) ?? null
 );
 const bindFacilitationAgent = vi.fn(
   async ({ agentId, role }: { agentId: string; role: string; userId: string }) => {
-    calls.push(`bind:${role}`);
     if (world.bindings.some((binding) => binding.role === role)) {
       // What the real service does on the unique index.
       throw new Error('That facilitation seat is already bound to an agent');
@@ -66,8 +57,6 @@ vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/framework/seed', () => ({ syncFrameworkForSeed }));
-vi.mock('@/lib/app/leaf-bootstrap', () => ({ initLeafApp }));
 vi.mock('@/lib/framework/facilitation/agents/binding-service', () => ({ bindFacilitationAgent }));
 vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
   getFacilitationBindingByRole,
@@ -107,7 +96,6 @@ function seat(role: string): FakeBinding | undefined {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  calls.length = 0;
   world.agents = [{ id: HER_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
   world.bindings = [];
 });
@@ -132,14 +120,6 @@ describe('a fresh install', () => {
     expect(bindFacilitationAgent).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'service-account' })
     );
-  });
-
-  it('materialises the framework’s rows before it binds anything', async () => {
-    await runSeed();
-
-    expect(syncFrameworkForSeed).toHaveBeenCalledWith({ registerLeaf: initLeafApp });
-    expect(calls[0]).toBe('syncFrameworkForSeed');
-    expect(calls.filter((call) => call.startsWith('bind:'))).toHaveLength(SEATED_ROLES.length);
   });
 
   it('fills no seat outside the two it owns', async () => {

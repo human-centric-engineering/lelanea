@@ -51,6 +51,7 @@ interface FakeAgent {
   fallbackProviders: string[];
   temperature: number;
   createdBy: string | null;
+  deletedAt: Date | null;
   grantedTags: { tagId: string }[];
   grantedDocuments: { documentId: string }[];
 }
@@ -103,6 +104,9 @@ vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+/** Set by a test to act as "an admin, a moment before the seed's write lands". */
+let beforeAgentWrite: (() => void) | undefined;
+
 /**
  * A stateful fake rather than sequenced one-shot mocks: the idempotence claim
  * needs the seed's SECOND run to read what its first run wrote.
@@ -115,14 +119,37 @@ const tables = {
     ),
   },
   aiAgent: {
-    findMany: vi.fn(async ({ where }: { where: { slug: { in: string[] } } }) =>
-      world.agents.filter((agent) => where.slug.in.includes(agent.slug))
+    findMany: vi.fn(async ({ where }: { where: { slug: { in: string[] }; deletedAt: null } }) =>
+      world.agents.filter(
+        (agent) => where.slug.in.includes(agent.slug) && agent.deletedAt === where.deletedAt
+      )
     ),
-    update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<FakeAgent> }) => {
-      writes.agentUpdate += 1;
+    // The seed's only write to an agent. The predicate is honoured, because the
+    // point of it is the row that does NOT match.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; provider: string; model: string };
+        data: Partial<FakeAgent>;
+      }) => {
+        beforeAgentWrite?.();
+        const agent = world.agents.find(
+          (candidate) =>
+            candidate.id === where.id &&
+            candidate.provider === where.provider &&
+            candidate.model === where.model
+        );
+        if (!agent) return { count: 0 };
+        writes.agentUpdate += 1;
+        Object.assign(agent, data);
+        return { count: 1 };
+      }
+    ),
+    findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => {
       const agent = world.agents.find((candidate) => candidate.id === where.id);
       if (!agent) throw new Error(`No agent ${where.id}`);
-      Object.assign(agent, data);
       return agent;
     }),
   },
@@ -175,11 +202,8 @@ const tables = {
     ),
   },
   aiProviderConfig: {
-    findFirst: vi.fn(
-      async ({ where }: { where: { slug: string; isActive: boolean } }) =>
-        world.providers.find(
-          (provider) => provider.slug === where.slug && provider.isActive === where.isActive
-        ) ?? null
+    findMany: vi.fn(async ({ where }: { where: { isActive: boolean } }) =>
+      world.providers.filter((provider) => provider.isActive === where.isActive)
     ),
   },
   // Present ONLY so a seed that reached for the settings singleton is counted
@@ -228,6 +252,7 @@ function blankAgent(slug: string): FakeAgent {
     fallbackProviders: [],
     temperature: 0.7,
     createdBy: 'service-account',
+    deletedAt: null,
     grantedTags: [],
     grantedDocuments: [],
   };
@@ -259,6 +284,7 @@ beforeEach(() => {
   world.versions = [];
   world.matrix = [];
   world.providers = [{ slug: PINNED_PROVIDER, isActive: true }];
+  beforeAgentWrite = undefined;
   resetWrites();
 });
 
@@ -426,6 +452,13 @@ describe('the control follows her', () => {
 });
 
 describe('what an operator chose is never written over', () => {
+  it('names the matrix row after the model it is for', () => {
+    // Derived, not typed out: change the pin and a NEW row is created under its
+    // own slug, rather than the old row being rewritten under a stale name.
+    expect(PINNED_MODEL_MATRIX_ROW.slug).toBe(`${PINNED_PROVIDER}-${PINNED_MODEL}`);
+    expect(PINNED_MODEL_MATRIX_ROW.modelId).toBe(PINNED_MODEL);
+  });
+
   it('reports a fallback list rather than clearing it', async () => {
     hers().fallbackProviders = ['anthropic'];
 
@@ -462,11 +495,13 @@ describe('what an operator chose is never written over', () => {
     if (!row) throw new Error('The seed created no matrix row');
     row.costPerMillionTokens = 9;
     row.contextLength = 'high';
+    row.name = 'Something stale';
 
     await runSeed();
 
     expect(row.costPerMillionTokens).toBe(PINNED_MODEL_MATRIX_ROW.costPerMillionTokens);
     expect(row.contextLength).toBe(PINNED_MODEL_MATRIX_ROW.contextLength);
+    expect(row.name).toBe(PINNED_MODEL_MATRIX_ROW.name);
   });
 
   it('does not create a second row for a model an admin already added under their own slug', async () => {
@@ -490,51 +525,92 @@ describe('what an operator chose is never written over', () => {
   });
 });
 
-describe('a provider that is not there yet', () => {
-  const NO_PROVIDER = 'no active provider with that slug';
+describe('whether there is anywhere for her turns to go', () => {
+  const NO_PROVIDER_YET = 'no active provider yet';
 
-  it('pins anyway — seeding runs before setup, and the runner does not come back', async () => {
-    world.providers = [];
+  describe('a fresh install — no active provider at all', () => {
+    beforeEach(() => {
+      world.providers = [];
+    });
 
-    await runSeed();
+    it('pins anyway — seeding runs before setup, and the runner does not come back', async () => {
+      await runSeed();
 
-    expect(hers().model).toBe(PINNED_MODEL);
-    expect(control().model).toBe(PINNED_MODEL);
+      expect(hers().model).toBe(PINNED_MODEL);
+      expect(control().model).toBe(PINNED_MODEL);
+    });
+
+    it('but says so', async () => {
+      await runSeed();
+
+      expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(true);
+    });
+
+    it('counts an inactive provider as not there', async () => {
+      world.providers = [{ slug: 'anthropic', isActive: false }];
+
+      await runSeed();
+
+      expect(hers().model).toBe(PINNED_MODEL);
+      expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(true);
+    });
   });
 
-  it('but says so, and names the ways out', async () => {
-    world.providers = [];
+  describe('a running install whose providers do not include the pinned one', () => {
+    beforeEach(() => {
+      world.providers = [
+        { slug: 'anthropic', isActive: true },
+        { slug: 'openai-prod', isActive: true },
+      ];
+    });
 
-    await runSeed();
+    it('throws, naming what the install has and both ways out', async () => {
+      await expect(runSeed()).rejects.toThrow(/"anthropic", "openai-prod"/);
+      await expect(runSeed()).rejects.toThrow('/admin/orchestration/agents');
+    });
 
-    const said = warnings().find((message) => message.includes(NO_PROVIDER));
-    expect(said).toBeDefined();
-    expect(said).toContain('/admin/orchestration/agents');
+    it('writes nothing at all — she is working, and stays on what she was on', async () => {
+      await expect(runSeed()).rejects.toThrow();
+
+      expect(totalWrites()).toBe(0);
+      expect(hers()).toMatchObject({ provider: '', model: '' });
+      expect(control()).toMatchObject({ provider: '', model: '' });
+    });
+
+    it('passes once an admin has chosen her model — the remedy the error names', async () => {
+      Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+
+      await runSeed();
+
+      expect(control()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
+    });
   });
 
-  it('counts an inactive provider as not there', async () => {
-    world.providers = [{ slug: PINNED_PROVIDER, isActive: false }];
-
-    await runSeed();
-
-    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(true);
-  });
-
-  it('is quiet when the provider exists', async () => {
+  it('is quiet when the pinned provider exists', async () => {
     await runSeed();
 
     // Population: the run did the work the warning is about.
     expect(hers().provider).toBe(PINNED_PROVIDER);
-    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(false);
+    expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(false);
   });
+});
 
-  it('is quiet when an admin has put her somewhere else — it is not our provider to check', async () => {
-    world.providers = [];
-    Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+describe('an admin who chooses her model while the seed is running', () => {
+  it('keeps their choice, gets no "pinned" entry, and the control follows THEM', async () => {
+    // Her row is read at the top of the run and written later. Without the
+    // predicate on the write, this edit is replaced by the dev pin.
+    beforeAgentWrite = () => {
+      beforeAgentWrite = undefined;
+      Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+    };
 
     await runSeed();
 
-    expect(warnings().some((message) => message.includes(NO_PROVIDER))).toBe(false);
+    expect(hers()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
+    expect(versionsOf(VOICE_AGENT_SLUG)).toEqual([]);
+    // Population: the run did write — to the control, which followed what was
+    // actually there rather than what the seed had meant to put there.
+    expect(control()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
   });
 });
 
@@ -547,6 +623,13 @@ describe('an agent that is not there', () => {
       await expect(runSeed()).rejects.toThrow(missing);
     }
   );
+
+  it('counts a soft-deleted agent as missing — units 003/004 will not recreate a taken slug', async () => {
+    hers().deletedAt = new Date();
+
+    await expect(runSeed()).rejects.toThrow(VOICE_AGENT_SLUG);
+    expect(totalWrites()).toBe(0);
+  });
 
   it('writes nothing before it throws — no install left with one arm pinned', async () => {
     world.agents = world.agents.filter((candidate) => candidate.slug !== VOICE_CONTROL_AGENT_SLUG);

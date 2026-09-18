@@ -37,14 +37,15 @@
  * which has no turn id, no seat and no record of what produced a turn. Both land
  * with the turn seam (§08 t-54), not before it.
  *
- * ## Framework rows first
+ * ## No framework sync, on purpose
  *
- * `db:seed` runs without booting the app, and an incremental run skips
- * Daybreak's `_framework/000-framework-boot.ts` — so this unit calls
- * `syncFrameworkForSeed` itself, as `001-journey-map.ts` does (#158). The
- * binding table needs no framework row today; the call is here so that the day a
- * seat is validated against something boot materialises, this unit is not the
- * one that finds out on a fresh CI database.
+ * `001-journey-map.ts` calls `syncFrameworkForSeed` because a map points at
+ * `Module` rows that only boot materialises. A seat binding points at nothing of
+ * the kind: the role is checked against `FACILITATION_ROLES`, a constant in
+ * code, and the only row it needs is her agent. The first version of this unit
+ * made the call anyway, as insurance against a validation that does not exist —
+ * which bought a full framework reconcile on every run, and meant a failure in
+ * that unrelated sync failed the seating. Caught by /code-review.
  *
  * @see lib/app/agent/pins.ts
  * @see lib/framework/facilitation/agents/binding-service.ts
@@ -53,8 +54,6 @@
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
-import { syncFrameworkForSeed } from '@/lib/framework/seed';
-import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { bindFacilitationAgent } from '@/lib/framework/facilitation/agents/binding-service';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
 import { SEATED_ROLES } from '@/lib/app/agent/pins';
@@ -72,10 +71,6 @@ const unit: SeedUnit = {
   ],
   async run({ prisma, logger }) {
     logger.info('🪑 Seating her...');
-
-    // Throws where boot would log, so a failure fails the seed rather than
-    // recording it as applied.
-    await syncFrameworkForSeed({ registerLeaf: initLeafApp });
 
     const admin = await prisma.user.findFirst({
       where: serviceAccountWhere,
