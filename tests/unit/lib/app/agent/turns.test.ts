@@ -74,10 +74,10 @@ const db = vi.hoisted(() => ({
   seq: 0,
 }));
 
-const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 
 vi.mock('@/lib/logging', () => ({
-  logger: { warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { warn, error, info: vi.fn(), debug: vi.fn() },
 }));
 
 /** Her agent as the seed leaves it: instructions on the agent, her core on the profile. */
@@ -213,7 +213,8 @@ vi.mock('@/lib/db/client', () => {
 });
 
 import { runRecordedTurn, TURN_REPLY_UNAVAILABLE } from '@/lib/app/agent/turns';
-import { STALE_CLAIM_MS } from '@/lib/app/agent/turn-record';
+import { STALE_CLAIM_MS, claimTurn, recordTurnCompleted } from '@/lib/app/agent/turn-record';
+import { prisma } from '@/lib/db/client';
 import type {
   FacilitationTurn,
   FacilitationTurnExtras,
@@ -520,5 +521,171 @@ describe('a turn costed at nothing', () => {
 
     expect(db.turns[0]).toMatchObject({ pricing: 'local', costUsd: 0 });
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('when the record itself fails', () => {
+  it('still gives the person their answer, and says the meter missed it', async () => {
+    // Every settle write fails: the database hiccups after the claim.
+    // Two settle writes per turn (start, then completed or failed). One-shot, so
+    // the fake's real implementation is back for the next case.
+    vi.mocked(prisma.appTurn.update)
+      .mockRejectedValueOnce(new Error('db hiccup'))
+      .mockRejectedValueOnce(new Error('db hiccup'));
+
+    const events = await take(turnFor());
+
+    // The population: the whole turn reached the person.
+    expect(events.map((e) => e.type)).toEqual(['start', 'content', 'done']);
+    expect(error).toHaveBeenCalledWith(
+      'Agent turn record write failed',
+      expect.objectContaining({ stage: 'start', turnId: 'turn-1', error: 'db hiccup' })
+    );
+    expect(error).toHaveBeenCalledWith(
+      'Agent turn record write failed',
+      expect.objectContaining({ stage: 'completed' })
+    );
+    // Left `running` — which STALE_CLAIM_MS is the remedy for.
+    expect(db.turns[0].status).toBe('running');
+  });
+
+  it('logs a failed failure-write rather than throwing it at the client', async () => {
+    behaviour.outcome = 'error';
+    // Two settle writes per turn (start, then completed or failed). One-shot, so
+    // the fake's real implementation is back for the next case.
+    vi.mocked(prisma.appTurn.update)
+      .mockRejectedValueOnce(new Error('db hiccup'))
+      .mockRejectedValueOnce(new Error('db hiccup'));
+
+    const events = await take(turnFor());
+
+    expect(events.at(-1)?.type).toBe('error');
+    expect(error).toHaveBeenCalledWith(
+      'Agent turn record write failed',
+      expect.objectContaining({ stage: 'failed' })
+    );
+  });
+});
+
+describe('the edges of a claim', () => {
+  it('a turn that hits the per-turn cost cap is failed with that code, so it may run again', async () => {
+    const turn = turnFor();
+    const capped = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        yield { type: 'start', conversationId: 'conv-user-1', messageId: 'm1' };
+        yield {
+          type: 'budget_exceeded_per_turn',
+          code: 'budget_exceeded_per_turn',
+          message: 'Capped.',
+          usedUsd: 1,
+          limitUsd: 0.5,
+        };
+      })();
+    const result = await runRecordedTurn(turn, capped);
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
+
+    expect(db.turns[0]).toMatchObject({ status: 'failed', errorCode: 'budget_exceeded_per_turn' });
+  });
+
+  it('a done with no model records no pricing rather than guessing one', async () => {
+    const turn = turnFor();
+    const bare = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        yield { type: 'start', conversationId: 'conv-user-1' };
+        yield {
+          type: 'done',
+          tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          costUsd: 0,
+        };
+      })();
+    const result = await runRecordedTurn(turn, bare);
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
+
+    expect(db.turns[0]).toMatchObject({
+      status: 'completed',
+      pricing: null,
+      modelId: null,
+      userMessageId: null,
+    });
+    // And a replay of it carries no invented model or provider.
+    db.messages.push({
+      id: 'late',
+      conversationId: 'conv-user-1',
+      role: 'assistant',
+      content: 'x',
+      metadata: null,
+      createdAt: new Date(),
+    });
+    db.conversationOwners.set('conv-user-1', 'user-1');
+    db.turns[0].assistantMessageId = 'late';
+    const replayed = await take(turn);
+    expect(replayed[0]).toEqual({ type: 'start', conversationId: 'conv-user-1' });
+    expect(replayed.at(-1)).not.toHaveProperty('model');
+  });
+
+  it('a database error other than the unique index is not read as a claim', async () => {
+    vi.mocked(prisma.appTurn.create).mockRejectedValueOnce(new Error('connection lost'));
+
+    await expect(take(turnFor())).rejects.toThrow('connection lost');
+    expect(modelCalls).toBe(0);
+  });
+
+  it('of two re-runs of one failed turn, only one runs the model', async () => {
+    behaviour.outcome = 'error';
+    await take(turnFor());
+    const request = {
+      userId: 'user-1',
+      turnId: 'turn-1',
+      clientSupplied: true,
+      seat: 'onboarding',
+      agentSlug: 'lelanea-guide',
+      requestHash: db.turns[0].requestHash,
+    };
+    // The other re-run takes it back between this one's read and its write.
+    vi.mocked(prisma.appTurn.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    const claim = await claimTurn(request, '1.0');
+
+    expect(claim.kind).toBe('in_flight');
+  });
+
+  it('refuses rather than guesses when the row vanishes between insert and read', async () => {
+    await take(turnFor());
+    vi.mocked(prisma.appTurn.findUnique).mockResolvedValueOnce(null);
+
+    await expect(
+      claimTurn(
+        {
+          userId: 'user-1',
+          turnId: 'turn-1',
+          clientSupplied: true,
+          seat: 'onboarding',
+          agentSlug: 'lelanea-guide',
+          requestHash: 'x',
+        },
+        null
+      )
+    ).rejects.toThrow(/lost its row/);
+  });
+
+  it('a completed turn with no conversation links no reply', async () => {
+    await take(turnFor());
+    const [row] = db.turns;
+
+    await recordTurnCompleted(
+      { ...row, conversationId: null },
+      {
+        model: 'm',
+        provider: 'p',
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        pricing: 'priced',
+      }
+    );
+
+    expect(db.turns[0].assistantMessageId).toBeNull();
   });
 });

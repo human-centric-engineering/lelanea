@@ -258,3 +258,47 @@ describe('safe on empty', () => {
     expect(world.versions).toHaveLength(0);
   });
 });
+
+describe('the edges', () => {
+  it('throws when there is no service account to write the timeline as', async () => {
+    client.user.findFirst.mockResolvedValueOnce(null as never);
+
+    await expect(runSeed()).rejects.toThrow(/No service account/);
+    expect(world.grants).toHaveLength(0);
+  });
+
+  it('writes no timeline entry when an admin changed her between the read and the write', async () => {
+    // Somebody else widens her first: the predicate matches nothing.
+    client.aiAgent.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await runSeed();
+
+    expect(world.versions).toHaveLength(0);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('changed while this ran'));
+  });
+
+  it('carries her knowledge grants into both snapshots, so a restore keeps them', async () => {
+    client.aiAgent.findUniqueOrThrow.mockImplementationOnce(async () => ({
+      ...her(),
+      grantedTags: [{ tagId: 'tag-b' }, { tagId: 'tag-a' }],
+      grantedDocuments: [{ documentId: 'doc-1' }],
+    }));
+
+    await runSeed();
+
+    for (const version of world.versions) {
+      expect(version.snapshot).toMatchObject({
+        grantedTagIds: ['tag-a', 'tag-b'],
+        grantedDocumentIds: ['doc-1'],
+      });
+    }
+  });
+
+  it('versions under her creator when the agent has none recorded', async () => {
+    her().createdBy = null;
+
+    await runSeed();
+
+    expect(world.versions[0].createdBy).toBe('service-account');
+  });
+});
