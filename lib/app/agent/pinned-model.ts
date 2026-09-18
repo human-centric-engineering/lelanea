@@ -30,7 +30,8 @@
  *
  * What this does NOT cover: a model an admin later pins through the agent form.
  * If that id is outside the static map it prices at $0 in a cold process, for
- * the same reason. That is the platform gap, reported upstream, and §08 t-54
+ * the same reason. That is the platform gap, reported as sunrise#813
+ * (https://github.com/human-centric-engineering/sunrise/issues/813), and §08 t-54
  * carries the requirement that a miss on the turn path is surfaced rather than
  * logged as free.
  *

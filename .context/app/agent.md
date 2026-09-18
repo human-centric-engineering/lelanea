@@ -254,7 +254,9 @@ takes an admin page sharing the module instance. §08 t-54 owns the turn path an
 can call `ensurePinnedModelPriced()` per turn, which closes even that.
 
 The seam fill goes when Sunrise prices an id outside its static map on the chat
-and evaluation-worker paths.
+and evaluation-worker paths — reported as
+[`sunrise#813`](https://github.com/human-centric-engineering/sunrise/issues/813),
+which also carries the blended-rate and history-budget overrides described above.
 
 ## After a deploy
 

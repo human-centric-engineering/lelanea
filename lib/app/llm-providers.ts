@@ -125,7 +125,7 @@ export function registerAppProviderEligibility(): void | Promise<void> {
   // model is synchronous, idempotent and restricts nothing.
   //
   // Owner ruling, 18 Sept 2026. The why and the measurements are in
-  // `lib/app/agent/pinned-model.ts`; the platform gap is reported upstream, and
+  // `lib/app/agent/pinned-model.ts`; the platform gap is reported as sunrise#813, and
   // this goes when Sunrise prices an id outside its static map on those paths.
   ensurePinnedModelPriced();
 }
