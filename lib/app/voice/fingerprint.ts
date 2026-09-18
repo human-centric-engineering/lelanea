@@ -114,13 +114,14 @@ export function readFingerprintVersion(prompt: string): string | null {
  * profile, so an instruction here that restated any of them would be a second
  * copy with nothing keeping it in step.
  *
- * **It must not instruct a lookup until there is a tool to do it with.** The
- * seed still binds no capabilities, and the agent is created active, so an
- * operator can chat with it from the first run. An earlier draft said "look
- * before you answer from memory", which asked a model with no tool to perform a
- * retrieval; the usual result is a confident claim to have consulted her
- * material. Whichever task binds `search_knowledge_base` adds the tool AND the
- * clause, together. Caught by /code-review.
+ * **The instruction to look arrived with the tool to look with** (§08 t-54).
+ * An earlier draft said "look before you answer from memory" while no capability
+ * was bound, which asked a model with no tool to perform a retrieval; the usual
+ * result is a confident claim to have consulted her material. So the clause
+ * waited for `prisma/seeds/app-lelanea/007-agent-reachable.ts`, which grants
+ * `search_knowledge_base` — and it is worded so that a tool an operator has
+ * switched off leaves her saying her material does not cover it, rather than
+ * pretending she looked. Caught by /code-review, the first time.
  *
  * t-27's exemplar path does NOT change this: it pushes her passages into the
  * prompt from outside the turn, so the model is never asked to go and look.
@@ -129,7 +130,7 @@ export const VOICE_AGENT_SYSTEM_INSTRUCTIONS = `You are the guide a person meets
 
 In a turn:
 - Receive what the person actually said before you answer it.
-- Answer from Lelañea's material, and say so plainly where it does not cover what was asked.
+- Answer from Lelañea's material. Where you have a tool to search it, search it before you answer from memory; say so plainly where it does not cover what was asked, and never say you looked when you did not.
 - Offer a perspective, a practice, or a question. Rarely all three at once.
 - Leave the next move with the person.
 

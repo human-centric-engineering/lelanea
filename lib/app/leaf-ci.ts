@@ -153,7 +153,21 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
 
 /**
  * Files this LEAF allows to read `AiWorkflowExecution`, `AiConversation` or
- * `AiMessage` outside the access helpers. Empty: no Lelañea file reads any of
- * the three, and a file that starts to should import the helper first.
+ * `AiMessage` outside the access helpers. A file that starts to should import
+ * the helper first, and land here only when the helper cannot express it.
  */
-export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [];
+export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
+  {
+    path: 'lib/app/agent/turn-record.ts',
+    disposition: 'by-design',
+    reason:
+      'the turn record reads two message rows of ONE turn — the reply it ' +
+      'links at completion and replays later — on behalf of the member who took ' +
+      'it. It runs inside the facilitation turn hook, which is handed a user id ' +
+      'and no session, so `conversationVisibilityWhere` has nothing to take. ' +
+      'Both reads name the conversation the platform reported for this turn AND ' +
+      '`conversation: { userId }` of the turn row, so they can only ever match ' +
+      'that member’s own messages — never an ownerless or shared thread, which ' +
+      'is the set the helper exists to decide about. §08 t-54.',
+  },
+];

@@ -14,9 +14,15 @@
  *
  * ## What Lelañea registers
  *
- * One contributor, for the `voice` context type (§05 t-27): the register a
- * moment calls for, plus real passages of her own writing, each labelled by
- * origin so the model can tell her material from the person's.
+ * Her voice block — the register a moment calls for, plus real passages of her
+ * own writing, each labelled by origin so the model can tell her material from
+ * the person's — under two context types:
+ *
+ * - `voice` (§05 t-27), keyed on a situation. What the admin chat sends.
+ * - `facilitation` (§08 t-54), keyed on a seat. What Daybreak's facilitation
+ *   route pins on every turn a person takes with her; the seat is mapped to a
+ *   situation in `lib/app/voice/context-contributor.ts`. Daybreak registers
+ *   nothing for this type, so the claim takes nothing from the framework.
  *
  * It is the second and third layers of the voice fingerprint. The first — the
  * always-on core — is not here and must not be: it rides on the agent's profile
@@ -32,13 +38,10 @@
  * quietly replacing a framework registration, which is the same mistake as
  * filling one of Daybreak's `lib/app/*` bridges.
  *
- * What sends the tuple today: the admin orchestration chat, which passes a
- * caller-supplied `contextType` straight through. The consumer route
- * deliberately refuses one ("admin-only concepts"), so the surface a member
- * eventually talks to her through will pin it server-side the way the
- * framework's module and facilitation routes pin theirs. Until that surface
- * exists this path is reachable and exercised but not yet on a member's turn —
- * stated here rather than left to be discovered.
+ * What sends each tuple: the admin orchestration chat passes a caller-supplied
+ * `voice` straight through; Daybreak's facilitation route pins `facilitation`
+ * server-side. The consumer route refuses a context type outright ("admin-only
+ * concepts"), so a turn through it gets the always-on core and no block.
  *
  * Pinned in `tests/unit/lib/app/defaults.test.ts` (`HB2`: pin the new value,
  * never delete the row) and asserted by registration in
@@ -49,8 +52,14 @@
  */
 
 import { registerContextContributor } from '@/lib/orchestration/chat/context-builder';
-import { VOICE_CONTEXT_TYPE, loadVoiceContext } from '@/lib/app/voice/context-contributor';
+import {
+  FACILITATION_CONTEXT_TYPE,
+  VOICE_CONTEXT_TYPE,
+  loadFacilitationVoiceContext,
+  loadVoiceContext,
+} from '@/lib/app/voice/context-contributor';
 
 export function initAppContextContributors(): void {
   registerContextContributor(VOICE_CONTEXT_TYPE, loadVoiceContext);
+  registerContextContributor(FACILITATION_CONTEXT_TYPE, loadFacilitationVoiceContext);
 }

@@ -1,0 +1,120 @@
+/**
+ * Facilitation turn hook — a seam a leaf fills to own what happens around a
+ * facilitation turn.
+ *
+ * **Carried by Lelañea ahead of Daybreak** (`.context/app/divergences.md`,
+ * Row 18; proposed upstream as daybreak#265). The facilitation role route hands every turn to
+ * {@link runFacilitationTurn} instead of calling `streamChat` itself. With
+ * nothing registered it runs the turn exactly as the route always did.
+ *
+ * ## The contract, for any leaf that registers one
+ *
+ * - `run(extras)` is the turn the route would have run: `streamChat` with the
+ *   route's own arguments, plus whatever `costLogMetadata` / `messageMetadata`
+ *   the hook passes. Call it at most once. Not calling it is how a hook answers a
+ *   turn without the model — a replay of one it already answered.
+ * - Resolve to a {@link FacilitationTurnRefusal} to refuse the turn: the caller
+ *   gets a 409 before any stream is opened, not an event stream saying no.
+ *   **Return it; do not throw an `APIError`.** The hook is registered from the
+ *   boot graph, so an error class it constructs is not the class the route's
+ *   error handler checks with `instanceof` — found by the dev-DB smoke, where a
+ *   thrown `ConflictError` became a 500. {@link runFacilitationTurn} runs in the
+ *   route's graph and builds the error there.
+ * - `clientTurnId` is the client's optional `turnId`, validated by the route and
+ *   otherwise untouched. The route gives it no meaning of its own.
+ *
+ * Register from the leaf's boot seam (`lib/app/leaf-bootstrap.ts`); the
+ * framework does not import the leaf, so the leaf reaches in.
+ *
+ * ## Why the store is on `globalThis`
+ *
+ * Next can bundle a route handler and the boot seam into separate module graphs,
+ * each with its own copy of this file. A module-scoped variable set at boot would
+ * be invisible to the route that reads it. Same reason, same fix, as the module
+ * registry (`lib/framework/modules/registry.ts`, #160).
+ */
+
+import { ConflictError } from '@/lib/api/errors';
+import type { ChatRequest, ChatStream } from '@/lib/orchestration/chat/types';
+
+/** One turn on a facilitation seat, as the route resolved it. */
+export interface FacilitationTurn {
+  userId: string;
+  /** The seat — the route's `:role` segment. */
+  role: string;
+  agentId: string;
+  agentSlug: string;
+  /** The surface conversation being resumed, or undefined for a new one. */
+  conversationId: string | undefined;
+  message: string;
+  /** The client's own id for this turn, when it sent one. */
+  clientTurnId: string | undefined;
+  /**
+   * The request's abort signal. A hook that claims anything before returning
+   * its stream needs it: a request aborted before the stream is read never
+   * iterates it, so nothing inside the stream can clean up.
+   */
+  signal?: AbortSignal;
+}
+
+/** What a hook may add to the turn's `streamChat` call. */
+export type FacilitationTurnExtras = Pick<ChatRequest, 'costLogMetadata' | 'messageMetadata'>;
+
+/** The turn the route would have run, with the hook's extras merged in. */
+export type FacilitationTurnRun = (extras: FacilitationTurnExtras) => ChatStream;
+
+/** A hook's refusal: answered as 409, with `reason` in the error's details. */
+export interface FacilitationTurnRefusal {
+  refused: true;
+  message: string;
+  /** A stable code a client can branch on. */
+  reason: string;
+}
+
+export type FacilitationTurnHook = (
+  turn: FacilitationTurn,
+  run: FacilitationTurnRun
+) => Promise<ChatStream | FacilitationTurnRefusal>;
+
+function isRefusal(
+  result: ChatStream | FacilitationTurnRefusal
+): result is FacilitationTurnRefusal {
+  return 'refused' in result && result.refused === true;
+}
+
+/** The behaviour with nothing registered: run the turn as the route always did. */
+export const passThroughFacilitationTurn: FacilitationTurnHook = (_turn, run) =>
+  Promise.resolve(run({}));
+
+const store = globalThis as unknown as {
+  daybreakFacilitationTurnHook?: FacilitationTurnHook;
+};
+
+/** Register the hook. One per install; a second registration replaces the first. */
+export function registerFacilitationTurnHook(hook: FacilitationTurnHook): void {
+  store.daybreakFacilitationTurnHook = hook;
+}
+
+/** The registered hook, or the pass-through. */
+export function getFacilitationTurnHook(): FacilitationTurnHook {
+  return store.daybreakFacilitationTurnHook ?? passThroughFacilitationTurn;
+}
+
+/**
+ * Called by the facilitation route for every turn. Throws `ConflictError` for a
+ * refusal — constructed here, in the route's module graph, so the route's error
+ * handler recognises it.
+ */
+export async function runFacilitationTurn(
+  turn: FacilitationTurn,
+  run: FacilitationTurnRun
+): Promise<ChatStream> {
+  const result = await getFacilitationTurnHook()(turn, run);
+  if (isRefusal(result)) throw new ConflictError(result.message, { reason: result.reason });
+  return result;
+}
+
+/** Test-only: back to nothing registered. */
+export function __resetFacilitationTurnHookForTests(): void {
+  delete store.daybreakFacilitationTurnHook;
+}

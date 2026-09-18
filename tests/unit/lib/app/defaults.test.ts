@@ -94,12 +94,26 @@ vi.mock('@/lib/db/client', () => ({
     },
     appAcknowledgement: { findMany: vi.fn(async () => []) },
     appUserBudget: { findMany: vi.fn(async () => []) },
+    // §08 t-54 — the turn record, for the export collector's section key.
+    appTurn: { findMany: vi.fn(async () => []) },
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
 import { initAppCapabilities } from '@/lib/app/capabilities';
 import { initAppContextContributors } from '@/lib/app/context-contributors';
-import { VOICE_CONTEXT_TYPE, loadVoiceContext } from '@/lib/app/voice/context-contributor';
+import {
+  FACILITATION_CONTEXT_TYPE,
+  VOICE_CONTEXT_TYPE,
+  loadFacilitationVoiceContext,
+  loadVoiceContext,
+} from '@/lib/app/voice/context-contributor';
+import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/agents/surface';
+import {
+  __resetFacilitationTurnHookForTests,
+  getFacilitationTurnHook,
+  passThroughFacilitationTurn,
+} from '@/lib/framework/facilitation/agents/turn-hook';
+import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
@@ -316,13 +330,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const registry = (globalThis as { sunriseChatContextContributors?: Map<string, unknown> })
         .sunriseChatContextContributors;
       registry?.delete(VOICE_CONTEXT_TYPE);
+      registry?.delete(FACILITATION_CONTEXT_TYPE);
       const before = new Set(registry?.keys() ?? []);
 
       expect(initAppContextContributors()).toBeUndefined();
 
+      // §08 t-54 adds the second: her block on Daybreak's facilitation turns,
+      // under the type Daybreak's surface pins — held equal to its constant here.
+      expect(FACILITATION_CONTEXT_TYPE).toBe(FACILITATION_SURFACE_CONTEXT_TYPE);
       const added = [...(registry?.keys() ?? [])].filter((type) => !before.has(type));
-      expect(added).toEqual([VOICE_CONTEXT_TYPE]);
+      expect(added).toEqual([VOICE_CONTEXT_TYPE, FACILITATION_CONTEXT_TYPE]);
       expect(registry?.get(VOICE_CONTEXT_TYPE)).toBe(loadVoiceContext);
+      expect(registry?.get(FACILITATION_CONTEXT_TYPE)).toBe(loadFacilitationVoiceContext);
     },
   },
   {
@@ -468,6 +487,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppAcknowledgement',
         'AppAgentSettings',
         'AppKnowledgeDesignation',
+        'AppTurn',
         'AppUserBudget',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
@@ -500,6 +520,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // person, so it is exported to them, never excluded.
       const budget = sources.find((entry) => entry.model === 'AppUserBudget');
       expect(budget).toMatchObject({ section: 'budget', disposition: 'export' });
+      // §08 t-54 — a person's turn records (what model and version answered,
+      // what it cost) are about that person, so exported to them.
+      const turns = sources.find((entry) => entry.model === 'AppTurn');
+      expect(turns).toMatchObject({ section: 'turns', disposition: 'export' });
       // THREE of ours are excluded, and only those three. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
@@ -649,6 +673,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // roll the erasure back rather than being logged and swallowed.
       expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
       expect(hooks[0]?.cleanupExternal).toBeUndefined();
+
+      // §08 t-54: the facilitation turn hook (divergences Row 18) — her turns
+      // claimed by id and recorded. By identity, and not the pass-through the
+      // framework falls back to when nothing registered.
+      __resetFacilitationTurnHookForTests();
+      expect(getFacilitationTurnHook()).toBe(passThroughFacilitationTurn);
+      await initLeafApp();
+      expect(getFacilitationTurnHook()).toBe(runRecordedTurn);
     },
   },
   {
@@ -951,10 +983,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
+        // LELAÑEA's one, spread after them from `leaf-ci.ts` — pinned here too,
+        // for the same reason as the always-run tests above (§08 t-54).
+        'lib/app/agent/turn-record.ts',
       ]);
-      // Every framework entry is a settled design, not a gap awaiting a fix.
+      // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(5).fill('by-design')
+        Array<'by-design'>(6).fill('by-design')
       );
     },
   },
@@ -968,9 +1003,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // PINNED (Lelañea fills this seam) — `HB2`. Daybreak keeps it empty; we do
     // not. Pinned rather than deleted so the row still guards the two lists we
     // have NOT filled: a coverage exclusion appearing here would switch the
-    // per-file 80% floor off for that path, and an ownerless-surface exception
-    // would exempt a file from the authorization seam — and nothing else would
-    // notice either.
+    // per-file 80% floor off for that path — and nothing else would notice. The
+    // ownerless-surface list is filled too (§08 t-54) and pinned by value, so a
+    // second exemption from the authorization seam still fails here.
     assert: () => {
       expect(leafCoverageExclusions).toEqual([]);
       expect(leafAlwaysRunTests.map((entry) => entry.path)).toEqual([
@@ -981,7 +1016,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/components/app/shell/chrome.test.tsx',
         'tests/unit/lib/app/voice/upload-scope.test.ts',
       ]);
-      expect(leafOwnerlessSurfaceExceptions).toEqual([]);
+      // §08 t-54 — the turn record's two owner-scoped message reads, by design.
+      expect(
+        leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
+      ).toEqual([['lib/app/agent/turn-record.ts', 'by-design']]);
     },
   },
 ];

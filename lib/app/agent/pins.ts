@@ -121,3 +121,16 @@ export const SEATED_ROLES: readonly string[] = [
   FACILITATION_ROLES.facilitator,
   FACILITATION_ROLES.onboarding,
 ];
+
+/** What her version timeline says when the seed widens her to `public`. */
+export const REACHABLE_CHANGE_SUMMARY = 'Made reachable by members (seeded — §08)';
+
+/**
+ * The capabilities her seed grants — the tool to look in her material.
+ *
+ * Granted together with the instruction that tells her to use it
+ * (`VOICE_AGENT_SYSTEM_INSTRUCTIONS`): an instruction to look with no tool
+ * produces a confident claim to have looked, and a tool with no instruction is
+ * one she may never reach for.
+ */
+export const GRANTED_CAPABILITY_SLUGS: readonly string[] = ['search_knowledge_base'];

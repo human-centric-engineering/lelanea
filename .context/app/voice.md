@@ -152,16 +152,13 @@ The other two layers — the context-selected overlays and the retrieved exempla
 reach what is in the core.** It is the invariant that no preference and no
 retrieval result can soften.
 
-The seed **binds no capabilities**, and still does not: the exemplar path does
-not need one (it calls the search _service_ directly, below), and binding
-`search_knowledge_base` to her agent belongs with the surface a member talks to
-her through. The `restricted` mode below is set now so the rule is already live
-when a tool does arrive, rather than being something somebody has to remember.
-
-It also leaves `visibility` at the platform default (`internal`). Widening it
-belongs to whichever task builds the surface a member talks to; shipping a
-publicly reachable agent ahead of that surface would be a live endpoint nobody
-had designed.
+The seed **binds no capabilities** and leaves `visibility` at `internal`: the
+exemplar path does not need a tool (it calls the search _service_ directly,
+below). Both belonged with the surface a member talks to her through, and landed
+with it — §08 t-54's `007-agent-reachable.ts` makes her `public` and grants
+`search_knowledge_base`, with the instruction to use it. The `restricted` mode
+below was set first so the rule was already live when the tool arrived. See
+[`agent.md`](./agent.md#how-she-is-reached).
 
 And it leaves her **provider and model blank**. Which model she runs on is a
 separate decision with a separate owner — `005-agent-models.ts` pins it, for her
@@ -199,13 +196,14 @@ the registry is keyed by type and re-registering replaces — and it would be th
 same mistake as filling one of Daybreak's `lib/app/*` bridges: fine until the
 next sync.
 
-**What sends the tuple today.** The admin orchestration chat, which passes a
-caller-supplied `contextType` straight through, so an operator (or she) can
-exercise this now. The core consumer route deliberately refuses one ("admin-only
-concepts"), so the surface a member eventually talks to her through will pin it
-server-side the way `app/api/v1/framework/modules/[slug]/chat/stream/route.ts`
-pins `module`. **Stated rather than left to be found**: until that surface
-exists, this path is live and exercised but not yet on a member's turn.
+**What sends a tuple.** The admin orchestration chat passes a caller-supplied
+`voice` straight through. A member's turn comes through Daybreak's facilitation
+route, which pins `facilitation` / `<seat>` — and since §08 t-54 the same block is
+registered for that type too, with the seat mapped to a situation
+(`onboarding` → `first-meeting`; `facilitator` → core-only until a turn can say
+which moment it is). See [`agent.md`](./agent.md#her-voice-on-a-seat). The core
+consumer route refuses a context type outright, so a turn through it gets the
+always-on core and no block.
 
 ## Selection is a lookup, and stays one
 
@@ -1216,15 +1214,9 @@ cases go red; empty `UNGRANTABLE_SENSITIVITIES` and two others do.
 
 ## Not yet built
 
-**The surface a member talks to her through.** Nothing in the app pins
-`contextType: 'voice'` server-side yet, so the overlay block reaches a turn only
-through the admin chat today. Whichever task builds that surface pins the tuple
-and chooses the situation, the way the framework's module route does.
-
-**`search_knowledge_base` on her agent.** The seed still binds no capabilities.
-The exemplar path does not need one, and binding the tool belongs with the
-surface above — a model told to look things up with no tool to look with will
-report having looked.
+**The situation on a facilitator turn.** Her block reaches seat turns since §08
+t-54, but the facilitator seat has no moment to select an overlay by — that needs
+the person's journey state on the turn. Until then it is core-only.
 
 **Her sign-off.** The review path is built — the golden set, both arms and the
 board above. What is not done is the judgement it exists to make cheap: three
