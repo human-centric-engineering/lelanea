@@ -1,5 +1,6 @@
 /**
- * The turn seam in Daybreak's facilitation route — at rest, and wired (§08 t-54).
+ * The turn seam in Daybreak's facilitation route — at rest, and wired (§08 t-54;
+ * `signal` and `keepAlive` §08 t-55).
  *
  * Lelañea carries a seam in a file Daybreak owns (`.context/app/divergences.md`,
  * Row 18). `B19` asks three things of it, demonstrated rather than asserted:
@@ -27,6 +28,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: vi.fn(),
+}));
 vi.mock('@/lib/security/rate-limit', () => ({
   consumerChatLimiter: { check: vi.fn(() => ({ success: true })) },
   agentChatLimiter: { check: vi.fn(() => ({ success: true })) },
@@ -44,6 +49,7 @@ vi.mock('@/lib/framework/facilitation/agents/surface', () => ({
   resolveFacilitationSurface: vi.fn(),
   FACILITATION_SURFACE_CONTEXT_TYPE: 'facilitation',
 }));
+import { after } from 'next/server';
 import { POST } from '@/app/api/v1/framework/facilitation/[role]/chat/stream/route';
 import { auth } from '@/lib/auth/config';
 import { streamChat } from '@/lib/orchestration/chat';
@@ -55,12 +61,12 @@ import {
   type FacilitationTurnHook,
 } from '@/lib/framework/facilitation/agents/turn-hook';
 
-const req = (body: unknown): NextRequest =>
+const req = (body: unknown, signal = new AbortController().signal): NextRequest =>
   ({
     json: async () => body,
     headers: new Headers(),
     url: 'http://localhost/api/v1/framework/facilitation/onboarding/chat/stream',
-    signal: new AbortController().signal,
+    signal,
   }) as unknown as NextRequest;
 
 const ctx = (role = 'onboarding') => ({ params: Promise.resolve({ role }) });
@@ -105,6 +111,14 @@ describe('at rest — nothing registered', () => {
     expect(vi.mocked(streamChat).mock.calls[0][0]).toEqual(PRE_SEAM_ARGS);
     // And the stream it returned is what reaches the response, untouched.
     expect(vi.mocked(sseResponse).mock.calls[0][0]).toEqual({ stream: true });
+  });
+
+  it("aborts the model call with the request's own signal, as it always did", async () => {
+    const requestSignal = new AbortController().signal;
+    await POST(req({ message: 'hi' }, requestSignal), ctx());
+
+    expect(vi.mocked(streamChat).mock.calls[0][0].signal).toBe(requestSignal);
+    expect(after).not.toHaveBeenCalled();
   });
 
   it('accepts a turnId and ignores it', async () => {
@@ -157,6 +171,7 @@ describe('wired — the route reaches a registered hook', () => {
         clientTurnId: 'turn-abc',
         // So a hook that claims before streaming can settle an early abort.
         signal: expect.any(AbortSignal),
+        keepAlive: expect.any(Function),
       },
       expect.any(Function)
     );
@@ -165,6 +180,32 @@ describe('wired — the route reaches a registered hook', () => {
       costLogMetadata: { turnId: 'turn-abc', seat: 'onboarding' },
       messageMetadata: { turnId: 'turn-abc', seat: 'onboarding', fingerprintVersion: '1.0' },
     });
+  });
+
+  it("lets the fill's own signal replace the request's (§08 t-55)", async () => {
+    const requestSignal = new AbortController().signal;
+    const turnSignal = new AbortController().signal;
+    runRecordedTurn.mockImplementation(async (_turn, run) => run({ signal: turnSignal }));
+
+    await POST(req({ message: 'hi' }, requestSignal), ctx());
+
+    const passed = vi.mocked(streamChat).mock.calls[0][0].signal;
+    // The population: the two are different signals, so identity decides it.
+    expect(turnSignal).not.toBe(requestSignal);
+    expect(passed).toBe(turnSignal);
+  });
+
+  it("hands the fill's keep-alive work to Next's after()", async () => {
+    const work = Promise.resolve();
+    runRecordedTurn.mockImplementation(async (turn, run) => {
+      turn.keepAlive?.(work);
+      return run({});
+    });
+
+    await POST(req({ message: 'hi' }), ctx());
+
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledWith(work);
   });
 
   it('passes an absent turnId as undefined — the fill mints one', async () => {

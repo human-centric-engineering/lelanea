@@ -48,7 +48,8 @@
  * ## When she can't answer (§08 t-55)
  *
  * - **Paused** by the operator: refused before the claim and before any model
- *   call, with the `paused` ending (`availability.ts`).
+ *   call, with the `paused` ending (`availability.ts`). A replay of a turn that
+ *   already completed is still served — it calls no model.
  * - **Deadlines**, read per request: a `still_thinking` warning at the
  *   first-words deadline; the `timed_out` ending, and a turn settled failed and
  *   retryable, at the whole-turn deadline (`deadlines.ts`).
@@ -77,6 +78,7 @@ import { ENDING_TIMED_OUT, endingFrame, toClientStream } from '@/lib/app/agent/e
 import {
   claimTurn,
   classifyPricing,
+  findReplayableTurn,
   hashTurnRequest,
   readAgentFingerprintVersion,
   readTurnReply,
@@ -289,14 +291,20 @@ export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
+  const turnId = turn.clientTurnId ?? mintTurnId();
+  const requestHash = await hashTurnRequest(turn.role, turn.message);
+
   if (await isGenerationPaused()) {
+    // A replay calls no model: an answer already given is still given.
+    const answered = turn.clientTurnId
+      ? await findReplayableTurn({ userId: turn.userId, turnId, requestHash })
+      : null;
+    if (answered) return toClientStream(replay(answered));
     logger.info('Agent turn refused: generation is paused', { seat: turn.role });
     return only(endingFrame('paused'));
   }
 
   const deadlines = await getAgentDeadlines();
-  const turnId = turn.clientTurnId ?? mintTurnId();
-  const requestHash = await hashTurnRequest(turn.role, turn.message);
   const fingerprintVersion = await readAgentFingerprintVersion(turn.agentSlug);
   const claim = await claimTurn(
     {

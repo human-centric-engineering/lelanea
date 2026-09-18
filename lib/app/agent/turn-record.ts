@@ -195,6 +195,22 @@ export async function claimTurn(
 }
 
 /**
+ * The completed turn this request would replay, or null — read without
+ * claiming anything. What a paused install still answers: a replay calls no
+ * model, and the answer is one the person already has a right to.
+ */
+export async function findReplayableTurn(
+  request: Pick<TurnRequest, 'userId' | 'turnId' | 'requestHash'>
+): Promise<AppTurn | null> {
+  const existing = await prisma.appTurn.findUnique({
+    where: { userId_turnId: { userId: request.userId, turnId: request.turnId } },
+  });
+  return existing?.status === 'completed' && existing.requestHash === request.requestHash
+    ? existing
+    : null;
+}
+
+/**
  * Which attempt a settle write belongs to.
  *
  * Every write after the claim names the attempt that made it, so an attempt
