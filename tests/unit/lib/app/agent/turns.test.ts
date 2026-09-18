@@ -576,11 +576,26 @@ describe('a turn costed at nothing', () => {
 });
 
 describe('when the record itself fails', () => {
-  it('still gives the person their answer, and says the meter missed it', async () => {
-    // Every settle write fails: the database hiccups after the claim.
-    // Two settle writes per turn (start, then completed or failed). One-shot, so
-    // the fake's real implementation is back for the next case.
+  it('retries a lost settle write once, so a hiccup does not hold the id', async () => {
+    // The `start` write succeeds; the completing write fails once, then lands.
     vi.mocked(prisma.appTurn.updateMany)
+      .mockImplementationOnce(vi.mocked(prisma.appTurn.updateMany).getMockImplementation()!)
+      .mockRejectedValueOnce(new Error('db hiccup'));
+
+    await take(turnFor());
+
+    expect(db.turns[0].status).toBe('completed');
+    expect(error).not.toHaveBeenCalled();
+    // And the retry is free to run as a replay rather than being refused.
+    await take(turnFor());
+    expect(modelCalls).toBe(1);
+  });
+
+  it('still gives the person their answer, and says the meter missed it', async () => {
+    // Every write fails: `start`, the completing write, and its one retry.
+    // One-shot, so the fake's real implementation is back for the next case.
+    vi.mocked(prisma.appTurn.updateMany)
+      .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'));
 
@@ -596,15 +611,16 @@ describe('when the record itself fails', () => {
       'Agent turn record write failed',
       expect.objectContaining({ stage: 'completed' })
     );
-    // Left `running` — which STALE_CLAIM_MS is the remedy for.
+    // Left `running` after both tries — STALE_CLAIM_MS is the remedy left.
     expect(db.turns[0].status).toBe('running');
   });
 
   it('logs a failed failure-write rather than throwing it at the client', async () => {
     behaviour.outcome = 'error';
-    // Two settle writes per turn (start, then completed or failed). One-shot, so
-    // the fake's real implementation is back for the next case.
+    // `start`, the failing write, and its one retry. One-shot, so the fake's
+    // real implementation is back for the next case.
     vi.mocked(prisma.appTurn.updateMany)
+      .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'))
       .mockRejectedValueOnce(new Error('db hiccup'));
 

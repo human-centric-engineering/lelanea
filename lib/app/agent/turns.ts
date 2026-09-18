@@ -170,8 +170,8 @@ async function* recorded(turn: AppTurn, events: ChatStream, onStart: () => void)
     }
   } finally {
     if (!settled) {
-      await recordTurnFailed(turn, errorCode ?? TURN_INCOMPLETE).catch((err: unknown) =>
-        logRecordFailure('failed', turn, err)
+      await settleWrite(() => recordTurnFailed(turn, errorCode ?? TURN_INCOMPLETE)).catch(
+        (err: unknown) => logRecordFailure('failed', turn, err)
       );
     }
   }
@@ -208,7 +208,7 @@ async function settleCompleted(
       costUsd: done.costUsd,
       pricing,
     };
-    const settled = await recordTurnCompleted(turn, outcome);
+    const settled = await settleWrite(() => recordTurnCompleted(turn, outcome));
     if (settled === 'failed') {
       logger.warn('Agent turn finished but its reply could not be linked; left re-runnable', {
         turnId: turn.turnId,
@@ -222,6 +222,24 @@ async function settleCompleted(
     }
   } catch (err) {
     logRecordFailure('completed', turn, err);
+  }
+}
+
+/**
+ * A write that settles a turn, tried twice.
+ *
+ * A settle that is lost leaves the turn `running`, and every retry of its id is
+ * refused until `STALE_CLAIM_MS` — ten minutes — although the person may already
+ * have their answer. One more attempt covers the transient failure (a dropped
+ * pool connection, a failover) that is the realistic cause. Safe to repeat: the
+ * write is guarded by its attempt and status, so a second try after a first that
+ * did land matches nothing. Owner ruling at t-54's PR.
+ */
+async function settleWrite<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch {
+    return write();
   }
 }
 
@@ -296,7 +314,7 @@ export async function runRecordedTurn(
       let started = false;
       const settleUnstarted = (): void => {
         if (started) return;
-        void recordTurnFailed(claim.turn, TURN_ABORTED).catch((err: unknown) =>
+        void settleWrite(() => recordTurnFailed(claim.turn, TURN_ABORTED)).catch((err: unknown) =>
           logRecordFailure('aborted', claim.turn, err)
         );
       };

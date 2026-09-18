@@ -356,8 +356,10 @@ row whose `messageId` is the turn's `assistantMessageId`.
 - **Abandoned** means `running` for longer than `STALE_CLAIM_MS` (10 minutes, the
   longest the platform lets a turn run). A client that disconnects still settles
   the turn as `failed` — mid-stream through the stream's own `finally`, and
-  before the stream began through the request's abort signal (`aborted`). Only a
-  crashed process leaves it `running`. A settle names its attempt, so an attempt
+  before the stream began through the request's abort signal (`aborted`). A
+  settling write that fails is tried once more, so a database hiccup does not
+  hold the id; only a crashed process, or a database down for both tries, leaves
+  it `running`. A settle names its attempt, so an attempt
   that outlived its claim writes nothing over the one that replaced it. t-55 can
   tighten this to the admin's turn deadline once that is enforced.
 - **A turn that finishes with no reply to link** is settled `failed`
@@ -369,7 +371,8 @@ row whose `messageId` is the turn's `assistantMessageId`.
   second call, and the person's message twice. Replay covers a duplicate of a
   turn that finished. Carrying a turn on after a disconnect means the route not
   passing that signal, which is a change to Daybreak's route behaviour, not to
-  this seam — a question for §08 t-55, which owns what a turn does when it ends.
+  this seam. **Owner ruling (18 Sept 2026): it will not stay this way** — the turn
+  is to finish server-side and replay on the retry; §08 t-55 builds it.
 - **A replay whose reply was deleted** ends in `turn_reply_unavailable` rather
   than inventing one.
 - **A retried failed turn leaves the person's message in the transcript twice.**
