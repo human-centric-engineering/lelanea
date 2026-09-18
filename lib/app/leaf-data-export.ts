@@ -6,7 +6,7 @@
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
- * `AppWaitlistEntry` and `AppAcknowledgement` here; the guidance below is
+ * `AppWaitlistEntry`, `AppAcknowledgement` and `AppUserBudget` here; the guidance below is
  * upstream's and still applies to every table added after them.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
@@ -43,6 +43,7 @@ import type { AppSubjectData, AppSubjectQuery } from '@/lib/app/data-export';
 import { registerAppSubjectSources } from '@/lib/privacy/subject-source-registry';
 import { findWaitlistEntriesForSubject } from '@/lib/app/waitlist/service';
 import { findAcknowledgementsForSubject } from '@/lib/app/gateway/acknowledgements';
+import { findUserBudgetsForSubject } from '@/lib/app/agent/settings';
 
 /**
  * Declare the leaf app's own models to core's subject-source registry.
@@ -88,6 +89,13 @@ export function initLeafSubjectSources(): void {
         description:
           'What you acknowledged at the gate — the disclaimer, the terms of use, and that you are eighteen or over — with the version of each you agreed to and when.',
       },
+      {
+        model: 'AppUserBudget',
+        section: 'budget',
+        disposition: 'export',
+        description:
+          'A monthly spending limit an administrator set for you personally, if there is one, and when it was set. Empty means you are on the limit that applies to everyone.',
+      },
     ],
     excluded: [
       {
@@ -119,6 +127,14 @@ export function initLeafSubjectSources(): void {
         reason:
           'One half of such a check: the instructions the assistant was given before it answered the test questions, and nothing else. The questions are ours, not anyone\u2019s, and no answer or account is recorded here.',
       },
+      {
+        // Who changed these numbers is in the admin audit log, deliberately not
+        // on the row, so this reason is true for every reader — administrators
+        // included.
+        model: 'AppAgentSettings',
+        reason:
+          'The app\u2019s own settings: how long the assistant may take to answer, and the monthly spending limit that applies to everyone by default. It holds no information about any person.',
+      },
     ],
   });
 }
@@ -126,7 +142,7 @@ export function initLeafSubjectSources(): void {
 /**
  * Collect Lelañea's own data about one subject.
  *
- * Two sections: `waitlist` and `acknowledgements`. Each is returned whether or
+ * Three sections: `waitlist`, `acknowledgements` and `budget`. Each is returned whether or
  * not the subject has a row — an empty array, never an omitted key. A declared
  * section missing from this object makes `exportUserData()` throw, and a key
  * set to `undefined` counts as missing because `JSON.stringify` drops it.
@@ -140,9 +156,10 @@ export function initLeafSubjectSources(): void {
  * against superseded document versions, because we still hold them.
  */
 export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
-  const [waitlist, acknowledgements] = await Promise.all([
+  const [waitlist, acknowledgements, budget] = await Promise.all([
     findWaitlistEntriesForSubject(subject),
     findAcknowledgementsForSubject(subject),
+    findUserBudgetsForSubject(subject),
   ]);
-  return { waitlist, acknowledgements };
+  return { waitlist, acknowledgements, budget };
 }

@@ -190,6 +190,40 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
+  /**
+   * §08 t-53 — one person's monthly limit. `ON DELETE CASCADE` is the whole
+   * Art. 17 disposition for `app_user_budget`; no erasure hook stands behind it.
+   */
+  it('registers the leaf user-budget FK probe', () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_user_budget');
+
+    expect(probe, 'the user-budget FK probe is not registered').toBeDefined();
+    expect(probe?.name).toContain('app_user_budget_userId_fkey');
+    expect(probe?.kind).toBe('FK constraint');
+  });
+
+  it('passes on the CASCADE FK the agent-settings migration writes', async () => {
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE CASCADE ON UPDATE CASCADE' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_user_budget');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+  });
+
+  it('FAILS when the user-budget FK has drifted to NO ACTION', async () => {
+    // `eraseUser()` would fail with P2003 for anyone an admin had given a limit.
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE NO ACTION' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_user_budget');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
   it('keeps the framework probes when the leaf registers its own', () => {
     registerAppDriftProbes();
     const tables = getAppDriftProbes().map((p) => p.table);
@@ -201,5 +235,6 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     expect(tables).toContain('app_waitlist_entry');
     expect(tables).toContain('app_acknowledgement');
     expect(tables).toContain('app_knowledge_designation');
+    expect(tables).toContain('app_user_budget');
   });
 });

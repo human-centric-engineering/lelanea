@@ -40,6 +40,13 @@
  * before it ships. Without a surface the two runs are rows in a table nobody
  * opens — `/admin/app/voice` is where they are read side by side.
  *
+ * ## And the fourth, because a number that needs a deploy is the wrong shape
+ *
+ * §08 t-53 stores the agent's two deadlines and the monthly spending ceilings,
+ * default and per person, as settings rather than constants — the owner's ruling
+ * was that all of them be changeable as real use teaches what they should be.
+ * `/admin/app/agent` is where.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -51,15 +58,16 @@
  * belongs to is the first thing worth knowing.
  *
  * Pinned in `tests/unit/lib/app/defaults.test.ts` — both here (one section, now
- * THREE items, in this order) and on the `lib/app/admin-nav.ts` bridge, which
+ * FOUR items, in this order) and on the `lib/app/admin-nav.ts` bridge, which
  * registers two sections rather than one (`HB2`: pin the new value, never delete
  * the row).
  */
 
-import { AudioLines, ClipboardList, Library } from 'lucide-react';
+import { AudioLines, ClipboardList, Gauge, Library } from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
 import { DESIGNATION_ADMIN_PAGE, VOICE_COMPARISON_PAGE } from '@/lib/app/voice/endpoint';
+import { AGENT_SETTINGS_PAGE } from '@/lib/app/agent/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
@@ -82,6 +90,12 @@ export function initLeafAdminNav(): void {
         label: 'Voice',
         icon: AudioLines,
         description: 'The assembled voice against a bare model, over the same fixed questions',
+      },
+      {
+        href: AGENT_SETTINGS_PAGE,
+        label: 'Deadlines & budgets',
+        icon: Gauge,
+        description: 'How long she may take to answer, and what each person may spend a month',
       },
     ],
   });
