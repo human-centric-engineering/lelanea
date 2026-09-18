@@ -40,9 +40,13 @@ import {
   resolveFacilitationSurface,
   FACILITATION_SURFACE_CONTEXT_TYPE,
 } from '@/lib/framework/facilitation/agents/surface';
+// Lelañea divergence (.context/app/divergences.md Row 18): a leaf-fillable turn hook.
+import { runFacilitationTurn } from '@/lib/framework/facilitation/agents/turn-hook';
 
 const surfaceChatRequestSchema = z.object({
   message: z.string().min(1),
+  // Optional client id for the turn, passed to the hook untouched. Row 18.
+  turnId: z.string().trim().min(1).max(128).optional(),
 });
 
 export const POST = withAuth<{ role: string }>(
@@ -78,17 +82,30 @@ export const POST = withAuth<{ role: string }>(
       userId: session.user.id,
     });
 
-    const events = streamChat({
-      message: body.message,
-      agentSlug: surface.agentSlug,
-      userId: session.user.id,
-      conversationId: surface.conversationId,
-      contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
-      contextId: role,
-      requestId,
-      visitorId,
-      signal: request.signal,
-    });
+    const events = await runFacilitationTurn(
+      {
+        userId: session.user.id,
+        role,
+        agentId: surface.agentId,
+        agentSlug: surface.agentSlug,
+        conversationId: surface.conversationId,
+        message: body.message,
+        clientTurnId: body.turnId,
+      },
+      (extras) =>
+        streamChat({
+          message: body.message,
+          agentSlug: surface.agentSlug,
+          userId: session.user.id,
+          conversationId: surface.conversationId,
+          contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
+          contextId: role,
+          requestId,
+          visitorId,
+          signal: request.signal,
+          ...extras,
+        })
+    );
 
     return sseResponse(events, { signal: request.signal });
   },

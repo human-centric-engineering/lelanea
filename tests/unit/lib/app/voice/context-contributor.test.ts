@@ -168,7 +168,12 @@ import {
   __resetAgentAccessContributorsForTests,
 } from '@/lib/orchestration/knowledge/resolveAgentDocumentAccess';
 import { initAppKnowledgeAccessContributors } from '@/lib/app/knowledge-access-contributors';
-import { VOICE_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
+import {
+  FACILITATION_CONTEXT_TYPE,
+  SEAT_SITUATIONS,
+  VOICE_CONTEXT_TYPE,
+} from '@/lib/app/voice/context-contributor';
+import { buildMessages } from '@/lib/orchestration/chat/message-builder';
 import { MAX_EXEMPLAR_CHARS } from '@/lib/app/voice/exemplars';
 import {
   CORPUS_AGENT_SLUG_PREFIX,
@@ -581,5 +586,77 @@ describe('a passage cannot escape the block that labels it', () => {
     expect(body).not.toContain('final words');
     expect(body).toContain('…');
     expect(body.length).toBeLessThan(MAX_EXEMPLAR_CHARS + 2_000);
+  });
+});
+
+/**
+ * §08 t-54 — her overlays and exemplars reach a turn a person actually takes.
+ *
+ * Daybreak's facilitation route pins `contextType: 'facilitation'` and
+ * `contextId: <seat>`. Before t-54 nothing was registered for that type, so a
+ * seat turn got the platform's "no context loader" placeholder and her register
+ * reached only admin-chat `voice` turns.
+ *
+ * Asserted on the ASSEMBLED PROMPT — the system message the platform's own
+ * `buildMessages` builds from the block, exactly as the chat handler calls it —
+ * not on the registration, which `context-contributors.test.ts` already pins.
+ */
+describe('a facilitation seat turn', () => {
+  /**
+   * Every system message for a seat turn, as the chat handler assembles them —
+   * the composed prompt first, the context block as its own message after it.
+   */
+  async function systemPromptFor(seat: string): Promise<string> {
+    const contextBlock = await buildContext(FACILITATION_CONTEXT_TYPE, seat, { userId: 'user-1' });
+    const system = buildMessages({
+      systemInstructions: 'In a turn: answer.',
+      persona: 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint_core v1.0',
+      contextBlock,
+      history: [],
+      newUserMessage: 'Hello.',
+    }).filter((message) => message.role === 'system');
+    // The composed prompt and the block: two, not one — the block is not folded
+    // into the first, and not dropped.
+    expect(system).toHaveLength(2);
+    return system
+      .map((message) =>
+        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+      )
+      .join('\n\n');
+  }
+
+  it('onboarding carries the first-meeting register and her own passages', async () => {
+    const firstMeeting = CONTENT.overlays.find(
+      (o) => o.situation === SEAT_SITUATIONS.get('onboarding')
+    );
+    if (!firstMeeting) throw new Error('the onboarding seat maps to no authored overlay');
+
+    const prompt = await systemPromptFor('onboarding');
+
+    expect(prompt).not.toContain(`No context loader for type '${FACILITATION_CONTEXT_TYPE}'`);
+    expect(prompt).toContain(firstMeeting.heading);
+    for (const line of firstMeeting.lines) expect(prompt).toContain(line);
+    // Her passage, under its origin label — the exemplar layer, not just the overlay.
+    expect(prompt).toContain('There is a whisper that says there has to be more to this life.');
+    expect(prompt).toContain(`[${CONTENT.exemplars.originLabel} · A Sunday letter]`);
+    // Beside the core, which rides on the profile and is never in the block.
+    expect(prompt).toContain('Voice fingerprint: lelanea_voice_fingerprint_core v1.0');
+  });
+
+  it('the facilitator seat gets the core-only block — a register is never invented', async () => {
+    const prompt = await systemPromptFor('facilitator');
+
+    // Population first: the block is there, and it is the authored fallback.
+    expect(prompt).toContain(CONTENT.coreOnly.heading);
+    for (const line of CONTENT.coreOnly.lines) expect(prompt).toContain(line);
+    expect(labelCount(prompt)).toBe(0);
+    expect(searchKnowledgeMock).not.toHaveBeenCalled();
+  });
+
+  it('a seat named like an object key maps to nothing', async () => {
+    const prompt = await systemPromptFor('__proto__');
+
+    expect(prompt).toContain(CONTENT.coreOnly.heading);
+    expect(searchKnowledgeMock).not.toHaveBeenCalled();
   });
 });

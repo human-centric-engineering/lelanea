@@ -208,3 +208,44 @@ export async function loadVoiceContext(id: string): Promise<string> {
 
   return composeVoiceContext(overlay, exemplars);
 }
+
+/**
+ * The chat `contextType` Daybreak's facilitation route pins on every seat turn.
+ *
+ * Not ours — `FACILITATION_SURFACE_CONTEXT_TYPE` in Daybreak's surface module —
+ * and restated rather than imported so this module stays on the leaf side of the
+ * tier boundary. The pinned row in `tests/unit/lib/app/defaults.test.ts` holds the
+ * two equal.
+ */
+export const FACILITATION_CONTEXT_TYPE = 'facilitation';
+
+/**
+ * Which moment a facilitation seat is, where a seat is one moment.
+ *
+ * `onboarding` is her first contact with someone, which is exactly the
+ * `first-meeting` overlay. `facilitator` is deliberately absent: that seat is
+ * every moment after the first, and which one is a fact about the person's
+ * journey that no turn carries yet. Guessing one would be this module inventing
+ * a register — the overlays' own rule is *do not invent a register for a
+ * situation you have not been given* — so the facilitator seat gets the
+ * core-only block until a turn can say which moment it is.
+ *
+ * A `Map`, not an object literal: the key is a URL segment, and
+ * `{…}['__proto__']` is not `undefined`.
+ */
+export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
+  ['onboarding', 'first-meeting'],
+]);
+
+/**
+ * The voice block for a facilitation seat turn (§08 t-54).
+ *
+ * Registered for `facilitation` beside `voice` because a request carries one
+ * context tuple and a facilitation turn's is Daybreak's: without this, her
+ * overlays and exemplars reached an admin-chat `voice` turn and no turn a person
+ * actually takes. Daybreak registers no contributor for the type, so this claims
+ * nothing another tier holds.
+ */
+export function loadFacilitationVoiceContext(seat: string): Promise<string> {
+  return loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
+}

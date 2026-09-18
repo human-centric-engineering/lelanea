@@ -112,7 +112,7 @@ export interface ResolvedVoiceArm {
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
 /** Everything an arm needs, in one query per agent. */
-const AGENT_SELECT = {
+export const AGENT_SELECT = {
   id: true,
   slug: true,
   isActive: true,
@@ -174,10 +174,18 @@ function toFieldMode(value: string | null): FieldMode | null {
   return value === 'append' ? 'append' : value === 'override' ? 'override' : null;
 }
 
-function composeArm(
-  arm: VoiceArm,
+/**
+ * An agent's composed system prompt — its own columns resolved against its
+ * profile, exactly as the chat handler will compose them.
+ *
+ * Exported for the turn record (`lib/app/agent/turn-record.ts`), which reads the
+ * fingerprint version off a live turn's prompt for the same reason an arm does:
+ * the version an output can honestly be attributed to is the one the agent is
+ * about to be told, not the one the content file holds.
+ */
+export function composeAgentPrompt(
   agent: Prisma.AiAgentGetPayload<{ select: typeof AGENT_SELECT }>
-): ResolvedVoiceArm {
+): { resolved: ReturnType<typeof resolveEffectivePrompt>; systemPrompt: string } {
   const resolved = resolveEffectivePrompt(
     {
       systemInstructions: agent.systemInstructions,
@@ -190,7 +198,14 @@ function composeArm(
     },
     agent.profile
   );
-  const systemPrompt = composeSystemPromptString(resolved);
+  return { resolved, systemPrompt: composeSystemPromptString(resolved) };
+}
+
+function composeArm(
+  arm: VoiceArm,
+  agent: Prisma.AiAgentGetPayload<{ select: typeof AGENT_SELECT }>
+): ResolvedVoiceArm {
+  const { resolved, systemPrompt } = composeAgentPrompt(agent);
 
   return {
     arm,

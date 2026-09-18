@@ -1,0 +1,502 @@
+/**
+ * A turn sent twice is one turn, and every turn records what produced it
+ * (§08 t-54).
+ *
+ * Runs the real `runRecordedTurn` → `turn-record.ts` chain against a small
+ * STATEFUL in-memory fake of the four tables it touches, and a fake model that
+ * does what the platform's chat handler does to them: writes the person's
+ * message (with `metadata.app`), a cost row (with `costLogMetadata`), her reply,
+ * then yields `start` / `content` / `done`. The properties worth proving are
+ * about state across requests — a replay finds the first request's row — and a
+ * canned mock can only echo what it was told.
+ *
+ * The fake enforces `@@unique([userId, turnId])` the way Postgres does, by
+ * throwing Prisma's own `P2002`, because that constraint IS the claim.
+ *
+ * ## Reverting the claim fails this file (`fp6`)
+ *
+ * Make `claimTurn` always answer `claimed` and "a completed turn replayed" sees
+ * a second model call and a second cost row; "a turn still in flight" opens a
+ * second stream instead of throwing. Both are asserted against a population
+ * established first: the first request's model call and cost row are counted
+ * before the replay asserts there is no second one.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Prisma } from '@prisma/client';
+
+interface TurnRow {
+  id: string;
+  userId: string;
+  turnId: string;
+  clientSupplied: boolean;
+  requestHash: string;
+  seat: string;
+  agentSlug: string;
+  status: 'running' | 'completed' | 'failed';
+  attempts: number;
+  fingerprintVersion: string | null;
+  conversationId: string | null;
+  userMessageId: string | null;
+  assistantMessageId: string | null;
+  model: string | null;
+  provider: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: number | null;
+  pricing: 'priced' | 'unpriced' | 'local' | null;
+  errorCode: string | null;
+  startedAt: Date;
+  completedAt: Date | null;
+}
+interface MessageRow {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+interface CostRow {
+  userId: string;
+  model: string;
+  costUsd: number;
+  metadata: Record<string, unknown> | undefined;
+}
+
+const db = vi.hoisted(() => ({
+  turns: [] as TurnRow[],
+  messages: [] as MessageRow[],
+  costs: [] as CostRow[],
+  providers: [] as { slug: string; isLocal: boolean }[],
+  seq: 0,
+}));
+
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+
+vi.mock('@/lib/logging', () => ({
+  logger: { warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+/** Her agent as the seed leaves it: instructions on the agent, her core on the profile. */
+const HER_PERSONA = 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint_core v1.0';
+
+vi.mock('@/lib/db/client', () => {
+  const next = (prefix: string): string => `${prefix}-${++db.seq}`;
+  const match = (row: TurnRow, where: Record<string, unknown>): boolean =>
+    Object.entries(where).every(([key, value]) => row[key as keyof TurnRow] === value);
+
+  return {
+    prisma: {
+      appTurn: {
+        create: vi.fn(async ({ data }: { data: Partial<TurnRow> }) => {
+          if (db.turns.some((t) => t.userId === data.userId && t.turnId === data.turnId)) {
+            throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+              code: 'P2002',
+              clientVersion: 'test',
+            });
+          }
+          const row: TurnRow = {
+            id: next('row'),
+            status: 'running',
+            attempts: 1,
+            conversationId: null,
+            userMessageId: null,
+            assistantMessageId: null,
+            model: null,
+            provider: null,
+            inputTokens: null,
+            outputTokens: null,
+            costUsd: null,
+            pricing: null,
+            errorCode: null,
+            completedAt: null,
+            fingerprintVersion: null,
+            startedAt: new Date(),
+            ...data,
+          } as TurnRow;
+          db.turns.push(row);
+          return { ...row };
+        }),
+        findUnique: vi.fn(
+          async ({ where }: { where: { userId_turnId: { userId: string; turnId: string } } }) => {
+            const { userId, turnId } = where.userId_turnId;
+            const row = db.turns.find((t) => t.userId === userId && t.turnId === turnId);
+            return row ? { ...row } : null;
+          }
+        ),
+        findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => {
+          const row = db.turns.find((t) => t.id === where.id);
+          if (!row) throw new Error('not found');
+          return { ...row };
+        }),
+        updateMany: vi.fn(
+          async ({ where, data }: { where: Record<string, unknown>; data: Partial<TurnRow> }) => {
+            const rows = db.turns.filter((t) => match(t, where));
+            rows.forEach((row) => Object.assign(row, data));
+            return { count: rows.length };
+          }
+        ),
+        update: vi.fn(
+          async ({ where, data }: { where: { id: string }; data: Partial<TurnRow> }) => {
+            const row = db.turns.find((t) => t.id === where.id);
+            if (!row) throw new Error('not found');
+            Object.assign(row, data);
+            return { ...row };
+          }
+        ),
+      },
+      aiMessage: {
+        findFirst: vi.fn(
+          async ({
+            where,
+          }: {
+            where: {
+              id?: string;
+              conversationId: string;
+              role?: string;
+              createdAt?: { gte: Date };
+            };
+          }) => {
+            const rows = db.messages.filter(
+              (m) =>
+                m.conversationId === where.conversationId &&
+                (where.id === undefined || m.id === where.id) &&
+                (where.role === undefined || m.role === where.role) &&
+                (where.createdAt === undefined || m.createdAt >= where.createdAt.gte)
+            );
+            const row = rows.at(-1);
+            return row ? { id: row.id, content: row.content } : null;
+          }
+        ),
+      },
+      aiAgent: {
+        findFirst: vi.fn(async () => ({
+          id: 'agent-1',
+          slug: 'lelanea-guide',
+          isActive: true,
+          provider: 'openai',
+          model: 'gpt-4o-mini-2024-07-18',
+          temperature: 0.7,
+          systemInstructions: 'In a turn: answer.',
+          persona: null,
+          guardrails: null,
+          brandVoiceInstructions: null,
+          personaMode: null,
+          voiceMode: null,
+          guardrailsMode: null,
+          profile: {
+            id: 'profile-1',
+            name: 'Her core',
+            persona: HER_PERSONA,
+            guardrails: null,
+            brandVoiceInstructions: null,
+          },
+        })),
+      },
+      aiProviderConfig: {
+        findUnique: vi.fn(
+          async ({ where }: { where: { slug: string } }) =>
+            db.providers.find((p) => p.slug === where.slug) ?? null
+        ),
+      },
+    },
+  };
+});
+
+import { runRecordedTurn, TURN_REPLY_UNAVAILABLE } from '@/lib/app/agent/turns';
+import { STALE_CLAIM_MS } from '@/lib/app/agent/turn-record';
+import type {
+  FacilitationTurn,
+  FacilitationTurnExtras,
+} from '@/lib/framework/facilitation/agents/turn-hook';
+import { PINNED_MODEL } from '@/lib/app/agent/pinned-model';
+import { __resetForTests as resetRegistry } from '@/lib/orchestration/llm/model-registry';
+import { ConflictError } from '@/lib/api/errors';
+import type { ChatEvent } from '@/types/orchestration';
+
+/** What the fake model should do on its next call. */
+interface ModelBehaviour {
+  model: string;
+  provider: string;
+  outcome: 'answer' | 'error';
+  costUsd: number;
+}
+let behaviour: ModelBehaviour;
+let modelCalls = 0;
+
+/**
+ * The platform's chat handler, as far as these tables are concerned.
+ *
+ * Writes what the real one writes, where it writes it: the user row carries
+ * `messageMetadata` under `metadata.app`, the cost row carries
+ * `costLogMetadata`, and a new conversation id appears on a first turn.
+ */
+function fakeRun(
+  turn: FacilitationTurn
+): (extras: FacilitationTurnExtras) => AsyncIterable<ChatEvent> {
+  return (extras) =>
+    (async function* () {
+      modelCalls += 1;
+      const conversationId = turn.conversationId ?? 'conv-new';
+      const userMessage: MessageRow = {
+        id: `msg-${++db.seq}`,
+        conversationId,
+        role: 'user',
+        content: turn.message,
+        metadata: extras.messageMetadata ? { app: extras.messageMetadata } : null,
+        createdAt: new Date(),
+      };
+      db.messages.push(userMessage);
+      yield { type: 'start', conversationId, messageId: userMessage.id };
+
+      if (behaviour.outcome === 'error') {
+        yield { type: 'error', code: 'provider_unavailable', message: 'Down.' };
+        return;
+      }
+
+      db.costs.push({
+        userId: turn.userId,
+        model: behaviour.model,
+        costUsd: behaviour.costUsd,
+        metadata: extras.costLogMetadata,
+      });
+      const reply = `Her answer to: ${turn.message}`;
+      db.messages.push({
+        id: `msg-${++db.seq}`,
+        conversationId,
+        role: 'assistant',
+        content: reply,
+        metadata: null,
+        createdAt: new Date(),
+      });
+      yield { type: 'content', delta: reply };
+      yield {
+        type: 'done',
+        tokenUsage: { inputTokens: 3000, outputTokens: 300, totalTokens: 3300 },
+        costUsd: behaviour.costUsd,
+        provider: behaviour.provider,
+        model: behaviour.model,
+      };
+    })();
+}
+
+function turnFor(overrides: Partial<FacilitationTurn> = {}): FacilitationTurn {
+  return {
+    userId: 'user-1',
+    role: 'onboarding',
+    agentId: 'agent-1',
+    agentSlug: 'lelanea-guide',
+    conversationId: undefined,
+    message: 'Where do I start?',
+    clientTurnId: 'turn-1',
+    ...overrides,
+  };
+}
+
+/** Take a turn and read its stream to the end. */
+async function take(turn: FacilitationTurn): Promise<ChatEvent[]> {
+  const events: ChatEvent[] = [];
+  for await (const event of await runRecordedTurn(turn, fakeRun(turn))) events.push(event);
+  return events;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetRegistry();
+  db.turns = [];
+  db.messages = [];
+  db.costs = [];
+  db.providers = [{ slug: 'openai', isLocal: false }];
+  db.seq = 0;
+  modelCalls = 0;
+  behaviour = { model: PINNED_MODEL, provider: 'openai', outcome: 'answer', costUsd: 0.00063 };
+});
+
+describe('a turn id', () => {
+  it('a completed turn replayed returns its recorded outcome — no model call, no cost row', async () => {
+    const first = await take(turnFor());
+    // The population: one real call, one cost row, one completed turn.
+    expect(modelCalls).toBe(1);
+    expect(db.costs).toHaveLength(1);
+    expect(db.turns[0].status).toBe('completed');
+
+    const second = await take(turnFor());
+
+    expect(modelCalls).toBe(1);
+    expect(db.costs).toHaveLength(1);
+    expect(db.turns).toHaveLength(1);
+    // The same outcome, frame for frame: a client that retried after losing the
+    // connection cannot tell the replay from the answer it missed.
+    expect(second).toEqual(first);
+  });
+
+  it('a turn still in flight is refused, not raced', async () => {
+    const turn = turnFor();
+    const firstStream = (await runRecordedTurn(turn, fakeRun(turn)))[Symbol.asyncIterator]();
+    // Claimed, not yet finished: the model has not even been called.
+    expect(db.turns[0].status).toBe('running');
+
+    await expect(runRecordedTurn(turn, fakeRun(turn))).rejects.toBeInstanceOf(ConflictError);
+    await expect(runRecordedTurn(turn, fakeRun(turn))).rejects.toMatchObject({
+      details: { reason: 'TURN_IN_FLIGHT' },
+    });
+
+    // The first request is untouched by the refusal and still finishes.
+    while (!(await firstStream.next()).done);
+    expect(modelCalls).toBe(1);
+    expect(db.turns[0].status).toBe('completed');
+  });
+
+  it('a turn that failed may run again under the same id', async () => {
+    behaviour.outcome = 'error';
+    await take(turnFor());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', errorCode: 'provider_unavailable' });
+
+    behaviour.outcome = 'answer';
+    const retry = await take(turnFor());
+
+    expect(modelCalls).toBe(2);
+    expect(retry.at(-1)?.type).toBe('done');
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2, errorCode: null });
+    // Hypothesis (c), confirmed: the platform wrote the person's message on BOTH
+    // attempts. There is no way to avoid it from here — recorded for f-conversation.
+    expect(db.messages.filter((m) => m.role === 'user')).toHaveLength(2);
+  });
+
+  it('a stream that ends without an outcome leaves the turn failed, not running', async () => {
+    const turn = turnFor();
+    const stream = (await runRecordedTurn(turn, fakeRun(turn)))[Symbol.asyncIterator]();
+    await stream.next(); // `start` — then the client goes away
+    await stream.return?.();
+
+    expect(db.turns[0]).toMatchObject({ status: 'failed', errorCode: 'incomplete' });
+    await take(turn);
+    expect(db.turns[0].status).toBe('completed');
+  });
+
+  it('an abandoned claim is taken back after STALE_CLAIM_MS', async () => {
+    const turn = turnFor();
+    await runRecordedTurn(turn, fakeRun(turn)); // claimed, never read: the process "died"
+    db.turns[0].startedAt = new Date(Date.now() - STALE_CLAIM_MS - 1000);
+
+    await take(turn);
+
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2 });
+  });
+
+  it("is the caller's own: another person's id neither collides nor leaks", async () => {
+    await take(turnFor({ userId: 'user-1', message: 'Mine.' }));
+
+    // Same id, different person, different words: a new turn, not a replay of
+    // user-1's and not a refusal that would tell user-2 the id exists.
+    const theirs = await take(turnFor({ userId: 'user-2', message: 'Theirs.' }));
+
+    expect(modelCalls).toBe(2);
+    expect(db.turns.map((t) => t.userId)).toEqual(['user-1', 'user-2']);
+    const content = theirs.find((e) => e.type === 'content');
+    expect(content).toEqual({ type: 'content', delta: 'Her answer to: Theirs.' });
+  });
+
+  it('refuses an id reused for a different message', async () => {
+    await take(turnFor({ message: 'First question.' }));
+
+    await expect(
+      runRecordedTurn(turnFor({ message: 'A different one.' }), fakeRun(turnFor()))
+    ).rejects.toMatchObject({ details: { reason: 'TURN_ID_REUSED' } });
+    expect(modelCalls).toBe(1);
+  });
+
+  it('with no client id, behaves as before: every request runs', async () => {
+    await take(turnFor({ clientTurnId: undefined }));
+    await take(turnFor({ clientTurnId: undefined }));
+
+    expect(modelCalls).toBe(2);
+    expect(db.costs).toHaveLength(2);
+    // Still recorded, under ids minted here, which no client can send again.
+    expect(db.turns.map((t) => t.clientSupplied)).toEqual([false, false]);
+    expect(db.turns[0].turnId).not.toBe(db.turns[1].turnId);
+    expect(db.turns[0].turnId).toMatch(/^srv_/);
+  });
+
+  it('a replay whose reply was deleted says so rather than inventing one', async () => {
+    await take(turnFor());
+    db.messages = db.messages.filter((m) => m.role !== 'assistant');
+
+    const replayed = await take(turnFor());
+
+    expect(replayed).toEqual([
+      { type: 'error', code: TURN_REPLY_UNAVAILABLE, message: expect.any(String) },
+    ]);
+    expect(modelCalls).toBe(1);
+  });
+});
+
+describe('what a turn records', () => {
+  it('tags the cost row with turn id and seat, and the message with the fingerprint version', async () => {
+    await take(turnFor({ role: 'facilitator' }));
+
+    expect(db.costs[0].metadata).toEqual({ turnId: 'turn-1', seat: 'facilitator' });
+    const userMessage = db.messages.find((m) => m.role === 'user');
+    expect(userMessage?.metadata).toEqual({
+      app: { turnId: 'turn-1', seat: 'facilitator', fingerprintVersion: '1.0' },
+    });
+  });
+
+  it('joins both messages to the model, provider, version and cost the platform reported', async () => {
+    await take(turnFor());
+
+    const [userMessage, assistantMessage] = db.messages;
+    expect(db.turns[0]).toMatchObject({
+      seat: 'onboarding',
+      agentSlug: 'lelanea-guide',
+      fingerprintVersion: '1.0',
+      conversationId: 'conv-new',
+      userMessageId: userMessage.id,
+      assistantMessageId: assistantMessage.id,
+      model: PINNED_MODEL,
+      provider: 'openai',
+      inputTokens: 3000,
+      outputTokens: 300,
+      costUsd: 0.00063,
+      pricing: 'priced',
+    });
+  });
+});
+
+describe('a turn costed at nothing', () => {
+  it('is marked unpriced with no cost — beside a priced turn as the population', async () => {
+    // The population: her pinned model, which t-52 taught the registry, prices.
+    await take(turnFor({ clientTurnId: 'priced-turn' }));
+    // An id an admin could pin her to that no registry holds. The platform's
+    // own cost row for it says $0.
+    behaviour = {
+      model: 'gpt-imaginary-2031-01-01',
+      provider: 'openai',
+      outcome: 'answer',
+      costUsd: 0,
+    };
+    await take(turnFor({ clientTurnId: 'unpriced-turn' }));
+
+    const [priced, unpriced] = db.turns;
+    expect(priced).toMatchObject({ pricing: 'priced', costUsd: 0.00063 });
+    // Not $0: nobody knows what it cost, and the record says so.
+    expect(unpriced).toMatchObject({ pricing: 'unpriced', costUsd: null });
+    expect(warn).toHaveBeenCalledWith(
+      'Agent turn was costed at nothing: its model has no rate',
+      expect.objectContaining({ turnId: 'unpriced-turn', model: 'gpt-imaginary-2031-01-01' })
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('is told apart from a genuinely free local model', async () => {
+    db.providers.push({ slug: 'ollama', isLocal: true });
+    behaviour = { model: 'llama-local-7b', provider: 'ollama', outcome: 'answer', costUsd: 0 };
+
+    await take(turnFor());
+
+    expect(db.turns[0]).toMatchObject({ pricing: 'local', costUsd: 0 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});

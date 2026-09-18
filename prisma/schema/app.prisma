@@ -400,3 +400,106 @@ model AppUserBudget {
 
   @@map("app_user_budget")
 }
+
+/// Where a turn stands. A claim is `running` from before the model is called
+/// until the stream ends; see `lib/app/agent/turns.ts` for what each state lets a
+/// second request with the same id do.
+enum AppTurnStatus {
+  running
+  completed
+  failed
+
+  @@map("app_turn_status")
+}
+
+/// Whether the turn's cost could be known.
+///
+/// `unpriced` is the reason this column exists: Sunrise prices a turn from an
+/// in-memory registry, and a model outside it is logged at $0 with a warning
+/// nobody reads. That is not the same fact as `local` — a model on a provider
+/// marked local, which really is free — and a meter that stored both as `0`
+/// could not tell a free turn from one nobody knows the price of.
+enum AppTurnPricing {
+  priced
+  unpriced
+  local
+
+  @@map("app_turn_pricing")
+}
+
+/// One turn with her: what was asked for, and what produced the answer.
+///
+/// §8.1 (a turn sent twice is one turn) and §8.2 (every turn records which model
+/// and which prompt produced it). The platform records the model and provider on
+/// the assistant message and nothing else: it sets no agent version on a
+/// streaming turn, her voice lives in a profile the agent snapshot does not
+/// cover, and a cost row knows the person but not the seat. This row is the
+/// record that joins them, keyed on the turn id.
+///
+/// **Holds no words.** The person's message and her reply are Sunrise's
+/// `ai_message` rows; this points at them by id (`userMessageId`,
+/// `assistantMessageId`) and a replay reads the reply from there. Copying the
+/// text here would be a second copy of the conversation with its own erasure
+/// and export story.
+///
+/// **The message ids are plain scalars with no foreign key**, deliberately. A
+/// person deleting a conversation deletes its messages; the turn — what model,
+/// what version, what it cost — survives that as metering, and a replay of a
+/// turn whose reply is gone says so rather than inventing one.
+///
+/// **`userId` is a plain scalar with no Prisma `@relation`** — a fork table must
+/// not add a reverse field to the Sunrise-owned `User` model (CUSTOMIZATION.md
+/// §5). The FK is hand-written in the `app_turn` migration with `ON DELETE
+/// CASCADE` — a turn is about the person who took it — and pinned by a drift
+/// probe in `lib/app/leaf-db-drift.ts`. Declared as a subject-data source in
+/// `lib/app/leaf-data-export.ts`.
+model AppTurn {
+  id                 String          @id @default(cuid())
+  /// Hand-written FK → `user`. See the note above.
+  userId             String
+  /// The client's id for the turn, or one minted here when the client sent none.
+  /// Unique per person, never globally: one person's id can neither collide with
+  /// nor reveal another's.
+  turnId             String
+  /// Whether `turnId` came from the client. A minted id can never be sent again,
+  /// so only a client id can replay — which is how a turn with no id behaves
+  /// exactly as it did before turn ids existed.
+  clientSupplied     Boolean
+  /// SHA-256 of the seat and the message. A repeat of the same id must be the
+  /// same request: an id reused for different words is a client bug, and
+  /// answering it with the first turn's reply would be wrong silently. Holds a
+  /// digest, never the words.
+  requestHash        String
+  /// The facilitation seat the turn was taken in (`onboarding`, `facilitator`).
+  seat               String
+  agentSlug          String
+  status             AppTurnStatus   @default(running)
+  /// How many times this id has been claimed. A failed turn run again under the
+  /// same id bumps it; a replay does not.
+  attempts           Int             @default(1)
+  /// Her voice fingerprint version, read from her composed prompt at claim —
+  /// null when the prompt carries no marker, which is the honest answer for an
+  /// agent that does not inherit her core.
+  fingerprintVersion String?
+  conversationId     String?
+  userMessageId      String?
+  assistantMessageId String?
+  /// What the platform reported on the turn's `done` event.
+  model              String?
+  provider           String?
+  inputTokens        Int?
+  outputTokens       Int?
+  /// The chat cost the platform reported. **Null when `pricing` is `unpriced`**,
+  /// never zero: zero would read as a free turn.
+  costUsd            Float?
+  pricing            AppTurnPricing?
+  /// The error code the stream ended on, when it failed.
+  errorCode          String?
+  startedAt          DateTime        @default(now())
+  completedAt        DateTime?
+
+  @@unique([userId, turnId])
+  @@index([userId, startedAt])
+  @@index([conversationId])
+  @@map("app_turn")
+}

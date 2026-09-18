@@ -1,5 +1,6 @@
 /**
- * The seam registers exactly one contributor, and it is the voice block.
+ * The seam registers exactly two contributors, both her voice block: one keyed
+ * on a situation (`voice`), one on a facilitation seat (`facilitation`).
  *
  * `tests/unit/lib/app/defaults.test.ts` pins this seam against the shared
  * registry, which tells you WHICH TYPE was added. This file is the other half:
@@ -47,25 +48,34 @@ vi.mock('@/lib/orchestration/chat/context-builder', () => ({
 }));
 
 import { initAppContextContributors } from '@/lib/app/context-contributors';
-import { VOICE_CONTEXT_TYPE, loadVoiceContext } from '@/lib/app/voice/context-contributor';
+import {
+  FACILITATION_CONTEXT_TYPE,
+  VOICE_CONTEXT_TYPE,
+  loadFacilitationVoiceContext,
+  loadVoiceContext,
+} from '@/lib/app/voice/context-contributor';
 
 beforeEach(() => {
   registered.length = 0;
 });
 
 describe('initAppContextContributors', () => {
-  it('registers one contributor, for the voice context type', () => {
+  it('registers two contributors: voice, and the facilitation seats (§08 t-54)', () => {
     initAppContextContributors();
 
-    expect(registered.map(([type]) => type)).toEqual([VOICE_CONTEXT_TYPE]);
+    expect(registered.map(([type]) => type)).toEqual([
+      VOICE_CONTEXT_TYPE,
+      FACILITATION_CONTEXT_TYPE,
+    ]);
   });
 
-  it('registers the voice loader itself, not some other function', () => {
+  it('registers the voice loaders themselves, not some other function', () => {
     initAppContextContributors();
 
     // By identity: a type assertion alone passes if the type is right and the
     // function behind it is not.
     expect(registered[0]?.[1]).toBe(loadVoiceContext);
+    expect(registered[1]?.[1]).toBe(loadFacilitationVoiceContext);
   });
 
   it('does not claim a type another tier already owns', () => {
