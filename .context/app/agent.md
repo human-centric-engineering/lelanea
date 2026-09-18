@@ -69,15 +69,21 @@ restoring v1 returns her to the floating default, as restoring any agent's first
 version returns it to how it was created — a deliberate act on operator-owned
 config, which leaves an entry of its own.
 
-### The provider may not exist yet
+### Whether there is anywhere for her turns to go
 
-`db:seed` runs before anyone has configured a provider, on every fresh install,
-and the pin is written anyway: the runner records a unit as applied once and does
-not come back, so waiting for a provider would mean never pinning. Until an
-active provider with the slug **`openai`** exists, her turns and every golden-set
-run end with "provider unavailable" — that is the no-fallback ruling working, not
-a fault. The seed warns loudly when it sees this state. Two ways out: configure
-OpenAI under that slug, or choose her model (and the control's) in the admin.
+An explicit provider is never re-picked and there is no fallback, so a pin to a
+slug the install cannot reach ends every one of her turns. When the seed is about
+to choose for her, two states look alike and get opposite answers:
+
+| This install has…                           | The seed…                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| no active provider at all (a fresh install) | **pins, and warns.** `db:seed` always runs before setup, and the runner does not come back to an applied unit |
+| active providers, none under `openai`       | **writes nothing and throws.** She is working there, on the install default; the pin would break her          |
+
+The second is not recorded as applied, so it is tried again on the next seed, and
+the error names both ways out: configure OpenAI under the slug **`openai`**, or
+choose her model in the admin — after which the seed sees a decision already made,
+leaves it alone, and matches the control to it.
 
 ### The matrix row
 
@@ -99,12 +105,14 @@ number on a matrix row overrides what the registry already holds:
   registry entry rather than merge with it, so this model is listed there with no
   price beside an alias that shows one. A wrong number in every cost row is worse
   than a blank in a dropdown.
-- **Context length: `medium`.** The column is a coarse label the platform turns
-  into a token count, and the chat handler trims history to it. `high` — what the
+- **Context length: `n_a`.** The column is a coarse label the platform turns into
+  a token count, and the chat handler trims history to it. `high` — what the
   platform's row for the alias says — is 200,000 against a 128,000-token model,
-  so a long conversation is rejected by the provider instead of trimmed. No
-  bucket means 128k; `medium` (32,000) trims early, the failure that loses
-  nothing.
+  so a long conversation is rejected by the provider instead of trimmed; `medium`
+  (32,000) made her budget flip between 32k and 128k depending on whether a
+  hydrate or the leaf's registration wrote last. `n_a` is 0, which falls through
+  to the registry's exact 128,000 in every order — and where nothing exact
+  exists, the handler reads 0 as "no token budget", not as a budget of nothing.
 
 ## Why there is no fallback
 
@@ -155,6 +163,9 @@ leaf; until this ran, its role route answered 404 for every role.
   unbind plus a rebind — so a seat another agent holds is an operator's decision,
   and is reported and left alone.
 - It never reads or writes the other four seats, and has no removal pass.
+- It does **not** run Daybreak's framework sync, as the journey-map seed does: a
+  binding points at no row that only boot materialises. The role is checked
+  against a constant in code, and the only row it needs is her agent.
 
 **She is still `internal`, with no capabilities, so the role route still answers 404.** That is deliberate. Widening her also opens Sunrise's general consumer chat
 route, which carries no turn id, no seat and no record of what produced a turn.
@@ -234,9 +245,9 @@ has run: `npm run db:seed` against each database.
 
 ## Tests
 
-| File                                                       | Pins                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | She is pinned to a dated pair and the control follows her — including onto a model an admin chose; a re-run writes nothing; the task defaults are never touched; a missing provider is said out loud; a missing agent throws before anything is written |
-| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled, framework rows first; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                   |
-| `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered        |
-| `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                              |
+| File                                                       | Pins                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | She is pinned to a dated pair and the control follows her — including onto a model an admin chose, even mid-run; a re-run writes nothing; the task defaults are never touched; a fresh install is pinned with a warning and a running install without the provider is refused; a missing or soft-deleted agent throws before anything is written |
+| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                                                                                                                                  |
+| `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered                                                                                                 |
+| `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                                                                                                                       |
