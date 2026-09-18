@@ -983,13 +983,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
-        // LELAÑEA's one, spread after them from `leaf-ci.ts` — pinned here too,
-        // for the same reason as the always-run tests above (§08 t-54).
+        // LELAÑEA's two, spread after them from `leaf-ci.ts` — pinned here too,
+        // for the same reason as the always-run tests above (§08 t-54, t-56).
         'lib/app/agent/turn-record.ts',
+        'lib/app/agent/metering.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(6).fill('by-design')
+        Array<'by-design'>(7).fill('by-design')
       );
     },
   },
@@ -1004,7 +1005,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // not. Pinned rather than deleted so the row still guards the two lists we
     // have NOT filled: a coverage exclusion appearing here would switch the
     // per-file 80% floor off for that path — and nothing else would notice. The
-    // ownerless-surface list is filled too (§08 t-54) and pinned by value, so a
+    // ownerless-surface list is filled too (§08 t-54, t-56) and pinned by value, so a
     // second exemption from the authorization seam still fails here.
     assert: () => {
       expect(leafCoverageExclusions).toEqual([]);
@@ -1017,9 +1018,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/voice/upload-scope.test.ts',
       ]);
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
+      // §08 t-56 — the meter's seat-only conversation join, by design.
       expect(
         leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
-      ).toEqual([['lib/app/agent/turn-record.ts', 'by-design']]);
+      ).toEqual([
+        ['lib/app/agent/turn-record.ts', 'by-design'],
+        ['lib/app/agent/metering.ts', 'by-design'],
+      ]);
     },
   },
 ];

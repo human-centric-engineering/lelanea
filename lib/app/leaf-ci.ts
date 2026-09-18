@@ -170,4 +170,18 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'that member’s own messages — never an ownerless or shared thread, which ' +
       'is the set the helper exists to decide about. §08 t-54.',
   },
+  {
+    path: 'lib/app/agent/metering.ts',
+    disposition: 'by-design',
+    reason:
+      'the meter joins the conversation table only to SEAT a cost row written before ' +
+      'rows were tagged: it reads `contextType` and `contextId` of the ' +
+      'conversation a cost row already points at, and nothing else — no ' +
+      'message, no title, no other column. Which rows are read is decided on ' +
+      'the COST LOG: a member route passes its own session id and the SQL ' +
+      'filters `ai_cost_log.userId` on it; the only callers passing none are ' +
+      'behind `withAdminAuth`. The access helper answers "which conversations ' +
+      'may this caller see", which is not the question — the caller never sees ' +
+      'the conversation, only the seat label of their own spend. §08 t-56.',
+  },
 ];
