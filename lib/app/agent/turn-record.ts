@@ -31,7 +31,6 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { isRecord } from '@/lib/utils';
-import { getModel } from '@/lib/orchestration/llm/model-registry';
 import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
 
@@ -203,19 +202,29 @@ export async function recordTurnStarted(
 }
 
 /**
- * Whether a turn's cost could be known — asked of the same registry that
- * priced the turn's cost row, so the answer is about that row.
+ * Whether a turn's cost could be known — read from what the turn was actually
+ * costed at, never from a price registry.
  *
- * A model with a rate is `priced`. One without is `local` when its provider is
- * configured as local — really free — and otherwise `unpriced`: logged at $0
- * because nobody knew the price, which a meter must not read as free.
+ * A turn that used tokens and came back at $0 was priced by a registry with no
+ * rate for its model — logged at $0 because nobody knew the price, which a
+ * meter must not read as free: `unpriced`. Unless its provider is configured as
+ * local, where $0 is the truth: `local`. Anything that cost something, or used
+ * nothing, is `priced`.
+ *
+ * **Not asked of the registry, deliberately.** This runs inside the turn hook,
+ * which is registered from the boot graph; the registry keeps its prices in a
+ * module-scoped variable, so asking it here would consult the boot graph's copy
+ * — not the copy that priced the turn — and could call a $0 turn priced. The
+ * `done` event is the answer the turn's own copy gave. Found by /code-review.
  */
-export async function classifyPricing(
-  model: string,
-  provider: string | null
-): Promise<AppTurnPricing> {
-  const info = getModel(model);
-  if (info && (info.inputCostPerMillion > 0 || info.outputCostPerMillion > 0)) return 'priced';
+export async function classifyPricing(outcome: {
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  provider: string | null;
+}): Promise<AppTurnPricing> {
+  const { costUsd, inputTokens, outputTokens, provider } = outcome;
+  if (costUsd > 0 || inputTokens + outputTokens === 0) return 'priced';
 
   if (provider) {
     const config = await prisma.aiProviderConfig.findUnique({

@@ -49,6 +49,12 @@ export interface FacilitationTurn {
   message: string;
   /** The client's own id for this turn, when it sent one. */
   clientTurnId: string | undefined;
+  /**
+   * The request's abort signal. A hook that claims anything before returning
+   * its stream needs it: a request aborted before the stream is read never
+   * iterates it, so nothing inside the stream can clean up.
+   */
+  signal?: AbortSignal;
 }
 
 /** What a hook may add to the turn's `streamChat` call. */

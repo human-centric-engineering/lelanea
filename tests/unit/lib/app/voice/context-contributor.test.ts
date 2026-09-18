@@ -122,6 +122,15 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
+/** Which agent each facilitation seat is bound to — hers unless a case says otherwise. */
+const seats = vi.hoisted(() => ({ boundTo: new Map<string, string>() }));
+vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
+  getFacilitationBindingByRole: vi.fn(async (role: string) => {
+    const slug = seats.boundTo.get(role);
+    return slug ? { role, agentId: `agent-${slug}`, agent: { slug } } : null;
+  }),
+}));
+
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -602,6 +611,14 @@ describe('a passage cannot escape the block that labels it', () => {
  * not on the registration, which `context-contributors.test.ts` already pins.
  */
 describe('a facilitation seat turn', () => {
+  beforeEach(() => {
+    seats.boundTo = new Map([
+      ['onboarding', 'lelanea-guide'],
+      ['facilitator', 'lelanea-guide'],
+      ['__proto__', 'lelanea-guide'],
+    ]);
+  });
+
   /**
    * Every system message for a seat turn, as the chat handler assembles them —
    * the composed prompt first, the context block as its own message after it.
@@ -651,6 +668,19 @@ describe('a facilitation seat turn', () => {
     for (const line of CONTENT.coreOnly.lines) expect(prompt).toContain(line);
     expect(labelCount(prompt)).toBe(0);
     expect(searchKnowledgeMock).not.toHaveBeenCalled();
+  });
+
+  it('a seat bound to another agent is not handed her voice', async () => {
+    // Population first: the same seat, bound to her, does carry the block.
+    expect(await systemPromptFor('onboarding')).toContain(CONTENT.exemplars.originLabel);
+    clearContextCache();
+    seats.boundTo.set('onboarding', 'someone-else');
+
+    const prompt = await systemPromptFor('onboarding');
+
+    expect(prompt).not.toContain('Register for this moment');
+    expect(prompt).not.toContain(CONTENT.exemplars.originLabel);
+    expect(prompt).not.toContain('There is a whisper');
   });
 
   it('a seat named like an object key maps to nothing', async () => {

@@ -42,7 +42,8 @@
  * Sunrise prices a turn from an in-memory registry. A model outside it is logged
  * at $0 with a warning nobody reads — which, on a meter, is a free turn. The
  * turn record says `unpriced` instead, stores no cost, and the log says so at
- * `warn`. See `classifyPricing()`.
+ * `warn` — judged from the turn's own `done`, not from a registry. See
+ * `classifyPricing()`.
  *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
@@ -53,7 +54,6 @@ import type { AppTurn } from '@prisma/client';
 import { logger } from '@/lib/logging';
 import type { ChatStream } from '@/lib/orchestration/chat/types';
 import type { ChatEvent } from '@/types/orchestration';
-import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
 import {
   claimTurn,
   classifyPricing,
@@ -80,6 +80,9 @@ export const TURN_REPLY_UNAVAILABLE = 'turn_reply_unavailable';
 
 /** The code a turn is failed with when its stream ended without an outcome. */
 export const TURN_INCOMPLETE = 'incomplete';
+
+/** The code a claimed turn is failed with when the request ended before its stream began. */
+export const TURN_ABORTED = 'aborted';
 
 /** A minted id: never sent by a client, so it can never replay. */
 export function mintTurnId(): string {
@@ -132,7 +135,8 @@ async function* replay(turn: AppTurn): ChatStream {
  * is stated where it lands — a turn left `running` is taken back as abandoned
  * after `STALE_CLAIM_MS`.
  */
-async function* recorded(turn: AppTurn, events: ChatStream): ChatStream {
+async function* recorded(turn: AppTurn, events: ChatStream, onStart: () => void): ChatStream {
+  onStart();
   let settled = false;
   let errorCode: string | null = null;
 
@@ -170,7 +174,14 @@ async function settleCompleted(
   done: Extract<ChatEvent, { type: 'done' }>
 ): Promise<void> {
   try {
-    const pricing = done.model ? await classifyPricing(done.model, done.provider ?? null) : null;
+    const pricing = done.model
+      ? await classifyPricing({
+          costUsd: done.costUsd,
+          inputTokens: done.tokenUsage.inputTokens,
+          outputTokens: done.tokenUsage.outputTokens,
+          provider: done.provider ?? null,
+        })
+      : null;
     if (pricing === 'unpriced') {
       logger.warn('Agent turn was costed at nothing: its model has no rate', {
         turnId: turn.turnId,
@@ -227,12 +238,6 @@ export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
-  // Her pinned model's rate, in this module graph, before the model is called.
-  // The provider-eligibility seam does this too, but it runs once per process
-  // and an admin page's registry refresh drops the entry; once per turn closes
-  // that (`.context/app/agent.md`, "How her model is priced").
-  ensurePinnedModelPriced();
-
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
   const fingerprintVersion = await readAgentFingerprintVersion(turn.agentSlug);
@@ -264,13 +269,32 @@ export async function runRecordedTurn(
     case 'completed':
       logger.info('Agent turn replayed', { turnId, seat: turn.role });
       return replay(claim.turn);
-    case 'claimed':
-      return recorded(
+    case 'claimed': {
+      const stream = recorded(
         claim.turn,
         run({
           costLogMetadata: { turnId, seat: turn.role },
           messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
-        })
+        }),
+        () => {
+          started = true;
+        }
       );
+      // A request that ends before its stream is read never runs the stream's
+      // `finally` — `sseResponse` returns without iterating an already-aborted
+      // request — so the claim would stay `running` and refuse the very retry
+      // it exists for, for STALE_CLAIM_MS. Settle it here instead. Once the
+      // stream has begun, its own `finally` owns the settle. Found by /code-review.
+      let started = false;
+      const settleUnstarted = (): void => {
+        if (started) return;
+        void recordTurnFailed(claim.turn, TURN_ABORTED).catch((err: unknown) =>
+          logRecordFailure('aborted', claim.turn, err)
+        );
+      };
+      if (turn.signal?.aborted) settleUnstarted();
+      else turn.signal?.addEventListener('abort', settleUnstarted, { once: true });
+      return stream;
+    }
   }
 }

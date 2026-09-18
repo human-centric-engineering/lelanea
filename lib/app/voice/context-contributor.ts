@@ -88,6 +88,8 @@
 import { getVoiceOverlays, type VoiceOverlay } from '@/lib/app/content';
 import { selectOverlay } from '@/lib/app/voice/overlays';
 import { retrieveVoiceExemplarsSafely, type VoiceExemplar } from '@/lib/app/voice/exemplars';
+import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -246,6 +248,12 @@ export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
  * actually takes. Daybreak registers no contributor for the type, so this claims
  * nothing another tier holds.
  */
-export function loadFacilitationVoiceContext(seat: string): Promise<string> {
+export async function loadFacilitationVoiceContext(seat: string): Promise<string> {
+  // Hers only. The type is every facilitation seat, and Daybreak has six; a seat
+  // bound to another agent must not be handed her voice. One read, and
+  // `buildContext` caches the block per seat and person for its TTL. Found by
+  // /code-review. An empty body frames an empty block, which says nothing.
+  const binding = await getFacilitationBindingByRole(seat);
+  if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
   return loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
 }

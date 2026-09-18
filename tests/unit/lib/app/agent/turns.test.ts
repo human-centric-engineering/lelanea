@@ -567,6 +567,45 @@ describe('when the record itself fails', () => {
   });
 });
 
+describe('a request that ends before its stream is read', () => {
+  it('leaves the turn failed, so the retry runs instead of meeting a 409', async () => {
+    const controller = new AbortController();
+    const turn = { ...turnFor(), signal: controller.signal };
+    await runRecordedTurn(turn, fakeRun(turn)); // claimed; the stream is never read
+    expect(db.turns[0].status).toBe('running');
+
+    controller.abort();
+    await vi.waitFor(() => expect(db.turns[0].status).toBe('failed'));
+    expect(db.turns[0].errorCode).toBe('aborted');
+
+    await take(turnFor());
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2 });
+    expect(modelCalls).toBe(1);
+  });
+
+  it('settles at once when the request was already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const turn = { ...turnFor(), signal: controller.signal };
+
+    await runRecordedTurn(turn, fakeRun(turn));
+
+    await vi.waitFor(() => expect(db.turns[0].errorCode).toBe('aborted'));
+  });
+
+  it('leaves a stream that has begun to settle itself', async () => {
+    const controller = new AbortController();
+    const turn = { ...turnFor(), signal: controller.signal };
+    const stream = await streamOf(turn);
+    await stream.next();
+
+    controller.abort(); // mid-stream: the stream's own finally owns this
+    for (let next = await stream.next(); !next.done; next = await stream.next());
+
+    expect(db.turns[0].status).toBe('completed');
+  });
+});
+
 describe('the edges of a claim', () => {
   it('a turn that hits the per-turn cost cap is failed with that code, so it may run again', async () => {
     const turn = turnFor();

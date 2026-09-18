@@ -91,6 +91,7 @@ export const POST = withAuth<{ role: string }>(
         conversationId: surface.conversationId,
         message: body.message,
         clientTurnId: body.turnId,
+        signal: request.signal,
       },
       (extras) =>
         streamChat({

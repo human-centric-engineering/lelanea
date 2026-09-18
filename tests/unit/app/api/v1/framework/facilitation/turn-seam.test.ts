@@ -155,6 +155,8 @@ describe('wired — the route reaches a registered hook', () => {
         conversationId: 'conv-9',
         message: 'hi',
         clientTurnId: 'turn-abc',
+        // So a hook that claims before streaming can settle an early abort.
+        signal: expect.any(AbortSignal),
       },
       expect.any(Function)
     );

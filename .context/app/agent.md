@@ -252,9 +252,11 @@ once per process so it does not put it back. After a _successful_ refresh that i
 harmless — OpenRouter lists this snapshot at the same rate, and delists one only
 when the provider retires the model. A _failed_ refresh leaves the registry as it
 was. Nothing on the chat path or in the evaluation worker refreshes at all; it
-takes an admin page sharing the module instance. And the turn hook calls
-`ensurePinnedModelPriced()` before every facilitation turn (§08 t-54), which
-closes even that on the path a member takes.
+takes an admin page sharing the module instance. The turn hook cannot close
+that gap from its side — it is registered from the boot graph, and warming a
+registry there warms the boot graph's copy, not the route's — so it does the
+other half: if a member's turn ever is costed at $0 this way, the turn record
+says `unpriced` rather than free (§08 t-54, below).
 
 The seam fill goes when Sunrise prices an id outside its static map on the chat
 and evaluation-worker paths — reported as
@@ -363,10 +365,15 @@ row whose `messageId` is the turn's `assistantMessageId`.
 
 ### A turn costed at nothing
 
-A model with no rate in the registry the turn was priced from is recorded as
-`pricing: unpriced` with **`costUsd` null** — never `0` — and logged at `warn`
-(`Agent turn was costed at nothing`). A model on a provider configured as local is
-`local`, cost as reported: really free, and not the same fact. The platform's own
+A turn that used tokens and came back at $0 — its model had no rate in the
+registry that priced it — is recorded as `pricing: unpriced` with **`costUsd`
+null**, never `0`, and logged at `warn` (`Agent turn was costed at nothing`). On a
+provider configured as local it is `local`, cost as reported: really free, and not
+the same fact.
+
+It is judged from the turn's own `done` event, **not by asking the registry**:
+the hook runs in the boot graph, whose registry is a different copy from the one
+that priced the turn, and would answer for the wrong copy. The platform's own
 cost row for an unpriced turn still says $0; the turn record is what knows better.
 
 ### Sessions
