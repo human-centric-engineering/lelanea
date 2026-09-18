@@ -107,7 +107,25 @@
  *
  * Full guide: `.context/orchestration/llm-providers.md`
  */
+
+import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
+
 export function registerAppProviderEligibility(): void | Promise<void> {
-  // No app provider-eligibility rule by default: every configured provider is
-  // eligible everywhere, which is Sunrise's single-tenant behaviour.
+  // Still NO eligibility rule: every configured provider is eligible
+  // everywhere, which is Sunrise's single-tenant behaviour and what the seam
+  // defaults test goes on asserting of this file.
+  //
+  // What Lelañea uses this seam for is its TIMING, not its purpose, and that is
+  // worth saying out loud. She is pinned to a dated model id (§8.2) that
+  // Sunrise's static price map does not know, and nothing on the chat path or in
+  // the evaluation worker warms the registry — so in a cold process her turns
+  // were costed at $0. This function is the one leaf hook Sunrise runs lazily, in
+  // whichever module graph is about to resolve a provider, before the cost of
+  // that call is logged: exactly where the rate has to be known. Registering a
+  // model is synchronous, idempotent and restricts nothing.
+  //
+  // Owner ruling, 18 Sept 2026. The why and the measurements are in
+  // `lib/app/agent/pinned-model.ts`; the platform gap is reported as sunrise#813, and
+  // this goes when Sunrise prices an id outside its static map on those paths.
+  ensurePinnedModelPriced();
 }

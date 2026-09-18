@@ -257,9 +257,11 @@ const unit: SeedUnit = {
           description:
             'The guide a person meets inside the app — her voice, her material, her boundaries.',
           systemInstructions: VOICE_AGENT_SYSTEM_INSTRUCTIONS,
-          // Empty strings: resolved at runtime from the operator's first
-          // configured provider and the system default chat model, the same
-          // contract the platform's own seeded agents use.
+          // Empty strings here, on purpose: choosing her model is
+          // `005-agent-models.ts`'s job, and it fills these only while they are
+          // still blank — so a model an admin picked survives a re-seed. Until
+          // that unit runs she resolves like the platform's own seeded agents,
+          // from the install's default chat model.
           model: '',
           provider: '',
           isActive: true,

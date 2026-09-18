@@ -34,6 +34,11 @@ vi.mock('@/lib/logging', () => ({
 }));
 
 import { getVoicePreflight } from '@/lib/app/voice/preflight';
+import { PINNED_MODEL } from '@/lib/app/agent/pinned-model';
+import {
+  __resetForTests as resetModelRegistry,
+  getModel,
+} from '@/lib/orchestration/llm/model-registry';
 
 const ADMIN = 'user-admin';
 
@@ -99,11 +104,31 @@ describe('getVoicePreflight', () => {
     expect(preflight.cost?.highUsd).toBeCloseTo(0.08);
   });
 
+  it('teaches the registry her pinned model’s rate before asking for an estimate', async () => {
+    // The estimator prices from the registry and never resolves a provider, so
+    // the seam that registers the rate does not run on this path. Cold, the
+    // dated id is unknown — and the estimate would read as unpriced whenever
+    // OpenRouter did not answer, with the rate sitting in this repo.
+    resetModelRegistry();
+    expect(getModel(PINNED_MODEL)).toBeUndefined();
+    let pricedWhenEstimated = false;
+    estimateEvaluationRunCost.mockImplementation(async () => {
+      pricedWhenEstimated = (getModel(PINNED_MODEL)?.inputCostPerMillion ?? 0) > 0;
+      return estimate();
+    });
+
+    await getVoicePreflight(ADMIN);
+
+    expect(estimateEvaluationRunCost).toHaveBeenCalled();
+    expect(pricedWhenEstimated).toBe(true);
+  });
+
   it('reports the model that would actually answer', async () => {
     const preflight = await getVoicePreflight(ADMIN);
 
     expect(preflight.modelId).toBe('claude-sonnet-5');
-    // The agents ship bound to no model so they resolve to the install default.
+    // Arms the model pin has not reached are bound to nothing and resolve to the
+    // install default.
     // Reporting the default as though it were the binding would hide the one
     // state `assertArmsComparable` checks for.
     expect(preflight.arms.map((entry) => entry.boundModel)).toEqual([null, null]);

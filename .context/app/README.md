@@ -36,6 +36,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`gateway.md`](./gateway.md)         | The gate: the ledger, its API, the redirect, `/app/begin`, and the two data rights                    |
 | [`emails.md`](./emails.md)           | Which auth emails are ours, the chrome they share, and why the welcome is verbatim                    |
 | [`voice.md`](./voice.md)             | Voice: the three layers, what each document may be quoted for, and the golden set it is heard through |
+| [`agent.md`](./agent.md)             | The one agent: the model she is pinned to, where an admin changes it, no fallback, and her two seats  |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 

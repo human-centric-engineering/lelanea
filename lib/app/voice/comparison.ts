@@ -281,11 +281,12 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
     );
   }
 
-  // Not a purity check. Both agents ship with an empty provider/model so they
-  // resolve to the same install default, but `SYSTEM_AGENT_PROTECTED_FIELDS`
-  // does not cover any of these three — an operator can pin a model on one agent
-  // through the admin form, and from then on the comparison measures the models
-  // rather than the fingerprint, with nothing on the screen saying so.
+  // Not a purity check. Both agents are created unbound and then pinned to the
+  // same provider and model by `005-agent-models.ts`, but that pin is
+  // operator-owned and `SYSTEM_AGENT_PROTECTED_FIELDS` does not cover any of
+  // these three — an operator can change the model on one agent through the
+  // admin form, and from then on the comparison measures the models rather than
+  // the fingerprint, with nothing on the screen saying so.
   const differing = (['provider', 'model', 'temperature'] as const).filter(
     (key) => fingerprint.binding[key] !== bare.binding[key]
   );
@@ -297,7 +298,7 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
       )
       .join('; ');
     throw new ValidationError(
-      `The two arms are bound to different models, so the run would compare the models rather than the voice (${detail}). Match them in /admin/orchestration/agents — both ship with an empty provider and model so they resolve to this install's default.`
+      `The two arms are bound to different models, so the run would compare the models rather than the voice (${detail}). Match them in /admin/orchestration/agents — the seed pins both arms to the same provider and model, and a change to one has to be made to the other.`
     );
   }
 }

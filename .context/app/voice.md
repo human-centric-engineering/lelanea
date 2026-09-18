@@ -163,6 +163,11 @@ belongs to whichever task builds the surface a member talks to; shipping a
 publicly reachable agent ahead of that surface would be a live endpoint nobody
 had designed.
 
+And it leaves her **provider and model blank**. Which model she runs on is a
+separate decision with a separate owner — `005-agent-models.ts` pins it, for her
+and for the bare control alike, and [`agent.md`](./agent.md) says what is pinned,
+where an admin changes it, and why there is no fallback.
+
 ---
 
 # The register for the moment, and her own sentences
@@ -486,7 +491,8 @@ fingerprint did anything. That is why the control is not optional.
 
 Every way this feature fails is silent. A profile detached from her agent, a
 control pointed at her profile, both arms resolving to the same agent, a model
-pinned on one side through the admin form — none throws, none logs, and every one
+changed on one side through the admin form (the seed pins both arms to the same
+one — see [`agent.md`](./agent.md)) — none throws, none logs, and every one
 produces two walls of plausible prose that look exactly like a comparison in
 which her fingerprint changed nothing.
 

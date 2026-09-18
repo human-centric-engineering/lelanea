@@ -279,10 +279,10 @@ const unit: SeedUnit = {
           slug: VOICE_CONTROL_AGENT_SLUG,
           description: goldenSet.control.description,
           systemInstructions: goldenSet.control.systemInstructions,
-          // Empty strings: resolved at runtime from the operator's first
-          // configured provider and the system default chat model — the same
-          // contract her own agent uses, which is what makes the two arms
-          // resolve to the SAME model without either naming one.
+          // Empty strings here, as on her own agent: `005-agent-models.ts` pins
+          // BOTH arms to the same provider and model, which is what keeps the
+          // comparison about the voice. Left blank, the two still match — both
+          // resolve to the install's default chat model.
           model: '',
           provider: '',
           isActive: true,

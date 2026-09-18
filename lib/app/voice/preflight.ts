@@ -38,6 +38,7 @@
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
 import { getVoiceGoldenSet } from '@/lib/app/content';
 import { resolveVoiceArms } from '@/lib/app/voice/comparison';
 import { BRAND_VOICE_JUDGE_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
@@ -50,11 +51,12 @@ export interface VoicePreflightArm {
   /**
    * The model the arm is BOUND to, or `null` when it is bound to none.
    *
-   * Both voice agents ship with an empty `model` so they resolve to the install
-   * default — which is the point of the binding check in
-   * `assertArmsComparable`, and why `null` is reported rather than papered over
-   * with the default's name. `modelId` on the estimate carries what would
-   * actually answer.
+   * Both voice agents are created with an empty `model` and pinned afterwards
+   * by `005-agent-models.ts`, so `null` means an arm that pin has not reached —
+   * it would resolve to the install default. That is reported rather than
+   * papered over with the default's name, because one arm bound and one not is
+   * exactly the state `assertArmsComparable` checks for. `modelId` on the
+   * estimate carries what would actually answer.
    */
   boundModel: string | null;
 }
@@ -107,6 +109,13 @@ export async function getVoicePreflight(userId: string): Promise<VoicePreflight>
   };
 
   if (arms.length === 0 || !dataset || dataset.caseCount === 0) return preflight;
+
+  // The estimator prices from the in-memory registry and never resolves a
+  // provider, so the seam that teaches the registry her pinned model's rate does
+  // not run on this path. Without this the estimate for the dated id depends on
+  // OpenRouter answering, and reads as unpriced whenever it does not — while the
+  // rate sits in this repo. See `lib/app/agent/pinned-model.ts`.
+  ensurePinnedModelPriced();
 
   try {
     const estimates = await Promise.all(
