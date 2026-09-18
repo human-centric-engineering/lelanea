@@ -152,6 +152,8 @@ describe('getGenerationStatus', () => {
       { status: 'completed', errorCode: null, completedAt: ago(60_000) },
       { status: 'failed', errorCode: 'reply_not_linked', completedAt: ago(1_000) },
       { status: 'failed', errorCode: 'budget_exceeded_per_turn', completedAt: ago(500) },
+      { status: 'failed', errorCode: 'citation_required', completedAt: ago(400) },
+      { status: 'failed', errorCode: 'tool_loop_cap', completedAt: ago(300) },
     ];
     await expect(getGenerationStatus(NOW)).resolves.toBe('available');
   });

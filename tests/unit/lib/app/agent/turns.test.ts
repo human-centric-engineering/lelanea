@@ -1212,6 +1212,37 @@ describe('the two deadlines (§08 t-55)', () => {
     expect(db.turns[0]).toMatchObject({ status: 'failed', errorCode: 'timed_out' });
   });
 
+  it('a deadline passing while a finished turn is being recorded does not end it (found by /code-review)', async () => {
+    // The model answers just inside the deadline; writing that answer takes past it.
+    const writing = gate();
+    const realUpdateMany = vi.mocked(prisma.appTurn.updateMany).getMockImplementation()!;
+    const slowCompletingWrite = async (
+      args: Parameters<typeof realUpdateMany>[0]
+    ): Promise<{ count: number }> => {
+      if (args.data.status === 'completed') await writing.promise;
+      return realUpdateMany(args);
+    };
+    // The fake returns a plain promise, as the fake it wraps already does.
+    vi.mocked(prisma.appTurn.updateMany).mockImplementation(slowCompletingWrite as never);
+    const { stream, finished } = await begin(turnFor());
+    const reader = readInBackground(stream);
+
+    await vi.advanceTimersByTimeAsync(0);
+    // The population: the completing write is in flight, and the deadline passes.
+    expect(db.turns[0].status).toBe('running');
+    await vi.advanceTimersByTimeAsync(60_000);
+    writing.open();
+    await reader.done;
+    await finished;
+
+    expect(reader.events.map((e) => e.type)).toEqual(['start', 'content', 'done']);
+    expect(db.turns[0]).toMatchObject({ status: 'completed', errorCode: null });
+    // So the retry is a replay, not a second bill.
+    vi.mocked(prisma.appTurn.updateMany).mockImplementation(realUpdateMany);
+    await take(turnFor());
+    expect(modelCalls).toBe(1);
+  });
+
   it('a reader that left does not stop the deadline', async () => {
     behaviour.gate = gate().promise;
     const { stream, finished } = await begin(turnFor());

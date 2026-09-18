@@ -35,6 +35,9 @@ export const ENDING_UNAVAILABLE = 'unavailable';
 export const ENDING_TIMED_OUT = 'timed_out';
 export const ENDING_PAUSED = 'paused';
 
+/** The platform's monthly-budget warning, which carries the agent's spend. */
+const BUDGET_WARNING = 'budget_warning';
+
 /** The `warning` code sent once when no words have come by the first-words deadline. */
 export const STILL_THINKING = 'still_thinking';
 
@@ -88,15 +91,22 @@ export function stillThinkingFrame(): Extract<ChatEvent, { type: 'warning' }> {
  *
  * The two terminal failure shapes — `error`, and the per-turn cost cap's own
  * `budget_exceeded_per_turn` (which carries spend figures) — become an ending
- * frame, their code and text dropped. Everything else passes as it is.
+ * frame, their code and text dropped. The agent's monthly `budget_warning`
+ * ("used 85% of its $X budget") is dropped outright: it is an operator's
+ * number, not a person's. Everything else passes as it is. `null` means send
+ * nothing.
  */
-export function toClientEvent(event: ChatEvent): ChatEvent {
+export function toClientEvent(event: ChatEvent): ChatEvent | null {
   if (event.type === 'error') return endingFrame(endingForCode(event.code));
   if (event.type === 'budget_exceeded_per_turn') return endingFrame('unavailable');
+  if (event.type === 'warning' && event.code === BUDGET_WARNING) return null;
   return event;
 }
 
 /** A stream with every frame passed through {@link toClientEvent}. */
 export async function* toClientStream(events: AsyncIterable<ChatEvent>): AsyncGenerator<ChatEvent> {
-  for await (const event of events) yield toClientEvent(event);
+  for await (const event of events) {
+    const client = toClientEvent(event);
+    if (client) yield client;
+  }
 }

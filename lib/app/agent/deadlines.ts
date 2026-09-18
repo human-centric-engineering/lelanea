@@ -40,8 +40,16 @@ export interface TurnDeadlines {
 }
 
 export interface DeadlineRunOptions {
-  /** Start the upstream under this signal. Called once, synchronously. */
-  start: (signal: AbortSignal) => ChatStream;
+  /**
+   * Start the upstream under this signal. Called once, synchronously.
+   *
+   * `disarm()` is for the moment the upstream reports its outcome — `done`, or
+   * a failure — and BEFORE that outcome is settled: it stands the whole-turn
+   * deadline down, so a deadline passing mid-settle cannot end a turn that has
+   * already ended. It answers `false` when the deadline fired first; the
+   * deadline then owns the turn, and the outcome must not be settled.
+   */
+  start: (signal: AbortSignal, disarm: () => boolean) => ChatStream;
   deadlines: TurnDeadlines;
   /**
    * Settle the turn as timed out. Awaited BEFORE the reader is told, so a retry
@@ -116,6 +124,7 @@ export function runWithDeadlines(options: DeadlineRunOptions): DeadlineRun {
   const channel = createChannel<ChatEvent>();
   let sawWords = false;
   let timedOut = false;
+  let disarmed = false;
 
   const firstWordsTimer = setTimeout(() => {
     if (!sawWords && !channel.closed) channel.push(stillThinkingFrame());
@@ -127,6 +136,7 @@ export function runWithDeadlines(options: DeadlineRunOptions): DeadlineRun {
   });
 
   const turnTimer = setTimeout(() => {
+    if (disarmed) return;
     timedOut = true;
     clearTimeout(firstWordsTimer);
     controller.abort();
@@ -140,9 +150,17 @@ export function runWithDeadlines(options: DeadlineRunOptions): DeadlineRun {
       });
   }, deadlines.turnDeadlineMs);
 
+  const disarm = (): boolean => {
+    if (timedOut) return false;
+    disarmed = true;
+    clearTimeout(turnTimer);
+    clearTimeout(firstWordsTimer);
+    return true;
+  };
+
   const pump = async (): Promise<void> => {
     try {
-      for await (const event of options.start(controller.signal)) {
+      for await (const event of options.start(controller.signal, disarm)) {
         // Past the deadline the reader has its ending; what the aborted
         // upstream says on its way out is drained, not forwarded.
         if (timedOut) continue;

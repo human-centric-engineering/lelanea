@@ -360,7 +360,11 @@ row whose `messageId` is the turn's `assistantMessageId`.
   crashed process, or a database down for both tries of a settle, leaves one
   `running`. A settling write that fails is tried once more. A settle names its
   attempt, so an attempt that outlived its claim writes nothing over the one
-  that replaced it.
+  that replaced it. **Known limit:** the window is the deadline in force when the
+  _retry_ asks, not the one the running turn started under — an admin who cuts
+  the deadline sharply mid-turn can let a retry take over a turn that is still
+  running (two model calls for one id). Storing each turn's deadline would close
+  it; not done, for a rare operator action.
 - **A turn that finishes with no reply to link** is settled `failed`
   (`reply_not_linked`), not `completed` — the id can run again rather than
   answering every retry with an error.
@@ -432,6 +436,8 @@ Every frame from her seat reaches the browser through `toClientStream()`
   platform's code in `errorCode`, for diagnosis.
 - **The per-turn cost cap's own frame** (`budget_exceeded_per_turn`, which
   carries spend figures) is replaced by `unavailable` as well.
+- **The agent's monthly `budget_warning`** (a dollar figure) is dropped: an
+  operator's number, not a member's. Other warnings pass through.
 - **"Try again" is real** (`HB10`): the client resends with the **same turn id**.
   A failed or timed-out turn runs again under it; one that completed is replayed.
 - **Still thinking** is not an ending: `{ type: 'warning', code: 'still_thinking' }`,
@@ -453,6 +459,10 @@ Read per request from `app_agent_settings` (`getAgentDeadlines()`), so a change 
   the turn is settled `failed` with `errorCode: timed_out` **before** the reader is
   told, and the reader gets `timed_out` at once. A retry sent the moment it arrives
   is therefore a re-run, not a 409.
+- **Once the platform reports an outcome the deadline stands down.** A `done` (or
+  a failure) disarms it before the outcome is written, so a deadline passing
+  mid-write cannot say `timed_out` after a whole answer, nor leave a saved reply
+  on a failed turn that the retry would bill again.
 
 **What a timed-out turn leaves in the transcript** (hypothesis a, checked in
 `streaming-handler.ts`): the person's message, and the platform's error-marker

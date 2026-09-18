@@ -108,6 +108,16 @@ describe('toClientEvent', () => {
     });
   });
 
+  it("drops the monthly budget warning — the agent's spend is not a member's business", () => {
+    const warning: ChatEvent = {
+      type: 'warning',
+      code: 'budget_warning',
+      message: 'This agent has used 85% of its $50.00 monthly budget.',
+    };
+
+    expect(toClientEvent(warning)).toBeNull();
+  });
+
   it('passes every other frame as it is', () => {
     const frames: ChatEvent[] = [
       { type: 'start', conversationId: 'c1', messageId: 'm1' },

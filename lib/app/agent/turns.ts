@@ -153,18 +153,25 @@ async function* replay(turn: AppTurn): ChatStream {
  * The turn is settled BEFORE `done` is passed on, so a retry that lands the
  * moment the client sees `done` finds a completed turn, not a running one.
  *
- * Once the whole-turn deadline has fired the deadline owns the settle — it wrote
- * `timed_out` — so nothing here writes over it: not a `done` that arrived a
- * moment too late, and not the `aborted` error the cancelled call ends on.
+ * The outcome — `done`, or a failure — first `disarm()`s the whole-turn deadline,
+ * so a deadline passing while the outcome is being written cannot end a turn
+ * that has already ended (found by /code-review: the person saw a whole answer
+ * and then "timed out", and a lost race left the turn failed with its reply
+ * saved, so the retry billed twice). If the deadline fired first it owns the
+ * settle — it wrote `timed_out` — and nothing here writes over it.
  *
  * A failure to write the record is logged and never fails the turn: the person
  * is owed their answer whether or not the meter heard about it. What that costs
  * is stated where it lands — a turn left `running` is taken back as abandoned
  * after `staleClaimMs()`.
  */
-async function* recorded(turn: AppTurn, events: ChatStream, isTimedOut: () => boolean): ChatStream {
+async function* recorded(turn: AppTurn, events: ChatStream, disarm: () => boolean): ChatStream {
   let settled = false;
   let errorCode: string | null = null;
+  // Whether this stream, not the deadline, owns the settle. Decided once, at
+  // the first outcome; a stream that ends with none asks at its end.
+  let owns: boolean | null = null;
+  const ownsSettle = (): boolean => (owns ??= disarm());
 
   try {
     for await (const event of events) {
@@ -179,15 +186,18 @@ async function* recorded(turn: AppTurn, events: ChatStream, isTimedOut: () => bo
           userMessageId: event.messageId ?? null,
         };
       } else if (event.type === 'done') {
-        if (!isTimedOut()) await settleCompleted(turn, event);
+        if (ownsSettle()) await settleCompleted(turn, event);
         settled = true;
       } else if (event.type === 'error' || event.type === 'budget_exceeded_per_turn') {
+        // Not while the aborted call ends past the deadline: that is its own
+        // `aborted`, and the deadline has already ended the turn.
+        if (!ownsSettle()) continue;
         errorCode = event.code;
       }
       yield event;
     }
   } finally {
-    if (!settled && !isTimedOut()) {
+    if (!settled && ownsSettle()) {
       await settleWrite(() => recordTurnFailed(turn, errorCode ?? TURN_INCOMPLETE)).catch(
         (err: unknown) => logRecordFailure('failed', turn, err)
       );
@@ -336,12 +346,11 @@ export async function runRecordedTurn(
       logger.info('Agent turn replayed', { turnId, seat: turn.role });
       return toClientStream(replay(claim.turn));
     case 'claimed': {
-      let timedOut = false;
       const { events, finished } = runWithDeadlines({
         deadlines,
         // The signal is this seam's, fired only by the whole-turn deadline. It
         // replaces the request's, so a client going away aborts nothing.
-        start: (signal) =>
+        start: (signal, disarm) =>
           recorded(
             claim.turn,
             run({
@@ -349,10 +358,9 @@ export async function runRecordedTurn(
               messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
               signal,
             }),
-            () => timedOut
+            disarm
           ),
         onTimeout: async () => {
-          timedOut = true;
           logger.warn('Agent turn passed its deadline and was ended', {
             turnId,
             seat: turn.role,

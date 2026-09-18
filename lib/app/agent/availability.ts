@@ -57,6 +57,8 @@ const NOT_AVAILABILITY_CODES: ReadonlySet<string> = new Set([
   REPLY_NOT_LINKED,
   'input_blocked',
   'output_blocked',
+  'citation_required',
+  'tool_loop_cap',
   'budget_exceeded_per_turn',
   'conversation_cap_reached',
   'conversation_length_cap_reached',
