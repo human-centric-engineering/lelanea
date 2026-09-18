@@ -38,6 +38,7 @@
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
 import { getVoiceGoldenSet } from '@/lib/app/content';
 import { resolveVoiceArms } from '@/lib/app/voice/comparison';
 import { BRAND_VOICE_JUDGE_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
@@ -108,6 +109,13 @@ export async function getVoicePreflight(userId: string): Promise<VoicePreflight>
   };
 
   if (arms.length === 0 || !dataset || dataset.caseCount === 0) return preflight;
+
+  // The estimator prices from the in-memory registry and never resolves a
+  // provider, so the seam that teaches the registry her pinned model's rate does
+  // not run on this path. Without this the estimate for the dated id depends on
+  // OpenRouter answering, and reads as unpriced whenever it does not — while the
+  // rate sits in this repo. See `lib/app/agent/pinned-model.ts`.
+  ensurePinnedModelPriced();
 
   try {
     const estimates = await Promise.all(

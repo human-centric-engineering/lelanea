@@ -3,9 +3,9 @@
  *
  * Split out of `pins.ts` for one reason: `lib/app/llm-providers.ts` imports this
  * file, and that seam is loaded in every module graph that is about to resolve a
- * provider. `pins.ts` also names her agents and seats, which pulls in the content
- * loader and Daybreak's vocabulary; none of that belongs on the path to a model
- * call. This file imports a type and nothing more.
+ * provider. `pins.ts` also names her seats, which pulls in Daybreak's vocabulary, and the
+ * matrix row; none of that belongs on the path to a model call. This file imports the model registry — synchronous, no database — and
+ * nothing more.
  *
  * ## Why the price is here at all
  *
@@ -13,7 +13,8 @@
  * static map knows the alias `gpt-4o-mini` and not the dated snapshot §8.2 makes
  * us pin, and nothing on the chat path or in the evaluation worker warms the
  * registry from anywhere else — only the admin cost/model pages and the
- * estimators do, each in their own module graph. Measured on 18 Sept 2026, in a
+ * estimators do, and Next can bundle the registry separately per route, so
+ * warming one copy does not reliably warm another. Measured on 18 Sept 2026, in a
  * cold process, 3,000 tokens in and 300 out: the alias priced at $0.00063 and
  * the dated id at **$0**, with a warning nobody reads.
  *
@@ -37,6 +38,7 @@
  * @see .context/app/agent.md
  */
 
+import { getModel, registerModels } from '@/lib/orchestration/llm/model-registry';
 import type { ModelInfo } from '@/lib/orchestration/llm/types';
 
 /** The `AiProviderConfig.slug` her turns go to. Explicit, so it is never re-picked. */
@@ -62,3 +64,28 @@ export const PINNED_MODEL_INFO: ModelInfo = {
   maxContext: 128_000,
   supportsTools: true,
 };
+
+/**
+ * Make sure the registry THIS module graph reads can price the pinned model.
+ *
+ * Cheap enough to call wherever a price is about to be asked for: one map lookup
+ * when the rate is already there, one registration when it is not. Two callers
+ * today — the provider seam (before any model call is costed) and the voice
+ * preflight (before the leaf's own estimate).
+ *
+ * **What can undo it, stated rather than discovered.** `refreshFromOpenRouter()`
+ * rebuilds the registry from the static map plus OpenRouter's list, which drops
+ * this entry, and the provider seam is wired once per process so it does not put
+ * it back. After a SUCCESSFUL refresh that is harmless: OpenRouter lists this
+ * snapshot at the same split rate, and delists one only when the provider retires
+ * the model — at which point her turns fail for a better reason than their price.
+ * A FAILED refresh leaves the registry, and this entry, as they were. Nothing on
+ * the chat path or in the evaluation worker calls the refresh at all; it takes an
+ * admin page sharing the module instance. §08 t-54 owns the turn path and can call
+ * this per turn, which closes even that.
+ */
+export function ensurePinnedModelPriced(): void {
+  const known = getModel(PINNED_MODEL);
+  if (known && known.inputCostPerMillion > 0 && known.outputCostPerMillion > 0) return;
+  registerModels([PINNED_MODEL_INFO]);
+}

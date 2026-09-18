@@ -34,6 +34,11 @@ vi.mock('@/lib/logging', () => ({
 }));
 
 import { getVoicePreflight } from '@/lib/app/voice/preflight';
+import { PINNED_MODEL } from '@/lib/app/agent/pinned-model';
+import {
+  __resetForTests as resetModelRegistry,
+  getModel,
+} from '@/lib/orchestration/llm/model-registry';
 
 const ADMIN = 'user-admin';
 
@@ -97,6 +102,25 @@ describe('getVoicePreflight', () => {
     expect(preflight.cost?.midUsd).toBeCloseTo(0.04);
     expect(preflight.cost?.lowUsd).toBeCloseTo(0.02);
     expect(preflight.cost?.highUsd).toBeCloseTo(0.08);
+  });
+
+  it('teaches the registry her pinned model’s rate before asking for an estimate', async () => {
+    // The estimator prices from the registry and never resolves a provider, so
+    // the seam that registers the rate does not run on this path. Cold, the
+    // dated id is unknown — and the estimate would read as unpriced whenever
+    // OpenRouter did not answer, with the rate sitting in this repo.
+    resetModelRegistry();
+    expect(getModel(PINNED_MODEL)).toBeUndefined();
+    let pricedWhenEstimated = false;
+    estimateEvaluationRunCost.mockImplementation(async () => {
+      pricedWhenEstimated = (getModel(PINNED_MODEL)?.inputCostPerMillion ?? 0) > 0;
+      return estimate();
+    });
+
+    await getVoicePreflight(ADMIN);
+
+    expect(estimateEvaluationRunCost).toHaveBeenCalled();
+    expect(pricedWhenEstimated).toBe(true);
   });
 
   it('reports the model that would actually answer', async () => {

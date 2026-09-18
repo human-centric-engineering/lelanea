@@ -108,8 +108,7 @@
  * Full guide: `.context/orchestration/llm-providers.md`
  */
 
-import { registerModels } from '@/lib/orchestration/llm/model-registry';
-import { PINNED_MODEL_INFO } from '@/lib/app/agent/pinned-model';
+import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
 
 export function registerAppProviderEligibility(): void | Promise<void> {
   // Still NO eligibility rule: every configured provider is eligible
@@ -128,5 +127,5 @@ export function registerAppProviderEligibility(): void | Promise<void> {
   // Owner ruling, 18 Sept 2026. The why and the measurements are in
   // `lib/app/agent/pinned-model.ts`; the platform gap is reported upstream, and
   // this goes when Sunrise prices an id outside its static map on those paths.
-  registerModels([PINNED_MODEL_INFO]);
+  ensurePinnedModelPriced();
 }

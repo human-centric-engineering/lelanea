@@ -47,7 +47,12 @@ vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { PINNED_MODEL, PINNED_MODEL_INFO, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
+import {
+  PINNED_MODEL,
+  PINNED_MODEL_INFO,
+  PINNED_PROVIDER,
+  ensurePinnedModelPriced,
+} from '@/lib/app/agent/pinned-model';
 import { PINNED_MODEL_MATRIX_ROW } from '@/lib/app/agent/pins';
 import { calculateCost } from '@/lib/orchestration/llm/cost-tracker';
 import { dbModelToModelInfo } from '@/lib/orchestration/llm/db-model-adapter';
@@ -141,6 +146,38 @@ describe('once the leaf seam has run', () => {
   });
 });
 
+describe('ensurePinnedModelPriced, called directly', () => {
+  it('prices the model from cold, with no seam involved', () => {
+    // The voice preflight calls this itself: the estimator never resolves a
+    // provider, so the seam does not run on that path.
+    expect(costOfATurn()).toBe(0);
+
+    ensurePinnedModelPriced();
+
+    expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
+  });
+
+  it('leaves a rate that is already there alone', () => {
+    // What a successful OpenRouter refresh leaves behind: the same id, priced by
+    // somebody else. Theirs is the more current number; ours is the fallback.
+    registerModels([{ ...PINNED_MODEL_INFO, name: 'From OpenRouter', inputCostPerMillion: 0.2 }]);
+
+    ensurePinnedModelPriced();
+
+    expect(getModel(PINNED_MODEL)?.name).toBe('From OpenRouter');
+    expect(getModel(PINNED_MODEL)?.inputCostPerMillion).toBe(0.2);
+  });
+
+  it('replaces an entry that is known but unpriced', () => {
+    registerModels([{ ...PINNED_MODEL_INFO, inputCostPerMillion: 0, outputCostPerMillion: 0 }]);
+    expect(costOfATurn()).toBe(0);
+
+    ensurePinnedModelPriced();
+
+    expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
+  });
+});
+
 describe('the matrix row and the exact rate', () => {
   it('a null-cost row hydrating AFTER the seam leaves the exact rate alone', async () => {
     await wireTheRealSeam();
@@ -172,6 +209,23 @@ describe('the matrix row and the exact rate', () => {
     expect(costOfATurn()).toBeGreaterThan(TRUE_COST * 1.9);
     // And so the seeded row must never carry one.
     expect(PINNED_MODEL_MATRIX_ROW.costPerMillionTokens).toBeNull();
+  });
+});
+
+describe('the matrix row and the context window', () => {
+  it('never budgets more history than the model can take', async () => {
+    await wireTheRealSeam();
+    expect(getModel(PINNED_MODEL)?.maxContext).toBe(128_000);
+
+    // A hydrate: the row's coarse label becomes a token count, and a positive one
+    // overrides what the registry had. The chat handler trims history to it.
+    registerModels([matrixRowAsModelInfo(null)]);
+
+    const budget = getModel(PINNED_MODEL)?.maxContext ?? 0;
+    expect(budget).toBeGreaterThan(0);
+    // `high` — what the platform's row for the alias says — lands at 200,000
+    // here, and a long conversation is rejected by the provider instead of trimmed.
+    expect(budget).toBeLessThanOrEqual(128_000);
   });
 });
 
