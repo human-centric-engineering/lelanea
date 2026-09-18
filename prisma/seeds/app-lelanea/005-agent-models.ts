@@ -65,9 +65,9 @@
  * ## What this unit deliberately does not do
  *
  * It does not touch visibility, capabilities or anything on the turn path; those
- * land with the turn seam (§08 t-54). It does not make the dated id price
- * correctly on the chat path — nothing there warms the registry, and that is
- * t-54's requirement, written on the task.
+ * land with the turn seam (§08 t-54). It does not price the dated id: a row in
+ * this table cannot carry a split rate, so that is `lib/app/llm-providers.ts`
+ * registering `PINNED_MODEL_INFO` — see `lib/app/agent/pinned-model.ts`.
  *
  * @see lib/app/agent/pins.ts
  * @see .context/app/agent.md
@@ -137,10 +137,11 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 
 const unit: SeedUnit = {
   name: 'app-lelanea/005-agent-models',
-  // The values live in `pins.ts`; the slugs it pins are derived from the two
-  // voice modules. Change either slug and this unit must re-run, or it keeps
+  // The values live in `pinned-model.ts` and `pins.ts`; the slugs it pins are
+  // derived from the two voice modules. Change either slug and this unit must re-run, or it keeps
   // looking for an agent under a name nothing creates any more.
   hashInputs: [
+    '../../../lib/app/agent/pinned-model.ts',
     '../../../lib/app/agent/pins.ts',
     '../../../lib/app/voice/fingerprint.ts',
     '../../../lib/app/voice/golden-set.ts',

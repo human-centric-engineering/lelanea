@@ -36,14 +36,14 @@
  */
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
+import { PINNED_MODEL, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
 
-/** The `AiProviderConfig.slug` her turns go to. Explicit, so it is never re-picked. */
-export const PINNED_PROVIDER = 'openai';
-
-/** A dated snapshot, never the alias that can be repointed. */
-export const PINNED_MODEL = 'gpt-4o-mini-2024-07-18';
+// The model and its price live in `pinned-model.ts`, which the provider seam
+// loads on the way to every model call and so must stay import-light.
+// Re-exported so everything about the pin is still reachable from one place.
+export { PINNED_MODEL, PINNED_MODEL_INFO, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
 
 /**
  * Both arms of the golden-set comparison, pinned to the SAME pair.
@@ -67,12 +67,13 @@ export const PIN_CHANGE_SUMMARY = 'Pinned model and provider (seeded — §08)';
  * registry on any path that hydrates from the matrix.
  *
  * Same characteristics as the platform's `openai-gpt-4o-mini` row, because it is
- * the same model. `costPerMillionTokens` is the same blended (in + out) / 2 rate
- * that row uses: the column is a single number applied to both directions, and a
- * positive value here overrides a split price on hydrate — so matching the
- * alias's row keeps the two priced identically wherever the matrix is what
- * prices them. Whether blended is good enough for the meter is stated in
- * `.context/app/agent.md`.
+ * the same model — with one deliberate difference. **`costPerMillionTokens` is
+ * null.** The column is a single number applied to input and output alike, and
+ * on hydrate a positive value OVERRIDES a split price already in the registry:
+ * measured, the platform's blended $0.375 prices a 3,000-in / 300-out turn at
+ * twice its true cost. Null falls through to whatever exact rate is there — ours
+ * from `pinned-model.ts`, or OpenRouter's — and where neither is, the model reads
+ * as unpriced, which the voice preflight flags rather than showing as cheap.
  */
 export const PINNED_MODEL_MATRIX_ROW = {
   slug: 'openai-gpt-4o-mini-2024-07-18',
@@ -89,7 +90,7 @@ export const PINNED_MODEL_MATRIX_ROW = {
   contextLength: 'high',
   toolUse: 'moderate',
   bestRole: 'Her pinned voice model (dev)',
-  costPerMillionTokens: 0.375, // ($0.15 in + $0.60 out) / 2 — see above
+  costPerMillionTokens: null, // never a blended rate — see above
 } as const;
 
 /**
