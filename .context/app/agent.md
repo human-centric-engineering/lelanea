@@ -102,12 +102,15 @@ platform's default task models, **per key and only when blank**:
 
 Change them at `/admin/orchestration/settings`.
 
-**The alias here, deliberately**, where her own pin is dated. The settings form
-validates every chat-task default against the in-memory model registry, whose
-static map knows the alias and not the snapshot; a dated id stored here would
-make the next save of that form fail on a field the admin never touched. These
-roles extract and summarise — a repointed alias changes their cost before it
-changes anything a person hears.
+**The alias here, deliberately**, where her own pin is dated. A task default is
+read by paths that look the model up by bare id in the in-memory registry — the
+workflow LLM runner (`lib/orchestration/engine/llm-runner.ts`) does it before any
+leaf seam has run, and **throws `unknown_model` on a miss**. The static map knows
+the alias and not the snapshot, so a dated `chat` default would fail every
+workflow LLM step in a cold process. Her own turns do not have that problem: an
+agent's explicit model goes through the resolver, which wires the seam first.
+These roles extract and summarise — a repointed alias changes their cost before
+it changes anything a person hears.
 
 ## The seats
 

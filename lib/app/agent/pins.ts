@@ -102,12 +102,17 @@ export const PINNED_MODEL_MATRIX_ROW = {
  * for. None of them speaks as her, so none needs her model — they sit on the
  * cheapest current one.
  *
- * The ALIAS here, deliberately, where her own pin is dated. The settings form
- * validates every chat-task default against the in-memory registry, whose static
- * map knows the alias and not the snapshot: a dated id stored here would make the
- * next save of that form fail on a field the admin never touched. These roles
- * extract and summarise; a repointed alias changes their cost before it changes
- * anything a person hears.
+ * The ALIAS here, deliberately, where her own pin is dated. A task default is
+ * read by paths that look the model up by bare id in the in-memory registry —
+ * the workflow LLM runner does it before any leaf seam has run, and THROWS
+ * `unknown_model` on a miss. The static map knows the alias and not the snapshot,
+ * and the snapshot is only registered where `lib/app/llm-providers.ts` has
+ * already been wired; so a dated `chat` default would fail every workflow LLM
+ * step in a cold process. Her own turns do not have that problem: an agent's
+ * explicit model goes through the resolver, which wires the seam first.
+ *
+ * These roles extract and summarise; a repointed alias changes their cost before
+ * it changes anything a person hears.
  */
 export const SIDE_ROLE_MODEL = 'gpt-4o-mini';
 export const SIDE_ROLE_TASKS = ['routing', 'chat'] as const;
