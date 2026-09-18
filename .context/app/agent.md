@@ -355,8 +355,14 @@ row whose `messageId` is the turn's `assistantMessageId`.
   request runs — but it is still recorded and tagged.
 - **Abandoned** means `running` for longer than `STALE_CLAIM_MS` (10 minutes, the
   longest the platform lets a turn run). A client that disconnects still settles
-  the turn as `failed`; only a crashed process leaves it `running`. t-55 can
+  the turn as `failed` — mid-stream through the stream's own `finally`, and
+  before the stream began through the request's abort signal (`aborted`). Only a
+  crashed process leaves it `running`. A settle names its attempt, so an attempt
+  that outlived its claim writes nothing over the one that replaced it. t-55 can
   tighten this to the admin's turn deadline once that is enforced.
+- **A turn that finishes with no reply to link** is settled `failed`
+  (`reply_not_linked`), not `completed` — the id can run again rather than
+  answering every retry with an error.
 - **A replay whose reply was deleted** ends in `turn_reply_unavailable` rather
   than inventing one.
 - **A retried failed turn leaves the person's message in the transcript twice.**
@@ -401,6 +407,10 @@ well as `voice`. The seat picks the moment — `SEAT_SITUATIONS` in
 | ------------- | ---------------- |
 | `onboarding`  | `first-meeting`  |
 | `facilitator` | none — core-only |
+
+**Only while the seat is hers.** The type covers all six of Daybreak's seats, so
+the contributor checks the seat's binding and gives any other agent an empty
+block, never her voice.
 
 The facilitator seat is every moment after the first, and which one is a fact
 about the person's journey that no turn carries yet. Guessing would be inventing
