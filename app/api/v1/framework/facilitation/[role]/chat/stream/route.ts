@@ -24,6 +24,8 @@
  */
 
 import { z } from 'zod';
+// Lelañea divergence (Row 18): `after` keeps a turn alive past its reader.
+import { after } from 'next/server';
 import { withAuth } from '@/lib/auth/guards';
 import { sseResponse } from '@/lib/api/sse';
 import { validateRequestBody } from '@/lib/api/validation';
@@ -92,6 +94,7 @@ export const POST = withAuth<{ role: string }>(
         message: body.message,
         clientTurnId: body.turnId,
         signal: request.signal,
+        keepAlive: (work) => after(work),
       },
       (extras) =>
         streamChat({

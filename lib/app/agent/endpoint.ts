@@ -20,3 +20,6 @@ export function userBudgetEndpoint(userId: string): string {
 
 /** Where an admin changes them. The nav seam and the page both name it here. */
 export const AGENT_SETTINGS_PAGE = '/admin/app/agent';
+
+/** Whether a turn can be expected to be answered now — `GET`, any member (§08 t-55). */
+export const AGENT_STATUS_ENDPOINT = '/api/v1/app/agent/status';

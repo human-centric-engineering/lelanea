@@ -15,13 +15,14 @@
  * the status AND the attempt count it read, so of two requests re-running one
  * failed turn, one updates a row and the other updates none.
  *
- * ## An abandoned claim is taken back after STALE_CLAIM_MS
+ * ## An abandoned claim is taken back once it outlives its deadline
  *
  * A claim stays `running` only if the process died mid-turn — a client that
- * disconnects still ends the stream, and the stream's end settles the row. Left
- * alone, a crashed turn's id would be refused forever: a guard with a failure
- * mode and no remedy (`HB10`). So a `running` claim older than the longest a turn
- * can run is treated as failed and may be claimed again.
+ * disconnects does not end the turn, which runs on and settles itself, and the
+ * whole-turn deadline settles it `failed` when it runs too long. Left alone, a
+ * crashed turn's id would be refused forever: a guard with a failure mode and no
+ * remedy (`HB10`). So a `running` claim older than the longest a turn can run
+ * ({@link staleClaimMs}) is treated as failed and may be claimed again.
  *
  * @see lib/app/agent/turns.ts
  * @see .context/app/agent.md — "What a turn records"
@@ -39,14 +40,26 @@ import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
 
 /**
- * How long a `running` claim is honoured before it counts as abandoned.
+ * How long past the whole-turn deadline a `running` claim is still honoured.
  *
- * Longer than any turn can run. Nothing enforces a turn deadline yet (§08 t-55
- * does), so the bound today is the platform's: a 120-second per-request library
- * timeout, over at most five tool-loop iterations. Ten minutes covers that with
- * room; t-55 can tighten it to the admin's turn deadline once that is enforced.
+ * The deadline settles a turn `failed` the moment it passes (§08 t-55), so a
+ * claim still `running` after it means the process died — or both tries of that
+ * settle were lost. The grace covers clock skew between instances and the
+ * settle's own round trip; it is not a second deadline.
  */
-export const STALE_CLAIM_MS = 10 * 60_000;
+export const STALE_CLAIM_GRACE_MS = 60_000;
+
+/**
+ * How long a `running` claim is honoured before it counts as abandoned: the
+ * whole-turn deadline in force when it is asked, plus {@link STALE_CLAIM_GRACE_MS}.
+ *
+ * Before the deadline was enforced this was a flat ten minutes — the platform's
+ * 120-second library timeout over five tool-loop iterations, with room. Read
+ * with the deadline, per request, so an admin's change moves both together.
+ */
+export function staleClaimMs(turnDeadlineMs: number): number {
+  return turnDeadlineMs + STALE_CLAIM_GRACE_MS;
+}
 
 /** The error code of a turn that finished but whose reply could not be found. */
 export const REPLY_NOT_LINKED = 'reply_not_linked';
@@ -111,10 +124,12 @@ function isUniqueViolation(err: unknown): boolean {
  *
  * `fingerprintVersion` is written on every claim, re-runs included, because a
  * re-run may be told a different version than the attempt that failed.
+ * `staleAfterMs` is {@link staleClaimMs} of the deadline in force.
  */
 export async function claimTurn(
   request: TurnRequest,
   fingerprintVersion: string | null,
+  staleAfterMs: number,
   now: Date = new Date()
 ): Promise<TurnClaim> {
   const { requestHash } = request;
@@ -150,7 +165,7 @@ export async function claimTurn(
   if (existing.status === 'completed') return { kind: 'completed', turn: existing };
 
   const abandoned =
-    existing.status === 'running' && now.getTime() - existing.startedAt.getTime() > STALE_CLAIM_MS;
+    existing.status === 'running' && now.getTime() - existing.startedAt.getTime() > staleAfterMs;
   if (existing.status === 'running' && !abandoned) return { kind: 'in_flight', turn: existing };
 
   // Failed, or abandoned: take it back. The predicate names what was read, so
@@ -183,7 +198,7 @@ export async function claimTurn(
  * Which attempt a settle write belongs to.
  *
  * Every write after the claim names the attempt that made it, so an attempt
- * that outlived `STALE_CLAIM_MS` and was taken over writes NOTHING when it
+ * that outlived its claim and was taken over writes NOTHING when it
  * finally ends — rather than overwriting the attempt that replaced it with its
  * own model, tokens and cost, or marking a live re-run `failed` so a third
  * request runs the model again. Found by /code-review.

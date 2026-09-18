@@ -45,6 +45,22 @@
  * `warn` — judged from the turn's own `done`, not from a registry. See
  * `classifyPricing()`.
  *
+ * ## When she can't answer (§08 t-55)
+ *
+ * - **Paused** by the operator: refused before the claim and before any model
+ *   call, with the `paused` ending (`availability.ts`).
+ * - **Deadlines**, read per request: a `still_thinking` warning at the
+ *   first-words deadline; the `timed_out` ending, and a turn settled failed and
+ *   retryable, at the whole-turn deadline (`deadlines.ts`).
+ * - **Every frame** reaches the browser through `toClientStream()`: a failure is
+ *   one of `unavailable` · `timed_out` · `paused`, never the platform's code or
+ *   text (`endings.ts`).
+ * - **A client that disconnects does not end the turn.** The model call runs
+ *   under this seam's own signal — fired only by the whole-turn deadline — not
+ *   the request's, and the stream is pumped independently of its reader and
+ *   handed to the host's `keepAlive`. The turn completes, is recorded, and the
+ *   retry is a replay: one model call, one cost row, one message.
+ *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
  */
@@ -54,6 +70,10 @@ import type { AppTurn } from '@prisma/client';
 import { logger } from '@/lib/logging';
 import type { ChatStream } from '@/lib/orchestration/chat/types';
 import type { ChatEvent } from '@/types/orchestration';
+import { getAgentDeadlines } from '@/lib/app/agent/settings';
+import { isGenerationPaused } from '@/lib/app/agent/availability';
+import { runWithDeadlines } from '@/lib/app/agent/deadlines';
+import { ENDING_TIMED_OUT, endingFrame, toClientStream } from '@/lib/app/agent/endings';
 import {
   claimTurn,
   classifyPricing,
@@ -63,6 +83,7 @@ import {
   recordTurnCompleted,
   recordTurnFailed,
   recordTurnStarted,
+  staleClaimMs,
   type TurnOutcome,
 } from '@/lib/app/agent/turn-record';
 import type {
@@ -81,9 +102,6 @@ export const TURN_REPLY_UNAVAILABLE = 'turn_reply_unavailable';
 /** The code a turn is failed with when its stream ended without an outcome. */
 export const TURN_INCOMPLETE = 'incomplete';
 
-/** The code a claimed turn is failed with when the request ended before its stream began. */
-export const TURN_ABORTED = 'aborted';
-
 /** A minted id: never sent by a client, so it can never replay. */
 export function mintTurnId(): string {
   return `srv_${crypto.randomUUID()}`;
@@ -95,13 +113,8 @@ export function mintTurnId(): string {
  * The frames a live turn ends with — `start`, the whole reply, its citations,
  * `done` — so a duplicate of a turn that already finished gets the same answer.
  *
- * **What this does not cover: a connection lost MID-turn.** Daybreak's route
- * hands the request's abort signal to `streamChat`, so a client that drops
- * mid-answer aborts the model call itself; the turn ends `failed`, and its retry
- * runs again (a second call, and the person's message twice). Carrying on
- * server-side after a disconnect would mean the route not passing that signal —
- * a change to Daybreak's route behaviour, not this seam's. Found by
- * /code-review; recorded in `.context/app/agent.md`.
+ * A connection lost mid-turn is covered too: the turn runs on without its
+ * reader and completes, so the retry lands here (§08 t-55).
  */
 async function* replay(turn: AppTurn): ChatStream {
   const reply = await readTurnReply(turn);
@@ -138,13 +151,16 @@ async function* replay(turn: AppTurn): ChatStream {
  * The turn is settled BEFORE `done` is passed on, so a retry that lands the
  * moment the client sees `done` finds a completed turn, not a running one.
  *
+ * Once the whole-turn deadline has fired the deadline owns the settle — it wrote
+ * `timed_out` — so nothing here writes over it: not a `done` that arrived a
+ * moment too late, and not the `aborted` error the cancelled call ends on.
+ *
  * A failure to write the record is logged and never fails the turn: the person
  * is owed their answer whether or not the meter heard about it. What that costs
  * is stated where it lands — a turn left `running` is taken back as abandoned
- * after `STALE_CLAIM_MS`.
+ * after `staleClaimMs()`.
  */
-async function* recorded(turn: AppTurn, events: ChatStream, onStart: () => void): ChatStream {
-  onStart();
+async function* recorded(turn: AppTurn, events: ChatStream, isTimedOut: () => boolean): ChatStream {
   let settled = false;
   let errorCode: string | null = null;
 
@@ -161,7 +177,7 @@ async function* recorded(turn: AppTurn, events: ChatStream, onStart: () => void)
           userMessageId: event.messageId ?? null,
         };
       } else if (event.type === 'done') {
-        await settleCompleted(turn, event);
+        if (!isTimedOut()) await settleCompleted(turn, event);
         settled = true;
       } else if (event.type === 'error' || event.type === 'budget_exceeded_per_turn') {
         errorCode = event.code;
@@ -169,7 +185,7 @@ async function* recorded(turn: AppTurn, events: ChatStream, onStart: () => void)
       yield event;
     }
   } finally {
-    if (!settled) {
+    if (!settled && !isTimedOut()) {
       await settleWrite(() => recordTurnFailed(turn, errorCode ?? TURN_INCOMPLETE)).catch(
         (err: unknown) => logRecordFailure('failed', turn, err)
       );
@@ -229,8 +245,8 @@ async function settleCompleted(
  * A write that settles a turn, tried twice.
  *
  * A settle that is lost leaves the turn `running`, and every retry of its id is
- * refused until `STALE_CLAIM_MS` — ten minutes — although the person may already
- * have their answer. One more attempt covers the transient failure (a dropped
+ * refused until `staleClaimMs()` — the turn deadline and a minute — although the
+ * person may already have their answer. One more attempt covers the transient failure (a dropped
  * pool connection, a failover) that is the realistic cause. Safe to repeat: the
  * write is guarded by its attempt and status, so a second try after a first that
  * did land matches nothing. Owner ruling at t-54's PR.
@@ -252,6 +268,11 @@ function logRecordFailure(stage: string, turn: AppTurn, err: unknown): void {
   });
 }
 
+/** A stream of one frame: how a turn is answered without a stream of its own. */
+async function* only(event: ChatEvent): ChatStream {
+  yield await Promise.resolve(event);
+}
+
 /**
  * Take one facilitation turn: claim its id, then replay, refuse or run it.
  *
@@ -259,11 +280,21 @@ function logRecordFailure(stage: string, turn: AppTurn, err: unknown): void {
  * as 409 rather than opening an event stream to say no. Returned rather than
  * thrown because this runs from the boot graph, and an error class built here
  * is not the one the route's error handler checks (see the seam's docblock).
+ *
+ * A pause is not a refusal of THIS turn id, so it is not a 409: it is the same
+ * `paused` ending any other turn would end on, sent before anything is claimed
+ * or called — so when generation resumes the same id simply runs.
  */
 export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
+  if (await isGenerationPaused()) {
+    logger.info('Agent turn refused: generation is paused', { seat: turn.role });
+    return only(endingFrame('paused'));
+  }
+
+  const deadlines = await getAgentDeadlines();
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
   const fingerprintVersion = await readAgentFingerprintVersion(turn.agentSlug);
@@ -276,7 +307,8 @@ export async function runRecordedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    fingerprintVersion
+    fingerprintVersion,
+    staleClaimMs(deadlines.turnDeadlineMs)
   );
 
   switch (claim.kind) {
@@ -294,33 +326,60 @@ export async function runRecordedTurn(
       };
     case 'completed':
       logger.info('Agent turn replayed', { turnId, seat: turn.role });
-      return replay(claim.turn);
+      return toClientStream(replay(claim.turn));
     case 'claimed': {
-      const stream = recorded(
-        claim.turn,
-        run({
-          costLogMetadata: { turnId, seat: turn.role },
-          messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
-        }),
-        () => {
-          started = true;
-        }
-      );
-      // A request that ends before its stream is read never runs the stream's
-      // `finally` — `sseResponse` returns without iterating an already-aborted
-      // request — so the claim would stay `running` and refuse the very retry
-      // it exists for, for STALE_CLAIM_MS. Settle it here instead. Once the
-      // stream has begun, its own `finally` owns the settle. Found by /code-review.
-      let started = false;
-      const settleUnstarted = (): void => {
-        if (started) return;
-        void settleWrite(() => recordTurnFailed(claim.turn, TURN_ABORTED)).catch((err: unknown) =>
-          logRecordFailure('aborted', claim.turn, err)
-        );
-      };
-      if (turn.signal?.aborted) settleUnstarted();
-      else turn.signal?.addEventListener('abort', settleUnstarted, { once: true });
-      return stream;
+      let timedOut = false;
+      const { events, finished } = runWithDeadlines({
+        deadlines,
+        // The signal is this seam's, fired only by the whole-turn deadline. It
+        // replaces the request's, so a client going away aborts nothing.
+        start: (signal) =>
+          recorded(
+            claim.turn,
+            run({
+              costLogMetadata: { turnId, seat: turn.role },
+              messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
+              signal,
+            }),
+            () => timedOut
+          ),
+        onTimeout: async () => {
+          timedOut = true;
+          logger.warn('Agent turn passed its deadline and was ended', {
+            turnId,
+            seat: turn.role,
+            turnDeadlineMs: deadlines.turnDeadlineMs,
+          });
+          await settleWrite(() => recordTurnFailed(claim.turn, ENDING_TIMED_OUT)).catch(
+            (err: unknown) => logRecordFailure('timed_out', claim.turn, err)
+          );
+        },
+        onPumpError: (err) => {
+          logger.error('Agent turn stream failed', {
+            turnId,
+            seat: turn.role,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        },
+      });
+      keepAlive(turn, finished);
+      return toClientStream(events);
     }
+  }
+}
+
+/**
+ * Hand the turn's run to the host, so it outlives the response. A host that
+ * refuses — `after()` outside a request scope throws — costs only the guarantee
+ * on a serverless deploy; a long-lived server finishes the turn regardless.
+ */
+function keepAlive(turn: FacilitationTurn, finished: Promise<void>): void {
+  try {
+    turn.keepAlive?.(finished);
+  } catch (err) {
+    logger.warn('Agent turn could not be kept alive past its response', {
+      seat: turn.role,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }

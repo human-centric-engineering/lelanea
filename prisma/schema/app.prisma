@@ -503,5 +503,7 @@ model AppTurn {
   @@unique([userId, turnId])
   @@index([userId, startedAt])
   @@index([conversationId])
+  /// The status read: the most recent turn anyone finished (§08 t-55).
+  @@index([completedAt])
   @@map("app_turn")
 }
