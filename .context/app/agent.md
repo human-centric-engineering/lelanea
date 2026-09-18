@@ -35,11 +35,15 @@ and its cost rows name `openai` / `gpt-4o-mini`. That string is an alias; the
 provider reports serving it from `gpt-4o-mini-2024-07-18`, which is what is
 pinned.
 
-**Why both agents.** The golden set compares her voice with a bare model. Pin her
-alone and the control keeps floating, and from then on the comparison measures
-two models rather than the fingerprint — with nothing on the screen saying so.
-`assertArmsComparable()` refuses to queue in that state; pinning both is what
-keeps it from arising.
+**Why both agents — and why the control is not "pinned" at all.** The golden set
+compares her voice with a bare model. Leave the control floating and the
+comparison measures two models rather than the fingerprint, with nothing on the
+screen saying so. So the control **follows her**: once her row is settled, a
+blank control is set to whatever she is on — the dev pin, or a model an admin
+chose for her — and never to the dev pin on its own account. Its timeline entry
+says so (`Matched to lelanea-guide's model`). A control somebody set is left
+alone; if it differs from hers the seed says so, and `assertArmsComparable()`
+refuses the next run.
 
 ### This is the dev pin — change it in the admin, not in the code
 
@@ -47,8 +51,9 @@ Production's model is chosen later, by evaluation (§8.2: nothing is promoted
 without the golden set being re-run and listened to). So the pin is
 **operator-owned**:
 
-- The seed writes provider and model only where **both are still blank**. A value
-  somebody set is never written over — including a half-set one.
+- The seed writes her provider and model only where **both are still blank**. A
+  value somebody set is never written over — including a half-set one, which
+  also leaves the control blank, because there is no whole pair to follow.
 - To change her model: `/admin/orchestration/agents` → `lelanea-guide` → Model.
   **Change `voice-control-bare` to the same pair**, or the next golden-set run is
   refused with a message naming the mismatch.
@@ -56,11 +61,23 @@ without the golden set being re-run and listened to). So the pin is
   does nothing to an install that already has a pin, and re-running the seed will
   not "fix" that — it is the rule working.
 
-The pin is an entry in each agent's version timeline (`Pinned model and provider
-(seeded — §08)`), written through the platform's own snapshot helpers, above a
-recorded `Initial configuration`. A seed that wrote the column directly would
-have left a timeline with no entry for the change, and "restore to v1" as a
-one-click way back to the floating default.
+The pin is an entry in her version timeline (`Pinned model and provider (seeded —
+§08)`), written through the platform's own snapshot helpers, above a recorded
+`Initial configuration`. A seed that wrote the column directly would have left a
+timeline with no entry for the change. It does **not** take away the way back:
+restoring v1 returns her to the floating default, as restoring any agent's first
+version returns it to how it was created — a deliberate act on operator-owned
+config, which leaves an entry of its own.
+
+### The provider may not exist yet
+
+`db:seed` runs before anyone has configured a provider, on every fresh install,
+and the pin is written anyway: the runner records a unit as applied once and does
+not come back, so waiting for a provider would mean never pinning. Until an
+active provider with the slug **`openai`** exists, her turns and every golden-set
+run end with "provider unavailable" — that is the no-fallback ruling working, not
+a fault. The seed warns loudly when it sees this state. Two ways out: configure
+OpenAI under that slug, or choose her model (and the control's) in the admin.
 
 ### The matrix row
 
@@ -73,6 +90,21 @@ It follows the platform's own protocol: `isDefault: true` means seed-managed and
 reconciled; edit the row in the admin and `isDefault` flips off and the seed
 leaves it alone from then on. A row an admin already added for that model under
 their own slug is theirs, and is left alone too.
+
+Two of its values look wrong and are deliberate — both because a **positive**
+number on a matrix row overrides what the registry already holds:
+
+- **Cost: none.** See [How her model is priced](#how-her-model-is-priced). The
+  price of that choice: the admin model list lets the matrix row _replace_ the
+  registry entry rather than merge with it, so this model is listed there with no
+  price beside an alias that shows one. A wrong number in every cost row is worse
+  than a blank in a dropdown.
+- **Context length: `medium`.** The column is a coarse label the platform turns
+  into a token count, and the chat handler trims history to it. `high` — what the
+  platform's row for the alias says — is 200,000 against a 128,000-token model,
+  so a long conversation is rejected by the provider instead of trimmed. No
+  bucket means 128k; `medium` (32,000) trims early, the failure that loses
+  nothing.
 
 ## Why there is no fallback
 
@@ -90,27 +122,27 @@ The seed never writes `fallbackProviders`. Empty is the column's default; a
 non-empty list is an operator's, and is logged as contradicting this ruling
 rather than cleared.
 
-## The side roles
+## The side roles are not seeded
 
-Not everything that calls a model speaks as her. The seed fills two of the
-platform's default task models, **per key and only when blank**:
+Not everything that calls a model speaks as her: the conversation summariser
+resolves through the platform's `routing` default; slot extraction, the
+facilitation supervisor and keyword enrichment through `chat`. The ruling is that
+they sit on the cheapest current model, and **the platform already does that** —
+the setup wizard fills blank defaults from the provider the operator actually
+configures.
 
-| Task key  | What resolves through it                                         | Filled with   |
-| --------- | ---------------------------------------------------------------- | ------------- |
-| `routing` | the conversation summariser                                      | `gpt-4o-mini` |
-| `chat`    | slot extraction, the facilitation supervisor, keyword enrichment | `gpt-4o-mini` |
+The first version of the model seed filled those two keys itself. It was removed:
+the seed runs _before_ any provider exists, the wizard skips a slot that is
+already taken, and an install that configured anything but OpenAI got every
+unbound platform agent asking its provider for a model it does not serve.
 
-Change them at `/admin/orchestration/settings`.
-
-**The alias here, deliberately**, where her own pin is dated. A task default is
-read by paths that look the model up by bare id in the in-memory registry — the
-workflow LLM runner (`lib/orchestration/engine/llm-runner.ts`) does it before any
-leaf seam has run, and **throws `unknown_model` on a miss**. The static map knows
-the alias and not the snapshot, so a dated `chat` default would fail every
-workflow LLM step in a cold process. Her own turns do not have that problem: an
-agent's explicit model goes through the resolver, which wires the seam first.
-These roles extract and summarise — a repointed alias changes their cost before
-it changes anything a person hears.
+Change them at `/admin/orchestration/settings`. **If you set one by hand, use an
+id the platform's static map knows** (the alias `gpt-4o-mini`, not the dated
+snapshot). A task default is read by paths that look the model up by bare id —
+the workflow LLM runner (`lib/orchestration/engine/llm-runner.ts`) does it before
+any leaf seam has run, and **throws `unknown_model` on a miss**. Her own turns do
+not have that problem: an agent's explicit model goes through the resolver, which
+wires the seam first.
 
 ## The seats
 
@@ -135,8 +167,8 @@ tracker prices from an in-memory model registry. Its static map holds the alias
 `gpt-4o-mini` and not the dated snapshot; the snapshot reaches the registry only
 from an OpenRouter refresh or a hydrate from the matrix, and **nothing on the
 chat path or in the evaluation worker calls either** — only the admin cost and
-model pages and the estimators do, each in its own module graph (Next bundles
-the registry per route, so warming one copy warms no other).
+model pages and the estimators do, and Next can bundle the registry separately
+per route, so warming one copy does not reliably warm another.
 
 Measured on 18 Sept 2026, in a cold process, 3,000 tokens in and 300 out:
 
@@ -154,12 +186,19 @@ accepting $0 until the turn seam lands (which zeroes the golden-set costs on
 - **The rate** is `PINNED_MODEL_INFO` in `lib/app/agent/pinned-model.ts`: $0.15 in,
   $0.60 out, per million. It is part of the pin — change `PINNED_MODEL` and the
   rates change in the same edit; a test holds the three values together.
-- **Where it is registered** is `lib/app/llm-providers.ts`. That seam exists for
+- **What registers it** is `ensurePinnedModelPriced()`, in the same file — one map
+  lookup when the rate is already there, one registration when it is not. It has
+  two callers.
+- **The first caller** is `lib/app/llm-providers.ts`. That seam exists for
   provider-eligibility rules and we register none. It is used for its **timing**:
   it is the one leaf hook Sunrise runs lazily, in whichever module graph is about
   to resolve a provider, before that call's cost is logged. Registering a model is
   synchronous, idempotent and restricts nothing, so Sunrise's own test that this
   seam ships with no eligibility rule still passes against the filled file.
+- **The second caller is the voice preflight** (`lib/app/voice/preflight.ts`). The
+  estimator prices from the registry and never resolves a provider, so the seam
+  does not run on that path; without the call, the estimate on `/admin/app/voice`
+  depended on OpenRouter answering.
 - **The matrix row's cost is null, on purpose.** The column is one number for
   both directions, and on hydrate a positive value **overrides** a split price
   already in the registry — the second row of the table. Null falls through to
@@ -176,19 +215,28 @@ the requirement that a miss on the turn path is surfaced rather than logged as
 free. Until then, **changing her model means checking the new id is in the static
 map, or adding its rate beside the pin.**
 
+**A registry refresh.** `refreshFromOpenRouter()` rebuilds the registry from the
+static map plus OpenRouter's list, which drops our entry, and the seam is wired
+once per process so it does not put it back. After a _successful_ refresh that is
+harmless — OpenRouter lists this snapshot at the same rate, and delists one only
+when the provider retires the model. A _failed_ refresh leaves the registry as it
+was. Nothing on the chat path or in the evaluation worker refreshes at all; it
+takes an admin page sharing the module instance. §08 t-54 owns the turn path and
+can call `ensurePinnedModelPriced()` per turn, which closes even that.
+
 The seam fill goes when Sunrise prices an id outside its static map on the chat
 and evaluation-worker paths.
 
 ## After a deploy
 
-The pin, the matrix row, the task defaults and the seats are rows. They exist
-only where the seed has run: `npm run db:seed` against each database.
+The pin, the matrix row and the seats are rows. They exist only where the seed
+has run: `npm run db:seed` against each database.
 
 ## Tests
 
-| File                                                       | Pins                                                                                                                                                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | Both arms pinned to one dated pair; a re-run writes nothing; admin-edited models and task defaults survive; a missing agent throws before anything is written                         |
-| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled, framework rows first; a seat another agent holds is left alone; no seat outside the two is touched                                                                 |
-| `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; no eligibility rule is registered |
-| `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                            |
+| File                                                       | Pins                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/prisma/seeds/app-lelanea/agent-models.test.ts` | She is pinned to a dated pair and the control follows her — including onto a model an admin chose; a re-run writes nothing; the task defaults are never touched; a missing provider is said out loud; a missing agent throws before anything is written |
+| `tests/unit/prisma/seeds/app-lelanea/agent-seats.test.ts`  | Both seats filled, framework rows first; a seat another agent holds is left alone; no seat outside the two is touched                                                                                                                                   |
+| `tests/unit/lib/app/agent/pinned-model.test.ts`            | From a cold registry: the dated id costs $0, the leaf seam prices it exactly, a null-cost matrix row leaves that alone and a blended one would not; a hydrate never budgets more history than the model takes; no eligibility rule is registered        |
+| `tests/unit/lib/app/voice/comparison.test.ts`              | The two arms still compose different prompts, and a model mismatch between them is refused                                                                                                                                                              |
