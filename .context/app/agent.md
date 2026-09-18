@@ -306,7 +306,7 @@ carried in Daybreak's route: [`divergences.md`](./divergences.md) Row 18,
 | `turnId`, `clientSupplied`               | the client's id, or one minted here (`srv_…`) when it sent none              |
 | `seat`, `agentSlug`                      | where the turn was taken, and who answered                                   |
 | `fingerprintVersion`                     | her voice version, read from her **composed** prompt at claim — null if none |
-| `model`, `provider`                      | what the platform reported on `done`                                         |
+| `modelId`, `providerSlug`                | what the platform reported on `done`                                         |
 | `inputTokens`, `outputTokens`, `costUsd` | the chat call; `costUsd` is null when `pricing` is `unpriced`                |
 | `pricing`                                | `priced`, `unpriced` or `local`                                              |
 | `userMessageId`, `assistantMessageId`    | the two `ai_message` rows — ids, never the words                             |
@@ -319,8 +319,10 @@ her reply has the model and provider as columns, and the turn row joins the two.
 ### Which cost rows carry the turn (hypothesis b, checked at the call sites)
 
 `costLogMetadata` is `{ turnId, seat }`. Read in
-`lib/orchestration/chat/streaming-handler.ts`, `summarizer.ts`,
-`capabilities/dispatcher.ts` and `built-in/search-knowledge.ts`:
+`lib/orchestration/chat/streaming-handler.ts`,
+`lib/orchestration/chat/summarizer.ts`,
+`lib/orchestration/capabilities/dispatcher.ts` and
+`lib/orchestration/capabilities/built-in/search-knowledge.ts`:
 
 | Cost row                                          | Tagged                                                                                                                                                                                                |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

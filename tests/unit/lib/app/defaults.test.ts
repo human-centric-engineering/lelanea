@@ -983,10 +983,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
+        // LELAÑEA's one, spread after them from `leaf-ci.ts` — pinned here too,
+        // for the same reason as the always-run tests above (§08 t-54).
+        'lib/app/agent/turn-record.ts',
       ]);
-      // Every framework entry is a settled design, not a gap awaiting a fix.
+      // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(5).fill('by-design')
+        Array<'by-design'>(6).fill('by-design')
       );
     },
   },
@@ -1000,9 +1003,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // PINNED (Lelañea fills this seam) — `HB2`. Daybreak keeps it empty; we do
     // not. Pinned rather than deleted so the row still guards the two lists we
     // have NOT filled: a coverage exclusion appearing here would switch the
-    // per-file 80% floor off for that path, and an ownerless-surface exception
-    // would exempt a file from the authorization seam — and nothing else would
-    // notice either.
+    // per-file 80% floor off for that path — and nothing else would notice. The
+    // ownerless-surface list is filled too (§08 t-54) and pinned by value, so a
+    // second exemption from the authorization seam still fails here.
     assert: () => {
       expect(leafCoverageExclusions).toEqual([]);
       expect(leafAlwaysRunTests.map((entry) => entry.path)).toEqual([
@@ -1013,7 +1016,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/components/app/shell/chrome.test.tsx',
         'tests/unit/lib/app/voice/upload-scope.test.ts',
       ]);
-      expect(leafOwnerlessSurfaceExceptions).toEqual([]);
+      // §08 t-54 — the turn record's two owner-scoped message reads, by design.
+      expect(
+        leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
+      ).toEqual([['lib/app/agent/turn-record.ts', 'by-design']]);
     },
   },
 ];

@@ -484,9 +484,11 @@ model AppTurn {
   conversationId     String?
   userMessageId      String?
   assistantMessageId String?
-  /// What the platform reported on the turn's `done` event.
-  model              String?
-  provider           String?
+  /// What the platform reported on the turn's `done` event. Named as
+  /// `AiMessage` names them — and not `model`, which a line-based scan of this
+  /// file reads as a declaration.
+  modelId            String?
+  providerSlug       String?
   inputTokens        Int?
   outputTokens       Int?
   /// The chat cost the platform reported. **Null when `pricing` is `unpriced`**,

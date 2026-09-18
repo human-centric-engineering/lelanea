@@ -75,6 +75,7 @@ const findMany = {
   appWaitlistEntry: vi.fn(),
   appAcknowledgement: vi.fn(),
   appUserBudget: vi.fn(),
+  appTurn: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -100,6 +101,7 @@ vi.mock('@/lib/db/client', () => ({
     appWaitlistEntry: { findMany: (...a: unknown[]) => findMany.appWaitlistEntry(...a) },
     appAcknowledgement: { findMany: (...a: unknown[]) => findMany.appAcknowledgement(...a) },
     appUserBudget: { findMany: (...a: unknown[]) => findMany.appUserBudget(...a) },
+    appTurn: { findMany: (...a: unknown[]) => findMany.appTurn(...a) },
   },
 }));
 
@@ -110,8 +112,8 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
 /** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
-const LEAF_SECTIONS = ['waitlist', 'acknowledgements', 'budget'];
-const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement', 'AppUserBudget'];
+const LEAF_SECTIONS = ['waitlist', 'acknowledgements', 'budget', 'turns'];
+const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement', 'AppUserBudget', 'AppTurn'];
 /** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
 const LEAF_EXCLUDED_MODELS = [
   'AppKnowledgeDesignation',
@@ -129,6 +131,7 @@ beforeEach(() => {
   findMany.appWaitlistEntry.mockResolvedValue([]);
   findMany.appAcknowledgement.mockResolvedValue([]);
   findMany.appUserBudget.mockResolvedValue([]);
+  findMany.appTurn.mockResolvedValue([]);
 
   // Personal-data sources return rows verbatim.
   findMany.userJourney.mockResolvedValue([{ id: 'j1', graphSlug: 'onboarding' }]);

@@ -39,8 +39,8 @@ interface TurnRow {
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
-  model: string | null;
-  provider: string | null;
+  modelId: string | null;
+  providerSlug: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
@@ -69,6 +69,8 @@ const db = vi.hoisted(() => ({
   messages: [] as MessageRow[],
   costs: [] as CostRow[],
   providers: [] as { slug: string; isLocal: boolean }[],
+  /** conversation id → the person it belongs to, as the platform would record. */
+  conversationOwners: new Map<string, string>(),
   seq: 0,
 }));
 
@@ -103,8 +105,8 @@ vi.mock('@/lib/db/client', () => {
             conversationId: null,
             userMessageId: null,
             assistantMessageId: null,
-            model: null,
-            provider: null,
+            modelId: null,
+            providerSlug: null,
             inputTokens: null,
             outputTokens: null,
             costUsd: null,
@@ -154,13 +156,19 @@ vi.mock('@/lib/db/client', () => {
             where: {
               id?: string;
               conversationId: string;
+              conversation?: { userId: string };
               role?: string;
               createdAt?: { gte: Date };
             };
           }) => {
+            // The owner scope is required, and honoured: a read that dropped it
+            // could reach another person's thread.
+            if (!where.conversation?.userId)
+              throw new Error('aiMessage read without an owner scope');
             const rows = db.messages.filter(
               (m) =>
                 m.conversationId === where.conversationId &&
+                db.conversationOwners.get(m.conversationId) === where.conversation?.userId &&
                 (where.id === undefined || m.id === where.id) &&
                 (where.role === undefined || m.role === where.role) &&
                 (where.createdAt === undefined || m.createdAt >= where.createdAt.gte)
@@ -237,7 +245,8 @@ function fakeRun(
   return (extras) =>
     (async function* () {
       modelCalls += 1;
-      const conversationId = turn.conversationId ?? 'conv-new';
+      const conversationId = turn.conversationId ?? `conv-${turn.userId}`;
+      db.conversationOwners.set(conversationId, turn.userId);
       const userMessage: MessageRow = {
         id: `msg-${++db.seq}`,
         conversationId,
@@ -317,6 +326,7 @@ beforeEach(() => {
   db.messages = [];
   db.costs = [];
   db.providers = [{ slug: 'openai', isLocal: false }];
+  db.conversationOwners = new Map();
   db.seq = 0;
   modelCalls = 0;
   behaviour = { model: PINNED_MODEL, provider: 'openai', outcome: 'answer', costUsd: 0.00063 };
@@ -464,11 +474,11 @@ describe('what a turn records', () => {
       seat: 'onboarding',
       agentSlug: 'lelanea-guide',
       fingerprintVersion: '1.0',
-      conversationId: 'conv-new',
+      conversationId: 'conv-user-1',
       userMessageId: userMessage.id,
       assistantMessageId: assistantMessage.id,
-      model: PINNED_MODEL,
-      provider: 'openai',
+      modelId: PINNED_MODEL,
+      providerSlug: 'openai',
       inputTokens: 3000,
       outputTokens: 300,
       costUsd: 0.00063,

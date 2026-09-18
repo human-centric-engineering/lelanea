@@ -116,8 +116,8 @@ async function* replay(turn: AppTurn): ChatStream {
     type: 'done',
     tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     costUsd: turn.costUsd ?? 0,
-    ...(turn.provider ? { provider: turn.provider } : {}),
-    ...(turn.model ? { model: turn.model } : {}),
+    ...(turn.providerSlug ? { provider: turn.providerSlug } : {}),
+    ...(turn.modelId ? { model: turn.modelId } : {}),
   };
 }
 

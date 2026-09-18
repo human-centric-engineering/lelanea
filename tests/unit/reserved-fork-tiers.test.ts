@@ -249,6 +249,11 @@ describe('reserved fork tiers', () => {
       // about nobody), and one person's own limit (a SOURCE: it is about them).
       'model AppAgentSettings {',
       'model AppUserBudget {',
+      // §08 t-54 — one row per turn with her: what produced it and what it cost
+      // (a SOURCE: it is about the person who took the turn).
+      'enum AppTurnStatus {',
+      'enum AppTurnPricing {',
+      'model AppTurn {',
     ]);
   });
 

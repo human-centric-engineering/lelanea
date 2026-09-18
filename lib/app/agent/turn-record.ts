@@ -161,8 +161,8 @@ export async function claimTurn(
       conversationId: null,
       userMessageId: null,
       assistantMessageId: null,
-      model: null,
-      provider: null,
+      modelId: null,
+      providerSlug: null,
       inputTokens: null,
       outputTokens: null,
       costUsd: null,
@@ -230,13 +230,16 @@ export interface TurnOutcome {
  * rather than a use.
  */
 export async function recordTurnCompleted(
-  turn: Pick<AppTurn, 'id' | 'startedAt' | 'conversationId'>,
+  turn: Pick<AppTurn, 'id' | 'userId' | 'startedAt' | 'conversationId'>,
   outcome: TurnOutcome
 ): Promise<void> {
   const assistant = turn.conversationId
     ? await prisma.aiMessage.findFirst({
         where: {
           conversationId: turn.conversationId,
+          // The member's own thread and nobody else's — see the leaf's
+          // ownerless-surface exception in lib/app/leaf-ci.ts.
+          conversation: { userId: turn.userId },
           role: 'assistant',
           createdAt: { gte: turn.startedAt },
         },
@@ -251,8 +254,8 @@ export async function recordTurnCompleted(
       status: 'completed',
       completedAt: new Date(),
       assistantMessageId: assistant?.id ?? null,
-      model: outcome.model,
-      provider: outcome.provider,
+      modelId: outcome.model,
+      providerSlug: outcome.provider,
       inputTokens: outcome.inputTokens,
       outputTokens: outcome.outputTokens,
       // Null, never zero, when nobody knew the price. See `classifyPricing`.
@@ -272,11 +275,15 @@ export async function recordTurnFailed(id: string, errorCode: string): Promise<v
 
 /** The reply a completed turn produced, for a replay. Null when it is gone. */
 export async function readTurnReply(
-  turn: Pick<AppTurn, 'assistantMessageId' | 'conversationId'>
+  turn: Pick<AppTurn, 'userId' | 'assistantMessageId' | 'conversationId'>
 ): Promise<string | null> {
   if (!turn.assistantMessageId || !turn.conversationId) return null;
   const message = await prisma.aiMessage.findFirst({
-    where: { id: turn.assistantMessageId, conversationId: turn.conversationId },
+    where: {
+      id: turn.assistantMessageId,
+      conversationId: turn.conversationId,
+      conversation: { userId: turn.userId },
+    },
     select: { content: true },
   });
   return message?.content ?? null;

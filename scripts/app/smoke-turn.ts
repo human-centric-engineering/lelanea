@@ -219,7 +219,10 @@ async function main(): Promise<void> {
       turn.fingerprintVersion !== null,
       `her fingerprint version recorded (v${turn.fingerprintVersion})`
     );
-    check(turn.model === PINNED_MODEL && turn.provider === 'openai', 'model and provider recorded');
+    check(
+      turn.modelId === PINNED_MODEL && turn.providerSlug === 'openai',
+      'model and provider recorded'
+    );
     check(turn.assistantMessageId !== null, 'her reply is linked');
 
     const userMessages = await prisma.aiMessage.findMany({
