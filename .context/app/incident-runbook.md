@@ -25,7 +25,7 @@ If one no longer answers where it says, fix this page before anything else.
   within an hour.
 - **Whoever notices first starts the clock.** Write down the time you became
   aware, and then contain. You don't need anyone's permission to pull a
-  containment lever. Every one of them can be undone.
+  containment lever. Each one can be undone, except rotating a secret.
 - **Admin access is required** for every page named here: `/admin/**` is
   `withAdminAuth`.
 
@@ -71,8 +71,11 @@ next turn, with no deploy.
   the platform's own agents keep calling models. To stop those, see [Cost
   runaway](#cost-runaway).
 - **Undo:** switch it off. A turn the person retries under the same id then runs.
-- Created off by seed `008`, and a re-seed never writes it again. If the flag is
-  missing, that database has not been seeded: run `npm run db:seed`.
+- Created off by seed `008`, and a re-seed never writes it again. **If the flag
+  is missing, there is no pause** (a missing flag reads as not paused). Create it
+  at `/admin/features` → create, with the key `LELANEA_GENERATION_PAUSED`, set to
+  on. Don't rely on `npm run db:seed` to put it back: the runner skips a unit it
+  has already applied, so a flag deleted after seeding stays deleted.
 
 Details: [`agent.md` → The pause switch](./agent.md#the-pause-switch).
 
@@ -113,9 +116,15 @@ environment variable. The key itself lives only in the host's environment
 4. Confirm with one turn on her seat, then `GET /api/v1/app/agent/status`, which
    should read `available`.
 
-The same steps apply to `RESEND_API_KEY` (email) and to `BETTER_AUTH_SECRET`.
-Rotating `BETTER_AUTH_SECRET` is a bigger change: treat it as signing everyone
-out, and do it only when the secret itself has leaked.
+The same steps apply to `RESEND_API_KEY` (email). **`BETTER_AUTH_SECRET` is a
+bigger change**, so rotate it only when the secret itself has leaked, or when a
+sign-out has to take effect at once (see below). It signs everyone out. It
+also breaks, without warning, everything else it signs:
+
+- approval links still waiting (`lib/orchestration/approval-tokens.ts`)
+- signed storage links (`lib/storage/access-tokens.ts`)
+- email-change confirmations (`lib/auth/change-email.ts`)
+- visitor ids (`lib/logging/visitor-id.ts`)
 
 ### Revoke a person's sessions
 
@@ -130,7 +139,14 @@ DELETE FROM "session" WHERE "userId" = '<user id>';
 DELETE FROM "session";
 ```
 
-This signs them out. It does **not** stop them signing back in. If the password
+**It takes up to five minutes.** Sessions are cached in a signed cookie for 5
+minutes (`cookieCache`, `lib/auth/config.ts`), and the auth guards read that
+cookie. A browser with a fresh one stays signed in, **with the role it had when
+it was cached**, until the cookie expires. Log the containment time as the
+deletion plus five minutes. If it has to take effect at once (an attacker holding
+an admin session), also rotate `BETTER_AUTH_SECRET`.
+
+Deleting the sessions does **not** stop them signing back in. If the password
 is compromised, have it reset **first**, then delete the sessions: a password
 reset doesn't revoke sessions in this configuration. **An admin's account:**
 demote it at `/admin/users/:id/edit` (role → user) before either step.
@@ -153,6 +169,10 @@ Every turn they start then ends on `ceiling_reached`, before any model call.
 
 - **The crisis path is never behind it.** A person over their limit who writes
   that they are in danger still gets the resource.
+- **It fails open.** If the month's spend can't be read (a database problem),
+  the turn is allowed, and a warning is logged
+  (`Monthly ceiling could not be read; the turn is allowed`). So a `0` limit is
+  not a hard stop. Where one is needed, use the pause or take her off a seat.
 - **The member-facing copy is written for a monthly limit.** It says replies come
   back on the reset date. For a person you have stopped on purpose, that is not
   true. See [Repeated abusive use](#repeated-abusive-use).
