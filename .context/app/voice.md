@@ -521,10 +521,12 @@ content seam anyway, because the set decides which moments she is ever heard in 
 and a probe set an engineer can silently retune is the same failure this feature
 exists to prevent, one level out.
 
-Five prompts, covering four moments, and the coverage is **structural**: the
+Nine prompts, covering five moments, and the coverage is **structural**: the
 schema's `superRefine` fails a file missing any of `greeting`, `decline`,
-`grounded-claim` or `retrieval-empty`. The last is the load-bearing one — nothing
-is retrievable behind it, so whatever register survives came from the core alone.
+`grounded-claim`, `retrieval-empty` or `refusal`. `retrieval-empty` is the
+load-bearing one for her voice: nothing is retrievable behind it, so whatever
+register survives came from the core alone. The four `refusal` cases (f-safety
+t-60) are the attempts to talk her out of role; see `.context/app/safety.md`.
 
 **There is no `expectedOutput` anywhere**, deliberately. Whether an answer reads
 as her is her judgement on a deployed build; a reference answer would invite a
@@ -532,7 +534,7 @@ grader to score a string comparison and report a number for it. Every
 reference-required grader is therefore structurally unusable against this
 dataset, which is correct rather than a gap.
 
-**The dataset id carries the version** — `lelanea-voice-golden-set-v1.0` — because
+**The dataset id carries the version** — `lelanea-voice-golden-set-v1.1` (v1.0 before t-60 added the refusal cases) — because
 a case cannot be deleted once a run has scored it: `AiEvaluationCaseResult
 .datasetCase` declares no `onDelete`, so Prisma's default `Restrict` applies. So
 `004-voice-golden-set.ts` reconciles a version nothing has run yet, and
