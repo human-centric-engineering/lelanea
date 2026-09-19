@@ -114,6 +114,9 @@ async function renderLoaded(width: 'large' | 'small' | 'medium' = 'large') {
 }
 
 const box = () => screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel });
+/** Her words alone — the bubble, not the account row under it (t-66). */
+const herWords = () =>
+  screen.getByRole('article', { name: 'Lelañea said' }).querySelector('p')?.textContent;
 const latestTurn = () => seat.turns[seat.turns.length - 1];
 
 describe('sending', () => {
@@ -215,11 +218,7 @@ describe('sending', () => {
       latestTurn().push('start', { conversationId: 'c1' });
       latestTurn().push('content', { delta: 'Every word at once, as it arrives.' });
     });
-    await waitFor(() =>
-      expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
-        'Every word at once, as it arrives.'
-      )
-    );
+    await waitFor(() => expect(herWords()).toBe('Every word at once, as it arrives.'));
   });
 
   it('folds a finished turn into the transcript, and the send control comes back', async () => {
@@ -473,11 +472,7 @@ describe('folding the pane mid-conversation', () => {
       latestTurn().push('done', {});
       latestTurn().close();
     });
-    await waitFor(() =>
-      expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
-        'Every word of this reply.'
-      )
-    );
+    await waitFor(() => expect(herWords()).toBe('Every word of this reply.'));
 
     // Now with motion back on, fold and unfold. A reply still flagged as
     // streamed would remount `useTypedText` from '' and start typing.
@@ -485,9 +480,7 @@ describe('folding the pane mid-conversation', () => {
     await user.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open the conversation' }));
 
-    expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
-      'Every word of this reply.'
-    );
+    expect(herWords()).toBe('Every word of this reply.');
     expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('hello');
   });
 });
@@ -524,6 +517,182 @@ describe('a soft crisis frame whose resource did not parse', () => {
   });
 });
 
+describe('the account under a reply (t-66)', () => {
+  const citation = {
+    marker: 1,
+    chunkId: 'ch1',
+    documentId: 'd1',
+    documentName: 'On boundaries',
+    contentHash: null,
+    documentVersion: null,
+    section: null,
+    patternNumber: null,
+    patternName: null,
+    excerpt: 'A boundary is…',
+    similarity: 0.9,
+  };
+  const reloadedReply = {
+    kind: 'reply',
+    id: 'a1',
+    text: 'She says…',
+    at: '2026-09-19T12:00:05.000Z',
+    turnId: 't1',
+    citations: [citation],
+    capabilities: ['search_knowledge_base'],
+    turn: {
+      turnId: 't1',
+      seat: 'facilitator',
+      status: 'completed',
+      attempts: 1,
+      modelId: 'gpt-4o-mini-2024-07-18',
+      providerSlug: 'openai',
+      fingerprintVersion: 'v1',
+      inputTokens: 3812,
+      outputTokens: 240,
+      costUsd: 0.0123,
+      pricing: 'priced',
+      errorCode: null,
+      startedAt: '2026-09-19T12:00:00.000Z',
+      completedAt: '2026-09-19T12:00:05.000Z',
+    },
+  };
+  const row = () => screen.getByRole('button', { expanded: false });
+  const account = () => {
+    const button = screen.getByRole('button', { name: /Looked something up|Nothing was written/ });
+    const detail = document.getElementById(button.getAttribute('aria-controls') ?? '');
+    return { button, detail };
+  };
+
+  /** The same turn, arriving live. */
+  async function liveTurn() {
+    motion.reduced = true;
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'What does she say about boundaries?{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('capability_result', {
+        capabilitySlug: 'search_knowledge_base',
+        result: { success: true, data: {} },
+      });
+      latestTurn().push('content', { delta: 'She says…' });
+      latestTurn().push('citations', { citations: [citation] });
+      latestTurn().push('done', {
+        tokenUsage: { inputTokens: 3812, outputTokens: 240, totalTokens: 4052 },
+        costUsd: 0.0123,
+        provider: 'openai',
+        model: 'gpt-4o-mini-2024-07-18',
+      });
+      latestTurn().close();
+    });
+    await waitFor(() => expect(herWords()).toBe('She says…'));
+    return user;
+  }
+
+  it('sits under a completed reply, collapsed, and reads as a sentence — not a status line', async () => {
+    seat.transcript = [
+      { kind: 'user', id: 'u1', text: 'Boundaries?', at: '2026-09-19T12:00:00.000Z', turnId: 't1' },
+      reloadedReply,
+    ];
+    await renderLoaded();
+    const { button, detail } = account();
+    expect(button.textContent).toMatch(/^\d{2}:\d{2}·Looked something up in her material$/);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(detail).toBeTruthy();
+    expect(detail?.hidden).toBe(true);
+    // Words, not system language.
+    for (const text of [button.textContent, detail?.textContent]) {
+      expect(text).not.toContain('gpt-4o');
+      expect(text).not.toContain('facilitator');
+      expect(text).not.toContain('search_knowledge_base');
+    }
+  });
+
+  it('opens on the chevron with aria-expanded, and closes again', async () => {
+    seat.transcript = [reloadedReply];
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.click(row());
+    const { button, detail } = account();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(detail?.hidden).toBe(false);
+    expect(detail?.textContent).toBe(
+      'Looked something up in her material and drew on 1 passage of it.\n' +
+        'This turn used about 4,100 tokens and cost $0.01.'
+    );
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(detail?.hidden).toBe(true);
+  });
+
+  it('shows the same account for the same turn, live and read back', async () => {
+    const user = await liveTurn();
+    const live = account();
+    await user.click(live.button);
+    const liveLine = live.button.textContent;
+    const liveDetail = live.detail?.textContent;
+
+    // Reload: the same turn from the read route.
+    seat.transcript = [
+      {
+        kind: 'user',
+        id: 'u1',
+        text: 'What does she say about boundaries?',
+        at: '2026-09-19T12:00:00.000Z',
+        turnId: 't1',
+      },
+      reloadedReply,
+    ];
+    document.body.innerHTML = '';
+    await renderLoaded();
+    const back = account();
+    // The clock reading is the reply's own time on each path; the words are the same.
+    expect(liveLine?.slice(5)).toBe(back.button.textContent?.slice(5));
+    expect(back.detail?.textContent).toBe(liveDetail);
+    expect(liveDetail).toContain('drew on 1 passage');
+    expect(liveDetail).toContain('cost $0.01');
+  });
+
+  it('appears only once the reply has been shown to its end', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'A reply of several words, paced.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    // Folded into the transcript, still typing: no row yet.
+    await waitFor(() => expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Nothing was written/ })).toBeNull();
+    await waitFor(() => expect(herWords()).toBe('A reply of several words, paced.'), {
+      timeout: 4000,
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Nothing was written/ })).toBeTruthy()
+    );
+  });
+
+  it('has no row under a turn that ended without her, nor under a reply from before the seam', async () => {
+    seat.transcript = [{ ...reloadedReply, turn: null, capabilities: [] }];
+    const user = userEvent.setup();
+    await renderLoaded();
+    expect(screen.queryByRole('button', { expanded: false })).toBeNull();
+
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('error', { code: 'unavailable', message: 'x' });
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeTruthy()
+    );
+    expect(screen.queryByRole('button', { expanded: false })).toBeNull();
+  });
+});
+
 describe('reading back', () => {
   it('shows the transcript on load, whole', async () => {
     seat.transcript = [
@@ -535,6 +704,7 @@ describe('reading back', () => {
         at: '2026-09-19T12:00:05.000Z',
         turnId: 't1',
         citations: [],
+        capabilities: [],
         turn: null,
       },
     ];

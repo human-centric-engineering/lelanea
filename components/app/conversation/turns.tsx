@@ -2,10 +2,19 @@
 
 import * as React from 'react';
 
+import { ChevronDown } from 'lucide-react';
+
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { useTypedText } from '@/components/app/conversation/use-typed-text';
 import styles from '@/components/app/conversation/turns.module.css';
+import {
+  accountDetail,
+  accountLine,
+  accountParts,
+  accountTime,
+  type AccountInput,
+} from '@/lib/app/conversation/account';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import type { CrisisResource } from '@/lib/app/conversation/events';
 import type { GenerationStatus } from '@/lib/app/conversation/client';
@@ -24,9 +33,9 @@ import { cn } from '@/lib/utils';
  * absent — a transcript is a sequence of self-contained pieces, and that is
  * the element for it.
  *
- * What is NOT here: the timestamp and the one-line account under a reply.
- * That row is t-66's, and the prototype renders it only when a turn has
- * `meta` — which no turn has until the account exists.
+ * Under a reply, once it has been shown to its end, sits the account row —
+ * the time, what the turn did in one line, and a chevron to the detail
+ * (`AccountRow`, t-66) — as the prototype's `.disclose` / `.detail` pair.
  */
 
 export function UserTurn({ text, rise }: { text: string; rise: boolean }) {
@@ -75,7 +84,7 @@ export interface ReplyTurnProps {
   onGrow?: () => void;
   /** Called once the whole settled text has been shown. */
   onRevealed?: () => void;
-  /** t-66 renders the account row here. */
+  /** The account row. Rendered once the whole reply has been shown, not while it is still arriving. */
   children?: React.ReactNode;
 }
 
@@ -106,7 +115,7 @@ export function ReplyTurn({
     >
       <HerMark />
       <div className="flex min-w-0 flex-col gap-2">
-        <div
+        <p
           className={cn(
             'rounded-[20px_20px_20px_6px] border px-[18px] py-[14px]',
             'text-foreground border-[var(--color-card-border)] bg-[var(--color-card)]',
@@ -114,10 +123,67 @@ export function ReplyTurn({
           )}
         >
           {shown}
-        </div>
-        {children}
+        </p>
+        {done ? children : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * The account under a reply (§3.3; t-66): the time and one line saying what
+ * the turn did, on a button that opens the detail. Collapsed by default
+ * (owner ruling, 19 Sept 2026) — open, the transcript reads as a trace.
+ *
+ * `aria-expanded` on the button and `aria-controls` to the detail, as the
+ * prototype's `.disclose` has; the chevron turns when open. The words come
+ * from `lib/app/conversation/account.ts`, composed from parts, so this row
+ * does not change when §11 and §13 add theirs.
+ */
+export function AccountRow({ input }: { input: AccountInput }) {
+  const [open, setOpen] = React.useState(false);
+  const parts = accountParts(input);
+  const detailId = React.useId();
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={detailId}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          'text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-1.5 px-0.5',
+          'text-left text-[12px] leading-[1.5]',
+          'transition-[color] duration-200 ease-[var(--ease-brand)] motion-reduce:transition-none',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+          'focus-visible:outline-[var(--color-ring)]'
+        )}
+      >
+        <span className="tabular-nums">{accountTime(input.at)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{accountLine(parts)}</span>
+        <ChevronDown
+          size={14}
+          strokeWidth={1.6}
+          aria-hidden="true"
+          className={cn(
+            'transition-transform duration-200 ease-[var(--ease-brand)] motion-reduce:transition-none',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+      <div
+        id={detailId}
+        hidden={!open}
+        className={cn(
+          'rounded-[14px] border px-4 py-[13px]',
+          'text-muted-foreground border-[var(--color-border)] bg-[var(--color-muted)]',
+          'text-[13px] leading-[1.6] whitespace-pre-line'
+        )}
+      >
+        {accountDetail(input, parts)}
+      </div>
+    </div>
   );
 }
 

@@ -32,6 +32,8 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 
 import { z } from 'zod';
 
+import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
+
 import { prisma } from '@/lib/db/client';
 import { citationSchema } from '@/lib/validations/orchestration';
 import type { Citation } from '@/types/orchestration';
@@ -381,10 +383,12 @@ export async function recordTurnFailed(turn: TurnAttempt, errorCode: string): Pr
 
 const replayCitationsSchema = z.object({ citations: z.array(citationSchema) });
 
-/** What a replay tells again: the whole reply, and the sources it cited. */
+/** What a replay tells again: the whole reply, the sources it cited, and what it called. */
 export interface TurnReply {
   text: string;
   citations: Citation[];
+  /** The capabilities that answered, in order (§10 t-66) — so a replay's account matches a reload's. */
+  capabilities: string[];
 }
 
 /**
@@ -396,6 +400,10 @@ export interface TurnReply {
  * joined as they were streamed. The citations are on the terminal row's
  * provenance, validated rather than cast. Reading only the linked row dropped
  * the text before a search and every `[N]` source (found by /code-review).
+ *
+ * **And what the turn called, where it answered** — from the terminal row's
+ * `provenance.capabilityCalls` — so a replayed turn's account says what a
+ * reload's does (t-66, found by /code-review).
  */
 export async function readTurnReply(
   turn: Pick<
@@ -425,6 +433,7 @@ export async function readTurnReply(
   return {
     text: passes.map((pass) => pass.content).join(''),
     citations: parsed.success ? parsed.data.citations : [],
+    capabilities: answeredCapabilities(terminal.provenance),
   };
 }
 

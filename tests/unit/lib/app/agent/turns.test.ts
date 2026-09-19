@@ -52,7 +52,7 @@ interface TurnRow {
 interface MessageRow {
   id: string;
   conversationId: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   metadata: Record<string, unknown> | null;
   provenance?: Record<string, unknown> | null;
@@ -869,7 +869,7 @@ describe('a client that disconnects mid-answer (§08 t-55)', () => {
 });
 
 describe('a replay of a turn that used a tool', () => {
-  it('tells every pass of the reply again, and the sources it cited', async () => {
+  it('tells every pass of the reply again, the sources it cited, and what it called that answered', async () => {
     const turn = turnFor();
     const citation = {
       marker: 1,
@@ -908,6 +908,17 @@ describe('a replay of a turn that used a tool', () => {
           metadata: null,
           createdAt: new Date(at + 1),
         });
+        // The platform writes a tool row for every call — its content the
+        // whole result — and traces each on the terminal row's provenance:
+        // one the model invented and was refused, then the search that answered.
+        db.messages.push({
+          id: 't1',
+          conversationId: 'conv-user-1',
+          role: 'tool',
+          content: JSON.stringify({ success: true, data: { results: [] } }),
+          metadata: null,
+          createdAt: new Date(at + 2),
+        });
         yield { type: 'content', delta: 'She writes of more [1].' };
         db.messages.push({
           id: 'a2',
@@ -915,8 +926,14 @@ describe('a replay of a turn that used a tool', () => {
           role: 'assistant',
           content: 'She writes of more [1].',
           metadata: null,
-          provenance: { citations: [citation] },
-          createdAt: new Date(at + 2),
+          provenance: {
+            citations: [citation],
+            capabilityCalls: [
+              { slug: 'delete_everything', arguments: {}, latencyMs: 0, success: false },
+              { slug: 'search_knowledge_base', arguments: {}, latencyMs: 40, success: true },
+            ],
+          },
+          createdAt: new Date(at + 3),
         });
         yield { type: 'citations', citations: [citation] };
         yield {
@@ -942,6 +959,16 @@ describe('a replay of a turn that used a tool', () => {
       type: 'citations',
       citations: [citation],
     });
+    // What it called, before the words — only the call that answered, so the
+    // account under a replayed reply says what a reload's does (t-66).
+    const called = replayed.findIndex((e) => e.type === 'capability_results');
+    expect(called).toBeGreaterThan(-1);
+    expect(called).toBeLessThan(replayed.findIndex((e) => e.type === 'content'));
+    expect(replayed[called]).toEqual({
+      type: 'capability_results',
+      results: [{ capabilitySlug: 'search_knowledge_base', result: { success: true } }],
+    });
+    expect(JSON.stringify(replayed)).not.toContain('delete_everything');
   });
 });
 

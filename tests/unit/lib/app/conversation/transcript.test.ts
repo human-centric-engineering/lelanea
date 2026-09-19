@@ -73,6 +73,21 @@ function assistant(id: string, text: string, seconds: number, extra: Record<stri
   };
 }
 
+/** A `tool` row as the platform writes it: the whole result, which the read never selects. */
+function tool(id: string, seconds: number) {
+  return {
+    id,
+    role: 'tool',
+    content: JSON.stringify({ success: true, data: { results: [{ text: 'a whole chunk' }] } }),
+    createdAt: at(seconds),
+    metadata: null,
+    provenance: null,
+  };
+}
+
+/** The platform's per-call trace on the terminal row's provenance. */
+const call = (slug: string, success: boolean) => ({ slug, arguments: {}, latencyMs: 1, success });
+
 function turn(
   turnId: string,
   fields: Partial<{
@@ -271,12 +286,22 @@ describe('assembleTranscript', () => {
     expect(JSON.stringify(entries)).not.toContain('An error occurred');
   });
 
-  it('joins a tool-using turn’s passes into one reply, keyed on the terminal row', () => {
+  it('joins a tool-using turn’s passes into one reply, keyed on the terminal row, naming what it called', () => {
     const entries = assembleTranscript(
       [
         user('u1', 'What does she say about boundaries?', 1, 't1'),
         assistant('pass1', 'Let me look. ', 2),
-        assistant('pass2', 'She says…', 4, { provenance: { citations: [] } }),
+        tool('tool1', 3),
+        assistant('pass2', 'She says…', 4, {
+          provenance: {
+            citations: [],
+            // A call the model invented and the platform refused is traced too.
+            capabilityCalls: [
+              call('delete_everything', false),
+              call('search_knowledge_base', true),
+            ],
+          },
+        }),
       ],
       [turn('t1', { userMessageId: 'u1', assistantMessageId: 'pass2' })]
     );
@@ -285,7 +310,33 @@ describe('assembleTranscript', () => {
       kind: 'reply',
       id: 'pass2',
       text: 'Let me look. She says…',
+      // What the terminal row's traces say answered (t-66). A refused call
+      // is not something the turn did, and the tool row's content is not hers.
+      capabilities: ['search_knowledge_base'],
     });
+    expect(JSON.stringify(entries)).not.toContain('a whole chunk');
+    expect(JSON.stringify(entries)).not.toContain('delete_everything');
+  });
+
+  it('a turn that called nothing says so, and a failed turn’s tool row never leaks into the next reply', () => {
+    const entries = assembleTranscript(
+      [
+        user('u1', 'first', 1, 't1'),
+        // A failed mid-loop turn: a call answered, then no reply — the
+        // marker only, which is dropped.
+        tool('tool1', 2),
+        assistant('marker', '[An error occurred]', 3, { metadata: { error: true } }),
+        user('u2', 'second', 4, 't2'),
+        assistant('a2', 'Plainly.', 5, { provenance: { citations: [], capabilityCalls: [] } }),
+      ],
+      [
+        turn('t1', { userMessageId: 'u1', status: 'failed', errorCode: 'aborted' }),
+        turn('t2', { userMessageId: 'u2', assistantMessageId: 'a2' }),
+      ]
+    );
+    const replies = entries.filter((entry) => entry.kind === 'reply');
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({ id: 'a2', capabilities: [] });
   });
 
   it('carries a reply written before the seam existed, with no account', () => {

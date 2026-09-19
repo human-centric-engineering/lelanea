@@ -233,6 +233,9 @@ const entrySchema = z.discriminatedUnion('kind', [
     at: z.string(),
     turnId: z.string().nullable(),
     citations: z.array(citationSchema),
+    // Absent on a body from before t-66 (a mixed-version window): the reply
+    // is kept and says it called nothing, rather than being dropped.
+    capabilities: z.array(z.string()).default([]),
     turn: accountSchema.nullable(),
   }),
 ]);

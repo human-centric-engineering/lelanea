@@ -1,7 +1,7 @@
 /**
  * The conversation, read back (§10 t-64).
  *
- * What the pane shows on load, and what the disclosure drawer (t-66) reads
+ * What the pane shows on load, and what the account under each reply reads
  * from: the person's conversation on a seat, as turns — what they said, what
  * she said, and the turn row that says what produced the reply.
  *
@@ -52,6 +52,7 @@ import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -91,6 +92,13 @@ export interface TranscriptReplyEntry {
   at: string;
   turnId: string | null;
   citations: Citation[];
+  /**
+   * The capabilities that answered the turn, in order, from the terminal
+   * row's `provenance.capabilityCalls` (`capability-answers.ts`). What the
+   * account row says the turn did (t-66); the live turn collects the same
+   * from the `capability_result` frames, and a replay from `readTurnReply`.
+   */
+  capabilities: string[];
   /** The turn row, when there is one; null for rows written before the seam. */
   turn: TurnAccount | null;
 }
@@ -228,6 +236,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       at: terminal.createdAt.toISOString(),
       turnId: turn?.turnId ?? null,
       citations: citationsOf(terminal.provenance),
+      capabilities: answeredCapabilities(terminal.provenance),
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;
