@@ -23,11 +23,8 @@ import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
 import { successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
 import { validateQueryParams } from '@/lib/api/validation';
-import {
-  CONVERSATION_SEAT,
-  READABLE_SEATS,
-  readTranscript,
-} from '@/lib/app/conversation/transcript';
+import { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
+import { readTranscript } from '@/lib/app/conversation/transcript';
 
 const querySchema = z.object({
   seat: z

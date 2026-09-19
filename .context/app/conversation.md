@@ -131,18 +131,18 @@ the authored shape drops to `undefined` and the frame still arrives, because
 
 ## What the pane does with each frame
 
-| Frame                                   | Then                                                                                |
-| --------------------------------------- | ----------------------------------------------------------------------------------- |
-| `start`                                 | the draft clears — the words leave the box only once the server has them (§8.1)     |
-| `content`                               | her words grow; the thinking row becomes her bubble on the first one                |
-| `warning` `still_thinking`              | the thinking row's label changes; no second frame                                   |
-| `warning` with `resource` (soft crisis) | kept on the live turn and the finished reply; rendered by t-65                      |
-| `status`                                | the platform's operator strings — never shown                                       |
-| `capability_result(s)`                  | slugs collected for the drawer (t-66)                                               |
-| `citations`                             | carried on the reply (t-66)                                                         |
-| `content_reset`                         | her words start over                                                                |
-| `done`                                  | the live turn folds into `entries` as a reply, with an account built from the frame |
-| `error`                                 | an `ending` entry with the frame's words; t-65 makes it hers and retryable          |
+| Frame                                   | Then                                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `start`                                 | the draft clears — the words leave the box only once the server has them (§8.1)                                          |
+| `content`                               | her words grow; the thinking row becomes her bubble on the first one                                                     |
+| `warning` `still_thinking`              | the thinking row's label changes; no second frame                                                                        |
+| `warning` with `resource` (soft crisis) | kept on the live turn and the finished reply; rendered by t-65                                                           |
+| `status`                                | the platform's operator strings — never shown                                                                            |
+| `capability_result(s)`                  | slugs collected for the drawer (t-66)                                                                                    |
+| `citations`                             | carried on the reply (t-66)                                                                                              |
+| `content_reset`                         | her words start over                                                                                                     |
+| `done`                                  | the live turn folds into `entries` as a reply, with an account built from the frame                                      |
+| `error`                                 | an `ending` entry with the frame's words, and the words back in the box if it is empty; t-65 makes it hers and retryable |
 
 The account built live from `done` carries model, provider, tokens and
 `costUsd`; `fingerprintVersion` and `pricing` are `null` until the read route

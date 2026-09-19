@@ -51,14 +51,8 @@ import { conversationVisibilityWhere } from '@/lib/orchestration/access/conversa
 import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
-import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
-import { SEATED_ROLES } from '@/lib/app/agent/pins';
 
-/** The seat the conversation pane speaks to in release 1. */
-export const CONVERSATION_SEAT = FACILITATION_ROLES.facilitator;
-
-/** The seats a member may read a transcript for — the two this leaf seeds. */
-export const READABLE_SEATS: readonly string[] = SEATED_ROLES;
+export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
 /** What a turn row says about the reply above it. Null fields are honest unknowns. */
 export interface TurnAccount {

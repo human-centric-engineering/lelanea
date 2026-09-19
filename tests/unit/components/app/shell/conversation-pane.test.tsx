@@ -218,10 +218,14 @@ describe('sending', () => {
     expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
   });
 
-  it('tells the person when a turn ends without her, with the frame\u2019s words', async () => {
+  it('tells the person when a turn ends without her, with the frame\u2019s words, and the words are back in the box', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'hello{Enter}');
+    // `start` came first, so the box was cleared before the ending arrived —
+    // the shape a provider outage takes on the real route.
+    await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
+    await waitFor(() => expect(box()).toHaveValue(''));
     await act(async () => {
       latestTurn().push('error', { code: 'unavailable', message: 'Your message is kept.' });
       latestTurn().close();
@@ -231,6 +235,24 @@ describe('sending', () => {
         'Your message is kept.'
       )
     );
+    expect(box()).toHaveValue('hello');
+  });
+
+  it('does not overwrite a new draft with the failed one', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'first{Enter}');
+    await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
+    await waitFor(() => expect(box()).toHaveValue(''));
+    await user.type(box(), 'a new thought');
+    await act(async () => {
+      latestTurn().push('error', { code: 'unavailable', message: 'kept' });
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'The turn ended' })).toBeTruthy()
+    );
+    expect(box()).toHaveValue('a new thought');
   });
 });
 

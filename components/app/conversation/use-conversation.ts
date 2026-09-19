@@ -9,7 +9,8 @@ import {
   TurnRefused,
 } from '@/lib/app/conversation/client';
 import type { ConversationEvent, CrisisResource } from '@/lib/app/conversation/events';
-import { CONVERSATION_SEAT, type TranscriptEntry } from '@/lib/app/conversation/transcript';
+import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
+import type { TranscriptEntry } from '@/lib/app/conversation/transcript';
 import { ENDING_MESSAGES, ENDING_UNAVAILABLE, STILL_THINKING } from '@/lib/app/agent/endings';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
@@ -165,6 +166,19 @@ export function useConversation(options: Options = {}): ConversationState {
           turnId,
         };
 
+        /**
+         * A turn that ended without her. The words go back into the box if
+         * it is empty — `start` cleared it, and "your message is kept" has to
+         * be true where the person looks for it (§8.1). Found looking at it:
+         * with no provider the server sends `start` and then the ending, and
+         * the box sat empty under a line saying the message was kept. The
+         * retry under the same turn id is t-65's.
+         */
+        const end = (ending: EndingEntry) => {
+          setDraft((current) => (current.trim() ? current : message));
+          finish([userEntry, ending]);
+        };
+
         const apply = (event: ConversationEvent) => {
           switch (event.type) {
             case 'start':
@@ -237,16 +251,13 @@ export function useConversation(options: Options = {}): ConversationState {
               ]);
               return;
             case 'error':
-              finish([
-                userEntry,
-                {
-                  kind: 'ending',
-                  turnId,
-                  code: event.code,
-                  message: event.message,
-                  ...(event.resource ? { resource: event.resource } : {}),
-                },
-              ]);
+              end({
+                kind: 'ending',
+                turnId,
+                code: event.code,
+                message: event.message,
+                ...(event.resource ? { resource: event.resource } : {}),
+              });
               return;
           }
         };
@@ -270,24 +281,18 @@ export function useConversation(options: Options = {}): ConversationState {
             // The stream closed with no terminal frame — a connection that
             // dropped. The turn goes on server-side and the id can be sent
             // again to get the whole answer (t-65).
-            finish([
-              userEntry,
-              {
-                kind: 'ending',
-                turnId,
-                code: ENDING_UNAVAILABLE,
-                message: ENDING_MESSAGES.unavailable,
-              },
-            ]);
+            end({
+              kind: 'ending',
+              turnId,
+              code: ENDING_UNAVAILABLE,
+              message: ENDING_MESSAGES.unavailable,
+            });
           }
         } catch (error: unknown) {
           if (controller.signal.aborted) return;
           const code = error instanceof TurnRefused ? error.code : ENDING_UNAVAILABLE;
           logger.warn('Conversation turn did not run', { seat, code });
-          finish([
-            userEntry,
-            { kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable },
-          ]);
+          end({ kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable });
         }
       })();
     },
