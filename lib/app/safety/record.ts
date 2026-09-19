@@ -2,8 +2,8 @@
  * The safety record: that a crisis was detected and what the app did —
  * never the words (f-safety t-58).
  *
- * The first consumer of `app_safety_event`; the misuse task (t-60) writes to
- * the same table under its own `kind`. What a row holds and why it holds no
+ * Two kinds share `app_safety_event`: `crisis` (t-58) and `misuse` (t-60, an
+ * inline guard flagging a message on one of her seats). What a row holds and why it holds no
  * text is on the model (`prisma/schema/app.prisma`).
  *
  * **A failed write never withholds the resource.** The person is owed the
@@ -42,6 +42,33 @@ export async function recordCrisisEvent(event: CrisisEventInput): Promise<void> 
       contextCheck: event.contextCheck,
       locale: event.locale,
       resourceRegion: event.resourceRegion,
+    },
+  });
+}
+
+export interface MisuseEventInput {
+  userId: string;
+  seat: string;
+  /** Which inline guard flagged. */
+  guard: string;
+  /** The mode it acted in. */
+  guardOutcome: string;
+}
+
+/**
+ * That a guard flagged a message on one of her seats (f-safety t-60). Only which
+ * guard and what it did. The platform's guard events carry no text, and this
+ * row never will either.
+ */
+export async function recordMisuseEvent(event: MisuseEventInput): Promise<void> {
+  await prisma.appSafetyEvent.create({
+    data: {
+      kind: 'misuse',
+      userId: event.userId,
+      seat: event.seat,
+      categories: [],
+      guard: event.guard,
+      guardOutcome: event.guardOutcome,
     },
   });
 }

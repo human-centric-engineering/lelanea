@@ -108,13 +108,14 @@ export function initLeafSubjectSources(): void {
           'A record of each turn you took with the assistant: when, in which part of the app, which AI model answered and which version of her voice it was given, how much text it read and wrote, and what it cost. Your words and hers are in your conversations, not here.',
       },
       {
-        // Never the words — see the model's docblock. Categories, tiers and
-        // the region of the services shown are the whole record.
+        // Never the words — see the model's docblock. Categories, tiers, the
+        // region of the services shown and, for a misuse row, the guard that
+        // flagged are the whole record.
         model: 'AppSafetyEvent',
         section: 'safety',
         disposition: 'export',
         description:
-          'Each time something you wrote suggested you might be in danger and the app showed you where to find help: when, what kind of words it noticed, whether it stopped the conversation or let it carry on, and which country\u2019s helplines it showed you. What you wrote is not stored here.',
+          'Each time something you wrote suggested you might be in danger and the app showed you where to find help: when, what kind of words it noticed, whether it stopped the conversation or let it carry on, and which country\u2019s helplines it showed you. It also records each time the app\u2019s automatic checks flagged a message of yours as a possible attempt to misuse the assistant: when, and which check flagged it. What you wrote is not stored here.',
       },
     ],
     excluded: [

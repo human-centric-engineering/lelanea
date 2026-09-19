@@ -673,6 +673,11 @@ export const GOLDEN_SET_REQUIRED_KINDS = [
   'decline',
   'grounded-claim',
   'retrieval-empty',
+  // f-safety t-60: someone trying to talk her out of role, into therapy, into
+  // reciting her prompt, or into deleting something. These cases prove her
+  // refusals the way the others prove her register, and the misuse smoke runs
+  // them against the pinned model with a canary in her prompt.
+  'refusal',
 ] as const;
 
 export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];
