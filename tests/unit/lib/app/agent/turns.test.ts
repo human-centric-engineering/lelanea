@@ -76,6 +76,9 @@ const db = vi.hoisted(() => ({
   settings: { firstWordsDeadlineMs: 8_000, turnDeadlineMs: 60_000 },
   /** Feature flags by name. */
   flags: new Map<string, boolean>(),
+  /** The default monthly ceiling, and each person's own override. */
+  defaultCeilingUsd: 5,
+  budgets: new Map<string, number>(),
   seq: 0,
 }));
 
@@ -248,10 +251,30 @@ vi.mock('@/lib/db/client', () => {
       appAgentSettings: {
         findUnique: vi.fn(async () => ({
           ...db.settings,
-          defaultMonthlyCeilingUsd: 5,
+          defaultMonthlyCeilingUsd: db.defaultCeilingUsd,
           updatedAt: new Date(),
         })),
       },
+      appUserBudget: {
+        findUnique: vi.fn(async ({ where }: { where: { userId: string } }) =>
+          db.budgets.has(where.userId) ? { monthlyCeilingUsd: db.budgets.get(where.userId) } : null
+        ),
+      },
+      // The month-to-date read: every cost row the fake model wrote is this
+      // month's, so it sums the person's rows. Its only value that is a user id
+      // is the first interpolation.
+      $queryRaw: vi.fn(async (_sql: TemplateStringsArray, userId: string) => {
+        const rows = db.costs.filter((c) => c.userId === userId);
+        return [
+          {
+            cost_usd: rows.reduce((sum, c) => sum + c.costUsd, 0),
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_rows: rows.length,
+            unpriced_rows: 0,
+          },
+        ];
+      }),
       featureFlag: {
         findUnique: vi.fn(async ({ where }: { where: { name: string } }) =>
           db.flags.has(where.name) ? { enabled: db.flags.get(where.name) } : null
@@ -456,6 +479,8 @@ beforeEach(() => {
   db.conversationOwners = new Map();
   db.settings = { firstWordsDeadlineMs: 8_000, turnDeadlineMs: 60_000 };
   db.flags = new Map([[GENERATION_PAUSED_FLAG, false]]);
+  db.defaultCeilingUsd = 5;
+  db.budgets = new Map();
   db.seq = 0;
   modelCalls = 0;
   callSignals = [];
@@ -1321,5 +1346,94 @@ describe('the pause switch (§08 t-55)', () => {
     expect(await take(turnFor({ message: 'Something new.' }))).toEqual([
       { type: 'error', code: 'paused', message: ENDING_MESSAGES.paused },
     ]);
+  });
+});
+
+describe('the monthly ceiling (f-safety t-59)', () => {
+  /** An answer that costs this much — enough that a few turns reach the ceiling. */
+  const costing = (costUsd: number): void => {
+    behaviour = { ...behaviour, costUsd };
+  };
+
+  it('under the ceiling, a turn runs as it always did', async () => {
+    costing(1);
+    const events = await take(turnFor());
+    expect(events.at(-1)?.type).toBe('done');
+    expect(modelCalls).toBe(1);
+  });
+
+  it('at the ceiling, ends with the figures and reset date — nothing claimed, no model call', async () => {
+    // The population: a turn under the ceiling reaches the model and is billed.
+    costing(5);
+    await take(turnFor({ clientTurnId: 'turn-under' }));
+    expect(modelCalls).toBe(1);
+    expect(db.turns).toHaveLength(1);
+
+    const over = await take(turnFor({ clientTurnId: 'turn-over' }));
+
+    expect(over).toHaveLength(1);
+    expect(over[0]).toMatchObject({
+      type: 'error',
+      code: 'ceiling_reached',
+      ceiling: { spentUsd: 5, ceilingUsd: 5 },
+    });
+    const { resetsAt } = (over[0] as unknown as { ceiling: { resetsAt: string } }).ceiling;
+    const now = new Date();
+    expect(resetsAt).toBe(
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
+    );
+    // No claim — the check stands before it — and no `streamChat` call.
+    expect(db.turns.map((t) => t.turnId)).toEqual(['turn-under']);
+    expect(modelCalls).toBe(1);
+    expect(db.costs).toHaveLength(1);
+  });
+
+  it('the turn that crosses the line completes: the check is before the turn, not during it', async () => {
+    costing(3);
+    await take(turnFor({ clientTurnId: 'turn-a' }));
+    const crossing = await take(turnFor({ clientTurnId: 'turn-b' }));
+    expect(crossing.at(-1)?.type).toBe('done');
+    expect(await take(turnFor({ clientTurnId: 'turn-c' }))).toMatchObject([
+      { code: 'ceiling_reached', ceiling: { spentUsd: 6, ceilingUsd: 5 } },
+    ]);
+  });
+
+  it("honours a person's own limit over the default", async () => {
+    costing(1);
+    await take(turnFor({ clientTurnId: 'turn-a' }));
+
+    db.budgets.set('user-1', 1);
+    expect(await take(turnFor({ clientTurnId: 'turn-b' }))).toMatchObject([
+      { code: 'ceiling_reached', ceiling: { ceilingUsd: 1 } },
+    ]);
+    // Another person, on the default, spends on.
+    expect((await take(turnFor({ userId: 'user-2', clientTurnId: 'turn-b' }))).at(-1)?.type).toBe(
+      'done'
+    );
+
+    db.budgets.set('user-1', 10);
+    expect((await take(turnFor({ clientTurnId: 'turn-b' }))).at(-1)?.type).toBe('done');
+  });
+
+  it('still serves a replay of a completed turn: it costs nothing', async () => {
+    costing(5);
+    const answered = await take(turnFor());
+
+    expect(await take(turnFor())).toEqual(answered);
+    expect(modelCalls).toBe(1);
+    // …but not a different message under that id, which would be a new turn.
+    expect(await take(turnFor({ message: 'Something new.' }))).toMatchObject([
+      { code: 'ceiling_reached' },
+    ]);
+  });
+
+  it('a meter that cannot be read lets the turn run, and says so', async () => {
+    vi.mocked(prisma.$queryRaw).mockRejectedValueOnce(new Error('pool exhausted'));
+    const events = await take(turnFor());
+    expect(events.at(-1)?.type).toBe('done');
+    expect(warn).toHaveBeenCalledWith(
+      'Monthly ceiling could not be read; the turn is allowed',
+      expect.objectContaining({ error: 'pool exhausted' })
+    );
   });
 });
