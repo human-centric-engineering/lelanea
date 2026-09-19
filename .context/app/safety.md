@@ -23,7 +23,7 @@ runRecordedTurn (lib/app/agent/turns.ts)
   └─ detectCrisis(text, locale, who)          lib/app/safety/assess.ts
        ├─ detectCrisisTier(text)               detect.ts — phrase list, no model
        ├─ checkCrisisContext(…) on a hard hit  context-check.ts — may only soften
-       └─ resolveCrisisResource(locale, tier)  resource.ts — authored content
+       └─ resolveCrisisResource(locale, tier)  resource.ts — admin-edited tables, bundled file as the floor
   hard → recordCrisisShown, crisisFrame(resource), and nothing else: run() is never called
   soft → the turn as before; unless it was refused (409),
          recordCrisisShown, then crisisFrame(resource) ahead of its stream
@@ -92,26 +92,103 @@ depend on a model. Both hold because of what the check may do
 
 ## The resource
 
-`content/lelanea_crisis_resources.json`, loaded and validated by
-`lib/app/content/crisis-resources.ts` (only `lib/app/content/**` may import the
-JSON). It is **a draft awaiting Lelañea's sign-off**: `provenance.status` is
-`draft`, and every resolved resource carries `status: 'draft'` until the file
-says `signed_off`. The sign-off covers the wording **and a check that every
-number still answers.**
+**Where it lives (f-safety t-63; owner ruling 19 Sept 2026).** In two tables an
+admin edits at **`/admin/app/safety`** (Lelañea → Crisis helplines), with no
+deploy:
+
+- `app_crisis_copy` (`AppCrisisCopy`, one row, `slug = 'global'`) — both
+  intros, the emergency line, "your message is kept", and the international
+  directory.
+- `app_crisis_region` (`AppCrisisRegion`, one row per region) — the emergency
+  number and the ordered services (`{ name, contact, hours }`).
+
+`content/lelanea_crisis_resources.json` (loaded by
+`lib/app/content/crisis-resources.ts`) stays in the repo as **the floor**, and
+is what the seed copies from.
+
+### The read path never depends on the database
+
+`resolveCrisisResource(locale, tier)` keeps its arguments and now returns a
+promise; its one caller, `detectCrisis`, was already async. It reads through
+`lib/app/safety/resources-store.ts`, which **never throws and never waits more
+than 750 ms**. The bundled file is served when:
+
+| The tables…                          | Why it can happen                    |
+| ------------------------------------ | ------------------------------------ |
+| are **unseeded** (no copy row)       | a database `db:seed` has not reached |
+| **throw** on read                    | connection lost, pool exhausted      |
+| hold a row that **fails validation** | someone edited it by hand            |
+| do not answer within **750 ms**      | a slow or locked database            |
+
+A database answer is cached in the module for 60 s; a failure is not, so the
+next crisis turn tries again. An admin write drops the cache in the instance
+that served it; other instances show the edit within the minute. The
+fallback, not the cache, is the safety net. Every fallback is logged
+(`warn` for unseeded, `error` otherwise).
+
+**Once seeded, the tables are the whole list.** A region an admin removed is
+unlisted — its people get the directory and the local emergency line — and the
+file's copy of it is not merged back in.
+
+### Seeding — once
+
+`prisma/seeds/app-lelanea/010-crisis-resources.ts` fills both tables from the
+file, in one transaction, **only while the copy row is absent** (`fp4`:
+operator-owned). The copy row is the marker rather than each region, so a re-run
+neither undoes an edit nor brings back a removed region. A region later added to
+the file does not reach a seeded database: add it on the admin page.
+
+### Sign-off
+
+The same two words the file uses: `draft` or `signed_off`. The sign-off covers
+the wording **and a check that every number still answers.**
+
+- **Any save that changes something sends that part back to `draft`** and bumps
+  its version. A save that changes nothing changes nothing.
+- **A save and a sign-off both name the version the admin read** (`version` in
+  the body), and either is refused 409 if it has moved. A stale form cannot
+  silently put back a number another admin just corrected, and nobody signs off
+  words they did not see. A region whose stored services are malformed cannot be
+  signed off.
+- **The page says when the stored rows cannot be served at all** (`unservable`
+  on `GET`): it runs the same check the turn does (`contentFromRows` in
+  `resources-store.ts`), so any row that sends everyone to the bundled file is
+  named there rather than edited unseen.
+- **The frame's `status` is `signed_off` only when everything shown is**: the
+  copy, and the region's services where a region was chosen.
+- **The frame's `version`** is `0.1` from the file, and `c3` or `c3/GB.2` from
+  the tables — the copy's version and, where one was chosen, the region's — so a
+  report of what someone saw can be matched to the audit log.
+- **Every write and every sign-off is in the admin audit log** (`app_crisis_copy.*`,
+  `app_crisis_region.*`, with the before and after). Who edited or signed off is
+  kept there, not on the rows, which is why both tables are declared as
+  holding nothing about anyone in `lib/app/leaf-data-export.ts`.
+- **No write is accepted before the seed has run** (409): a lone admin-created
+  row would make the tables the source with every other region missing.
+
+| Route (admin, `withAdminAuth`)                                     | Does                               |
+| ------------------------------------------------------------------ | ---------------------------------- |
+| `GET /api/v1/admin/app/safety/resources`                           | `{ seeded, copy, regions }`        |
+| `PUT /api/v1/admin/app/safety/resources/copy`                      | replace the copy and directory     |
+| `POST /api/v1/admin/app/safety/resources/copy/sign-off`            | sign the copy off at `{ version }` |
+| `POST /api/v1/admin/app/safety/resources/regions`                  | add a region, as a draft           |
+| `PUT/DELETE /api/v1/admin/app/safety/resources/regions/:region`    | edit / stop listing a region       |
+| `POST /api/v1/admin/app/safety/resources/regions/:region/sign-off` | sign a region off at `{ version }` |
+
+### Which region
 
 - **By region, from the language preference.** Nothing records where a person
   is, so the region is the region subtag of the highest-weighted
   `Accept-Language` tag (`preferredLanguageTag()` in
   `lib/app/waitlist/locale.ts`, shared with the waitlist): `en-GB` → `GB`.
 - **The fallback is never a guess.** No preference, a tag with no region (`en`),
-  a non-country region (`es-419`) or a region the table does not list all get
-  the international directory (Find A Helpline) plus "your local emergency
-  number" without a number. A wrong named number is worse than a directory that
-  is always right.
+  a non-country region (`es-419`) or a region not listed all get the
+  international directory plus "your local emergency number" without a number.
+  A wrong named number is worse than a directory that is always right.
 - **The directory is listed everywhere**, last where a region is known — for a
   person who is travelling.
-- Regions today: GB, IE, US, CA, AU, NZ. Adding one is an edit to the JSON; the
-  schema refuses a duplicate region or one with no services.
+- Seeded regions: GB, IE, US, CA, AU, NZ. Both the admin API and the file's
+  schema refuse a duplicate region or one with no services.
 
 ### How the locale reaches the hook
 
@@ -151,8 +228,8 @@ resource: {
   ([`agent.md`](./agent.md#the-endings--what-f-conversation-builds-against)): no
   model turn is written, and what the person typed stays in the box.
 - **The copy is neutral and authored.** Rendering it in her register is
-  f-conversation's; every string in `resource` comes from the file, never from a
-  model.
+  f-conversation's; every string in `resource` comes from the tables or the
+  file, never from a model.
 - **A platform frame never becomes `crisis`.** `toClientStream()` still maps an
   unknown platform code to `unavailable`; the crisis frame is added outside it.
 - **Soft, then paused or failed:** the crisis frame, then that ending. The
@@ -190,10 +267,14 @@ hit), the locale and the region shown.
   characters), the regional resolution and its fallbacks, each context-check
   failure, and the seam: a hard hit with the model call throwing and with
   generation paused calls no model; a soft hit's frame precedes her first words.
+- `tests/unit/lib/app/safety/resource.test.ts` "where the words come from" —
+  stored rows served once seeded; the bundled file when the tables are empty,
+  the read throws, a row is malformed, or the read passes its deadline.
 - `npm run smoke:app-crisis` — in-process against the dev database with **every
   `*_API_KEY` removed**: the real turn seam answers a hard hit with the UK
   resource, calls no model, records the event without the words, and the event
-  goes with the account.
+  goes with the account. Then it edits the GB row and shows the edited service
+  reaching the person (as a draft), and puts the row back.
 
 ## Misuse — attempts are seen, never obeyed
 

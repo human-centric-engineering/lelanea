@@ -17,7 +17,9 @@
  * feature's standing rule.
  *
  * **Nothing in here can withhold the resource.** Detection is pure. The context
- * check can only soften a hard hit to soft, and never throws. A failed record
+ * check can only soften a hard hit to soft, and never throws. Resolving the
+ * resource never throws either: an unreadable or slow table serves the bundled
+ * file (`resources-store.ts`). A failed record
  * write is logged, not raised: the person is owed the resource whether or not
  * the row was kept.
  *
@@ -85,7 +87,7 @@ export async function detectCrisis(
     categories: detection.categories,
     contextCheck,
     locale,
-    resource: resolveCrisisResource(locale, tier),
+    resource: await resolveCrisisResource(locale, tier),
   };
 }
 

@@ -260,6 +260,11 @@ describe('reserved fork tiers', () => {
       'enum AppCrisisTier {',
       'enum AppContextCheckOutcome {',
       'model AppSafetyEvent {',
+      // f-safety t-63 — the crisis resource an admin edits: the shared copy and
+      // one row per region (EXCLUSIONS: content, about nobody).
+      'enum AppCrisisContentStatus {',
+      'model AppCrisisCopy {',
+      'model AppCrisisRegion {',
     ]);
   });
 

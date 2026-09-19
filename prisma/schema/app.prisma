@@ -586,3 +586,74 @@ model AppSafetyEvent {
   @@index([createdAt])
   @@map("app_safety_event")
 }
+
+/// Whether crisis content has been signed off (f-safety t-63). The same two
+/// words the bundled file's `provenance.status` uses, so a resource read from
+/// either place carries one vocabulary.
+enum AppCrisisContentStatus {
+  draft
+  signed_off
+
+  @@map("app_crisis_content_status")
+}
+
+/// The words every crisis resource shares, and the international directory
+/// (f-safety t-63; product description §12). One row, `slug = 'global'`.
+///
+/// **This row is what makes the database the source.** While it is absent, the
+/// resolver serves the bundled `content/lelanea_crisis_resources.json`; once it
+/// exists, the regions below are the whole list — including none, if an admin
+/// removed them all. The seed writes it together with the regions, once, and
+/// never again (`fp4`), so an admin's removal is not undone by a re-seed.
+///
+/// **Any edit returns it to `draft`**, and only a sign-off moves it to
+/// `signed_off`. Who edited and who signed off is in the admin audit log, not
+/// here — so it holds nothing about anyone, and is declared as an EXCLUSION in
+/// `lib/app/leaf-data-export.ts`.
+model AppCrisisCopy {
+  /// Always `global`. See `AppAgentSettings.slug` for why a string key.
+  slug                 String                 @id @default("global")
+  hardIntro            String
+  softIntro            String
+  /// "…call your local emergency number now." A known region's number is appended.
+  emergency            String
+  /// Hard tier only: what they typed is still in the box.
+  keptMessage          String
+  internationalName    String
+  internationalContact String
+  internationalUrl     String
+  internationalHours   String
+  status               AppCrisisContentStatus @default(draft)
+  /// Bumped on every edit that changes something. A sign-off names the version
+  /// it read, so nobody signs off words they did not see.
+  version              Int                    @default(1)
+  signedOffAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("app_crisis_copy")
+}
+
+/// One region's named services and emergency number (f-safety t-63).
+///
+/// `region` is ISO 3166-1 alpha-2, upper case — matched against the region
+/// subtag of a person's language preference. `services` is an ordered JSON
+/// array of `{ name, contact, hours }`, validated on every write and every
+/// read (`lib/validations/app-crisis-resources.ts`); a row that fails the read
+/// check sends the whole resource to the bundled file rather than show a
+/// half-formed list.
+///
+/// Draft/sign-off and version exactly as on `AppCrisisCopy`. Holds nothing about
+/// anyone; an EXCLUSION in `lib/app/leaf-data-export.ts`.
+model AppCrisisRegion {
+  region          String                 @id
+  emergencyNumber String
+  services        Json
+  status          AppCrisisContentStatus @default(draft)
+  version         Int                    @default(1)
+  signedOffAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@map("app_crisis_region")
+}

@@ -63,11 +63,12 @@
  * the row).
  */
 
-import { AudioLines, ClipboardList, Gauge, Library } from 'lucide-react';
+import { AudioLines, ClipboardList, Gauge, LifeBuoy, Library } from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
 import { DESIGNATION_ADMIN_PAGE, VOICE_COMPARISON_PAGE } from '@/lib/app/voice/endpoint';
 import { AGENT_SETTINGS_PAGE } from '@/lib/app/agent/endpoint';
+import { CRISIS_RESOURCES_PAGE } from '@/lib/app/safety/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
@@ -96,6 +97,13 @@ export function initLeafAdminNav(): void {
         label: 'Deadlines & budgets',
         icon: Gauge,
         description: 'How long the AI may take to answer, and what each person may spend a month',
+      },
+      {
+        href: CRISIS_RESOURCES_PAGE,
+        label: 'Crisis helplines',
+        icon: LifeBuoy,
+        description:
+          'Who someone in danger is pointed to, by country, and whether it is signed off',
       },
     ],
   });

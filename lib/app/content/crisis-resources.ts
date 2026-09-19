@@ -9,8 +9,13 @@
  *
  * **It ships as a draft.** `provenance.status` is `draft` and the accessor
  * returns it, so every surface that shows the resource can show that it is
- * awaiting sign-off. Changing the status to `signed_off` is the sign-off; the
- * schema admits nothing else.
+ * awaiting sign-off. The schema admits nothing but `draft` and `signed_off`.
+ *
+ * **Since f-safety t-63 this file is the floor, not the source.** The seed
+ * copies it into the tables an admin edits, once; after that the tables are
+ * served, and this file only when they cannot answer
+ * (`lib/app/safety/resources-store.ts`). An edit here reaches a database that
+ * has not been seeded, and every fallback — not a seeded one.
  *
  * @see lib/app/safety/resource.ts — which entry a request gets
  * @see .context/app/safety.md
