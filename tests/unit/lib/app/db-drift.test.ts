@@ -224,6 +224,41 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
+  /**
+   * f-safety t-58 — the crisis path's record. `ON DELETE CASCADE` is its whole
+   * Art. 17 disposition; `smoke:app-crisis` proves the cascade on the dev DB.
+   */
+  it('registers the leaf safety-event FK probe', () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_safety_event');
+
+    expect(probe, 'the safety-event FK probe is not registered').toBeDefined();
+    expect(probe?.name).toContain('app_safety_event_userId_fkey');
+    expect(probe?.kind).toBe('FK constraint');
+  });
+
+  it('passes on the CASCADE FK the safety-event migration writes', async () => {
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE CASCADE ON UPDATE CASCADE' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_safety_event');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+  });
+
+  it('FAILS when the safety-event FK has drifted to SET NULL', async () => {
+    // The row would outlive the person it is about — an erasure that kept a
+    // record of their crisis.
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("userId") REFERENCES "user"(id) ON DELETE SET NULL' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_safety_event');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
   it('keeps the framework probes when the leaf registers its own', () => {
     registerAppDriftProbes();
     const tables = getAppDriftProbes().map((p) => p.table);

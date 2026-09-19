@@ -1,0 +1,103 @@
+{
+  "resources": {
+    "id": "lelanea_crisis_resources",
+    "title": "Lelañea — where to turn in a crisis",
+    "version": "0.1",
+    "locale": "en-US",
+    "provenance": {
+      "status": "draft",
+      "awaitingSignOffFrom": "Lelañea Fulton",
+      "note": "Drafted for the crisis path of §12 (f-safety t-58). These are the words a person reads at the worst moment they will ever bring to the app, and the services are named, so both the copy and every number wait on her sign-off — and on a check that each service is still answering at the number given — before this reaches anyone outside development."
+    },
+    "notes": [
+      "Never a model's words: this file is shown as it is, by code, whether or not any model is reachable.",
+      "A region is the ISO 3166-1 alpha-2 code read from the person's language preference (en-GB → GB). No region, or one not listed here, gets the international entry and the local emergency line.",
+      "Keep each service to what a person can act on immediately: who, how to reach them, and when."
+    ]
+  },
+  "copy": {
+    "hardIntro": "It sounds like you might be in real danger right now. You deserve support from a person, straight away — this app can't give you that, but these people can.",
+    "softIntro": "If things feel like too much right now, you don't have to carry it alone. These people are there to talk, any time.",
+    "emergency": "If you are in immediate danger, call your local emergency number now.",
+    "keptMessage": "What you wrote is still in the box — nothing has been sent or lost."
+  },
+  "international": {
+    "name": "Find A Helpline",
+    "contact": "findahelpline.com",
+    "url": "https://findahelpline.com",
+    "hours": "A free directory of crisis lines in over 130 countries"
+  },
+  "regions": [
+    {
+      "region": "GB",
+      "emergencyNumber": "999",
+      "services": [
+        { "name": "Samaritans", "contact": "Call 116 123", "hours": "Free, 24 hours a day" },
+        { "name": "Shout", "contact": "Text SHOUT to 85258", "hours": "Free, 24 hours a day" }
+      ]
+    },
+    {
+      "region": "IE",
+      "emergencyNumber": "112 or 999",
+      "services": [
+        {
+          "name": "Samaritans Ireland",
+          "contact": "Call 116 123",
+          "hours": "Free, 24 hours a day"
+        },
+        {
+          "name": "Text About It",
+          "contact": "Text HELLO to 50808",
+          "hours": "Free, 24 hours a day"
+        }
+      ]
+    },
+    {
+      "region": "US",
+      "emergencyNumber": "911",
+      "services": [
+        {
+          "name": "988 Suicide & Crisis Lifeline",
+          "contact": "Call or text 988",
+          "hours": "Free, 24 hours a day"
+        },
+        {
+          "name": "Crisis Text Line",
+          "contact": "Text HOME to 741741",
+          "hours": "Free, 24 hours a day"
+        }
+      ]
+    },
+    {
+      "region": "CA",
+      "emergencyNumber": "911",
+      "services": [
+        {
+          "name": "9-8-8 Suicide Crisis Helpline",
+          "contact": "Call or text 988",
+          "hours": "Free, 24 hours a day"
+        }
+      ]
+    },
+    {
+      "region": "AU",
+      "emergencyNumber": "000",
+      "services": [
+        { "name": "Lifeline", "contact": "Call 13 11 14", "hours": "24 hours a day" },
+        { "name": "Beyond Blue", "contact": "Call 1300 22 4636", "hours": "24 hours a day" }
+      ]
+    },
+    {
+      "region": "NZ",
+      "emergencyNumber": "111",
+      "services": [
+        {
+          "name": "Need to talk?",
+          "contact": "Call or text 1737",
+          "hours": "Free, 24 hours a day"
+        },
+        { "name": "Lifeline Aotearoa", "contact": "Call 0800 543 354", "hours": "24 hours a day" }
+      ]
+    }
+  ]
+}

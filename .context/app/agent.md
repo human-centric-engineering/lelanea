@@ -532,8 +532,12 @@ Every frame from her seat reaches the browser through `toClientStream()`
 - **The copy is neutral on purpose.** The words in her register, and the banner,
   are f-conversation's. So is the misfit for `input_blocked` and the conversation
   caps: they map to `unavailable`, whose "try again" will not help — the three-word
-  vocabulary has no word for "this message cannot be sent". The crisis path is
-  f-safety's and depends on none of this.
+  vocabulary has no word for "this message cannot be sent".
+- **One more code, `crisis`, is not an ending of this kind.** It is built by the
+  crisis path ahead of everything above — before the pause, the claim and the
+  model — and carries the resource a person in danger is shown: as an `error`
+  when the turn ends there, as a `warning` when her turn follows. It depends on
+  none of this. See [`safety.md`](./safety.md).
 
 ### The deadlines
 

@@ -19,6 +19,13 @@
  * **Unknown codes map to `unavailable`, never through.** A code the platform
  * adds tomorrow reaches the browser as the plain word, not as itself.
  *
+ * **One more code, `crisis`, is not an ending of this kind** (f-safety t-58).
+ * It is never mapped from a platform frame: the crisis path builds it itself,
+ * outside {@link toClientStream}, and it carries the resource a person in danger
+ * is shown — as an `error` when the turn ends there, as a `warning` when her
+ * turn follows. See `lib/app/safety/resource.ts` for the contract. A platform
+ * frame that happened to say `crisis` would still map to `unavailable` here.
+ *
  * **The copy here is neutral on purpose.** The words in her register, and the
  * banner, are f-conversation's; this is the contract they build against, with a
  * default that is true and says what to do (`HB10`).
@@ -34,6 +41,9 @@ export type TurnEnding = 'unavailable' | 'timed_out' | 'paused';
 export const ENDING_UNAVAILABLE = 'unavailable';
 export const ENDING_TIMED_OUT = 'timed_out';
 export const ENDING_PAUSED = 'paused';
+
+/** The code of the crisis frame — built by `lib/app/safety/resource.ts`, never mapped here. */
+export const ENDING_CRISIS = 'crisis';
 
 /** The platform's monthly-budget warning, which carries the agent's spend. */
 const BUDGET_WARNING = 'budget_warning';

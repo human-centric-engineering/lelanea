@@ -62,6 +62,20 @@
  *   handed to the host's `keepAlive`. The turn completes, is recorded, and the
  *   retry is a replay: one model call, one cost row, one message.
  *
+ * ## Someone in danger (f-safety t-58)
+ *
+ * **Before anything else** — the pause check, the claim, the model — the
+ * message goes through `detectCrisis()` (`lib/app/safety/assess.ts`):
+ *
+ * - **Hard tier:** answered with the crisis frame alone. `run()` is never
+ *   called, nothing is claimed, no turn is recorded — so it is answered with
+ *   generation paused, the provider down, or the model call broken.
+ * - **Soft tier:** the crisis frame goes first, then the turn runs exactly as
+ *   below. A pause or a failure still ends it the usual way, after the resource.
+ *   A 409 refusal carries no stream, so it carries no frame — and writes no
+ *   safety record: it is the retry of a turn whose first request already
+ *   showed the resource, and a record says what was shown, not what was decided.
+ *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
  */
@@ -75,6 +89,9 @@ import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { isGenerationPaused } from '@/lib/app/agent/availability';
 import { runWithDeadlines } from '@/lib/app/agent/deadlines';
 import { ENDING_TIMED_OUT, endingFrame, toClientStream } from '@/lib/app/agent/endings';
+import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
+import { crisisFrame } from '@/lib/app/safety/resource';
+import { preferredLanguageTag } from '@/lib/app/waitlist/locale';
 import {
   claimTurn,
   classifyPricing,
@@ -285,8 +302,46 @@ async function* only(event: ChatEvent): ChatStream {
   yield await Promise.resolve(event);
 }
 
+/** A frame, then everything the turn's own stream says. */
+async function* precededBy(first: ChatEvent, rest: ChatStream): ChatStream {
+  yield first;
+  yield* rest;
+}
+
+function isRefusal(
+  result: ChatStream | FacilitationTurnRefusal
+): result is FacilitationTurnRefusal {
+  return 'refused' in result && result.refused === true;
+}
+
 /**
- * Take one facilitation turn: claim its id, then replay, refuse or run it.
+ * Take one facilitation turn — crisis first, then {@link runGeneratedTurn}.
+ *
+ * The crisis check is ahead of the pause, the claim and the model on purpose:
+ * none of them may stand between a person in danger and the resource. See
+ * "Someone in danger" in the module docblock.
+ */
+export async function runRecordedTurn(
+  turn: FacilitationTurn,
+  run: FacilitationTurnRun
+): Promise<ChatStream | FacilitationTurnRefusal> {
+  const locale = preferredLanguageTag(turn.headers?.get('accept-language') ?? null);
+  const who = { userId: turn.userId, seat: turn.role };
+  const crisis = await detectCrisis(turn.message, locale, who);
+  if (crisis.resource?.tier === 'hard') {
+    await recordCrisisShown(crisis, who);
+    return only(crisisFrame(crisis.resource));
+  }
+
+  const result = await runGeneratedTurn(turn, run);
+  // A refusal carries no stream, so it shows no resource — and records none.
+  if (crisis.resource === null || isRefusal(result)) return result;
+  await recordCrisisShown(crisis, who);
+  return precededBy(crisisFrame(crisis.resource), result);
+}
+
+/**
+ * A turn she answers: claim its id, then replay, refuse or run it.
  *
  * A refusal is RETURNED, before any stream exists, and the framework answers it
  * as 409 rather than opening an event stream to say no. Returned rather than
@@ -297,7 +352,7 @@ async function* only(event: ChatEvent): ChatStream {
  * `paused` ending any other turn would end on, sent before anything is claimed
  * or called — so when generation resumes the same id simply runs.
  */
-export async function runRecordedTurn(
+async function runGeneratedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {

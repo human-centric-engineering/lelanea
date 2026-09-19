@@ -172,6 +172,8 @@ describe('wired — the route reaches a registered hook', () => {
         // So a hook that claims before streaming can settle an early abort.
         signal: expect.any(AbortSignal),
         keepAlive: expect.any(Function),
+        // So a hook registered at boot can read the request (f-safety t-58: its locale).
+        headers: expect.any(Headers),
       },
       expect.any(Function)
     );

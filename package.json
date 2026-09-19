@@ -70,6 +70,7 @@
     "smoke:voice-comparison": "tsx --env-file=.env.local scripts/smoke/voice-comparison.ts",
     "smoke:app-turn": "tsx --env-file=.env.local scripts/app/smoke-turn.ts",
     "smoke:app-metering": "tsx --env-file=.env.local scripts/app/smoke-metering.ts",
+    "smoke:app-crisis": "tsx --env-file=.env.local scripts/app/smoke-crisis.ts",
     "postinstall": "prisma generate",
     "prepare": "husky",
     "check:client-env": "tsx scripts/ci/check-client-env-delivery.ts"
