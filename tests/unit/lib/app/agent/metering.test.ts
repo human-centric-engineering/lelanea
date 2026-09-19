@@ -196,6 +196,22 @@ describe('breakdowns', () => {
     expect(result.totals.costUsd).toBe(3);
   });
 
+  it('by day, keeps the NEWEST days when cut and hands them back oldest first', async () => {
+    // The query sorts days newest first for the cut; this is its answer.
+    const newestFirst = ['2026-09-03', '2026-09-02', '2026-09-01'].map((key) => ({
+      key,
+      ...rawTotals({ cost_usd: 1 }),
+    }));
+    answerBreakdown(newestFirst, rawTotals({ cost_usd: 3 }));
+
+    const result = await getMemberBreakdown(ME, { by: 'day', window: WINDOW, limit: 2 });
+
+    const groups = queryRaw.mock.calls.find((call) => sqlText(call).includes('GROUP BY key'))!;
+    expect(sqlText(groups)).toContain("= 'day' THEN key END DESC");
+    expect(result.groups.map((group) => group.key)).toEqual(['2026-09-02', '2026-09-03']);
+    expect(result.truncated).toBe(true);
+  });
+
   it('names each person on a by-user breakdown in one read, and leaves platform cost unnamed', async () => {
     answerBreakdown(
       [

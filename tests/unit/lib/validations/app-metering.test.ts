@@ -70,6 +70,23 @@ describe('the window', () => {
     );
   });
 
+  it('refuses a one-sided window that resolves empty or backwards', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-18T00:00:00Z'));
+    // A lone future `from`: [future, now).
+    expect(memberBreakdownQuerySchema.safeParse({ by: 'day', from: '2026-10-01' }).success).toBe(
+      false
+    );
+    // A lone `to` on a month's first instant: [2026-09-01, 2026-09-01).
+    expect(
+      memberBreakdownQuerySchema.safeParse({ by: 'day', to: '2026-09-01T00:00:00Z' }).success
+    ).toBe(false);
+    // A lone `to` mid-month is its month so far.
+    expect(memberBreakdownQuerySchema.safeParse({ by: 'day', to: '2026-08-15' }).success).toBe(
+      true
+    );
+  });
+
   it('caps the groups', () => {
     expect(memberBreakdownQuerySchema.safeParse({ by: 'day', limit: 500 }).success).toBe(true);
     expect(memberBreakdownQuerySchema.safeParse({ by: 'day', limit: 501 }).success).toBe(false);

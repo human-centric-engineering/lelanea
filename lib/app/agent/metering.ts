@@ -98,7 +98,10 @@ export interface MeterBreakdown<G extends MeterGroup = MeterGroup> {
     platformCostUsd: number;
   };
   groups: G[];
-  /** More groups existed than `limit`; the smallest were left out, never the totals. */
+  /**
+   * More groups existed than `limit`. The smallest were left out — by day, the
+   * oldest — never the totals.
+   */
   truncated: boolean;
 }
 
@@ -198,7 +201,7 @@ async function breakdown(scope: BreakdownScope): Promise<MeterBreakdown> {
       FROM metered
       GROUP BY key
       ORDER BY
-        CASE WHEN ${by}::text = 'day' THEN key END ASC,
+        CASE WHEN ${by}::text = 'day' THEN key END DESC,
         SUM(cost) DESC,
         key ASC NULLS LAST
       LIMIT ${limit + 1}
@@ -224,7 +227,11 @@ async function breakdown(scope: BreakdownScope): Promise<MeterBreakdown> {
     by,
     window,
     totals: { ...toTotals(totals[0]), platformCostUsd: toNumber(totals[0]?.platform_cost_usd) },
-    groups: groups.slice(0, limit).map((row) => ({ key: row.key, ...toTotals(row) })),
+    // By day the query keeps the NEWEST days — the cut is the oldest, which a
+    // usage view needs least — and they are handed back oldest first, to chart.
+    groups: (by === 'day' ? groups.slice(0, limit).reverse() : groups.slice(0, limit)).map(
+      (row) => ({ key: row.key, ...toTotals(row) })
+    ),
     truncated: groups.length > limit,
   };
 }

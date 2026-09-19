@@ -35,14 +35,21 @@ const windowFields = {
   limit: z.coerce.number().int().positive().max(MAX_METER_GROUPS).default(DEFAULT_METER_GROUPS),
 };
 
+/**
+ * Judged on the window the reader will actually use — the missing end filled
+ * the way `resolveWindow()` fills it (`to` defaults to now, `from` to the start
+ * of `to`'s UTC month) — so a lone future `from`, or a lone `to` on the first
+ * instant of a month, is refused rather than answered with an empty window.
+ */
 function windowIsSane(query: { from?: Date; to?: Date }, ctx: z.RefinementCtx): void {
-  const { from, to } = query;
-  if (from && to && from.getTime() >= to.getTime()) {
-    ctx.addIssue({ code: 'custom', path: ['to'], message: '`to` must be after `from`' });
+  const end = query.to?.getTime() ?? Date.now();
+  const endDate = new Date(end);
+  const start =
+    query.from?.getTime() ?? Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1);
+  if (start >= end) {
+    ctx.addIssue({ code: 'custom', path: ['to'], message: 'The window must end after it starts' });
     return;
   }
-  const start = from?.getTime() ?? Date.now();
-  const end = to?.getTime() ?? Date.now();
   if (end - start > MAX_METER_WINDOW_DAYS * DAY_MS) {
     ctx.addIssue({
       code: 'custom',

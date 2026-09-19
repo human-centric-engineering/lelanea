@@ -450,8 +450,8 @@ configured as local was priced by a registry with no rate for its model (see
 `[from, to)` — this month so far when omitted, at most 366 days. Each group is
 `{ key, costUsd, inputTokens, outputTokens, costRows, unpricedRows }`; `key` is a
 user id, conversation id, seat, model id or `YYYY-MM-DD` (UTC). Groups are
-largest spend first — by day, oldest first — capped by `limit` (default 100, max
-500). By user, each group also carries `user: { name, email }`, read in one query.
+largest spend first, capped by `limit` (default 100, max 500) — by day, the
+newest `limit` days, returned oldest first. By user, each group also carries `user: { name, email }`, read in one query.
 
 ### One turn's record
 
