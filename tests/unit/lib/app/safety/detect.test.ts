@@ -42,6 +42,16 @@ const HARD: ReadonlyArray<[string, string]> = [
   ['I do not want to be alive', 'suicide'],
   ['I do not want to live any more', 'suicide'],
   ["I'm in danger", 'immediate_risk'],
+  // Found by the second /code-review: the first round's narrowing had dropped each of these.
+  ["I don't want to live with this pain anymore", 'suicide'],
+  ["I don't want to live with myself after what I did", 'suicide'],
+  ["I don't want to live on like this", 'suicide'],
+  ['gonna shoot him and then myself', 'harm_to_others'],
+  ["I'll shoot him tomorrow", 'harm_to_others'],
+  ['I will shoot my boss', 'harm_to_others'],
+  ["I've been cutting myself up again", 'self_harm'],
+  ['I want to shoot myself', 'suicide'],
+  ["I'm gonna hurt her", 'harm_to_others'],
   ["He's going to kill me", 'immediate_risk'],
   ["I'm not safe at home", 'immediate_risk'],
 ];
