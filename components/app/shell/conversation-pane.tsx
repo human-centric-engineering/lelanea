@@ -78,8 +78,9 @@ const STEP_SHIFT = 48;
  * have been, the words go back into the box for the same turn id, and the
  * status read puts one quiet line above the composer (t-65).
  *
- * What is still deliberately absent: the timestamp and account row under a
- * reply (t-66), the mic (t-67).
+ * Under every completed reply, the account row — the time, what the turn did,
+ * the detail one click away (t-66). What is still deliberately absent: the
+ * mic (t-67).
  *
  * ## The strip
  *

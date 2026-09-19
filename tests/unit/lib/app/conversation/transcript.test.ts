@@ -73,6 +73,18 @@ function assistant(id: string, text: string, seconds: number, extra: Record<stri
   };
 }
 
+function tool(id: string, capabilitySlug: string, seconds: number) {
+  return {
+    id,
+    role: 'tool',
+    content: '{"results":[]}',
+    createdAt: at(seconds),
+    metadata: null,
+    provenance: null,
+    capabilitySlug,
+  };
+}
+
 function turn(
   turnId: string,
   fields: Partial<{
@@ -271,11 +283,12 @@ describe('assembleTranscript', () => {
     expect(JSON.stringify(entries)).not.toContain('An error occurred');
   });
 
-  it('joins a tool-using turn’s passes into one reply, keyed on the terminal row', () => {
+  it('joins a tool-using turn’s passes into one reply, keyed on the terminal row, naming what it called', () => {
     const entries = assembleTranscript(
       [
         user('u1', 'What does she say about boundaries?', 1, 't1'),
         assistant('pass1', 'Let me look. ', 2),
+        tool('tool1', 'search_knowledge_base', 3),
         assistant('pass2', 'She says…', 4, { provenance: { citations: [] } }),
       ],
       [turn('t1', { userMessageId: 'u1', assistantMessageId: 'pass2' })]
@@ -285,7 +298,31 @@ describe('assembleTranscript', () => {
       kind: 'reply',
       id: 'pass2',
       text: 'Let me look. She says…',
+      // The tool row's answer is not her words; what it names is (t-66).
+      capabilities: ['search_knowledge_base'],
     });
+    expect(JSON.stringify(entries)).not.toContain('"results"');
+  });
+
+  it('a turn that called nothing says so, and tool rows never leak into the next reply', () => {
+    const entries = assembleTranscript(
+      [
+        user('u1', 'first', 1, 't1'),
+        // A failed mid-loop turn: a call answered, then no reply — the
+        // marker only, which is dropped.
+        tool('tool1', 'search_knowledge_base', 2),
+        assistant('marker', '[An error occurred]', 3, { metadata: { error: true } }),
+        user('u2', 'second', 4, 't2'),
+        assistant('a2', 'Plainly.', 5),
+      ],
+      [
+        turn('t1', { userMessageId: 'u1', status: 'failed', errorCode: 'aborted' }),
+        turn('t2', { userMessageId: 'u2', assistantMessageId: 'a2' }),
+      ]
+    );
+    const replies = entries.filter((entry) => entry.kind === 'reply');
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({ id: 'a2', capabilities: [] });
   });
 
   it('carries a reply written before the seam existed, with no account', () => {

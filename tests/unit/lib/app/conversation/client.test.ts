@@ -158,6 +158,7 @@ describe('fetchTranscript', () => {
     at: '2026-09-19T12:00:00.000Z',
     turnId: 't1',
     citations: [],
+    capabilities: [],
     turn: null,
   };
 

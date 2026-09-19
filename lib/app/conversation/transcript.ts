@@ -1,7 +1,7 @@
 /**
  * The conversation, read back (§10 t-64).
  *
- * What the pane shows on load, and what the disclosure drawer (t-66) reads
+ * What the pane shows on load, and what the account under each reply reads
  * from: the person's conversation on a seat, as turns — what they said, what
  * she said, and the turn row that says what produced the reply.
  *
@@ -91,6 +91,13 @@ export interface TranscriptReplyEntry {
   at: string;
   turnId: string | null;
   citations: Citation[];
+  /**
+   * The capabilities the turn called, in order, from the platform's `tool`
+   * rows between the person's row and the reply (`capabilitySlug`). What the
+   * account row says the turn did (t-66); the live turn collects the same from
+   * `capability_result` frames.
+   */
+  capabilities: string[];
   /** The turn row, when there is one; null for rows written before the seam. */
   turn: TurnAccount | null;
 }
@@ -121,6 +128,8 @@ interface MessageRow {
   createdAt: Date;
   metadata: unknown;
   provenance: unknown;
+  /** On a `tool` row: which capability answered. */
+  capabilitySlug?: string | null;
 }
 
 interface TurnRow {
@@ -194,12 +203,18 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
   }
 
   const entries: TranscriptEntry[] = [];
-  let pendingReply: { rows: MessageRow[] } | null = null;
+  let pendingReply: { rows: MessageRow[]; capabilities: string[] } | null = null;
   // The turn row the current user row opened, if the seam recorded one.
   let currentTurn: TurnRow | undefined;
 
   const flushReply = () => {
-    if (!pendingReply || pendingReply.rows.length === 0) return;
+    if (!pendingReply) return;
+    if (pendingReply.rows.length === 0) {
+      // Tool rows with no reply after them — a turn that failed mid-loop.
+      // Nothing to show, and nothing to carry into the next reply.
+      pendingReply = null;
+      return;
+    }
     const rows = pendingReply.rows;
     const terminal = rows[rows.length - 1];
     const turn = rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined);
@@ -228,6 +243,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       at: terminal.createdAt.toISOString(),
       turnId: turn?.turnId ?? null,
       citations: citationsOf(terminal.provenance),
+      capabilities: pendingReply.capabilities,
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;
@@ -238,7 +254,15 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       // The platform's own marker for a turn that ended without her. Not her
       // words; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
-      (pendingReply ??= { rows: [] }).rows.push(row);
+      (pendingReply ??= { rows: [], capabilities: [] }).rows.push(row);
+      continue;
+    }
+    if (row.role === 'tool') {
+      // A capability's answer, between her passes. Not shown; what it names
+      // is what the account says the turn did.
+      if (row.capabilitySlug) {
+        (pendingReply ??= { rows: [], capabilities: [] }).capabilities.push(row.capabilitySlug);
+      }
       continue;
     }
     if (row.role !== 'user') continue;
@@ -305,7 +329,7 @@ export async function readTranscript(
         conversation: {
           AND: [conversationVisibilityWhere(session, { excludeShared: true }), { userId }],
         },
-        role: { in: ['user', 'assistant'] },
+        role: { in: ['user', 'assistant', 'tool'] },
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -315,6 +339,7 @@ export async function readTranscript(
         createdAt: true,
         metadata: true,
         provenance: true,
+        capabilitySlug: true,
       },
     }),
     prisma.appTurn.findMany({

@@ -233,6 +233,7 @@ const entrySchema = z.discriminatedUnion('kind', [
     at: z.string(),
     turnId: z.string().nullable(),
     citations: z.array(citationSchema),
+    capabilities: z.array(z.string()),
     turn: accountSchema.nullable(),
   }),
 ]);

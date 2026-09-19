@@ -115,7 +115,7 @@ export interface LiveTurn {
   /** Her words so far, as the server sent them — the pacing is the view's. */
   replyText: string;
   stillThinking: boolean;
-  /** Capability slugs the turn called, for the drawer (t-66). */
+  /** Capability slugs the turn called, for the account row. */
   capabilities: string[];
   /** A soft crisis frame shown ahead of her turn. */
   resource?: CrisisResource;
@@ -335,6 +335,7 @@ export function useConversation(options: Options = {}): ConversationState {
                   at: new Date().toISOString(),
                   turnId,
                   citations,
+                  capabilities,
                   ...(resource ? { resource } : {}),
                   ...(crisisText ? { crisisText } : {}),
                   turn: {

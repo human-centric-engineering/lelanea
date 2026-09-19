@@ -9,6 +9,7 @@ import type {
   LiveTurn,
 } from '@/components/app/conversation/use-conversation';
 import {
+  AccountRow,
   CrisisRow,
   EndingRow,
   ReplyTurn,
@@ -98,7 +99,23 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
         rise={rise}
         onGrow={follow}
         onRevealed={turnId !== null && onRevealed ? () => onRevealed(turnId) : undefined}
-      />
+      >
+        {/*
+          The account row, only where there is a turn row to account from: a
+          reply written before the seam has nothing honest to say about itself
+          — the prototype renders `.disclose` only when a turn has `meta`.
+        */}
+        {entry.turn ? (
+          <AccountRow
+            input={{
+              at: entry.at,
+              capabilities: entry.capabilities,
+              citations: entry.citations,
+              turn: entry.turn,
+            }}
+          />
+        ) : null}
+      </ReplyTurn>
     );
     // A soft crisis frame came ahead of her turn: the resource is shown first,
     // whatever her reply then says (safety.md).
