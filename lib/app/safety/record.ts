@@ -2,8 +2,8 @@
  * The safety record: that a crisis was detected and what the app did —
  * never the words (f-safety t-58).
  *
- * Two kinds share `app_safety_event`: `crisis` (t-58) and `misuse` (t-60, an
- * inline guard flagging a message on one of her seats). What a row holds and why it holds no
+ * Two kinds share `app_safety_event`: `crisis` (t-58) and `misuse` (t-60, the
+ * input guard flagging a message on one of her seats). What a row holds and why it holds no
  * text is on the model (`prisma/schema/app.prisma`).
  *
  * **A failed write never withholds the resource.** The person is owed the
