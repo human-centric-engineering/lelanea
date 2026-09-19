@@ -507,3 +507,73 @@ model AppTurn {
   @@index([completedAt])
   @@map("app_turn")
 }
+
+/// What kind of safety event a row records. `crisis` today; the misuse task
+/// (f-safety t-60) adds its own kind to the same table.
+enum AppSafetyEventKind {
+  crisis
+
+  @@map("app_safety_event_kind")
+}
+
+/// A crisis tier, as `lib/app/safety/detect.ts` names it. `none` is never
+/// stored: nothing is recorded for a message that matched nothing.
+enum AppCrisisTier {
+  soft
+  hard
+
+  @@map("app_crisis_tier")
+}
+
+/// What the context check said about a hard hit (`lib/app/safety/context-check.ts`).
+/// `not_run` for a soft hit, which it never reads.
+enum AppContextCheckOutcome {
+  not_run
+  confirmed
+  softened
+  error
+  timeout
+  unavailable
+
+  @@map("app_context_check_outcome")
+}
+
+/// One safety event: that it happened, and what the app did — never the words
+/// (f-safety t-58; product description §12).
+///
+/// **Holds no message text, and nothing derived from it but categories.** A
+/// record of someone's worst moment that quoted them would be a second copy of
+/// it, with its own erasure and export story, read by whoever reads this table.
+/// `categories` says which kinds of phrase matched (`suicide`, `distress`, …).
+///
+/// **`userId` is nullable** so the pre-signup conversation (standing rule of
+/// f-safety) can write the same record before there is an account. It is a
+/// plain scalar with no Prisma `@relation` — a fork table must not add a reverse
+/// field to the Sunrise-owned `User` model (CUSTOMIZATION.md §5). The FK is
+/// hand-written in the `app_safety_event` migration with `ON DELETE CASCADE` —
+/// an event is about the person it happened to and goes with the account — and
+/// pinned by a drift probe in `lib/app/leaf-db-drift.ts`. Declared as a
+/// subject-data source in `lib/app/leaf-data-export.ts`.
+model AppSafetyEvent {
+  id             String                  @id @default(cuid())
+  /// Hand-written FK → `user`. Null before signup. See the note above.
+  userId         String?
+  kind           AppSafetyEventKind
+  /// The facilitation seat, or the surface that raised it before signup.
+  seat           String
+  /// What the phrase list said.
+  detectedTier   AppCrisisTier?
+  /// What the turn acted on: `detectedTier`, or `soft` where the context check softened a hard hit.
+  actedTier      AppCrisisTier?
+  categories     String[]
+  contextCheck   AppContextCheckOutcome?
+  /// The language tag the resource was chosen from, or null when the request named none.
+  locale         String?
+  /// The region whose services were shown, or null for the international fallback.
+  resourceRegion String?
+  createdAt      DateTime                @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("app_safety_event")
+}

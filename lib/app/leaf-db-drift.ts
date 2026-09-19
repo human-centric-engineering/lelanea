@@ -105,4 +105,14 @@ export function registerLeafDriftProbes(): void {
     // with `SET NULL`, on the NOT NULL column.
     probe: constraintExists('app_turn_userId_fkey', 'ON DELETE CASCADE'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_safety_event_userId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_safety_event',
+    // `ON DELETE CASCADE` is the whole Art. 17 disposition for a person's
+    // safety events (f-safety t-58). With `NO ACTION`, `eraseUser()` would fail
+    // for everyone the crisis path ever answered.
+    probe: constraintExists('app_safety_event_userId_fkey', 'ON DELETE CASCADE'),
+  });
 }

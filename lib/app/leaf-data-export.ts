@@ -6,7 +6,7 @@
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
- * `AppWaitlistEntry`, `AppAcknowledgement` and `AppUserBudget` here; the guidance below is
+ * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn` and `AppSafetyEvent` here; the guidance below is
  * upstream's and still applies to every table added after them.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
@@ -45,6 +45,7 @@ import { findWaitlistEntriesForSubject } from '@/lib/app/waitlist/service';
 import { findAcknowledgementsForSubject } from '@/lib/app/gateway/acknowledgements';
 import { findUserBudgetsForSubject } from '@/lib/app/agent/settings';
 import { findTurnsForSubject } from '@/lib/app/agent/turn-record';
+import { findSafetyEventsForSubject } from '@/lib/app/safety/record';
 
 /**
  * Declare the leaf app's own models to core's subject-source registry.
@@ -106,6 +107,15 @@ export function initLeafSubjectSources(): void {
         description:
           'A record of each turn you took with the assistant: when, in which part of the app, which AI model answered and which version of her voice it was given, how much text it read and wrote, and what it cost. Your words and hers are in your conversations, not here.',
       },
+      {
+        // Never the words — see the model's docblock. Categories, tiers and
+        // the region of the services shown are the whole record.
+        model: 'AppSafetyEvent',
+        section: 'safety',
+        disposition: 'export',
+        description:
+          'Each time something you wrote suggested you might be in danger and the app showed you where to find help: when, what kind of words it noticed, whether it stopped the conversation or let it carry on, and which country\u2019s helplines it showed you. What you wrote is not stored here.',
+      },
     ],
     excluded: [
       {
@@ -152,7 +162,7 @@ export function initLeafSubjectSources(): void {
 /**
  * Collect Lelañea's own data about one subject.
  *
- * Four sections: `waitlist`, `acknowledgements`, `budget` and `turns`. Each is returned whether or
+ * Five sections: `waitlist`, `acknowledgements`, `budget`, `turns` and `safety`. Each is returned whether or
  * not the subject has a row — an empty array, never an omitted key. A declared
  * section missing from this object makes `exportUserData()` throw, and a key
  * set to `undefined` counts as missing because `JSON.stringify` drops it.
@@ -166,11 +176,12 @@ export function initLeafSubjectSources(): void {
  * against superseded document versions, because we still hold them.
  */
 export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
-  const [waitlist, acknowledgements, budget, turns] = await Promise.all([
+  const [waitlist, acknowledgements, budget, turns, safety] = await Promise.all([
     findWaitlistEntriesForSubject(subject),
     findAcknowledgementsForSubject(subject),
     findUserBudgetsForSubject(subject),
     findTurnsForSubject(subject),
+    findSafetyEventsForSubject(subject),
   ]);
-  return { waitlist, acknowledgements, budget, turns };
+  return { waitlist, acknowledgements, budget, turns, safety };
 }

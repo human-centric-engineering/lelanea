@@ -96,6 +96,7 @@ vi.mock('@/lib/db/client', () => ({
     appUserBudget: { findMany: vi.fn(async () => []) },
     // §08 t-54 — the turn record, for the export collector's section key.
     appTurn: { findMany: vi.fn(async () => []) },
+    appSafetyEvent: { findMany: vi.fn(async () => []) },
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
@@ -487,6 +488,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppAcknowledgement',
         'AppAgentSettings',
         'AppKnowledgeDesignation',
+        'AppSafetyEvent',
         'AppTurn',
         'AppUserBudget',
         'AppVoiceComparison',
@@ -524,6 +526,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // what it cost) are about that person, so exported to them.
       const turns = sources.find((entry) => entry.model === 'AppTurn');
       expect(turns).toMatchObject({ section: 'turns', disposition: 'export' });
+      // f-safety t-58 — that the crisis path answered someone is about them, so
+      // it is exported to them (the words never were stored).
+      const safety = sources.find((entry) => entry.model === 'AppSafetyEvent');
+      expect(safety).toMatchObject({ section: 'safety', disposition: 'export' });
       // THREE of ours are excluded, and only those three. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
