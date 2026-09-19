@@ -227,9 +227,9 @@ resource: {
 - **A hard frame ends the turn the way every ending does**
   ([`agent.md`](./agent.md#the-endings--what-f-conversation-builds-against)): no
   model turn is written, and what the person typed stays in the box.
-- **The copy is neutral and authored.** Rendering it in her register is
-  f-conversation's; every string in `resource` comes from the tables or the
-  file, never from a model.
+- **The copy is neutral and authored.** f-conversation lays it out as it is
+  (`CrisisRow`, §10 t-65) — every string in `resource` comes from the tables or
+  the file, never from a model, and none is rewritten into her register.
 - **A platform frame never becomes `crisis`.** `toClientStream()` still maps an
   unknown platform code to `unavailable`; the crisis frame is added outside it.
 - **Soft, then paused or failed:** the crisis frame, then that ending. The

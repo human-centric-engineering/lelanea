@@ -73,8 +73,7 @@ export const CONVERSATION_COPY = {
   banner: {
     paused:
       'Conversations are paused for now, on purpose. Everything you can read here still works.',
-    unavailable:
-      "Lelañea may not be able to answer just now — a recent reply didn't come through. You can still try.",
+    unavailable: 'Lelañea may not be able to answer just now — you can still try.',
   },
 
   /** Accessible name of the crisis resource row. Its words are authored (safety.md). */

@@ -520,13 +520,14 @@ nothing to disclose.
 
 Every frame from her seat reaches the browser through `toClientStream()`
 (`lib/app/agent/endings.ts`). A turn that ends without her answer ends on **one
-`error` frame whose `code` is one of three**:
+`error` frame whose `code` is one of four**:
 
-| `code`        | Means                                                        | Default copy says                                          |
-| ------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| `unavailable` | she could not answer — every platform code but the two below | your message is kept; try again; the rest of the app works |
-| `timed_out`   | the whole-turn deadline passed (or the provider timed out)   | it was stopped; your message is kept; try again            |
-| `paused`      | an operator paused conversations on purpose                  | paused on purpose; everything you can read still works     |
+| `code`        | Means                                                                           | Default copy says                                                    |
+| ------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `unavailable` | she could not answer — every platform code but the three below                  | your message is kept; try again; the rest of the app works           |
+| `timed_out`   | the whole-turn deadline passed (or the provider timed out)                      | it was stopped; your message is kept; try again                      |
+| `paused`      | an operator paused conversations on purpose                                     | paused on purpose; everything you can read still works               |
+| `not_sent`    | the message itself was refused — the input guard's block, or a conversation cap | it couldn't be sent; sending it again won't help; put it another way |
 
 - **Unknown codes map to `unavailable`, never through.** The platform's code and
   its text — written for an operator, and on some paths carrying a slug, a model
@@ -540,10 +541,15 @@ Every frame from her seat reaches the browser through `toClientStream()`
   A failed or timed-out turn runs again under it; one that completed is replayed.
 - **Still thinking** is not an ending: `{ type: 'warning', code: 'still_thinking' }`,
   sent once when no words have come by the first-words deadline. The turn goes on.
+- **`not_sent` is the one a retry cannot cure** (§10 t-65; owner ruling, 19
+  Sept 2026). Mapped by name from `input_blocked`, `conversation_cap_reached`
+  and `conversation_length_cap_reached` — the three places the platform refuses
+  the message rather than fails to answer it. The caps refuse before the person's
+  row is written; the guard's block comes after it, so that message is in the
+  transcript on reload. `output_blocked` is not here: that is her reply refused,
+  and a re-run can answer differently. The status read skips all of them.
 - **The copy is neutral on purpose.** The words in her register, and the banner,
-  are f-conversation's. So is the misfit for `input_blocked` and the conversation
-  caps: they map to `unavailable`, whose "try again" will not help — the three-word
-  vocabulary has no word for "this message cannot be sent".
+  are f-conversation's — see [`conversation.md`](./conversation.md#when-she-cant-answer-in-the-pane).
 - **One more code, `crisis`, is not an ending of this kind.** It is built by the
   crisis path ahead of everything above — before the pause, the claim and the
   model — and carries the resource a person in danger is shown: as an `error`
