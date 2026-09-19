@@ -175,6 +175,15 @@ describe('sending', () => {
     expect(document.body.textContent).not.toContain('Executing');
   });
 
+  it('the send disc submits the form too', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'by mouse');
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.send }));
+    expect(seat.bodies).toHaveLength(1);
+    expect(seat.bodies[0]).toMatchObject({ message: 'by mouse' });
+  });
+
   it('disables send, and says why, while a turn is running; typing is still allowed', async () => {
     const user = userEvent.setup();
     await renderLoaded();

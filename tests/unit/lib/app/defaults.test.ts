@@ -1016,6 +1016,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appCoverageExclusions.map((entry) => entry.pattern)).toEqual([
         'scripts/boundary/check.ts',
         'scripts/release/changelog-check.ts',
+        // LELAÑEA's one, spread after them from `leaf-ci.ts` (§10 t-64) —
+        // pinned here too, so the spread cannot be dropped unnoticed.
+        'scripts/app/smoke-!(*-assertions).ts',
       ]);
       expect(appAlwaysRunTests.map((entry) => entry.path)).toEqual([
         // Daybreak's two, declared in the bridge itself.
@@ -1058,13 +1061,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     seam: 'lib/app/leaf-ci.ts',
     risk: "a value here is Daybreak occupying the surface it reserves for a leaf, so the leaf's own entries would collide with it on every upgrade — the conflict Sunrise #759 removed one tier up, re-created one tier down",
     // PINNED (Lelañea fills this seam) — `HB2`. Daybreak keeps it empty; we do
-    // not. Pinned rather than deleted so the row still guards the two lists we
-    // have NOT filled: a coverage exclusion appearing here would switch the
-    // per-file 80% floor off for that path — and nothing else would notice. The
-    // ownerless-surface list is filled too (§08 t-54, t-56) and pinned by value, so a
-    // second exemption from the authorization seam still fails here.
+    // not. Pinned by value rather than deleted, so a SECOND entry on any of the
+    // three lists still fails here: a stray coverage exclusion would switch the
+    // per-file 80% floor off for that path and nothing else would notice; the
+    // one we carry (§10 t-64) is the leaf's smoke harnesses, the tier Sunrise
+    // excludes the same way. The ownerless-surface list is filled too (§08
+    // t-54, t-56), so a second exemption from the authorization seam still
+    // fails here.
     assert: () => {
-      expect(leafCoverageExclusions).toEqual([]);
+      expect(leafCoverageExclusions.map((entry) => entry.pattern)).toEqual([
+        'scripts/app/smoke-!(*-assertions).ts',
+      ]);
       expect(leafAlwaysRunTests.map((entry) => entry.path)).toEqual([
         'tests/unit/components/app/ui/tokens-only.test.ts',
         'tests/unit/app/public/authored-provenance.test.ts',
