@@ -87,6 +87,12 @@ export interface ConversationState {
   /** Whether the transcript could not be read back. The composer still works. */
   unreadable: boolean;
   send: (text?: string) => void;
+  /**
+   * The view has shown this turn's reply to its end. Retires `streamed` on
+   * the entry, so a remount — the pane folded and unfolded — shows it whole
+   * rather than typing it out again (review round 2).
+   */
+  revealed: (turnId: string) => void;
 }
 
 interface Options {
@@ -299,5 +305,19 @@ export function useConversation(options: Options = {}): ConversationState {
     [draft, phase, seat, fetchImpl]
   );
 
-  return { phase, entries, live, draft, setDraft, unreadable, send };
+  const revealed = useCallback((turnId: string) => {
+    setEntries((previous) => {
+      const index = previous.findIndex(
+        (entry) => entry.kind === 'reply' && entry.turnId === turnId && 'streamed' in entry
+      );
+      // Already retired: the same state back, so nothing re-renders.
+      if (index === -1) return previous;
+      const entry = previous[index];
+      if (entry.kind !== 'reply' || !('streamed' in entry)) return previous;
+      const { streamed: _streamed, ...rest } = entry;
+      return [...previous.slice(0, index), rest, ...previous.slice(index + 1)];
+    });
+  }, []);
+
+  return { phase, entries, live, draft, setDraft, unreadable, send, revealed };
 }

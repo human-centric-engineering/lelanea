@@ -194,12 +194,22 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
 
   const entries: TranscriptEntry[] = [];
   let pendingReply: { rows: MessageRow[] } | null = null;
+  // The turn row the current user row opened, if the seam recorded one.
+  let currentTurn: TurnRow | undefined;
 
   const flushReply = () => {
     if (!pendingReply || pendingReply.rows.length === 0) return;
     const rows = pendingReply.rows;
     const terminal = rows[rows.length - 1];
     const turn = rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined);
+    // A turn that failed on a later pass, and was never retried, leaves its
+    // earlier passes' rows behind with no reply linked to any of them. Those
+    // are fragments, not her answer; the turn row's `errorCode` is the record.
+    // A reply with no turn row at all is from before the seam, and is kept.
+    if (!turn && currentTurn && currentTurn.assistantMessageId === null) {
+      pendingReply = null;
+      return;
+    }
     entries.push({
       kind: 'reply',
       id: terminal.id,
@@ -224,6 +234,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
     flushReply();
 
     const turnId = turnIdOf(row.metadata);
+    currentTurn = byUserMessage.get(row.id);
     // The most recent thing the person said — looked for past any reply rows,
     // because a tool-using turn that failed at its second pass has already
     // left its first pass's row behind, and that fragment is not a reason to

@@ -183,6 +183,33 @@ describe('assembleTranscript', () => {
     expect(entries[1]).toMatchObject({ id: 'final', text: 'She says…' });
   });
 
+  it('drops the fragments of a failed multi-pass turn that was never retried', () => {
+    // Failed at the second pass, then the person moved on to a new turn: the
+    // first pass's row would otherwise read as a finished, accountless answer.
+    const messages = [
+      user('u1', 'What does she say about boundaries?', 1, 't1'),
+      assistant('pass1', 'Let me look that up.', 2),
+      assistant('marker', '[An error occurred and the response could not be completed.]', 3, {
+        metadata: { error: true, errorCode: 'timed_out' },
+      }),
+      user('u2', 'Never mind. How are you?', 10, 't2'),
+      assistant('a2', 'Here.', 12),
+    ];
+    expect(messages.some((m) => m.id === 'pass1')).toBe(true);
+
+    const entries = assembleTranscript(messages, [
+      turn('t1', {
+        status: 'failed',
+        errorCode: 'timed_out',
+        userMessageId: 'u1',
+        assistantMessageId: null,
+      }),
+      turn('t2', { userMessageId: 'u2', assistantMessageId: 'a2' }),
+    ]);
+
+    expect(entries.map((e) => `${e.kind}:${e.id}`)).toEqual(['user:u1', 'user:u2', 'reply:a2']);
+  });
+
   it('keeps two messages with the same words apart when they are different turns', () => {
     // Saying the same thing twice on purpose is two turns, and both stay.
     const entries = assembleTranscript(

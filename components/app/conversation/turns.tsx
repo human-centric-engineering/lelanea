@@ -70,11 +70,21 @@ export interface ReplyTurnProps {
   rise: boolean;
   /** Called each time the reveal grows, so a scroll container can follow it. */
   onGrow?: () => void;
+  /** Called once the whole settled text has been shown. */
+  onRevealed?: () => void;
   /** t-66 renders the account row here. */
   children?: React.ReactNode;
 }
 
-export function ReplyTurn({ text, settled, animate, rise, onGrow, children }: ReplyTurnProps) {
+export function ReplyTurn({
+  text,
+  settled,
+  animate,
+  rise,
+  onGrow,
+  onRevealed,
+  children,
+}: ReplyTurnProps) {
   const reducedMotion = useReducedMotion();
   const shown = useTypedText(text, settled, animate && !reducedMotion);
   // The reveal keeps growing for seconds after the last chunk lands, and the
@@ -82,6 +92,10 @@ export function ReplyTurn({ text, settled, animate, rise, onGrow, children }: Re
   React.useEffect(() => {
     onGrow?.();
   }, [shown, onGrow]);
+  const done = settled && shown === text;
+  React.useEffect(() => {
+    if (done && animate) onRevealed?.();
+  }, [done, animate, onRevealed]);
   return (
     <article
       aria-label="Lelañea said"

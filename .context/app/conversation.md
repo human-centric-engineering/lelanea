@@ -89,6 +89,11 @@ second request with the same id gets", "The deadlines"):
   `[An error occurred and the response could not be completed.]`,
   `metadata.error: true`. Not her voice; dropped. The turn row's `errorCode`
   is the record.
+- **A turn that failed on a later pass leaves its earlier passes' rows.** A
+  tool-using turn persists one assistant row per pass; failing at the second
+  leaves the first's fragment with no reply linked to it. Fragments of a turn
+  row with `assistantMessageId: null` are dropped rather than shown as a
+  finished, accountless answer. (Pre-seam rows have no turn row and are kept.)
 
 Both are pure (`assembleTranscript`) and pinned in
 `tests/unit/lib/app/conversation/transcript.test.ts` against fixtures that
@@ -167,7 +172,10 @@ a millisecond do not become three words in a millisecond.
 `ReplyTurn` with the same React key, in one flat list — a fragment or a second
 array beside the map would be a different reconciliation slot, and the same
 key in a different slot is a remount. Replies read back on load are shown
-whole (`streamed` is not on them).
+whole (`streamed` is not on them) — and so is a reply already shown to its
+end: `ReplyTurn` reports `onRevealed`, the hook retires the flag, and the
+pane folded and unfolded (which unmounts the transcript) paints the turn
+whole rather than typing it out again.
 
 **Reduced motion** shows her words as the server paces them, which is still
 gradual, and never the word-by-word reveal on top. `rise` and the thinking

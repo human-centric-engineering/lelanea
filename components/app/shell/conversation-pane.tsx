@@ -272,6 +272,7 @@ export function ConversationPane() {
             entries={conversation.entries}
             live={conversation.live}
             unreadable={conversation.unreadable}
+            onRevealed={conversation.revealed}
           />
 
           <Composer

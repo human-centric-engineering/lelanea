@@ -265,6 +265,40 @@ describe('sending', () => {
   });
 });
 
+describe('folding the pane mid-conversation', () => {
+  it('shows a reply already revealed whole on unfold, rather than typing it again', async () => {
+    // Reduced motion here so the reveal is immediate and the test is about the
+    // remount, not the pacing: with motion, the same path would re-type the
+    // whole reply from nothing on every unfold (review round 2).
+    motion.reduced = true;
+    const user = userEvent.setup();
+    await renderLoaded('large');
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'Every word of this reply.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
+        'Every word of this reply.'
+      )
+    );
+
+    // Now with motion back on, fold and unfold. A reply still flagged as
+    // streamed would remount `useTypedText` from '' and start typing.
+    motion.reduced = false;
+    await user.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    await user.click(screen.getByRole('button', { name: 'Open the conversation' }));
+
+    expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
+      'Every word of this reply.'
+    );
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('hello');
+  });
+});
+
 describe('reading back', () => {
   it('shows the transcript on load, whole', async () => {
     seat.transcript = [

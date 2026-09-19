@@ -17,6 +17,8 @@ export interface TranscriptProps {
   entries: ConversationEntry[];
   live: LiveTurn | null;
   unreadable: boolean;
+  /** The hook's `revealed`: a reply shown to its end stops being `streamed`. */
+  onRevealed?: (turnId: string) => void;
 }
 
 /**
@@ -39,7 +41,7 @@ export interface TranscriptProps {
  * A reader who has scrolled up to re-read is not pinned there; that
  * refinement is deliberately not in this task.
  */
-export function Transcript({ phase, entries, live, unreadable }: TranscriptProps) {
+export function Transcript({ phase, entries, live, unreadable, onRevealed }: TranscriptProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const liveText = live?.replyText ?? '';
 
@@ -56,24 +58,33 @@ export function Transcript({ phase, entries, live, unreadable }: TranscriptProps
   // the map is a different reconciliation slot, and the same key in a
   // different slot is a remount — which is exactly the snap the shared key
   // exists to prevent.
+  // A reply still `streamed` is one this session has not yet shown to its end;
+  // its turn — the person's words and the reply — is the only thing that rises
+  // and types. Once revealed the flag is retired, so a remount (the pane folded
+  // and unfolded) paints the turn whole, like the read-back transcript.
+  const arriving = new Set(
+    entries.flatMap((entry) =>
+      entry.kind === 'reply' && 'streamed' in entry ? [entry.turnId] : []
+    )
+  );
   const nodes: React.ReactNode[] = entries.map((entry, index) => {
-    // Only what arrived in this session rises; the read-back transcript is
-    // already there when the pane paints.
-    const rise = 'streamed' in entry || entry.kind === 'ending' || entry.id.startsWith('live:');
+    const rise = entry.kind !== 'ending' && entry.turnId !== null && arriving.has(entry.turnId);
     if (entry.kind === 'user') {
       return <UserTurn key={`user:${entry.id}`} text={entry.text} rise={rise} />;
     }
     if (entry.kind === 'ending') {
       return <EndingRow key={`ending:${entry.turnId}:${index}`} message={entry.message} />;
     }
+    const turnId = entry.turnId;
     return (
       <ReplyTurn
-        key={`reply:${entry.turnId ?? entry.id}`}
+        key={`reply:${turnId ?? entry.id}`}
         text={entry.text}
         settled
-        animate={'streamed' in entry}
+        animate={rise}
         rise={rise}
         onGrow={follow}
+        onRevealed={turnId !== null && onRevealed ? () => onRevealed(turnId) : undefined}
       />
     );
   });
