@@ -92,8 +92,11 @@ second request with the same id gets", "The deadlines"):
 - **A turn that failed on a later pass leaves its earlier passes' rows.** A
   tool-using turn persists one assistant row per pass; failing at the second
   leaves the first's fragment with no reply linked to it. Fragments of a turn
-  row with `assistantMessageId: null` are dropped rather than shown as a
-  finished, accountless answer. (Pre-seam rows have no turn row and are kept.)
+  row settled `failed` with no reply linked are dropped rather than shown as a
+  finished, accountless answer — except `reply_not_linked`, where she answered
+  and only the link failed. A turn still `running` keeps its rows too: her
+  final row is written a moment before the link. Pre-seam rows have no turn
+  row and are kept.
 
 Both are pure (`assembleTranscript`) and pinned in
 `tests/unit/lib/app/conversation/transcript.test.ts` against fixtures that
@@ -140,22 +143,24 @@ the authored shape drops to `undefined` and the frame still arrives, because
 
 ## What the pane does with each frame
 
-| Frame                                   | Then                                                                                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `start`                                 | the draft clears — the words leave the box only once the server has them (§8.1)                                          |
-| `content`                               | her words grow; the thinking row becomes her bubble on the first one                                                     |
-| `warning` `still_thinking`              | the thinking row's label changes; no second frame                                                                        |
-| `warning` with `resource` (soft crisis) | kept on the live turn and the finished reply; rendered by t-65                                                           |
-| `status`                                | the platform's operator strings — never shown                                                                            |
-| `capability_result(s)`                  | slugs collected for the drawer (t-66)                                                                                    |
-| `citations`                             | carried on the reply (t-66)                                                                                              |
-| `content_reset`                         | her words start over                                                                                                     |
-| `done`                                  | the live turn folds into `entries` as a reply, with an account built from the frame                                      |
-| `error`                                 | an `ending` entry with the frame's words, and the words back in the box if it is empty; t-65 makes it hers and retryable |
+| Frame                      | Then                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `start`                    | the draft clears — the words leave the box only once the server has them (§8.1)                                                                                                      |
+| `content`                  | her words grow; the thinking row becomes her bubble on the first one                                                                                                                 |
+| `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                                    |
+| `warning` `crisis` (soft)  | its `message` — the whole resource as text — shown as an `alert` row ahead of her reply, live and once folded; the structured `resource` is kept for t-65 to lay out in her register |
+| `status`                   | the platform's operator strings — never shown                                                                                                                                        |
+| `capability_result(s)`     | slugs collected for the drawer (t-66)                                                                                                                                                |
+| `citations`                | carried on the reply (t-66)                                                                                                                                                          |
+| `content_reset`            | her words start over                                                                                                                                                                 |
+| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame                                                                                                  |
+| `error`                    | an `ending` entry with the frame's words, and the words back in the box if it is empty; t-65 makes it hers and retryable                                                             |
 
 The account built live from `done` carries model, provider, tokens and
 `costUsd`; `fingerprintVersion` and `pricing` are `null` until the read route
-has them on reload — the frame does not carry either.
+has them on reload — the frame does not carry either. A `costUsd` of `0` on
+the frame (what a replay says for an unpriced turn) is recorded as `null`,
+never `0`: zero reads as free, and only the turn row knows.
 
 ## The pacing — `useTypedText`
 
@@ -211,9 +216,9 @@ banner are t-65's and will sit beside these.
 - **The timestamp and one-line account under a reply** — t-66. The prototype
   renders `.disclose` only when a turn has `meta`, which no turn has until the
   account exists. `ReplyTurn` takes `children` for it.
-- **The endings in her words, retry, the crisis resource rendered, the
+- **The endings in her words, retry, the crisis resource laid out, the
   banner** — t-65. t-64 shows the neutral copy the ending frame carries, in the
-  muted ink, and offers nothing.
+  muted ink, and offers nothing; a soft crisis frame's text is shown as-is.
 - **The microphone** — t-67. Still disabled, still labelled as arriving with
   the conversation.
 - **Pinning a reader who has scrolled up** — the transcript follows the foot

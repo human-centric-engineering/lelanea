@@ -8,7 +8,13 @@ import type {
   ConversationPhase,
   LiveTurn,
 } from '@/components/app/conversation/use-conversation';
-import { EndingRow, ReplyTurn, ThinkingRow, UserTurn } from '@/components/app/conversation/turns';
+import {
+  CrisisRow,
+  EndingRow,
+  ReplyTurn,
+  ThinkingRow,
+  UserTurn,
+} from '@/components/app/conversation/turns';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +73,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
       entry.kind === 'reply' && 'streamed' in entry ? [entry.turnId] : []
     )
   );
-  const nodes: React.ReactNode[] = entries.map((entry, index) => {
+  const nodes: React.ReactNode[] = entries.flatMap((entry, index) => {
     const rise = entry.kind !== 'ending' && entry.turnId !== null && arriving.has(entry.turnId);
     if (entry.kind === 'user') {
       return <UserTurn key={`user:${entry.id}`} text={entry.text} rise={rise} />;
@@ -76,7 +82,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
       return <EndingRow key={`ending:${entry.turnId}:${index}`} message={entry.message} />;
     }
     const turnId = entry.turnId;
-    return (
+    const reply = (
       <ReplyTurn
         key={`reply:${turnId ?? entry.id}`}
         text={entry.text}
@@ -87,9 +93,17 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
         onRevealed={turnId !== null && onRevealed ? () => onRevealed(turnId) : undefined}
       />
     );
+    // A soft crisis frame came ahead of her turn: the resource is shown first,
+    // whatever her reply then says (safety.md).
+    return 'crisisText' in entry && entry.crisisText
+      ? [<CrisisRow key={`crisis:${entry.id}`} text={entry.crisisText} />, reply]
+      : [reply];
   });
   if (live) {
     nodes.push(<UserTurn key={`user:live:${live.turnId}`} text={live.userText} rise />);
+    if (live.crisisText) {
+      nodes.push(<CrisisRow key={`crisis:live:${live.turnId}`} text={live.crisisText} />);
+    }
     nodes.push(
       live.replyText ? (
         <ReplyTurn
@@ -98,6 +112,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
           settled={false}
           animate
           rise
+          onGrow={follow}
         />
       ) : (
         <ThinkingRow key={`thinking:${live.turnId}`} stillThinking={live.stillThinking} />

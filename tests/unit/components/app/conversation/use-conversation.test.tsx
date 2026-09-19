@@ -149,7 +149,42 @@ describe('useConversation', () => {
       latest().close();
     });
     await waitFor(() => expect(result.current.phase).toBe('idle'));
-    expect(result.current.entries[1]).toMatchObject({ kind: 'reply', resource: { tier: 'soft' } });
+    expect(result.current.entries[1]).toMatchObject({
+      kind: 'reply',
+      resource: { tier: 'soft' },
+      crisisText: 'text',
+    });
+  });
+
+  it('keeps a soft crisis frame\u2019s words even when its resource does not parse', async () => {
+    // `message` is the whole resource as text (safety.md); a shape mismatch
+    // in `resource` must never cost the person the names and numbers.
+    const { result } = await loaded();
+    act(() => result.current.send('a hard week'));
+    await act(async () => {
+      latest().push('warning', {
+        code: 'crisis',
+        message: 'Samaritans 116 123',
+        resource: { tier: 'nonsense' },
+      });
+      latest().push('start', { conversationId: 'c1' });
+    });
+    await waitFor(() => expect(result.current.live?.crisisText).toBe('Samaritans 116 123'));
+    expect(result.current.live?.resource).toBeUndefined();
+  });
+
+  it('never records a $0 reply cost from the frame — unknown until the row says', async () => {
+    const { result } = await loaded();
+    act(() => result.current.send('again'));
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().push('content', { delta: 'replayed' });
+      // What a replay's `done` says for an unpriced turn.
+      latest().push('done', { costUsd: 0 });
+      latest().close();
+    });
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(result.current.entries[1]).toMatchObject({ kind: 'reply', turn: { costUsd: null } });
   });
 
   it('turns a refusal into an ending carrying the route’s reason, before any frame', async () => {

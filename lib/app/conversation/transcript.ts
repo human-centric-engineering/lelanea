@@ -51,6 +51,7 @@ import { conversationVisibilityWhere } from '@/lib/orchestration/access/conversa
 import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
+import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -206,7 +207,17 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
     // earlier passes' rows behind with no reply linked to any of them. Those
     // are fragments, not her answer; the turn row's `errorCode` is the record.
     // A reply with no turn row at all is from before the seam, and is kept.
-    if (!turn && currentTurn && currentTurn.assistantMessageId === null) {
+    // Two look the same and are not: a turn still `running` (her final row is
+    // written a moment before the link), and one settled `reply_not_linked`
+    // — she answered on the stream and only the link failed. Both keep their
+    // rows.
+    if (
+      !turn &&
+      currentTurn &&
+      currentTurn.assistantMessageId === null &&
+      currentTurn.status === 'failed' &&
+      currentTurn.errorCode !== REPLY_NOT_LINKED
+    ) {
       pendingReply = null;
       return;
     }

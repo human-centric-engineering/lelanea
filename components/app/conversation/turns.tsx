@@ -146,6 +146,30 @@ export function ThinkingRow({ stillThinking }: { stillThinking: boolean }) {
 }
 
 /**
+ * A soft crisis frame, shown ahead of her reply: the authored resource as the
+ * frame's `message` — every name and number, as plain text (safety.md). It is
+ * an `alert` because it is the one thing in a transcript that must be read
+ * before anything after it. t-65 lays the structured `resource` out in her
+ * register; this row is what makes sure the words are never dropped meanwhile.
+ */
+export function CrisisRow({ text }: { text: string }) {
+  return (
+    <article role="alert" aria-label="Somewhere to turn" className="flex gap-3">
+      <HerMark />
+      <p
+        className={cn(
+          'rounded-[14px] border px-4 py-[13px]',
+          'text-foreground border-[var(--color-border)] bg-[var(--color-muted)]',
+          'text-[14px] leading-[1.6] whitespace-pre-line'
+        )}
+      >
+        {text}
+      </p>
+    </article>
+  );
+}
+
+/**
  * How a turn ended without her. The neutral copy the ending frame carries, in
  * the muted ink, where her reply would have been. t-65 replaces the words with
  * hers and makes it retryable; this task only makes sure a person is told.

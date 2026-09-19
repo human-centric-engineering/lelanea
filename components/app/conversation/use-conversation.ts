@@ -11,7 +11,12 @@ import {
 import type { ConversationEvent, CrisisResource } from '@/lib/app/conversation/events';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import type { TranscriptEntry } from '@/lib/app/conversation/transcript';
-import { ENDING_MESSAGES, ENDING_UNAVAILABLE, STILL_THINKING } from '@/lib/app/agent/endings';
+import {
+  ENDING_CRISIS,
+  ENDING_MESSAGES,
+  ENDING_UNAVAILABLE,
+  STILL_THINKING,
+} from '@/lib/app/agent/endings';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
 
@@ -59,9 +64,11 @@ export interface EndingEntry {
  * pace it as typed; a reply read back on load is shown whole.
  */
 export type StreamedReplyEntry = Extract<TranscriptEntry, { kind: 'reply' }> & {
-  streamed: true;
-  /** A soft crisis frame that came ahead of her turn (rendered by t-65). */
+  streamed?: true;
+  /** A soft crisis frame that came ahead of her turn (laid out by t-65). */
   resource?: CrisisResource;
+  /** Its `message`, shown as text meanwhile. */
+  crisisText?: string;
 };
 
 export type ConversationEntry = TranscriptEntry | StreamedReplyEntry | EndingEntry;
@@ -76,6 +83,8 @@ export interface LiveTurn {
   capabilities: string[];
   /** A soft crisis frame shown ahead of her turn. */
   resource?: CrisisResource;
+  /** The same frame's `message` — the whole resource as text — shown until t-65 lays `resource` out. */
+  crisisText?: string;
 }
 
 export interface ConversationState {
@@ -163,6 +172,7 @@ export function useConversation(options: Options = {}): ConversationState {
         let replyText = '';
         let capabilities: string[] = [];
         let resource: CrisisResource | undefined;
+        let crisisText: string | undefined;
         let citations: Citation[] = [];
         const userEntry: TranscriptEntry = {
           kind: 'user',
@@ -204,9 +214,12 @@ export function useConversation(options: Options = {}): ConversationState {
             case 'warning':
               if (event.code === STILL_THINKING) {
                 setLive((current) => current && { ...current, stillThinking: true });
-              } else if (event.resource) {
+              } else if (event.code === ENDING_CRISIS) {
+                // The resource, structured when it parsed; its `message` is
+                // the whole resource as text either way, and is what shows.
                 resource = event.resource;
-                setLive((current) => current && { ...current, resource });
+                crisisText = event.message;
+                setLive((current) => current && { ...current, resource, crisisText });
               }
               return;
             case 'capability_result':
@@ -235,6 +248,7 @@ export function useConversation(options: Options = {}): ConversationState {
                   turnId,
                   citations,
                   ...(resource ? { resource } : {}),
+                  ...(crisisText ? { crisisText } : {}),
                   turn: {
                     turnId,
                     seat,
@@ -246,8 +260,10 @@ export function useConversation(options: Options = {}): ConversationState {
                     fingerprintVersion: null,
                     inputTokens: event.tokenUsage?.inputTokens ?? null,
                     outputTokens: event.tokenUsage?.outputTokens ?? null,
-                    costUsd: event.costUsd ?? null,
-                    // Whether that figure is priced is the turn row's to say.
+                    // A replay's `done` says `0` for an unpriced turn (turns.ts),
+                    // and `0` reads as free. Unknown until the read route has
+                    // the row; the turn row is what says whether it was priced.
+                    costUsd: event.costUsd ? event.costUsd : null,
                     pricing: null,
                     errorCode: null,
                     startedAt,

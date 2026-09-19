@@ -299,6 +299,38 @@ describe('folding the pane mid-conversation', () => {
   });
 });
 
+describe('a soft crisis frame', () => {
+  it('shows the resource ahead of her reply, and keeps it there once the turn is done', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'a hard week{Enter}');
+    await act(async () => {
+      latestTurn().push('warning', {
+        code: 'crisis',
+        message: 'If things feel heavy: Samaritans, 116 123, 24/7.',
+      });
+      latestTurn().push('start', { conversationId: 'c1' });
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Samaritans, 116 123')
+    );
+
+    await act(async () => {
+      latestTurn().push('content', { delta: 'I am here.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
+    );
+    const alert = screen.getByRole('alert');
+    const reply = screen.getByRole('article', { name: 'Lelañea said' });
+    expect(alert.textContent).toContain('Samaritans, 116 123');
+    // The resource comes first, whatever she then says.
+    expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('reading back', () => {
   it('shows the transcript on load, whole', async () => {
     seat.transcript = [

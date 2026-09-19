@@ -210,6 +210,31 @@ describe('assembleTranscript', () => {
     expect(entries.map((e) => `${e.kind}:${e.id}`)).toEqual(['user:u1', 'user:u2', 'reply:a2']);
   });
 
+  it('keeps the rows of a turn still running, and of one whose reply only failed to link', () => {
+    // Her final row is written a moment before the turn row links it; a reload
+    // in that window must not lose the reply. And `reply_not_linked` means she
+    // answered on the stream — the words are in the conversation.
+    const running = assembleTranscript(
+      [user('u1', 'q', 1, 't1'), assistant('a1', 'partial…', 2)],
+      [turn('t1', { status: 'running', userMessageId: 'u1', assistantMessageId: null })]
+    );
+    expect(running.map((e) => e.kind)).toEqual(['user', 'reply']);
+
+    const unlinked = assembleTranscript(
+      [user('u1', 'q', 1, 't1'), assistant('a1', 'the whole answer', 2)],
+      [
+        turn('t1', {
+          status: 'failed',
+          errorCode: 'reply_not_linked',
+          userMessageId: 'u1',
+          assistantMessageId: null,
+        }),
+      ]
+    );
+    expect(unlinked.map((e) => e.kind)).toEqual(['user', 'reply']);
+    expect(unlinked[1]).toMatchObject({ text: 'the whole answer', turn: null });
+  });
+
   it('keeps two messages with the same words apart when they are different turns', () => {
     // Saying the same thing twice on purpose is two turns, and both stay.
     const entries = assembleTranscript(

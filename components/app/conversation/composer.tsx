@@ -35,7 +35,10 @@ export interface ComposerProps {
  * only once they are held somewhere else (§8.1).
  *
  * While a turn runs the send control is disabled and says why; typing is not.
- * A person can draft their next thought while she answers.
+ * A person can draft their next thought while she answers. Enter while she is
+ * answering does nothing — neither sends nor breaks a line — as the prototype's
+ * `if (!v || S.busy) return` after its `preventDefault` makes it; Shift+Enter
+ * still breaks a line.
  *
  * ## The mic
  *
