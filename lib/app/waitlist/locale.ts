@@ -70,8 +70,20 @@ const MAX_ENTRY_LENGTH = 64;
  * tag, or the authored collection's locale when there is none.
  */
 export function resolveJoinLocale(acceptLanguage: string | null): string {
-  const fallback = getFoundationalCollectionMeta().locale;
-  if (!acceptLanguage) return fallback;
+  return preferredLanguageTag(acceptLanguage) ?? getFoundationalCollectionMeta().locale;
+}
+
+/**
+ * The client's highest-weighted well-formed language tag, or `null` when the
+ * header offers none.
+ *
+ * `null` rather than a default because the right default depends on the
+ * reader: the waitlist records the collection's locale, while the crisis path
+ * (`lib/app/safety/resource.ts`) must NOT guess a country for someone who
+ * named none.
+ */
+export function preferredLanguageTag(acceptLanguage: string | null): string | null {
+  if (!acceptLanguage) return null;
 
   let best: string | null = null;
   let bestQ = -1;
@@ -100,7 +112,7 @@ export function resolveJoinLocale(acceptLanguage: string | null): string {
 
   // `q=0` means "explicitly not this one", so a header offering nothing else
   // has offered nothing.
-  return best !== null && bestQ > 0 ? best : fallback;
+  return best !== null && bestQ > 0 ? best : null;
 }
 
 /**
