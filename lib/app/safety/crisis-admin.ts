@@ -120,6 +120,23 @@ function toRegionRow(row: AppCrisisRegion): CrisisRegionRow {
   };
 }
 
+/**
+ * Whether the stored services are the ones submitted, field by field and in
+ * order. Not `JSON.stringify` on both: JSONB hands objects back with their keys
+ * reordered (shortest first — `name, hours, contact`), so an untouched region
+ * would compare as edited and lose its sign-off (found by /code-review).
+ */
+function sameServices(stored: unknown, submitted: CrisisService[]): boolean {
+  const parsed = crisisServicesSchema.safeParse(stored);
+  if (!parsed.success || parsed.data.length !== submitted.length) return false;
+  return parsed.data.every(
+    (s, i) =>
+      s.name === submitted[i]?.name &&
+      s.contact === submitted[i]?.contact &&
+      s.hours === submitted[i]?.hours
+  );
+}
+
 async function requireSeeded(): Promise<AppCrisisCopy> {
   const copy = await prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } });
   if (!copy) throw new ConflictError(NOT_SEEDED_MESSAGE, { reason: 'not_seeded' });
@@ -224,7 +241,7 @@ export async function updateCrisisRegion(
   if (before.emergencyNumber !== update.emergencyNumber) {
     changes.emergencyNumber = { from: before.emergencyNumber, to: update.emergencyNumber };
   }
-  if (JSON.stringify(before.services) !== JSON.stringify(update.services)) {
+  if (!sameServices(before.services, update.services)) {
     changes.services = { from: before.services, to: update.services };
   }
   if (Object.keys(changes).length === 0) return { region: toRegionRow(before), changes };

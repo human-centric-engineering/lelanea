@@ -72,6 +72,19 @@ describe('loadCrisisContent', () => {
     expect((await loadCrisisContent()).copy.hardIntro).toBe('Edited.');
   });
 
+  it('does not cache a read that an admin write overtook', async () => {
+    let finish: (row: typeof COPY) => void = () => undefined;
+    db.findCopy.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const stale = loadCrisisContent();
+
+    invalidateCrisisContentCache(); // the admin's edit commits mid-read
+    finish(COPY);
+    expect((await stale).copy.hardIntro).toBe('Hard.');
+
+    db.findCopy.mockResolvedValue({ ...COPY, hardIntro: 'Edited.', version: 2 });
+    expect((await loadCrisisContent()).copy.hardIntro).toBe('Edited.');
+  });
+
   it('never caches a failure: the next call reads the tables again', async () => {
     db.findCopy.mockRejectedValueOnce(new Error('pool exhausted'));
     expect((await loadCrisisContent()).source).toBe('bundled');

@@ -163,10 +163,21 @@ async function readFromDatabase(): Promise<CrisisContent | null> {
 }
 
 let cached: { content: CrisisContent; expiresAt: number } | null = null;
+/**
+ * Bumped by every invalidation. A read that started before an admin write must
+ * not cache what it read once it finishes, or the pre-edit words would be
+ * served here for another TTL (found by /code-review).
+ */
+let generation = 0;
 
 /** Drop the cached answer. Every admin write calls this after it commits. */
 export function invalidateCrisisContentCache(): void {
   cached = null;
+  generation += 1;
+}
+
+function cache(content: CrisisContent, readGeneration: number, now: number): void {
+  if (readGeneration === generation) cached = { content, expiresAt: now + CRISIS_CACHE_TTL_MS };
 }
 
 /**
@@ -177,6 +188,7 @@ export async function loadCrisisContent(): Promise<CrisisContent> {
   const now = Date.now();
   if (cached && cached.expiresAt > now) return cached.content;
 
+  const readGeneration = generation;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const read = readFromDatabase();
   // A read that loses the race may still reject later; it has nobody to tell.
@@ -190,10 +202,10 @@ export async function loadCrisisContent(): Promise<CrisisContent> {
     if (stored === null) {
       logger.warn('Crisis resource tables are unseeded — serving the bundled file');
       const content = bundledCrisisContent();
-      cached = { content, expiresAt: now + CRISIS_CACHE_TTL_MS };
+      cache(content, readGeneration, now);
       return content;
     }
-    cached = { content: stored, expiresAt: now + CRISIS_CACHE_TTL_MS };
+    cache(stored, readGeneration, now);
     return stored;
   } catch (err) {
     logger.error('Crisis resource read failed — serving the bundled file', {

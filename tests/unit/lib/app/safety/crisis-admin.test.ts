@@ -174,6 +174,21 @@ describe('updateCrisisRegion', () => {
     expect(db.region.update).not.toHaveBeenCalled();
   });
 
+  it('is not fooled by JSONB’s key order: an untouched region keeps its sign-off', async () => {
+    // What Postgres actually returns: keys shortest-first, not as written.
+    db.region.findUnique.mockResolvedValue({
+      ...GB,
+      services: [{ name: SAMARITANS.name, hours: SAMARITANS.hours, contact: SAMARITANS.contact }],
+    });
+    const { changes, region } = await updateCrisisRegion('GB', {
+      emergencyNumber: '999',
+      services: [SAMARITANS],
+    });
+    expect(changes).toEqual({});
+    expect(region.status).toBe('signed_off');
+    expect(db.region.update).not.toHaveBeenCalled();
+  });
+
   it('404s a region that is not listed', async () => {
     db.region.findUnique.mockResolvedValue(null);
     await expect(
