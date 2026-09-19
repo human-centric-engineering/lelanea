@@ -30,17 +30,29 @@ import { cn } from '@/lib/utils';
  *
  * ## Degrading, not erroring
  *
- * A browser with no `MediaRecorder`, or one that was told no at the
- * permission prompt, gets the disabled disc with its reason as its name — the
- * same state the stub shipped with, now honest about why. A clip that could
- * not be transcribed leaves the box untouched and says so in the status row;
- * the disc is live again for another go.
+ * A browser with no `MediaRecorder` gets the disabled disc with its reason as
+ * its name — the same state the stub shipped with, now honest about why. One
+ * that was told no at the permission prompt keeps the disc live, named with
+ * that reason: Chrome reports a *dismissed* prompt the same way as a refused
+ * one, so a press has to be able to ask again (review round 1). A clip that
+ * could not be transcribed leaves the box untouched and says so in the
+ * status row; the disc is live again for another go.
+ *
+ * ## The two-minute cap is ours to enforce
+ *
+ * The hook's own auto-stop calls `stop()` and drops the clip on the floor —
+ * nothing holds the promise. So the cap is watched here, from `elapsedMs`,
+ * and the stop is ours, which sends the clip; the hook's is set a little
+ * later so it never wins. While a turn is in flight only *starting* is
+ * refused — a recording under way can always be stopped.
  *
  * Whether the control is offered at all — the two switches, a provider — is
  * the composer's question, asked of the route; this component assumes yes.
  */
 
 const MAX_CLIP_MS = 120_000;
+/** A clip too short to hold a word is not sent: the mic was pressed twice. */
+const MIN_CLIP_MS = 300;
 
 export interface VoiceNoteProps {
   /** The words, for the box. Called once per clip, never with an empty string. */
@@ -54,7 +66,8 @@ export interface VoiceNoteProps {
 type Phase = 'idle' | 'recording' | 'transcribing' | 'failed';
 
 export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
-  const recording = useVoiceRecording({ maxDurationMs: MAX_CLIP_MS });
+  // The hook's cap sits behind ours, so ours — which sends the clip — fires first.
+  const recording = useVoiceRecording({ maxDurationMs: MAX_CLIP_MS + 5_000 });
   const [phase, setPhase] = React.useState<Phase>('idle');
   const inFlight = React.useRef<AbortController | null>(null);
   React.useEffect(() => () => inFlight.current?.abort(), []);
@@ -62,10 +75,7 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
   // The hook's state is the truth about the recorder; ours is about the words.
   const isRecording = recording.state === 'recording' || recording.state === 'stopping';
   const denied = recording.error?.code === 'permission_denied';
-  const cannot = !recording.supported || denied;
-
-  /** A clip too short to hold a word is not sent: the mic was pressed twice. */
-  const MIN_CLIP_MS = 300;
+  const cannot = !recording.supported;
 
   const send = React.useCallback(
     async (clip: { blob: Blob; mimeType: string; durationMs: number }) => {
@@ -91,16 +101,34 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
     [fetchImpl, onText]
   );
 
+  const stopAndSend = React.useCallback(async () => {
+    const clip = await recording.stop();
+    if (clip) await send(clip);
+    else setPhase('failed');
+  }, [recording, send]);
+
   const press = async () => {
     if (isRecording) {
-      const clip = await recording.stop();
-      if (clip) await send(clip);
-      else setPhase('failed');
+      await stopAndSend();
       return;
     }
+    if (disabled) return;
     setPhase('idle');
     await recording.start();
   };
+
+  // The cap, watched from here so the clip is sent rather than dropped.
+  const stopping = React.useRef(false);
+  React.useEffect(() => {
+    if (recording.state !== 'recording') {
+      stopping.current = false;
+      return;
+    }
+    if (recording.elapsedMs >= MAX_CLIP_MS && !stopping.current) {
+      stopping.current = true;
+      void stopAndSend();
+    }
+  }, [recording.state, recording.elapsedMs, stopAndSend]);
 
   // The hook reports a capture that failed after it began; treat as a clip that did not arrive.
   React.useEffect(() => {
@@ -108,12 +136,12 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
   }, [recording.error]);
 
   const label = cannot
-    ? denied
-      ? CONVERSATION_COPY.micDenied
-      : CONVERSATION_COPY.micUnsupported
+    ? CONVERSATION_COPY.micUnsupported
     : isRecording
       ? CONVERSATION_COPY.micStop
-      : CONVERSATION_COPY.mic;
+      : denied
+        ? CONVERSATION_COPY.micDenied
+        : CONVERSATION_COPY.mic;
 
   const seconds = Math.floor(recording.elapsedMs / 1000);
   const status =
@@ -130,7 +158,8 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
       <button
         type="button"
         onClick={() => void press()}
-        disabled={cannot || disabled || phase === 'transcribing'}
+        // A recording under way can always be stopped; only starting waits on a turn.
+        disabled={cannot || phase === 'transcribing' || (disabled && !isRecording)}
         aria-label={label}
         title={label}
         aria-pressed={isRecording}

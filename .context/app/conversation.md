@@ -352,10 +352,17 @@ read and edit — **never sent for them**. Its accessible name says the
 recording is never kept. A clip shorter than 300 ms — the disc pressed twice
 — is not sent.
 
-**Degrading, not erroring.** No `MediaRecorder`, or a permission prompt
-answered no → the disabled disc with its reason as its name. A clip that
-could not be transcribed → the box untouched, the reason in the status row,
-the disc live for another go. The composer offers the control only when the
+**Degrading, not erroring.** No `MediaRecorder` → the disabled disc with its
+reason as its name. A permission prompt answered no → the disc stays live,
+named with that reason, and a press asks again: Chrome reports a _dismissed_
+prompt the same way as a refused one, so a disabled disc would lock the
+microphone until a reload (review round 1). A clip that could not be
+transcribed → the box untouched, the reason in the status row, the disc live
+for another go. The two-minute cap is enforced by the control from the hook's
+`elapsedMs` — the hook's own auto-stop drops the clip — and a recording under
+way can always be stopped, even once a turn is in flight; only _starting_
+waits. The words land in whatever the box holds when they arrive, not what it
+held at the press. The composer offers the control only when the
 route's `GET` says `available`; `useConversation` asks once on mount, and no
 answer means not offered.
 

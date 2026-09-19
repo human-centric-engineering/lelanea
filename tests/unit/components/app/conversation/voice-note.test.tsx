@@ -62,14 +62,14 @@ const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) 
 }) as unknown as typeof fetch;
 
 /** The composer as the pane renders it, with its own draft state and a spy on send. */
-function Harness({ voiceInput = 'available' as const, initial = '' }) {
+function Harness({ voiceInput = 'available' as const, initial = '', busy = false }) {
   const [value, setValue] = React.useState(initial);
   return (
     <Composer
       value={value}
       onChange={setValue}
       onSend={onSend}
-      busy={false}
+      busy={busy}
       voiceInput={voiceInput}
       fetchImpl={fetchImpl}
     />
@@ -167,14 +167,83 @@ describe('a voice note', () => {
     expect(mic()).not.toBeDisabled();
   });
 
-  it('is the disabled disc with its reason when the browser was told no', async () => {
+  it('keeps what was typed while the words were on their way', async () => {
+    let release!: () => void;
+    vi.mocked(fetchImpl).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve(
+              new Response(JSON.stringify({ success: true, data: { text: 'what I said' } }), {
+                status: 200,
+              })
+            );
+        })
+    );
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(mic());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.micStop }));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(CONVERSATION_COPY.micTranscribing)
+    );
+    // Typing meanwhile.
+    await user.type(box(), 'hello');
+    await act(async () => release());
+    await waitFor(() => expect(box()).toHaveValue('hello what I said'));
+  });
+
+  it('sends the clip itself at the cap rather than letting the recorder drop it', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(mic());
+    await screen.findByRole('button', { name: CONVERSATION_COPY.micStop });
+    // The hook reads the clock on a real 200 ms tick; jump the clock past the cap.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 121_000);
+    try {
+      await waitFor(() => expect(posts).toHaveLength(1), { timeout: 3000 });
+      await waitFor(() => expect(box()).toHaveValue('what I said'));
+      expect(mic()).toBeTruthy();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('can always be stopped, even once a turn is in flight', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Harness />);
+    await user.click(mic());
+    await screen.findByRole('button', { name: CONVERSATION_COPY.micStop });
+    // A turn starts while recording: the send disc greys; the stop must not.
+    rerender(<Harness busy />);
+    const stop = screen.getByRole('button', { name: CONVERSATION_COPY.micStop });
+    expect(stop).not.toBeDisabled();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(stop);
+    await waitFor(() => expect(box()).toHaveValue('what I said'));
+    // And starting a new one does wait.
+    expect(mic()).toBeDisabled();
+  });
+
+  it('keeps the disc live, named with the reason, when the browser was told no — a press asks again', async () => {
     getUserMedia.mockRejectedValue(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
     const user = userEvent.setup();
     render(<Harness />);
     await user.click(mic());
     const denied = await screen.findByRole('button', { name: CONVERSATION_COPY.micDenied });
-    expect(denied).toBeDisabled();
+    expect(denied).not.toBeDisabled();
     expect(posts).toHaveLength(0);
+    // A dismissed prompt reads the same as a refused one; the person may allow it now.
+    getUserMedia.mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] });
+    await user.click(denied);
+    await screen.findByRole('button', { name: CONVERSATION_COPY.micStop });
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
   });
 
   it('is the disabled disc with its reason in a browser that cannot record', () => {

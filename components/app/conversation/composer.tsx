@@ -57,14 +57,20 @@ export interface ComposerProps {
 export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl }: ComposerProps) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
 
-  /** The words, at the caret — with a space either side where they meet other words. */
+  /**
+   * The words, at the caret — with a space either side where they meet other
+   * words. Read from the box itself, not the render-time `value`: the words
+   * arrive seconds after the press, and whatever was typed meanwhile is in
+   * the box and not in this closure (review round 1).
+   */
   const insertAtCaret = React.useCallback(
     (text: string) => {
       const el = textarea.current;
-      const start = el?.selectionStart ?? value.length;
-      const end = el?.selectionEnd ?? value.length;
-      const before = value.slice(0, start);
-      const after = value.slice(end);
+      const current = el?.value ?? value;
+      const start = el?.selectionStart ?? current.length;
+      const end = el?.selectionEnd ?? current.length;
+      const before = current.slice(0, start);
+      const after = current.slice(end);
       const lead = before && !/\s$/.test(before) ? ' ' : '';
       const trail = after && !/^\s/.test(after) ? ' ' : '';
       const next = `${before}${lead}${text}${trail}${after}`;
