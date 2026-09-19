@@ -14,8 +14,10 @@ import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 import {
+  ENDING_CEILING_REACHED,
   ENDING_MESSAGES,
   STILL_THINKING,
+  ceilingReachedFrame,
   endingForCode,
   stillThinkingFrame,
   toClientEvent,
@@ -144,5 +146,37 @@ describe('the copy', () => {
 
   it('the still-thinking warning carries its own code', () => {
     expect(stillThinkingFrame()).toMatchObject({ type: 'warning', code: STILL_THINKING });
+  });
+});
+
+describe('the ceiling ending (f-safety t-59)', () => {
+  const frame = ceilingReachedFrame({
+    spentUsd: 5.2,
+    ceilingUsd: 5,
+    resetsAt: new Date('2026-10-01T00:00:00Z'),
+  });
+
+  it('carries the figures and the reset date', () => {
+    expect(frame).toMatchObject({
+      type: 'error',
+      code: ENDING_CEILING_REACHED,
+      ceiling: { spentUsd: 5.2, ceilingUsd: 5, resetsAt: '2026-10-01T00:00:00.000Z' },
+    });
+  });
+
+  it('says why, and what the person can do — without offering more', () => {
+    expect(frame.message).toContain('$5.20 of $5.00');
+    expect(frame.message).toContain('1 October');
+    expect(frame.message).toContain('read and write');
+    expect(frame.message).not.toMatch(/ask|request|contact|upgrade/i);
+  });
+
+  it('is never mapped from a platform frame', () => {
+    const event: ChatEvent = { type: 'error', code: ENDING_CEILING_REACHED, message: 'x' };
+    expect(toClientEvent(event)).toEqual({
+      type: 'error',
+      code: 'unavailable',
+      message: ENDING_MESSAGES.unavailable,
+    });
   });
 });

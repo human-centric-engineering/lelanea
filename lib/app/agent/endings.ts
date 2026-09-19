@@ -26,6 +26,12 @@
  * turn follows. See `lib/app/safety/resource.ts` for the contract. A platform
  * frame that happened to say `crisis` would still map to `unavailable` here.
  *
+ * **Nor is `ceiling_reached`** (f-safety t-59), though it ends a turn: it is
+ * built by the turn seam, before anything is claimed, when the person has used
+ * their month's budget (`lib/app/agent/ceiling.ts`). It carries the figures —
+ * spent, limit, reset date — so it is its own frame, {@link ceilingReachedFrame},
+ * and a platform frame saying `ceiling_reached` still maps to `unavailable`.
+ *
  * **The copy here is neutral on purpose.** The words in her register, and the
  * banner, are f-conversation's; this is the contract they build against, with a
  * default that is true and says what to do (`HB10`).
@@ -44,6 +50,9 @@ export const ENDING_PAUSED = 'paused';
 
 /** The code of the crisis frame — built by `lib/app/safety/resource.ts`, never mapped here. */
 export const ENDING_CRISIS = 'crisis';
+
+/** The code of the frame a turn ends on when the person has used their month's budget. */
+export const ENDING_CEILING_REACHED = 'ceiling_reached';
 
 /** The platform's monthly-budget warning, which carries the agent's spend. */
 const BUDGET_WARNING = 'budget_warning';
@@ -89,6 +98,52 @@ export function endingForCode(code: string): TurnEnding {
 /** The frame a turn ends on. The only shape of `error` the browser ever sees from her seat. */
 export function endingFrame(ending: TurnEnding): Extract<ChatEvent, { type: 'error' }> {
   return { type: 'error', code: ending, message: ENDING_MESSAGES[ending] };
+}
+
+/** The figures a `ceiling_reached` frame carries. `resetsAt` is an ISO instant, UTC. */
+export interface CeilingReached {
+  spentUsd: number;
+  ceilingUsd: number;
+  resetsAt: string;
+}
+
+export type CeilingReachedFrame = Extract<ChatEvent, { type: 'error' }> & {
+  code: typeof ENDING_CEILING_REACHED;
+  ceiling: CeilingReached;
+};
+
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const resetDay = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+});
+
+/**
+ * The frame a turn ends on when the person has used their month's budget.
+ *
+ * The default copy says why, and what they can do that exists: keep reading
+ * and writing, or wait for the reset (`HB10`). It offers no "ask for more" —
+ * there is no mechanism behind one (`B31`).
+ */
+export function ceilingReachedFrame(figures: {
+  spentUsd: number;
+  ceilingUsd: number;
+  resetsAt: Date;
+}): CeilingReachedFrame {
+  return {
+    type: 'error',
+    code: ENDING_CEILING_REACHED,
+    message:
+      `You've used this month's conversation budget (${usd.format(figures.spentUsd)} of ` +
+      `${usd.format(figures.ceilingUsd)}), so there are no more replies until it resets on ` +
+      `${resetDay.format(figures.resetsAt)}. Everything you can read and write in the app still works.`,
+    ceiling: {
+      spentUsd: figures.spentUsd,
+      ceilingUsd: figures.ceilingUsd,
+      resetsAt: figures.resetsAt.toISOString(),
+    },
+  };
 }
 
 /** Sent once, when no words have come by the first-words deadline. The turn carries on. */

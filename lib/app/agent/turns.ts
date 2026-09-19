@@ -50,6 +50,9 @@
  * - **Paused** by the operator: refused before the claim and before any model
  *   call, with the `paused` ending (`availability.ts`). A replay of a turn that
  *   already completed is still served — it calls no model.
+ * - **Over the person's monthly ceiling** (f-safety t-59): the same, with the
+ *   `ceiling_reached` ending and its figures (`ceiling.ts`). Asked before the
+ *   turn, so the turn that crosses the line completes — never cut mid-sentence.
  * - **Deadlines**, read per request: a `still_thinking` warning at the
  *   first-words deadline; the `timed_out` ending, and a turn settled failed and
  *   retryable, at the whole-turn deadline (`deadlines.ts`).
@@ -64,17 +67,19 @@
  *
  * ## Someone in danger (f-safety t-58)
  *
- * **Before anything else** — the pause check, the claim, the model — the
- * message goes through `detectCrisis()` (`lib/app/safety/assess.ts`):
+ * **Before anything else** — the pause and ceiling checks, the claim, the
+ * model — the message goes through `detectCrisis()` (`lib/app/safety/assess.ts`):
  *
  * - **Hard tier:** answered with the crisis frame alone. `run()` is never
  *   called, nothing is claimed, no turn is recorded — so it is answered with
- *   generation paused, the provider down, or the model call broken.
+ *   generation paused, the month's budget used, the provider down, or the
+ *   model call broken.
  * - **Soft tier:** the crisis frame goes first, then the turn runs exactly as
- *   below. A pause or a failure still ends it the usual way, after the resource.
- *   A 409 refusal carries no stream, so it carries no frame — and writes no
- *   safety record: it is the retry of a turn whose first request already
- *   showed the resource, and a record says what was shown, not what was decided.
+ *   below. A pause, a reached ceiling or a failure still ends it the usual
+ *   way, after the resource. A 409 refusal carries no stream, so it carries no
+ *   frame — and writes no safety record: it is the retry of a turn whose first
+ *   request already showed the resource, and a record says what was shown, not
+ *   what was decided.
  *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
@@ -88,7 +93,13 @@ import type { ChatEvent } from '@/types/orchestration';
 import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { isGenerationPaused } from '@/lib/app/agent/availability';
 import { runWithDeadlines } from '@/lib/app/agent/deadlines';
-import { ENDING_TIMED_OUT, endingFrame, toClientStream } from '@/lib/app/agent/endings';
+import { mayStartGeneratedTurn } from '@/lib/app/agent/ceiling';
+import {
+  ENDING_TIMED_OUT,
+  ceilingReachedFrame,
+  endingFrame,
+  toClientStream,
+} from '@/lib/app/agent/endings';
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 import { crisisFrame } from '@/lib/app/safety/resource';
 import { preferredLanguageTag } from '@/lib/app/waitlist/locale';
@@ -317,9 +328,9 @@ function isRefusal(
 /**
  * Take one facilitation turn — crisis first, then {@link runGeneratedTurn}.
  *
- * The crisis check is ahead of the pause, the claim and the model on purpose:
- * none of them may stand between a person in danger and the resource. See
- * "Someone in danger" in the module docblock.
+ * The crisis check is ahead of the pause, the ceiling, the claim and the model
+ * on purpose: none of them may stand between a person in danger and the
+ * resource. See "Someone in danger" in the module docblock.
  */
 export async function runRecordedTurn(
   turn: FacilitationTurn,
@@ -350,7 +361,8 @@ export async function runRecordedTurn(
  *
  * A pause is not a refusal of THIS turn id, so it is not a 409: it is the same
  * `paused` ending any other turn would end on, sent before anything is claimed
- * or called — so when generation resumes the same id simply runs.
+ * or called — so when generation resumes the same id simply runs. A reached
+ * ceiling is answered the same way, and the id runs once the month resets.
  */
 async function runGeneratedTurn(
   turn: FacilitationTurn,
@@ -359,14 +371,14 @@ async function runGeneratedTurn(
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
 
-  if (await isGenerationPaused()) {
+  const held = await heldEnding(turn);
+  if (held) {
     // A replay calls no model: an answer already given is still given.
     const answered = turn.clientTurnId
       ? await findReplayableTurn({ userId: turn.userId, turnId, requestHash })
       : null;
     if (answered) return toClientStream(replay(answered));
-    logger.info('Agent turn refused: generation is paused', { seat: turn.role });
-    return only(endingFrame('paused'));
+    return only(held);
   }
 
   const deadlines = await getAgentDeadlines();
@@ -437,6 +449,24 @@ async function runGeneratedTurn(
       return toClientStream(events);
     }
   }
+}
+
+/**
+ * Why no turn she answers may start now, as the frame it ends on — or `null`.
+ * Generation paused for everyone, then this person's month used up. Neither
+ * claims or calls anything.
+ */
+async function heldEnding(turn: FacilitationTurn): Promise<ChatEvent | null> {
+  if (await isGenerationPaused()) {
+    logger.info('Agent turn refused: generation is paused', { seat: turn.role });
+    return endingFrame('paused');
+  }
+  const allowance = await mayStartGeneratedTurn(turn.userId);
+  if (!allowance.allowed) {
+    logger.info('Agent turn refused: monthly ceiling reached', { seat: turn.role });
+    return ceilingReachedFrame(allowance);
+  }
+  return null;
 }
 
 /**

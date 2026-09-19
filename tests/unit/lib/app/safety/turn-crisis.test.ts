@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   check: vi.fn(),
   createEvent: vi.fn(),
   claimTurn: vi.fn(),
+  allowance: vi.fn(),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -34,6 +35,7 @@ vi.mock('@/lib/app/agent/availability', () => ({ isGenerationPaused: mocks.pause
 vi.mock('@/lib/app/agent/settings', () => ({
   getAgentDeadlines: vi.fn(async () => ({ firstWordsDeadlineMs: 8_000, turnDeadlineMs: 60_000 })),
 }));
+vi.mock('@/lib/app/agent/ceiling', () => ({ mayStartGeneratedTurn: mocks.allowance }));
 vi.mock('@/lib/app/safety/context-check', () => ({ checkCrisisContext: mocks.check }));
 vi.mock('@/lib/db/client', () => ({
   prisma: { appSafetyEvent: { create: mocks.createEvent } },
@@ -94,7 +96,17 @@ beforeEach(() => {
   mocks.check.mockResolvedValue('confirmed');
   mocks.createEvent.mockResolvedValue({});
   mocks.claimTurn.mockResolvedValue({ kind: 'claimed', turn: TURN_ROW });
+  mocks.allowance.mockResolvedValue({ allowed: true });
 });
+
+/** A person who has used their month's budget (f-safety t-59). */
+const OVER_CEILING = {
+  allowed: false,
+  reason: 'ceiling_reached',
+  spentUsd: 5.2,
+  ceilingUsd: 5,
+  resetsAt: new Date('2026-10-01T00:00:00Z'),
+} as const;
 
 describe('runRecordedTurn — someone in danger', () => {
   describe('hard tier', () => {
@@ -175,6 +187,32 @@ describe('runRecordedTurn — someone in danger', () => {
         ['warning', 'crisis'],
         ['error', 'paused'],
       ]);
+    });
+  });
+
+  describe('over the monthly ceiling (f-safety t-59)', () => {
+    it('a hard hit still gets the resource, and the model is not called', async () => {
+      mocks.allowance.mockResolvedValue(OVER_CEILING);
+      const run = vi.fn(() => herReply());
+
+      const out = await frames(await runRecordedTurn(turn('I want to kill myself'), run));
+
+      expect(run).not.toHaveBeenCalled();
+      expect(out.map((e) => [e.type, 'code' in e ? e.code : null])).toEqual([['error', 'crisis']]);
+    });
+
+    it('a soft hit gets the resource first, then the ceiling ending — no claim, no model', async () => {
+      mocks.allowance.mockResolvedValue(OVER_CEILING);
+      const run = vi.fn(() => herReply());
+
+      const out = await frames(await runRecordedTurn(turn("I can't go on like this"), run));
+
+      expect(out.map((e) => [e.type, 'code' in e ? e.code : null])).toEqual([
+        ['warning', 'crisis'],
+        ['error', 'ceiling_reached'],
+      ]);
+      expect(run).not.toHaveBeenCalled();
+      expect(mocks.claimTurn).not.toHaveBeenCalled();
     });
   });
 
