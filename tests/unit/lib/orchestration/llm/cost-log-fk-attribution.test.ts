@@ -313,6 +313,14 @@ const ALLOWED_CALL_SITES: readonly string[] = [
   // Sunrise-owned roster, same class as sunrise#799; .context/app/divergences.md
   // Row 20.
   'lib/app/safety/context-check.ts | agentId=— | conversationId=— | workflowExecutionId=— | userId=spread((input.userId ? { userId: input.userId } : {}))',
+  // LELAÑEA — a member's voice note (f-conversation t-67): one transcription
+  // per clip, billed to the person. `agentId` is her agent's id, read by slug
+  // from the row (`voiceInputSwitches`), never the caller's multipart field;
+  // `userId` is the session's — `withAuth` refused anyone without a real
+  // `User` row. No conversation: the words go to the box, not the transcript.
+  // Same fork edit to a Sunrise-owned roster as the entry above; divergences
+  // Row 20.
+  'app/api/v1/app/agent/transcribe/route.ts | agentId=agentId | conversationId=— | workflowExecutionId=— | userId=userId',
   // DAYBREAK — the framework conversation supervisor. `conversationId` is the
   // id the route loaded and `loadFrameworkConversation` already resolved, so it
   // is a real `AiConversation` row. No agent: the judge runs on the platform
