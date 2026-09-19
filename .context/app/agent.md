@@ -286,12 +286,15 @@ body `{ message, turnId? }`.
 
 ### Where else she can be reached
 
-**`public` also opens Sunrise's general consumer chat route** (`POST
-/api/v1/chat/stream`, by slug) and lists her in `GET /api/v1/chat/agents`. A turn
-there has no turn id, no seat, no turn record and none of her overlays — only her
-always-on core. **The leaf cannot close it**: that route consults the
-authorization seam with no resource, so there is no agent for a policy to refuse.
-Recorded on f-safety, which owns ceilings, with what it bypasses.
+**Nowhere else, by design.** `public` would also open Sunrise's general consumer
+chat route (`POST /api/v1/chat/stream`, by slug) and list her in `GET
+/api/v1/chat/agents`. A turn there would skip the turn hook: no crisis check, no
+ceiling, no turn id, no record. The authorization seam cannot refuse it, because
+that route names no resource. So f-safety t-61 carries a generic seam in both
+routes (`lib/orchestration/chat/consumer-exclusions.ts`, divergences Row 21), and
+`lib/app/leaf-bootstrap.ts` registers her slug. The stream route answers her slug
+exactly as it answers an agent that does not exist, and the listing omits her.
+Admin chat and embed don't consult the seam.
 
 ## What a turn records
 
@@ -644,7 +647,8 @@ no model call, no cost row.
   generated turn; if not, why" is all the seam knows; `TurnAllowance` has room
   for another reason.
 - **Only her seats.** Sunrise's consumer chat route (`POST /api/v1/chat/stream`)
-  does not pass through this seam — see [How she is reached](#how-she-is-reached).
+  does not pass through this seam, so she is kept off that route instead. See
+  [Where else she can be reached](#where-else-she-can-be-reached).
 - **Cost per turn: one month-to-date aggregate** over `ai_cost_log` by user and
   time, beside the two primary-key reads for the limit. Fine at current volume;
   the same trigger as the [index watch item](#watch-item-no-userid-createdat-index)
