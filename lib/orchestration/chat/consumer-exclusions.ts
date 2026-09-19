@@ -15,7 +15,10 @@
  *
  * - A registered slug is answered by the stream route **exactly** as an agent
  *   that does not exist — same status, same code, same message — and is left
- *   out of the agent listing. Registering reveals nothing about the agent.
+ *   out of the agent listing. Neither route reveals that the agent exists.
+ *   This does not hide it everywhere: `POST /api/v1/chat/agents/:slug/validate-token`
+ *   answers every active agent, internal ones included, differently from an
+ *   unknown slug. Nothing streams through that route, so it is not a way in.
  * - Only the consumer routes consult this. Admin chat, embed and any fork
  *   surface are untouched.
  * - With nothing registered, both routes behave exactly as before.

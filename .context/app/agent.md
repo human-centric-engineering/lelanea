@@ -286,7 +286,7 @@ body `{ message, turnId? }`.
 
 ### Where else she can be reached
 
-**Nowhere else, by design.** `public` would also open Sunrise's general consumer
+**Not through Sunrise's consumer chat routes.** `public` would also open Sunrise's general consumer
 chat route (`POST /api/v1/chat/stream`, by slug) and list her in `GET
 /api/v1/chat/agents`. A turn there would skip the turn hook: no crisis check, no
 ceiling, no turn id, no record. The authorization seam cannot refuse it, because
@@ -295,6 +295,13 @@ routes (`lib/orchestration/chat/consumer-exclusions.ts`, divergences Row 21), an
 `lib/app/leaf-bootstrap.ts` registers her slug. The stream route answers her slug
 exactly as it answers an agent that does not exist, and the listing omits her.
 Admin chat and embed don't consult the seam.
+
+**One more door, closed only by configuration.** Daybreak's module chat route
+(`POST /api/v1/framework/modules/{slug}/chat/stream`) streams a module's primary
+agent directly, also without the turn hook, and it doesn't consult this seam
+either. She is bound to no module today. **Don't make her a module's primary
+agent**: that would open the door again. The route's missing turn hook is the
+twin daybreak#265 already names.
 
 ## What a turn records
 
