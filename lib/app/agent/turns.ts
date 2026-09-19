@@ -57,7 +57,7 @@
  *   first-words deadline; the `timed_out` ending, and a turn settled failed and
  *   retryable, at the whole-turn deadline (`deadlines.ts`).
  * - **Every frame** reaches the browser through `toClientStream()`: a failure is
- *   one of `unavailable` · `timed_out` · `paused`, never the platform's code or
+ *   one of `unavailable` · `timed_out` · `paused` · `not_sent`, never the platform's code or
  *   text (`endings.ts`).
  * - **A client that disconnects does not end the turn.** The model call runs
  *   under this seam's own signal — fired only by the whole-turn deadline — not
@@ -121,10 +121,10 @@ import type {
   FacilitationTurnRefusal,
   FacilitationTurnRun,
 } from '@/lib/framework/facilitation/agents/turn-hook';
+import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 
-/** Error codes a refused turn carries, for a client to branch on. */
-export const TURN_IN_FLIGHT = 'TURN_IN_FLIGHT';
-export const TURN_ID_REUSED = 'TURN_ID_REUSED';
+/** Error codes a refused turn carries, for a client to branch on (`turn-codes.ts`, import-light). */
+export { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 
 /** The code a replayed turn ends on when its reply no longer exists. */
 export const TURN_REPLY_UNAVAILABLE = 'turn_reply_unavailable';

@@ -1,6 +1,6 @@
 /**
- * Every way the platform can end a turn reaches the browser as one of three
- * plain endings — never as itself (§08 t-55).
+ * Every way the platform can end a turn reaches the browser as one of four
+ * plain endings — never as itself (§08 t-55; the fourth, `not_sent`, §10 t-65).
  *
  * The codes are read from the platform's own registry source rather than copied
  * here, so a code Sunrise adds tomorrow is covered by this file the day it
@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ENDING_CEILING_REACHED,
   ENDING_MESSAGES,
+  ENDING_NOT_SENT,
   STILL_THINKING,
   ceilingReachedFrame,
   endingForCode,
@@ -24,7 +25,7 @@ import {
 } from '@/lib/app/agent/endings';
 import type { ChatEvent } from '@/types/orchestration';
 
-const VOCABULARY = ['unavailable', 'timed_out', 'paused'];
+const VOCABULARY = ['unavailable', 'timed_out', 'paused', 'not_sent'];
 
 /** Every code in Sunrise's user-facing error registry, from its source. */
 function platformRegistryCodes(): string[] {
@@ -76,6 +77,47 @@ describe('endingForCode', () => {
   it('maps an unknown code to unavailable, never through', () => {
     expect(endingForCode('a_code_nobody_has_written_yet')).toBe('unavailable');
     expect(endingForCode('')).toBe('unavailable');
+  });
+
+  describe('not_sent — the message was refused, and a retry would be too (§10 t-65)', () => {
+    /** The platform's refusals of the message itself, by name (`streaming-handler.ts`). */
+    const REFUSALS = [
+      'input_blocked',
+      'conversation_cap_reached',
+      'conversation_length_cap_reached',
+    ];
+
+    it('maps each named refusal code to not_sent', () => {
+      // Each is a code the platform really emits: in its registry, so a rename
+      // upstream fails here rather than silently falling to `unavailable`.
+      const registry = platformRegistryCodes();
+      for (const code of REFUSALS) {
+        expect(registry).toContain(code);
+        expect(endingForCode(code)).toBe(ENDING_NOT_SENT);
+      }
+      expect(endingForCode(ENDING_NOT_SENT)).toBe(ENDING_NOT_SENT);
+    });
+
+    it('leaves every other code where it was — her reply refused is still a re-runnable turn', () => {
+      expect(endingForCode('output_blocked')).toBe('unavailable');
+      expect(endingForCode('citation_required')).toBe('unavailable');
+      expect(endingForCode('invalid_request')).toBe('unavailable');
+      const registry = platformRegistryCodes().filter((code) => !REFUSALS.includes(code));
+      expect(registry.length).toBeGreaterThan(20);
+      for (const code of registry) expect(endingForCode(code)).not.toBe(ENDING_NOT_SENT);
+    });
+
+    it('carries none of the platform\u2019s text into any frame, refusal or not', () => {
+      const registry = platformRegistryCodes();
+      for (const code of [...registry, ...EMITTED_OUTSIDE_THE_REGISTRY]) {
+        const frame = toClientEvent({ type: 'error', code, message: `OPERATOR TEXT for ${code}` });
+        expect(frame).toMatchObject({ type: 'error' });
+        if (frame?.type !== 'error') throw new Error('unreachable');
+        expect(Object.values(ENDING_MESSAGES)).toContain(frame.message);
+        expect(frame.message).not.toContain('OPERATOR TEXT');
+        expect(frame.message).not.toContain(code);
+      }
+    });
   });
 });
 
@@ -142,6 +184,12 @@ describe('the copy', () => {
     // Deliberate, and reading still works (HB10).
     expect(ENDING_MESSAGES.paused).toMatch(/on purpose/i);
     expect(ENDING_MESSAGES.paused).toMatch(/read/i);
+    // Names that it was not sent, offers no retry (a retry meets the same
+    // refusal), and says what is left (HB10).
+    expect(ENDING_MESSAGES.not_sent).toMatch(/couldn't be sent/i);
+    expect(ENDING_MESSAGES.not_sent).not.toMatch(/try .*again/i);
+    expect(ENDING_MESSAGES.not_sent).toMatch(/put it another way/i);
+    expect(ENDING_MESSAGES.not_sent).toMatch(/still works/i);
   });
 
   it('the still-thinking warning carries its own code', () => {

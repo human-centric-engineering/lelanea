@@ -7,7 +7,13 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchTranscript, streamTurn, TurnRefused } from '@/lib/app/conversation/client';
+import {
+  fetchGenerationStatus,
+  fetchTranscript,
+  STATUS_ROUTE,
+  streamTurn,
+  TurnRefused,
+} from '@/lib/app/conversation/client';
 
 function sse(type: string, data: unknown): string {
   return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -184,5 +190,26 @@ describe('fetchTranscript', () => {
   it('throws on a refusal', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 401 }));
     await expect(fetchTranscript('facilitator', { fetchImpl })).rejects.toBeInstanceOf(TurnRefused);
+  });
+});
+
+describe('fetchGenerationStatus (t-65)', () => {
+  const envelope = (generation: unknown) =>
+    new Response(JSON.stringify({ success: true, data: { generation } }), { status: 200 });
+
+  it('asks the status route and returns the one word', async () => {
+    const fetchImpl = vi.fn(async () => envelope('paused'));
+    await expect(fetchGenerationStatus({ fetchImpl })).resolves.toBe('paused');
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toBe(STATUS_ROUTE);
+  });
+
+  it('throws on a word it does not know, and on a refusal', async () => {
+    await expect(
+      fetchGenerationStatus({ fetchImpl: vi.fn(async () => envelope('degraded')) })
+    ).rejects.toBeInstanceOf(TurnRefused);
+    await expect(
+      fetchGenerationStatus({ fetchImpl: vi.fn(async () => new Response('', { status: 401 })) })
+    ).rejects.toMatchObject({ status: 401 });
   });
 });

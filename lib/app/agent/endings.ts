@@ -8,16 +8,27 @@
  * `ChatError` path the raw error text, slug included. None of that is for a
  * person in the middle of a conversation. So every frame the turn seam hands the
  * browser passes through {@link toClientEvent}, and a failure reaches it as
- * exactly one of three endings:
+ * exactly one of four endings:
  *
- * | Ending        | Means                                          | What the person can do                                 |
- * | ------------- | ---------------------------------------------- | ------------------------------------------------------ |
- * | `unavailable` | she could not answer — anything but the two below | try again: the turn id makes a retry safe          |
- * | `timed_out`   | the whole-turn deadline passed                 | try again, the same way                                |
- * | `paused`      | an operator paused conversations on purpose    | wait; everything readable still works                  |
+ * | Ending        | Means                                                | What the person can do                        |
+ * | ------------- | ---------------------------------------------------- | --------------------------------------------- |
+ * | `unavailable` | she could not answer — anything but the three below  | try again: the turn id makes a retry safe     |
+ * | `timed_out`   | the whole-turn deadline passed                       | try again, the same way                       |
+ * | `paused`      | an operator paused conversations on purpose          | wait; everything readable still works         |
+ * | `not_sent`    | the message itself was refused — a retry fails again | say it another way; nothing else is affected  |
  *
  * **Unknown codes map to `unavailable`, never through.** A code the platform
  * adds tomorrow reaches the browser as the plain word, not as itself.
+ *
+ * **`not_sent` is the one ending a retry cannot cure** (owner ruling, §10, 19
+ * Sept 2026). The platform refuses a message in three places, each with its own
+ * code: the input guard in `block` mode (`input_blocked` — after the person's
+ * row is written, so it is in the transcript), and the two conversation caps
+ * (`conversation_cap_reached`, `conversation_length_cap_reached` — before it).
+ * All three are about *this message*, not about her: "try again" under the same
+ * id runs it into the same refusal, so the copy must not offer one (`HB10`).
+ * `output_blocked` is deliberately not here — that is her reply refused, not
+ * the message, and a re-run can answer differently.
  *
  * **One more code, `crisis`, is not an ending of this kind** (f-safety t-58).
  * It is never mapped from a platform frame: the crisis path builds it itself,
@@ -41,12 +52,13 @@
 
 import type { ChatEvent } from '@/types/orchestration';
 
-/** The three ways a turn ends without her answer. */
-export type TurnEnding = 'unavailable' | 'timed_out' | 'paused';
+/** The four ways a turn ends without her answer. */
+export type TurnEnding = 'unavailable' | 'timed_out' | 'paused' | 'not_sent';
 
 export const ENDING_UNAVAILABLE = 'unavailable';
 export const ENDING_TIMED_OUT = 'timed_out';
 export const ENDING_PAUSED = 'paused';
+export const ENDING_NOT_SENT = 'not_sent';
 
 /** The code of the crisis frame — built by `lib/app/safety/resource.ts`, never mapped here. */
 export const ENDING_CRISIS = 'crisis';
@@ -71,6 +83,8 @@ export const ENDING_MESSAGES: Readonly<Record<TurnEnding, string>> = {
   timed_out: 'This took too long, so it was stopped. Your message is kept — try sending it again.',
   paused:
     'Conversations are paused for now, on purpose. Everything you can read in the app still works.',
+  not_sent:
+    "This message couldn't be sent, and sending it again as it is won't change that. It is kept here; if you'd like, put it another way. Everything else in the app still works.",
 };
 
 const STILL_THINKING_MESSAGE = 'Still thinking — this is taking a little longer than usual.';
@@ -88,10 +102,23 @@ const TIMED_OUT_CODES: ReadonlySet<string> = new Set([
   'http_504',
 ]);
 
+/**
+ * Platform codes that refuse the message rather than fail to answer it. Listed
+ * by name, from `streaming-handler.ts`: the input guard's block, and the two
+ * conversation caps. A retry under the same id meets the same refusal.
+ */
+const NOT_SENT_CODES: ReadonlySet<string> = new Set([
+  ENDING_NOT_SENT,
+  'input_blocked',
+  'conversation_cap_reached',
+  'conversation_length_cap_reached',
+]);
+
 /** Which ending a platform (or seam) error code is. Anything unrecognised is `unavailable`. */
 export function endingForCode(code: string): TurnEnding {
   if (code === ENDING_PAUSED) return 'paused';
   if (TIMED_OUT_CODES.has(code)) return 'timed_out';
+  if (NOT_SENT_CODES.has(code)) return 'not_sent';
   return 'unavailable';
 }
 
