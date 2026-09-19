@@ -31,6 +31,9 @@
  * Run with: npm run smoke:app-crisis
  */
 
+// A module, not a global script: everything else is imported dynamically.
+export {};
+
 for (const key of Object.keys(process.env)) {
   if (key.endsWith('_API_KEY')) delete process.env[key];
 }
