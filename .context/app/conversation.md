@@ -209,7 +209,8 @@ banner are t-65's and will sit beside these.
 - **The microphone** — t-67. Still disabled, still labelled as arriving with
   the conversation.
 - **Pinning a reader who has scrolled up** — the transcript follows the foot
-  on every change, as the prototype's `scrollLog()` does. A reader re-reading
+  on every change, as the prototype's `scrollLog()` does, including each step
+  of the paced reveal (`ReplyTurn`'s `onGrow`). A reader re-reading
   an earlier turn is pulled back down when a new word lands; not in this task.
 - **Per-place threads.** One conversation, whichever pane is open beside it
   (owner ruling, 19 Sept 2026). The head keeps its "on <place>" label.
