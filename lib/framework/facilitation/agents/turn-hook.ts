@@ -69,6 +69,12 @@ export interface FacilitationTurn {
    * has ended. Absent where the host offers no such thing.
    */
   keepAlive?: (work: Promise<unknown>) => void;
+  /**
+   * The request's headers, read-only. Passed rather than read by the hook,
+   * because a hook registered at boot may sit in another module graph from the
+   * route's request scope. Absent where the caller has no request.
+   */
+  headers?: Headers;
 }
 
 /**

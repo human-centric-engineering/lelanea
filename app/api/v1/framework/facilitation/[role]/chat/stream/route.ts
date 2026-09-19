@@ -95,6 +95,7 @@ export const POST = withAuth<{ role: string }>(
         clientTurnId: body.turnId,
         signal: request.signal,
         keepAlive: (work) => after(work),
+        headers: request.headers,
       },
       (extras) =>
         streamChat({
