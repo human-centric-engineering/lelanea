@@ -41,7 +41,12 @@ vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-const { syncRegisteredSlotDefinitions } = await import('@/lib/framework/data-slots/sync');
+const {
+  syncRegisteredSlotDefinitions,
+  syncGlobalSlotDefinitions,
+  registerGlobalSlotDefinitionProvider,
+  __resetGlobalSlotDefinitionProviderForTests,
+} = await import('@/lib/framework/data-slots/sync');
 const { registerModule, __resetModuleRegistryForTests } =
   await import('@/lib/framework/modules/registry');
 const { executeTransaction } = await import('@/lib/db/utils');
@@ -50,6 +55,7 @@ const { logger } = await import('@/lib/logging');
 const executeTransactionMock = executeTransaction as ReturnType<typeof vi.fn>;
 const loggerInfo = logger.info as ReturnType<typeof vi.fn>;
 const loggerWarn = logger.warn as ReturnType<typeof vi.fn>;
+const loggerError = logger.error as ReturnType<typeof vi.fn>;
 
 /** Register a module owning the given slot definitions. */
 function registerModuleWithSlots(slug: string, slotDefinitions: SlotDefinitionInput[]): void {
@@ -84,6 +90,7 @@ function row(overrides: Partial<SlotDefinition> & Pick<SlotDefinition, 'slug'>):
 beforeEach(() => {
   vi.clearAllMocks();
   __resetModuleRegistryForTests();
+  __resetGlobalSlotDefinitionProviderForTests();
   txMock.slotDefinition.findMany.mockResolvedValue([]);
   txMock.slotDefinition.updateMany.mockResolvedValue({ count: 0 });
 });
@@ -292,6 +299,278 @@ describe('syncRegisteredSlotDefinitions', () => {
     expect(loggerInfo).toHaveBeenCalledWith(
       'syncRegisteredSlotDefinitions: framework slot definitions synced',
       { registered: 1, created: 1, updated: 0, deactivated: 3 }
+    );
+  });
+});
+
+/**
+ * The global-slot seam carried ahead of Daybreak (`.context/app/divergences.md`,
+ * Row 22). The first block is the neutrality proof: with no provider registered,
+ * the sync must issue exactly the module pass's calls and nothing else.
+ */
+describe('syncRegisteredSlotDefinitions — no global provider registered (neutral at rest)', () => {
+  it('issues exactly the module pass: one transaction, one read, one create, one scoped deactivate', async () => {
+    registerModuleWithSlots('onboarding', [
+      { slug: 'primary_goal', group: 'goals', description: 'The main goal' },
+    ]);
+
+    await syncRegisteredSlotDefinitions();
+
+    expect(executeTransactionMock).toHaveBeenCalledTimes(1);
+    expect(txMock.slotDefinition.findMany).toHaveBeenCalledTimes(1);
+    expect(txMock.slotDefinition.findMany).toHaveBeenCalledWith({
+      where: { slug: { in: ['primary_goal'] } },
+    });
+    expect(txMock.slotDefinition.createMany).toHaveBeenCalledTimes(1);
+    expect(txMock.slotDefinition.update).not.toHaveBeenCalled();
+    expect(txMock.slotDefinition.updateMany).toHaveBeenCalledTimes(1);
+    expect(txMock.slotDefinition.updateMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        scope: { startsWith: 'module:' },
+        slug: { notIn: ['primary_goal'] },
+      },
+      data: { isActive: false },
+    });
+    expect(loggerWarn).not.toHaveBeenCalled();
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
+  it('an on-demand global sync with no provider touches nothing', async () => {
+    await expect(syncGlobalSlotDefinitions()).resolves.toEqual({ status: 'no_provider' });
+    expect(executeTransactionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncGlobalSlotDefinitions', () => {
+  it("lands the provider's slots scope global, defaults resolved", async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          slug: 'relationship',
+          group: 'person',
+          description: 'Who they share life with',
+          scope: 'global',
+          visibility: 'open',
+          mode: 'targeted',
+          dataType: 'text',
+          sensitivity: 'standard',
+          priorityWeight: 0,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    expect(result).toMatchObject({ status: 'synced', provided: 1, created: 1, updated: 0 });
+  });
+
+  it('deactivates only global rows whose slug the provider dropped', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+
+    await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.updateMany).toHaveBeenCalledWith({
+      where: { isActive: true, scope: 'global', slug: { notIn: ['relationship'] } },
+      data: { isActive: false },
+    });
+  });
+
+  it('writes nothing when nothing changed (idempotent re-sync)', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+    txMock.slotDefinition.findMany.mockResolvedValue([
+      row({
+        slug: 'relationship',
+        group: 'person',
+        description: 'Who they share life with',
+        scope: 'global',
+      }),
+    ]);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.createMany).not.toHaveBeenCalled();
+    expect(txMock.slotDefinition.update).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ created: 0, updated: 0, deactivated: 0 });
+  });
+
+  it('propagates an edited wording to the global row', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Reworded' },
+    ]);
+    txMock.slotDefinition.findMany.mockResolvedValue([
+      row({ slug: 'relationship', group: 'person', description: 'Original', scope: 'global' }),
+    ]);
+
+    await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.update).toHaveBeenCalledWith({
+      where: { slug: 'relationship' },
+      data: expect.objectContaining({ description: 'Reworded', scope: 'global', isActive: true }),
+    });
+  });
+
+  it('never rewrites a slug a module holds — skipped and warned, not flipped to global', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'primary_goal', group: 'goals', description: 'A global take on it' },
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+    txMock.slotDefinition.findMany.mockResolvedValue([
+      row({ slug: 'primary_goal', scope: 'module:onboarding' }),
+    ]);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.update).not.toHaveBeenCalled();
+    const created = txMock.slotDefinition.createMany.mock.calls[0]?.[0]?.data as Array<{
+      slug: string;
+    }>;
+    expect(created.map((d) => d.slug)).toEqual(['relationship']);
+    expect(result).toMatchObject({ skipped: ['primary_goal'] });
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'syncGlobalSlotDefinitions: slug already held by another scope — left to its owner',
+      { slugs: ['primary_goal'] }
+    );
+  });
+
+  it('takes over a slug whose module retired it (inactive row), stamping it global', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+    txMock.slotDefinition.findMany.mockResolvedValue([
+      row({ slug: 'relationship', scope: 'module:onboarding', isActive: false }),
+    ]);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.update).toHaveBeenCalledWith({
+      where: { slug: 'relationship' },
+      data: expect.objectContaining({ scope: 'global', isActive: true }),
+    });
+    expect(result).toMatchObject({ skipped: [], updated: 1 });
+  });
+
+  it('runs overlapping re-syncs one at a time, each reading the provider on its turn', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    registerGlobalSlotDefinitionProvider(async () => {
+      const n = ++calls;
+      order.push(`read ${n}`);
+      if (n === 1) await gate;
+      return [{ slug: 'relationship', group: 'person', description: `Edit ${n}` }];
+    });
+    const recordWrite = () => {
+      order.push('write');
+      return Promise.resolve({ count: 1 });
+    };
+    txMock.slotDefinition.createMany.mockImplementationOnce(recordWrite);
+    txMock.slotDefinition.createMany.mockImplementationOnce(recordWrite);
+
+    const first = syncGlobalSlotDefinitions();
+    const second = syncGlobalSlotDefinitions();
+    await Promise.resolve();
+    release();
+    await Promise.all([first, second]);
+
+    // The second never reads before the first has written.
+    expect(order).toEqual(['read 1', 'write', 'read 2', 'write']);
+  });
+
+  it('a failed re-sync does not wedge the ones queued behind it', async () => {
+    let calls = 0;
+    registerGlobalSlotDefinitionProvider(async () => {
+      if (++calls === 1) throw new Error('taxonomy unreadable');
+      return [{ slug: 'relationship', group: 'person', description: 'Who' }];
+    });
+
+    const first = syncGlobalSlotDefinitions();
+    const second = syncGlobalSlotDefinitions();
+
+    await expect(first).rejects.toThrow('taxonomy unreadable');
+    await expect(second).resolves.toMatchObject({ status: 'synced' });
+  });
+
+  it('an empty provider writes nothing — no mass deactivation (safe on empty)', async () => {
+    registerGlobalSlotDefinitionProvider(async () => []);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(result).toEqual({ status: 'empty' });
+    expect(executeTransactionMock).not.toHaveBeenCalled();
+    expect(txMock.slotDefinition.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('dedupes a slug the provider repeats — last wins, logged', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'First' },
+      { slug: 'relationship', group: 'person', description: 'Second' },
+    ]);
+
+    await syncGlobalSlotDefinitions();
+
+    const created = txMock.slotDefinition.createMany.mock.calls[0]?.[0]?.data as Array<{
+      description: string;
+    }>;
+    expect(created).toHaveLength(1);
+    expect(created[0]?.description).toBe('Second');
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'syncGlobalSlotDefinitions: duplicate slot slug — last one wins',
+      { slug: 'relationship' }
+    );
+  });
+
+  it('on demand, a provider failure reaches the caller', async () => {
+    registerGlobalSlotDefinitionProvider(async () => {
+      throw new Error('taxonomy unreadable');
+    });
+
+    await expect(syncGlobalSlotDefinitions()).rejects.toThrow('taxonomy unreadable');
+    expect(executeTransactionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncRegisteredSlotDefinitions — with a global provider', () => {
+  it('runs the module pass, then the global pass, in separate transactions', async () => {
+    registerModuleWithSlots('onboarding', [
+      { slug: 'primary_goal', group: 'goals', description: 'The main goal' },
+    ]);
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+
+    await syncRegisteredSlotDefinitions();
+
+    expect(executeTransactionMock).toHaveBeenCalledTimes(2);
+    const scopes = txMock.slotDefinition.updateMany.mock.calls.map(
+      (call) => (call[0] as { where: { scope: unknown } }).where.scope
+    );
+    expect(scopes).toEqual([{ startsWith: 'module:' }, 'global']);
+  });
+
+  it('at boot, a provider failure is logged and does not throw (later framework syncs still run)', async () => {
+    registerModuleWithSlots('onboarding', [
+      { slug: 'primary_goal', group: 'goals', description: 'The main goal' },
+    ]);
+    registerGlobalSlotDefinitionProvider(async () => {
+      throw new Error('taxonomy unreadable');
+    });
+
+    await expect(syncRegisteredSlotDefinitions()).resolves.toBeUndefined();
+
+    expect(executeTransactionMock).toHaveBeenCalledTimes(1); // the module pass only
+    expect(loggerError).toHaveBeenCalledWith(
+      'syncRegisteredSlotDefinitions: global slot sync failed — module slots are synced',
+      { error: 'taxonomy unreadable' }
     );
   });
 });

@@ -30,7 +30,15 @@ export type {
   SlotSensitivity,
   SlotSourceType,
 } from '@/lib/framework/data-slots/vocabulary';
-export { syncRegisteredSlotDefinitions } from '@/lib/framework/data-slots/sync';
+export {
+  syncRegisteredSlotDefinitions,
+  registerGlobalSlotDefinitionProvider,
+  syncGlobalSlotDefinitions,
+} from '@/lib/framework/data-slots/sync';
+export type {
+  GlobalSlotDefinitionProvider,
+  GlobalSlotSyncResult,
+} from '@/lib/framework/data-slots/sync';
 export { listSlotDefinitions } from '@/lib/framework/data-slots/queries';
 export { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots/values';
 export type {

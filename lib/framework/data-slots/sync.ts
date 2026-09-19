@@ -36,9 +36,35 @@
  *
  * Wrapped in one interactive transaction via `executeTransaction`; the `{ timeout }`
  * option (#368) gives headroom for the write set.
+ *
+ * ## Global slots — a provider a leaf registers
+ *
+ * **Carried by Lelañea ahead of Daybreak** (`.context/app/divergences.md`,
+ * Row 22; proposed upstream as daybreak#266). Spec §6.1's second source — app-seeded `global` slots, belonging to no
+ * module — has no registration upstream. A leaf registers one async provider
+ * ({@link registerGlobalSlotDefinitionProvider}); after the module pass the sync
+ * reconciles what it returns as `scope = global`, and the leaf calls
+ * {@link syncGlobalSlotDefinitions} again whenever its source changes (an admin
+ * edit). With no provider registered the global pass does nothing — no query, no
+ * transaction — so the sync is exactly the module pass it always was.
+ *
+ * The two passes are two writers into one table, so each owns a partition (fp4):
+ * - **Removal is partitioned.** The module pass deactivates only `module:%` rows,
+ *   the global pass only `global` rows.
+ * - **A slug is claimed by at most one pass.** A module declaring a slug keeps it
+ *   (that is the module pass's existing behaviour); the global pass skips, with a
+ *   warning, any slug another scope holds active, rather than flipping it back on
+ *   every boot. A slug its owner retired is free for the global pass to take.
+ * - **Safe on empty.** A provider returning nothing is read as a fluke (its source
+ *   not yet seeded, or unreadable), never as "retire every global slot": the pass
+ *   writes nothing. The cost is that retiring the *last* global slot is not
+ *   propagated until another exists.
+ * - **A provider fault never stops the boot.** It is leaf code; at boot its error is
+ *   logged and the remaining framework syncs still run. On demand it throws, so the
+ *   caller who asked can say so.
  */
 
-import type { SlotDefinition } from '@prisma/client';
+import type { Prisma, SlotDefinition } from '@prisma/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { getRegisteredModules } from '@/lib/framework/modules/registry';
@@ -48,6 +74,7 @@ import {
   SLOT_MODE,
   SLOT_DATA_TYPE,
   SLOT_SENSITIVITY,
+  SLOT_SCOPE,
   SLOT_SCOPE_MODULE_PREFIX,
   moduleSlotScope,
 } from '@/lib/framework/data-slots/vocabulary';
@@ -63,6 +90,21 @@ const SYNC_TX_TIMEOUT_MS = 20_000;
  * to the create payload, and to the field diff automatically.
  */
 type ResolvedSlotDefinition = Required<SlotDefinitionInput> & { scope: string };
+
+/** Resolve every unset classifier to its documented default and stamp `scope`. */
+function resolveSlotDefinition(input: SlotDefinitionInput, scope: string): ResolvedSlotDefinition {
+  return {
+    slug: input.slug,
+    group: input.group,
+    description: input.description,
+    scope,
+    visibility: input.visibility ?? SLOT_VISIBILITY.open,
+    mode: input.mode ?? SLOT_MODE.targeted,
+    dataType: input.dataType ?? SLOT_DATA_TYPE.text,
+    sensitivity: input.sensitivity ?? SLOT_SENSITIVITY.standard,
+    priorityWeight: input.priorityWeight ?? 0,
+  };
+}
 
 /**
  * Collect every registered module's `slotDefinitions`, resolve defaults, and stamp
@@ -82,17 +124,7 @@ export function collectRegisteredSlotDefinitions(): ResolvedSlotDefinition[] {
           { slug: input.slug, moduleSlug: mod.slug }
         );
       }
-      bySlug.set(input.slug, {
-        slug: input.slug,
-        group: input.group,
-        description: input.description,
-        scope: moduleSlotScope(mod.slug),
-        visibility: input.visibility ?? SLOT_VISIBILITY.open,
-        mode: input.mode ?? SLOT_MODE.targeted,
-        dataType: input.dataType ?? SLOT_DATA_TYPE.text,
-        sensitivity: input.sensitivity ?? SLOT_SENSITIVITY.standard,
-        priorityWeight: input.priorityWeight ?? 0,
-      });
+      bySlug.set(input.slug, resolveSlotDefinition(input, moduleSlotScope(mod.slug)));
     }
   }
 
@@ -111,7 +143,97 @@ function slotDefinitionNeedsUpdate(row: SlotDefinition, desired: ResolvedSlotDef
   );
 }
 
-export async function syncRegisteredSlotDefinitions(): Promise<void> {
+/** The client `executeTransaction` hands its callback. */
+type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/** The rows one pass owns, and whether it may take over a slug another scope holds. */
+interface SlotPartition {
+  /** The `scope` filter bounding this pass's deactivate — it touches no other row. */
+  scope: Prisma.SlotDefinitionWhereInput['scope'];
+  /** Whether this pass may rewrite an existing row with the same slug. */
+  mayWrite: (row: SlotDefinition) => boolean;
+}
+
+interface ReconcileCounts {
+  created: number;
+  updated: number;
+  deactivated: number;
+  /** Slugs this pass left alone because another partition holds them. */
+  skipped: string[];
+}
+
+/**
+ * Reconcile one partition's definitions into rows: create new slugs, update rows
+ * whose code changed (no write when unchanged), and deactivate this partition's
+ * rows whose slug is gone. The `notIn` filter is omitted when no slugs remain so it
+ * never degenerates to `notIn: []`.
+ */
+async function reconcileSlotDefinitions(
+  tx: Tx,
+  definitions: ResolvedSlotDefinition[],
+  partition: SlotPartition
+): Promise<ReconcileCounts> {
+  const slugs = definitions.map((d) => d.slug);
+  const existing =
+    slugs.length > 0 ? await tx.slotDefinition.findMany({ where: { slug: { in: slugs } } }) : [];
+  const bySlug = new Map(existing.map((row) => [row.slug, row]));
+
+  // Create newly-declared slugs (all code-owned fields; `isActive` defaults true).
+  const toCreate = definitions.filter((d) => !bySlug.has(d.slug));
+  if (toCreate.length > 0) {
+    await tx.slotDefinition.createMany({ data: toCreate, skipDuplicates: true });
+  }
+
+  // Propagate code edits (and re-activation) to existing rows — only when changed.
+  let updated = 0;
+  const skipped: string[] = [];
+  for (const desired of definitions) {
+    const row = bySlug.get(desired.slug);
+    if (!row) continue;
+    if (!partition.mayWrite(row)) {
+      skipped.push(desired.slug);
+      continue;
+    }
+    if (slotDefinitionNeedsUpdate(row, desired)) {
+      await tx.slotDefinition.update({
+        where: { slug: desired.slug },
+        data: { ...desired, isActive: true },
+      });
+      updated++;
+    }
+  }
+
+  // Deactivate this partition's rows whose code was removed (retain for audit).
+  const { count: deactivated } = await tx.slotDefinition.updateMany({
+    where: {
+      isActive: true,
+      scope: partition.scope,
+      ...(slugs.length > 0 ? { slug: { notIn: slugs } } : {}),
+    },
+    data: { isActive: false },
+  });
+
+  return { created: toCreate.length, updated, deactivated, skipped };
+}
+
+/** Module slots own every `module:%` row, and take over a slug from any other scope. */
+const MODULE_PARTITION: SlotPartition = {
+  scope: { startsWith: SLOT_SCOPE_MODULE_PREFIX },
+  mayWrite: () => true,
+};
+
+/**
+ * Global slots own the `global` rows, and never take a slug another scope holds
+ * **actively**. A row its owner retired (`isActive: false`) is nobody's claim, so a
+ * slot can move from a module to the global taxonomy; if the module declares it
+ * again, the module pass takes it back.
+ */
+const GLOBAL_PARTITION: SlotPartition = {
+  scope: SLOT_SCOPE.global,
+  mayWrite: (row) => row.scope === SLOT_SCOPE.global || !row.isActive,
+};
+
+async function syncModuleSlotDefinitions(): Promise<void> {
   // "Did registration run?" is a question about MODULES, not slots (see the file
   // header): zero registered modules ⇒ a fluke boot ⇒ skip, never mass-deactivate.
   if (getRegisteredModules().length === 0) {
@@ -120,56 +242,128 @@ export async function syncRegisteredSlotDefinitions(): Promise<void> {
   }
 
   const definitions = collectRegisteredSlotDefinitions();
-  const slugs = definitions.map((d) => d.slug);
 
-  const counts = await executeTransaction(
-    async (tx) => {
-      const existing =
-        slugs.length > 0
-          ? await tx.slotDefinition.findMany({ where: { slug: { in: slugs } } })
-          : [];
-      const bySlug = new Map(existing.map((row) => [row.slug, row]));
-
-      // Create newly-declared slugs (all code-owned fields; `isActive` defaults true).
-      const toCreate = definitions.filter((d) => !bySlug.has(d.slug));
-      if (toCreate.length > 0) {
-        await tx.slotDefinition.createMany({ data: toCreate, skipDuplicates: true });
-      }
-
-      // Propagate code edits (and re-activation) to existing rows — only when changed.
-      let updated = 0;
-      for (const desired of definitions) {
-        const row = bySlug.get(desired.slug);
-        if (!row) continue;
-        if (slotDefinitionNeedsUpdate(row, desired)) {
-          await tx.slotDefinition.update({
-            where: { slug: desired.slug },
-            data: { ...desired, isActive: true },
-          });
-          updated++;
-        }
-      }
-
-      // Deactivate module-owned rows whose code was removed (retain for audit).
-      // Scoped to `module:%` so non-module slots are never touched; the `notIn`
-      // filter is omitted when no slugs remain (all module slots removed) so it
-      // never degenerates to `notIn: []`.
-      const { count: deactivated } = await tx.slotDefinition.updateMany({
-        where: {
-          isActive: true,
-          scope: { startsWith: SLOT_SCOPE_MODULE_PREFIX },
-          ...(slugs.length > 0 ? { slug: { notIn: slugs } } : {}),
-        },
-        data: { isActive: false },
-      });
-
-      return { created: toCreate.length, updated, deactivated };
-    },
+  const { created, updated, deactivated } = await executeTransaction(
+    (tx) => reconcileSlotDefinitions(tx, definitions, MODULE_PARTITION),
     { timeout: SYNC_TX_TIMEOUT_MS }
   );
 
   logger.info('syncRegisteredSlotDefinitions: framework slot definitions synced', {
-    registered: slugs.length,
-    ...counts,
+    registered: definitions.length,
+    created,
+    updated,
+    deactivated,
   });
+}
+
+/**
+ * Supplies the leaf's global slot definitions. Async because a leaf may keep them
+ * as data (an admin-edited table) rather than code; called on every sync, never at
+ * registration.
+ */
+export type GlobalSlotDefinitionProvider = () => Promise<readonly SlotDefinitionInput[]>;
+
+// On `globalThis` for the module registry's reason (#160): the boot seam registers
+// in the instrumentation graph, and an admin route asking for a re-sync may run in
+// another.
+const globalForSlotProvider = globalThis as unknown as {
+  daybreakGlobalSlotDefinitionProvider?: GlobalSlotDefinitionProvider;
+  daybreakGlobalSlotSyncQueue: Promise<unknown>;
+};
+globalForSlotProvider.daybreakGlobalSlotSyncQueue ??= Promise.resolve();
+
+/**
+ * Register the provider of global slot definitions. One per app: a later
+ * registration replaces the earlier (HMR / repeat-import safe). Call from the
+ * leaf's boot seam, before `syncFramework()`.
+ */
+export function registerGlobalSlotDefinitionProvider(provider: GlobalSlotDefinitionProvider): void {
+  globalForSlotProvider.daybreakGlobalSlotDefinitionProvider = provider;
+}
+
+/** Test-only: forget the registered provider. */
+export function __resetGlobalSlotDefinitionProviderForTests(): void {
+  delete globalForSlotProvider.daybreakGlobalSlotDefinitionProvider;
+}
+
+/** What one global pass did. `status` says why a pass wrote nothing. */
+export type GlobalSlotSyncResult =
+  | { status: 'no_provider' }
+  | { status: 'empty' }
+  | ({ status: 'synced'; provided: number } & ReconcileCounts);
+
+/**
+ * Reconcile the registered provider's definitions as `scope = global`. Idempotent:
+ * a call with nothing changed writes no row. Throws when the provider or the write
+ * fails — call it after an edit to the provider's source and report the failure.
+ */
+export function syncGlobalSlotDefinitions(): Promise<GlobalSlotSyncResult> {
+  // One at a time, each reading the provider only when its turn comes: two edits
+  // saved back to back must not commit out of order, leaving the older snapshot
+  // standing. In-process only — two instances can still interleave, which the next
+  // edit or boot repairs.
+  const run = globalForSlotProvider.daybreakGlobalSlotSyncQueue.then(runGlobalSlotSync);
+  globalForSlotProvider.daybreakGlobalSlotSyncQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function runGlobalSlotSync(): Promise<GlobalSlotSyncResult> {
+  const provider = globalForSlotProvider.daybreakGlobalSlotDefinitionProvider;
+  if (!provider) return { status: 'no_provider' };
+
+  const bySlug = new Map<string, ResolvedSlotDefinition>();
+  for (const input of await provider()) {
+    if (bySlug.has(input.slug)) {
+      logger.warn('syncGlobalSlotDefinitions: duplicate slot slug — last one wins', {
+        slug: input.slug,
+      });
+    }
+    bySlug.set(input.slug, resolveSlotDefinition(input, SLOT_SCOPE.global));
+  }
+  const definitions = [...bySlug.values()];
+
+  // Safe on empty (see the file header): nothing provided is never "retire them all".
+  if (definitions.length === 0) {
+    logger.warn('syncGlobalSlotDefinitions: provider returned no definitions — nothing written');
+    return { status: 'empty' };
+  }
+
+  const counts = await executeTransaction(
+    (tx) => reconcileSlotDefinitions(tx, definitions, GLOBAL_PARTITION),
+    { timeout: SYNC_TX_TIMEOUT_MS }
+  );
+
+  if (counts.skipped.length > 0) {
+    logger.warn(
+      'syncGlobalSlotDefinitions: slug already held by another scope — left to its owner',
+      { slugs: counts.skipped }
+    );
+  }
+  logger.info('syncGlobalSlotDefinitions: global slot definitions synced', {
+    provided: definitions.length,
+    created: counts.created,
+    updated: counts.updated,
+    deactivated: counts.deactivated,
+  });
+
+  return { status: 'synced', provided: definitions.length, ...counts };
+}
+
+/**
+ * The boot sync: module slots, then the leaf's global slots. The global pass runs
+ * second so a slug both declare is settled for the module on the same boot.
+ */
+export async function syncRegisteredSlotDefinitions(): Promise<void> {
+  await syncModuleSlotDefinitions();
+  try {
+    await syncGlobalSlotDefinitions();
+  } catch (error) {
+    // Leaf code must not stop the framework's remaining syncs (see the file header).
+    logger.error(
+      'syncRegisteredSlotDefinitions: global slot sync failed — module slots are synced',
+      {
+        error: error instanceof Error ? error.message : String(error),
+      }
+    );
+  }
 }
