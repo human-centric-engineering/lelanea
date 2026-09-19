@@ -29,13 +29,20 @@
  * **A hard frame ends the turn the way every ending does:** no model turn is
  * written and what the person typed stays in the box (`endings.ts`).
  *
- * @see lib/app/content/crisis-resources.ts — the authored table
+ * ## Where the words come from
+ *
+ * The admin-edited tables, or the bundled file when those cannot answer in
+ * time (f-safety t-63). `resources-store.ts` decides which and never throws, so
+ * this module never withholds a resource either. The frame's shape does not
+ * depend on the source.
+ *
+ * @see lib/app/safety/resources-store.ts — the tables, the cache and the fallback
  * @see .context/app/safety.md
  */
 
 import type { ChatEvent } from '@/types/orchestration';
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
 import { ENDING_CRISIS } from '@/lib/app/agent/endings';
+import { loadCrisisContent, type CrisisContent } from '@/lib/app/safety/resources-store';
 
 export interface CrisisService {
   name: string;
@@ -76,36 +83,65 @@ export function regionOfLocale(locale: string | null): string | null {
   return region ? region.toUpperCase() : null;
 }
 
-/** The resource for a locale and tier. Pure: authored content in, authored content out. */
-export function resolveCrisisResource(
+/**
+ * The resource for a locale and tier, from whichever source is answering.
+ * Never throws: see `resources-store.ts`.
+ */
+export async function resolveCrisisResource(
+  locale: string | null,
+  tier: 'hard' | 'soft'
+): Promise<CrisisResource> {
+  return resourceFromContent(await loadCrisisContent(), locale, tier);
+}
+
+/**
+ * Signed off only when everything shown is: the shared copy, and the region's
+ * services where a region was chosen. One draft part makes the whole a draft.
+ */
+function statusOf(content: CrisisContent, entry: CrisisContent['regions'][number] | undefined) {
+  if (content.copyStatus !== 'signed_off') return 'draft';
+  return entry && entry.status !== 'signed_off' ? 'draft' : 'signed_off';
+}
+
+/**
+ * Which versions were shown. The bundled file has one version for everything
+ * (`0.1`); a stored resource names the copy's and, where one was chosen, the
+ * region's — `c3` or `c3/GB.2` — so a report of what someone saw can be matched
+ * to the audit log's edits.
+ */
+function versionOf(content: CrisisContent, entry: CrisisContent['regions'][number] | undefined) {
+  if (content.source === 'bundled') return String(content.copyVersion);
+  const copy = `c${content.copyVersion}`;
+  return entry ? `${copy}/${entry.region}.${entry.version}` : copy;
+}
+
+/** The resource built from one source's content. Pure. */
+export function resourceFromContent(
+  content: CrisisContent,
   locale: string | null,
   tier: 'hard' | 'soft'
 ): CrisisResource {
-  const file = getCrisisResources();
   const wanted = regionOfLocale(locale);
-  const entry = wanted ? file.regions.find((r) => r.region === wanted) : undefined;
+  const entry = wanted ? content.regions.find((r) => r.region === wanted) : undefined;
 
   const services: CrisisService[] = entry
     ? entry.services.map((s) => ({ name: s.name, contact: s.contact, hours: s.hours }))
     : [];
   // The directory is listed everywhere, last where a region is known: it is
   // always right, and a person travelling may need it.
-  services.push({
-    name: file.international.name,
-    contact: file.international.contact,
-    hours: file.international.hours,
-    url: file.international.url,
-  });
+  services.push({ ...content.international });
 
   return {
     tier,
     region: entry ? entry.region : null,
-    intro: tier === 'hard' ? file.copy.hardIntro : file.copy.softIntro,
+    intro: tier === 'hard' ? content.copy.hardIntro : content.copy.softIntro,
     services,
-    emergency: entry ? `${file.copy.emergency} (${entry.emergencyNumber})` : file.copy.emergency,
-    keptMessage: tier === 'hard' ? file.copy.keptMessage : null,
-    status: file.resources.provenance.status,
-    version: file.resources.version,
+    emergency: entry
+      ? `${content.copy.emergency} (${entry.emergencyNumber})`
+      : content.copy.emergency,
+    keptMessage: tier === 'hard' ? content.copy.keptMessage : null,
+    status: statusOf(content, entry),
+    version: versionOf(content, entry),
   };
 }
 
