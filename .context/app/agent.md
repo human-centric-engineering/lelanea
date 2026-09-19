@@ -627,7 +627,12 @@ no model call, no cost row.
 - **The turn that crosses the line completes — so a person can overshoot by one
   turn's cost.** The check runs before the turn, never during it: that is the
   price of never cutting a reply off mid-sentence, and it is accepted. `spentUsd`
-  may therefore be above `ceilingUsd`.
+  may therefore be above `ceilingUsd`. **Strictly, one turn's cost per turn in
+  flight**: cost is recorded when a model call ends and nothing is reserved at
+  the check, so turns started together (two tabs, a client that does not wait)
+  each pass it. Trigger to revisit: a month-to-date well past a ceiling in the
+  admin cost view — then count the person's running turns before allowing
+  another (found by /code-review).
 - **A limit of $0 means nothing may be spent** — every turn ends on the ceiling.
 - **Fails open**, like the pause: a meter read that errors lets the turn run and
   logs a warning. A database that cannot be read fails the turn by itself.

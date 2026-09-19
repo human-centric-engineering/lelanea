@@ -12,6 +12,13 @@
  * overshoot by one turn's cost. That is the price of never cutting a reply off
  * mid-sentence, and it is accepted.
  *
+ * **One turn's cost per turn in flight, strictly.** A turn's cost is recorded
+ * when its model call ends and nothing is reserved at the check, so turns that
+ * start together (two tabs, a client that does not wait) each pass it. Bounded
+ * by how many turns one person runs at once. Trigger to revisit: a month-to-date
+ * well past a ceiling in the admin cost view — then count the person's running
+ * turns here before allowing another.
+ *
  * **Fails open.** A read that errors counts as under the ceiling, as the pause
  * switch does: a database that cannot be read fails the turn by itself a moment
  * later, as `unavailable`, and a meter hiccup should not read as "you have used
