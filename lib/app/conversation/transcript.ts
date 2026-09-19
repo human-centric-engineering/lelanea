@@ -224,19 +224,25 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
     flushReply();
 
     const turnId = turnIdOf(row.metadata);
-    const previous = entries[entries.length - 1];
+    // The most recent thing the person said — looked for past any reply rows,
+    // because a tool-using turn that failed at its second pass has already
+    // left its first pass's row behind, and that fragment is not a reason to
+    // treat the retry as a new turn.
+    const lastUser = entries.findLastIndex((entry) => entry.kind === 'user');
+    const previous = lastUser >= 0 ? entries[lastUser] : undefined;
     if (previous?.kind === 'user' && turnId !== null && previous.turnId === turnId) {
       // The same turn, sent again after a failure: one message from the person,
       // whichever attempt the turn row names — that is the one that ran.
-      const turn = byUserMessage.get(row.id);
-      if (turn) {
-        entries[entries.length - 1] = {
+      // Everything since the earlier attempt (its fragments) goes with it.
+      if (byUserMessage.has(row.id)) {
+        entries.splice(lastUser);
+        entries.push({
           kind: 'user',
           id: row.id,
           text: row.content,
           at: row.createdAt.toISOString(),
           turnId,
-        };
+        });
       }
       continue;
     }

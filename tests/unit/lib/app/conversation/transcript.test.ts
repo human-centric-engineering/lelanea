@@ -158,6 +158,31 @@ describe('assembleTranscript', () => {
     expect(entries.map((e) => e.kind)).toEqual(['user', 'reply']);
   });
 
+  it('collapses a retry even when the failed attempt left a pass behind', () => {
+    // A tool-using turn persists one assistant row per pass. Failing at the
+    // second pass leaves the first pass's fragment before the marker, so the
+    // entry before the retry's row is a reply, not the person's message.
+    const messages = [
+      user('u1', 'What does she say about boundaries?', 1, 't1'),
+      assistant('pass1', 'Let me look. ', 2),
+      assistant('marker', '[An error occurred and the response could not be completed.]', 3, {
+        metadata: { error: true, errorCode: 'timed_out' },
+      }),
+      user('u2', 'What does she say about boundaries?', 10, 't1'),
+      assistant('final', 'She says…', 12),
+    ];
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
+
+    const entries = assembleTranscript(messages, [
+      turn('t1', { attempts: 2, userMessageId: 'u2', assistantMessageId: 'final' }),
+    ]);
+
+    expect(entries.map((e) => e.kind)).toEqual(['user', 'reply']);
+    expect(entries[0]).toMatchObject({ id: 'u2' });
+    // The fragment went with the failed attempt.
+    expect(entries[1]).toMatchObject({ id: 'final', text: 'She says…' });
+  });
+
   it('keeps two messages with the same words apart when they are different turns', () => {
     // Saying the same thing twice on purpose is two turns, and both stay.
     const entries = assembleTranscript(

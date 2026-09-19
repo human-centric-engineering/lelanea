@@ -9,7 +9,8 @@
  *
  * What her seat can send is narrower than the platform's full union, because
  * every frame passes `toClientStream()` first (`lib/app/agent/endings.ts`):
- * `error` carries one of the four endings or `crisis`, never a platform code;
+ * `error` carries one of the endings, `crisis` (with its `resource`) or
+ * `ceiling_reached` (with its `ceiling` figures), never a platform code;
  * `budget_exceeded_per_turn` never arrives (it becomes an ending); nothing on
  * her seats requires approval. Those variants are therefore not modelled, and
  * a frame this schema does not recognise is `null` — ignored, not fatal — so a
@@ -51,6 +52,14 @@ export type CrisisResource = z.infer<typeof crisisResourceSchema>;
  * the person still sees every name and number.
  */
 const resourceField = crisisResourceSchema.optional().catch(undefined);
+
+/** The figures the ceiling ending carries (`ceilingReachedFrame`, f-safety). Same leniency. */
+export const ceilingFiguresSchema = z.object({
+  spentUsd: z.number(),
+  ceilingUsd: z.number(),
+  resetsAt: z.string(),
+});
+const ceilingField = ceilingFiguresSchema.optional().catch(undefined);
 
 const tokenUsageSchema = z.object({
   inputTokens: z.number(),
@@ -97,6 +106,7 @@ export const conversationEventSchema = z.discriminatedUnion('type', [
     code: z.string(),
     message: z.string(),
     resource: resourceField,
+    ceiling: ceilingField,
   }),
 ]);
 

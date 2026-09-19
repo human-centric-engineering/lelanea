@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type {
   ConversationEntry,
@@ -34,17 +34,21 @@ export interface TranscriptProps {
  * ## Scroll
  *
  * Follows the foot, as the prototype's `scrollLog()` does, whenever a turn is
- * added or her words grow. A reader who has scrolled up to re-read is not
- * pinned there; that refinement is deliberately not in this task.
+ * added or her words grow — including the paced reveal, which goes on after
+ * the last chunk has landed and which `ReplyTurn` reports through `onGrow`.
+ * A reader who has scrolled up to re-read is not pinned there; that
+ * refinement is deliberately not in this task.
  */
 export function Transcript({ phase, entries, live, unreadable }: TranscriptProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const liveText = live?.replyText ?? '';
 
-  useEffect(() => {
+  const follow = useCallback(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [entries.length, liveText, phase]);
+  }, []);
+
+  useEffect(follow, [entries.length, liveText, phase, follow]);
 
   const empty = phase !== 'loading' && entries.length === 0 && !live;
 
@@ -69,6 +73,7 @@ export function Transcript({ phase, entries, live, unreadable }: TranscriptProps
         settled
         animate={'streamed' in entry}
         rise={rise}
+        onGrow={follow}
       />
     );
   });

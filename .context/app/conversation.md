@@ -79,9 +79,12 @@ Both recorded on this feature by §08 ([`agent.md`](./agent.md) → "What a
 second request with the same id gets", "The deadlines"):
 
 - **A retried failed turn writes the person's message twice.** The platform
-  writes it before every model call and offers no way to reuse the first.
-  Consecutive user rows with the same `metadata.app.turnId` collapse to one —
-  the row the turn row points at, which is the attempt that ran.
+  writes it before every model call and offers no way to reuse the first. A
+  user row whose `metadata.app.turnId` matches the most recent user entry —
+  looked for past any reply rows, since a tool-using turn that failed at its
+  second pass leaves its first pass's fragment behind — replaces that entry
+  and everything since it, when it is the row the turn row names: the attempt
+  that ran.
 - **A timed-out turn leaves the platform's error-marker row** —
   `[An error occurred and the response could not be completed.]`,
   `metadata.error: true`. Not her voice; dropped. The turn row's `errorCode`
@@ -122,8 +125,9 @@ Pinned: `tests/unit/lib/app/conversation/events.test.ts` runs the same frame
 through both parsers and asserts only ours keeps it.
 
 What her seat can send is narrower than the platform's union, because every
-frame passes `toClientStream()` first: `error` is one of the endings or
-`crisis`, never a platform code; `budget_exceeded_per_turn` never arrives;
+frame passes `toClientStream()` first: `error` is one of the endings, `crisis`
+(with its `resource`) or `ceiling_reached` (with its `ceiling` figures), never
+a platform code; `budget_exceeded_per_turn` never arrives;
 nothing on her seats requires approval. Those variants are not modelled. An
 unrecognised frame is `null` — skipped, never fatal. A `resource` that is not
 the authored shape drops to `undefined` and the frame still arrives, because

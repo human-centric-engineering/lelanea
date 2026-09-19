@@ -49,9 +49,14 @@ const errorEnvelopeSchema = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
-    details: z.object({ reason: z.string().optional() }).partial().optional(),
+    // `details` is whatever the route put there — an object with a `reason`
+    // on the seam's refusals, an `errors` array on a validation failure. Read
+    // leniently, so an unexpected shape costs the reason, never the code.
+    details: z.unknown().optional(),
   }),
 });
+
+const reasonSchema = z.object({ reason: z.string() });
 
 /** The route refused the request before any turn ran. */
 export class TurnRefused extends Error {
@@ -73,7 +78,8 @@ async function refusalOf(response: Response): Promise<TurnRefused> {
   try {
     const parsed = errorEnvelopeSchema.safeParse(await response.json());
     if (parsed.success) {
-      code = parsed.data.error.details?.reason ?? parsed.data.error.code;
+      const reason = reasonSchema.safeParse(parsed.data.error.details);
+      code = reason.success ? reason.data.reason : parsed.data.error.code;
       message = parsed.data.error.message;
     }
   } catch {

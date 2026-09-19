@@ -68,13 +68,20 @@ export interface ReplyTurnProps {
   /** Pace the words as typed. False for a reply read back on load. */
   animate: boolean;
   rise: boolean;
+  /** Called each time the reveal grows, so a scroll container can follow it. */
+  onGrow?: () => void;
   /** t-66 renders the account row here. */
   children?: React.ReactNode;
 }
 
-export function ReplyTurn({ text, settled, animate, rise, children }: ReplyTurnProps) {
+export function ReplyTurn({ text, settled, animate, rise, onGrow, children }: ReplyTurnProps) {
   const reducedMotion = useReducedMotion();
   const shown = useTypedText(text, settled, animate && !reducedMotion);
+  // The reveal keeps growing for seconds after the last chunk lands, and the
+  // transcript cannot see that from its own props.
+  React.useEffect(() => {
+    onGrow?.();
+  }, [shown, onGrow]);
   return (
     <article
       aria-label="Lelañea said"

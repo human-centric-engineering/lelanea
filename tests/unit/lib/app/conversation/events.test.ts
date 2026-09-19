@@ -59,6 +59,26 @@ describe('every frame her seat sends', () => {
   });
 });
 
+describe('the ceiling frame keeps its figures', () => {
+  it('on an error frame, and drops a malformed one keeping the message', () => {
+    const ceiling = { spentUsd: 5.1, ceilingUsd: 5, resetsAt: '2026-10-01T00:00:00.000Z' };
+    const kept = parseConversationEvent(
+      block('error', { code: 'ceiling_reached', message: 'figures as text', ceiling })
+    );
+    expect(kept && 'ceiling' in kept ? kept.ceiling : undefined).toEqual(ceiling);
+
+    const broken = parseConversationEvent(
+      block('error', {
+        code: 'ceiling_reached',
+        message: 'figures as text',
+        ceiling: { spentUsd: 'x' },
+      })
+    );
+    expect(broken?.type).toBe('error');
+    expect(broken && 'ceiling' in broken ? broken.ceiling : 'absent').toBeUndefined();
+  });
+});
+
 describe('the crisis frame keeps its resource', () => {
   it('on an error frame — and Sunrise’s parser would have dropped it', () => {
     const frame = block('error', { code: 'crisis', message: 'flattened', resource });

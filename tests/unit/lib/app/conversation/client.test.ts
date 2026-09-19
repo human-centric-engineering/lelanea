@@ -118,6 +118,23 @@ describe('streamTurn', () => {
     });
   });
 
+  it('keeps the envelope\u2019s code when `details` is not a reason object', async () => {
+    // A validation failure carries `{ errors: [...] }`; a shape without a
+    // `reason` must cost the reason, never the code.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: 'VALIDATION_ERROR', message: 'bad', details: ['not', 'an', 'object'] },
+          }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
+    );
+    const turn = streamTurn({ seat: 'facilitator', message: 'hi', turnId: 't', fetchImpl });
+    await expect(turn.next()).rejects.toMatchObject({ status: 400, code: 'VALIDATION_ERROR' });
+  });
+
   it('falls back on the status when a refusal is not an envelope', async () => {
     const fetchImpl = vi.fn(async () => new Response('gateway', { status: 502 }));
     const turn = streamTurn({ seat: 'facilitator', message: 'hi', turnId: 't', fetchImpl });
