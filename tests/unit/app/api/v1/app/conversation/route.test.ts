@@ -43,8 +43,8 @@ beforeEach(() => {
   store.clear();
   // A transcript keyed on (person, seat) — the only way to reach a row is to
   // be the person it belongs to.
-  readTranscript.mockImplementation(async (userId: string, seat: string) => {
-    return store.get(`${userId}:${seat}`) ?? { seat, conversationId: null, entries: [] };
+  readTranscript.mockImplementation(async (session: { user: { id: string } }, seat: string) => {
+    return store.get(`${session.user.id}:${seat}`) ?? { seat, conversationId: null, entries: [] };
   });
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
 });
@@ -61,7 +61,10 @@ describe('GET /api/v1/app/conversation', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(readTranscript).toHaveBeenCalledWith(ME, 'facilitator');
+    expect(readTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: ME }) }),
+      'facilitator'
+    );
     expect(await response.json()).toMatchObject({
       success: true,
       data: { conversationId: 'c-mine', entries: [{ id: 'u1' }] },
@@ -79,7 +82,10 @@ describe('GET /api/v1/app/conversation', () => {
 
   it('reads the onboarding seat when asked, and refuses a seat this leaf does not seed', async () => {
     await GET(request('/api/v1/app/conversation?seat=onboarding'));
-    expect(readTranscript).toHaveBeenCalledWith(ME, 'onboarding');
+    expect(readTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: ME }) }),
+      'onboarding'
+    );
 
     const refused = await GET(request('/api/v1/app/conversation?seat=synopsis'));
     expect(refused.status).toBe(400);
@@ -100,7 +106,10 @@ describe('GET /api/v1/app/conversation', () => {
     const response = await GET(request(`/api/v1/app/conversation?userId=${OTHER}`));
     const body = await response.json();
 
-    expect(readTranscript).toHaveBeenCalledWith(ME, 'facilitator');
+    expect(readTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: ME }) }),
+      'facilitator'
+    );
     expect(body.data.conversationId).toBeNull();
     expect(JSON.stringify(body)).not.toContain('private');
   });

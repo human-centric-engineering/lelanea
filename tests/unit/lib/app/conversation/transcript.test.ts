@@ -36,6 +36,18 @@ import {
   CONVERSATION_SEAT,
   readTranscript,
 } from '@/lib/app/conversation/transcript';
+import type { AuthenticatedSession } from '@/lib/auth/guards';
+
+/**
+ * Enough of an `AuthenticatedSession` for the read: a member, whose policy
+ * answer for ownerless conversations is no — the visibility helper's owner
+ * arm alone. (Precedent: `conversation-access.test.ts`.)
+ */
+const SESSION = {
+  user: { id: ME, role: 'USER' },
+  principal: { userId: ME, role: 'USER', credential: 'session' },
+  unattributedReads: { conversation: false, dataset: false, execution: false, experiment: false },
+} as unknown as AuthenticatedSession;
 
 const at = (seconds: number) => new Date(Date.UTC(2026, 8, 19, 12, 0, seconds));
 
@@ -239,7 +251,7 @@ describe('readTranscript', () => {
 
   it('is empty, not an error, when there is no surface', async () => {
     resolveSurface.mockResolvedValue(null);
-    await expect(readTranscript(ME, CONVERSATION_SEAT)).resolves.toEqual({
+    await expect(readTranscript(SESSION, CONVERSATION_SEAT)).resolves.toEqual({
       seat: CONVERSATION_SEAT,
       conversationId: null,
       entries: [],
@@ -249,7 +261,7 @@ describe('readTranscript', () => {
 
   it('is empty when the surface has no conversation to resume yet', async () => {
     resolveSurface.mockResolvedValue({ agentId: 'a', agentSlug: 's', conversationId: undefined });
-    const transcript = await readTranscript(ME, CONVERSATION_SEAT);
+    const transcript = await readTranscript(SESSION, CONVERSATION_SEAT);
     expect(transcript.conversationId).toBeNull();
     expect(findMessages).not.toHaveBeenCalled();
   });
@@ -263,13 +275,14 @@ describe('readTranscript', () => {
     findMessages.mockResolvedValue([user('u1', 'hi', 1, 't1'), assistant('a1', 'hello', 2)]);
     findTurns.mockResolvedValue([turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' })]);
 
-    const transcript = await readTranscript(ME, CONVERSATION_SEAT);
+    const transcript = await readTranscript(SESSION, CONVERSATION_SEAT);
 
     expect(resolveSurface).toHaveBeenCalledWith(ME, CONVERSATION_SEAT);
-    expect(findMessages.mock.calls[0][0].where).toMatchObject({
-      conversationId: CONVERSATION,
-      conversation: { userId: ME },
-    });
+    const where = findMessages.mock.calls[0][0].where;
+    expect(where.conversationId).toBe(CONVERSATION);
+    // Through the platform's visibility helper, composed with AND and narrowed
+    // to the owner: the shared and ownerless arms cannot widen a transcript.
+    expect(where.conversation.AND).toEqual([{ OR: [{ userId: ME }] }, { userId: ME }]);
     expect(findTurns.mock.calls[0][0].where).toEqual({
       userId: ME,
       conversationId: CONVERSATION,

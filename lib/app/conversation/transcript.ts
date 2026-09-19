@@ -35,12 +35,19 @@
  * narrowed, a stage policy) reads as an empty transcript, not an error: the
  * pane still renders, with nothing in it, and a turn would 404 the same way.
  *
+ * The message rows are read through the platform's `conversationVisibilityWhere`
+ * (the ownerless-surfaces guard), AND-ed with the caller's own id: a transcript
+ * is the person's own, so neither the shared arm nor an admin's ownerless arm
+ * may widen it.
+ *
  * @see .context/app/conversation.md
  */
 
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db/client';
+import type { AuthenticatedSession } from '@/lib/auth/guards';
+import { conversationVisibilityWhere } from '@/lib/orchestration/access/conversation-access';
 import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
@@ -255,7 +262,11 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
  * The signed-in person's transcript on a seat. Empty — not an error — when
  * there is no surface or nothing has been said.
  */
-export async function readTranscript(userId: string, seat: string): Promise<Transcript> {
+export async function readTranscript(
+  session: AuthenticatedSession,
+  seat: string
+): Promise<Transcript> {
+  const userId = session.user.id;
   const surface = await resolveFacilitationSurface(userId, seat);
   if (!surface || !surface.conversationId) {
     return { seat, conversationId: null, entries: [] };
@@ -264,9 +275,16 @@ export async function readTranscript(userId: string, seat: string): Promise<Tran
 
   const [messages, turns] = await Promise.all([
     prisma.aiMessage.findMany({
-      // The conversation was resolved under the caller's id; the join on
-      // `conversation.userId` keeps the rows theirs even so.
-      where: { conversationId, conversation: { userId }, role: { in: ['user', 'assistant'] } },
+      // The conversation was resolved under the caller's id; the join keeps
+      // the rows theirs even so — the visibility helper composed with `AND`,
+      // as its docblock asks, and narrowed to the owner arm alone.
+      where: {
+        conversationId,
+        conversation: {
+          AND: [conversationVisibilityWhere(session, { excludeShared: true }), { userId }],
+        },
+        role: { in: ['user', 'assistant'] },
+      },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,

@@ -51,7 +51,7 @@ export const GET = withAuth(async (request, session) => {
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
   const seat = query.seat ?? CONVERSATION_SEAT;
 
-  const transcript = await readTranscript(session.user.id, seat);
+  const transcript = await readTranscript(session, seat);
 
   log.info('Own conversation read', {
     userId: session.user.id,

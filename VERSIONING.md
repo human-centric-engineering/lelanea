@@ -150,6 +150,7 @@ covered by the version contract.
 
   - `lib/app/agent/` — the one agent's pins: the model she runs on and its rate, the two seats she holds
   - `lib/app/content/` — the authored content loader: foundational documents, discovery questions, journey structure
+  - `lib/app/conversation/` — the conversation pane's side of a turn: the leaf event schema, the transcript read, the stream client and its copy
   - `lib/app/gateway/` — the acknowledgement gate: kinds, current versions, a member's standing at the gate
   - `lib/app/journey/` — the published journey map, its module registry and path helpers
   - `lib/app/modules/` — the leaf's module definitions, registered with Daybreak's module registry
