@@ -96,7 +96,7 @@ vi.mock('@/lib/db/client', () => ({
     appUserBudget: { findMany: vi.fn(async () => []) },
     // §08 t-54 — the turn record, for the export collector's section key.
     appTurn: { findMany: vi.fn(async () => []) },
-    appSafetyEvent: { findMany: vi.fn(async () => []) },
+    appSafetyEvent: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
@@ -304,10 +304,32 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    // PINNED, not deleted (`HB2`). f-safety t-60 fills this with ONE
+    // registration: her search, mounted OVER the built-in slug so each result
+    // says whose material it is. What is pinned is the handler the dispatcher
+    // ends up holding for that slug after the real lazy registration pass. A
+    // registration under any other slug, or a built-in flush that ran after
+    // ours, fails here. A stray second capability is caught by the count.
     seam: 'lib/app/capabilities.ts',
     risk: 'a stray capability would be dispatchable on every install',
-    // Behavioural reach into the dispatcher is covered by bootstrap-wiring.test.ts.
-    assert: () => expect(initAppCapabilities()).toBeUndefined(),
+    assert: async () => {
+      const { registerBuiltInCapabilities, __resetRegistrationForTests } =
+        await import('@/lib/orchestration/capabilities/registry');
+      const { capabilityDispatcher } = await import('@/lib/orchestration/capabilities/dispatcher');
+      const { LabelledSearchKnowledgeCapability } =
+        await import('@/lib/app/safety/labelled-search');
+      const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
+      __resetRegistrationForTests();
+      registerBuiltInCapabilities();
+      const handler = capabilityDispatcher.getHandler('search_knowledge_base');
+      const ours = registerSpy.mock.calls.filter(
+        ([capability]) => capability instanceof LabelledSearchKnowledgeCapability
+      );
+      registerSpy.mockRestore();
+      expect(handler).toBeInstanceOf(LabelledSearchKnowledgeCapability);
+      expect(ours).toHaveLength(1);
+      expect(initAppCapabilities()).toBeUndefined();
+    },
   },
   {
     // PINNED, not deleted (`HB2`). §05 t-27 fills this with ONE contributor: her
@@ -709,9 +731,37 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(initAppGuardFloorContributors()).toBeUndefined(),
   },
   {
+    // PINNED, not deleted (`HB2`). f-safety t-60 fills this with ONE observer: a
+    // guard flagging a message on one of her seats writes a `misuse` safety
+    // event. Driven through the real emitter, so the pin is on what the
+    // registration DOES: her seat is recorded, and a turn on any other surface
+    // is not. The observer's own branches are in
+    // tests/unit/lib/app/safety/misuse.test.ts.
     seam: 'lib/app/guard-event-contributors.ts',
     risk: 'a stray observer would receive every install’s inline-chat guard events',
-    assert: () => expect(initAppGuardEventContributors()).toBeUndefined(),
+    assert: async () => {
+      const { emitGuardEvent, __resetGuardEventContributorsForTests } =
+        await import('@/lib/orchestration/chat/guard-events');
+      const { prisma } = await import('@/lib/db/client');
+      const create = vi.mocked(prisma.appSafetyEvent.create);
+      create.mockClear();
+      __resetGuardEventContributorsForTests();
+      const turn = { agentId: 'a', userId: 'u', conversationId: 'c' };
+
+      emitGuardEvent({ ...turn, contextType: 'chat' }, 'input', 'log_only');
+      emitGuardEvent(
+        { ...turn, contextType: 'facilitation', contextId: 'onboarding' },
+        'input',
+        'log_only'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ kind: 'misuse', seat: 'onboarding', guard: 'input' }),
+      });
+      expect(initAppGuardEventContributors()).toBeUndefined();
+    },
   },
   {
     seam: 'lib/app/agent-fields.ts',
