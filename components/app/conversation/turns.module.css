@@ -1,0 +1,56 @@
+/* The two keyframed movements in a transcript, from the prototype (§10 t-64).
+ *
+ * A CSS module for the same reason as `lotus.module.css`: `@keyframes` cannot
+ * live in `app/brand-theme.css`, which is asserted flat and surface-scoped.
+ *
+ * `rise` is a turn arriving — 6px and a fade over 420ms on the brand ease, the
+ * prototype's `.turn` animation. `breathe` is the three dots of the thinking
+ * row, staggered by 180ms per dot. Both are withheld by the components under
+ * reduced motion; the media query here is the belt to that braces. */
+
+.rise {
+  animation: rise 420ms var(--ease-brand) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dot {
+  animation: breathe 1400ms var(--ease-brand) infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 180ms;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 360ms;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .dot {
+    animation: none;
+  }
+  .dot {
+    opacity: 0.6;
+  }
+}

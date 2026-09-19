@@ -1,11 +1,14 @@
 'use client';
 
-import { ArrowLeft, ArrowUp, Mic } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
+import { Composer } from '@/components/app/conversation/composer';
+import { Transcript } from '@/components/app/conversation/transcript';
+import { useConversation } from '@/components/app/conversation/use-conversation';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
   CHAT_FOLD,
@@ -62,15 +65,16 @@ const STEP_SHIFT = 48;
  * because those are what make it read as a conversation rather than as a panel
  * that happens to have a text box at the bottom.
  *
- * ## What it is not, yet
+ * ## The conversation is real (§10 t-64)
  *
- * A deliberate stub (D6). The composer renders as the designed card — a real
- * multi-row textarea that grows to 160px, mic and send on its foot — but
- * everything is `disabled`, and the transcript holds one plain line saying why.
- * No turns, no thinking indicator, no fake bubbles: the conversation is phase
- * 2's, and a mocked-up one here would read as a working product to anyone
- * glancing at a screenshot. The prototype's user/AI bubble styling therefore has
- * nothing to style yet and is deliberately not carried over ahead of it.
+ * The transcript and the composer are views over `useConversation`, which is
+ * called HERE — above the folded early return below — because that return
+ * unmounts both views, and a turn folded away mid-answer must still be there
+ * when the pane comes back. The pane itself is mounted once, in the group
+ * layout, so a turn also survives navigating to a module.
+ *
+ * What is still deliberately absent: the timestamp and account row under a
+ * reply (t-66), the endings in her words and retry (t-65), the mic (t-67).
  *
  * ## The strip
  *
@@ -82,6 +86,7 @@ export function ConversationPane() {
   const { chatW, chatSlim, setChatSlim, width, wsOpen, pane, modulePlace } = useShellLayout();
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
+  const conversation = useConversation();
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
   const foldByKeyboard = useRef(false);
@@ -115,10 +120,10 @@ export function ConversationPane() {
       // 900px both panes are genuinely on screen together.
       aria-hidden={carousel && pane !== 'chat' ? 'true' : undefined}
       /*
-       * As on the workspace: `aria-hidden` does not remove focusability. This
-       * pane escapes the bug today only because every control in the composer is
-       * `disabled` — which is an accident of it being a stub, and stops being
-       * true the moment phase 2 makes the composer real.
+       * As on the workspace: `aria-hidden` does not remove focusability, and
+       * with the composer live the off-screen pane holds a real textarea and a
+       * real send button. `inert` is what keeps a swipe from leaving focus in a
+       * box nobody can see.
        */
       inert={carousel && pane !== 'chat'}
       data-pane="chat"
@@ -256,28 +261,25 @@ export function ConversationPane() {
           </div>
 
           {/*
-            The transcript area (`.chat-log`), which is a SCROLL CONTAINER with
-            the composer below it rather than a centred sentence filling the
-            column.
-
-            The distinction is the whole of t-36's third complaint: the column
-            has a title row, a transcript and a composer, and it keeps all three
-            whether or not there is anything in the transcript yet. The honest
-            note about phase 2 goes INSIDE here, where a turn will go, rather
-            than in place of the column.
-
-            `.inner` is the prototype's 604px measure, shared with the composer
-            below so the two line up as one column at any pane width.
+            The transcript (`.chat-log`): a SCROLL CONTAINER with the composer
+            below it. The column keeps its three parts whether or not there is
+            anything in the transcript yet; the empty state goes INSIDE it,
+            where a turn will go (t-36). `.inner` is the prototype's 604px
+            measure, shared with the composer so the two line up as one column.
           */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-5 pb-2 max-[760px]:px-3.5 max-[760px]:pt-4">
-            <div className="mx-auto flex w-full max-w-[604px] flex-1 flex-col items-center justify-center text-center">
-              <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-                This is where you and Lelañea will talk. The conversation arrives in a later phase.
-              </p>
-            </div>
-          </div>
+          <Transcript
+            phase={conversation.phase}
+            entries={conversation.entries}
+            live={conversation.live}
+            unreadable={conversation.unreadable}
+          />
 
-          <Composer />
+          <Composer
+            value={conversation.draft}
+            onChange={conversation.setDraft}
+            onSend={() => conversation.send()}
+            busy={conversation.phase !== 'idle'}
+          />
         </>
       )}
 
@@ -352,113 +354,6 @@ const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void; classNam
     );
   }
 );
-
-/**
- * The composer: the prototype's card, and everything in it disabled.
- *
- * ## A card, not a bar
- *
- * It was a full-bleed row ruled off from the transcript with a border-top —
- * which is a chat BAR, and reads as a different product. The prototype's
- * `.composer-wrap` has no rule at all: the card floats on the pane's own ground
- * at a 604px measure centred in the column, 20px of radius, the lifted
- * `--color-popover` ground and `--shadow-rest` under it. It is two rows tall
- * before anyone types (`min-height: 60px` on the textarea), so the placeholder
- * sits at the top with room beneath it rather than being a single line.
- *
- * The measure is the same `604px` the transcript above it uses, so the two are
- * one column. That is also what makes the split view free: the card narrows
- * with its pane and needs no second styling (t-36).
- *
- * ## The foot
- *
- * Mic bottom-left, the shift-return hint pushed right, and the send button as
- * the prototype's filled terracotta disc (`--color-primary`) with a white
- * up-arrow — not an outline and not a bare glyph. The hint is dropped below
- * 760px, where there is no keyboard to give it advice about.
- *
- * ## Still a stub (D6)
- *
- * Every control is `disabled`, and their accessible names say why. The
- * placeholder is the prototype's, because the card is what this task is about —
- * the honest line about phase 2 is in the transcript above, where a reader who
- * wonders what the box is for will already be looking.
- *
- * The auto-grow is wired but CANNOT RUN yet: a disabled control fires no
- * `input` event. It is kept rather than deleted because it is the behaviour
- * phase 2 needs the moment the control is enabled, and removing it would mean
- * rediscovering the 160px cap then. What it is not is evidence that the frame
- * survives a growing composer; that is still owed.
- */
-function Composer() {
-  return (
-    <div className="flex-none px-6 pt-2 pb-5 max-[760px]:px-3.5 max-[760px]:pb-4">
-      <div
-        className={cn(
-          'mx-auto w-full max-w-[604px] rounded-[20px] px-3.5 pt-3 pb-2.5',
-          'border border-[var(--color-border)] bg-[var(--color-popover)]',
-          'shadow-[var(--shadow-rest)]',
-          'transition-[border-color] duration-200 ease-[var(--ease-brand)]',
-          'motion-reduce:transition-none',
-          'focus-within:border-[var(--color-secondary)]'
-        )}
-      >
-        <label className="sr-only" htmlFor="shell-composer">
-          Message Lelañea
-        </label>
-        <textarea
-          id="shell-composer"
-          rows={2}
-          disabled
-          placeholder="What would you like to talk about today?"
-          onInput={(event) => {
-            const el = event.currentTarget;
-            el.style.height = 'auto';
-            el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-          }}
-          className={cn(
-            'text-foreground placeholder:text-muted-foreground block w-full resize-none',
-            'max-h-[160px] min-h-[60px] bg-transparent text-[15px] leading-[1.6] outline-none',
-            'disabled:cursor-not-allowed'
-          )}
-        />
-        <div className="flex items-center gap-2 pt-1.5">
-          <span title="Record a voice note — arrives with the conversation" className="flex-none">
-            <button
-              type="button"
-              disabled
-              aria-label="Record a voice note — arrives with the conversation"
-              className={cn(
-                'text-muted-foreground flex h-9 w-9 items-center justify-center rounded-full',
-                'disabled:opacity-50'
-              )}
-            >
-              <Mic size={18} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
-          <span className="flex-1" />
-          <span className="text-muted-foreground flex-none text-[12px] max-[760px]:hidden">
-            shift + return for a new line
-          </span>
-          <span title="Send — arrives with the conversation" className="flex-none">
-            <button
-              type="button"
-              disabled
-              aria-label="Send — arrives with the conversation"
-              className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-full',
-                'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]',
-                'disabled:opacity-60'
-              )}
-            >
-              <ArrowUp size={17} strokeWidth={1.7} aria-hidden="true" />
-            </button>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * The one thing worth resizing: the conversation, against the work.
