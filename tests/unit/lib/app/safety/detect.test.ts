@@ -5,6 +5,11 @@
  * hard-tier misses on a written case set, and does not put the golden set's
  * anxious-not-in-danger case in the hard tier. Every table below is asserted
  * non-empty first, so an empty case list cannot pass for free (`fp6`).
+ *
+ * FORK NOTE — this reads the real `lib/app/content` golden set, not a mock:
+ * the anxious-not-in-danger case is only a guarantee about the prompt that is
+ * actually authored. Re-authoring the golden set can fail the golden-set case
+ * here; if its `asked-for-a-diagnosis` key moves, point the lookup at the new one.
  */
 
 import { describe, it, expect } from 'vitest';

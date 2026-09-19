@@ -76,6 +76,7 @@ const findMany = {
   appAcknowledgement: vi.fn(),
   appUserBudget: vi.fn(),
   appTurn: vi.fn(),
+  appSafetyEvent: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -102,6 +103,7 @@ vi.mock('@/lib/db/client', () => ({
     appAcknowledgement: { findMany: (...a: unknown[]) => findMany.appAcknowledgement(...a) },
     appUserBudget: { findMany: (...a: unknown[]) => findMany.appUserBudget(...a) },
     appTurn: { findMany: (...a: unknown[]) => findMany.appTurn(...a) },
+    appSafetyEvent: { findMany: (...a: unknown[]) => findMany.appSafetyEvent(...a) },
   },
 }));
 
@@ -112,8 +114,14 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
 /** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
-const LEAF_SECTIONS = ['waitlist', 'acknowledgements', 'budget', 'turns'];
-const LEAF_MODELS = ['AppWaitlistEntry', 'AppAcknowledgement', 'AppUserBudget', 'AppTurn'];
+const LEAF_SECTIONS = ['waitlist', 'acknowledgements', 'budget', 'turns', 'safety'];
+const LEAF_MODELS = [
+  'AppWaitlistEntry',
+  'AppAcknowledgement',
+  'AppUserBudget',
+  'AppTurn',
+  'AppSafetyEvent',
+];
 /** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
 const LEAF_EXCLUDED_MODELS = [
   'AppKnowledgeDesignation',
@@ -132,6 +140,7 @@ beforeEach(() => {
   findMany.appAcknowledgement.mockResolvedValue([]);
   findMany.appUserBudget.mockResolvedValue([]);
   findMany.appTurn.mockResolvedValue([]);
+  findMany.appSafetyEvent.mockResolvedValue([]);
 
   // Personal-data sources return rows verbatim.
   findMany.userJourney.mockResolvedValue([{ id: 'j1', graphSlug: 'onboarding' }]);

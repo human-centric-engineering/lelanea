@@ -99,7 +99,29 @@ describe('checkCrisisContext', () => {
     );
   });
 
+  it('bills nobody before signup, rather than a synthetic id', async () => {
+    answers('DANGER');
+    await checkCrisisContext({ ...INPUT, userId: null });
+    expect(mocks.logCost.mock.calls[0]?.[0]).not.toHaveProperty('userId');
+  });
+
+  it('still answers when the cost row cannot be written', async () => {
+    answers('FIGURATIVE');
+    mocks.logCost.mockRejectedValue(new Error('db down'));
+    expect(await checkCrisisContext(INPUT)).toBe('softened');
+  });
+
   describe('every failure leaves the deterministic tier standing', () => {
+    it('error: the model call rejects with something that is not an Error', async () => {
+      mocks.chat.mockRejectedValue('socket hang up');
+      expect(await checkCrisisContext(INPUT)).toBe('error');
+    });
+
+    it('unreachable: the provider lookup rejects with something that is not an Error', async () => {
+      mocks.getProvider.mockRejectedValue('no row');
+      expect(await checkCrisisContext(INPUT)).toBe('unavailable');
+    });
+
     it('error: the model call throws', async () => {
       mocks.chat.mockRejectedValue(new Error('provider 500'));
       expect(await checkCrisisContext(INPUT)).toBe('error');

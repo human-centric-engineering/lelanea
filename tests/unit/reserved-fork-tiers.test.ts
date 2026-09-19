@@ -254,6 +254,12 @@ describe('reserved fork tiers', () => {
       'enum AppTurnStatus {',
       'enum AppTurnPricing {',
       'model AppTurn {',
+      // f-safety t-58 — that the crisis path answered someone, never the words
+      // (a SOURCE: it is about the person it happened to).
+      'enum AppSafetyEventKind {',
+      'enum AppCrisisTier {',
+      'enum AppContextCheckOutcome {',
+      'model AppSafetyEvent {',
     ]);
   });
 

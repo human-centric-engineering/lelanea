@@ -306,6 +306,13 @@ const ALLOWED_CALL_SITES: readonly string[] = [
   'lib/orchestration/engine/executors/agent-call.ts | agentId=agent!.id | conversationId=— | workflowExecutionId=ctx.executionId | userId=ctx.userId',
   // `chat_turn` runs a real agent against a real conversation it created.
   'lib/orchestration/engine/executors/chat-turn.ts | agentId=agent.id | conversationId=conversationId | workflowExecutionId=ctx.executionId | userId=ctx.userId',
+  // LELAÑEA — the crisis context check (f-safety t-58): one side-model call
+  // on a hard hit, billed to the person. No agent (the routing default model,
+  // not an agent), no conversation (the turn has not opened one yet). `userId`
+  // is guarded because the pre-signup path calls it with none. A fork edit to a
+  // Sunrise-owned roster, same class as sunrise#799; .context/app/divergences.md
+  // Row 20.
+  'lib/app/safety/context-check.ts | agentId=— | conversationId=— | workflowExecutionId=— | userId=spread((input.userId ? { userId: input.userId } : {}))',
   // DAYBREAK — the framework conversation supervisor. `conversationId` is the
   // id the route loaded and `loadFrameworkConversation` already resolved, so it
   // is a real `AiConversation` row. No agent: the judge runs on the platform

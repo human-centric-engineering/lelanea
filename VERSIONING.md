@@ -153,6 +153,7 @@ covered by the version contract.
   - `lib/app/gateway/` — the acknowledgement gate: kinds, current versions, a member's standing at the gate
   - `lib/app/journey/` — the published journey map, its module registry and path helpers
   - `lib/app/modules/` — the leaf's module definitions, registered with Daybreak's module registry
+  - `lib/app/safety/` — the crisis path: deterministic detection, the context check, the regional resource and the safety record
   - `lib/app/voice/` — the voice corpus: designation, comparison, corpus access and the chat context contributor
   - `lib/app/waitlist/` — the public waitlist: endpoint, service, confirmation email, locale and rate limit
 
