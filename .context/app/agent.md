@@ -386,7 +386,8 @@ row whose `messageId` is the turn's `assistantMessageId`.
   as `turn_reply_unavailable`, sent as the plain `unavailable` ending.
 - **A retried failed turn leaves the person's message in the transcript twice.**
   The platform writes it before calling the model, on every call, and offers no
-  way to reuse the first. Recorded on f-conversation.
+  way to reuse the first. Recorded on f-conversation. The transcript read
+  collapses the two to one (§10 t-64, [`conversation.md`](./conversation.md)).
 
 - **While generation is paused**, a replay is still served — it calls no model.
   Anything that would run the model gets the `paused` ending instead.
@@ -580,8 +581,8 @@ classified as a client abort — the signal is aborted — so **no circuit-break
 failure is recorded**. A re-run under the same id writes the person's message a
 second time (the t-54 known limit, recorded on f-conversation), and a marker row
 that lands after the re-run's own message is possible if the aborted call is slow
-to unwind. f-conversation should hide `metadata.error` rows, or render them as the
-ending rather than as her words.
+to unwind. The transcript read hides `metadata.error` rows (§10 t-64,
+[`conversation.md`](./conversation.md)).
 
 ### A dropped connection
 

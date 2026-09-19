@@ -47,7 +47,24 @@
 import type { AppCoverageExclusion, AppAlwaysRunTest, AppOwnerlessSurfaceException } from './ci';
 
 /** Coverage exclusions this LEAF adds. Daybreak ships this empty. */
-export const leafCoverageExclusions: AppCoverageExclusion[] = [];
+export const leafCoverageExclusions: AppCoverageExclusion[] = [
+  {
+    // The leaf's smoke harnesses, the same tier as Sunrise's `scripts/smoke/`
+    // and the same shape as its exclusion — the extglob spares any
+    // `*-assertions.ts` a harness extracts, so pure logic pulled out of one
+    // stays gated. Filled by §10 t-64, the first task to run the per-file gate
+    // with one of these in its diff: `smoke-turn.ts` landed at 0% and the run
+    // failed on a file vitest never executes.
+    pattern: 'scripts/app/smoke-!(*-assertions).ts',
+    reason:
+      'standalone tsx entry points run by `npm run smoke:app-*` against a ' +
+      'live server and the dev database (`.context/app/agent.md`, ' +
+      '`safety.md`). Nothing imports them, so vitest never executes them and ' +
+      'their coverage is structurally 0% — the per-file gate would fail every ' +
+      'edit to one. Their proof is the smoke run itself, which each task ' +
+      'names in its done-when.',
+  },
+];
 
 /**
  * Whole-tree always-run tests this LEAF adds.

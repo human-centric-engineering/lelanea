@@ -1,63 +1,382 @@
 // @vitest-environment happy-dom
 
 /**
- * The conversation pane: the honest stub, and the drag that sizes it.
+ * The conversation pane: live from §10 t-64, and the drag that sizes it.
  *
- * The stub's rules moved here from `shell-home-page.test.tsx` when t-10 made the
- * pane the clean view. They matter more here than they did there, because this
- * is the surface phase 2 fills in — and the way a fake arrives is somebody
- * porting the prototype's transcript wholesale to "see how it looks".
+ * The stub's rules — nothing sends, no digit, no article — lived here until
+ * the conversation arrived. What replaces them is the conversation's own
+ * contract: Enter sends and Shift+Enter does not, the box clears on the
+ * server's `start`, the thinking row shows until her first words, a person
+ * who asked for less motion gets the reply whole, and the off-screen carousel
+ * pane is `inert` now that it holds real controls.
  *
  * @see components/app/shell/conversation-pane.tsx
+ * @see components/app/conversation/*
  */
 
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
+import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+const motion = vi.hoisted(() => ({ reduced: false }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
-vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
+vi.mock('@/components/app/ui/use-reduced-motion', () => ({
+  useReducedMotion: () => motion.reduced,
+}));
+
+/* ------------------------------------------------------------ a fake seat */
+
+function sse(type: string, data: unknown): string {
+  return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/** A turn whose frames the test pushes, when it chooses. */
+function openTurn() {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+  });
+  return {
+    response: new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }),
+    push: (type: string, data: unknown = {}) => controller.enqueue(encoder.encode(sse(type, data))),
+    close: () => controller.close(),
+  };
+}
+
+const transcriptResponse = (entries: unknown[] = []) =>
+  new Response(
+    JSON.stringify({
+      success: true,
+      data: { seat: 'facilitator', conversationId: entries.length ? 'c1' : null, entries },
+    }),
+    { status: 200 }
+  );
+
+/** Every request the pane makes, and the turn it is currently streaming. */
+const seat = {
+  turns: [] as ReturnType<typeof openTurn>[],
+  bodies: [] as unknown[],
+  transcript: [] as unknown[],
+};
 
 beforeEach(() => {
   window.localStorage.clear();
   mockPathname.current = '/app/journey';
+  motion.reduced = false;
+  seat.turns = [];
+  seat.bodies = [];
+  seat.transcript = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/v1/app/conversation')) return transcriptResponse(seat.transcript);
+      if (url.includes('/chat/stream')) {
+        seat.bodies.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}'));
+        const turn = openTurn();
+        seat.turns.push(turn);
+        return turn.response;
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    })
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
-describe('the composer is present, and inert', () => {
-  it('renders a real textarea rather than a picture of one', () => {
-    // The layout has to survive a growing composer before anything real is
-    // typed into it, which is why this is a textarea now and not a later job.
-    renderInShell(<ConversationPane />);
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+/** The pane, with its transcript read back. */
+async function renderLoaded(width: 'large' | 'small' | 'medium' = 'large') {
+  const result = renderInShell(<ConversationPane />, width);
+  await waitFor(() => expect(screen.queryByText(CONVERSATION_COPY.loading)).toBeNull());
+  return result;
+}
+
+const box = () => screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel });
+const latestTurn = () => seat.turns[seat.turns.length - 1];
+
+describe('sending', () => {
+  it('Enter sends the seam\u2019s shape — the words and a minted turn id — and Shift+Enter does not', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    await user.type(box(), 'first line{Shift>}{Enter}{/Shift}second line');
+    expect(seat.bodies).toHaveLength(0);
+    expect(box()).toHaveValue('first line\nsecond line');
+
+    await user.keyboard('{Enter}');
+    expect(seat.bodies).toHaveLength(1);
+    expect(seat.bodies[0]).toMatchObject({ message: 'first line\nsecond line' });
+    expect(seat.bodies[0]).toHaveProperty('turnId', expect.stringMatching(/^[0-9a-f-]{36}$/));
   });
 
-  it('disables everything a person could try to send with', () => {
-    renderInShell(<ConversationPane />);
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Send/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Record a voice note/ })).toBeDisabled();
+  it('keeps the words in the box until the server says it has them, then clears it', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+
+    // Sent, but not yet acknowledged: the words are still in the box (§8.1).
+    expect(box()).toHaveValue('hello');
+    await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
+    await waitFor(() => expect(box()).toHaveValue(''));
   });
 
-  it('says why, where a person can actually read it', () => {
-    // The same lesson as the rail's: a `title` on a disabled control never
-    // fires, so the reason goes on an enabled wrapper and in the accessible
-    // name.
-    renderInShell(<ConversationPane />);
-    const send = screen.getByRole('button', { name: /^Send/ });
+  it('shows the person\u2019s words as a turn at once, and the thinking row until her first words', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'Are you there?{Enter}');
 
-    expect(send.getAttribute('aria-label')).toMatch(/arrives with the conversation/);
-    expect(send.parentElement?.getAttribute('title')).toMatch(/arrives with the conversation/);
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('Are you there?');
+    const thinking = screen.getByRole('status');
+    expect(thinking.textContent).toContain(CONVERSATION_COPY.thinking);
+
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'I am. ' });
+    });
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
   });
 
-  it('mocks up no conversation, and invents no number', () => {
-    const { container } = renderInShell(<ConversationPane />);
-    expect(container.textContent ?? '').not.toMatch(/\d/);
-    // A transcript would arrive as list items or article elements.
+  it('changes the thinking row\u2019s label at the first-words deadline rather than adding a frame', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('warning', { code: 'still_thinking', message: 'operator text' });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(CONVERSATION_COPY.stillThinking)
+    );
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('operator text');
+  });
+
+  it('never shows the platform\u2019s status strings', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('status', { message: 'Executing search_knowledge_base' });
+    });
+    expect(document.body.textContent).not.toContain('Executing');
+  });
+
+  it('the send disc submits the form too', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'by mouse');
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.send }));
+    expect(seat.bodies).toHaveLength(1);
+    expect(seat.bodies[0]).toMatchObject({ message: 'by mouse' });
+  });
+
+  it('disables send, and says why, while a turn is running; typing is still allowed', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+
+    expect(screen.getByRole('button', { name: CONVERSATION_COPY.sendBusy })).toBeDisabled();
+    expect(box()).not.toBeDisabled();
+    await user.keyboard('{Enter}');
+    expect(seat.bodies).toHaveLength(1);
+  });
+
+  it('renders her reply whole, not paced, for a reader who asked for less motion', async () => {
+    motion.reduced = true;
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'Every word at once, as it arrives.' });
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
+        'Every word at once, as it arrives.'
+      )
+    );
+  });
+
+  it('folds a finished turn into the transcript, and the send control comes back', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'Hello.' });
+      latestTurn().push('done', { costUsd: 0.0006, model: 'm' });
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
+    );
+    expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
+  });
+
+  it('tells the person when a turn ends without her, with the frame\u2019s words, and the words are back in the box', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'hello{Enter}');
+    // `start` came first, so the box was cleared before the ending arrived —
+    // the shape a provider outage takes on the real route.
+    await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
+    await waitFor(() => expect(box()).toHaveValue(''));
+    await act(async () => {
+      latestTurn().push('error', { code: 'unavailable', message: 'Your message is kept.' });
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'The turn ended' }).textContent).toBe(
+        'Your message is kept.'
+      )
+    );
+    expect(box()).toHaveValue('hello');
+  });
+
+  it('does not overwrite a new draft with the failed one', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'first{Enter}');
+    await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
+    await waitFor(() => expect(box()).toHaveValue(''));
+    await user.type(box(), 'a new thought');
+    await act(async () => {
+      latestTurn().push('error', { code: 'unavailable', message: 'kept' });
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'The turn ended' })).toBeTruthy()
+    );
+    expect(box()).toHaveValue('a new thought');
+  });
+});
+
+describe('folding the pane mid-conversation', () => {
+  it('shows a reply already revealed whole on unfold, rather than typing it again', async () => {
+    // Reduced motion here so the reveal is immediate and the test is about the
+    // remount, not the pacing: with motion, the same path would re-type the
+    // whole reply from nothing on every unfold (review round 2).
+    motion.reduced = true;
+    const user = userEvent.setup();
+    await renderLoaded('large');
+    await user.type(box(), 'hello{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'Every word of this reply.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
+        'Every word of this reply.'
+      )
+    );
+
+    // Now with motion back on, fold and unfold. A reply still flagged as
+    // streamed would remount `useTypedText` from '' and start typing.
+    motion.reduced = false;
+    await user.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    await user.click(screen.getByRole('button', { name: 'Open the conversation' }));
+
+    expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe(
+      'Every word of this reply.'
+    );
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('hello');
+  });
+});
+
+describe('a soft crisis frame', () => {
+  it('shows the resource ahead of her reply, and keeps it there once the turn is done', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'a hard week{Enter}');
+    await act(async () => {
+      latestTurn().push('warning', {
+        code: 'crisis',
+        message: 'If things feel heavy: Samaritans, 116 123, 24/7.',
+      });
+      latestTurn().push('start', { conversationId: 'c1' });
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Samaritans, 116 123')
+    );
+
+    await act(async () => {
+      latestTurn().push('content', { delta: 'I am here.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
+    );
+    const alert = screen.getByRole('alert');
+    const reply = screen.getByRole('article', { name: 'Lelañea said' });
+    expect(alert.textContent).toContain('Samaritans, 116 123');
+    // The resource comes first, whatever she then says.
+    expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('reading back', () => {
+  it('shows the transcript on load, whole', async () => {
+    seat.transcript = [
+      { kind: 'user', id: 'u1', text: 'Earlier', at: '2026-09-19T12:00:00.000Z', turnId: 't1' },
+      {
+        kind: 'reply',
+        id: 'a1',
+        text: 'Yes, earlier.',
+        at: '2026-09-19T12:00:05.000Z',
+        turnId: 't1',
+        citations: [],
+        turn: null,
+      },
+    ];
+    await renderLoaded();
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('Earlier');
+    expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe('Yes, earlier.');
+  });
+
+  it('says so, inside the transcript, when there is nothing yet', async () => {
+    const { container } = await renderLoaded();
+    const transcript = container.querySelector('[role="log"]');
+    expect(transcript?.textContent).toContain(CONVERSATION_COPY.empty);
     expect(container.querySelectorAll('article')).toHaveLength(0);
+  });
+
+  it('still lets a person talk when the transcript could not be read', async () => {
+    vi.mocked(fetch).mockImplementationOnce(async () => new Response('', { status: 500 }));
+    const user = userEvent.setup();
+    await renderLoaded();
+    expect(screen.getByText(CONVERSATION_COPY.unreadable)).toBeTruthy();
+    await user.type(box(), 'hello{Enter}');
+    expect(seat.bodies).toHaveLength(1);
+  });
+});
+
+describe('the off-screen carousel pane', () => {
+  it('is inert, now that it holds real controls', async () => {
+    // `aria-hidden` does not remove focusability. With the composer live the
+    // pane behind the workspace holds a real textarea, and a swipe must not
+    // leave focus in a box nobody can see.
+    mockPathname.current = '/app/journey';
+    const { container } = await renderLoaded('small');
+    const pane = container.querySelector('[data-pane="chat"]');
+    expect(pane?.getAttribute('aria-hidden')).toBe('true');
+    expect(pane?.hasAttribute('inert')).toBe(true);
   });
 });
 
@@ -102,16 +421,16 @@ describe('the split view keeps a conversation beside the work', () => {
   // but nothing asserted either WITH THE WORKSPACE OPEN, which is the state
   // they are about. Every other case in this file renders the full-width view.
 
-  it('keeps the title row, the transcript and the composer, rather than a centred sentence', () => {
+  it('keeps the title row, the transcript and the composer, rather than a centred sentence', async () => {
     mockPathname.current = '/app/modules/values';
-    const { container } = renderInShell(<ConversationPane />, 'large');
+    const { container } = await renderLoaded('large');
 
     // The way back is the title row in this state.
     expect(screen.getByRole('link', { name: /the main conversation/ })).toBeTruthy();
     // A real scroll container, with the honest note INSIDE it where a turn goes.
     const transcript = container.querySelector('.overflow-y-auto');
     expect(transcript).not.toBeNull();
-    expect(transcript?.textContent).toMatch(/arrives in a later phase/);
+    expect(transcript?.textContent).toContain(CONVERSATION_COPY.empty);
     // And the composer is still there.
     expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
   });

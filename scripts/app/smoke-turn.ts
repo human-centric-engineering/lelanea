@@ -461,6 +461,48 @@ async function main(): Promise<void> {
       `this month so far includes it ($${Number(monthCost).toFixed(6)})`
     );
 
+    // The conversation, read back through the member API (§10 t-64) — the
+    // wiring the pane loads on: the turn just taken, joined to its turn row.
+    console.log('\n3c. The conversation, read back');
+    const transcript = await fetch(
+      `${BASE_URL}/api/v1/app/conversation?seat=${encodeURIComponent(SEAT)}`,
+      { headers: { cookie } }
+    );
+    const transcriptBody: unknown = await transcript.json();
+    const transcriptData =
+      isRecord(transcriptBody) && isRecord(transcriptBody.data) ? transcriptBody.data : null;
+    const entries = Array.isArray(transcriptData?.entries) ? transcriptData.entries : [];
+    check(
+      transcript.status === 200 && transcriptData?.conversationId === turn.conversationId,
+      'the conversation is readable at /api/v1/app/conversation, and it is this one'
+    );
+    const said = entries.filter(
+      (e): e is Record<string, unknown> => isRecord(e) && e.kind === 'user'
+    );
+    const replied = entries.filter(
+      (e): e is Record<string, unknown> => isRecord(e) && e.kind === 'reply'
+    );
+    check(
+      said.length === 1 && said[0].text === MESSAGE && said[0].turnId === TURN_ID,
+      'one message from the member, carrying the turn id'
+    );
+    const replyEntry = replied[0];
+    const account = isRecord(replyEntry?.turn) ? replyEntry.turn : null;
+    check(
+      replied.length === 1 &&
+        replyEntry.text === reply &&
+        replyEntry.id === turn.assistantMessageId,
+      'her reply, word for word, keyed on the row the turn names'
+    );
+    check(
+      account?.turnId === TURN_ID &&
+        account?.modelId === PINNED_MODEL &&
+        account?.fingerprintVersion === turn.fingerprintVersion &&
+        account?.seat === SEAT &&
+        account?.costUsd === turn.costUsd,
+      `joined to its turn row: ${String(account?.modelId)}, v${String(account?.fingerprintVersion)}, $${String(account?.costUsd)}`
+    );
+
     // 5. The same id with different words is a client bug, and is refused.
     console.log('\n4. The same id, different words');
     const reused = await takeTurn(cookie, TURN_ID, 'Something else entirely.');
