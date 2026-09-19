@@ -53,8 +53,8 @@
  *   the global pass only `global` rows.
  * - **A slug is claimed by at most one pass.** A module declaring a slug keeps it
  *   (that is the module pass's existing behaviour); the global pass skips, with a
- *   warning, any slug whose row is in another scope, rather than flipping it back
- *   on every boot.
+ *   warning, any slug another scope holds active, rather than flipping it back on
+ *   every boot. A slug its owner retired is free for the global pass to take.
  * - **Safe on empty.** A provider returning nothing is read as a fluke (its source
  *   not yet seeded, or unreadable), never as "retire every global slot": the pass
  *   writes nothing. The cost is that retiring the *last* global slot is not
@@ -222,10 +222,15 @@ const MODULE_PARTITION: SlotPartition = {
   mayWrite: () => true,
 };
 
-/** Global slots own the `global` rows, and never take a slug another scope holds. */
+/**
+ * Global slots own the `global` rows, and never take a slug another scope holds
+ * **actively**. A row its owner retired (`isActive: false`) is nobody's claim, so a
+ * slot can move from a module to the global taxonomy; if the module declares it
+ * again, the module pass takes it back.
+ */
 const GLOBAL_PARTITION: SlotPartition = {
   scope: SLOT_SCOPE.global,
-  mayWrite: (row) => row.scope === SLOT_SCOPE.global,
+  mayWrite: (row) => row.scope === SLOT_SCOPE.global || !row.isActive,
 };
 
 async function syncModuleSlotDefinitions(): Promise<void> {
@@ -263,7 +268,9 @@ export type GlobalSlotDefinitionProvider = () => Promise<readonly SlotDefinition
 // another.
 const globalForSlotProvider = globalThis as unknown as {
   daybreakGlobalSlotDefinitionProvider?: GlobalSlotDefinitionProvider;
+  daybreakGlobalSlotSyncQueue: Promise<unknown>;
 };
+globalForSlotProvider.daybreakGlobalSlotSyncQueue ??= Promise.resolve();
 
 /**
  * Register the provider of global slot definitions. One per app: a later
@@ -290,7 +297,17 @@ export type GlobalSlotSyncResult =
  * a call with nothing changed writes no row. Throws when the provider or the write
  * fails — call it after an edit to the provider's source and report the failure.
  */
-export async function syncGlobalSlotDefinitions(): Promise<GlobalSlotSyncResult> {
+export function syncGlobalSlotDefinitions(): Promise<GlobalSlotSyncResult> {
+  // One at a time, each reading the provider only when its turn comes: two edits
+  // saved back to back must not commit out of order, leaving the older snapshot
+  // standing. In-process only — two instances can still interleave, which the next
+  // edit or boot repairs.
+  const run = globalForSlotProvider.daybreakGlobalSlotSyncQueue.then(runGlobalSlotSync);
+  globalForSlotProvider.daybreakGlobalSlotSyncQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function runGlobalSlotSync(): Promise<GlobalSlotSyncResult> {
   const provider = globalForSlotProvider.daybreakGlobalSlotDefinitionProvider;
   if (!provider) return { status: 'no_provider' };
 

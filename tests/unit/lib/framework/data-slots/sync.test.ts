@@ -441,6 +441,65 @@ describe('syncGlobalSlotDefinitions', () => {
     );
   });
 
+  it('takes over a slug whose module retired it (inactive row), stamping it global', async () => {
+    registerGlobalSlotDefinitionProvider(async () => [
+      { slug: 'relationship', group: 'person', description: 'Who they share life with' },
+    ]);
+    txMock.slotDefinition.findMany.mockResolvedValue([
+      row({ slug: 'relationship', scope: 'module:onboarding', isActive: false }),
+    ]);
+
+    const result = await syncGlobalSlotDefinitions();
+
+    expect(txMock.slotDefinition.update).toHaveBeenCalledWith({
+      where: { slug: 'relationship' },
+      data: expect.objectContaining({ scope: 'global', isActive: true }),
+    });
+    expect(result).toMatchObject({ skipped: [], updated: 1 });
+  });
+
+  it('runs overlapping re-syncs one at a time, each reading the provider on its turn', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    registerGlobalSlotDefinitionProvider(async () => {
+      const n = ++calls;
+      order.push(`read ${n}`);
+      if (n === 1) await gate;
+      return [{ slug: 'relationship', group: 'person', description: `Edit ${n}` }];
+    });
+    const recordWrite = () => {
+      order.push('write');
+      return Promise.resolve({ count: 1 });
+    };
+    txMock.slotDefinition.createMany.mockImplementationOnce(recordWrite);
+    txMock.slotDefinition.createMany.mockImplementationOnce(recordWrite);
+
+    const first = syncGlobalSlotDefinitions();
+    const second = syncGlobalSlotDefinitions();
+    await Promise.resolve();
+    release();
+    await Promise.all([first, second]);
+
+    // The second never reads before the first has written.
+    expect(order).toEqual(['read 1', 'write', 'read 2', 'write']);
+  });
+
+  it('a failed re-sync does not wedge the ones queued behind it', async () => {
+    let calls = 0;
+    registerGlobalSlotDefinitionProvider(async () => {
+      if (++calls === 1) throw new Error('taxonomy unreadable');
+      return [{ slug: 'relationship', group: 'person', description: 'Who' }];
+    });
+
+    const first = syncGlobalSlotDefinitions();
+    const second = syncGlobalSlotDefinitions();
+
+    await expect(first).rejects.toThrow('taxonomy unreadable');
+    await expect(second).resolves.toMatchObject({ status: 'synced' });
+  });
+
   it('an empty provider writes nothing — no mass deactivation (safe on empty)', async () => {
     registerGlobalSlotDefinitionProvider(async () => []);
 

@@ -200,6 +200,30 @@ describe('global and module slots share one table without touching each other', 
     });
   });
 
+  it('a slug a module retires can move to the global taxonomy, and back if the module reclaims it', async () => {
+    await syncRegisteredSlotDefinitions();
+    __resetModuleRegistryForTests();
+    registerModuleWithSlots('onboarding', []);
+    globalSource = [
+      ...globalSource,
+      { slug: 'primary_goal', group: 'goals', description: 'Global' },
+    ];
+
+    await syncRegisteredSlotDefinitions();
+    expect(store.get('primary_goal')).toMatchObject({ scope: 'global', isActive: true });
+
+    __resetModuleRegistryForTests();
+    registerModuleWithSlots('onboarding', [
+      { slug: 'primary_goal', group: 'goals', description: 'The main goal' },
+    ]);
+    await syncRegisteredSlotDefinitions();
+    await syncRegisteredSlotDefinitions();
+    expect(store.get('primary_goal')).toMatchObject({
+      scope: 'module:onboarding',
+      isActive: true,
+    });
+  });
+
   it('re-syncing after an edit writes the edit, and re-syncing again writes nothing', async () => {
     await syncRegisteredSlotDefinitions();
     globalSource = globalSource.map((d) =>
