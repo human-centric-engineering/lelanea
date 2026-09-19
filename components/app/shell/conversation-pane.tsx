@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 
 import { Composer } from '@/components/app/conversation/composer';
 import { Transcript } from '@/components/app/conversation/transcript';
+import { StatusLine } from '@/components/app/conversation/turns';
 import { useConversation } from '@/components/app/conversation/use-conversation';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
@@ -73,8 +74,12 @@ const STEP_SHIFT = 48;
  * when the pane comes back. The pane itself is mounted once, in the group
  * layout, so a turn also survives navigating to a module.
  *
+ * When she can't answer, the ending stands in her words where the reply would
+ * have been, the words go back into the box for the same turn id, and the
+ * status read puts one quiet line above the composer (t-65).
+ *
  * What is still deliberately absent: the timestamp and account row under a
- * reply (t-66), the endings in her words and retry (t-65), the mic (t-67).
+ * reply (t-66), the mic (t-67).
  *
  * ## The strip
  *
@@ -274,6 +279,8 @@ export function ConversationPane() {
             unreadable={conversation.unreadable}
             onRevealed={conversation.revealed}
           />
+
+          <StatusLine generation={conversation.status} />
 
           <Composer
             value={conversation.draft}

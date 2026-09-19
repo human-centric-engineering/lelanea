@@ -37,7 +37,10 @@
  *      cannot resolve). The turn ends with the plain `unavailable` ending, and no
  *      frame names the provider or its host; the person's message is kept; the
  *      read routes answer 200; the status read says `unavailable`. Point her back
- *      and the same turn id runs.
+ *      and the same turn id runs. Both requests go through the browser's own
+ *      client (`lib/app/conversation/client.ts`, §10 t-65), so what is proved
+ *      is what the pane meets: the ending as the client parses it, and the
+ *      retry under the id it was given.
  *   8. Pause generation. The turn is refused before any model call — no turn
  *      row, no cost row — with the `paused` ending; the status read says
  *      `paused`; the read routes answer 200.
@@ -68,7 +71,10 @@ import { prisma } from '@/lib/db/client';
 import { isRecord } from '@/lib/utils';
 import { PINNED_MODEL, PINNED_PROVIDER } from '@/lib/app/agent/pinned-model';
 import { GENERATION_PAUSED_FLAG } from '@/lib/app/agent/availability';
+import { TURN_ID_REUSED } from '@/lib/app/agent/turn-codes';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { streamTurn, TurnRefused } from '@/lib/app/conversation/client';
+import type { ConversationEvent } from '@/lib/app/conversation/events';
 
 // The app's own URL by default: better-auth refuses a sign-up from any origin
 // it does not trust, and this install's is `BETTER_AUTH_URL`.
@@ -139,6 +145,38 @@ async function takeTurn(
   const raw = await res.text();
   const isStream = (res.headers.get('content-type') ?? '').includes('text/event-stream');
   return { status: res.status, frames: isStream ? parseFrames(raw) : [], raw };
+}
+
+/**
+ * Take a turn the way the pane does: through `streamTurn`, which posts the
+ * seam's shape and parses every frame with the leaf's own schema. The route is
+ * relative in the browser; here the session cookie and the origin ride on a
+ * `fetchImpl` that prefixes the base URL. A refusal comes back as the client's
+ * own `TurnRefused`, not thrown, so the caller can assert on its code.
+ */
+async function takeTurnAsClient(
+  cookie: string,
+  turnId: string,
+  message: string
+): Promise<{ events: ConversationEvent[]; refused: TurnRefused | null }> {
+  const fetchImpl: typeof fetch = (input, init) => {
+    // `streamTurn` passes the route as a string; anything else is a bug here.
+    if (typeof input !== 'string') throw new Error('expected a route string');
+    const headers = new Headers(init?.headers);
+    headers.set('cookie', cookie);
+    headers.set('origin', BASE_URL);
+    return fetch(`${BASE_URL}${input}`, { ...init, headers });
+  };
+  const events: ConversationEvent[] = [];
+  try {
+    for await (const event of streamTurn({ seat: SEAT, message, turnId, fetchImpl })) {
+      events.push(event);
+    }
+  } catch (error) {
+    if (error instanceof TurnRefused) return { events, refused: error };
+    throw error;
+  }
+  return { events, refused: null };
 }
 
 /**
@@ -510,6 +548,13 @@ async function main(): Promise<void> {
       reused.status === 409,
       `refused with 409 (${reused.status}: ${reused.raw.slice(0, 400)})`
     );
+    // And as the pane would meet it: a refusal before any frame, with the reason.
+    const reusedAsClient = await takeTurnAsClient(cookie, TURN_ID, 'Something else entirely.');
+    check(
+      reusedAsClient.refused?.status === 409 && reusedAsClient.refused.code === TURN_ID_REUSED,
+      `the client reads it as a refusal with reason ${TURN_ID_REUSED}, no frame`
+    );
+    check(reusedAsClient.events.length === 0, 'and no frame reached it');
 
     // 6. The connection drops after her first words. Owner ruling (18 Sept
     //    2026): that does not stop her answer.
@@ -562,15 +607,17 @@ async function main(): Promise<void> {
     });
     const downId = `${PREFIX}-down-${Date.now()}`;
     const downMessage = 'Are you there?';
-    const down = await takeTurn(cookie, downId, downMessage);
-    check(down.status === 200, `the turn is answered, not errored (${down.status})`);
-    const ending = down.frames.at(-1);
+    // The client's request shape, and the client's parse of what came back.
+    const down = await takeTurnAsClient(cookie, downId, downMessage);
+    check(down.refused === null, 'the turn is answered, not refused');
+    const ending = down.events.at(-1);
     check(
       ending?.type === 'error' && ending.code === 'unavailable',
-      `it ends with the plain ending: ${JSON.stringify(ending)}`
+      `it ends with the plain ending, as the client reads it: ${JSON.stringify(ending)}`
     );
+    const downText = JSON.stringify(down.events);
     check(
-      !down.raw.includes(UNREACHABLE_PROVIDER) && !down.raw.includes(UNREACHABLE_HOST),
+      !downText.includes(UNREACHABLE_PROVIDER) && !downText.includes(UNREACHABLE_HOST),
       'no frame names the provider or its host'
     );
     const downTurn = await waitForSettled(user.id, downId);
@@ -588,8 +635,11 @@ async function main(): Promise<void> {
     );
 
     await restoreSharedRows();
-    const back = await takeTurn(cookie, downId, downMessage);
-    check(back.frames.at(-1)?.type === 'done', 'pointed back, the same turn id runs');
+    const back = await takeTurnAsClient(cookie, downId, downMessage);
+    check(
+      back.refused === null && back.events.at(-1)?.type === 'done',
+      'pointed back, the same turn id — sent again as the pane sends it — runs'
+    );
     const backTurn = await prisma.appTurn.findUniqueOrThrow({
       where: { userId_turnId: { userId: user.id, turnId: downId } },
     });

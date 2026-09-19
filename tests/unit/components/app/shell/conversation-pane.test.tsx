@@ -8,17 +8,20 @@
  * contract: Enter sends and Shift+Enter does not, the box clears on the
  * server's `start`, the thinking row shows until her first words, a person
  * who asked for less motion gets the reply whole, and the off-screen carousel
- * pane is `inert` now that it holds real controls.
+ * pane is `inert` now that it holds real controls. And when she can't answer
+ * (t-65): each ending in her words, the crisis resource laid out, and the
+ * quiet line above the composer.
  *
  * @see components/app/shell/conversation-pane.tsx
  * @see components/app/conversation/*
  */
 
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
+import { ENDING_MESSAGES } from '@/lib/app/agent/endings';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -68,6 +71,7 @@ const seat = {
   turns: [] as ReturnType<typeof openTurn>[],
   bodies: [] as unknown[],
   transcript: [] as unknown[],
+  generation: 'available',
 };
 
 beforeEach(() => {
@@ -77,10 +81,17 @@ beforeEach(() => {
   seat.turns = [];
   seat.bodies = [];
   seat.transcript = [];
+  seat.generation = 'available';
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith('/api/v1/app/conversation')) return transcriptResponse(seat.transcript);
+      if (url.startsWith('/api/v1/app/agent/status')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { generation: seat.generation } }),
+          { status: 200 }
+        );
+      }
       if (url.includes('/chat/stream')) {
         seat.bodies.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}'));
         const turn = openTurn();
@@ -227,7 +238,7 @@ describe('sending', () => {
     expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
   });
 
-  it('tells the person when a turn ends without her, with the frame\u2019s words, and the words are back in the box', async () => {
+  it('tells the person when a turn ends without her, in her words, and the words are back in the box', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'hello{Enter}');
@@ -236,15 +247,17 @@ describe('sending', () => {
     await act(async () => latestTurn().push('start', { conversationId: 'c1' }));
     await waitFor(() => expect(box()).toHaveValue(''));
     await act(async () => {
-      latestTurn().push('error', { code: 'unavailable', message: 'Your message is kept.' });
+      latestTurn().push('error', { code: 'unavailable', message: ENDING_MESSAGES.unavailable });
       latestTurn().close();
     });
     await waitFor(() =>
-      expect(screen.getByRole('article', { name: 'The turn ended' }).textContent).toBe(
-        'Your message is kept.'
+      expect(screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel }).textContent).toBe(
+        CONVERSATION_COPY.endings.unavailable
       )
     );
     expect(box()).toHaveValue('hello');
+    // In the box, not in the transcript as well.
+    expect(screen.queryByRole('article', { name: 'You said' })).toBeNull();
   });
 
   it('does not overwrite a new draft with the failed one', async () => {
@@ -259,9 +272,189 @@ describe('sending', () => {
       latestTurn().close();
     });
     await waitFor(() =>
-      expect(screen.getByRole('article', { name: 'The turn ended' })).toBeTruthy()
+      expect(screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeTruthy()
     );
     expect(box()).toHaveValue('a new thought');
+    // The failed words are not nowhere: they stay as their bubble.
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('first');
+  });
+});
+
+describe('when she can\u2019t answer (t-65)', () => {
+  const endingRow = () => screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel });
+
+  async function endOn(code: string, message: string) {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'a hard week{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('error', { code, message });
+      latestTurn().close();
+    });
+    await waitFor(() => expect(endingRow()).toBeTruthy());
+    return user;
+  }
+
+  it.each(['unavailable', 'timed_out', 'paused', 'not_sent'] as const)(
+    'renders %s in her words, never the frame\u2019s',
+    async (code) => {
+      await endOn(code, ENDING_MESSAGES[code]);
+      expect(endingRow().textContent).toBe(CONVERSATION_COPY.endings[code]);
+      expect(screen.queryByText(ENDING_MESSAGES[code])).toBeNull();
+      expect(box()).toHaveValue('a hard week');
+    }
+  );
+
+  it('sends the same words again as the same turn, and the ending row goes', async () => {
+    const user = await endOn('unavailable', ENDING_MESSAGES.unavailable);
+    const first = seat.bodies[0] as { turnId: string };
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(seat.bodies).toHaveLength(2));
+    expect((seat.bodies[1] as { turnId: string }).turnId).toBe(first.turnId);
+    expect(screen.queryByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeNull();
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('a hard week');
+  });
+
+  it('says she is still on it when the earlier request is still being answered', async () => {
+    const user = await endOn('unavailable', ENDING_MESSAGES.unavailable);
+    vi.mocked(fetch).mockImplementationOnce(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: 'CONFLICT', message: 'x', details: { reason: 'TURN_IN_FLIGHT' } },
+          }),
+          { status: 409, headers: { 'content-type': 'application/json' } }
+        )
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(endingRow().textContent).toBe(CONVERSATION_COPY.stillWorking));
+    expect(box()).toHaveValue('a hard week');
+  });
+
+  it('keeps the ceiling frame\u2019s own words — they carry the figures', async () => {
+    await endOn('ceiling_reached', 'You have used this month\u2019s budget ($4.00 of $4.00).');
+    expect(endingRow().textContent).toContain('$4.00 of $4.00');
+  });
+
+  const resource = (tier: 'hard' | 'soft') => ({
+    tier,
+    region: 'GB',
+    intro:
+      tier === 'hard' ? 'It sounds like you might be in real danger.' : 'If things feel heavy.',
+    services: [
+      { name: 'Samaritans', contact: 'Call 116 123', hours: 'Free, 24 hours a day' },
+      { name: 'Shout', contact: 'Text SHOUT to 85258', hours: 'Free, 24 hours a day' },
+      {
+        name: 'Find A Helpline',
+        contact: 'findahelpline.com',
+        hours: 'A free directory',
+        url: 'https://findahelpline.com',
+      },
+    ],
+    emergency: 'If you are in immediate danger, call your local emergency number now. (999)',
+    keptMessage: tier === 'hard' ? 'What you wrote is still in the box.' : null,
+    status: 'draft',
+    version: '0.1',
+  });
+
+  it('a hard crisis frame lays out every service and keeps the words in the box', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'I want to end it{Enter}');
+    const hard = resource('hard');
+    await act(async () => {
+      // Before `start`: the crisis check comes before everything else.
+      latestTurn().push('error', { code: 'crisis', message: 'as text', resource: hard });
+      latestTurn().close();
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(hard.intro);
+    for (const service of hard.services) {
+      expect(alert.textContent).toContain(service.name);
+      expect(alert.textContent).toContain(service.contact);
+      expect(alert.textContent).toContain(service.hours);
+    }
+    expect(screen.getByRole('link', { name: 'findahelpline.com' })).toHaveAttribute(
+      'href',
+      'https://findahelpline.com'
+    );
+    expect(alert.textContent).toContain(hard.emergency);
+    expect(alert.textContent).toContain(hard.keptMessage);
+    // Only an https:// address becomes a link; anything else stays as text.
+    expect(screen.queryByRole('link', { name: 'Call 116 123' })).toBeNull();
+    // Verbatim: nothing of hers is said under it, and the text form is not shown twice.
+    expect(screen.queryByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeNull();
+    expect(alert.textContent).not.toContain('as text');
+    expect(box()).toHaveValue('I want to end it');
+  });
+
+  it('never links a service address that is not https://', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'I want to end it{Enter}');
+    const hard = resource('hard');
+    hard.services[2].url = 'javascript:alert(1)';
+    await act(async () => {
+      latestTurn().push('error', { code: 'crisis', message: 'as text', resource: hard });
+      latestTurn().close();
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('findahelpline.com');
+    expect(within(alert).queryByRole('link')).toBeNull();
+  });
+
+  it('a soft crisis frame lays out the resource, then her turn', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'a hard week{Enter}');
+    const soft = resource('soft');
+    await act(async () => {
+      latestTurn().push('warning', { code: 'crisis', message: 'as text', resource: soft });
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('content', { delta: 'I am here.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
+    );
+    const alert = screen.getByRole('alert');
+    for (const service of soft.services) expect(alert.textContent).toContain(service.contact);
+    expect(alert.textContent).not.toContain('still in the box');
+    const reply = screen.getByRole('article', { name: 'Lelañea said' });
+    expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  describe('the line above the composer', () => {
+    it.each(['paused', 'unavailable'] as const)('shows one line for %s', async (generation) => {
+      seat.generation = generation;
+      await renderLoaded();
+      const line = await screen.findByRole('status');
+      expect(line.textContent).toBe(CONVERSATION_COPY.banner[generation]);
+      // Above the composer, below the transcript.
+      const log = screen.getByRole('log');
+      expect(log.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(line.compareDocumentPosition(box()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows nothing when she is available, and clears once a read says so', async () => {
+      seat.generation = 'paused';
+      const user = userEvent.setup();
+      await renderLoaded();
+      await screen.findByRole('status');
+
+      // Asked again after an ending: the switch is off now.
+      seat.generation = 'available';
+      await user.type(box(), 'hello{Enter}');
+      await act(async () => {
+        latestTurn().push('start', { conversationId: 'c1' });
+        latestTurn().push('error', { code: 'unavailable', message: 'x' });
+        latestTurn().close();
+      });
+      await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    });
   });
 });
 
@@ -299,8 +492,8 @@ describe('folding the pane mid-conversation', () => {
   });
 });
 
-describe('a soft crisis frame', () => {
-  it('shows the resource ahead of her reply, and keeps it there once the turn is done', async () => {
+describe('a soft crisis frame whose resource did not parse', () => {
+  it('shows the text form ahead of her reply, and keeps it there once the turn is done', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'a hard week{Enter}');

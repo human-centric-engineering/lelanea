@@ -1,8 +1,9 @@
 /**
- * The browser's side of a turn (§10 t-64).
+ * The browser's side of a turn (§10 t-64, t-65).
  *
- * Two calls, and nothing else: read the transcript back, and take a turn on a
- * seat. The turn goes to Daybreak's role route with the seam's request shape —
+ * Three calls, and nothing else: read the transcript back, take a turn on a
+ * seat, and ask whether a turn can be expected to be answered (the status read,
+ * for the banner). The turn goes to Daybreak's role route with the seam's request shape —
  * `{ message, turnId }` — and comes back as SSE frames, each one passed through
  * the leaf's own schema (`events.ts`). The client never handles a conversation
  * id: resume-by-context is the route's, and a member has no other door.
@@ -21,7 +22,8 @@
  * or an id reused for different words, `429` — as a JSON envelope, not as an
  * SSE frame. `streamTurn` reads the status before touching the body and throws
  * {@link TurnRefused} with the envelope's code, so the caller can tell a
- * refusal from a turn that ran and ended. t-65 gives each refusal its words.
+ * refusal from a turn that ran and ended — and, for `TURN_IN_FLIGHT`, keep the
+ * id rather than mint another (t-65).
  */
 
 import { z } from 'zod';
@@ -38,6 +40,9 @@ export function streamRouteFor(seat: string): string {
 export function transcriptRouteFor(seat: string): string {
   return `/api/v1/app/conversation?seat=${encodeURIComponent(seat)}`;
 }
+
+/** Whether a turn sent now can be expected to be answered (§08 t-55). Install-wide. */
+export const STATUS_ROUTE = '/api/v1/app/agent/status';
 
 /** One id per message, kept for as long as the message might be sent again. */
 export function mintTurnId(): string {
@@ -167,6 +172,33 @@ export async function fetchTranscript(
   const parsed = transcriptEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) throw new TurnRefused(response.status, 'malformed', 'Unreadable transcript');
   return validateEntries(parsed.data.data);
+}
+
+const statusEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ generation: z.enum(['available', 'unavailable', 'paused']) }),
+});
+
+export type GenerationStatus = z.infer<typeof statusEnvelopeSchema>['data']['generation'];
+
+/**
+ * The status read, for the banner: asked on mount and after an ending, never
+ * on a timer. A read that fails throws; the caller treats that as no news,
+ * not as an outage — the banner is a courtesy, and a turn is still tried.
+ */
+export async function fetchGenerationStatus(
+  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<GenerationStatus> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(STATUS_ROUTE, {
+    credentials: 'include',
+    signal: options.signal,
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = statusEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) throw new TurnRefused(response.status, 'malformed', 'Unreadable status');
+  return parsed.data.data.generation;
 }
 
 const accountSchema = z.object({

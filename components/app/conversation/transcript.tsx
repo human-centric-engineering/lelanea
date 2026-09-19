@@ -79,7 +79,14 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
       return <UserTurn key={`user:${entry.id}`} text={entry.text} rise={rise} />;
     }
     if (entry.kind === 'ending') {
-      return <EndingRow key={`ending:${entry.turnId}:${index}`} message={entry.message} />;
+      return (
+        <EndingRow
+          key={`ending:${entry.turnId}:${index}`}
+          code={entry.code}
+          message={entry.message}
+          resource={entry.resource}
+        />
+      );
     }
     const turnId = entry.turnId;
     const reply = (
@@ -96,13 +103,26 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
     // A soft crisis frame came ahead of her turn: the resource is shown first,
     // whatever her reply then says (safety.md).
     return 'crisisText' in entry && entry.crisisText
-      ? [<CrisisRow key={`crisis:${entry.id}`} text={entry.crisisText} />, reply]
+      ? [
+          <CrisisRow
+            key={`crisis:${entry.id}`}
+            resource={entry.resource}
+            text={entry.crisisText}
+          />,
+          reply,
+        ]
       : [reply];
   });
   if (live) {
     nodes.push(<UserTurn key={`user:live:${live.turnId}`} text={live.userText} rise />);
     if (live.crisisText) {
-      nodes.push(<CrisisRow key={`crisis:live:${live.turnId}`} text={live.crisisText} />);
+      nodes.push(
+        <CrisisRow
+          key={`crisis:live:${live.turnId}`}
+          resource={live.resource}
+          text={live.crisisText}
+        />
+      );
     }
     nodes.push(
       live.replyText ? (

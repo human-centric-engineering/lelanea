@@ -1,6 +1,6 @@
 ---
 name: app-conversation
-description: The conversation pane — the transcript read back through a leaf route with each reply joined to its turn row, the leaf event schema that keeps the crisis frame's resource, the stream client that mints the turn id, and the pacing that makes her reply arrive as typed. What is deliberately absent until t-65, t-66 and t-67.
+description: The conversation pane — the transcript read back through a leaf route with each reply joined to its turn row, the leaf event schema that keeps the crisis frame's resource, the stream client that mints the turn id, the pacing that makes her reply arrive as typed, and what the pane does when she can't answer — the endings in her words, the same turn id on a second try, the crisis resource laid out, the status line. What is deliberately absent until t-66 and t-67.
 ---
 
 # The conversation — talking to her from the shell
@@ -109,19 +109,25 @@ shape, `{ message, turnId }`. The client never handles a conversation id;
 resume-by-context is the route's.
 
 **The turn id is minted in the browser** (`crypto.randomUUID()`), once per
-message, and kept with the message until the turn ends. That is what makes
-"try again" safe (§08 t-54): a failed or timed-out turn re-runs under it, a
-completed one replays with no second model call. The retry itself is t-65's.
+message, and stays bound to the words. That is what makes "try again" safe
+(§08 t-54): a failed or timed-out turn re-runs under it, a completed one
+replays with no second model call. See
+[When she can't answer](#when-she-cant-answer-in-the-pane) for the retry.
 
 **A refusal is not a stream.** `404` (no surface), `409` (`TURN_IN_FLIGHT`,
 `TURN_ID_REUSED`) and `429` arrive as JSON envelopes; `streamTurn` reads the
 status before touching the body and throws `TurnRefused` with the envelope's
-`details.reason` or `code`. t-64 renders any refusal as the `unavailable`
-ending; t-65 gives each its words.
+`details.reason` or `code` (the two reasons are in the import-light
+`lib/app/agent/turn-codes.ts`, so the browser can branch on them without the
+turn seam's Prisma import).
 
 **A stream that closes with no terminal frame** — a connection that dropped —
-is also `unavailable` here. The turn carries on server-side and is recorded
-`completed` (§08 t-55), so the id can be sent again for the whole answer.
+is `unavailable` here. The turn carries on server-side and is recorded
+`completed` (§08 t-55), so the same id gets the whole answer.
+
+**The status read** — `GET /api/v1/app/agent/status` → `available |
+unavailable | paused` — is `fetchGenerationStatus()`, asked on mount and after
+every ending, never on a timer.
 
 ## The event schema — `events.ts`
 
@@ -143,24 +149,81 @@ the authored shape drops to `undefined` and the frame still arrives, because
 
 ## What the pane does with each frame
 
-| Frame                      | Then                                                                                                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `start`                    | the draft clears — the words leave the box only once the server has them (§8.1)                                                                                                      |
-| `content`                  | her words grow; the thinking row becomes her bubble on the first one                                                                                                                 |
-| `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                                    |
-| `warning` `crisis` (soft)  | its `message` — the whole resource as text — shown as an `alert` row ahead of her reply, live and once folded; the structured `resource` is kept for t-65 to lay out in her register |
-| `status`                   | the platform's operator strings — never shown                                                                                                                                        |
-| `capability_result(s)`     | slugs collected for the drawer (t-66)                                                                                                                                                |
-| `citations`                | carried on the reply (t-66)                                                                                                                                                          |
-| `content_reset`            | her words start over                                                                                                                                                                 |
-| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame                                                                                                  |
-| `error`                    | an `ending` entry with the frame's words, and the words back in the box if it is empty; t-65 makes it hers and retryable                                                             |
+| Frame                      | Then                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `start`                    | the draft clears — the words leave the box only once the server has them (§8.1)                                                                                                |
+| `content`                  | her words grow; the thinking row becomes her bubble on the first one                                                                                                           |
+| `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                              |
+| `warning` `crisis` (soft)  | the authored `resource` laid out as an `alert` row ahead of her reply, live and once folded; its `message` — the whole resource as text — where the resource did not parse     |
+| `status`                   | the platform's operator strings — never shown                                                                                                                                  |
+| `capability_result(s)`     | slugs collected for the drawer (t-66)                                                                                                                                          |
+| `citations`                | carried on the reply (t-66)                                                                                                                                                    |
+| `content_reset`            | her words start over                                                                                                                                                           |
+| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame                                                                                            |
+| `error`                    | an `ending` entry: the words back in the box, bound to the turn id, and her words where the reply would have been (below); a hard `crisis` frame lays the resource out instead |
 
 The account built live from `done` carries model, provider, tokens and
 `costUsd`; `fingerprintVersion` and `pricing` are `null` until the read route
 has them on reload — the frame does not carry either. A `costUsd` of `0` on
 the frame (what a replay says for an unpriced turn) is recorded as `null`,
 never `0`: zero reads as free, and only the turn row knows.
+
+## When she can't answer — in the pane
+
+§10 t-65; product description §8.1; the contract is
+[`agent.md`](./agent.md#the-endings--what-f-conversation-builds-against).
+
+**The words go back into the box, not into the transcript as well.** §8.1: _a
+message that fails to send stays in the box, retryable, with the conversation
+intact around it._ On any ending the box gets the words back (`start` had
+cleared it) and the ending row stands where her reply would have been — no
+bubble, which would show the words twice. The one exception is a box already
+holding a newer thought: that draft is left alone, and the failed words stay in
+the transcript as their bubble, so they are never nowhere.
+
+**A second try is the same turn.** The id stays bound to the words
+(`kept` in `useConversation`); `send` with the same words posts the same id,
+and the earlier attempt's ending row is removed — the retry supersedes it, as
+the transcript read collapses the attempts to one. Different words are a
+different turn and mint a new id, which is why `TURN_ID_REUSED` cannot happen
+from this client; if it ever does, it reads as `unavailable` and the id is
+dropped.
+
+| The turn ended on                      | The row says (`CONVERSATION_COPY`)             | The id                          |
+| -------------------------------------- | ---------------------------------------------- | ------------------------------- |
+| `unavailable`                          | `endings.unavailable`                          | kept                            |
+| `timed_out`                            | `endings.timed_out`                            | kept                            |
+| `paused`                               | `endings.paused`                               | kept                            |
+| `not_sent`                             | `endings.not_sent` — no retry offered          | dropped                         |
+| `409 TURN_IN_FLIGHT`                   | `stillWorking` — she is still on it            | kept, no new one minted         |
+| `409 TURN_ID_REUSED`                   | `endings.unavailable`                          | dropped                         |
+| a network failure, or a dropped stream | `endings.unavailable`                          | kept                            |
+| `ceiling_reached`                      | the frame's own words (it carries the figures) | kept — a replay is still served |
+| `crisis` (hard)                        | the resource, laid out                         | kept                            |
+
+**The copy is in her register, in one module** (`lib/app/conversation/copy.ts`
+→ `endings`, `stillWorking`, `banner`): short sentences, one thought to a line
+(each `\n` is a beat and is rendered as its own line), no stacked apology, the
+next move handed back. Like the voice core, these are proposals in her register
+until she has read them. The frame's neutral words stay on the entry as the
+fallback for a code the pane does not know.
+
+**The crisis resource is laid out verbatim** (`CrisisRow`): the intro, every
+service — name, contact (a link where the file gives a URL), hours — the
+emergency line, and on a hard frame the `keptMessage` line. Nothing is
+rewritten: these are the words a person reads at the worst moment they will
+bring to the app, and they wait on her sign-off as they are
+([`safety.md`](./safety.md#the-client-frame--what-f-conversation-builds-against)).
+A hard frame ends the turn before `start`, so the box never emptied; a soft
+frame's resource stands ahead of her turn, live and once folded. Where the
+frame's `resource` did not parse, its `message` — the whole resource as text —
+is shown instead, so a shape mismatch never costs the names and numbers.
+
+**The line above the composer** (`StatusLine`): one line in the muted ink at
+the transcript's measure, no red, no icon, a `status` region. `paused` and
+`unavailable` from the status read show it; `available`, or a turn that
+completes, clears it. Asked on mount and after every ending; there is no
+interval, and a test reads the hook's source to say so.
 
 ## The pacing — `useTypedText`
 
@@ -208,17 +271,22 @@ is recorded, so closing the tab loses nothing.
 Every word the pane says of its own is in `lib/app/conversation/copy.ts` —
 one module, so a locale can replace it later rather than being retrofitted
 across components (§11: externalised strings from the first line). Her
-replies are not there; they are hers. The endings in her register and the
-banner are t-65's and will sit beside these.
+replies are not there; they are hers. The endings in her register, the
+still-working line and the status line sit beside the chrome's words.
 
 ## What is deliberately absent
 
 - **The timestamp and one-line account under a reply** — t-66. The prototype
   renders `.disclose` only when a turn has `meta`, which no turn has until the
   account exists. `ReplyTurn` takes `children` for it.
-- **The endings in her words, retry, the crisis resource laid out, the
-  banner** — t-65. t-64 shows the neutral copy the ending frame carries, in the
-  muted ink, and offers nothing; a soft crisis frame's text is shown as-is.
+- **The ceiling ending in her register.** `ceiling_reached` keeps the frame's
+  own words: they carry the figures, formatted server-side, and f-budget owns
+  the budget view they belong beside. Trigger to revisit: f-budget's copy.
+- **An explanation under a failed turn on reload.** The read route returns the
+  person's row of a turn that failed after `start` with no reply under it — the
+  turn row's `errorCode` is joined to replies, not to the person's row. The
+  words are kept, which is §8.1's floor; saying why nothing follows is not in
+  this task.
 - **The microphone** — t-67. Still disabled, still labelled as arriving with
   the conversation.
 - **Pinning a reader who has scrolled up** — the transcript follows the foot
@@ -239,15 +307,17 @@ banner are t-65's and will sit beside these.
 
 ## Tests
 
-| Where                                                            | Proves                                                                                                                                                                                                    |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/unit/lib/app/conversation/events.test.ts`                 | Every frame her seat sends parses; the crisis `resource` survives where Sunrise's parser strips it (asserted on both); a malformed resource drops to nothing and the frame still arrives                  |
-| `tests/unit/lib/app/conversation/transcript.test.ts`             | The join; the doubled user row collapsed and the marker row hidden, each against a fixture that first shows it present; passes joined; pre-seam rows carried; the read under the caller's id, both tables |
-| `tests/unit/lib/app/conversation/client.test.ts`                 | The seam's request shape; frames out of a byte stream split mid-frame; unknown frames skipped; a refusal thrown before any frame with the envelope's reason                                               |
-| `tests/unit/app/api/v1/app/conversation/route.test.ts`           | Auth, the seat vocabulary, `no-store`, empty-not-404, another person's conversation unreachable by construction, the words never logged                                                                   |
-| `tests/unit/components/app/conversation/use-typed-text.test.tsx` | The pace, the half-word held back, the pace kept across fast chunks, a replaced text starting over, reduced motion whole                                                                                  |
-| `tests/unit/components/app/shell/conversation-pane.test.tsx`     | Enter sends and Shift+Enter does not; the box clears on `start`; the thinking row until first words and its label at `still_thinking`; status strings never shown; reduced motion; `inert` off-screen     |
-| `scripts/app/smoke-turn.ts` (step 3c)                            | After a real turn, `/api/v1/app/conversation` returns that turn — the person's message with its id, her reply word for word, joined to its row with model, fingerprint version, seat and cost             |
+| Where                                                              | Proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/lib/app/conversation/events.test.ts`                   | Every frame her seat sends parses; the crisis `resource` survives where Sunrise's parser strips it (asserted on both); a malformed resource drops to nothing and the frame still arrives                                                                                                                                                                                                                                                                                              |
+| `tests/unit/lib/app/conversation/transcript.test.ts`               | The join; the doubled user row collapsed and the marker row hidden, each against a fixture that first shows it present; passes joined; pre-seam rows carried; the read under the caller's id, both tables                                                                                                                                                                                                                                                                             |
+| `tests/unit/lib/app/conversation/client.test.ts`                   | The seam's request shape; frames out of a byte stream split mid-frame; unknown frames skipped; a refusal thrown before any frame with the envelope's reason                                                                                                                                                                                                                                                                                                                           |
+| `tests/unit/app/api/v1/app/conversation/route.test.ts`             | Auth, the seat vocabulary, `no-store`, empty-not-404, another person's conversation unreachable by construction, the words never logged                                                                                                                                                                                                                                                                                                                                               |
+| `tests/unit/components/app/conversation/use-typed-text.test.tsx`   | The pace, the half-word held back, the pace kept across fast chunks, a replaced text starting over, reduced motion whole                                                                                                                                                                                                                                                                                                                                                              |
+| `tests/unit/components/app/shell/conversation-pane.test.tsx`       | Enter sends and Shift+Enter does not; the box clears on `start`; the thinking row until first words and its label at `still_thinking`; status strings never shown; reduced motion; `inert` off-screen; each ending in her words and never the frame's; the same words sent again as the same id; `TURN_IN_FLIGHT`; a hard frame's every service and the words in the box; a soft frame's resource then her turn; the status line for `paused` / `unavailable`, cleared on `available` |
+| `tests/unit/components/app/conversation/use-conversation.test.tsx` | The id sent, then equal on the retry, for each retryable ending; `not_sent` and `TURN_ID_REUSED` drop it; `TURN_IN_FLIGHT` mints nothing; a newer draft kept; the status read on mount and after an ending, no timer in the source                                                                                                                                                                                                                                                    |
+| `tests/unit/lib/app/agent/endings.test.ts`                         | Each named refusal code maps to `not_sent`; every other platform code does not; no platform text in any frame                                                                                                                                                                                                                                                                                                                                                                         |
+| `scripts/app/smoke-turn.ts` (steps 3c, 4, 6)                       | After a real turn, `/api/v1/app/conversation` returns that turn joined to its row; the down-and-back turn through the pane's own client — the plain ending as it parses it, then the same id running                                                                                                                                                                                                                                                                                  |
 
 ## See also
 

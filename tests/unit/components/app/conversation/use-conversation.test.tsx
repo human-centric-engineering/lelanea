@@ -3,10 +3,15 @@
 /**
  * The conversation's state, frame by frame — the paths the pane test does
  * not reach by typing: what rides on the live turn, how a turn folds into an
- * entry, a refusal, a dropped stream, and the busy guard (§10 t-64).
+ * entry, a refusal, a dropped stream, and the busy guard (§10 t-64); and when
+ * she can't answer, that the words go back and the second try is the same
+ * turn — the id asserted sent, then asserted equal (t-65).
  *
  * @see components/app/conversation/use-conversation.ts
  */
+
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,19 +50,44 @@ const emptyTranscript = () =>
     { status: 200 }
   );
 
-const turns: ReturnType<typeof openTurn>[] = [];
-let refuse: Response | null = null;
+const statusResponse = (generation: string) =>
+  new Response(JSON.stringify({ success: true, data: { generation } }), { status: 200 });
 
-const fetchImpl = vi.fn(async (url: string | URL | Request): Promise<Response> => {
-  const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
-  if (href.startsWith('/api/v1/app/conversation')) return emptyTranscript();
-  if (refuse) return refuse;
-  const turn = openTurn();
-  turns.push(turn);
-  return turn.response;
-}) as unknown as typeof fetch;
+const turns: ReturnType<typeof openTurn>[] = [];
+/** The `turnId` each turn request carried, in order. */
+const sentIds: string[] = [];
+let refuse: Response | null = null;
+let generation = 'available';
+let statusReads = 0;
+let statusDown = false;
+
+const fetchImpl = vi.fn(
+  async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (href.startsWith('/api/v1/app/conversation')) return emptyTranscript();
+    if (href.startsWith('/api/v1/app/agent/status')) {
+      statusReads += 1;
+      return statusDown ? new Response('', { status: 500 }) : statusResponse(generation);
+    }
+    const body: unknown = JSON.parse(typeof init?.body === 'string' ? init.body : '{}');
+    if (body && typeof body === 'object' && 'turnId' in body) sentIds.push(String(body.turnId));
+    if (refuse) return refuse;
+    const turn = openTurn();
+    turns.push(turn);
+    return turn.response;
+  }
+) as unknown as typeof fetch;
 
 const latest = () => turns[turns.length - 1];
+
+const refusal = (status: number, reason: string) =>
+  new Response(
+    JSON.stringify({
+      success: false,
+      error: { code: 'CONFLICT', message: 'x', details: { reason } },
+    }),
+    { status, headers: { 'content-type': 'application/json' } }
+  );
 
 async function loaded() {
   const hook = renderHook(() => useConversation({ fetchImpl }));
@@ -67,9 +97,22 @@ async function loaded() {
 
 beforeEach(() => {
   turns.length = 0;
+  sentIds.length = 0;
   refuse = null;
+  generation = 'available';
+  statusReads = 0;
+  statusDown = false;
   vi.mocked(fetchImpl).mockClear();
 });
+
+/** A turn that the server started and then could not answer. */
+async function failTurn(code: string) {
+  await act(async () => {
+    latest().push('start', { conversationId: 'c1' });
+    latest().push('error', { code, message: `frame words for ${code}` });
+    latest().close();
+  });
+}
 
 describe('useConversation', () => {
   it('carries what the turn called and what it cited onto the finished reply', async () => {
@@ -188,19 +231,15 @@ describe('useConversation', () => {
   });
 
   it('turns a refusal into an ending carrying the route’s reason, before any frame', async () => {
-    refuse = new Response(
-      JSON.stringify({
-        success: false,
-        error: { code: 'CONFLICT', message: 'x', details: { reason: 'TURN_IN_FLIGHT' } },
-      }),
-      { status: 409, headers: { 'content-type': 'application/json' } }
-    );
+    refuse = refusal(409, 'TURN_IN_FLIGHT');
     const { result } = await loaded();
     act(() => result.current.send('again'));
     await waitFor(() => expect(result.current.phase).toBe('idle'));
-    expect(result.current.entries[1]).toMatchObject({ kind: 'ending', code: 'TURN_IN_FLIGHT' });
+    expect(result.current.entries).toEqual([
+      expect.objectContaining({ kind: 'ending', code: 'TURN_IN_FLIGHT' }),
+    ]);
     // The words were never cleared — no `start` came — and are still there.
-    expect(result.current.entries[0]).toMatchObject({ kind: 'user', text: 'again' });
+    expect(result.current.draft).toBe('again');
   });
 
   it('treats a stream that closes with no terminal frame as unavailable', async () => {
@@ -212,8 +251,10 @@ describe('useConversation', () => {
       latest().close();
     });
     await waitFor(() => expect(result.current.phase).toBe('idle'));
-    expect(result.current.entries[1]).toMatchObject({ kind: 'ending', code: 'unavailable' });
-    // And the words are back in the box.
+    expect(result.current.entries).toEqual([
+      expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
+    ]);
+    // And the words are back in the box — not in the transcript as well.
     expect(result.current.draft).toBe('hello');
   });
 
@@ -228,6 +269,196 @@ describe('useConversation', () => {
     expect(result.current.live?.userText).toBe('first');
   });
 
+  describe('when she can\u2019t answer (t-65)', () => {
+    /** The ending, then the same words sent again: one id across both requests. */
+    async function endThenRetry(code: string) {
+      const { result } = await loaded();
+      act(() => result.current.send('a hard week'));
+      await waitFor(() => expect(sentIds).toHaveLength(1));
+      const first = sentIds[0];
+      expect(first).toMatch(/^[0-9a-f-]{36}$/);
+      await failTurn(code);
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      return { result, first };
+    }
+
+    it.each(['unavailable', 'timed_out', 'paused'])(
+      'on %s the words are back in the box, and sending them again is the same turn',
+      async (code) => {
+        const { result, first } = await endThenRetry(code);
+        // The frame's own words are on the entry; the row swaps them for hers.
+        expect(result.current.entries).toEqual([
+          expect.objectContaining({ kind: 'ending', code, message: `frame words for ${code}` }),
+        ]);
+        expect(result.current.draft).toBe('a hard week');
+
+        act(() => result.current.send());
+        await waitFor(() => expect(sentIds).toHaveLength(2));
+        expect(sentIds[1]).toBe(first);
+        // The retry supersedes the earlier attempt's row.
+        expect(result.current.entries).toEqual([]);
+        expect(result.current.live?.turnId).toBe(first);
+      }
+    );
+
+    it('on not_sent the words are back in the box, and nothing offers the same id again', async () => {
+      const { result, first } = await endThenRetry('not_sent');
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'ending', code: 'not_sent' }),
+      ]);
+      expect(result.current.draft).toBe('a hard week');
+
+      // Sent again as they are, the words are a new turn: the refused id is
+      // not kept, so nothing about this client can retry the refusal.
+      act(() => result.current.send());
+      await waitFor(() => expect(sentIds).toHaveLength(2));
+      expect(sentIds[1]).not.toBe(first);
+    });
+
+    it('different words are a different turn — a new id, never TURN_ID_REUSED', async () => {
+      const { result, first } = await endThenRetry('unavailable');
+      act(() => result.current.send('a hard week, and a long one'));
+      await waitFor(() => expect(sentIds).toHaveLength(2));
+      expect(sentIds[1]).not.toBe(first);
+    });
+
+    it('on TURN_IN_FLIGHT no new id is minted: the next send is the same id', async () => {
+      const { result, first } = await endThenRetry('unavailable');
+      refuse = refusal(409, 'TURN_IN_FLIGHT');
+      act(() => result.current.send());
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(sentIds).toEqual([first, first]);
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'ending', code: 'TURN_IN_FLIGHT' }),
+      ]);
+      expect(result.current.draft).toBe('a hard week');
+
+      // Once the earlier request has finished, the same id gets the reply.
+      refuse = null;
+      act(() => result.current.send());
+      await waitFor(() => expect(sentIds).toHaveLength(3));
+      expect(sentIds[2]).toBe(first);
+    });
+
+    it('reads TURN_ID_REUSED as unavailable and drops the id', async () => {
+      const { result, first } = await endThenRetry('unavailable');
+      refuse = refusal(409, 'TURN_ID_REUSED');
+      act(() => result.current.send());
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
+      ]);
+      refuse = null;
+      act(() => result.current.send());
+      await waitFor(() => expect(sentIds).toHaveLength(3));
+      expect(sentIds[2]).not.toBe(first);
+    });
+
+    it('a network failure before any frame is the unavailable path, id kept', async () => {
+      const { result } = await loaded();
+      vi.mocked(fetchImpl).mockImplementationOnce(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      act(() => result.current.send('hello'));
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
+      ]);
+      expect(result.current.draft).toBe('hello');
+    });
+
+    it('keeps a newer draft, and the failed words in the transcript instead', async () => {
+      const { result } = await loaded();
+      act(() => result.current.send('first'));
+      await act(async () => latest().push('start', { conversationId: 'c1' }));
+      await waitFor(() => expect(result.current.draft).toBe(''));
+      act(() => result.current.setDraft('a new thought'));
+      await failTurn('unavailable');
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(result.current.draft).toBe('a new thought');
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'user', text: 'first' }),
+        expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
+      ]);
+    });
+
+    it('a hard crisis frame ends the turn with the resource, the words still in the box', async () => {
+      const resource = {
+        tier: 'hard',
+        region: 'GB',
+        intro: 'It sounds like you might be in real danger right now.',
+        services: [{ name: 'Samaritans', contact: 'Call 116 123', hours: 'Free, 24 hours a day' }],
+        emergency: 'If you are in immediate danger, call 999.',
+        keptMessage: 'What you wrote is still in the box.',
+        status: 'draft',
+        version: '0.1',
+      };
+      const { result } = await loaded();
+      act(() => result.current.send('I want to end it'));
+      await act(async () => {
+        // No `start`: the crisis check comes before anything else.
+        latest().push('error', { code: 'crisis', message: 'text', resource });
+        latest().close();
+      });
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(result.current.entries).toEqual([
+        expect.objectContaining({ kind: 'ending', code: 'crisis', resource }),
+      ]);
+      expect(result.current.draft).toBe('I want to end it');
+    });
+
+    describe('the status read', () => {
+      it('is asked on mount and after an ending, never on a timer', async () => {
+        generation = 'paused';
+        const { result } = await loaded();
+        await waitFor(() => expect(result.current.status).toBe('paused'));
+        expect(statusReads).toBe(1);
+
+        act(() => result.current.send('hello'));
+        await failTurn('paused');
+        await waitFor(() => expect(statusReads).toBe(2));
+        // Nothing polls: the hook owns no timer at all. (`waitFor` above uses
+        // one itself, so this is read from the source rather than spied.)
+        const source = readFileSync(
+          path.join(process.cwd(), 'components/app/conversation/use-conversation.ts'),
+          'utf8'
+        );
+        expect(source).not.toMatch(/setInterval|setTimeout/);
+      });
+
+      it('clears on an available read, and on a turn that completes', async () => {
+        generation = 'unavailable';
+        const { result } = await loaded();
+        await waitFor(() => expect(result.current.status).toBe('unavailable'));
+
+        generation = 'available';
+        act(() => result.current.send('hello'));
+        await failTurn('unavailable');
+        await waitFor(() => expect(result.current.status).toBe('available'));
+
+        generation = 'unavailable';
+        const again = await loaded();
+        await waitFor(() => expect(again.result.current.status).toBe('unavailable'));
+        act(() => again.result.current.send('hello'));
+        await act(async () => {
+          latest().push('start', { conversationId: 'c1' });
+          latest().push('content', { delta: 'Here.' });
+          latest().push('done', {});
+          latest().close();
+        });
+        await waitFor(() => expect(again.result.current.phase).toBe('idle'));
+        expect(again.result.current.status).toBe('available');
+      });
+
+      it('is no news when it cannot be read', async () => {
+        statusDown = true;
+        const { result } = await loaded();
+        await waitFor(() => expect(statusReads).toBe(1));
+        expect(result.current.status).toBeNull();
+      });
+    });
+  });
+
   it('marks the turn unreadable, not broken, when the transcript cannot be read', async () => {
     vi.mocked(fetchImpl).mockImplementationOnce(async () => new Response('', { status: 500 }));
     const { result } = renderHook(() => useConversation({ fetchImpl }));
@@ -240,7 +471,8 @@ describe('useConversation', () => {
     const hook = await loaded();
     act(() => hook.result.current.send('hello'));
     await waitFor(() => expect(turns).toHaveLength(1));
-    const [, init] = vi.mocked(fetchImpl).mock.calls[1] as unknown as [string, RequestInit];
+    // The transcript read, the status read, then the turn.
+    const [, init] = vi.mocked(fetchImpl).mock.calls[2] as unknown as [string, RequestInit];
     hook.unmount();
     expect(init.signal?.aborted).toBe(true);
   });
