@@ -137,7 +137,7 @@
     "jsdom": "^26.1.0",
     "libphonenumber-js": "^1.13.13",
     "lru-cache": "^11.5.2",
-    "lucide-react": "^1.45.0",
+    "lucide-react": "^1.46.0",
     "mammoth": "^1.12.3",
     "mermaid": "^11.17.2",
     "next": "^16.3.5",
