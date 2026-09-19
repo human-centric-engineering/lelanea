@@ -54,6 +54,7 @@ type CopyJson = Jsonified<CrisisCopyRow>;
 type RegionJson = Jsonified<CrisisRegionRow>;
 export interface CrisisViewJson {
   seeded: boolean;
+  unservable: string | null;
   copy: CopyJson | null;
   regions: RegionJson[];
 }
@@ -149,6 +150,14 @@ export function CrisisResourcesPanel({
 
   return (
     <div className="space-y-10">
+      {initialView.unservable && (
+        <p role="alert" className="text-destructive max-w-3xl text-sm">
+          What is stored here cannot be shown to anyone, so everyone is being shown the version
+          built into the code instead. The problem: {initialView.unservable}. Correct it and save;
+          until then, edits and sign-offs here reach nobody.
+        </p>
+      )}
+
       {malformed.length > 0 && (
         <p role="alert" className="text-destructive max-w-3xl text-sm">
           The stored services for {malformed.join(', ')} are malformed, so everyone is being shown
@@ -286,11 +295,10 @@ function CopyForm({ copy, onSaved }: { copy: CopyJson; onSaved: (copy: CopyJson)
     setBusy(true);
     setError(null);
     setNotice(null);
-    const result = await send<{ copy: CopyJson; changed: string[] }>(
-      'PUT',
-      CRISIS_COPY_ENDPOINT,
-      text
-    );
+    const result = await send<{ copy: CopyJson; changed: string[] }>('PUT', CRISIS_COPY_ENDPOINT, {
+      ...text,
+      version: copy.version,
+    });
     setBusy(false);
     if (!result.ok) return setError(result.message);
     onSaved(result.data.copy);
@@ -560,6 +568,7 @@ function RegionEditor(
         : await send<{ region: RegionJson }>('PUT', crisisRegionEndpoint(props.initial.region), {
             emergencyNumber,
             services,
+            version: props.initial.version,
           });
     setBusy(false);
     if (!result.ok) return setError(result.message);

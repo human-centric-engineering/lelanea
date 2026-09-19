@@ -4,7 +4,9 @@
  * PUT    /api/v1/admin/app/safety/resources/regions/:region — replace its number and services
  * DELETE /api/v1/admin/app/safety/resources/regions/:region — stop listing it
  *
- * PUT body: `{ emergencyNumber, services }` (`crisisRegionUpdateSchema`). A save
+ * PUT body: `{ emergencyNumber, services, version }` (`crisisRegionSaveSchema`) —
+ * `version` is the one the admin edited from, and a save from a stale form is
+ * refused 409 rather than silently undoing someone else's correction. A save
  * that changes something returns the region to `draft` and bumps its version;
  * one that changes nothing writes nothing and no audit entry.
  *
@@ -22,15 +24,15 @@ import { validatePathParam, validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { getClientIP } from '@/lib/security/ip';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
-import { crisisRegionUpdateSchema, regionCodeSchema } from '@/lib/validations/app-crisis-resources';
+import { crisisRegionSaveSchema, regionCodeSchema } from '@/lib/validations/app-crisis-resources';
 import { removeCrisisRegion, updateCrisisRegion } from '@/lib/app/safety/crisis-admin';
 
 export const PUT = withAdminAuth<{ region: string }>(async (request, session, { params }) => {
   const log = await getRouteLogger(request);
   const code = validatePathParam((await params).region, regionCodeSchema, { label: 'region' });
-  const body = await validateRequestBody(request, crisisRegionUpdateSchema);
+  const { version, ...body } = await validateRequestBody(request, crisisRegionSaveSchema);
 
-  const { region, changes } = await updateCrisisRegion(code, body);
+  const { region, changes } = await updateCrisisRegion(code, body, version);
   const changed = Object.keys(changes);
   log.info('Crisis region saved', { adminId: session.user.id, region: code, changed });
 

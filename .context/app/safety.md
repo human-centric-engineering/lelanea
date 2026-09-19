@@ -145,9 +145,15 @@ the wording **and a check that every number still answers.**
 
 - **Any save that changes something sends that part back to `draft`** and bumps
   its version. A save that changes nothing changes nothing.
-- **Sign-off names the version the admin read** (`POST …/sign-off { version }`),
-  and is refused 409 if it has moved — nobody signs off words they did not see.
-  A region whose stored services are malformed cannot be signed off.
+- **A save and a sign-off both name the version the admin read** (`version` in
+  the body), and either is refused 409 if it has moved. A stale form cannot
+  silently put back a number another admin just corrected, and nobody signs off
+  words they did not see. A region whose stored services are malformed cannot be
+  signed off.
+- **The page says when the stored rows cannot be served at all** (`unservable`
+  on `GET`): it runs the same check the turn does (`contentFromRows` in
+  `resources-store.ts`), so any row that sends everyone to the bundled file is
+  named there rather than edited unseen.
 - **The frame's `status` is `signed_off` only when everything shown is**: the
   copy, and the region's services where a region was chosen.
 - **The frame's `version`** is `0.1` from the file, and `c3` or `c3/GB.2` from

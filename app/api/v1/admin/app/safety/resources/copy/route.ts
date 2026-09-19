@@ -3,10 +3,11 @@
  *
  * PUT /api/v1/admin/app/safety/resources/copy
  *
- * Body: every field of the copy, every time (`crisisCopyUpdateSchema`). A save
- * that changes something returns the copy to `draft` and bumps its version; one
- * that changes nothing leaves both alone and writes no audit entry. 409 before
- * the tables are seeded.
+ * Body: every field of the copy, every time, plus the `version` the admin edited
+ * from (`crisisCopySaveSchema`). A save that changes something returns the copy
+ * to `draft` and bumps its version; one that changes nothing leaves both alone
+ * and writes no audit entry. 409 when the version has moved (someone else saved
+ * first) or before the tables are seeded.
  *
  * Authentication: admin. Rate limiting: the `admin` section tier from `proxy.ts`.
  * Audited with the before and after — who reworded what a person in danger
@@ -19,14 +20,14 @@ import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { getClientIP } from '@/lib/security/ip';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
-import { crisisCopyUpdateSchema } from '@/lib/validations/app-crisis-resources';
+import { crisisCopySaveSchema } from '@/lib/validations/app-crisis-resources';
 import { updateCrisisCopy } from '@/lib/app/safety/crisis-admin';
 
 export const PUT = withAdminAuth(async (request, session) => {
   const log = await getRouteLogger(request);
-  const body = await validateRequestBody(request, crisisCopyUpdateSchema);
+  const { version, ...body } = await validateRequestBody(request, crisisCopySaveSchema);
 
-  const { copy, changes } = await updateCrisisCopy(body);
+  const { copy, changes } = await updateCrisisCopy(body, version);
   const changed = Object.keys(changes);
   log.info('Crisis copy saved', { adminId: session.user.id, changed, version: copy.version });
 

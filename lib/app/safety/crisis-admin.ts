@@ -18,8 +18,10 @@
  * tables the source with every other region missing — so each write refuses
  * 409 instead, naming the seed.
  *
- * A sign-off names the version the admin read. If someone edited in between, it
- * is refused 409 — nobody signs off words they did not see.
+ * A save and a sign-off both name the version the admin read. If someone else
+ * saved in between, either is refused 409: a stale form cannot silently put
+ * back a number another admin just corrected, and nobody signs off words they
+ * did not see.
  *
  * @see lib/app/safety/resources-store.ts — how the turn reads what this writes
  * @see .context/app/safety.md — "The resource"
@@ -32,6 +34,7 @@ import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { isRecord } from '@/lib/utils';
 import {
   CRISIS_COPY_SLUG,
+  contentFromRows,
   invalidateCrisisContentCache,
   type CrisisContentStatus,
 } from '@/lib/app/safety/resources-store';
@@ -72,6 +75,13 @@ export interface CrisisRegionRow {
 export interface CrisisAdminView {
   /** Whether the tables are the source. `false` means the bundled file is served. */
   seeded: boolean;
+  /**
+   * Why the stored rows cannot be served, or `null` when they can. Non-null
+   * means every crisis turn is getting the bundled file — the same check the
+   * turn makes (`contentFromRows`), so the page never edits words nobody sees
+   * without saying so.
+   */
+  unservable: string | null;
   copy: CrisisCopyRow | null;
   regions: CrisisRegionRow[];
 }
@@ -149,11 +159,27 @@ async function requireRegion(region: string): Promise<AppCrisisRegion> {
   return row;
 }
 
-function versionMoved(what: string, current: number, read: number): ConflictError {
+function versionMoved(
+  what: string,
+  current: number,
+  read: number,
+  doing: 'saving' | 'signing off' = 'signing off'
+): ConflictError {
   return new ConflictError(
-    `${what} was changed since you read it (version ${read}, now ${current}). Reload and read it again before signing off.`,
+    `${what} was changed by someone else since you opened it (version ${read}, now ${current}). Reload and read it again before ${doing}.`,
     { reason: 'version_moved', currentVersion: current }
   );
+}
+
+function describeUnservable(err: unknown): string {
+  if (isRecord(err) && Array.isArray(err.issues)) {
+    const first: unknown = err.issues[0];
+    if (isRecord(first) && typeof first.message === 'string') {
+      const path = Array.isArray(first.path) ? first.path.join('.') : '';
+      return path ? `${path}: ${first.message}` : first.message;
+    }
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 /** Everything as stored, for the admin page. Two reads. */
@@ -162,8 +188,17 @@ export async function getCrisisAdminView(): Promise<CrisisAdminView> {
     prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
     prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
+  let unservable: string | null = null;
+  if (copy) {
+    try {
+      contentFromRows(copy, regions);
+    } catch (err) {
+      unservable = describeUnservable(err);
+    }
+  }
   return {
     seeded: copy !== null,
+    unservable,
     copy: copy ? toCopyRow(copy) : null,
     regions: regions.map(toRegionRow),
   };
@@ -171,9 +206,13 @@ export async function getCrisisAdminView(): Promise<CrisisAdminView> {
 
 /** Replace the shared copy and directory. Back to `draft` if anything changed. */
 export async function updateCrisisCopy(
-  update: CrisisCopyUpdate
+  update: CrisisCopyUpdate,
+  versionRead: number
 ): Promise<{ copy: CrisisCopyRow; changes: FieldChanges }> {
   const before = await requireSeeded();
+  if (before.version !== versionRead) {
+    throw versionMoved('The shared wording', before.version, versionRead, 'saving');
+  }
 
   const changes: FieldChanges = {};
   for (const field of COPY_FIELDS) {
@@ -182,12 +221,18 @@ export async function updateCrisisCopy(
   }
   if (Object.keys(changes).length === 0) return { copy: toCopyRow(before), changes };
 
-  const row = await prisma.appCrisisCopy.update({
-    where: { slug: CRISIS_COPY_SLUG },
+  // Conditional on the version, so a save racing another between the read
+  // above and here is refused too.
+  const { count } = await prisma.appCrisisCopy.updateMany({
+    where: { slug: CRISIS_COPY_SLUG, version: versionRead },
     data: { ...update, status: 'draft', signedOffAt: null, version: { increment: 1 } },
   });
+  if (count === 0) {
+    const now = await requireSeeded();
+    throw versionMoved('The shared wording', now.version, versionRead, 'saving');
+  }
   invalidateCrisisContentCache();
-  return { copy: toCopyRow(row), changes };
+  return { copy: toCopyRow(await requireSeeded()), changes };
 }
 
 /** Sign the shared copy off, at the version the admin read. */
@@ -232,10 +277,14 @@ export async function createCrisisRegion(data: CrisisRegionCreate): Promise<Cris
 /** Replace one region's number and services. Back to `draft` if anything changed. */
 export async function updateCrisisRegion(
   region: string,
-  update: CrisisRegionUpdate
+  update: CrisisRegionUpdate,
+  versionRead: number
 ): Promise<{ region: CrisisRegionRow; changes: FieldChanges }> {
   await requireSeeded();
   const before = await requireRegion(region);
+  if (before.version !== versionRead) {
+    throw versionMoved(region, before.version, versionRead, 'saving');
+  }
 
   const changes: FieldChanges = {};
   if (before.emergencyNumber !== update.emergencyNumber) {
@@ -246,8 +295,8 @@ export async function updateCrisisRegion(
   }
   if (Object.keys(changes).length === 0) return { region: toRegionRow(before), changes };
 
-  const row = await prisma.appCrisisRegion.update({
-    where: { region },
+  const { count } = await prisma.appCrisisRegion.updateMany({
+    where: { region, version: versionRead },
     data: {
       emergencyNumber: update.emergencyNumber,
       services: update.services,
@@ -256,8 +305,12 @@ export async function updateCrisisRegion(
       version: { increment: 1 },
     },
   });
+  if (count === 0) {
+    const now = await requireRegion(region);
+    throw versionMoved(region, now.version, versionRead, 'saving');
+  }
   invalidateCrisisContentCache();
-  return { region: toRegionRow(row), changes };
+  return { region: toRegionRow(await requireRegion(region)), changes };
 }
 
 /** Sign one region off, at the version the admin read. */

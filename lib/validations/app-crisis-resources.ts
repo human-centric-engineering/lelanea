@@ -67,14 +67,23 @@ export const crisisCopyUpdateSchema = z.strictObject({
   internationalHours: line('The directory description', 160),
 });
 
+/** The version the admin read, sent with every save and sign-off. */
+const versionRead = z.number().int().positive();
+
+/**
+ * A save names the version it was edited from. If another admin saved in
+ * between, it is refused 409 rather than silently putting their change back —
+ * the lost update a wrong emergency number would ride in on.
+ */
+export const crisisCopySaveSchema = crisisCopyUpdateSchema.extend({ version: versionRead });
+export const crisisRegionSaveSchema = crisisRegionUpdateSchema.extend({ version: versionRead });
+
 /**
  * A sign-off names the version it read. If someone edited in between, the
  * version has moved and the sign-off is refused — nobody signs off words they
  * did not see.
  */
-export const crisisSignOffSchema = z.strictObject({
-  version: z.number().int().positive(),
-});
+export const crisisSignOffSchema = z.strictObject({ version: versionRead });
 
 export type CrisisService = z.infer<typeof crisisServiceSchema>;
 export type CrisisRegionCreate = z.infer<typeof crisisRegionCreateSchema>;

@@ -38,6 +38,8 @@
  * @see .context/app/safety.md — "The resource"
  */
 
+import type { AppCrisisCopy, AppCrisisRegion } from '@prisma/client';
+
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { getCrisisResources } from '@/lib/app/content/crisis-resources';
@@ -109,17 +111,11 @@ class CrisisReadDeadline extends Error {
 }
 
 /**
- * The tables as a {@link CrisisContent}, or `null` when unseeded. Throws on a
- * read error or a row that fails validation — the caller turns both into the
- * fallback.
+ * Stored rows as a {@link CrisisContent}. **Throws on any row the turn may not
+ * serve** — the one definition of "servable", shared with the admin page so it
+ * warns about exactly what sends everyone to the bundled file.
  */
-async function readFromDatabase(): Promise<CrisisContent | null> {
-  const [copy, regions] = await Promise.all([
-    prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
-    prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
-  ]);
-  if (!copy) return null;
-
+export function contentFromRows(copy: AppCrisisCopy, regions: AppCrisisRegion[]): CrisisContent {
   const text = crisisCopyUpdateSchema.parse({
     hardIntro: copy.hardIntro,
     softIntro: copy.softIntro,
@@ -149,7 +145,7 @@ async function readFromDatabase(): Promise<CrisisContent | null> {
     copyVersion: copy.version,
     regions: regions.map((row) => {
       if (!/^[A-Z]{2}$/.test(row.region) || row.emergencyNumber.trim() === '') {
-        throw new Error(`crisis region row ${row.region} is malformed`);
+        throw new Error(`the ${row.region} row has an invalid region code or no emergency number`);
       }
       return {
         region: row.region,
@@ -160,6 +156,19 @@ async function readFromDatabase(): Promise<CrisisContent | null> {
       };
     }),
   };
+}
+
+/**
+ * The tables as a {@link CrisisContent}, or `null` when unseeded. Throws on a
+ * read error or a row that fails validation — the caller turns both into the
+ * fallback.
+ */
+async function readFromDatabase(): Promise<CrisisContent | null> {
+  const [copy, regions] = await Promise.all([
+    prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
+    prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
+  ]);
+  return copy ? contentFromRows(copy, regions) : null;
 }
 
 let cached: { content: CrisisContent; expiresAt: number } | null = null;

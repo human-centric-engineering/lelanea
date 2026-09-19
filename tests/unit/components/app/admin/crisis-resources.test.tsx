@@ -48,7 +48,7 @@ const GB = {
   signedOffAt: null,
   updatedAt: '2026-09-19T10:00:00.000Z',
 };
-const VIEW: CrisisViewJson = { seeded: true, copy: COPY, regions: [GB] };
+const VIEW: CrisisViewJson = { seeded: true, unservable: null, copy: COPY, regions: [GB] };
 
 const fetchMock = vi.fn();
 
@@ -82,7 +82,11 @@ beforeEach(() => {
 
 describe('before the seed', () => {
   it('says the built-in version is served and offers nothing to edit', () => {
-    render(<CrisisResourcesPanel initialView={{ seeded: false, copy: null, regions: [] }} />);
+    render(
+      <CrisisResourcesPanel
+        initialView={{ seeded: false, unservable: null, copy: null, regions: [] }}
+      />
+    );
     expect(screen.getByRole('alert')).toHaveTextContent(/npm run db:seed/);
     expect(screen.queryByRole('button')).toBeNull();
   });
@@ -107,7 +111,11 @@ describe('the shared wording', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/draft/));
     const { url, method, body } = sent(0);
     expect([url, method]).toEqual([CRISIS_COPY_ENDPOINT, 'PUT']);
-    expect(body).toMatchObject({ hardIntro: 'Reworded.', internationalUrl: COPY.internationalUrl });
+    expect(body).toMatchObject({
+      hardIntro: 'Reworded.',
+      internationalUrl: COPY.internationalUrl,
+      version: 2, // the version the form was opened at
+    });
     const copySection = screen.getByRole('region', { name: 'The wording every country shares' });
     expect(within(copySection).getByText('Draft — awaiting sign-off')).toBeInTheDocument();
     expect(within(copySection).getByRole('button', { name: 'Sign off v3' })).toBeEnabled();
@@ -189,7 +197,7 @@ describe('a country', () => {
     expect(sent(0)).toEqual({
       url: crisisRegionEndpoint('GB'),
       method: 'PUT',
-      body: { emergencyNumber: '999 or 112', services: saved.services },
+      body: { emergencyNumber: '999 or 112', services: saved.services, version: 3 },
     });
     expect(screen.getByText('v4')).toBeInTheDocument();
   });
@@ -239,5 +247,15 @@ describe('a country', () => {
     );
     expect(screen.getAllByText(/malformed/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Sign off v3' })).toBeNull();
+  });
+
+  it('says so when the stored rows cannot be served at all', () => {
+    render(
+      <CrisisResourcesPanel
+        initialView={{ ...VIEW, unservable: 'internationalUrl: must be an https:// address' }}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/built into the code/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/internationalUrl/);
   });
 });

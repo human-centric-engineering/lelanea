@@ -98,13 +98,13 @@ describe('the guard', () => {
   it('answers 401 to nobody and 403 to a non-admin on every route, and writes nothing', async () => {
     const calls = () => [
       GET(req('GET', '')),
-      putCopy(req('PUT', '/copy', COPY_BODY)),
+      putCopy(req('PUT', '/copy', { ...COPY_BODY, version: 1 })),
       signOffCopy(req('POST', '/copy/sign-off', { version: 1 })),
       addRegion(
         req('POST', '/regions', { region: 'FR', emergencyNumber: '112', services: [SERVICE] })
       ),
       putRegion(
-        req('PUT', '/regions/GB', { emergencyNumber: '999', services: [SERVICE] }),
+        req('PUT', '/regions/GB', { emergencyNumber: '999', services: [SERVICE], version: 1 }),
         regionParams('GB')
       ),
       deleteRegion(req('DELETE', '/regions/GB'), regionParams('GB')),
@@ -133,9 +133,9 @@ describe('GET', () => {
 
 describe('PUT copy', () => {
   it('saves, and audits the before and after', async () => {
-    const response = await putCopy(req('PUT', '/copy', COPY_BODY));
+    const response = await putCopy(req('PUT', '/copy', { ...COPY_BODY, version: 1 }));
     expect(response.status).toBe(200);
-    expect(admin.updateCrisisCopy).toHaveBeenCalledWith(COPY_BODY);
+    expect(admin.updateCrisisCopy).toHaveBeenCalledWith(COPY_BODY, 1);
     expect(admin.logAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'app_crisis_copy.update',
@@ -150,15 +150,19 @@ describe('PUT copy', () => {
       copy: { ...COPY_BODY, status: 'signed_off', version: 1 },
       changes: {},
     });
-    expect((await putCopy(req('PUT', '/copy', COPY_BODY))).status).toBe(200);
+    expect((await putCopy(req('PUT', '/copy', { ...COPY_BODY, version: 1 }))).status).toBe(200);
     expect(admin.logAdminAction).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['a missing field', { ...COPY_BODY, keptMessage: undefined }],
-    ['an empty intro', { ...COPY_BODY, hardIntro: '   ' }],
-    ['a directory link that is not https', { ...COPY_BODY, internationalUrl: 'http://x.example' }],
-    ['an unknown field', { ...COPY_BODY, status: 'signed_off' }],
+    ['no version — a save must say what it was edited from', COPY_BODY],
+    ['a missing field', { ...COPY_BODY, version: 1, keptMessage: undefined }],
+    ['an empty intro', { ...COPY_BODY, version: 1, hardIntro: '   ' }],
+    [
+      'a non-https directory link',
+      { ...COPY_BODY, version: 1, internationalUrl: 'http://x.example' },
+    ],
+    ['an unknown field', { ...COPY_BODY, version: 1, status: 'signed_off' }],
   ])('refuses 400 for %s, writing nothing', async (_label, body) => {
     expect((await putCopy(req('PUT', '/copy', body))).status).toBe(400);
     expect(admin.updateCrisisCopy).not.toHaveBeenCalled();
@@ -225,8 +229,12 @@ describe('regions', () => {
 
   it('edits one, and audits the before and after', async () => {
     const body = { emergencyNumber: '999', services: [SERVICE] };
-    expect((await putRegion(req('PUT', '/regions/GB', body), regionParams('GB'))).status).toBe(200);
-    expect(admin.updateCrisisRegion).toHaveBeenCalledWith('GB', body);
+    const response = await putRegion(
+      req('PUT', '/regions/GB', { ...body, version: 3 }),
+      regionParams('GB')
+    );
+    expect(response.status).toBe(200);
+    expect(admin.updateCrisisRegion).toHaveBeenCalledWith('GB', body, 3);
     expect(admin.logAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'app_crisis_region.update',
@@ -237,14 +245,20 @@ describe('regions', () => {
 
   it('writes no audit entry for a region save that changed nothing', async () => {
     admin.updateCrisisRegion.mockResolvedValue({ region: REGION_ROW, changes: {} });
-    const body = { emergencyNumber: '999', services: [SERVICE] };
+    const body = { emergencyNumber: '999', services: [SERVICE], version: 3 };
     expect((await putRegion(req('PUT', '/regions/GB', body), regionParams('GB'))).status).toBe(200);
     expect(admin.logAdminAction).not.toHaveBeenCalled();
   });
 
+  it('refuses 400 a region save with no version, writing nothing', async () => {
+    const body = { emergencyNumber: '999', services: [SERVICE] };
+    expect((await putRegion(req('PUT', '/regions/GB', body), regionParams('GB'))).status).toBe(400);
+    expect(admin.updateCrisisRegion).not.toHaveBeenCalled();
+  });
+
   it('refuses 400 for a region code in the path that is not one', async () => {
     const response = await putRegion(
-      req('PUT', '/regions/G1', { emergencyNumber: '999', services: [SERVICE] }),
+      req('PUT', '/regions/G1', { emergencyNumber: '999', services: [SERVICE], version: 1 }),
       regionParams('G1')
     );
     expect(response.status).toBe(400);
