@@ -249,8 +249,8 @@ limit](./agent.md#the-monthly-limit)).
 
 ## Repeated abusive use
 
-§8.6 asks for "a defined response rather than an ad-hoc one". This is it:
-_proposed here, confirmed by the owner in review_.
+§8.6 asks for "a defined response rather than an ad-hoc one". This is it,
+confirmed in review (19 Sept 2026).
 
 ### What is recorded, and who reads it
 
