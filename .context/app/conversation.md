@@ -250,23 +250,25 @@ there is one thing a turn can be shown to have done:
 | called nothing                        | Nothing was written from this turn  | the same, as a sentence                                        |
 
 **Which capabilities answered the turn, on all three paths.** Live, from the
-`capability_result(s)` frames. On reload, from the platform's `tool` rows
-between the person's row and the reply — `AiMessage.capabilitySlug` — which
-the read route now selects and collapses onto the reply's `capabilities`. On a
-replay (the same id sent again after a completed turn), `readTurnReply` reads
-the same rows and `replay()` sends them as one `capability_results` frame
-ahead of the words, so a replayed reply's account says what a reload's does.
-A tool row's content (the search result) is never shown.
+`capability_result(s)` frames. On reload, from the terminal assistant row's
+`provenance.capabilityCalls` — one trace per call the model made, `slug` and
+`success` and a truncated preview, written always-on by the platform as its
+audit substrate — which the read already selects, and collapses onto the
+reply's `capabilities`. On a replay (the same id sent again after a completed
+turn), `readTurnReply` reads the same traces and `replay()` sends them as one
+`capability_results` frame ahead of the words, so a replayed reply's account
+says what a reload's does. The platform's `tool` rows — whose content is the
+whole result, every chunk a search returned — are never selected (review
+round 2: they were, for one boolean, on every pane open).
 
-**Only a call that answered counts.** The platform writes a tool row — and
-sends a frame — for every call the model made, including one it refused
-(`tool_not_advertised`, a name the model invented; `tool_unavailable`) or that
-threw (`execution_error`). Each result carries `success`;
-`lib/app/agent/capability-answers.ts` asks it of the frame and of the row, and
-a call that did not answer is not something the turn did. Telling a person a
-lookup happened when it did not would be the wrong kind of honest (review
-round 1). A test proves one fixture gives the same account live and read back,
-and that a refused call reaches neither.
+**Only a call that answered counts.** The platform traces every call the
+model made, including one it refused (`tool_not_advertised`, a name the model
+invented; `tool_unavailable`) or that threw (`execution_error`).
+`lib/app/agent/capability-answers.ts` asks `success` of the frame and of the
+trace, and a call that did not answer is not something the turn did. Telling
+a person a lookup happened when it did not would be the wrong kind of honest
+(review round 1). A test proves one fixture gives the same account live and
+read back, and that a refused call reaches neither.
 
 **Two figures, one source.** The detail's tokens and cost are the reply's:
 the `done` frame's `tokenUsage` / `costUsd` live, and the turn row's copy of

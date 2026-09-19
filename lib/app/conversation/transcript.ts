@@ -52,7 +52,7 @@ import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
-import { toolRowAnswered } from '@/lib/app/agent/capability-answers';
+import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -93,11 +93,10 @@ export interface TranscriptReplyEntry {
   turnId: string | null;
   citations: Citation[];
   /**
-   * The capabilities that answered the turn, in order, from the platform's
-   * `tool` rows between the person's row and the reply (`capabilitySlug`,
-   * counted only where the result says `success`). What the account row says
-   * the turn did (t-66); the live turn collects the same from the
-   * `capability_result` frames, and a replay from `readTurnReply`.
+   * The capabilities that answered the turn, in order, from the terminal
+   * row's `provenance.capabilityCalls` (`capability-answers.ts`). What the
+   * account row says the turn did (t-66); the live turn collects the same
+   * from the `capability_result` frames, and a replay from `readTurnReply`.
    */
   capabilities: string[];
   /** The turn row, when there is one; null for rows written before the seam. */
@@ -130,8 +129,6 @@ interface MessageRow {
   createdAt: Date;
   metadata: unknown;
   provenance: unknown;
-  /** On a `tool` row: which capability answered. */
-  capabilitySlug?: string | null;
 }
 
 interface TurnRow {
@@ -205,18 +202,12 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
   }
 
   const entries: TranscriptEntry[] = [];
-  let pendingReply: { rows: MessageRow[]; capabilities: string[] } | null = null;
+  let pendingReply: { rows: MessageRow[] } | null = null;
   // The turn row the current user row opened, if the seam recorded one.
   let currentTurn: TurnRow | undefined;
 
   const flushReply = () => {
-    if (!pendingReply) return;
-    if (pendingReply.rows.length === 0) {
-      // Tool rows with no reply after them — a turn that failed mid-loop.
-      // Nothing to show, and nothing to carry into the next reply.
-      pendingReply = null;
-      return;
-    }
+    if (!pendingReply || pendingReply.rows.length === 0) return;
     const rows = pendingReply.rows;
     const terminal = rows[rows.length - 1];
     const turn = rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined);
@@ -245,7 +236,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       at: terminal.createdAt.toISOString(),
       turnId: turn?.turnId ?? null,
       citations: citationsOf(terminal.provenance),
-      capabilities: pendingReply.capabilities,
+      capabilities: answeredCapabilities(terminal.provenance),
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;
@@ -256,16 +247,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       // The platform's own marker for a turn that ended without her. Not her
       // words; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
-      (pendingReply ??= { rows: [], capabilities: [] }).rows.push(row);
-      continue;
-    }
-    if (row.role === 'tool') {
-      // A capability's answer, between her passes. Not shown; what it names
-      // is what the account says the turn did — when it answered. A refused
-      // or failed call is a row too, and is not something the turn did.
-      if (row.capabilitySlug && toolRowAnswered(row)) {
-        (pendingReply ??= { rows: [], capabilities: [] }).capabilities.push(row.capabilitySlug);
-      }
+      (pendingReply ??= { rows: [] }).rows.push(row);
       continue;
     }
     if (row.role !== 'user') continue;
@@ -332,7 +314,7 @@ export async function readTranscript(
         conversation: {
           AND: [conversationVisibilityWhere(session, { excludeShared: true }), { userId }],
         },
-        role: { in: ['user', 'assistant', 'tool'] },
+        role: { in: ['user', 'assistant'] },
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -342,7 +324,6 @@ export async function readTranscript(
         createdAt: true,
         metadata: true,
         provenance: true,
-        capabilitySlug: true,
       },
     }),
     prisma.appTurn.findMany({

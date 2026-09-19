@@ -1,13 +1,13 @@
 /**
- * Whether a capability call answered — asked of a frame and of a stored tool
- * row the same way (§10 t-66).
+ * Which capability calls answered — asked of a frame, and of the terminal
+ * row's provenance, the same way (§10 t-66).
  *
  * @see lib/app/agent/capability-answers.ts
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { capabilityAnswered, toolRowAnswered } from '@/lib/app/agent/capability-answers';
+import { answeredCapabilities, capabilityAnswered } from '@/lib/app/agent/capability-answers';
 
 describe('capabilityAnswered', () => {
   it('is true only for a result that says success', () => {
@@ -21,21 +21,40 @@ describe('capabilityAnswered', () => {
   });
 });
 
-describe('toolRowAnswered', () => {
-  it('reads metadata.result where the platform kept it', () => {
-    expect(
-      toolRowAnswered({ content: '{"success":false}', metadata: { result: { success: true } } })
-    ).toBe(true);
-    expect(
-      toolRowAnswered({ content: '{"success":true}', metadata: { result: { success: false } } })
-    ).toBe(false);
+describe('answeredCapabilities', () => {
+  it('names the calls that answered, in order, and none that were refused or failed', () => {
+    const provenance = {
+      citations: [],
+      capabilityCalls: [
+        {
+          slug: 'delete_everything',
+          arguments: {},
+          latencyMs: 0,
+          success: false,
+          errorCode: 'tool_not_advertised',
+        },
+        { slug: 'search_knowledge_base', arguments: { query: 'b' }, latencyMs: 40, success: true },
+        {
+          slug: 'search_knowledge_base',
+          arguments: { query: 'c' },
+          latencyMs: 40,
+          success: false,
+          errorCode: 'execution_error',
+        },
+        { slug: 'get_state', arguments: {}, latencyMs: 1, success: true },
+      ],
+    };
+    expect(answeredCapabilities(provenance)).toEqual(['search_knowledge_base', 'get_state']);
   });
 
-  it('falls back to the content, and an unreadable row did not answer', () => {
-    expect(toolRowAnswered({ content: '{"success":true,"data":{}}', metadata: null })).toBe(true);
-    expect(toolRowAnswered({ content: '{"success":false}', metadata: { toolCall: {} } })).toBe(
-      false
-    );
-    expect(toolRowAnswered({ content: 'not json', metadata: null })).toBe(false);
+  it('reads nothing from a row with no traces, and skips a trace it cannot read', () => {
+    expect(answeredCapabilities(null)).toEqual([]);
+    expect(answeredCapabilities({ citations: [] })).toEqual([]);
+    expect(answeredCapabilities({ capabilityCalls: 'nope' })).toEqual([]);
+    expect(
+      answeredCapabilities({
+        capabilityCalls: [{ slug: 1, success: true }, 'x', { slug: 'get_state', success: true }],
+      })
+    ).toEqual(['get_state']);
   });
 });

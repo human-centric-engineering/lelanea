@@ -56,7 +56,6 @@ interface MessageRow {
   content: string;
   metadata: Record<string, unknown> | null;
   provenance?: Record<string, unknown> | null;
-  capabilitySlug?: string | null;
   createdAt: Date;
 }
 interface CostRow {
@@ -200,28 +199,22 @@ vi.mock('@/lib/db/client', () => {
             where: {
               conversationId: string;
               conversation?: { userId: string };
-              role: string | { in: string[] };
+              role: string;
               createdAt: { gte: Date; lte: Date };
             };
           }) => {
             if (!where.conversation?.userId)
               throw new Error('aiMessage read without an owner scope');
-            const roles = typeof where.role === 'string' ? [where.role] : where.role.in;
             return db.messages
               .filter(
                 (m) =>
                   m.conversationId === where.conversationId &&
                   db.conversationOwners.get(m.conversationId) === where.conversation?.userId &&
-                  roles.includes(m.role) &&
+                  m.role === where.role &&
                   m.createdAt >= where.createdAt.gte &&
                   m.createdAt <= where.createdAt.lte
               )
-              .map((m) => ({
-                role: m.role,
-                content: m.content,
-                metadata: m.metadata ?? null,
-                capabilitySlug: m.capabilitySlug ?? null,
-              }));
+              .map((m) => ({ content: m.content }));
           }
         ),
       },
@@ -915,25 +908,16 @@ describe('a replay of a turn that used a tool', () => {
           metadata: null,
           createdAt: new Date(at + 1),
         });
-        // The platform writes a tool row for every call: one the model
-        // invented and was refused, then the search that answered.
-        db.messages.push({
-          id: 't0',
-          conversationId: 'conv-user-1',
-          role: 'tool',
-          content: JSON.stringify({ success: false, error: { code: 'tool_not_advertised' } }),
-          metadata: null,
-          capabilitySlug: 'delete_everything',
-          createdAt: new Date(at + 2),
-        });
+        // The platform writes a tool row for every call — its content the
+        // whole result — and traces each on the terminal row's provenance:
+        // one the model invented and was refused, then the search that answered.
         db.messages.push({
           id: 't1',
           conversationId: 'conv-user-1',
           role: 'tool',
           content: JSON.stringify({ success: true, data: { results: [] } }),
           metadata: null,
-          capabilitySlug: 'search_knowledge_base',
-          createdAt: new Date(at + 3),
+          createdAt: new Date(at + 2),
         });
         yield { type: 'content', delta: 'She writes of more [1].' };
         db.messages.push({
@@ -942,8 +926,14 @@ describe('a replay of a turn that used a tool', () => {
           role: 'assistant',
           content: 'She writes of more [1].',
           metadata: null,
-          provenance: { citations: [citation] },
-          createdAt: new Date(at + 4),
+          provenance: {
+            citations: [citation],
+            capabilityCalls: [
+              { slug: 'delete_everything', arguments: {}, latencyMs: 0, success: false },
+              { slug: 'search_knowledge_base', arguments: {}, latencyMs: 40, success: true },
+            ],
+          },
+          createdAt: new Date(at + 3),
         });
         yield { type: 'citations', citations: [citation] };
         yield {

@@ -32,7 +32,7 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 
 import { z } from 'zod';
 
-import { toolRowAnswered } from '@/lib/app/agent/capability-answers';
+import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 
 import { prisma } from '@/lib/db/client';
 import { citationSchema } from '@/lib/validations/orchestration';
@@ -401,9 +401,9 @@ export interface TurnReply {
  * provenance, validated rather than cast. Reading only the linked row dropped
  * the text before a search and every `[N]` source (found by /code-review).
  *
- * **And the tool rows in the same window** — what the turn called, where it
- * answered — so a replayed turn's account says what a reload's does (t-66,
- * found by /code-review).
+ * **And what the turn called, where it answered** — from the terminal row's
+ * `provenance.capabilityCalls` — so a replayed turn's account says what a
+ * reload's does (t-66, found by /code-review).
  */
 export async function readTurnReply(
   turn: Pick<
@@ -419,26 +419,21 @@ export async function readTurnReply(
   });
   if (!terminal) return null;
 
-  const rows = await prisma.aiMessage.findMany({
+  const passes = await prisma.aiMessage.findMany({
     where: {
       conversationId: turn.conversationId,
       ...owned,
-      role: { in: ['assistant', 'tool'] },
+      role: 'assistant',
       createdAt: { gte: await turnWindowStart(turn), lte: terminal.createdAt },
     },
     orderBy: { createdAt: 'asc' },
-    select: { role: true, content: true, metadata: true, capabilitySlug: true },
+    select: { content: true },
   });
   const parsed = replayCitationsSchema.safeParse(terminal.provenance);
   return {
-    text: rows
-      .filter((row) => row.role === 'assistant')
-      .map((pass) => pass.content)
-      .join(''),
+    text: passes.map((pass) => pass.content).join(''),
     citations: parsed.success ? parsed.data.citations : [],
-    capabilities: rows.flatMap((row) =>
-      row.role === 'tool' && row.capabilitySlug && toolRowAnswered(row) ? [row.capabilitySlug] : []
-    ),
+    capabilities: answeredCapabilities(terminal.provenance),
   };
 }
 
