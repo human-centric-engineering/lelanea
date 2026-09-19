@@ -250,7 +250,47 @@ describe("an operator's choices", () => {
   });
 });
 
+describe('her timeline', () => {
+  it('adds one entry after an existing history, carrying her grants into the snapshot', async () => {
+    world.versions = [
+      { agentId: 'agent-her', version: 3, snapshot: {}, changeSummary: 'earlier', createdBy: 'x' },
+    ];
+    client.aiAgent.findUniqueOrThrow.mockImplementationOnce(async () => ({
+      ...her(),
+      grantedTags: [{ tagId: 'tag-1' }],
+      grantedDocuments: [{ documentId: 'doc-1' }],
+    }));
+
+    await runSeed();
+
+    expect(world.versions.map((v) => [v.version, v.changeSummary])).toEqual([
+      [3, 'earlier'],
+      [4, GUARD_MODES_CHANGE_SUMMARY],
+    ]);
+    expect(world.versions[1]?.snapshot).toMatchObject({
+      grantedTagIds: ['tag-1'],
+      grantedDocumentIds: ['doc-1'],
+    });
+  });
+
+  it('writes no entry when an admin set a guard between the read and the write', async () => {
+    client.aiAgent.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+
+    await runSeed();
+
+    expect(world.versions).toEqual([]);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('changed while this ran'));
+  });
+});
+
 describe('safe on empty', () => {
+  it('throws when the service account is missing, before any write', async () => {
+    client.user.findFirst.mockImplementationOnce(async () => null as unknown as { id: string });
+
+    await expect(runSeed()).rejects.toThrow(/No service account/);
+    expect(writes()).toBe(0);
+  });
+
   it('throws rather than banking success when her agent is missing', async () => {
     world.agents = [];
 
