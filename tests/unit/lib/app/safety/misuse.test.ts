@@ -10,8 +10,8 @@
  *   payload were one the contributor skipped (wrong scope, wrong guard, a
  *   severity above `flagged`), this fails.
  * - **The safety record.** `recordGuardDetection` writes a `misuse` row with
- *   the guard and its mode, and no text. It ignores other surfaces, other seats
- *   and a switched-off guard.
+ *   the guard and its mode, and no text, for the input guard only. It ignores
+ *   the reply-side guards, other surfaces, other seats and a switched-off guard.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -111,12 +111,13 @@ describe('recordGuardDetection', () => {
     });
   });
 
-  it('records the output guard as well — the record is what happened, not what is escalated', async () => {
-    await recordGuardDetection(ON_HER_SEAT, { guard: 'output', outcome: 'log_only' });
-    expect(mocks.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ kind: 'misuse', guard: 'output' }),
-    });
-  });
+  it.each(['output', 'citation'] as const)(
+    'does not record the %s guard — it reads her reply, not what the person wrote',
+    async (guard) => {
+      await recordGuardDetection(ON_HER_SEAT, { guard, outcome: 'log_only' });
+      expect(mocks.create).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     ['a turn off the facilitation surface', { ...ON_HER_SEAT, contextType: 'voice' }],

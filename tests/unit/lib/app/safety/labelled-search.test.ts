@@ -64,6 +64,9 @@ const PLATFORM = hit('doc-platform', 'Agentic Design Patterns', 'Reflection is a
 
 const CONTEXT = { agentId: 'agent-her', userId: 'user-1' };
 
+/** What the two document lookups find: her designated corpus, and the platform's. */
+const corpus = { quotable: [] as string[], system: [] as string[] };
+
 /** The tool message the chat handler would send her, parsed back. */
 function toolMessage(result: unknown): Array<Record<string, unknown>> {
   const { augmentedResult } = extractCitations('search_knowledge_base', result, 1);
@@ -94,7 +97,14 @@ beforeEach(() => {
     embedding: { model: 'm', provider: 'p', inputTokens: 1, costUsd: 0 },
   });
   mocks.agent.mockResolvedValue({ slug: 'lelanea-guide' });
-  mocks.documents.mockResolvedValue([{ id: 'doc-hers' }]);
+  corpus.quotable = ['doc-hers'];
+  corpus.system = ['doc-platform'];
+  mocks.documents.mockImplementation(
+    async ({ where }: { where: { scope: string; id?: { in: string[] } } }) => {
+      const ids = where.scope === 'system' ? corpus.system : corpus.quotable;
+      return ids.filter((id) => !where.id || where.id.in.includes(id)).map((id) => ({ id }));
+    }
+  );
 });
 
 describe('for her', () => {
@@ -111,13 +121,28 @@ describe('for her', () => {
     ]);
   });
 
-  it("never calls the platform's reference corpus hers", async () => {
-    mocks.documents.mockResolvedValue([]);
+  it("labels only the platform's corpus not-hers, and only her designated corpus hers", async () => {
+    corpus.quotable = [];
     const passages = toolMessage(
       await new LabelledSearchKnowledgeCapability().execute({ query: 'x' }, CONTEXT)
     );
-    expect(passages.length).toBe(2);
-    expect(passages.every((p) => p.origin === RESULT_ORIGINS.notHers)).toBe(true);
+    expect(passages.map((p) => p.origin)).toEqual([
+      RESULT_ORIGINS.unverified,
+      RESULT_ORIGINS.notHers,
+    ]);
+  });
+
+  it('does not disown a document she reaches another way — it is unverified, not "not hers"', async () => {
+    // An app document an operator granted her agent directly: in her access
+    // set, not in her designated corpus, not the platform's.
+    mocks.search.mockResolvedValue({
+      results: [hit('doc-granted', 'Session notes', 'Something granted to her.')],
+      embedding: { model: 'm', provider: 'p', inputTokens: 1, costUsd: 0 },
+    });
+    const passages = toolMessage(
+      await new LabelledSearchKnowledgeCapability().execute({ query: 'x' }, CONTEXT)
+    );
+    expect(passages.map((p) => p.origin)).toEqual([RESULT_ORIGINS.unverified]);
   });
 
   it('marks every passage unverified when her material cannot be read, and still returns them', async () => {

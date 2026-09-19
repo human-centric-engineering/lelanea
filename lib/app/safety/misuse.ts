@@ -11,10 +11,12 @@
  * - **This one** writes it to the safety record, beside the crisis events, so the
  *   person's own export shows it (Art. 15) and it is erased with their account.
  *
- * Every guard is recorded, not only the input guard the escalation policy
- * notifies on. The record is what happened; whether it is worth waking someone
- * up is the policy's decision. A guard an operator switched off (`none`) emits an
- * event with nothing flagged in it and is not recorded.
+ * **Only the input guard.** It is the one that reads what the PERSON wrote. The
+ * output and citation guards read her reply, so a hit there is about her, not an
+ * attempt by them, and a row in their safety record saying otherwise would be
+ * false. It would also reach them in their Art. 15 export under wording that
+ * calls it theirs. A guard an operator switched off (`none`) emits an event with
+ * nothing flagged in it and is not recorded either.
  *
  * Registered through `lib/app/guard-event-contributors.ts`. Contributors run
  * fire-and-forget after the guard has acted. This one also catches its own
@@ -36,7 +38,7 @@ export async function recordGuardDetection(
 ): Promise<void> {
   if (ctx.contextType !== FACILITATION_SURFACE_CONTEXT_TYPE || !ctx.contextId) return;
   if (!SEATED_ROLES.includes(ctx.contextId)) return;
-  if (event.outcome === 'none') return;
+  if (event.guard !== 'input' || event.outcome === 'none') return;
 
   try {
     await recordMisuseEvent({

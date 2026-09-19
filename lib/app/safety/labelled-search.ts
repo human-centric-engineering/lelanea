@@ -27,6 +27,13 @@
  * not her, so the label would be noise. The one exception is below: when the
  * agent itself cannot be looked up, every result is marked unverified.
  *
+ * **Three labels, and "not hers" is only for what is known not to be.** A
+ * passage from her designated corpus is hers. One from the platform's
+ * `system`-scoped reference corpus is not. Anything else she can reach, such as
+ * an app document an operator granted her agent directly or a person's own
+ * upload, is marked unverified. Calling those "not hers" would tell her to
+ * disown material that may be hers or the person's.
+ *
  * **Fail-safe, not fail-open.** If the labelling lookup fails, the results are
  * still returned, because a search that errors leaves her answering from
  * memory, which is worse. Each result is marked unverified, never hers.
@@ -46,8 +53,11 @@ export const RESULT_ORIGINS = {
   hers: "Lelañea's material.",
   notHers:
     "Not Lelañea's material. This is reference text the install holds for another purpose. Do not present it as hers or as her view.",
-  unverified: "Origin could not be checked. Do not present this as Lelañea's material.",
+  unverified: "Not confirmed as Lelañea's material. Do not present this as hers.",
 } as const;
+
+/** The platform's own reference material. Every restricted agent can search it. */
+const SYSTEM_SCOPE = 'system';
 
 type SearchArgs = Parameters<SearchKnowledgeCapability['execute']>[0];
 type SearchResult = Awaited<ReturnType<SearchKnowledgeCapability['execute']>>;
@@ -64,8 +74,24 @@ export class LabelledSearchKnowledgeCapability extends SearchKnowledgeCapability
         select: { slug: true },
       });
       if (!isCorpusAgent(agent?.slug)) return result;
-      const hers = new Set(await resolveQuotableDocumentIds());
-      label = (documentId) => (hers.has(documentId) ? RESULT_ORIGINS.hers : RESULT_ORIGINS.notHers);
+      const [quotable, platform] = await Promise.all([
+        resolveQuotableDocumentIds(),
+        prisma.aiKnowledgeDocument.findMany({
+          where: {
+            id: { in: result.data.results.map((item) => item.documentId) },
+            scope: SYSTEM_SCOPE,
+          },
+          select: { id: true },
+        }),
+      ]);
+      const hers = new Set(quotable);
+      const platformIds = new Set(platform.map((doc) => doc.id));
+      label = (documentId) =>
+        hers.has(documentId)
+          ? RESULT_ORIGINS.hers
+          : platformIds.has(documentId)
+            ? RESULT_ORIGINS.notHers
+            : RESULT_ORIGINS.unverified;
     } catch (err) {
       logger.warn('labelled search: could not check origins — marking every result unverified', {
         agentId: context.agentId,

@@ -179,8 +179,8 @@ hit), the locale and the region shown.
   (`lib/app/leaf-db-drift.ts`); `smoke:app-crisis` proves the cascade.
 - **Exported** as the `safety` section of a subject-access request
   (`lib/app/leaf-data-export.ts`).
-- **`kind: 'misuse'`** (t-60): an inline guard flagged a message on one of her
-  seats. The row holds only the guard and the mode it acted in (`guard`,
+- **`kind: 'misuse'`** (t-60): the input guard flagged a message on one of
+  her seats. The row holds only the guard and the mode it acted in (`guard`,
   `guardOutcome`); `categories` is empty. See [Misuse](#misuse--attempts-are-seen-never-obeyed).
 
 ## Proving it
@@ -229,9 +229,12 @@ stub model asking for `write_user_memory`, and reads her real advertised set.
 return the platform's reference corpus. `LabelledSearchKnowledgeCapability`
 (`lib/app/safety/labelled-search.ts`) is mounted over the built-in slug by
 `lib/app/capabilities.ts`. For her agents only, it adds an `origin` sentence to
-each result: "Lelañea's material", "Not Lelañea's material…", or, when the
-check fails, "Origin could not be checked…". The label is on the tool message
-the model reads, and the test asserts it there.
+each result. Her designated corpus is "Lelañea's material". The platform's
+`system`-scoped corpus is "Not Lelañea's material…". Anything else she can
+reach, such as a document an operator granted her agent directly, or any result
+when the check fails, is "Not confirmed as Lelañea's material…". "Not hers" is
+used only where that is known. The label is on the tool message the model
+reads, and the test asserts it there.
 
 **Her guards observe; attempts reach a person.** Seed
 `app-lelanea/009-misuse-observed`:
@@ -244,8 +247,9 @@ the model reads, and the test asserts it there.
   operator's edit or switch-off is never undone.
 
 `lib/app/guard-event-contributors.ts` registers `recordGuardDetection`
-(`lib/app/safety/misuse.ts`), which writes the `misuse` row for any guard on her
-seats. The record is what happened; the policy decides who is woken.
+(`lib/app/safety/misuse.ts`), which writes the `misuse` row when the input
+guard flags a message on her seats. The output and citation guards read her
+reply, not what the person wrote, so they are not recorded against the person.
 
 This also closes the `input_blocked` misfit §08 left in the endings: nothing on
 her seats blocks, so no heuristic hit can look like an outage.
