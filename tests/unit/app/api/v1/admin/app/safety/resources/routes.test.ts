@@ -235,6 +235,13 @@ describe('regions', () => {
     );
   });
 
+  it('writes no audit entry for a region save that changed nothing', async () => {
+    admin.updateCrisisRegion.mockResolvedValue({ region: REGION_ROW, changes: {} });
+    const body = { emergencyNumber: '999', services: [SERVICE] };
+    expect((await putRegion(req('PUT', '/regions/GB', body), regionParams('GB'))).status).toBe(200);
+    expect(admin.logAdminAction).not.toHaveBeenCalled();
+  });
+
   it('refuses 400 for a region code in the path that is not one', async () => {
     const response = await putRegion(
       req('PUT', '/regions/G1', { emergencyNumber: '999', services: [SERVICE] }),

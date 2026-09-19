@@ -16,6 +16,26 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 
+/** Flip to seed from a file Lelañea has signed off. */
+const fileStatus = vi.hoisted(() => ({ value: null as 'draft' | 'signed_off' | null }));
+vi.mock('@/lib/app/content/crisis-resources', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/app/content/crisis-resources')>();
+  return {
+    ...actual,
+    getCrisisResources: () => {
+      const file = actual.getCrisisResources();
+      if (fileStatus.value === null) return file;
+      return {
+        ...file,
+        resources: {
+          ...file.resources,
+          provenance: { ...file.resources.provenance, status: fileStatus.value },
+        },
+      };
+    },
+  };
+});
+
 import unit from '@/prisma/seeds/app-lelanea/010-crisis-resources';
 import { getCrisisResources } from '@/lib/app/content/crisis-resources';
 
@@ -55,6 +75,7 @@ async function run(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fileStatus.value = null;
   copy = null;
   regions = [];
 });
@@ -108,5 +129,12 @@ describe('010-crisis-resources', () => {
 
     expect(prisma.appCrisisRegion.createMany).not.toHaveBeenCalled();
     expect(regions.some((r) => r.region === 'NZ')).toBe(false);
+  });
+
+  it('carries a signed-off file across as signed off, with when', async () => {
+    fileStatus.value = 'signed_off';
+    await run();
+    expect(copy).toMatchObject({ status: 'signed_off', signedOffAt: expect.any(Date) });
+    expect(regions.every((r) => r.status === 'signed_off')).toBe(true);
   });
 });
