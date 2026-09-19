@@ -90,8 +90,9 @@ beforeEach(() => {
     configurable: true,
     value: { getUserMedia },
   });
+  // After the next paint, as a browser would: after React has committed the value.
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-    cb(0);
+    setTimeout(() => cb(0), 0);
     return 0;
   });
 });
@@ -131,6 +132,23 @@ describe('a voice note', () => {
     expect(onSend).not.toHaveBeenCalled();
     // And the disc is a microphone again.
     expect(mic()).toBeTruthy();
+  });
+
+  it('replaces a selection in the middle, spaced from the words either side', async () => {
+    const user = userEvent.setup();
+    render(<Harness initial="Before SELECTED after." />);
+    box().focus();
+    (box() as HTMLTextAreaElement).setSelectionRange(7, 15);
+    await user.click(mic());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.micStop }));
+    await waitFor(() => expect(box()).toHaveValue('Before what I said after.'));
+    // The caret sits after the words that landed.
+    await waitFor(() =>
+      expect((box() as HTMLTextAreaElement).selectionStart).toBe('Before what I said'.length)
+    );
   });
 
   it('leaves the box alone and says so when the clip could not be turned into words', async () => {
