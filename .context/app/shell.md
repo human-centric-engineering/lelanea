@@ -547,7 +547,9 @@ is the specific failure D6 names.
   seventeen rows say the same non-word about themselves. `STATE_ROW` in
   `map-drawer.tsx` is the seam that widens.
 - **The budget meter** — omitted from the topbar rather than faked.
-- **The composer** — present, inert.
+- ~~**The composer** — present, inert.~~ Live from §10 t-64; see
+  [`conversation.md`](./conversation.md). What the pane still leaves out —
+  the account row, the endings in her words, the mic — is listed there.
 
 The account view shows the three facts the session holds and no statistics. The
 prototype's version carries "Eleven sessions so far" and three counters with
