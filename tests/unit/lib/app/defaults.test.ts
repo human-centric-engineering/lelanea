@@ -410,6 +410,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin/app/voice',
         // §08 t-53 — the agent's deadlines and the monthly limits.
         '/admin/app/agent',
+        // f-safety t-63 — the crisis helplines, per region.
+        '/admin/app/safety',
       ]);
     },
   },
@@ -514,6 +516,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appModels).toEqual([
         'AppAcknowledgement',
         'AppAgentSettings',
+        'AppCrisisCopy',
+        'AppCrisisRegion',
         'AppKnowledgeDesignation',
         'AppSafetyEvent',
         'AppTurn',
@@ -557,7 +561,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // it is exported to them (the words never were stored).
       const safety = sources.find((entry) => entry.model === 'AppSafetyEvent');
       expect(safety).toMatchObject({ section: 'safety', disposition: 'export' });
-      // THREE of ours are excluded, and only those three. `AppKnowledgeDesignation`
+      // Six of ours are excluded, and only those six. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
       // her voice was heard, when, and what it was told. `AppWaitlistEntry` and
@@ -571,6 +575,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // §08 t-53 — the settings singleton: deadlines and the default limit.
         // Who changed it is in the admin audit log, not on the row.
         'AppAgentSettings',
+        // f-safety t-63 — the crisis resource's copy and regions. Content, not
+        // people; who edited or signed off is in the admin audit log.
+        'AppCrisisCopy',
+        'AppCrisisRegion',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
       // is what lets them tell "we hold nothing about you" apart from "we decided

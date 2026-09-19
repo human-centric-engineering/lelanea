@@ -156,6 +156,18 @@ export function initLeafSubjectSources(): void {
         reason:
           'The app\u2019s own settings: how long the assistant may take to answer, and the monthly spending limit that applies to everyone by default. It holds no information about any person.',
       },
+      {
+        // f-safety t-63. Who edited or signed off is in the admin audit log,
+        // deliberately not on the row, so this is true for every reader.
+        model: 'AppCrisisCopy',
+        reason:
+          'The words the app shows anyone who may be in danger, and the international helpline directory it points to. It holds no information about any person.',
+      },
+      {
+        model: 'AppCrisisRegion',
+        reason:
+          'The helplines and emergency number the app shows for one country. It holds no information about any person.',
+      },
     ],
   });
 }
