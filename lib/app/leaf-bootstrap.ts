@@ -28,6 +28,8 @@ import { getModuleDefinitions } from '@/lib/app/modules/definitions';
 import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
 import { registerFacilitationTurnHook } from '@/lib/framework/facilitation/agents/turn-hook';
 import { runRecordedTurn } from '@/lib/app/agent/turns';
+import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
+import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -46,6 +48,15 @@ export function initLeafApp(): Promise<void> {
   // A pure registration, as this function requires. The seam is carried ahead
   // of Daybreak — `.context/app/divergences.md` Row 18.
   registerFacilitationTurnHook(runRecordedTurn);
+
+  // f-safety t-61. She is `public` for the facilitation surface's sake, which
+  // also opens Sunrise's general consumer chat route to her — a door with no
+  // turn hook behind it, so no crisis check, no ceiling and no record. Keep her
+  // off it: that route now answers her slug as an unknown agent and its listing
+  // omits her. Before anything that can throw, for the same reason as the hook
+  // above. The seam is carried ahead of Sunrise — `.context/app/divergences.md`
+  // Row 21.
+  excludeFromConsumerChat(VOICE_AGENT_SLUG);
 
   // The seventeen modules of the journey, each a real place with an empty
   // interior. `registerModule()` is idempotent by slug, so a hot reload or a

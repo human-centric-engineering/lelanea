@@ -27,6 +27,7 @@ import {
   imageLimiter,
 } from '@/lib/security/rate-limit';
 import { streamChat } from '@/lib/orchestration/chat';
+import { isExcludedFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 import { consumerChatRequestSchema } from '@/lib/validations/orchestration';
 import { getRequestId, getVisitorId } from '@/lib/logging/context';
 import { prisma } from '@/lib/db/client';
@@ -53,7 +54,9 @@ export const POST = withAuth(
       select: { id: true, slug: true, visibility: true, rateLimitRpm: true },
     });
 
-    if (!agent) {
+    // A fork can keep an agent off this route; it answers as one that does not
+    // exist (`lib/orchestration/chat/consumer-exclusions.ts`).
+    if (!agent || isExcludedFromConsumerChat(agent.slug)) {
       throw new NotFoundError(`Agent "${body.agentSlug}" not found`);
     }
 

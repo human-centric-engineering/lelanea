@@ -42,8 +42,8 @@
  * ---------------------------------------------------------------------------
  * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
- * `leaf-bootstrap.ts` (the seventeen journey modules and the waitlist's
- * erasure hook), `leaf-data-export.ts` (the
+ * `leaf-bootstrap.ts` (the seventeen journey modules, the waitlist's
+ * erasure hook, the facilitation turn hook and her consumer-chat exclusion), `leaf-data-export.ts` (the
  * waitlist's Art. 15 declaration and collector), `leaf-admin-nav.ts` (the
  * "Lelañea" sidebar section) and `context-contributors.ts` (her voice block)
  * assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
@@ -115,6 +115,11 @@ import {
   passThroughFacilitationTurn,
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { runRecordedTurn } from '@/lib/app/agent/turns';
+import {
+  isExcludedFromConsumerChat,
+  resetConsumerChatExclusions,
+} from '@/lib/orchestration/chat/consumer-exclusions';
+import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
@@ -709,6 +714,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(getFacilitationTurnHook()).toBe(passThroughFacilitationTurn);
       await initLeafApp();
       expect(getFacilitationTurnHook()).toBe(runRecordedTurn);
+
+      // f-safety t-61: she is kept off Sunrise's consumer chat route
+      // (divergences Row 21) — exactly her slug, and nothing else by accident.
+      resetConsumerChatExclusions();
+      expect(isExcludedFromConsumerChat(VOICE_AGENT_SLUG)).toBe(false);
+      await initLeafApp();
+      expect(isExcludedFromConsumerChat(VOICE_AGENT_SLUG)).toBe(true);
+      expect(isExcludedFromConsumerChat('some-other-agent')).toBe(false);
     },
   },
   {

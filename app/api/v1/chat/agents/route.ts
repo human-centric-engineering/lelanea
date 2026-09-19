@@ -14,12 +14,13 @@ import { withAuth } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db/client';
 import { successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
+import { isExcludedFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 
 export const GET = withAuth(
   async (request, session) => {
     const log = await getRouteLogger(request);
 
-    const agents = await prisma.aiAgent.findMany({
+    const listed = await prisma.aiAgent.findMany({
       where: {
         isActive: true,
         visibility: 'public',
@@ -32,6 +33,9 @@ export const GET = withAuth(
       },
       orderBy: { name: 'asc' },
     });
+    // A fork can keep an agent off the consumer routes
+    // (`lib/orchestration/chat/consumer-exclusions.ts`).
+    const agents = listed.filter((agent) => !isExcludedFromConsumerChat(agent.slug));
 
     log.info('Consumer agents listed', { count: agents.length, userId: session.user.id });
     return successResponse({ agents });
