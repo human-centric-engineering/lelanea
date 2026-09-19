@@ -105,6 +105,14 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 1,
     why: 'conversation-context vector lookup on the hot path',
   },
+  // LELAÑEA — the meter (§08 t-56). A leaf edit to a test Daybreak carries from
+  // Sunrise, for the reason the DAYBREAK block below gives: no seam (Sunrise
+  // #799). Ledger: .context/app/divergences.md Row 19.
+  {
+    file: 'lib/app/agent/metering.ts',
+    calls: 3,
+    why: 'read-only SUM/COUNT over ai_cost_log grouped by a CASE-picked dimension (JSON seat with an ai_conversation fallback, UTC day) that Prisma groupBy cannot express; every value bound — the person, when scoped, filters ai_cost_log.userId',
+  },
   {
     file: 'lib/db/drift-probes.ts',
     calls: 6,

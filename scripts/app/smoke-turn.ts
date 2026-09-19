@@ -24,6 +24,11 @@
  *      first.
  *   5. POST the same id with different words → 409.
  *
+ * And the meter, read back (§08 t-56):
+ *   3b. GET /api/v1/app/usage/turns/:turnId shows the model, fingerprint version,
+ *       seat and a non-zero cost equal to the turn's cost rows — the tagged ones
+ *       and the embedding of her reply; month to date includes it.
+ *
  * And when she can't answer (§08 t-55):
  *   6. Drop the connection after her first words. The turn still completes and
  *      is recorded `completed`; the retry is a replay — one model call, one cost
@@ -41,7 +46,9 @@
  *
  * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — she
  * must be public and seated, and the pause flag must exist), and a working
- * OpenAI key under the `openai` provider slug. It costs three real model calls —
+ * OpenAI key under the `openai` provider slug. Against the proxied
+ * `https://lelanea.test` (the origin better-auth trusts), Node must trust the
+ * local CA from the system store: `NODE_OPTIONS=--use-system-ca npm run smoke:app-turn`. It costs three real model calls —
  * about $0.002.
  *
  * **It changes two shared rows while it runs**: her agent's provider (step 7)
@@ -215,6 +222,55 @@ function chatCostRowsFor(turnId: string): Promise<number> {
   });
 }
 
+/**
+ * One turn's record from the member meter API, and the cost rows it should
+ * equal: those tagged with the turn, plus the embedding of her reply.
+ *
+ * The embedding is written fire-and-forget after the reply, so wait for it
+ * before comparing — reading too early would compare against a moving total.
+ */
+async function readTurnMeter(
+  cookie: string,
+  turnId: string,
+  assistantMessageId: string | null
+): Promise<{
+  status: number;
+  record: Record<string, unknown> | null;
+  rows: Array<{ operation: string; totalCostUsd: number }>;
+}> {
+  const where = {
+    OR: [
+      { metadata: { path: ['turnId'], equals: turnId } },
+      ...(assistantMessageId
+        ? [{ metadata: { path: ['messageId'], equals: assistantMessageId } }]
+        : []),
+    ],
+  };
+  const deadline = Date.now() + 15_000;
+  while (
+    assistantMessageId &&
+    Date.now() < deadline &&
+    (await prisma.aiCostLog.count({
+      where: { metadata: { path: ['messageId'], equals: assistantMessageId } },
+    })) === 0
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  const rows = await prisma.aiCostLog.findMany({
+    where,
+    select: { operation: true, totalCostUsd: true },
+  });
+  const res = await fetch(`${BASE_URL}/api/v1/app/usage/turns/${encodeURIComponent(turnId)}`, {
+    headers: { cookie },
+  });
+  const body: unknown = await res.json();
+  return {
+    status: res.status,
+    record: isRecord(body) && isRecord(body.data) ? body.data : null,
+    rows,
+  };
+}
+
 /** Put back the two shared rows this script changes. Safe to call when it changed neither. */
 async function restoreSharedRows(): Promise<void> {
   await prisma.aiAgent.updateMany({
@@ -235,9 +291,16 @@ async function restoreSharedRows(): Promise<void> {
 /** Remove anything a previous run left behind. `finally` cannot cover a SIGINT. */
 async function sweep(): Promise<void> {
   await restoreSharedRows();
-  // Cost rows are kept on user deletion (SET NULL), so they go by turn id.
+  // Cost rows are kept on user deletion (SET NULL), so they go by turn id —
+  // and by the member, BEFORE the account goes: the embedding of her reply
+  // carries no turn id, and left behind it would read as platform cost.
   await prisma.aiCostLog.deleteMany({
-    where: { metadata: { path: ['turnId'], string_starts_with: PREFIX } },
+    where: {
+      OR: [
+        { metadata: { path: ['turnId'], string_starts_with: PREFIX } },
+        { user: { email: EMAIL } },
+      ],
+    },
   });
   // Conversations, messages and turn records cascade with the account.
   await prisma.user.deleteMany({ where: { email: EMAIL } });
@@ -364,6 +427,38 @@ async function main(): Promise<void> {
         app?.seat === SEAT &&
         app?.fingerprintVersion === turn.fingerprintVersion,
       'the message carries turn id, seat and fingerprint version'
+    );
+
+    // The meter, read back through the member API (§08 t-56) — the second half
+    // of f-agent's done-when: which model and prompt produced the turn, and its cost.
+    console.log('\n3b. What the meter says, read back');
+    const meter = await readTurnMeter(cookie, TURN_ID, turn.assistantMessageId);
+    check(meter.status === 200, 'the turn is readable at /api/v1/app/usage/turns/:turnId');
+    const record = meter.record;
+    check(
+      record?.model === PINNED_MODEL && record?.provider === PINNED_PROVIDER,
+      `produced by ${String(record?.model)} on ${String(record?.provider)}`
+    );
+    check(
+      record?.fingerprintVersion === turn.fingerprintVersion && record?.seat === SEAT,
+      `her fingerprint v${String(record?.fingerprintVersion)}, on the ${String(record?.seat)} seat`
+    );
+    const costOfRows = meter.rows.reduce((total, row) => total + row.totalCostUsd, 0);
+    check(
+      typeof record?.costUsd === 'number' && record.costUsd > 0,
+      `a non-zero cost: $${Number(record?.costUsd).toFixed(6)}`
+    );
+    check(
+      Math.abs(Number(record?.costUsd) - costOfRows) < 1e-9 &&
+        record?.costRows === meter.rows.length,
+      `equal to its ${meter.rows.length} cost rows (${meter.rows.map((row) => row.operation).join(', ')}), the reply embedding included`
+    );
+    const usage = await fetch(`${BASE_URL}/api/v1/app/usage`, { headers: { cookie } });
+    const month: unknown = await usage.json();
+    const monthCost = isRecord(month) && isRecord(month.data) ? month.data.costUsd : undefined;
+    check(
+      usage.status === 200 && typeof monthCost === 'number' && monthCost >= costOfRows - 1e-9,
+      `this month so far includes it ($${Number(monthCost).toFixed(6)})`
     );
 
     // 5. The same id with different words is a client bug, and is refused.
