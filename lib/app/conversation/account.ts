@@ -124,11 +124,15 @@ export function aboutTokens(tokens: number): string {
 /** The reply's figures as one sentence, honest about what is not known. */
 export function costSentence(turn: TurnAccount | null): string | null {
   if (!turn) return null;
+  // The platform writes 0/0 when the provider reported no usage (`turn-record.ts`,
+  // `classifyPricing`), and a replay says the same for a null row: not a
+  // count, so not a figure — the way `unpriced` is not a cost.
   const tokens =
     turn.inputTokens !== null && turn.outputTokens !== null
       ? turn.inputTokens + turn.outputTokens
       : null;
-  const used = tokens !== null ? `This turn used ${aboutTokens(tokens)} tokens` : null;
+  const used =
+    tokens !== null && tokens > 0 ? `This turn used ${aboutTokens(tokens)} tokens` : null;
 
   let cost: string | null;
   if (turn.pricing === 'unpriced' || (turn.pricing === null && turn.costUsd === null)) {

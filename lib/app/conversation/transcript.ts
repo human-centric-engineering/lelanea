@@ -52,6 +52,7 @@ import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { toolRowAnswered } from '@/lib/app/agent/capability-answers';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -92,10 +93,11 @@ export interface TranscriptReplyEntry {
   turnId: string | null;
   citations: Citation[];
   /**
-   * The capabilities the turn called, in order, from the platform's `tool`
-   * rows between the person's row and the reply (`capabilitySlug`). What the
-   * account row says the turn did (t-66); the live turn collects the same from
-   * `capability_result` frames.
+   * The capabilities that answered the turn, in order, from the platform's
+   * `tool` rows between the person's row and the reply (`capabilitySlug`,
+   * counted only where the result says `success`). What the account row says
+   * the turn did (t-66); the live turn collects the same from the
+   * `capability_result` frames, and a replay from `readTurnReply`.
    */
   capabilities: string[];
   /** The turn row, when there is one; null for rows written before the seam. */
@@ -259,8 +261,9 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
     }
     if (row.role === 'tool') {
       // A capability's answer, between her passes. Not shown; what it names
-      // is what the account says the turn did.
-      if (row.capabilitySlug) {
+      // is what the account says the turn did — when it answered. A refused
+      // or failed call is a row too, and is not something the turn did.
+      if (row.capabilitySlug && toolRowAnswered(row)) {
         (pendingReply ??= { rows: [], capabilities: [] }).capabilities.push(row.capabilitySlug);
       }
       continue;

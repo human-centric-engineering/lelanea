@@ -21,6 +21,7 @@ import {
   STILL_THINKING,
 } from '@/lib/app/agent/endings';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
 
@@ -309,11 +310,19 @@ export function useConversation(options: Options = {}): ConversationState {
               }
               return;
             case 'capability_result':
-              capabilities = [...capabilities, event.capabilitySlug];
-              setLive((current) => current && { ...current, capabilities });
+              // Only a call that answered is something the turn did.
+              if (capabilityAnswered(event.result)) {
+                capabilities = [...capabilities, event.capabilitySlug];
+                setLive((current) => current && { ...current, capabilities });
+              }
               return;
             case 'capability_results':
-              capabilities = [...capabilities, ...event.results.map((r) => r.capabilitySlug)];
+              capabilities = [
+                ...capabilities,
+                ...event.results
+                  .filter((r) => capabilityAnswered(r.result))
+                  .map((r) => r.capabilitySlug),
+              ];
               setLive((current) => current && { ...current, capabilities });
               return;
             case 'citations':

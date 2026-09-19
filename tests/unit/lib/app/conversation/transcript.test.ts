@@ -73,11 +73,14 @@ function assistant(id: string, text: string, seconds: number, extra: Record<stri
   };
 }
 
-function tool(id: string, capabilitySlug: string, seconds: number) {
+function tool(id: string, capabilitySlug: string, seconds: number, success = true) {
+  const result = success
+    ? { success: true, data: { results: [] } }
+    : { success: false, error: { code: 'tool_not_advertised', message: 'no' } };
   return {
     id,
     role: 'tool',
-    content: '{"results":[]}',
+    content: JSON.stringify(result),
     createdAt: at(seconds),
     metadata: null,
     provenance: null,
@@ -288,6 +291,8 @@ describe('assembleTranscript', () => {
       [
         user('u1', 'What does she say about boundaries?', 1, 't1'),
         assistant('pass1', 'Let me look. ', 2),
+        // A call the model invented and the platform refused is a row too.
+        tool('tool0', 'delete_everything', 3, false),
         tool('tool1', 'search_knowledge_base', 3),
         assistant('pass2', 'She says…', 4, { provenance: { citations: [] } }),
       ],
@@ -298,10 +303,12 @@ describe('assembleTranscript', () => {
       kind: 'reply',
       id: 'pass2',
       text: 'Let me look. She says…',
-      // The tool row's answer is not her words; what it names is (t-66).
+      // The tool row's answer is not her words; what it names is (t-66) —
+      // where it answered. A refused call is not something the turn did.
       capabilities: ['search_knowledge_base'],
     });
     expect(JSON.stringify(entries)).not.toContain('"results"');
+    expect(JSON.stringify(entries)).not.toContain('delete_everything');
   });
 
   it('a turn that called nothing says so, and tool rows never leak into the next reply', () => {

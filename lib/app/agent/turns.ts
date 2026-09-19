@@ -140,8 +140,9 @@ export function mintTurnId(): string {
 /**
  * The completed turn, told again — no model call, no cost row.
  *
- * The frames a live turn ends with — `start`, the whole reply, its citations,
- * `done` — so a duplicate of a turn that already finished gets the same answer.
+ * The frames a live turn ends with — `start`, what it called, the whole reply,
+ * its citations, `done` — so a duplicate of a turn that already finished gets
+ * the same answer, and the same account under it (t-66).
  *
  * A connection lost mid-turn is covered too: the turn runs on without its
  * reader and completes, so the retry lands here (§08 t-55).
@@ -162,6 +163,15 @@ async function* replay(turn: AppTurn): ChatStream {
     conversationId: turn.conversationId,
     ...(turn.userMessageId ? { messageId: turn.userMessageId } : {}),
   };
+  if (reply.capabilities.length > 0) {
+    yield {
+      type: 'capability_results',
+      results: reply.capabilities.map((capabilitySlug) => ({
+        capabilitySlug,
+        result: { success: true },
+      })),
+    };
+  }
   yield { type: 'content', delta: reply.text };
   if (reply.citations.length > 0) yield { type: 'citations', citations: reply.citations };
   const inputTokens = turn.inputTokens ?? 0;

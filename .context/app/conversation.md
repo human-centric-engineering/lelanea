@@ -249,12 +249,24 @@ there is one thing a turn can be shown to have done:
 | called a capability with no words yet | Used <slug, as words>               | the same — named, never hidden; her seat cannot call one today |
 | called nothing                        | Nothing was written from this turn  | the same, as a sentence                                        |
 
-**Which capabilities a turn called, on both paths.** Live, from the
+**Which capabilities answered the turn, on all three paths.** Live, from the
 `capability_result(s)` frames. On reload, from the platform's `tool` rows
 between the person's row and the reply — `AiMessage.capabilitySlug` — which
-the read route now selects and collapses onto the reply's `capabilities`. A
-tool row's content (the search result) is never shown. A test proves one
-fixture gives the same account live and read back.
+the read route now selects and collapses onto the reply's `capabilities`. On a
+replay (the same id sent again after a completed turn), `readTurnReply` reads
+the same rows and `replay()` sends them as one `capability_results` frame
+ahead of the words, so a replayed reply's account says what a reload's does.
+A tool row's content (the search result) is never shown.
+
+**Only a call that answered counts.** The platform writes a tool row — and
+sends a frame — for every call the model made, including one it refused
+(`tool_not_advertised`, a name the model invented; `tool_unavailable`) or that
+threw (`execution_error`). Each result carries `success`;
+`lib/app/agent/capability-answers.ts` asks it of the frame and of the row, and
+a call that did not answer is not something the turn did. Telling a person a
+lookup happened when it did not would be the wrong kind of honest (review
+round 1). A test proves one fixture gives the same account live and read back,
+and that a refused call reaches neither.
 
 **Two figures, one source.** The detail's tokens and cost are the reply's:
 the `done` frame's `tokenUsage` / `costUsd` live, and the turn row's copy of

@@ -32,6 +32,8 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 
 import { z } from 'zod';
 
+import { toolRowAnswered } from '@/lib/app/agent/capability-answers';
+
 import { prisma } from '@/lib/db/client';
 import { citationSchema } from '@/lib/validations/orchestration';
 import type { Citation } from '@/types/orchestration';
@@ -381,10 +383,12 @@ export async function recordTurnFailed(turn: TurnAttempt, errorCode: string): Pr
 
 const replayCitationsSchema = z.object({ citations: z.array(citationSchema) });
 
-/** What a replay tells again: the whole reply, and the sources it cited. */
+/** What a replay tells again: the whole reply, the sources it cited, and what it called. */
 export interface TurnReply {
   text: string;
   citations: Citation[];
+  /** The capabilities that answered, in order (§10 t-66) — so a replay's account matches a reload's. */
+  capabilities: string[];
 }
 
 /**
@@ -396,6 +400,10 @@ export interface TurnReply {
  * joined as they were streamed. The citations are on the terminal row's
  * provenance, validated rather than cast. Reading only the linked row dropped
  * the text before a search and every `[N]` source (found by /code-review).
+ *
+ * **And the tool rows in the same window** — what the turn called, where it
+ * answered — so a replayed turn's account says what a reload's does (t-66,
+ * found by /code-review).
  */
 export async function readTurnReply(
   turn: Pick<
@@ -411,20 +419,26 @@ export async function readTurnReply(
   });
   if (!terminal) return null;
 
-  const passes = await prisma.aiMessage.findMany({
+  const rows = await prisma.aiMessage.findMany({
     where: {
       conversationId: turn.conversationId,
       ...owned,
-      role: 'assistant',
+      role: { in: ['assistant', 'tool'] },
       createdAt: { gte: await turnWindowStart(turn), lte: terminal.createdAt },
     },
     orderBy: { createdAt: 'asc' },
-    select: { content: true },
+    select: { role: true, content: true, metadata: true, capabilitySlug: true },
   });
   const parsed = replayCitationsSchema.safeParse(terminal.provenance);
   return {
-    text: passes.map((pass) => pass.content).join(''),
+    text: rows
+      .filter((row) => row.role === 'assistant')
+      .map((pass) => pass.content)
+      .join(''),
     citations: parsed.success ? parsed.data.citations : [],
+    capabilities: rows.flatMap((row) =>
+      row.role === 'tool' && row.capabilitySlug && toolRowAnswered(row) ? [row.capabilitySlug] : []
+    ),
   };
 }
 

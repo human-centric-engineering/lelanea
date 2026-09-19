@@ -52,10 +52,11 @@ interface TurnRow {
 interface MessageRow {
   id: string;
   conversationId: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   metadata: Record<string, unknown> | null;
   provenance?: Record<string, unknown> | null;
+  capabilitySlug?: string | null;
   createdAt: Date;
 }
 interface CostRow {
@@ -199,22 +200,28 @@ vi.mock('@/lib/db/client', () => {
             where: {
               conversationId: string;
               conversation?: { userId: string };
-              role: string;
+              role: string | { in: string[] };
               createdAt: { gte: Date; lte: Date };
             };
           }) => {
             if (!where.conversation?.userId)
               throw new Error('aiMessage read without an owner scope');
+            const roles = typeof where.role === 'string' ? [where.role] : where.role.in;
             return db.messages
               .filter(
                 (m) =>
                   m.conversationId === where.conversationId &&
                   db.conversationOwners.get(m.conversationId) === where.conversation?.userId &&
-                  m.role === where.role &&
+                  roles.includes(m.role) &&
                   m.createdAt >= where.createdAt.gte &&
                   m.createdAt <= where.createdAt.lte
               )
-              .map((m) => ({ content: m.content }));
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+                metadata: m.metadata ?? null,
+                capabilitySlug: m.capabilitySlug ?? null,
+              }));
           }
         ),
       },
@@ -869,7 +876,7 @@ describe('a client that disconnects mid-answer (§08 t-55)', () => {
 });
 
 describe('a replay of a turn that used a tool', () => {
-  it('tells every pass of the reply again, and the sources it cited', async () => {
+  it('tells every pass of the reply again, the sources it cited, and what it called that answered', async () => {
     const turn = turnFor();
     const citation = {
       marker: 1,
@@ -908,6 +915,26 @@ describe('a replay of a turn that used a tool', () => {
           metadata: null,
           createdAt: new Date(at + 1),
         });
+        // The platform writes a tool row for every call: one the model
+        // invented and was refused, then the search that answered.
+        db.messages.push({
+          id: 't0',
+          conversationId: 'conv-user-1',
+          role: 'tool',
+          content: JSON.stringify({ success: false, error: { code: 'tool_not_advertised' } }),
+          metadata: null,
+          capabilitySlug: 'delete_everything',
+          createdAt: new Date(at + 2),
+        });
+        db.messages.push({
+          id: 't1',
+          conversationId: 'conv-user-1',
+          role: 'tool',
+          content: JSON.stringify({ success: true, data: { results: [] } }),
+          metadata: null,
+          capabilitySlug: 'search_knowledge_base',
+          createdAt: new Date(at + 3),
+        });
         yield { type: 'content', delta: 'She writes of more [1].' };
         db.messages.push({
           id: 'a2',
@@ -916,7 +943,7 @@ describe('a replay of a turn that used a tool', () => {
           content: 'She writes of more [1].',
           metadata: null,
           provenance: { citations: [citation] },
-          createdAt: new Date(at + 2),
+          createdAt: new Date(at + 4),
         });
         yield { type: 'citations', citations: [citation] };
         yield {
@@ -942,6 +969,16 @@ describe('a replay of a turn that used a tool', () => {
       type: 'citations',
       citations: [citation],
     });
+    // What it called, before the words — only the call that answered, so the
+    // account under a replayed reply says what a reload's does (t-66).
+    const called = replayed.findIndex((e) => e.type === 'capability_results');
+    expect(called).toBeGreaterThan(-1);
+    expect(called).toBeLessThan(replayed.findIndex((e) => e.type === 'content'));
+    expect(replayed[called]).toEqual({
+      type: 'capability_results',
+      results: [{ capabilitySlug: 'search_knowledge_base', result: { success: true } }],
+    });
+    expect(JSON.stringify(replayed)).not.toContain('delete_everything');
   });
 });
 

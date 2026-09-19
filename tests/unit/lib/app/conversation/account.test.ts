@@ -155,6 +155,13 @@ describe('the figures', () => {
     ).toBe('What it cost is not known.');
   });
 
+  it('0/0 tokens — the provider reported no usage — is no figure, not "about 0"', () => {
+    expect(
+      costSentence(turn({ inputTokens: 0, outputTokens: 0, pricing: 'unpriced', costUsd: null }))
+    ).toBe('What it cost is not known.');
+    expect(costSentence(turn({ inputTokens: 0, outputTokens: 0 }))).toBe('Cost $0.01.');
+  });
+
   it('no turn row, no figures', () => {
     expect(costSentence(null)).toBeNull();
     expect(accountDetail(input({ turn: null }), [])).toBe(`${NOTHING_WRITTEN}.`);

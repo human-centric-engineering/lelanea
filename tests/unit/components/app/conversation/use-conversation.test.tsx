@@ -122,9 +122,20 @@ describe('useConversation', () => {
     await act(async () => {
       latest().push('start', { conversationId: 'c1' });
       latest().push('status', { message: 'Executing search_knowledge_base' });
-      latest().push('capability_result', { capabilitySlug: 'search_knowledge_base', result: 1 });
+      latest().push('capability_result', {
+        capabilitySlug: 'search_knowledge_base',
+        result: { success: true, data: {} },
+      });
+      // A call the platform refused is a frame too, and not something the turn did.
+      latest().push('capability_result', {
+        capabilitySlug: 'delete_everything',
+        result: { success: false, error: { code: 'tool_not_advertised' } },
+      });
       latest().push('capability_results', {
-        results: [{ capabilitySlug: 'get_state', result: 1 }],
+        results: [
+          { capabilitySlug: 'get_state', result: { success: true } },
+          { capabilitySlug: 'get_state', result: { success: false } },
+        ],
       });
     });
     await waitFor(() =>
@@ -153,6 +164,7 @@ describe('useConversation', () => {
       // The reset threw away the first pass.
       text: 'Boundaries are…',
       citations: [],
+      capabilities: ['search_knowledge_base', 'get_state'],
       turn: {
         status: 'completed',
         modelId: 'gpt-4o-mini-2024-07-18',

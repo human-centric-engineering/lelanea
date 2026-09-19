@@ -573,7 +573,7 @@ describe('the account under a reply (t-66)', () => {
       latestTurn().push('start', { conversationId: 'c1' });
       latestTurn().push('capability_result', {
         capabilitySlug: 'search_knowledge_base',
-        result: 1,
+        result: { success: true, data: {} },
       });
       latestTurn().push('content', { delta: 'She says…' });
       latestTurn().push('citations', { citations: [citation] });
