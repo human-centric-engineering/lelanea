@@ -16,7 +16,7 @@
  * @see components/app/conversation/*
  */
 
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -382,10 +382,27 @@ describe('when she can\u2019t answer (t-65)', () => {
     );
     expect(alert.textContent).toContain(hard.emergency);
     expect(alert.textContent).toContain(hard.keptMessage);
+    // Only an https:// address becomes a link; anything else stays as text.
+    expect(screen.queryByRole('link', { name: 'Call 116 123' })).toBeNull();
     // Verbatim: nothing of hers is said under it, and the text form is not shown twice.
     expect(screen.queryByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeNull();
     expect(alert.textContent).not.toContain('as text');
     expect(box()).toHaveValue('I want to end it');
+  });
+
+  it('never links a service address that is not https://', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+    await user.type(box(), 'I want to end it{Enter}');
+    const hard = resource('hard');
+    hard.services[2].url = 'javascript:alert(1)';
+    await act(async () => {
+      latestTurn().push('error', { code: 'crisis', message: 'as text', resource: hard });
+      latestTurn().close();
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('findahelpline.com');
+    expect(within(alert).queryByRole('link')).toBeNull();
   });
 
   it('a soft crisis frame lays out the resource, then her turn', async () => {

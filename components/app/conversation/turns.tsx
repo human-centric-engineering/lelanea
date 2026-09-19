@@ -161,6 +161,12 @@ export function ThinkingRow({ stillThinking }: { stillThinking: boolean }) {
  * plain text, the frame's `message` — is shown instead, so a shape mismatch
  * never costs the person the names and numbers.
  *
+ * A service's `url` becomes a link only when it is `https://`. The admin write
+ * already refuses anything else (`lib/validations/app-crisis-resources.ts`);
+ * this is the same rule at the last step, so no path — a future table row, a
+ * hand edit to the file — can put another scheme on a link a person in danger
+ * is about to press.
+ *
  * It is an `alert` because it is the one thing in a transcript that must be
  * read before anything after it.
  */
@@ -183,7 +189,7 @@ export function CrisisRow({ resource, text }: { resource?: CrisisResource; text:
                 <li key={`${service.name}:${service.contact}`} className="flex flex-col">
                   <span className="font-medium">{service.name}</span>
                   <span>
-                    {service.url ? (
+                    {service.url?.startsWith('https://') ? (
                       <a
                         href={service.url}
                         target="_blank"
