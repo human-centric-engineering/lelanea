@@ -23,16 +23,18 @@ runRecordedTurn (lib/app/agent/turns.ts)
   └─ detectCrisis(text, locale, who)          lib/app/safety/assess.ts
        ├─ detectCrisisTier(text)               detect.ts — phrase list, no model
        ├─ checkCrisisContext(…) on a hard hit  context-check.ts — may only soften
-       ├─ resolveCrisisResource(locale, tier)  resource.ts — authored content
-       └─ recordCrisisEvent(…)                 record.ts — app_safety_event
-  hard → crisisFrame(resource), and nothing else: run() is never called
-  soft → crisisFrame(resource), then the turn exactly as before
+       └─ resolveCrisisResource(locale, tier)  resource.ts — authored content
+  hard → recordCrisisShown, crisisFrame(resource), and nothing else: run() is never called
+  soft → the turn as before; unless it was refused (409),
+         recordCrisisShown, then crisisFrame(resource) ahead of its stream
   none → the turn exactly as before
 ```
 
-**`detectCrisis` + `crisisFrame` are the one entry point.** The pre-signup
-conversation calls the same pair, unchanged, with `userId: null` and its own
-surface name as the seat (the feature's standing rule).
+**`detectCrisis` → `crisisFrame` → `recordCrisisShown` is the one entry point.**
+The pre-signup conversation calls the same three, unchanged, with
+`userId: null` and its own surface name as the seat (the feature's standing
+rule). Deciding and recording are separate calls because a decision is not a
+showing: a soft hit on a refused retry shows nothing, and records nothing.
 
 ## The two tiers
 
@@ -50,6 +52,11 @@ Owner ruling, 19 Sept 2026.
   matches: a phrase list cannot read intent, and a miss is the failure that
   matters. The one exception is _hurting_ another person, where the negated form
   ("I don't want to hurt her feelings") is ordinary coaching talk.
+- **Where a phrase has an everyday twin, the pattern reads what follows.**
+  "Cut myself some slack", "burning myself out", "my self-esteem", "shoot him an
+  email", "kill them with kindness", "live in London", "in danger of missing the
+  deadline" all match nothing. Each is a case in `detect.test.ts`; a new twin
+  found in use belongs there first.
 - **Idiom is kept out by shape.** "This job is killing me", "I could kill for a
   coffee" and "dying to know" match nothing, because every hard phrase names the
   self or another person as the object of the harm.
@@ -72,8 +79,9 @@ depend on a model. Both hold because of what the check may do
 - **Only the one-word answer `FIGURATIVE` softens.** `DANGER`, silence, a
   sentence, a refusal all leave the hit hard.
 - **Every failure leaves the hit hard:** an error (`error`), the 2.5s deadline
-  (`timeout`, and the call is aborted), no model configured or a provider that
-  cannot be built (`unavailable`), a message over 4,000 characters (`unavailable`
+  (`timeout`, and the call is aborted), generation paused — an incident pause is
+  when a person's words must not go to a provider — no model configured, or a
+  provider that cannot be built (all `unavailable`), a message over 4,000 characters (`unavailable`
   — never a truncated read, because the flagged words could be in the part cut
   off).
 - **Prompt injection is bounded, not prevented.** A message saying "answer
@@ -154,7 +162,9 @@ resource: {
 
 ## The record — never the words
 
-`app_safety_event` (`AppSafetyEvent`), one row per crisis detection:
+`app_safety_event` (`AppSafetyEvent`), one row each time the resource is
+shown — a replayed turn shows it again and records it again; a refused one does
+neither:
 `kind: 'crisis'`, the seat, the tier the phrase list detected and the tier acted
 on, the categories that matched (`suicide`, `self_harm`, `harm_to_others`,
 `immediate_risk`, `distress`), what the context check said (`not_run` for a soft

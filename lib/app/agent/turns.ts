@@ -72,8 +72,9 @@
  *   generation paused, the provider down, or the model call broken.
  * - **Soft tier:** the crisis frame goes first, then the turn runs exactly as
  *   below. A pause or a failure still ends it the usual way, after the resource.
- *   A 409 refusal carries no stream, so it carries no frame either: it is the
- *   retry of a turn whose first request already showed the resource.
+ *   A 409 refusal carries no stream, so it carries no frame — and writes no
+ *   safety record: it is the retry of a turn whose first request already
+ *   showed the resource, and a record says what was shown, not what was decided.
  *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
@@ -88,7 +89,7 @@ import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { isGenerationPaused } from '@/lib/app/agent/availability';
 import { runWithDeadlines } from '@/lib/app/agent/deadlines';
 import { ENDING_TIMED_OUT, endingFrame, toClientStream } from '@/lib/app/agent/endings';
-import { detectCrisis } from '@/lib/app/safety/assess';
+import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 import { crisisFrame } from '@/lib/app/safety/resource';
 import { preferredLanguageTag } from '@/lib/app/waitlist/locale';
 import {
@@ -325,14 +326,17 @@ export async function runRecordedTurn(
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
   const locale = preferredLanguageTag(turn.headers?.get('accept-language') ?? null);
-  const crisis = await detectCrisis(turn.message, locale, {
-    userId: turn.userId,
-    seat: turn.role,
-  });
-  if (crisis.resource?.tier === 'hard') return only(crisisFrame(crisis.resource));
+  const who = { userId: turn.userId, seat: turn.role };
+  const crisis = await detectCrisis(turn.message, locale, who);
+  if (crisis.resource?.tier === 'hard') {
+    await recordCrisisShown(crisis, who);
+    return only(crisisFrame(crisis.resource));
+  }
 
   const result = await runGeneratedTurn(turn, run);
+  // A refusal carries no stream, so it shows no resource — and records none.
   if (crisis.resource === null || isRefusal(result)) return result;
+  await recordCrisisShown(crisis, who);
   return precededBy(crisisFrame(crisis.resource), result);
 }
 

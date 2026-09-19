@@ -62,6 +62,13 @@ interface Pattern {
 // character or a missing space ("killmyself") cannot step around a match.
 const MY_SELF = String.raw`my\s*self`;
 
+/**
+ * "Myself" as the object of self-harm — not "my self-esteem", "myself some
+ * slack", "myself out", which are the ordinary sentences a coaching
+ * conversation is full of (found by /code-review).
+ */
+const MY_SELF_HARMED = String.raw`${MY_SELF}\b(?![\s-]*(?:esteem|worth|confidence|image|some\s*slack|out|up|off)\b)`;
+
 const OTHERS = String.raw`(?:him|her|them|someone|somebody|my\s*(?:wife|husband|partner|mum|mom|dad|mother|father|boss|son|daughter|child|kids?|baby|brother|sister))\b`;
 
 const HARD: readonly Pattern[] = [
@@ -75,7 +82,9 @@ const HARD: readonly Pattern[] = [
   { category: 'suicide', regex: /\bno\s*reason\s*to\s*(?:live|be\s*alive)\b/ },
   {
     category: 'suicide',
-    regex: /\bdon'?t\s*want\s*to\s*(?:live|be\s*alive)\b/,
+    // Not "live in London", "live with my parents": where, not whether.
+    regex:
+      /\b(?:don'?t|do\s*not)\s*want\s*to\s*(?:live\b(?!\s*(?:in|at|with|near|on|there|here|abroad|together|alone)\b)|be\s*alive\b)/,
   },
   {
     category: 'suicide',
@@ -84,20 +93,23 @@ const HARD: readonly Pattern[] = [
   {
     category: 'self_harm',
     regex: new RegExp(
-      String.raw`\b(?:hurt|harm|cut|cutting|burn|burning|hurting|harming)\s*${MY_SELF}`
+      String.raw`\b(?:hurt|harm|cut|cutting|burn|burning|hurting|harming)\s*${MY_SELF_HARMED}`
     ),
   },
   { category: 'self_harm', regex: /\bself[\s-]*harm(?:ing)?\b/ },
   { category: 'self_harm', regex: /\boverdos(?:e|ing)\b/ },
-  // "Hurt" only with intent: "I don't want to hurt her feelings" is the most
-  // ordinary sentence in a coaching conversation.
+  // "Hurt" and "shoot" only with intent: "I don't want to hurt her feelings"
+  // and "I'll shoot him an email" are ordinary sentences at work. "Kill them
+  // with kindness" is kept out by what follows.
   {
     category: 'harm_to_others',
-    regex: new RegExp(String.raw`\b(?:kill|stab|shoot|strangle)\s*${OTHERS}`),
+    regex: new RegExp(String.raw`\b(?:kill|stab|strangle)\s*${OTHERS}(?!\s*with\s*kindness)`),
   },
   {
     category: 'harm_to_others',
-    regex: new RegExp(String.raw`\b(?:want|wanna|going|gonna)\s*to\s*kill\s*${OTHERS}`),
+    regex: new RegExp(
+      String.raw`\b(?:want|wanna|going|gonna)\s*to\s*(?:kill|shoot)\s*${OTHERS}(?!\s*(?:with\s*kindness|an?\s|a\s*(?:message|note|line|text)))`
+    ),
   },
   // The one place the list reads a negation: "I don't want to hurt him" is
   // said about feelings far more often than about harm, and a stated intent
@@ -112,7 +124,8 @@ const HARD: readonly Pattern[] = [
     category: 'immediate_risk',
     regex: /\b(?:going|gonna|trying)\s*to\s*(?:kill|hurt)\s*me\b/,
   },
-  { category: 'immediate_risk', regex: /\bi'?m\s*(?:not\s*safe|in\s*danger)\b/ },
+  // Not "in danger of missing the deadline".
+  { category: 'immediate_risk', regex: /\bi'?m\s*(?:not\s*safe|in\s*danger(?!\s*of\b))\b/ },
 ];
 
 const SOFT: readonly Pattern[] = [
@@ -120,7 +133,7 @@ const SOFT: readonly Pattern[] = [
   { category: 'distress', regex: /\bwant\s*to\s*disappear\b/ },
   {
     category: 'distress',
-    regex: /\bdon'?t\s*want\s*to\s*be\s*(?:here|around)\s*any\s*more\b/,
+    regex: /\b(?:don'?t|do\s*not)\s*want\s*to\s*be\s*(?:here|around)\s*any\s*more\b/,
   },
   { category: 'distress', regex: /\b(?:no\s*one|nobody)\s*would\s*(?:miss|care)\b/ },
   { category: 'distress', regex: /\bbetter\s*off\s*without\s*me\b/ },

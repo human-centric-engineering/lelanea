@@ -38,6 +38,10 @@ const HARD: ReadonlyArray<[string, string]> = [
   ["I'm going to kill him", 'harm_to_others'],
   ['I want to hurt my husband', 'harm_to_others'],
   ['I am going to hurt her', 'harm_to_others'],
+  ['I want to shoot him', 'harm_to_others'],
+  ['I do not want to be alive', 'suicide'],
+  ['I do not want to live any more', 'suicide'],
+  ["I'm in danger", 'immediate_risk'],
   ["He's going to kill me", 'immediate_risk'],
   ["I'm not safe at home", 'immediate_risk'],
 ];
@@ -64,6 +68,14 @@ const NONE: readonly string[] = [
   "I'm hopeless at cooking",
   'My mum will kill me if I forget her birthday',
   'I want to grow into the person I am becoming',
+  // Found by /code-review: each of these was hard before the patterns read what follows.
+  'I need to cut myself some slack',
+  "I'm burning myself out at work",
+  'That really hurt my self-esteem',
+  "I'll shoot him an email this afternoon",
+  'My plan is to kill them with kindness',
+  "I don't want to live in London any more",
+  "I'm in danger of missing the deadline",
 ];
 
 describe('detectCrisisTier', () => {

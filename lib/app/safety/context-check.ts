@@ -13,7 +13,8 @@
  * - **It can only move `hard` to `soft`.** Softened, the resource is still shown
  *   first and her turn follows. Nothing here can hide the resource.
  * - **Anything but a clean "not in danger" leaves the hit hard.** An error, a
- *   timeout, no model configured, a provider down, an answer it cannot parse:
+ *   timeout, generation paused, no model configured, a provider down, an
+ *   answer it cannot parse:
  *   each one is the deterministic decision standing. So with the provider
  *   blocked, a hard hit is answered by the resource — the feature's done-when.
  *
@@ -35,6 +36,7 @@
  */
 
 import { logger } from '@/lib/logging';
+import { isGenerationPaused } from '@/lib/app/agent/availability';
 import { logCost } from '@/lib/orchestration/llm/cost-tracker';
 import { getModel } from '@/lib/orchestration/llm/model-registry';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
@@ -120,6 +122,14 @@ async function ask(input: ContextCheckInput, signal: AbortSignal): Promise<Conte
     logger.info('Crisis context check skipped: message too long to read whole', {
       seat: input.seat,
     });
+    return 'unavailable';
+  }
+
+  // A pause refuses every model call (`availability.ts`), and an incident pause
+  // is exactly when a person's words must not go to a provider. The hard tier
+  // stands; the resource needs no model (found by /code-review).
+  if (await isGenerationPaused()) {
+    logger.info('Crisis context check skipped: generation is paused', { seat: input.seat });
     return 'unavailable';
   }
 

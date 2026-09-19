@@ -21,7 +21,7 @@ vi.mock('@/lib/logging', () => ({
 vi.mock('@/lib/app/safety/context-check', () => ({ checkCrisisContext: mocks.check }));
 vi.mock('@/lib/db/client', () => ({ prisma: { appSafetyEvent: { create: mocks.create } } }));
 
-import { detectCrisis } from '@/lib/app/safety/assess';
+import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 
 const WHO = { userId: 'user-1', seat: 'onboarding' };
 const HARD_TEXT = 'I want to kill myself';
@@ -37,6 +37,12 @@ describe('detectCrisis', () => {
     const result = await detectCrisis('I want to be braver at work', 'en-GB', WHO);
     expect(result).toMatchObject({ tier: 'none', resource: null });
     expect(mocks.check).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('decides without writing: the record waits until the resource is shown', async () => {
+    mocks.check.mockResolvedValue('confirmed');
+    await detectCrisis(HARD_TEXT, 'en-GB', WHO);
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
@@ -84,7 +90,8 @@ describe('detectCrisis', () => {
   describe('the record', () => {
     it('writes what happened and never the words', async () => {
       mocks.check.mockResolvedValue('softened');
-      await detectCrisis(`${HARD_TEXT} tonight, after work`, 'en-GB', WHO);
+      const text = `${HARD_TEXT} tonight, after work`;
+      await recordCrisisShown(await detectCrisis(text, 'en-GB', WHO), WHO);
 
       expect(mocks.create).toHaveBeenCalledTimes(1);
       const { data } = mocks.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
@@ -105,16 +112,23 @@ describe('detectCrisis', () => {
     });
 
     it('records a pre-signup event with no user', async () => {
-      await detectCrisis(SOFT_TEXT, null, { userId: null, seat: 'pre-signup' });
+      const who = { userId: null, seat: 'pre-signup' };
+      await recordCrisisShown(await detectCrisis(SOFT_TEXT, null, who), who);
       const { data } = mocks.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
       expect(data).toMatchObject({ userId: null, seat: 'pre-signup', resourceRegion: null });
     });
 
-    it('still returns the resource when the record cannot be written', async () => {
+    it('never throws when the record cannot be written', async () => {
       mocks.check.mockResolvedValue('confirmed');
       mocks.create.mockRejectedValue(new Error('connection lost'));
       const result = await detectCrisis(HARD_TEXT, 'en-US', WHO);
-      expect(result.resource).toMatchObject({ tier: 'hard', region: 'US' });
+      await expect(recordCrisisShown(result, WHO)).resolves.toBeUndefined();
+      expect(mocks.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('records nothing for a message that matched nothing', async () => {
+      await recordCrisisShown(await detectCrisis('Plan my week', 'en-GB', WHO), WHO);
+      expect(mocks.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -178,6 +178,28 @@ describe('runRecordedTurn — someone in danger', () => {
     });
   });
 
+  it('a soft hit on a refused retry shows nothing, so records nothing', async () => {
+    mocks.claimTurn.mockResolvedValue({ kind: 'in_flight' });
+
+    const result = await runRecordedTurn(turn("I can't go on like this"), vi.fn());
+
+    expect(result).toMatchObject({ refused: true });
+    expect(mocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it('records a soft hit once its frame is on the way', async () => {
+    await frames(
+      await runRecordedTurn(
+        turn("I can't go on like this"),
+        vi.fn(() => herReply())
+      )
+    );
+    expect(mocks.createEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvent).toHaveBeenCalledWith({
+      data: expect.objectContaining({ actedTier: 'soft', contextCheck: 'not_run' }),
+    });
+  });
+
   it('adds nothing to a turn that raised nothing', async () => {
     const out = await frames(
       await runRecordedTurn(

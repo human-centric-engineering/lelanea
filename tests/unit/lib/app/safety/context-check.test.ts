@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getProvider: vi.fn(),
   chat: vi.fn(),
   logCost: vi.fn(),
+  paused: vi.fn(),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -26,6 +27,7 @@ vi.mock('@/lib/orchestration/llm/settings-resolver', () => ({
 vi.mock('@/lib/orchestration/llm/model-registry', () => ({ getModel: mocks.getModel }));
 vi.mock('@/lib/orchestration/llm/provider-manager', () => ({ getProvider: mocks.getProvider }));
 vi.mock('@/lib/orchestration/llm/cost-tracker', () => ({ logCost: mocks.logCost }));
+vi.mock('@/lib/app/agent/availability', () => ({ isGenerationPaused: mocks.paused }));
 
 import { checkCrisisContext } from '@/lib/app/safety/context-check';
 
@@ -45,6 +47,7 @@ beforeEach(() => {
   mocks.getModel.mockReturnValue({ provider: 'openai' });
   mocks.getProvider.mockResolvedValue({ chat: mocks.chat });
   mocks.logCost.mockResolvedValue(null);
+  mocks.paused.mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -131,6 +134,14 @@ describe('checkCrisisContext', () => {
       mocks.getProvider.mockRejectedValue(new Error('Provider "openai" is disabled'));
       expect(await checkCrisisContext(INPUT)).toBe('unavailable');
       expect(mocks.chat).not.toHaveBeenCalled();
+    });
+
+    it('paused: an operator pause sends no words to any provider', async () => {
+      mocks.paused.mockResolvedValue(true);
+      answers('FIGURATIVE');
+      expect(await checkCrisisContext(INPUT)).toBe('unavailable');
+      expect(mocks.chat).not.toHaveBeenCalled();
+      expect(mocks.logCost).not.toHaveBeenCalled();
     });
 
     it('unreachable: no side model is configured', async () => {
