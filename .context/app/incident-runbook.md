@@ -15,10 +15,10 @@ If one no longer answers where it says, fix this page before anything else.
 
 ## Who
 
-| Role   | Name                                 | Reaches by |
-| ------ | ------------------------------------ | ---------- |
-| Owner  | _to be named by the owner in review_ |            |
-| Deputy | _to be named by the owner in review_ |            |
+| Role   | Name           | Reaches by |
+| ------ | -------------- | ---------- |
+| Owner  | Lelañea Fulton |            |
+| Deputy | John Durrant   |            |
 
 - **The owner runs the incident**, decides its severity, and makes or signs off
   every notification. The deputy does all of that when the owner can't be reached
