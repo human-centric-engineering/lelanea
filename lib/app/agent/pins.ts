@@ -133,4 +133,80 @@ export const REACHABLE_CHANGE_SUMMARY = 'Made reachable by members (seeded — �
  * produces a confident claim to have looked, and a tool with no instruction is
  * one she may never reach for.
  */
-export const GRANTED_CAPABILITY_SLUGS: readonly string[] = ['search_knowledge_base'];
+export const GRANTED_CAPABILITY_SLUGS: readonly ReadOnlyCapabilitySlug[] = [
+  'search_knowledge_base',
+];
+
+/**
+ * Every capability she may ever hold. Each one was read and found to change
+ * nothing, and nothing else is on the list (f-safety t-60).
+ *
+ * Someone who talks her into deleting their account, their data or anything
+ * else meets a tool set in which nothing deletes. That is enforced in two
+ * places. **The chat path** refuses any tool name the model emits that is not in
+ * her advertised set (`tool_not_advertised`, Sunrise's streaming handler).
+ * **This list** is what that set may contain. `GRANTED_CAPABILITY_SLUGS` is typed
+ * against it, so a grant outside it does not compile. Its test also names every
+ * write capability the install ships and fails if one appears here.
+ *
+ * **Adding a slug is a security review, not an edit.** Read the capability's
+ * `execute()` first. It belongs here only if nothing it does writes, deletes,
+ * sends or spends on anyone's behalf.
+ *
+ * `search_knowledge_base` reads chunks. It is mounted in this leaf as
+ * `LabelledSearchKnowledgeCapability`, which adds an origin label to each
+ * result and writes nothing. The query embedding it pays for is a cost row, not
+ * a change to anyone's data.
+ *
+ * What an operator binds in the admin UI is not stopped by a constant. The smoke
+ * (`npm run smoke:app-misuse`) reads her advertised set on a real install and
+ * fails if it holds anything outside this list.
+ */
+export const READ_ONLY_CAPABILITY_SLUGS = ['search_knowledge_base'] as const;
+export type ReadOnlyCapabilitySlug = (typeof READ_ONLY_CAPABILITY_SLUGS)[number];
+
+/**
+ * The guard modes her agent is pinned to: observe, never speak (f-safety t-60).
+ *
+ * The platform's inline guards are heuristics. The input guard's own docblock
+ * says it is not a security boundary. A `block` stops the turn with an error,
+ * and every error reaches the person as our neutral `unavailable` ending
+ * (`endings.ts`). So a false positive on someone's ordinary message would look
+ * like she is down. At `log_only` a detection is still an event: it reaches the
+ * escalation policy (`ESCALATION_POLICIES`, an audit entry and a notification)
+ * and the safety record. The person just never sees a fake outage.
+ *
+ * Her refusals therefore stay in her prompt and are proved by the golden set's
+ * `refusal` cases, not by a guard.
+ *
+ * This closes the `input_blocked` misfit §08 left in the endings by not
+ * blocking, rather than by adding a word for it.
+ *
+ * The agent's own column wins over the install-wide default, which is why these
+ * are written onto her. A `guard_minimum` policy can still raise a floor, but
+ * that is an operator's explicit decision, and the smoke reports it.
+ */
+export const GUARD_MODES = { inputGuardMode: 'log_only', outputGuardMode: 'log_only' } as const;
+
+/** What her version timeline says when the seed writes her guard modes. */
+export const GUARD_MODES_CHANGE_SUMMARY = 'Guards set to observe, not block (seeded — f-safety)';
+
+/**
+ * The escalation policies her two seats carry: someone trying to talk her out
+ * of role is seen by a person (f-safety t-60).
+ *
+ * Daybreak's `escalation` kind turns an input-guard detection on a seat into a
+ * notification plus an audit entry (`handleFacilitationGuardEvent`). `flagged`
+ * is the minimum severity. It fires on every detection, which at `log_only` is
+ * every detection there is. `medium` priority because an attempt is not an
+ * emergency. The crisis path is the one that is, and it does not go through a
+ * guard.
+ *
+ * Operator-owned rows (`fp4`): the seed creates one only when none exists for
+ * that seat and guard, and never edits or re-enables one.
+ */
+export const ESCALATION_POLICIES = SEATED_ROLES.map((role) => ({
+  scope: { type: 'facilitation_role' as const, id: role },
+  signal: { guard: 'input' as const, outcome: 'flagged' as const },
+  priority: 'medium' as const,
+}));

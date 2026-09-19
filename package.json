@@ -71,6 +71,7 @@
     "smoke:app-turn": "tsx --env-file=.env.local scripts/app/smoke-turn.ts",
     "smoke:app-metering": "tsx --env-file=.env.local scripts/app/smoke-metering.ts",
     "smoke:app-crisis": "tsx --env-file=.env.local scripts/app/smoke-crisis.ts",
+    "smoke:app-misuse": "tsx --env-file=.env.local scripts/app/smoke-misuse.ts",
     "postinstall": "prisma generate",
     "prepare": "husky",
     "check:client-env": "tsx scripts/ci/check-client-env-delivery.ts"

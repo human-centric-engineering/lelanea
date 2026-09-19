@@ -512,6 +512,9 @@ model AppTurn {
 /// (f-safety t-60) adds its own kind to the same table.
 enum AppSafetyEventKind {
   crisis
+  /// The input guard flagged a message on one of her seats (f-safety t-60): an
+  /// attempt to talk her out of role, or anything else its heuristics catch.
+  misuse
 
   @@map("app_safety_event_kind")
 }
@@ -571,6 +574,12 @@ model AppSafetyEvent {
   locale         String?
   /// The region whose services were shown, or null for the international fallback.
   resourceRegion String?
+  /// `misuse` only: which guard flagged. Always `input` today: the output and
+  /// citation guards read her reply, not the person's words, and are not recorded.
+  guard          String?
+  /// `misuse` only: the mode that guard acted in. Pinned to `log_only` on her
+  /// agent (`GUARD_MODES`), so anything else here means an operator raised it.
+  guardOutcome   String?
   createdAt      DateTime                @default(now())
 
   @@index([userId, createdAt])

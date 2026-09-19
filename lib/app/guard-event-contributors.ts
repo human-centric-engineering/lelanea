@@ -20,6 +20,16 @@
  *
  * Full guide: CUSTOMIZATION.md §4 · .context/orchestration/chat.md
  */
+import { registerGuardEventContributor } from '@/lib/orchestration/chat/guard-events';
+import { MISUSE_RECORD_CONTRIBUTOR, recordGuardDetection } from '@/lib/app/safety/misuse';
+
+/**
+ * Lelañea registers one observer: a guard flagging a message on one of her seats
+ * is written to the safety record (f-safety t-60, `lib/app/safety/misuse.ts`).
+ * Daybreak's escalation observer, which notifies and audits, is registered by
+ * the framework separately. Pinned in `tests/unit/lib/app/defaults.test.ts`
+ * (`HB2`).
+ */
 export function initAppGuardEventContributors(): void {
-  // No app guard-event contributors by default.
+  registerGuardEventContributor(MISUSE_RECORD_CONTRIBUTOR, recordGuardDetection);
 }
