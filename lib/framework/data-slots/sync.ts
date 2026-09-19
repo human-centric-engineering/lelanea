@@ -143,7 +143,8 @@ function slotDefinitionNeedsUpdate(row: SlotDefinition, desired: ResolvedSlotDef
   );
 }
 
-type Tx = Prisma.TransactionClient;
+/** The client `executeTransaction` hands its callback. */
+type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 
 /** The rows one pass owns, and whether it may take over a slug another scope holds. */
 interface SlotPartition {
