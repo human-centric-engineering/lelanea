@@ -40,7 +40,7 @@
  * ## Global slots — a provider a leaf registers
  *
  * **Carried by Lelañea ahead of Daybreak** (`.context/app/divergences.md`,
- * Row 22). Spec §6.1's second source — app-seeded `global` slots, belonging to no
+ * Row 22; proposed upstream as daybreak#266). Spec §6.1's second source — app-seeded `global` slots, belonging to no
  * module — has no registration upstream. A leaf registers one async provider
  * ({@link registerGlobalSlotDefinitionProvider}); after the module pass the sync
  * reconciles what it returns as `scope = global`, and the leaf calls
