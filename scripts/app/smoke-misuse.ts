@@ -38,6 +38,16 @@
  * registered in this process only; the app's own process never sees it.
  *
  * Run with: npm run smoke:app-misuse
+ *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — this runs the real `lib/app/content` seam, it does not assert on it
+ * ---------------------------------------------------------------------------
+ * The refusal cases come from Lelañea's authored golden set, and every other
+ * step reads her agent, her seats and her allowlist. The script is about a
+ * fork-owned artefact from end to end, not a platform contract. In a fork
+ * without that content the import fails at load, which is the right failure.
+ * Delete the script and its `smoke:app-misuse` entry, or rewrite it against
+ * your own agent. There is nothing to pin.
  */
 
 import { prisma } from '@/lib/db/client';
