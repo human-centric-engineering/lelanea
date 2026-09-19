@@ -1,9 +1,10 @@
 /**
- * The browser's side of a turn (§10 t-64, t-65).
+ * The browser's side of a turn (§10 t-64, t-65, t-67).
  *
- * Three calls, and nothing else: read the transcript back, take a turn on a
- * seat, and ask whether a turn can be expected to be answered (the status read,
- * for the banner). The turn goes to Daybreak's role route with the seam's request shape —
+ * Read the transcript back, take a turn on a seat, ask whether a turn can be
+ * expected to be answered (the status read, for the banner), and — for the
+ * microphone — ask whether a voice note may be sent and send one. The turn
+ * goes to Daybreak's role route with the seam's request shape —
  * `{ message, turnId }` — and comes back as SSE frames, each one passed through
  * the leaf's own schema (`events.ts`). The client never handles a conversation
  * id: resume-by-context is the route's, and a member has no other door.
@@ -43,6 +44,9 @@ export function transcriptRouteFor(seat: string): string {
 
 /** Whether a turn sent now can be expected to be answered (§08 t-55). Install-wide. */
 export const STATUS_ROUTE = '/api/v1/app/agent/status';
+
+/** A voice note: GET says whether one may be sent; POST transcribes one (t-67). */
+export const TRANSCRIBE_ROUTE = '/api/v1/app/agent/transcribe';
 
 /** One id per message, kept for as long as the message might be sent again. */
 export function mintTurnId(): string {
@@ -199,6 +203,58 @@ export async function fetchGenerationStatus(
   const parsed = statusEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) throw new TurnRefused(response.status, 'malformed', 'Unreadable status');
   return parsed.data.data.generation;
+}
+
+const voiceInputEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ voiceInput: z.enum(['available', 'off', 'no_provider']) }),
+});
+
+export type VoiceInputState = z.infer<typeof voiceInputEnvelopeSchema>['data']['voiceInput'];
+
+/** Whether the microphone should be offered at all. Asked once, on mount. */
+export async function fetchVoiceInput(
+  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<VoiceInputState> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(TRANSCRIBE_ROUTE, {
+    credentials: 'include',
+    signal: options.signal,
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = voiceInputEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) throw new TurnRefused(response.status, 'malformed', 'Unreadable answer');
+  return parsed.data.data.voiceInput;
+}
+
+const transcriptEnvelope = z.object({
+  success: z.literal(true),
+  data: z.object({ text: z.string() }),
+});
+
+/**
+ * A clip to the transcribe route, as multipart, the way the platform's own
+ * mic buttons post it. The words come back; the clip does not stay anywhere.
+ */
+export async function transcribeClip(
+  clip: { blob: Blob; mimeType: string },
+  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<string> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const body = new FormData();
+  const extension = clip.mimeType.includes('mp4') ? 'm4a' : 'webm';
+  body.set('audio', new File([clip.blob], `voice-note.${extension}`, { type: clip.mimeType }));
+  const response = await fetchImpl(TRANSCRIBE_ROUTE, {
+    method: 'POST',
+    credentials: 'include',
+    signal: options.signal,
+    body,
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = transcriptEnvelope.safeParse(await response.json());
+  if (!parsed.success) throw new TurnRefused(response.status, 'malformed', 'Unreadable answer');
+  return parsed.data.data.text;
 }
 
 const accountSchema = z.object({

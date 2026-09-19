@@ -79,8 +79,8 @@ const STEP_SHIFT = 48;
  * status read puts one quiet line above the composer (t-65).
  *
  * Under every completed reply, the account row — the time, what the turn did,
- * the detail one click away (t-66). What is still deliberately absent: the
- * mic (t-67).
+ * the detail one click away (t-66). The microphone, when the route offers it
+ * (t-67).
  *
  * ## The strip
  *
@@ -288,6 +288,7 @@ export function ConversationPane() {
             onChange={conversation.setDraft}
             onSend={() => conversation.send()}
             busy={conversation.phase !== 'idle'}
+            voiceInput={conversation.voiceInput}
           />
         </>
       )}

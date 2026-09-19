@@ -1,8 +1,10 @@
 'use client';
 
-import { ArrowUp, Mic } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import * as React from 'react';
 
+import { VoiceNote } from '@/components/app/conversation/voice-note';
+import type { VoiceInputState } from '@/lib/app/conversation/client';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +14,10 @@ export interface ComposerProps {
   onSend: () => void;
   /** A turn is in flight, or the transcript is still loading: nothing sends. */
   busy: boolean;
+  /** Whether the microphone is offered — the route's answer; `null` until it has answered. */
+  voiceInput?: VoiceInputState | null;
+  /** Injectable for tests, passed to the microphone. */
+  fetchImpl?: typeof fetch;
 }
 
 /**
@@ -40,14 +46,38 @@ export interface ComposerProps {
  * `if (!v || S.busy) return` after its `preventDefault` makes it; Shift+Enter
  * still breaks a line.
  *
- * ## The mic
+ * ## The mic (t-67)
  *
- * Still disabled, still labelled as arriving with the conversation. It is
- * t-67's, and lighting it up here with nothing behind it would be the D6
- * failure in miniature.
+ * Offered only when the route says voice input is on and there is something
+ * to transcribe with; otherwise absent, not disabled — a disabled control
+ * with no reason is the D6 failure in miniature. What the person said lands
+ * at the caret, replacing any selection, for them to read and edit; the box
+ * is never sent for them. See `voice-note.tsx`.
  */
-export function Composer({ value, onChange, onSend, busy }: ComposerProps) {
+export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl }: ComposerProps) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
+
+  /** The words, at the caret — with a space either side where they meet other words. */
+  const insertAtCaret = React.useCallback(
+    (text: string) => {
+      const el = textarea.current;
+      const start = el?.selectionStart ?? value.length;
+      const end = el?.selectionEnd ?? value.length;
+      const before = value.slice(0, start);
+      const after = value.slice(end);
+      const lead = before && !/\s$/.test(before) ? ' ' : '';
+      const trail = after && !/^\s/.test(after) ? ' ' : '';
+      const next = `${before}${lead}${text}${trail}${after}`;
+      onChange(next);
+      const caret = before.length + lead.length + text.length;
+      // After React has painted the new value.
+      requestAnimationFrame(() => {
+        el?.focus();
+        el?.setSelectionRange(caret, caret);
+      });
+    },
+    [value, onChange]
+  );
 
   // The auto-grow runs on every value change, not only on `input`: a value
   // cleared by the hook fires no input event, and the box would keep the
@@ -102,19 +132,9 @@ export function Composer({ value, onChange, onSend, busy }: ComposerProps) {
           )}
         />
         <div className="flex items-center gap-2 pt-1.5">
-          <span title={CONVERSATION_COPY.micArriving} className="flex-none">
-            <button
-              type="button"
-              disabled
-              aria-label={CONVERSATION_COPY.micArriving}
-              className={cn(
-                'text-muted-foreground flex h-9 w-9 items-center justify-center rounded-full',
-                'disabled:opacity-50'
-              )}
-            >
-              <Mic size={18} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
+          {voiceInput === 'available' ? (
+            <VoiceNote onText={insertAtCaret} disabled={busy} fetchImpl={fetchImpl} />
+          ) : null}
           <span className="flex-1" />
           <span className="text-muted-foreground flex-none text-[12px] max-[760px]:hidden">
             {CONVERSATION_COPY.hint}

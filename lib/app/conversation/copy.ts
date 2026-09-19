@@ -32,8 +32,21 @@ export const CONVERSATION_COPY = {
   hint: 'shift + return for a new line',
   send: 'Send',
   sendBusy: 'Send — waiting for her reply',
-  /** The mic is t-67's; until then it says so, as the stub did. */
-  micArriving: 'Record a voice note — arrives with the conversation',
+  /**
+   * The microphone (t-67). Its accessible name says what happens to the
+   * recording — nothing — because that is the fact a person would want
+   * before speaking about their marriage into it (owner ruling, 19 Sept 2026).
+   */
+  mic: 'Record a voice note — it is turned into text for you to read and edit, and the recording is never kept',
+  micStop: 'Stop recording',
+  /** The row while recording; the seconds are appended. */
+  micRecording: 'Recording',
+  micTranscribing: 'Turning it into words…',
+  /** The disabled control's reasons — never an error, just why not. */
+  micDenied: 'Voice notes need the microphone, and this browser was told no',
+  micUnsupported: 'Voice notes need a browser that can record',
+  /** After a clip could not be transcribed: the box is untouched; try again. */
+  micFailed: "That one couldn't be turned into words. Nothing was kept — try again if you'd like.",
 
   /** The three-dot row while she has said nothing yet. */
   thinking: 'thinking',

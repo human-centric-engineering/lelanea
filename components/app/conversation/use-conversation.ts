@@ -5,10 +5,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchGenerationStatus,
   fetchTranscript,
+  fetchVoiceInput,
   type GenerationStatus,
   mintTurnId,
   streamTurn,
   TurnRefused,
+  type VoiceInputState,
 } from '@/lib/app/conversation/client';
 import type { ConversationEvent, CrisisResource } from '@/lib/app/conversation/events';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
@@ -134,6 +136,8 @@ export interface ConversationState {
   unreadable: boolean;
   /** The status read's last word; `null` until it has answered, or when it could not. */
   status: GenerationStatus | null;
+  /** Whether the microphone is offered (t-67); `null` until the route has answered, or when it could not. */
+  voiceInput: VoiceInputState | null;
   send: (text?: string) => void;
   /**
    * The view has shown this turn's reply to its end. Retires `streamed` on
@@ -159,6 +163,7 @@ export function useConversation(options: Options = {}): ConversationState {
   const [draft, setDraft] = useState('');
   const [unreadable, setUnreadable] = useState(false);
   const [status, setStatus] = useState<GenerationStatus | null>(null);
+  const [voiceInput, setVoiceInput] = useState<VoiceInputState | null>(null);
 
   // The in-flight request, so an unmount ends it. The turn itself carries on
   // server-side and is recorded (§08 t-55): closing the tab loses nothing.
@@ -214,6 +219,22 @@ export function useConversation(options: Options = {}): ConversationState {
       inFlight.current?.abort();
     };
   }, [refreshStatus]);
+
+  // Once: whether to offer the microphone. Unanswered means not offered.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchVoiceInput({ signal: controller.signal, fetchImpl })
+      .then((state) => {
+        if (!controller.signal.aborted) setVoiceInput(state);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        logger.warn('Voice input availability could not be read', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return () => controller.abort();
+  }, [fetchImpl]);
 
   const send = useCallback(
     (text?: string) => {
@@ -450,5 +471,5 @@ export function useConversation(options: Options = {}): ConversationState {
     });
   }, []);
 
-  return { phase, entries, live, draft, setDraft, unreadable, status, send, revealed };
+  return { phase, entries, live, draft, setDraft, unreadable, status, voiceInput, send, revealed };
 }
