@@ -232,7 +232,7 @@ describe('POST — a clip, transcribed', () => {
 describe('GET — whether the microphone is offered', () => {
   const get = () => GET(new NextRequest('https://lelanea.com/api/v1/app/agent/transcribe'));
 
-  it('says available with both switches on and a provider', async () => {
+  it('says available with both switches on and a provider, and needs no subject', async () => {
     const response = await get();
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect((await json<{ data: { voiceInput: string } }>(response)).data.voiceInput).toBe(

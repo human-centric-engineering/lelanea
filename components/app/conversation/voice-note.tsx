@@ -3,7 +3,7 @@
 import { Loader2, Mic, Square } from 'lucide-react';
 import * as React from 'react';
 
-import { transcribeClip } from '@/lib/app/conversation/client';
+import { transcribeClip, TurnRefused } from '@/lib/app/conversation/client';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { useVoiceRecording } from '@/lib/hooks/use-voice-recording';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,15 @@ import { cn } from '@/lib/utils';
  * refused — a recording under way can always be stopped.
  *
  * Whether the control is offered at all — the two switches, a provider — is
- * the composer's question, asked of the route; this component assumes yes.
+ * the composer's question, asked of the route once, on mount. A switch turned
+ * off while the pane is open answers the next clip with `VOICE_DISABLED` (or
+ * `NO_AUDIO_PROVIDER`); the control withdraws itself then, saying so once,
+ * rather than inviting a retry that cannot succeed (review round 2).
+ *
+ * A transcription in flight is not aborted on unmount: the pane's composer
+ * unmounts when the pane is parked on a tablet, and the words are the
+ * person's — paid for, and the draft they land in lives above the pane. The
+ * only thing the unmount stops is this component's own state.
  */
 
 const MAX_CLIP_MS = 120_000;
@@ -63,14 +71,25 @@ export interface VoiceNoteProps {
   fetchImpl?: typeof fetch;
 }
 
-type Phase = 'idle' | 'recording' | 'transcribing' | 'failed';
+type Phase = 'idle' | 'recording' | 'transcribing' | 'failed' | 'unreachable' | 'withdrawn';
+
+/** Refusals that mean the control should not be here any more. */
+const WITHDRAWING_CODES = new Set(['VOICE_DISABLED', 'NO_AUDIO_PROVIDER']);
 
 export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
   // The hook's cap sits behind ours, so ours — which sends the clip — fires first.
   const recording = useVoiceRecording({ maxDurationMs: MAX_CLIP_MS + 5_000 });
-  const [phase, setPhase] = React.useState<Phase>('idle');
-  const inFlight = React.useRef<AbortController | null>(null);
-  React.useEffect(() => () => inFlight.current?.abort(), []);
+  const [phase, setPhaseState] = React.useState<Phase>('idle');
+  const mounted = React.useRef(true);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const setPhase = React.useCallback((next: Phase) => {
+    if (mounted.current) setPhaseState(next);
+  }, []);
 
   // The hook's state is the truth about the recorder; ours is about the words.
   const isRecording = recording.state === 'recording' || recording.state === 'stopping';
@@ -84,28 +103,23 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
         return;
       }
       setPhase('transcribing');
-      const controller = new AbortController();
-      inFlight.current = controller;
       try {
-        const text = (await transcribeClip(clip, { signal: controller.signal, fetchImpl })).trim();
-        if (controller.signal.aborted) return;
+        const text = (await transcribeClip(clip, { fetchImpl })).trim();
         if (text) onText(text);
         setPhase('idle');
-      } catch {
-        if (controller.signal.aborted) return;
-        setPhase('failed');
-      } finally {
-        inFlight.current = null;
+      } catch (error) {
+        const code = error instanceof TurnRefused ? error.code : null;
+        setPhase(code !== null && WITHDRAWING_CODES.has(code) ? 'withdrawn' : 'failed');
       }
     },
-    [fetchImpl, onText]
+    [fetchImpl, onText, setPhase]
   );
 
   const stopAndSend = React.useCallback(async () => {
     const clip = await recording.stop();
     if (clip) await send(clip);
     else setPhase('failed');
-  }, [recording, send]);
+  }, [recording, send, setPhase]);
 
   const press = async () => {
     if (isRecording) {
@@ -130,10 +144,21 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
     }
   }, [recording.state, recording.elapsedMs, stopAndSend]);
 
-  // The hook reports a capture that failed after it began; treat as a clip that did not arrive.
+  // The hook's `capture_failed` covers both a microphone that could not be
+  // reached at all (held by another app, no device) and a recorder that failed
+  // mid-clip. Either way no clip was made, so the words are about the
+  // microphone, not about a clip that could not be transcribed.
   React.useEffect(() => {
-    if (recording.error?.code === 'capture_failed') setPhase('failed');
-  }, [recording.error]);
+    if (recording.error?.code === 'capture_failed') setPhase('unreachable');
+  }, [recording.error, setPhase]);
+
+  if (phase === 'withdrawn') {
+    return (
+      <span role="status" className="text-muted-foreground text-[12px] leading-[1.5]">
+        {CONVERSATION_COPY.micWithdrawn}
+      </span>
+    );
+  }
 
   const label = cannot
     ? CONVERSATION_COPY.micUnsupported
@@ -149,9 +174,11 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
       ? CONVERSATION_COPY.micTranscribing
       : phase === 'failed'
         ? CONVERSATION_COPY.micFailed
-        : isRecording
-          ? `${CONVERSATION_COPY.micRecording} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-          : null;
+        : phase === 'unreachable'
+          ? CONVERSATION_COPY.micUnreachable
+          : isRecording
+            ? `${CONVERSATION_COPY.micRecording} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+            : null;
 
   return (
     <span className="flex min-w-0 items-center gap-2">

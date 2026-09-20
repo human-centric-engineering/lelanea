@@ -36,7 +36,7 @@ import {
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/** Ownership: self — the clip is the caller's, and the cost row is theirs. */
+/** Ownership of the POST: self — the clip is the caller's, and the cost row is theirs. */
 const OWNERSHIP: WithAuthOptions = {
   ownership: {
     decidedBy: 'self',
@@ -45,12 +45,22 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async () => {
-  const { state } = await voiceInputAvailability();
-  return successResponse({ voiceInput: state }, undefined, {
-    headers: { 'Cache-Control': 'no-store' },
-  });
-}, OWNERSHIP);
+export const GET = withAuth(
+  async () => {
+    const { state } = await voiceInputAvailability();
+    return successResponse({ voiceInput: state }, undefined, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  },
+  {
+    // Ownership: none to decide — see RouteOwnership in lib/auth/guards.ts.
+    ownership: {
+      decidedBy: 'nothing',
+      because:
+        'Serves one install-wide word — whether a voice note may be sent. It reads an operator switch, her agent flag and whether a provider exists, nothing keyed to the caller, so every member gets the same answer.',
+    },
+  }
+);
 
 // Audit invariant: this handler MUST NOT persist audio bytes. The only write
 // on the happy path is `logCost(...)`, and the route's tests assert it.

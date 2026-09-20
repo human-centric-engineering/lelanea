@@ -76,9 +76,12 @@ export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl 
       const next = `${before}${lead}${text}${trail}${after}`;
       onChange(next);
       const caret = before.length + lead.length + text.length;
-      // After React has painted the new value.
+      // After React has painted the new value. Focus is taken only where the
+      // box had it, or nothing did: the words can arrive without a press (the
+      // two-minute cap), and a person typing elsewhere is not pulled here.
+      const hadFocus = document.activeElement === el || document.activeElement === document.body;
       requestAnimationFrame(() => {
-        el?.focus();
+        if (hadFocus) el?.focus();
         el?.setSelectionRange(caret, caret);
       });
     },

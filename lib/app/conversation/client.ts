@@ -243,7 +243,15 @@ export async function transcribeClip(
 ): Promise<string> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const body = new FormData();
-  const extension = clip.mimeType.includes('mp4') ? 'm4a' : 'webm';
+  // Named by MIME, as the platform's own mic button names it: a browser with
+  // none of the preferred MIMEs records its default (Firefox: ogg).
+  const extension = clip.mimeType.startsWith('audio/mp4')
+    ? 'mp4'
+    : clip.mimeType.startsWith('audio/webm')
+      ? 'webm'
+      : clip.mimeType.startsWith('audio/ogg')
+        ? 'ogg'
+        : 'bin';
   body.set('audio', new File([clip.blob], `voice-note.${extension}`, { type: clip.mimeType }));
   const response = await fetchImpl(TRANSCRIBE_ROUTE, {
     method: 'POST',

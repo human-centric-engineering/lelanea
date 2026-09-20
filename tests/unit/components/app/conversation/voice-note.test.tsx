@@ -246,6 +246,61 @@ describe('a voice note', () => {
     expect(getUserMedia).toHaveBeenCalledTimes(2);
   });
 
+  it('withdraws itself when a switch was turned off while the pane was open', async () => {
+    vi.mocked(fetchImpl).mockImplementationOnce(
+      async () =>
+        new Response(
+          JSON.stringify({ success: false, error: { code: 'VOICE_DISABLED', message: 'off' } }),
+          { status: 403, headers: { 'content-type': 'application/json' } }
+        )
+    );
+    const user = userEvent.setup();
+    render(<Harness initial="Mine." />);
+    await user.click(mic());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.micStop }));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(CONVERSATION_COPY.micWithdrawn)
+    );
+    expect(screen.queryByRole('button', { name: /voice note/i })).toBeNull();
+    expect(box()).toHaveValue('Mine.');
+  });
+
+  it('says the microphone could not be reached — not that a clip failed — when no clip was made', async () => {
+    getUserMedia.mockRejectedValue(Object.assign(new Error('busy'), { name: 'NotReadableError' }));
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(mic());
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(CONVERSATION_COPY.micUnreachable)
+    );
+    expect(mic()).not.toBeDisabled();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('names the clip by its MIME', async () => {
+    (FakeRecorder as unknown as { isTypeSupported: (m: string) => boolean }).isTypeSupported = () =>
+      false;
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(mic());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.micStop }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    const form = await posts[0].formData();
+    const file = form.get('audio');
+    expect(file).toBeInstanceOf(File);
+    // The fake's default MIME is audio/webm; the name follows it.
+    expect((file as File).name).toBe('voice-note.webm');
+    (FakeRecorder as unknown as { isTypeSupported: (m: string) => boolean }).isTypeSupported = (
+      m
+    ) => (PREFERRED_MIMES as readonly string[]).includes(m);
+  });
+
   it('is the disabled disc with its reason in a browser that cannot record', () => {
     vi.stubGlobal('MediaRecorder', undefined);
     render(<Harness />);

@@ -47,6 +47,11 @@ export const CONVERSATION_COPY = {
   micUnsupported: 'Voice notes need a browser that can record',
   /** After a clip could not be transcribed: the box is untouched; try again. */
   micFailed: "That one couldn't be turned into words. Nothing was kept — try again if you'd like.",
+  /** The microphone could not be reached at all — no clip was made. */
+  micUnreachable:
+    "The microphone couldn't be reached — is another app using it? Try again if you'd like.",
+  /** Voice notes were switched off while the pane was open: the control withdraws. */
+  micWithdrawn: 'Voice notes are off for now.',
 
   /** The three-dot row while she has said nothing yet. */
   thinking: 'thinking',
