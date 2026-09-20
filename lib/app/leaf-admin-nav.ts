@@ -47,6 +47,15 @@
  * was that all of them be changeable as real use teaches what they should be.
  * `/admin/app/agent` is where.
  *
+ * ## And the fifth and sixth, because a taxonomy nobody can see is not data
+ *
+ * f-safety t-63 put the crisis helplines behind a surface for the reason above.
+ * f-slots t-71 does the same for the taxonomy: t-70 made what the app tries to
+ * learn about a person into rows an admin owns rather than constants in a
+ * deploy, and until this link existed the only way to change one was a
+ * migration. `/admin/app/slots` is where a slot is added, reworded, retired and
+ * read back through every version it has had.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -57,18 +66,20 @@
  * looking at this sidebar is reading three tiers at once, and the tier a link
  * belongs to is the first thing worth knowing.
  *
- * Pinned in `tests/unit/lib/app/defaults.test.ts` — both here (one section, now
- * FOUR items, in this order) and on the `lib/app/admin-nav.ts` bridge, which
- * registers two sections rather than one (`HB2`: pin the new value, never delete
- * the row).
+ * Pinned in `tests/unit/lib/app/defaults.test.ts` — both here (one section, and
+ * the exact list of hrefs in this order) and on the `lib/app/admin-nav.ts`
+ * bridge, which registers two sections rather than one (`HB2`: pin the new
+ * value, never delete the row). The pin is the live count; this docblock does
+ * not restate it, because it drifted the moment an item was added.
  */
 
-import { AudioLines, ClipboardList, Gauge, LifeBuoy, Library } from 'lucide-react';
+import { AudioLines, ClipboardList, Gauge, LifeBuoy, Library, ListTree } from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
 import { DESIGNATION_ADMIN_PAGE, VOICE_COMPARISON_PAGE } from '@/lib/app/voice/endpoint';
 import { AGENT_SETTINGS_PAGE } from '@/lib/app/agent/endpoint';
 import { CRISIS_RESOURCES_PAGE } from '@/lib/app/safety/endpoint';
+import { SLOT_DEFINITIONS_PAGE } from '@/lib/app/slots/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
@@ -104,6 +115,13 @@ export function initLeafAdminNav(): void {
         icon: LifeBuoy,
         description:
           'Who someone in danger is pointed to, by country, and whether it is signed off',
+      },
+      {
+        href: SLOT_DEFINITIONS_PAGE,
+        label: 'What the AI asks about',
+        icon: ListTree,
+        description:
+          'The data slots the AI tries to fill in about a person, and every past version of each',
       },
     ],
   });

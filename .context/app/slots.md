@@ -249,20 +249,222 @@ pinned by a drift probe in `lib/app/leaf-db-drift.ts`. `origin` survives the
 null, so a row left by an erased admin still reads as an admin edit rather than
 as the seed.
 
+## The editor — `/admin/app/slots` (t-71)
+
+**Locations:** `lib/app/slots/definitions-admin.ts` (the store) ·
+`lib/app/slots/validation.ts` (the schemas) · `lib/app/slots/endpoint.ts` (the
+paths) · `app/api/v1/admin/app/slots/**` (eight handlers in seven files) ·
+`app/admin/app/slots/page.tsx` + `components/app/admin/slot-definitions.tsx`
+
+**This table is the roster.** Count the surface from here, not from the ordinal
+in the line above — and if you add a route, add its row.
+
+| Route                           | Does                                                               |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `GET /api/v1/admin/app/slots`   | every definition, **retired included**, plus the group keys in use |
+| `POST /api/v1/admin/app/slots`  | add one, at v1                                                     |
+| `PUT .../slots/[slug]`          | reword one                                                         |
+| `PUT .../slots/[slug]/active`   | retire or restore                                                  |
+| `GET .../slots/[slug]/history`  | every past version, newest first                                   |
+| `POST .../slots/upload/preview` | what a file would do                                               |
+| `POST .../slots/upload`         | do it                                                              |
+| `GET .../slots/export`          | the taxonomy as a file the upload accepts ("Export" below)         |
+
+All `withAdminAuth`. Rate limiting is the `admin` section tier in `proxy.ts`;
+no handler adds a per-flow cap, including the upload, which is a no-op on a
+repeat.
+
+**What bounds an uploaded file is the schema, not the platform.** There is no
+platform-wide body-size ceiling — `lib/api/multipart-guard.ts` guards
+`request.formData()` only, and both upload routes' docblocks once claimed a
+ceiling that does not exist. The bound is `slotTaxonomyFileSchema.slots`,
+`.min(1).max(1000)`, and it lives on the schema so the preview, the apply, the
+seed and the export's round-trip check all inherit the same one. The upload's
+work is bounded by the file, not by the stored taxonomy.
+
+### The store is not the provider, and its reader is not `listSlotDefinitions`
+
+`taxonomy-store.ts` is the **provider**: `isActive: true`, the columns the sync
+needs. `definitions-admin.ts` is the **editor's** store: every row, plus
+`version`, `createdAt`, `updatedAt`. The two share `SLOT_DEFINITION_FIELDS`,
+`StoredSlotDefinitionFields` and `changedDefinitionFields()` and nothing else —
+widening the provider's select for the editor's sake would make every boot fetch
+three columns it never reads.
+
+**And the reader is `getSlotTaxonomyAdminView()`.**
+`lib/framework/data-slots/queries.ts` already exports `listSlotDefinitions()`
+through the framework barrel, and it reads the _projection_ — no history, and no
+way to tell our retirement from a deactivation. A leaf function by that name is
+one import away from being the wrong one.
+
+### The lock: an integer `version`, compared twice
+
+Every write that changes a row sends the version the admin read. It is checked
+before anything is touched, and again inside the write via a conditional
+`updateMany` — so a save racing another _between_ those two is refused as well,
+and the refusal rolls the revision back with it.
+
+A stale save is a **409** with `details.reason: 'version_moved'` and
+`currentVersion`, and a message naming both versions. The page shows that
+message verbatim; it is the only thing that tells the admin what happened.
+
+**The shape is the crisis-resources editor's; the reasoning is not.** There,
+`version` exists for the lock. Here it _is_ the revision number, so a lost
+update would leave `app_slot_definition_revision` claiming a version whose
+wording nothing stored ever had.
+
+### What each write does, and what a no-op does not
+
+A write that changes a field: one revision, `version + 1`, one audit entry, one
+`syncGlobalSlotDefinitions()`. A write that changes nothing: **none of those
+four.** That is the change rule above, and it is why the page says "Nothing had
+changed, so nothing was written" rather than reporting a new version.
+
+Retirement runs through the same machinery — `isActive` is a field like any
+other — which is why retiring appends history and bumps the version.
+
+### A failed re-sync is reported, not thrown
+
+The sync runs _after_ the transaction commits. If it fails, the edit is still
+saved, so throwing would surface a 500 on a request that did write. The store
+returns a `SlotSyncOutcome` instead and the page shows an amber warning naming
+the remedy (`HB10`): save again — the pass is idempotent and serialised — or
+restart the server.
+
+`not_needed` and `empty` are **different**, deliberately. The first means the
+pass never ran because nothing changed. The second is the framework's, and means
+it ran and the provider handed it nothing — every slot retired, in which case
+that last retirement is not propagated. The page says different things about
+them.
+
+### Upload: one planner, two callers
+
+`planTaxonomyUpload(file, mode, stored)` is pure, and both the preview and the
+apply call it. That is what makes "the preview matches what apply does" a
+property of the code rather than two implementations kept in step by hand.
+
+- **`merge`** adds what is missing, rewords what differs, and leaves a slug the
+  file does not mention exactly as it is.
+- **`replace`** does that and additionally retires the slugs the file omits.
+
+Neither deletes. **Neither retires anything the preview did not name**, and the
+page will not enable Apply until a preview has been read — editing the file or
+changing the mode takes the plan back down.
+
+The file is parsed by `slotTaxonomyFileSchema`, the same schema the seed uses,
+so the admin reads the same referential errors. A `mode: open` row is refused by
+name rather than coerced.
+
+**Apply re-plans inside its own transaction** and returns the plan that _ran_,
+which the page then shows. A row someone saved between the preview and the apply
+is therefore reconciled as it actually is, and the admin sees that rather than
+the plan they clicked.
+
+#### A retired slug listed in the file stays retired
+
+The file format has no `isActive`, so a retired slug appearing in it is
+indistinguishable from one that was never retired. Reviving it on that evidence
+is the seed's own documented trap, one step removed. It goes in the plan's
+`skippedRetired` list instead, and restoring is a deliberate act with its own
+route.
+
+#### Idempotent by construction, not by a guard
+
+Every write is driven by `changedDefinitionFields()`, so a second apply of the
+same file finds its creates stored and identical, its updates applied and its
+retirements retired — and plans nothing.
+
+### Export, and the round trip
+
+`GET .../slots/export` answers a JSON attachment in the **same format the
+upload accepts**, so export → edit → import is a real round trip rather than
+two formats that resemble each other.
+
+**The panel fetches it; it is not a plain `<a href download>`.** A link was the
+first shape, justified as following the waitlist export — but that is the wrong
+precedent: the waitlist is the **outlier**, and every other download in the tree
+(Sunrise's backup panel and agent export, our own Art. 15 row in
+`components/app/account/export-data-row.tsx`) already fetches.
+
+The reason is that this route refuses in the two cases below, and a link answers
+a refusal by saving the JSON error envelope to disk while the page stays silent.
+`unexportable`'s message is the one that _names the offending rows_, so it is
+the message that most has to be read. `export-data-row.tsx` records the same
+lesson from t-11, where navigating to an Art. 15 route put a raw
+`{"success":false,…}` in a tab — including the detail that the blob URL must
+outlive the click (Firefox and Safari read it asynchronously), which is why both
+revoke after a minute rather than on the next tick.
+
+**`components/app/admin/waitlist-table.tsx` still has the plain link** and the
+same latent gap. It is ours — absent from both upstreams — so there is nothing
+to file upstream; it is a follow-up on this codebase, deliberately not bundled
+into t-71.
+
+That is an **invariant, not an intention**: `exportTaxonomyFile()` parses what
+it is about to return with `slotTaxonomyFileSchema` — the seed's own schema —
+and throws rather than hand out a file the import would reject. The store's
+test closes the loop by planning an upload of a fresh export and asserting it
+writes nothing.
+
+Three things it does not carry, each said in the file's own `notes` so the
+statement travels with the download:
+
+- **Retired definitions.** The format has no `isActive`, so exporting them
+  would write them as active — and importing that into a fresh database would
+  resurrect every retirement ever made. **An export is therefore not a backup**,
+  and the page says so beside the button.
+- **Group titles and descriptions**, which are not stored (below). They are
+  filled in from the key rather than read out of the bundled file, which would
+  put prose in the download that never described these rows.
+- **Versions and history**, which stay in the database. A file is the wording,
+  not the record of how it got there.
+
+It refuses rather than degrades in two cases: nothing active to export
+(`reason: 'nothing_to_export'`), and a stored row whose free-form classifier is
+not in the vocabulary (`reason: 'unexportable'`, naming the rows). The second
+is the one worth understanding — `loadGlobalSlotDefinitions()` _withholds_ such
+a row from the sync, and an export must not copy that behaviour: a file
+silently missing a definition is how a round trip deletes one.
+
+**No per-flow rate limit**, unlike the waitlist export it is modelled on. That
+sub-cap exists because each waitlist download is a copy of other people's email
+addresses leaving the building. This file holds the questions, not the answers
+— the same reason both definition tables are exclusions in
+`lib/app/leaf-data-export.ts` — so the `admin` section tier is the right and
+only cap.
+
+### Groups are derived from the rows, not from the file
+
+`app_slot_definition.group` is a free string and there is no group table. The
+editor's picker is the distinct groups **in use**, because once seeded the tables
+are the taxonomy — reading the bundled file for a vocabulary would let an admin
+move a slot into a group no row has, and stop them moving it into one an upload
+introduced.
+
+The file's group `title` and `description` are therefore not read back anywhere;
+they were decoration on a column that stores a key. **Creating a group from the
+editor is not in t-71** — an upload can introduce one, and allowing free text
+later is a one-field change with no migration.
+
+### The page calls them "data slots"
+
+In admin copy the unit is a **data slot**, not a "slot" — and the model is
+**"the AI"**, never "she". The persona belongs to the member-facing product;
+an operator reading this page is looking at configuration. This document keeps
+"slot definition" and "slot value" because those are the framework's own table
+and type names.
+
+### What an admin cannot do here, and why the surface says so
+
+- **Edit a slug.** Shown, disabled, with the remedy beside it. The routes refuse
+  a `slug` in the body rather than ignoring it: someone who thought they were
+  renaming a slot has to be told they were not, or they will believe the old
+  answers followed.
+- **Delete anything.** There is no `DELETE` on any route. "Retire" is the word
+  on the button, retired rows stay on the page, and Restore is one click.
+- **Choose `mode`.** Never offered; every row is written `targeted`.
+
 ## What is not here yet
-
-- **The editor** — t-71. Adding, rewording and retiring a definition, and seeing
-  every past version. `changedDefinitionFields()` is here for it — it is the
-  executable form of the change rule above — but the read and write paths are
-  not, deliberately: the editor's list needs the revision join, and guessing at
-  that shape now would have shipped an API t-71 then had to change.
-
-  **Name its reader carefully.** `lib/framework/data-slots/queries.ts` already
-  exports a `listSlotDefinitions()`, reachable from the framework barrel, and it
-  reads `framework_slot_definition` — the projection, with no history and no
-  way to tell _our_ retirement from a deactivation. A leaf function by that name
-  is one import away from being the wrong one. An earlier draft of this task had
-  exactly that collision; `/code-review` removed it.
 
 - **Capture** — t-72. `fill_slot` writing a value with its provenance and
   confidence, once per turn.
