@@ -118,10 +118,17 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
   const stopAndSend = React.useCallback(async () => {
     const clip = await recording.stop();
     if (clip) await send(clip);
-    else setPhase('failed');
+    // No clip and no error is a tap-and-stop that yielded no chunks: the
+    // pressed-twice no-op, not a failure.
+    else setPhase(recording.error ? 'failed' : 'idle');
   }, [recording, send, setPhase]);
 
   const press = async () => {
+    // Between the press and the recorder's own stop event nothing is pressable:
+    // a second stop would read the recorder as inactive, report a clip that is
+    // about to be transcribed as failed, and a third press would start a
+    // recording the first one's teardown then killed (review round 3).
+    if (recording.state === 'stopping') return;
     if (isRecording) {
       await stopAndSend();
       return;
@@ -186,7 +193,12 @@ export function VoiceNote({ onText, disabled, fetchImpl }: VoiceNoteProps) {
         type="button"
         onClick={() => void press()}
         // A recording under way can always be stopped; only starting waits on a turn.
-        disabled={cannot || phase === 'transcribing' || (disabled && !isRecording)}
+        disabled={
+          cannot ||
+          phase === 'transcribing' ||
+          recording.state === 'stopping' ||
+          (disabled && !isRecording)
+        }
         aria-label={label}
         title={label}
         aria-pressed={isRecording}

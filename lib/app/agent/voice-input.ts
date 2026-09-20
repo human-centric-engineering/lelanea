@@ -13,7 +13,7 @@
  *
  * `AiOrchestrationSettings.voiceInputGloballyEnabled` is an operator's off
  * switch that needs no deploy; her agent's `enableVoiceInput` is the flag the
- * seed turns on once (`prisma/seeds/app-lelanea/011-agent-voice-input.ts`) and
+ * seed turns on once (`prisma/seeds/app-lelanea/012-agent-voice-input.ts`) and
  * an admin may turn off. Either off → the route refuses and the microphone is
  * not offered — the pane asks {@link voiceInputAvailability} first.
  *

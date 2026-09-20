@@ -7,7 +7,7 @@
  * A small stateful fake of the three tables the unit touches; the transaction
  * forwards to the same fake (`B9`).
  *
- * @see prisma/seeds/app-lelanea/011-agent-voice-input.ts
+ * @see prisma/seeds/app-lelanea/012-agent-voice-input.ts
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -82,7 +82,7 @@ const client = {
 };
 
 const { logger } = await import('@/lib/logging');
-const unit = (await import('@/prisma/seeds/app-lelanea/011-agent-voice-input')).default;
+const unit = (await import('@/prisma/seeds/app-lelanea/012-agent-voice-input')).default;
 const { VOICE_INPUT_CHANGE_SUMMARY } = await import('@/lib/app/agent/pins');
 const { VOICE_AGENT_SLUG } = await import('@/lib/app/voice/fingerprint');
 

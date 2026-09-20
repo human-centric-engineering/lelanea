@@ -151,6 +151,19 @@ describe('a voice note', () => {
     );
   });
 
+  it('puts the words at the end of a box the person has not clicked into since it mounted', async () => {
+    // A remounted box (the pane parked and unparked) reports its caret at 0
+    // until it is clicked; the words belong after what is there.
+    const user = userEvent.setup();
+    render(<Harness initial="Hello there" />);
+    await user.click(mic());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    await user.click(screen.getByRole('button', { name: CONVERSATION_COPY.micStop }));
+    await waitFor(() => expect(box()).toHaveValue('Hello there what I said'));
+  });
+
   it('leaves the box alone and says so when the clip could not be turned into words', async () => {
     transcript = 'fail';
     const user = userEvent.setup();

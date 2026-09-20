@@ -56,6 +56,12 @@ export interface ComposerProps {
  */
 export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl }: ComposerProps) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
+  /** Where the person last had the caret, or null since mount. */
+  const lastCaret = React.useRef<{ start: number; end: number } | null>(null);
+  const rememberCaret = () => {
+    const el = textarea.current;
+    if (el) lastCaret.current = { start: el.selectionStart, end: el.selectionEnd };
+  };
 
   /**
    * The words, at the caret — with a space either side where they meet other
@@ -67,8 +73,14 @@ export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl 
     (text: string) => {
       const el = textarea.current;
       const current = el?.value ?? value;
-      const start = el?.selectionStart ?? current.length;
-      const end = el?.selectionEnd ?? current.length;
+      // The caret as the person last left it. Pressing the mic moves focus to
+      // the disc, and a remounted box (the pane parked and unparked) reports
+      // its selection at 0 until it is clicked — so the box's own selection
+      // is not the answer; the last one the person made is, and with none
+      // since mount the words go at the end (review round 3).
+      const known = lastCaret.current ?? { start: current.length, end: current.length };
+      const start = Math.min(known.start, current.length);
+      const end = Math.min(known.end, current.length);
       const before = current.slice(0, start);
       const after = current.slice(end);
       const lead = before && !/\s$/.test(before) ? ' ' : '';
@@ -83,6 +95,7 @@ export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl 
       requestAnimationFrame(() => {
         if (hadFocus) el?.focus();
         el?.setSelectionRange(caret, caret);
+        lastCaret.current = { start: caret, end: caret };
       });
     },
     [value, onChange]
@@ -128,6 +141,8 @@ export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl 
           value={value}
           placeholder={CONVERSATION_COPY.placeholder}
           onChange={(event) => onChange(event.currentTarget.value)}
+          onSelect={rememberCaret}
+          onBlur={rememberCaret}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.shiftKey) return;
             // IME composition also uses Enter; let it finish the character.

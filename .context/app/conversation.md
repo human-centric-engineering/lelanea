@@ -325,7 +325,7 @@ transcribe with) → the microphone is not offered either; a POST would be
 `503 NO_AUDIO_PROVIDER`.
 
 **Her flag is operator-owned** (`fp4`). Seed
-`prisma/seeds/app-lelanea/011-agent-voice-input.ts` turns `enableVoiceInput`
+`prisma/seeds/app-lelanea/012-agent-voice-input.ts` turns `enableVoiceInput`
 on for `lelanea-guide` once, as an entry in her version timeline (the field
 is versioned) with `VOICE_INPUT_CHANGE_SUMMARY`, inside one transaction with
 the update — the reachability seed's shape. Off with that entry behind it is

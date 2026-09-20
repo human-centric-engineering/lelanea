@@ -43,7 +43,7 @@ const AGENT_INCLUDE = {
 } as const;
 
 const unit: SeedUnit = {
-  name: 'app-lelanea/011-agent-voice-input',
+  name: 'app-lelanea/012-agent-voice-input',
   hashInputs: ['../../../lib/app/agent/pins.ts', '../../../lib/app/voice/fingerprint.ts'],
   async run({ prisma, logger }) {
     logger.info('🎙  Letting members speak to her...');
