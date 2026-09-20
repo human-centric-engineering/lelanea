@@ -536,9 +536,15 @@ reachable today, through a **cost-attribution** channel.
 
 That is a workaround and `turnIdFrom()` treats it as one: it validates with Zod
 rather than casting, and an unusable value degrades to "no turn" instead of
-throwing. Filed with **Sunrise** — the blobs for
-`lib/orchestration/capabilities/types.ts` are identical across all three tiers,
-so Daybreak could not fix it (`daybreak.filing`).
+throwing. Filed as
+[`sunrise#822`](https://github.com/human-centric-engineering/sunrise/issues/822) —
+the blobs for `lib/orchestration/capabilities/types.ts`,
+`streaming-handler.ts` and `dispatcher.ts` are identical across all three tiers,
+so Daybreak could not have fixed it (`daybreak.filing`). Our evidence on the
+write side is commented on
+[`daybreak#167`](https://github.com/human-centric-engineering/daybreak/issues/167)
+and [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156),
+which is where the framework tier tracks run provenance on slot values.
 
 ### Mounting over Daybreak's capability costs one non-obvious line
 
@@ -553,7 +559,24 @@ inherited one does not count. That is deliberate upstream.
 and quietly captures nothing. Nothing in `capture.ts` fails. What catches it is
 the `lib/app/capabilities.ts` row in `tests/unit/lib/app/defaults.test.ts`,
 which asserts the handler the dispatcher **actually holds** for the slug — and
-it caught exactly this during t-72's build.
+it caught exactly this during t-72's build. Noted on `daybreak#167` for the
+next fork.
+
+### And she has to be left able to speak
+
+`fill_slot` sets `skipFollowup`, so a silent capture does not cost a second
+model pass. That is right for an agent that answers *and* captures in one pass.
+Hers does not: she is told to record before she answers, and the pinned model
+obliges with a first pass carrying nothing but tool calls — with the follow-up
+skipped, **that pass is the whole turn**, and someone who has just confided
+something is answered with an empty string. Measured on a real turn, not
+predicted.
+
+`answering()` drops the flag on every return, so the turn always gets a pass in
+which she speaks. It costs one extra model call on any turn she captures in —
+the cost the owner accepted at claim ("each write also adds a tool pass to her
+turn"). It is **not** fixed by rewording the instruction, which would make the
+turn's correctness depend on a model choosing to emit text beside a tool call.
 
 ### What proves the write, until the panel lands
 

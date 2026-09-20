@@ -46,9 +46,11 @@
  * channel, typed `Record<string, unknown>`, which is why {@link turnIdFrom}
  * validates rather than casts and why an unusable value degrades to "no turn"
  * instead of throwing. A first-class turn/request id on the context is what
- * should exist, and is filed upstream with the tier that owns the file
- * (`daybreak.filing`; see `.context/app/divergences.md` and
- * `.context/app/slots.md`).
+ * should exist, and is filed with the tier that owns the file (`daybreak.filing`)
+ * as **sunrise#822** — the blobs for `types.ts`, `streaming-handler.ts` and
+ * `dispatcher.ts` are identical across all three tiers, so Daybreak could not
+ * have fixed it. Delete this paragraph and read the id off the context when
+ * that lands.
  *
  * ## What is deliberately NOT guarded
  *
