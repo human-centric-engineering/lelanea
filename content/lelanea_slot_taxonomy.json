@@ -1,0 +1,585 @@
+{
+  "taxonomy": {
+    "id": "lelanea_slot_taxonomy",
+    "title": "Lelañea — what the app aims to learn about a person",
+    "version": "0.1",
+    "locale": "en-US",
+    "provenance": {
+      "status": "draft",
+      "awaitingSignOffFrom": "Lelañea Fulton",
+      "note": "Drafted for f-slots t-70 from the product description §5, which carries the framework overview's taxonomy forward as-is: life areas, the person, external conditions, preferences, and where someone sits in their own development. It is a PROPOSAL. Every slug, wording and classification here is a content decision the owner reviews and signs off; nothing in the build treats this file as authoritative once the taxonomy tables are seeded."
+    },
+    "notes": [
+      "This file is the seed, not the source. It is loaded into `app_slot_definition` ONCE (prisma/seeds/app-lelanea/011-slot-taxonomy.ts); after that the tables are the taxonomy and the editor is how it changes. An edit here reaches a database nobody has seeded, and nothing else.",
+      "Every slot here is scope `global` and mode `targeted`. The scope is stamped by the framework sync, not stored — see `lib/app/slots/taxonomy-store.ts`. Open-mode capture mints slugs at runtime with no row here, so this file is the pre-declared set and not the whole vocabulary.",
+      "A slug is immutable: it is what a captured value points at, so renaming one would orphan every answer already given under it. A rename is an add plus a retire.",
+      "The `development` group is hidden in full. It is a tuning signal for pace and register and must never be ranked, scored, or shown as a level (§12).",
+      "`sensitivity` classifies the slot, not any particular answer. A `sensitive` slot can still receive something that is special-category in fact — what a person says about their relationships may disclose their health or orientation — and masking that is the capture capability's job (f-slot-capture), which keys on this classification rather than being replaced by it.",
+      "`priorityWeight` sequences targeted capture: higher is asked sooner. `topic_no_go` is highest because it is read before anything is offered, and `blind_spots` is lowest because it is inferred late or not at all."
+    ]
+  },
+  "groups": [
+    {
+      "key": "life_areas",
+      "title": "Life areas",
+      "description": "The seven areas of a life the framework names, each held three ways: how it stands, where it strains, and where it is working."
+    },
+    {
+      "key": "the_person",
+      "title": "The person",
+      "description": "Disposition, patterns, psyche, aspirations and blind spots — who this is, rather than what is happening to them."
+    },
+    {
+      "key": "external_conditions",
+      "title": "External conditions",
+      "description": "The situation around them and the limits it sets, which any recommendation has to be realistic about."
+    },
+    {
+      "key": "preferences",
+      "title": "Preferences",
+      "description": "How they want to be met, and how they respond to different kinds of question. These filter; they never override (§12)."
+    },
+    {
+      "key": "development",
+      "title": "Development",
+      "description": "Where someone sits in examining their own conditioning. A tuning signal for pace and register, never a grade — so every slot here is hidden and never leaves the server to a member (§12)."
+    },
+    {
+      "key": "module_output",
+      "title": "Module output",
+      "description": "What work inside a module produced — values, standards, boundaries, commitments — held as slots so it travels with the person rather than being stranded in the module."
+    }
+  ],
+  "slots": [
+    {
+      "slug": "life_physical_health",
+      "group": "life_areas",
+      "description": "How their body, energy, sleep, movement and physical wellbeing stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_physical_health_strain",
+      "group": "life_areas",
+      "description": "Where physical health feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_physical_health_strength",
+      "group": "life_areas",
+      "description": "Where physical health is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_emotional_health",
+      "group": "life_areas",
+      "description": "How their emotional life, mood over time, and how they meet difficulty stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_emotional_health_strain",
+      "group": "life_areas",
+      "description": "Where emotional health feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_emotional_health_strength",
+      "group": "life_areas",
+      "description": "Where emotional health is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_wealth",
+      "group": "life_areas",
+      "description": "How money, security, and their relationship to having and wanting it stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_wealth_strain",
+      "group": "life_areas",
+      "description": "Where wealth feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_wealth_strength",
+      "group": "life_areas",
+      "description": "Where wealth is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_relationships",
+      "group": "life_areas",
+      "description": "How partnership, friendship, and the close ties outside their family stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_relationships_strain",
+      "group": "life_areas",
+      "description": "Where relationships feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_relationships_strength",
+      "group": "life_areas",
+      "description": "Where relationships is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_family",
+      "group": "life_areas",
+      "description": "How the family they came from and the family they are in now, as a system stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_family_strain",
+      "group": "life_areas",
+      "description": "Where family feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_family_strength",
+      "group": "life_areas",
+      "description": "Where family is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_work",
+      "group": "life_areas",
+      "description": "How profession, working life, vocation, and what work is for them stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_work_strain",
+      "group": "life_areas",
+      "description": "Where work feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_work_strength",
+      "group": "life_areas",
+      "description": "Where work is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_spiritual_health",
+      "group": "life_areas",
+      "description": "How meaning, practice, faith or its absence, and what they hold sacred stands for this person right now, in their own words. The whole picture of the area, not a judgement of it.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "life_spiritual_health_strain",
+      "group": "life_areas",
+      "description": "Where spiritual health feels dysfunctional to them — what is not working, what they are carrying, what they would change. Their reading, not ours.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_spiritual_health_strength",
+      "group": "life_areas",
+      "description": "Where spiritual health is working — what is solid, what they have built, what they can draw on. Held as deliberately as the strain, so the picture is not a list of problems.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "special_category",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "disposition",
+      "group": "the_person",
+      "description": "Their temperament and characteristic stance: how they meet a new thing, where they sit between caution and appetite, what their default energy is.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 80
+    },
+    {
+      "slug": "life_patterns",
+      "group": "the_person",
+      "description": "The patterns that recur across their life — the same shape showing up in different decades, different relationships, different jobs. What repeats, in their framing.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 55
+    },
+    {
+      "slug": "self_story",
+      "group": "the_person",
+      "description": "The story they tell about themselves: who they say they are, how they explain their own life, and which parts of it they return to.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 65
+    },
+    {
+      "slug": "psyche_inner_world",
+      "group": "the_person",
+      "description": "Their inner life as they describe it — what they carry, what occupies them when nothing is demanding attention, what they have not said out loud before.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 45
+    },
+    {
+      "slug": "aspirations",
+      "group": "the_person",
+      "description": "What they are reaching for. Not a goal list: the thing underneath the goals, including the ones they have not given themselves permission to want.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 85
+    },
+    {
+      "slug": "blind_spots",
+      "group": "the_person",
+      "description": "Something they appear not to see about themselves, held as an inference with its reasoning and its confidence — never as a verdict, and always visible to them so it can be corrected or rejected.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 10
+    },
+    {
+      "slug": "formative_experience",
+      "group": "the_person",
+      "description": "The experience that shaped them, as much or as little of it as they have chosen to say. Recorded because it changes what will land, not because the app is building a history of them.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 35
+    },
+    {
+      "slug": "strengths_capacities",
+      "group": "the_person",
+      "description": "What they can already draw on — capability, resilience, craft, the things they do well and may not count.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 60
+    },
+    {
+      "slug": "fears_avoidances",
+      "group": "the_person",
+      "description": "What they are afraid of and what they move away from. Named to loosen its grip, never rehearsed: see the guardrail on anticipated futures (§12).",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 25
+    },
+    {
+      "slug": "motivational_drivers",
+      "group": "the_person",
+      "description": "What actually moves them to act, as against what they say should. Useful precisely where the two differ.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 55
+    },
+    {
+      "slug": "current_circumstances",
+      "group": "external_conditions",
+      "description": "The situation they are in right now — what is going on around them that any conversation has to account for.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 90
+    },
+    {
+      "slug": "constraints_practical",
+      "group": "external_conditions",
+      "description": "The practical limits on what they can do: time, money, obligations, the people who depend on them.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 75
+    },
+    {
+      "slug": "constraints_capacity",
+      "group": "external_conditions",
+      "description": "The bandwidth they actually have — energy, attention, and how much is left after everything else. What is realistic for them, not what is ideal.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "support_available",
+      "group": "external_conditions",
+      "description": "Who and what they can lean on: people, professionals, community, practice. Held by role rather than identity — other people are not subjects (§12).",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 55
+    },
+    {
+      "slug": "locale_context",
+      "group": "external_conditions",
+      "description": "Where they are and what that means for them — country, culture, language, and anything local that changes what is available or appropriate.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "life_transitions",
+      "group": "external_conditions",
+      "description": "A change underway or anticipated: a move, a loss, a birth, a leaving, an ending. Its temporality matters as much as its content.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 65
+    },
+    {
+      "slug": "pace_preference",
+      "group": "preferences",
+      "description": "How fast they want to move — whether they want to sit with something or get to the next thing.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 75
+    },
+    {
+      "slug": "directness_preference",
+      "group": "preferences",
+      "description": "How direct they want her to be: named plainly, or approached side-on.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 75
+    },
+    {
+      "slug": "register_preference",
+      "group": "preferences",
+      "description": "Whether they are better served by guiding — questions back to them — or by teaching, where she says what she knows (§3.14).",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 75
+    },
+    {
+      "slug": "depth_preference",
+      "group": "preferences",
+      "description": "How much elaboration serves them: a sentence, or the full working.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 70
+    },
+    {
+      "slug": "challenge_tolerance",
+      "group": "preferences",
+      "description": "How much pushback lands well right now. A person who wants to be challenged in March may not in November, so this is read as current rather than fixed.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 60
+    },
+    {
+      "slug": "practice_openness",
+      "group": "preferences",
+      "description": "What they are open to being offered — somatic work, breath, meditation, writing — and what they have declined. A decline is remembered (§12).",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 50
+    },
+    {
+      "slug": "question_response_style",
+      "group": "preferences",
+      "description": "Which kinds of question open them up and which close them down. Observed from how they actually answer, not asked.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "standard",
+      "priorityWeight": 60
+    },
+    {
+      "slug": "topic_no_go",
+      "group": "preferences",
+      "description": "What they have asked not to be taken into. No is a complete answer, so this is read before anything is offered.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 95
+    },
+    {
+      "slug": "development_stage",
+      "group": "development",
+      "description": "How long and how deeply this person has been examining their own conditioning — whether this is new ground or decades of it. A tuning signal for pace and register. NEVER ranked, scored, or shown as a level (§12), which is why it is hidden.",
+      "visibility": "hidden",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 30
+    },
+    {
+      "slug": "development_vocabulary",
+      "group": "development",
+      "description": "The language they already have for this work — the frames, traditions and terms they use unprompted. It changes what can be said without explaining it first.",
+      "visibility": "hidden",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 30
+    },
+    {
+      "slug": "development_readiness",
+      "group": "development",
+      "description": "What would land now and what would be premature. A reading of readiness for a particular move, not of the person.",
+      "visibility": "hidden",
+      "mode": "targeted",
+      "dataType": "text",
+      "sensitivity": "sensitive",
+      "priorityWeight": 30
+    },
+    {
+      "slug": "values_named",
+      "group": "module_output",
+      "description": "The values this person has named as theirs, from the Values module or from anywhere else they said one out loud.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "json",
+      "sensitivity": "standard",
+      "priorityWeight": 40
+    },
+    {
+      "slug": "values_contested",
+      "group": "module_output",
+      "description": "A value they have found they inherited rather than chose — one they are holding at arm's length. Held separately from the named ones because the distinction is the work.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "json",
+      "sensitivity": "sensitive",
+      "priorityWeight": 35
+    },
+    {
+      "slug": "standards_named",
+      "group": "module_output",
+      "description": "The standards they have set for themselves — what they hold themselves to.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "json",
+      "sensitivity": "standard",
+      "priorityWeight": 35
+    },
+    {
+      "slug": "boundaries_named",
+      "group": "module_output",
+      "description": "The boundaries they have drawn, and with whom, held by role rather than identity.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "json",
+      "sensitivity": "sensitive",
+      "priorityWeight": 40
+    },
+    {
+      "slug": "commitments_made",
+      "group": "module_output",
+      "description": "What they decided to actually do, and when they decided it. Their record, not a task list the app enforces.",
+      "visibility": "open",
+      "mode": "targeted",
+      "dataType": "json",
+      "sensitivity": "standard",
+      "priorityWeight": 30
+    }
+  ]
+}

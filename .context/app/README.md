@@ -40,6 +40,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`safety.md`](./safety.md)                     | The crisis path: the two tiers, the context check, the regional resource, the client frame, the record |
 | [`incident-runbook.md`](./incident-runbook.md) | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock   |
 | [`conversation.md`](./conversation.md)         | The conversation pane: the transcript read back, the event schema, the stream client, the pacing       |
+| [`slots.md`](./slots.md)                       | The slot taxonomy: the six groups, the immutable slug, the version chain, and reading an answer back   |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 
