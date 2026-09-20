@@ -291,11 +291,11 @@ else; 013's two bindings each carry an exposure allowlist, and that config has
 to be written **with** the binding — a grant created first and configured second
 is permissive in between.
 
-| Tool                   | Seed | Does                                                          |
-| ---------------------- | ---- | ------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is    |
-| `get_state`            | 013  | reads back what is already understood about this person       |
-| `fill_slot`            | 013  | writes what she has newly learned, once per turn              |
+| Tool                    | Seed | Does                                                       |
+| ----------------------- | ---- | ---------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is |
+| `get_state`             | 013  | reads back what is already understood about this person    |
+| `fill_slot`             | 013  | writes what she has newly learned, once per turn           |
 
 `fill_slot` is the **one** tool she holds that writes, and the ceiling it is
 admitted under is in [`safety.md`](./safety.md) — "nothing she holds may delete

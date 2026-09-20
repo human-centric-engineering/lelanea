@@ -254,6 +254,11 @@ describe('reserved fork tiers', () => {
       'enum AppTurnStatus {',
       'enum AppTurnPricing {',
       'model AppTurn {',
+      // f-slots t-72 — which slots a turn has already written, so a retried turn
+      // cannot record one thing twice (an EXCLUSION: a ledger of writes, not the
+      // writes themselves; and a child of `AppTurn`, so its Art. 17 disposition
+      // is that turn's cascade rather than a second FK to `user`).
+      'model AppTurnSlotWrite {',
       // f-safety t-58 — that the crisis path answered someone, never the words
       // (a SOURCE: it is about the person it happened to).
       'enum AppSafetyEventKind {',

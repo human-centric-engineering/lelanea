@@ -501,7 +501,7 @@ model AppTurn {
   completedAt        DateTime?
 
   /// Which slots this turn has already written — the retry guard (t-72).
-  slotWrites         AppTurnSlotWrite[]
+  slotWrites AppTurnSlotWrite[]
 
   @@unique([userId, turnId])
   @@index([userId, startedAt])

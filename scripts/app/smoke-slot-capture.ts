@@ -54,6 +54,14 @@
  * it is measured by the golden set (`npm run smoke:app-voice`), re-run with these
  * tools granted. This script asserts the mechanism carries whatever she decides.
  *
+ * FORK NOTE — this runs the real `lib/app/bootstrap` seam (via `initApp()`), it
+ * does not assert on it. Step 3 dispatches a capability in this process, so it
+ * needs the registration a server boot does: the framework tier's capabilities,
+ * then the flush that mounts the leaf's over them. A fork whose `initApp()` does
+ * not register `fill_slot` will fail step 0 first, on the grant, with a message
+ * naming the seed — which is the right place to be sent. Nothing here pins what
+ * the seam contains; `tests/unit/lib/app/defaults.test.ts` is where that belongs.
+ *
  * Run with: npm run smoke:app-slot-capture
  */
 
@@ -245,9 +253,7 @@ async function main(): Promise<void> {
       },
     });
     if (!agent) throw new Error(`no agent ${VOICE_AGENT_SLUG} — run npm run db:seed`);
-    const bound = new Map(
-      agent.capabilities.map((row) => [row.capability.slug, row] as const)
-    );
+    const bound = new Map(agent.capabilities.map((row) => [row.capability.slug, row] as const));
     for (const slug of ['fill_slot', 'get_state']) {
       const row = bound.get(slug);
       if (!row?.isEnabled) {
@@ -356,7 +362,12 @@ async function main(): Promise<void> {
 
     // The sentence a person actually reads under the reply (§10 t-66).
     const line = accountLine(
-      accountParts({ at: new Date().toISOString(), capabilities: answered, citations: [], turn: null })
+      accountParts({
+        at: new Date().toISOString(),
+        capabilities: answered,
+        citations: [],
+        turn: null,
+      })
     );
     note(`the account under her reply reads: "${line}"`);
     check(
@@ -410,7 +421,10 @@ async function main(): Promise<void> {
     check(firstWrite.success, `the first write of ${target.slug} succeeded`);
     const afterFirst = await slotValuesFor(user.id);
     const firstVersions = afterFirst.filter((value) => value.slotSlug === target.slug);
-    check(firstVersions.length === 1, `${target.slug} is written once, at v${firstVersions[0]?.version}`);
+    check(
+      firstVersions.length === 1,
+      `${target.slug} is written once, at v${firstVersions[0]?.version}`
+    );
 
     const secondWrite = await capabilityDispatcher.dispatch('fill_slot', args, dispatchContext);
     const afterSecond = await slotValuesFor(user.id);

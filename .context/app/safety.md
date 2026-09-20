@@ -308,7 +308,7 @@ smoke drives that refusal for her with a stub model asking for
 
 ### The ceiling was restated once, and why
 
-t-60 shipped it as *"she may only ever hold tools that read"*. §11 needs her to
+t-60 shipped it as _"she may only ever hold tools that read"_. §11 needs her to
 record what she learns about a person as she learns it, so on **20 Sept 2026**
 the owner restated it rather than letting it be worked around:
 

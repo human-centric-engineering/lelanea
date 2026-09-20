@@ -479,10 +479,10 @@ delaying `done` to run one.
 
 ### The grant, and the two halves of the allowlist
 
-| Facet              | What it says                                 | Why                                                                        |
-| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------- |
-| `write`            | **absent** — she may write anything          | Any restriction also forbids minting; the owner ruled she may mint          |
-| `read` → `groups`  | every group whose slots are all `open`       | §12 — a `development` slot must never reach a sentence she says            |
+| Facet             | What it says                           | Why                                                                |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| `write`           | **absent** — she may write anything    | Any restriction also forbids minting; the owner ruled she may mint |
+| `read` → `groups` | every group whose slots are all `open` | §12 — a `development` slot must never reach a sentence she says    |
 
 Daybreak's facet filters on `group` and `scope` only, and **a minted slug has
 neither**. `facetAllows()` refuses a null group against any named list, so a
@@ -517,7 +517,7 @@ recorded twice, minutes apart. §8.1 says that must not happen.
 `app_turn_slot_write` is the guard, and **the unique index IS the guard** —
 `@@unique([turnId, slotSlug])`, the same shape as the turn claim, so two
 dispatches cannot both miss it. A suppressed call answers with the version that
-*was* written, not an error: the reading is recorded, which is what the model
+_was_ written, not an error: the reading is recorded, which is what the model
 asked for. It carries `skipFollowup` too, or a suppressed write would cost a
 model pass the real one did not.
 
@@ -551,7 +551,7 @@ which is where the framework tier tracks run provenance on slot values.
 `GuardedFillSlotCapability` **must re-declare `redactProvenance()`**, even to
 delegate straight to `super`. `capabilityDispatcher.register()` refuses any
 `processesPii` capability whose redactor it cannot see, and
-`isRedactorOverridden()` asks `hasOwnProperty` of the *immediate* prototype — an
+`isRedactorOverridden()` asks `hasOwnProperty` of the _immediate_ prototype — an
 inherited one does not count. That is deliberate upstream.
 
 **The refusal is silent**: it is caught by the registration pass, logged as an
@@ -565,7 +565,7 @@ next fork.
 ### And she has to be left able to speak
 
 `fill_slot` sets `skipFollowup`, so a silent capture does not cost a second
-model pass. That is right for an agent that answers *and* captures in one pass.
+model pass. That is right for an agent that answers _and_ captures in one pass.
 Hers does not: she is told to record before she answers, and the pinned model
 obliges with a first pass carrying nothing but tool calls — with the follow-up
 skipped, **that pass is the whole turn**, and someone who has just confided
@@ -587,7 +587,7 @@ the value, its conversation, its confidence and its `sourceType`; that every
 write reached the stream as a `capability_result`; that a forced-failed turn
 re-run under the same id adds no version; and that the hidden group is withheld.
 
-It cannot prove she captures the *right* things at the right confidence. That is
+It cannot prove she captures the _right_ things at the right confidence. That is
 her judgement, and the voice golden set measures it.
 
 ### After a change here

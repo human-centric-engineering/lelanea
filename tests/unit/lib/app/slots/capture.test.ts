@@ -146,9 +146,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   world.turns = [{ id: TURN_ROW_ID, userId: USER, turnId: TURN }];
   world.slotWrites = [];
-  framework = vi
-    .spyOn(FillSlotCapability.prototype, 'execute')
-    .mockResolvedValue(wroteSilently(1) as never);
+  framework = vi.spyOn(FillSlotCapability.prototype, 'execute').mockResolvedValue(wroteSilently(1));
 });
 
 describe('the turn id', () => {
@@ -180,7 +178,7 @@ describe('a turn that writes a slot', () => {
   });
 
   it('records a mint as a mint, so a suppressed retry answers with the same shape', async () => {
-    framework.mockResolvedValue(wroteSilently(1, true) as never);
+    framework.mockResolvedValue(wroteSilently(1, true));
     const capability = new GuardedFillSlotCapability();
 
     await capability.execute(ARGS, context());
@@ -190,7 +188,7 @@ describe('a turn that writes a slot', () => {
 });
 
 describe('she still speaks after she has recorded', () => {
-  it('drops the framework\'s `skipFollowup`, so the turn does not end on a tool call', async () => {
+  it("drops the framework's `skipFollowup`, so the turn does not end on a tool call", async () => {
     // Found on a real turn, not reasoned about: her instruction tells her to
     // record before she answers, the pinned model obliges with a first pass
     // carrying nothing but tool calls, and with the follow-up skipped that pass
@@ -215,7 +213,7 @@ describe('she still speaks after she has recorded', () => {
       success: false,
       error: { code: 'slot_inactive', message: 'retired' },
       skipFollowup: true,
-    } as never);
+    });
 
     const result = await new GuardedFillSlotCapability().execute(ARGS, context());
 
@@ -246,7 +244,7 @@ describe('the same turn run again — the defect §8.1 names', () => {
 
     framework.mockClear();
     // Attempt 2 would append version 2 if it reached the framework.
-    framework.mockResolvedValue(wroteSilently(2) as never);
+    framework.mockResolvedValue(wroteSilently(2));
 
     const second = await capability.execute(ARGS, context());
 
@@ -271,7 +269,7 @@ describe('the same turn run again — the defect §8.1 names', () => {
       success: true,
       data: { slotSlug: 'work_strain', version: 1, minted: false },
       skipFollowup: true,
-    } as never);
+    });
 
     await capability.execute({ ...(ARGS as object), slotSlug: 'work_strain' } as never, context());
 
@@ -323,7 +321,7 @@ describe('when the framework refuses or fails', () => {
     framework.mockResolvedValue({
       success: false,
       error: { code: 'slot_inactive', message: 'retired' },
-    } as never);
+    });
     const capability = new GuardedFillSlotCapability();
 
     const result = await capability.execute(ARGS, context());
@@ -336,7 +334,7 @@ describe('when the framework refuses or fails', () => {
     framework.mockResolvedValue({
       success: false,
       error: { code: 'slot_not_permitted', message: 'outside scope' },
-    } as never);
+    });
 
     const result = await new GuardedFillSlotCapability().execute(ARGS, context());
 
@@ -360,9 +358,7 @@ describe('when the guard row cannot be written', () => {
     // framework versions them. That is a model calling a tool twice, not a
     // retried turn — see the module docblock's "deliberately NOT guarded".
     const capability = new GuardedFillSlotCapability();
-    framework
-      .mockResolvedValueOnce(wroteSilently(1) as never)
-      .mockResolvedValueOnce(wroteSilently(2) as never);
+    framework.mockResolvedValueOnce(wroteSilently(1)).mockResolvedValueOnce(wroteSilently(2));
 
     const [first, second] = await Promise.all([
       capability.execute(ARGS, context()),

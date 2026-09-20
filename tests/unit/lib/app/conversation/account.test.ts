@@ -131,7 +131,9 @@ describe('the parts', () => {
     // has a sentence of its own, which is the whole point of this floor: the day
     // a tool is granted before its words are written, it is named rather than
     // hidden.
-    const parts = accountParts(input({ capabilities: ['request_transition', 'request_transition'] }));
+    const parts = accountParts(
+      input({ capabilities: ['request_transition', 'request_transition'] })
+    );
     expect(parts).toEqual([
       {
         key: 'other_capability',

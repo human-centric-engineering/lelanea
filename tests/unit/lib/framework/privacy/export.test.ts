@@ -135,6 +135,9 @@ const LEAF_EXCLUDED_MODELS = [
   // answers. What was learned about a person is a `framework_slot_value`.
   'AppSlotDefinition',
   'AppSlotDefinitionRevision',
+  // f-slots t-72 — the retry guard's ledger: that a write happened, not what was
+  // written. The reading itself is the `framework_slot_value` above.
+  'AppTurnSlotWrite',
 ];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
