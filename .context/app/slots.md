@@ -195,14 +195,35 @@ slug and the sync would dutifully reactivate its projection.
 **Do not hand the sync a `scope`.** It stamps `global` itself. Supplying one
 would put a second copy of the partition key in the payload.
 
-**Do not read "row withheld" as "slot retired" — it depends on what survived.**
-A stored row whose free-form classifier the framework does not recognise is
-dropped rather than passed on. If other rows survived, the sync deactivates that
-slug's projection and the slot stops being asked: fail-closed, which is what we
-want. If **every** row was withheld, the sync reads the empty provider as a
-fluke, opens no transaction, and every stale projection stays **active** — the
-slots keep being asked under their old wording. That is the fail-**open** case,
-and `loadGlobalSlotDefinitions()` logs it distinctly for exactly that reason.
+**Do not restate the sync's contract in prose — cite the test that states it.**
+Everything this document says about what Daybreak's global pass does with what
+we hand it comes from
+`tests/integration/lib/framework/data-slots/global-slots.test.ts`, whose case
+names are the contract:
+
+| Case                                                                              | What it means for us                     |
+| --------------------------------------------------------------------------------- | ---------------------------------------- |
+| _"a slug the provider drops is deactivated"_                                      | omission **is** the retirement mechanism |
+| _"an empty provider on a fluke boot leaves every global row active"_              | omitting **everything** retires nothing  |
+| _"re-syncing after an edit writes the edit, and re-syncing again writes nothing"_ | the pass is idempotent                   |
+
+This rule is written from experience rather than tidiness: three comments in
+this feature described that contract in prose, each re-read from `sync.ts`
+rather than from the test, and `/code-review` found all three wrong — one of
+them in the round immediately after it had been "corrected". The test fails if
+Daybreak changes the behaviour; prose does not. That matters more than usual
+here, because the seam is carried ahead of Daybreak
+([`divergences.md`](./divergences.md) Row 22) and the upstream version may not
+behave identically.
+
+**So: "row withheld" does not mean "slot retired" — it depends what survived.**
+A stored row whose classifier the framework does not recognise is dropped rather
+than passed on. With other rows surviving, row one of the table applies and the
+slot stops being asked: fail-closed, which is what we want. With **every** row
+withheld, row two applies — nothing is retired and the stale projections stay
+live, so the slots keep being asked under their old wording. That is the
+fail-**open** case, and `loadGlobalSlotDefinitions()` gives it its own log line
+for exactly that reason.
 
 **Do not hand the sync retired rows.** Withholding them _is_ the retirement
 mechanism. `loadGlobalSlotDefinitions()` filters on `isActive: true`, and that

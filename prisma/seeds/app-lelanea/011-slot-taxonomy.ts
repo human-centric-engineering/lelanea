@@ -20,8 +20,13 @@
  * (t-71) is how a slot is added. The file is not a fallback at read time —
  * `lib/app/slots/taxonomy-store.ts` explains why it must not be.
  *
- * **Safe on empty.** It only ever adds rows. No removal pass, at either tier:
- * the framework's global pass writes nothing when the provider returns nothing.
+ * **Safe on empty.** This unit only ever adds rows — it has no removal pass at
+ * all. The tier below is safe on empty too, but that is Daybreak's behaviour
+ * rather than ours to assert: it is pinned as *"an empty provider on a fluke
+ * boot leaves every global row active"* in
+ * `tests/integration/lib/framework/data-slots/global-slots.test.ts`. Cite that
+ * case rather than restating what `sync.ts` does — every prose restatement of
+ * this contract in this feature has turned out to be wrong somewhere.
  *
  * **Idempotent** in the only sense that is reachable: if this unit runs again it
  * reads one row and writes none. Note that "runs again" is rarer than it sounds

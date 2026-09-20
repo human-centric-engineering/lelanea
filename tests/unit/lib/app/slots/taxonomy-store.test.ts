@@ -16,7 +16,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -122,11 +122,16 @@ describe('loadGlobalSlotDefinitions', () => {
   );
 
   it('shouts when EVERY row is withheld, because that case fails OPEN', async () => {
-    // The opposite outcome to the one above, and the dangerous one. With no
-    // survivor the sync reads an empty provider as a fluke and returns before
-    // opening a transaction — so nothing is deactivated and every stale
-    // projection stays live, the slots still being asked under their old
-    // wording. The per-row error alone would read as "two slots retired".
+    // The opposite outcome to the one above, and the dangerous one. This case
+    // exists BECAUSE of a behaviour that is not ours and is pinned elsewhere:
+    // `tests/integration/lib/framework/data-slots/global-slots.test.ts`,
+    // "an empty provider on a fluke boot leaves every global row active".
+    // Nothing is deactivated, so the stale projections stay live and the slots
+    // keep being asked under their old wording.
+    //
+    // Cited rather than restated — if Daybreak ever makes an empty provider
+    // retire instead, that test fails and this log becomes wrong, and the
+    // pointer is what connects the two.
     findMany.mockResolvedValue([
       row({ slug: 'bad_one', mode: 'freeform' }),
       row({ slug: 'bad_two', sensitivity: 'very_secret' }),
@@ -167,6 +172,54 @@ describe('loadGlobalSlotDefinitions', () => {
     // Catching here would turn both into "the taxonomy is empty".
     findMany.mockRejectedValue(new Error('connection refused'));
     await expect(loadGlobalSlotDefinitions()).rejects.toThrow('connection refused');
+  });
+});
+
+describe('the sync contract this module is built on', () => {
+  // The fix for a defect that hit this feature three times: every prose
+  // description of what Daybreak's global pass does with what we hand it was
+  // re-derived from `sync.ts`, and every one was wrong somewhere. The cure was
+  // to CITE the test that states the contract instead of restating it — which
+  // only works while the citation resolves.
+  //
+  // So this is the guard on the cure. A renamed case there silently dangles
+  // three pointers here, in `011-slot-taxonomy.ts` and in
+  // `.context/app/slots.md`, and a reader who follows a dead pointer goes back
+  // to reading `sync.ts` — exactly the state that produced the original bug.
+  //
+  // Its inputs are FILES, which is why this file is in `leafAlwaysRunTests`
+  // (`lib/app/leaf-ci.ts`): a branch renaming a case there reaches this through
+  // no module graph.
+  const CONTRACT = join(
+    process.cwd(),
+    'tests/integration/lib/framework/data-slots/global-slots.test.ts'
+  );
+
+  /** The cases our code and docs name. Keep in step with those citations. */
+  const CITED = [
+    // Omission is the retirement mechanism — `loadGlobalSlotDefinitions`
+    // filtering on `isActive` depends on it.
+    'a slug the provider drops is deactivated',
+    // Omitting EVERYTHING retires nothing — the fail-open case the store logs
+    // its own line for.
+    'an empty provider on a fluke boot leaves every global row active',
+    // The pass is idempotent — why the seed may call it unconditionally.
+    're-syncing after an edit writes the edit, and re-syncing again writes nothing',
+  ];
+
+  it('still names every case our code and docs cite', () => {
+    const source = readFileSync(CONTRACT, 'utf8');
+    const missing = CITED.filter((name) => !source.includes(name));
+
+    expect(
+      missing,
+      'These case names are cited by `lib/app/slots/taxonomy-store.ts`, ' +
+        '`prisma/seeds/app-lelanea/011-slot-taxonomy.ts` and `.context/app/slots.md` ' +
+        'as the statement of the global slot sync contract, and no longer exist in ' +
+        `${relative(process.cwd(), CONTRACT)}. Update the citations to the new ` +
+        'names — do not replace them with a prose description of what the sync does, ' +
+        'which is the mistake they were introduced to fix.'
+    ).toEqual([]);
   });
 });
 

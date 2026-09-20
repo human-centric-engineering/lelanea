@@ -23,9 +23,27 @@
  * dutifully reactivate its projection. An unseeded database therefore has no
  * global slots, which is the truth, and the seed is what changes that.
  *
- * The seam is safe on empty for the same reason (its own `fp4` note): a
- * provider returning nothing is read as a fluke, never as "retire them all",
- * so the pass writes no row.
+ * ## What the sync does with what we hand it — do not re-derive this
+ *
+ * Three behaviours of Daybreak's global pass decide what this module must do,
+ * and all three are pinned, executably, in
+ * `tests/integration/lib/framework/data-slots/global-slots.test.ts`:
+ *
+ * - *"a slug the provider drops is deactivated"* — omission is how a slot is
+ *   retired.
+ * - *"an empty provider on a fluke boot leaves every global row active"* —
+ *   omitting **everything** is read as a fluke and retires nothing.
+ * - *"re-syncing after an edit writes the edit, and re-syncing again writes
+ *   nothing"* — the pass is idempotent.
+ *
+ * **Cite those cases; do not restate them from `sync.ts`.** Three earlier
+ * comments in this feature described that contract in prose, each re-read from
+ * the implementation, and `/code-review` found all three wrong — including one
+ * that had just been "corrected" in the round before. The test is the statement
+ * of record: it fails if Daybreak changes the behaviour, which prose cannot.
+ * That matters here more than usual, because this seam is carried ahead of
+ * Daybreak (`.context/app/divergences.md` Row 22) and its upstream version may
+ * not behave identically.
  *
  * ## A stored row that fails validation is dropped, not served
  *
@@ -35,11 +53,9 @@
  * reach `framework_slot_definition` and from there the capture prompt. One bad
  * row does not take the rest of the taxonomy with it.
  *
- * **Withholding retires that slot, though — say so when it happens.** The sync
- * deactivates any `global` projection whose slug it was not handed, so a slug
- * dropped here stops being asked until the value is corrected. Failing closed
- * is right; failing closed *quietly* would look like a slot that had simply
- * stopped working, so the log names the consequence rather than the symptom.
+ * What withholding COSTS follows from the first two cases above, and the two
+ * outcomes are opposites — which is the whole reason the log distinguishes
+ * them. See {@link loadGlobalSlotDefinitions}.
  *
  * @see lib/app/content/slot-taxonomy.ts — the bundled file the seed loads
  * @see .context/app/slots.md
@@ -187,19 +203,16 @@ export async function loadGlobalSlotDefinitions(): Promise<SlotDefinitionInput[]
     definitions.push(result.input);
   }
 
-  // What withholding COSTS depends on whether anything survived, and the two
-  // outcomes are opposites — so say which one happened rather than asserting
-  // the commoner of them.
+  // Which of the sync's two omission behaviours we have just triggered — see
+  // the file header, which names the test case for each rather than restating
+  // it. Some survived: "a slug the provider drops is deactivated", so each
+  // withheld slot stops being asked. None survived: "an empty provider on a
+  // fluke boot leaves every global row active", so nothing is retired and the
+  // stale projections stay live.
   //
-  // Some survived: the sync's deactivate pass works from the slugs it was
-  // handed, so each withheld slug has its projection deactivated and the slot
-  // stops being asked. A retirement nobody asked for, but it fails closed.
-  //
-  // NONE survived: the pass reads an empty provider as a fluke and returns
-  // before it opens a transaction, so nothing is deactivated and every stale
-  // projection stays ACTIVE — the slots keep being asked under their old
-  // wording. That is the failure-open case, and it is the one worth shouting
-  // about. `/code-review` caught the log claiming deactivation here too.
+  // Opposite outcomes, and only the second fails OPEN — so it is the one that
+  // gets its own line rather than being left to the reader to infer from N
+  // per-row errors.
   if (withheld.length > 0 && definitions.length === 0) {
     logger.error(
       'loadGlobalSlotDefinitions: EVERY active definition was withheld — the framework sync treats an empty provider as a fluke, so no projection is deactivated and the stale ones stay live. Correct the classifiers; the taxonomy is not being reconciled.',
