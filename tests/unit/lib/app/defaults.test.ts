@@ -422,6 +422,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin/app/agent',
         // f-safety t-63 — the crisis helplines, per region.
         '/admin/app/safety',
+        // f-slots t-71 — the taxonomy, and every past version of each slot.
+        '/admin/app/slots',
       ]);
     },
   },
