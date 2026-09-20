@@ -36,14 +36,20 @@ import {
   SLOT_DATA_TYPE,
   SLOT_SENSITIVITY,
 } from '@/lib/framework/data-slots';
+import { slotSlugSchema } from '@/lib/app/slots/validation';
 
 /**
  * A slug is lower-case, digits and underscores. Immutable once seeded — it is
  * what a captured `framework_slot_value.slotSlug` points at.
+ *
+ * Read from `lib/validations/app-slot-definitions.ts` rather than declared here
+ * (t-71): the editor writes slugs into the same column this file seeds, so one
+ * rule has to govern both or a file the seed accepts and a slug the editor
+ * accepts drift apart. It lives over there because a client component may
+ * import the validation schemas, and importing them from *here* would pull this
+ * module's 60KB of bundled JSON into the browser with them.
  */
-const slugSchema = z
-  .string()
-  .regex(/^[a-z][a-z0-9_]*$/, 'a slot slug is lower-case letters, digits and underscores');
+const slugSchema = slotSlugSchema;
 
 const slotSchema = z.strictObject({
   slug: slugSchema,
