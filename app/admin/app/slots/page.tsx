@@ -6,7 +6,7 @@ import { SLOT_DEFINITIONS_ENDPOINT } from '@/lib/app/slots/endpoint';
 import type { SlotTaxonomyAdminView } from '@/lib/app/slots/definitions-admin';
 
 export const metadata: Metadata = {
-  title: 'What she asks about',
+  title: 'What the AI asks about',
   description: 'The slots the app tries to learn about a person, and every past version of each',
 };
 
@@ -38,11 +38,11 @@ export default async function SlotDefinitionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">What she asks about</h2>
+        <h2 className="text-lg font-semibold">What the AI asks about</h2>
         <p className="text-muted-foreground max-w-3xl text-sm">
           Every slot here is something the app is trying to learn about a person — the wording is
-          what the capture agent is actually given, so it reads as an instruction to her rather than
-          as a label. Changing it takes effect on the next thing she writes; it does not change
+          what the capture layer is actually given, so it reads as an instruction rather than as a
+          label. Changing it takes effect on the next thing the AI writes; it does not change
           anything already learned.
         </p>
         <p className="text-muted-foreground mt-2 max-w-3xl text-sm">

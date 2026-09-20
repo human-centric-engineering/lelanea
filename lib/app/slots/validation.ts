@@ -42,7 +42,18 @@
 
 import { z } from 'zod';
 
-import { SLOT_VISIBILITY, SLOT_DATA_TYPE, SLOT_SENSITIVITY } from '@/lib/framework/data-slots';
+// The vocabulary module directly, NOT the `@/lib/framework/data-slots` barrel.
+// The barrel re-exports the value engine, which imports `@/lib/db/client` and
+// so drags `pg` behind it — and this module is imported by a client component
+// for its bounds, which puts the whole chain in the browser bundle. That fails
+// as `Module not found: Can't resolve 'dns'` at the page, with a stack naming
+// `pg` and nothing naming the import that caused it. `vocabulary.ts` imports
+// nothing at all, which is what makes it safe to reach for from either side.
+import {
+  SLOT_VISIBILITY,
+  SLOT_DATA_TYPE,
+  SLOT_SENSITIVITY,
+} from '@/lib/framework/data-slots/vocabulary';
 
 /**
  * A slug is lower-case letters, digits and underscores, starting with a letter.

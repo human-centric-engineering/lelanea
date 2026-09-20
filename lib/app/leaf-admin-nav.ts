@@ -118,7 +118,7 @@ export function initLeafAdminNav(): void {
       },
       {
         href: SLOT_DEFINITIONS_PAGE,
-        label: 'What she asks about',
+        label: 'What the AI asks about',
         icon: ListTree,
         description:
           'The slots the app tries to learn about a person, and every past version of each',

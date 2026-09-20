@@ -122,9 +122,9 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<Res
 function syncWarning(sync: SlotSyncOutcome): string | null {
   if (sync.status === 'synced' || sync.status === 'not_needed') return null;
   if (sync.status === 'empty') {
-    return 'Saved. Every slot is now retired, so nothing was handed to the agent — and the last retirement is not propagated until another change is made.';
+    return 'Saved. Every slot is now retired, so nothing was handed to the AI — and the last retirement is not propagated until another change is made.';
   }
-  return 'Saved — but the agent is still reading the previous wording: the projection did not update. Save again to retry it; a server restart also repairs it.';
+  return 'Saved — but the AI is still reading the previous wording: the projection did not update. Save again to retry it; a server restart also repairs it.';
 }
 
 const VISIBILITY = [
@@ -151,7 +151,7 @@ const HELP = {
   group:
     'Which cluster this belongs to on this page. Moving a slot between groups changes nothing about what is captured; it is how the taxonomy reads.',
   description:
-    'What this slot means — and the exact words the capture agent is given, so write it as an instruction to her rather than as a label. Rewording it does not change any answer already given: each answer is read back against the wording that stood when it was captured.',
+    'What this slot means — and the exact words the capture layer is given, so write it as an instruction rather than as a label. Rewording it does not change any answer already given: each answer is read back against the wording that stood when it was captured.',
   visibility:
     'Whether the person this is about can see the value and correct it. Hidden means it never leaves the server to a member — which is what keeps a development-stage reading a tuning signal rather than a grade. Development slots must never rank or score someone to their face, and hiding them is the mechanism, not a default.',
   dataType:
