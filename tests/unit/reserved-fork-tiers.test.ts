@@ -265,6 +265,12 @@ describe('reserved fork tiers', () => {
       'enum AppCrisisContentStatus {',
       'model AppCrisisCopy {',
       'model AppCrisisRegion {',
+      // f-slots t-70 — the authored slot taxonomy and its version history
+      // (EXCLUSIONS: the questions, not the answers — what was actually learned
+      // about a person is a `framework_slot_value`, the framework tier's).
+      'enum AppSlotRevisionOrigin {',
+      'model AppSlotDefinition {',
+      'model AppSlotDefinitionRevision {',
     ]);
   });
 
