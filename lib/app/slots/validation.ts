@@ -42,12 +42,7 @@
 
 import { z } from 'zod';
 
-import {
-  SLOT_VISIBILITY,
-  SLOT_MODE,
-  SLOT_DATA_TYPE,
-  SLOT_SENSITIVITY,
-} from '@/lib/framework/data-slots';
+import { SLOT_VISIBILITY, SLOT_DATA_TYPE, SLOT_SENSITIVITY } from '@/lib/framework/data-slots';
 
 /**
  * A slug is lower-case letters, digits and underscores, starting with a letter.
@@ -159,9 +154,6 @@ export const slotTaxonomyUploadSchema = z.strictObject({
   mode: z.enum(SLOT_UPLOAD_MODES),
   file: z.unknown(),
 });
-
-/** The one vocabulary value an upload may carry that the editor never writes. */
-export const REJECTED_UPLOAD_MODE = SLOT_MODE.open;
 
 export type SlotDefinitionUpdate = z.infer<typeof slotDefinitionUpdateSchema>;
 export type SlotDefinitionCreate = z.infer<typeof slotDefinitionCreateSchema>;

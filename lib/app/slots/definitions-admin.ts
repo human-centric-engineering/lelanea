@@ -153,6 +153,23 @@ const DEFINITION_SELECT = {
   updatedAt: true,
 } satisfies Prisma.AppSlotDefinitionSelect;
 
+/**
+ * What one write changed, as the audit log records it. Keyed by field, so an
+ * entry says what the wording WAS as well as what it became — which is the half
+ * a reader of the audit log cannot get from the definition row afterwards.
+ */
+export type SlotFieldChanges = Partial<Record<SlotDefinitionField, { from: unknown; to: unknown }>>;
+
+function toFieldChanges(
+  before: StoredSlotDefinitionFields,
+  after: StoredSlotDefinitionFields,
+  changed: readonly SlotDefinitionField[]
+): SlotFieldChanges {
+  return Object.fromEntries(
+    changed.map((field) => [field, { from: before[field], to: after[field] }])
+  );
+}
+
 /** The authored fields of a row, without the identity and bookkeeping around them. */
 function fieldsOf(row: StoredSlotDefinitionFields): StoredSlotDefinitionFields {
   return {
@@ -300,7 +317,11 @@ async function writeDefinitionChange(
   toNext: (before: StoredSlotDefinitionFields) => StoredSlotDefinitionFields,
   versionRead: number,
   editorId: string
-): Promise<{ definition: SlotDefinitionRow; changed: SlotDefinitionField[] }> {
+): Promise<{
+  definition: SlotDefinitionRow;
+  changed: SlotDefinitionField[];
+  changes: SlotFieldChanges;
+}> {
   const before = await prisma.appSlotDefinition.findUnique({
     where: { slug },
     select: DEFINITION_SELECT,
@@ -315,7 +336,7 @@ async function writeDefinitionChange(
   const changed = changedDefinitionFields(fieldsOf(before), next);
   // The change rule: an edit that changes nothing writes no revision and bumps
   // no version. Returning `before` rather than re-reading is the same row.
-  if (changed.length === 0) return { definition: before, changed };
+  if (changed.length === 0) return { definition: before, changed, changes: {} };
 
   const version = before.version + 1;
 
@@ -343,7 +364,7 @@ async function writeDefinitionChange(
       where: { slug },
       select: DEFINITION_SELECT,
     });
-    return { definition, changed };
+    return { definition, changed, changes: toFieldChanges(fieldsOf(before), next, changed) };
   });
 }
 
@@ -417,9 +438,10 @@ export async function updateSlotDefinition(
 ): Promise<{
   definition: SlotDefinitionRow;
   changed: SlotDefinitionField[];
+  changes: SlotFieldChanges;
   sync: SlotSyncOutcome;
 }> {
-  const { definition, changed } = await writeDefinitionChange(
+  const { definition, changed, changes } = await writeDefinitionChange(
     slug,
     // `isActive` and `mode` are carried through from the stored row, not taken
     // from the caller: retirement is its own route, and mode is never written
@@ -429,9 +451,9 @@ export async function updateSlotDefinition(
     editorId
   );
 
-  if (changed.length === 0) return { definition, changed, sync: { status: 'not_needed' } };
+  if (changed.length === 0) return { definition, changed, changes, sync: { status: 'not_needed' } };
   const sync = await resyncGlobalSlots({ action: 'update', slug, changed });
-  return { definition, changed, sync };
+  return { definition, changed, changes, sync };
 }
 
 /**
@@ -452,18 +474,19 @@ export async function setSlotDefinitionActive(
 ): Promise<{
   definition: SlotDefinitionRow;
   changed: SlotDefinitionField[];
+  changes: SlotFieldChanges;
   sync: SlotSyncOutcome;
 }> {
-  const { definition, changed } = await writeDefinitionChange(
+  const { definition, changed, changes } = await writeDefinitionChange(
     slug,
     (before) => ({ ...before, isActive }),
     versionRead,
     editorId
   );
 
-  if (changed.length === 0) return { definition, changed, sync: { status: 'not_needed' } };
+  if (changed.length === 0) return { definition, changed, changes, sync: { status: 'not_needed' } };
   const sync = await resyncGlobalSlots({ action: isActive ? 'restore' : 'retire', slug });
-  return { definition, changed, sync };
+  return { definition, changed, changes, sync };
 }
 
 // ─── Upload ─────────────────────────────────────────────────────────────────
