@@ -168,6 +168,26 @@ export function initLeafSubjectSources(): void {
         reason:
           'The helplines and emergency number the app shows for one country. It holds no information about any person.',
       },
+      {
+        // f-slots t-70. The authored taxonomy — what the app AIMS to learn.
+        // What it has actually learned about this person is a slot VALUE, a
+        // framework table, declared in `lib/framework/privacy/export-sources.ts`.
+        // Keeping the two apart is the point: a subject reading their bundle
+        // should get their own answers, not a catalogue of the questions.
+        model: 'AppSlotDefinition',
+        reason:
+          'The list of things the app aims to understand about the people who use it, and what each one means. It is the same list for everyone and holds no information about you; what the app has actually learned about you is in your profile, which this bundle returns separately.',
+      },
+      {
+        // Same situation as `AppKnowledgeDesignation`: the reason has to be
+        // true for EVERY subject who could read it, administrators included,
+        // and this row retains `editorId` — the account id of whoever made the
+        // edit — so "it holds nothing about you" would have been false for
+        // exactly the people who work here. It says what is actually retained.
+        model: 'AppSlotDefinitionRevision',
+        reason:
+          'Every past version of that list — the wording as it stood on a given date, which is how an answer you gave is read back against the words you were actually asked under. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
     ],
   });
 }

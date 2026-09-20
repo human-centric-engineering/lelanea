@@ -97,6 +97,12 @@ vi.mock('@/lib/db/client', () => ({
     // §08 t-54 — the turn record, for the export collector's section key.
     appTurn: { findMany: vi.fn(async () => []) },
     appSafetyEvent: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
+    // f-slots t-70 — the taxonomy the global slot provider reads. Empty is the
+    // useful return here: the framework's global pass treats "provider supplied
+    // nothing" as a fluke and returns before it opens a transaction, so the
+    // `leaf-bootstrap.ts` row can prove the provider is registered and reaches
+    // this table without the mock having to stand in for `executeTransaction`.
+    appSlotDefinition: { findMany: vi.fn(async () => []) },
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
@@ -120,6 +126,10 @@ import {
   resetConsumerChatExclusions,
 } from '@/lib/orchestration/chat/consumer-exclusions';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import {
+  __resetGlobalSlotDefinitionProviderForTests,
+  syncGlobalSlotDefinitions,
+} from '@/lib/framework/data-slots/sync';
 import { initAppNav } from '@/lib/app/admin-nav';
 import { initLeafAdminNav } from '@/lib/app/leaf-admin-nav';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
@@ -520,6 +530,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppCrisisRegion',
         'AppKnowledgeDesignation',
         'AppSafetyEvent',
+        'AppSlotDefinition',
+        'AppSlotDefinitionRevision',
         'AppTurn',
         'AppUserBudget',
         'AppVoiceComparison',
@@ -561,7 +573,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // it is exported to them (the words never were stored).
       const safety = sources.find((entry) => entry.model === 'AppSafetyEvent');
       expect(safety).toMatchObject({ section: 'safety', disposition: 'export' });
-      // Six of ours are excluded, and only those six. `AppKnowledgeDesignation`
+      // Eight of ours are excluded, and only those eight. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
       // her voice was heard, when, and what it was told. `AppWaitlistEntry` and
@@ -579,6 +591,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // people; who edited or signed off is in the admin audit log.
         'AppCrisisCopy',
         'AppCrisisRegion',
+        // f-slots t-70 — the authored taxonomy and its version history. The
+        // QUESTIONS, not the answers: what the app has learned about a subject
+        // is a `framework_slot_value`, declared by the framework tier. If a
+        // leaf-owned table ever holds a slot VALUE, it belongs in `sources`
+        // above, not here.
+        'AppSlotDefinition',
+        'AppSlotDefinitionRevision',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
       // is what lets them tell "we hold nothing about you" apart from "we decided
@@ -684,8 +703,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). Two things are registered here, and both
-    // are pinned by count as well as by name.
+    // PINNED, not deleted (`HB2`). Five things are registered here, each pinned
+    // by identity or by count as well as by name.
     //
     // §05 t-12: the seventeen journey modules, each a `ModuleDefinition` with
     // an empty interior. The framework's boot sync upserts a `framework_module`
@@ -730,6 +749,29 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       await initLeafApp();
       expect(isExcludedFromConsumerChat(VOICE_AGENT_SLUG)).toBe(true);
       expect(isExcludedFromConsumerChat('some-other-agent')).toBe(false);
+
+      // f-slots t-70: the global slot definition provider (divergences Row 22).
+      // Pinned BEHAVIOURALLY rather than by identity, because identity is what
+      // the seam does not expose — and because the thing worth protecting is
+      // that a provider is registered AND that it reads the taxonomy table.
+      // Without the registration the framework's global pass returns
+      // `no_provider` and writes nothing, silently: the entire taxonomy would be
+      // missing from `framework_slot_definition` with nothing failing.
+      __resetGlobalSlotDefinitionProviderForTests();
+      const findMany = vi.mocked(prisma.appSlotDefinition.findMany);
+      await expect(syncGlobalSlotDefinitions()).resolves.toEqual({ status: 'no_provider' });
+      expect(findMany).not.toHaveBeenCalled();
+
+      await initLeafApp();
+      // `empty` — not `no_provider` — is the proof the provider ran: the mock
+      // returns no rows, and the pass reads that as a fluke and writes nothing.
+      await expect(syncGlobalSlotDefinitions()).resolves.toEqual({ status: 'empty' });
+      expect(findMany).toHaveBeenCalledTimes(1);
+      // `isActive: true` is pinned here as well as in the store's own test,
+      // because it is the whole retirement mechanism seen from the seam: a
+      // provider that returned retired rows would have the sync reactivate
+      // every slug an admin had retired, on every boot.
+      expect(findMany.mock.calls[0]?.[0]).toMatchObject({ where: { isActive: true } });
     },
   },
   {

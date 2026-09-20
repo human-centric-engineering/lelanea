@@ -657,3 +657,136 @@ model AppCrisisRegion {
 
   @@map("app_crisis_region")
 }
+
+/// Who made one revision of a slot definition (f-slots t-70).
+///
+/// `seed` is the one-time load of `content/lelanea_slot_taxonomy.json`; `admin`
+/// is a person editing in the taxonomy editor (t-71). The distinction is why
+/// this enum exists rather than reading it off a null `editorId`: that column
+/// is also null for an admin whose account was later erased, and "the operator
+/// wrote this" and "a person wrote this and is now gone" are different facts.
+enum AppSlotRevisionOrigin {
+  seed
+  admin
+
+  @@map("app_slot_revision_origin")
+}
+
+/// One global slot definition, as currently worded — what the app aims to learn
+/// about a person (product description §5; f-slots t-70).
+///
+/// **This table is the authored taxonomy; `framework_slot_definition` is its
+/// projection.** The provider registered from `lib/app/leaf-bootstrap.ts` reads
+/// the active rows here and hands them to Daybreak's global slot sync, which
+/// stamps `scope = global` (`lib/framework/data-slots/sync.ts`). Nothing writes
+/// the framework row directly, and the framework row carries no history — the
+/// version chain is here, because the editor is ours.
+///
+/// **`slug` is the primary key and is immutable.** It is the identity a captured
+/// `framework_slot_value.slotSlug` points at, so renaming one would orphan every
+/// answer already given under it. A rename is therefore an add plus a retire
+/// (owner ruling, 19 September 2026), which is what `isActive` is for: a retired
+/// row stays, the framework sync deactivates its projection, and the values
+/// captured under it keep resolving to the wording they were captured under.
+///
+/// **No `scope` column, deliberately.** Every row here is global by construction
+/// — the seam stamps the scope, so storing it would be a second copy that can
+/// disagree with the only one that matters.
+///
+/// The classifier columns mirror `framework_slot_definition`'s as free-form
+/// `String` rather than Prisma enums, for the framework's own reason (convention
+/// X1): Daybreak adding a vocabulary value must not be a migration here. They
+/// are validated on write and on read against
+/// `lib/framework/data-slots/vocabulary.ts` — see `lib/app/slots/taxonomy-store.ts`.
+///
+/// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
+model AppSlotDefinition {
+  /// Stable identity, immutable. Matches `framework_slot_value.slotSlug`.
+  slug           String   @id
+  /// Thematic cluster — `life_areas`, `the_person`, `external_conditions`,
+  /// `preferences`, `development`, or a module's own output.
+  group          String
+  /// What the slot means, in the words the capture agent is given.
+  description    String
+  /// `open` (the person sees and corrects it) or `hidden` (system-only).
+  /// Development-stage slots are `hidden`: a tuning signal, never a grade (§12).
+  visibility     String   @default("open")
+  /// `targeted` (pre-declared) or `open` (minted at runtime).
+  mode           String   @default("targeted")
+  /// `text` | `number` | `boolean` | `date` | `json`.
+  dataType       String   @default("text")
+  /// `standard` | `sensitive` | `special_category`.
+  sensitivity    String   @default("standard")
+  /// Sequencing input for targeted capture; higher is asked sooner.
+  priorityWeight Int      @default(0)
+  /// False once retired. The row stays — see the docblock. A retired slug's
+  /// projection is deactivated by the framework sync, not deleted.
+  isActive       Boolean  @default(true)
+  /// Bumped on every edit that changes a field. The revision below records the
+  /// version it produced, so a value captured at time T resolves to the wording
+  /// standing at T by comparing against `AppSlotDefinitionRevision.changedAt`.
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  revisions AppSlotDefinitionRevision[]
+
+  @@index([isActive, group])
+  @@map("app_slot_definition")
+}
+
+/// One version of one slot definition — the whole wording as it stood, not a
+/// diff (f-slots t-70).
+///
+/// **A full snapshot, on purpose.** The question this table exists to answer is
+/// "what did this slot mean when that answer was given?", which is a read at a
+/// timestamp: the newest revision whose `changedAt` is at or before the capture.
+/// A chain of diffs would make that a replay. `changedFields` carries the "what
+/// changed" on top of the snapshot, for the editor's history view.
+///
+/// `version` 1 is the creation — every field is in `changedFields`, because
+/// against nothing, everything is new.
+///
+/// **`editorId` is a plain scalar with no Prisma `@relation`** — a fork table
+/// must not add a reverse field to the Sunrise-owned `User` model
+/// (CUSTOMIZATION.md §5). The foreign key is hand-written in the
+/// `app_slot_taxonomy` migration with `ON DELETE SET NULL`, and pinned by a
+/// drift probe in `lib/app/leaf-db-drift.ts`.
+///
+/// `SET NULL` — not `Cascade` — because the history is about the taxonomy, not
+/// about the editor. Erasing an admin's account must remove their identity from
+/// this record; it must not remove the record that the wording changed, which is
+/// what every captured value dated after it is read against. `origin` survives
+/// the null, so a row left by an erased admin still reads as an admin edit
+/// rather than as the seed.
+model AppSlotDefinitionRevision {
+  id             String                @id @default(cuid())
+  slotSlug       String
+  definition     AppSlotDefinition     @relation(fields: [slotSlug], references: [slug], onDelete: Cascade)
+  /// The version this revision produced. 1 is the creation.
+  version        Int
+  /// The definition's fields as they stood at this version.
+  group          String
+  description    String
+  visibility     String
+  mode           String
+  dataType       String
+  sensitivity    String
+  priorityWeight Int
+  isActive       Boolean
+  /// Which of the snapshot fields differ from the previous revision. Every one
+  /// of them at version 1. Empty is never written — an edit that changed
+  /// nothing does not make a revision.
+  changedFields  String[]
+  origin         AppSlotRevisionOrigin
+  /// The admin who made the edit; null for the seed, and null once that admin's
+  /// account is erased. Read `origin` to tell those apart.
+  editorId       String?
+  changedAt      DateTime              @default(now())
+
+  @@unique([slotSlug, version])
+  /// The "wording at time T" read: newest revision for a slug at or before T.
+  @@index([slotSlug, changedAt])
+  @@index([editorId])
+  @@map("app_slot_definition_revision")
+}

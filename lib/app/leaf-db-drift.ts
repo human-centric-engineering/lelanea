@@ -115,4 +115,21 @@ export function registerLeafDriftProbes(): void {
     // for everyone the crisis path ever answered.
     probe: constraintExists('app_safety_event_userId_fkey', 'ON DELETE CASCADE'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_slot_definition_revision_editorId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_slot_definition_revision',
+    // The action is asserted, not just the existence, and here the DANGEROUS
+    // drift is the one that looks tidiest. `ON DELETE SET NULL` (f-slots t-70)
+    // is what keeps a revision — the wording as it stood, and the date it
+    // changed — when the admin who made that edit is erased. The history is
+    // about the taxonomy, not about the editor, and every slot value captured
+    // after a revision is read against it. A constraint re-created with
+    // `CASCADE` would pass an existence check while making one admin's erasure
+    // silently delete the wording history that OTHER people's answers resolve
+    // through; one re-created with `NO ACTION` would make `eraseUser()` fail
+    // with `P2003` for every admin who ever edited a definition.
+    probe: constraintExists('app_slot_definition_revision_editorId_fkey', 'ON DELETE SET NULL'),
+  });
 }

@@ -9,7 +9,10 @@
  * `lib/framework/**` changes, so on a database it has already applied to an
  * incremental `db:seed` skips it; a leaf seed that needs the module rows calls
  * `syncFrameworkForSeed({ registerLeaf: initLeafApp })` at the top of its own
- * `run()`, as the boot seed's docblock says. Upstream Daybreak ships this
+ * `run()`, as the boot seed's docblock says. One leaf seed calls THIS function
+ * directly instead — `prisma/seeds/app-lelanea/011-slot-taxonomy.ts` needs only
+ * the global slot provider registered, not the framework's module rows, and
+ * says so at its call site. Upstream Daybreak ships this
  * empty; the row in `tests/unit/lib/app/defaults.test.ts` is PINNED to what we
  * register rather than deleted, so a stray SECOND registration still fails
  * there (`HB2`).
@@ -30,6 +33,8 @@ import { registerFacilitationTurnHook } from '@/lib/framework/facilitation/agent
 import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { registerGlobalSlotDefinitionProvider } from '@/lib/framework/data-slots';
+import { loadGlobalSlotDefinitions } from '@/lib/app/slots/taxonomy-store';
 
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -57,6 +62,21 @@ export function initLeafApp(): Promise<void> {
   // above. The seam is carried ahead of Sunrise — `.context/app/divergences.md`
   // Row 21.
   excludeFromConsumerChat(VOICE_AGENT_SLUG);
+
+  // f-slots t-70. The authored slot taxonomy — what the app aims to learn about
+  // a person (§5) — lives in `app_slot_definition`, and this hands Daybreak the
+  // function that reads it. The framework's boot sync then calls it, stamps
+  // `scope = global` and reconciles the result into `framework_slot_definition`;
+  // the taxonomy editor calls `syncGlobalSlotDefinitions()` again after an edit.
+  // The seam is carried ahead of Daybreak — `.context/app/divergences.md` Row 22,
+  // proposed upstream as daybreak#266 — and this is its first production caller.
+  //
+  // A pure registration, as this function requires: the provider is async and
+  // is not invoked here, so no database is touched at boot time by this line.
+  // It is before the module loop for the same reason as the hooks above — with
+  // no provider registered the global pass does nothing at all, silently, and
+  // the whole taxonomy would be missing with nothing saying so.
+  registerGlobalSlotDefinitionProvider(loadGlobalSlotDefinitions);
 
   // The seventeen modules of the journey, each a real place with an empty
   // interior. `registerModule()` is idempotent by slug, so a hot reload or a
