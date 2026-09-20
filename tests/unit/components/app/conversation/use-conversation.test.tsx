@@ -60,6 +60,8 @@ let refuse: Response | null = null;
 let generation = 'available';
 let statusReads = 0;
 let statusDown = false;
+let voiceInput = 'off';
+let voiceDown = false;
 
 const fetchImpl = vi.fn(
   async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -68,6 +70,10 @@ const fetchImpl = vi.fn(
     if (href.startsWith('/api/v1/app/agent/status')) {
       statusReads += 1;
       return statusDown ? new Response('', { status: 500 }) : statusResponse(generation);
+    }
+    if (href.startsWith('/api/v1/app/agent/transcribe')) {
+      if (voiceDown) return new Response('', { status: 500 });
+      return new Response(JSON.stringify({ success: true, data: { voiceInput } }), { status: 200 });
     }
     const body: unknown = JSON.parse(typeof init?.body === 'string' ? init.body : '{}');
     if (body && typeof body === 'object' && 'turnId' in body) sentIds.push(String(body.turnId));
@@ -102,6 +108,8 @@ beforeEach(() => {
   generation = 'available';
   statusReads = 0;
   statusDown = false;
+  voiceInput = 'off';
+  voiceDown = false;
   vi.mocked(fetchImpl).mockClear();
 });
 
@@ -471,6 +479,24 @@ describe('useConversation', () => {
     });
   });
 
+  it('asks once whether the microphone is offered, and reads no answer as not offered (t-67)', async () => {
+    voiceInput = 'available';
+    const { result } = await loaded();
+    await waitFor(() => expect(result.current.voiceInput).toBe('available'));
+
+    voiceDown = true;
+    const again = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(again.result.current.phase).toBe('idle'));
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(fetchImpl)
+          .mock.calls.filter(([u]) => typeof u === 'string' && u.includes('transcribe'))
+      ).toHaveLength(2)
+    );
+    expect(again.result.current.voiceInput).toBeNull();
+  });
+
   it('marks the turn unreadable, not broken, when the transcript cannot be read', async () => {
     vi.mocked(fetchImpl).mockImplementationOnce(async () => new Response('', { status: 500 }));
     const { result } = renderHook(() => useConversation({ fetchImpl }));
@@ -483,8 +509,8 @@ describe('useConversation', () => {
     const hook = await loaded();
     act(() => hook.result.current.send('hello'));
     await waitFor(() => expect(turns).toHaveLength(1));
-    // The transcript read, the status read, then the turn.
-    const [, init] = vi.mocked(fetchImpl).mock.calls[2] as unknown as [string, RequestInit];
+    // The transcript read, the status read, the voice-input read, then the turn.
+    const [, init] = vi.mocked(fetchImpl).mock.calls[3] as unknown as [string, RequestInit];
     hook.unmount();
     expect(init.signal?.aborted).toBe(true);
   });

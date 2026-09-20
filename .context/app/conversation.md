@@ -1,6 +1,6 @@
 ---
 name: app-conversation
-description: The conversation pane — the transcript read back through a leaf route with each reply joined to its turn row, the leaf event schema that keeps the crisis frame's resource, the stream client that mints the turn id, the pacing that makes her reply arrive as typed, what the pane does when she can't answer, and the account under every reply — composed from parts, the seam §11 and §13 add to. What is deliberately absent until t-67.
+description: The conversation pane — the transcript read back through a leaf route with each reply joined to its turn row, the leaf event schema that keeps the crisis frame's resource, the stream client that mints the turn id, the pacing that makes her reply arrive as typed, what the pane does when she can't answer, the account under every reply — composed from parts, the seam §11 and §13 add to — and the microphone: a voice note transcribed and discarded, the route, its two switches, and what happens to the audio (nothing).
 ---
 
 # The conversation — talking to her from the shell
@@ -294,6 +294,78 @@ fixtures where the model and the seat are present in the data.
 from), and none under a turn that ended without her — an ending is not a
 reply.
 
+## The microphone — a voice note, transcribed and discarded
+
+§10 t-67; product description §3.3 (the mic in the composer's foot); owner
+ruling 19 Sept 2026: **transcribe and discard, text only, said at the
+microphone**. Speech-to-text existed in the platform for the embed widget and
+the admin chat, and nowhere for a signed-in member.
+
+**The route.** `POST /api/v1/app/agent/transcribe` — `withAuth`,
+`ownership: self`, multipart (`audio`, optional `language`) →
+`{ text, durationMs, language? }`. Built from the pieces the two platform
+routes use: `enforceContentLengthCap` before the body is read,
+`validateTranscribeUpload` (25 MB, audio MIME), the platform's `audioLimiter`
+keyed `audio:app:<userId>` — the one expensive sub-flow, and the one case
+CLAUDE.md asks a handler to cap itself — `getAudioProvider()`, and one
+`logCost` row with the person's id, `operation: 'transcription'`, tagged
+`{ seat }` in its metadata (the platform's `logCost` takes `metadata`; the
+chat handler's `costLogMetadata` pass-through is not on this path, so the tag
+is set here). The validator wants an `agentId`; it is hers, set server-side,
+and a caller's is ignored. Awaited, so the meter has the row before the
+person has the words. `GET` on the same route →
+`{ voiceInput: 'available' | 'off' | 'no_provider' }`, `no-store`.
+
+**Two switches, both honoured before the provider is asked.**
+`AiOrchestrationSettings.voiceInputGloballyEnabled` — an operator's off switch
+that needs no deploy; no row means on, the platform's default — and her
+agent's `enableVoiceInput`. Either off → `403 VOICE_DISABLED`, zero provider
+calls, and the microphone is not offered. `no_provider` (allowed, nothing to
+transcribe with) → the microphone is not offered either; a POST would be
+`503 NO_AUDIO_PROVIDER`.
+
+**Her flag is operator-owned** (`fp4`). Seed
+`prisma/seeds/app-lelanea/012-agent-voice-input.ts` turns `enableVoiceInput`
+on for `lelanea-guide` once, as an entry in her version timeline (the field
+is versioned) with `VOICE_INPUT_CHANGE_SUMMARY`, inside one transaction with
+the update — the reachability seed's shape. Off with that entry behind it is
+an admin who turned it off, and a re-run leaves it alone. A missing agent
+throws. **After a deploy: `npm run db:seed` per database.**
+
+**What happens to the audio: nothing.** The clip goes to the provider and
+nowhere else — no file write, no row with its bytes, no log line with its
+bytes or its text. The route logs the person's id, the provider, the model,
+the duration and the byte count. The route's tests assert the single write
+and run the platform's `assertNoAudioPersistence` guard over it.
+
+**The control** (`VoiceNote`, `components/app/conversation/voice-note.tsx`),
+re-derived from the admin `MicButton` rather than imported (`fp5`): the
+mechanism that transfers is the platform's `useVoiceRecording` hook
+(`MediaRecorder` lifecycle, a supported MIME, the length clamped at two
+minutes, a denied permission told apart from a failed capture); the styling,
+the copy and the level meter do not. One disc in the composer's foot: the
+mic, a square while recording, a spinner while the words are on their way;
+a `status` row beside it says _Recording · 0:12_, _Turning it into words…_,
+or why a clip could not be. **The words land at the caret** in the box,
+replacing any selection, spaced from what is around them, for the person to
+read and edit — **never sent for them**. Its accessible name says the
+recording is never kept. A clip shorter than 300 ms — the disc pressed twice
+— is not sent.
+
+**Degrading, not erroring.** No `MediaRecorder` → the disabled disc with its
+reason as its name. A permission prompt answered no → the disc stays live,
+named with that reason, and a press asks again: Chrome reports a _dismissed_
+prompt the same way as a refused one, so a disabled disc would lock the
+microphone until a reload (review round 1). A clip that could not be
+transcribed → the box untouched, the reason in the status row, the disc live
+for another go. The two-minute cap is enforced by the control from the hook's
+`elapsedMs` — the hook's own auto-stop drops the clip — and a recording under
+way can always be stopped, even once a turn is in flight; only _starting_
+waits. The words land in whatever the box holds when they arrive, not what it
+held at the press. The composer offers the control only when the
+route's `GET` says `available`; `useConversation` asks once on mount, and no
+answer means not offered.
+
 ## The pacing — `useTypedText`
 
 §3.3: "the reply streams, arriving as if typed rather than in a block. Pacing
@@ -357,8 +429,9 @@ still-working line and the status line sit beside the chrome's words.
   turn row's `errorCode` is joined to replies, not to the person's row. The
   words are kept, which is §8.1's floor; saying why nothing follows is not in
   this task.
-- **The microphone** — t-67. Still disabled, still labelled as arriving with
-  the conversation.
+- **A language hint on the clip.** The route accepts one; the control sends
+  none — the provider detects it, and the person's language preference is
+  not yet a thing the pane reads. Trigger: a locale feature.
 - **Pinning a reader who has scrolled up** — the transcript follows the foot
   on every change, as the prototype's `scrollLog()` does, including each step
   of the paced reveal (`ReplyTurn`'s `onGrow`). A reader re-reading

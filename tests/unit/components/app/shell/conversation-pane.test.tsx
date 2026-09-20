@@ -72,6 +72,7 @@ const seat = {
   bodies: [] as unknown[],
   transcript: [] as unknown[],
   generation: 'available',
+  voiceInput: 'off',
 };
 
 beforeEach(() => {
@@ -82,6 +83,7 @@ beforeEach(() => {
   seat.bodies = [];
   seat.transcript = [];
   seat.generation = 'available';
+  seat.voiceInput = 'off';
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -89,6 +91,12 @@ beforeEach(() => {
       if (url.startsWith('/api/v1/app/agent/status')) {
         return new Response(
           JSON.stringify({ success: true, data: { generation: seat.generation } }),
+          { status: 200 }
+        );
+      }
+      if (url.startsWith('/api/v1/app/agent/transcribe')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { voiceInput: seat.voiceInput } }),
           { status: 200 }
         );
       }

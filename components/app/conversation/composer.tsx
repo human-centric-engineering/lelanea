@@ -1,8 +1,10 @@
 'use client';
 
-import { ArrowUp, Mic } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import * as React from 'react';
 
+import { VoiceNote } from '@/components/app/conversation/voice-note';
+import type { VoiceInputState } from '@/lib/app/conversation/client';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +14,10 @@ export interface ComposerProps {
   onSend: () => void;
   /** A turn is in flight, or the transcript is still loading: nothing sends. */
   busy: boolean;
+  /** Whether the microphone is offered — the route's answer; `null` until it has answered. */
+  voiceInput?: VoiceInputState | null;
+  /** Injectable for tests, passed to the microphone. */
+  fetchImpl?: typeof fetch;
 }
 
 /**
@@ -40,14 +46,60 @@ export interface ComposerProps {
  * `if (!v || S.busy) return` after its `preventDefault` makes it; Shift+Enter
  * still breaks a line.
  *
- * ## The mic
+ * ## The mic (t-67)
  *
- * Still disabled, still labelled as arriving with the conversation. It is
- * t-67's, and lighting it up here with nothing behind it would be the D6
- * failure in miniature.
+ * Offered only when the route says voice input is on and there is something
+ * to transcribe with; otherwise absent, not disabled — a disabled control
+ * with no reason is the D6 failure in miniature. What the person said lands
+ * at the caret, replacing any selection, for them to read and edit; the box
+ * is never sent for them. See `voice-note.tsx`.
  */
-export function Composer({ value, onChange, onSend, busy }: ComposerProps) {
+export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl }: ComposerProps) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
+  /** Where the person last had the caret, or null since mount. */
+  const lastCaret = React.useRef<{ start: number; end: number } | null>(null);
+  const rememberCaret = () => {
+    const el = textarea.current;
+    if (el) lastCaret.current = { start: el.selectionStart, end: el.selectionEnd };
+  };
+
+  /**
+   * The words, at the caret — with a space either side where they meet other
+   * words. Read from the box itself, not the render-time `value`: the words
+   * arrive seconds after the press, and whatever was typed meanwhile is in
+   * the box and not in this closure (review round 1).
+   */
+  const insertAtCaret = React.useCallback(
+    (text: string) => {
+      const el = textarea.current;
+      const current = el?.value ?? value;
+      // The caret as the person last left it. Pressing the mic moves focus to
+      // the disc, and a remounted box (the pane parked and unparked) reports
+      // its selection at 0 until it is clicked — so the box's own selection
+      // is not the answer; the last one the person made is, and with none
+      // since mount the words go at the end (review round 3).
+      const known = lastCaret.current ?? { start: current.length, end: current.length };
+      const start = Math.min(known.start, current.length);
+      const end = Math.min(known.end, current.length);
+      const before = current.slice(0, start);
+      const after = current.slice(end);
+      const lead = before && !/\s$/.test(before) ? ' ' : '';
+      const trail = after && !/^\s/.test(after) ? ' ' : '';
+      const next = `${before}${lead}${text}${trail}${after}`;
+      onChange(next);
+      const caret = before.length + lead.length + text.length;
+      // After React has painted the new value. Focus is taken only where the
+      // box had it, or nothing did: the words can arrive without a press (the
+      // two-minute cap), and a person typing elsewhere is not pulled here.
+      const hadFocus = document.activeElement === el || document.activeElement === document.body;
+      requestAnimationFrame(() => {
+        if (hadFocus) el?.focus();
+        el?.setSelectionRange(caret, caret);
+        lastCaret.current = { start: caret, end: caret };
+      });
+    },
+    [value, onChange]
+  );
 
   // The auto-grow runs on every value change, not only on `input`: a value
   // cleared by the hook fires no input event, and the box would keep the
@@ -89,6 +141,8 @@ export function Composer({ value, onChange, onSend, busy }: ComposerProps) {
           value={value}
           placeholder={CONVERSATION_COPY.placeholder}
           onChange={(event) => onChange(event.currentTarget.value)}
+          onSelect={rememberCaret}
+          onBlur={rememberCaret}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.shiftKey) return;
             // IME composition also uses Enter; let it finish the character.
@@ -102,19 +156,9 @@ export function Composer({ value, onChange, onSend, busy }: ComposerProps) {
           )}
         />
         <div className="flex items-center gap-2 pt-1.5">
-          <span title={CONVERSATION_COPY.micArriving} className="flex-none">
-            <button
-              type="button"
-              disabled
-              aria-label={CONVERSATION_COPY.micArriving}
-              className={cn(
-                'text-muted-foreground flex h-9 w-9 items-center justify-center rounded-full',
-                'disabled:opacity-50'
-              )}
-            >
-              <Mic size={18} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
+          {voiceInput === 'available' ? (
+            <VoiceNote onText={insertAtCaret} disabled={busy} fetchImpl={fetchImpl} />
+          ) : null}
           <span className="flex-1" />
           <span className="text-muted-foreground flex-none text-[12px] max-[760px]:hidden">
             {CONVERSATION_COPY.hint}

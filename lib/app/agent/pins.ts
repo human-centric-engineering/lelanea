@@ -125,6 +125,9 @@ export const SEATED_ROLES: readonly string[] = [
 /** What her version timeline says when the seed widens her to `public`. */
 export const REACHABLE_CHANGE_SUMMARY = 'Made reachable by members (seeded — §08)';
 
+/** What her version timeline says when the seed lets members speak to her (t-67). */
+export const VOICE_INPUT_CHANGE_SUMMARY = 'Voice input switched on (seeded — §10)';
+
 /**
  * The capabilities her seed grants — the tool to look in her material.
  *
