@@ -259,6 +259,48 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
+  /**
+   * f-slots t-70 — the taxonomy's version history. `ON DELETE SET NULL` is the
+   * opposite of the safety-event row above, and for a reason worth keeping in
+   * view: the history is about the TAXONOMY, not about the editor. Erasing an
+   * admin must remove their identity from it and leave the record that the
+   * wording changed, because every slot value captured after that date is read
+   * against it.
+   */
+  it('registers the leaf slot-revision editor FK probe', () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_slot_definition_revision');
+
+    expect(probe, 'the slot-revision editor FK probe is not registered').toBeDefined();
+    expect(probe?.name).toContain('app_slot_definition_revision_editorId_fkey');
+    expect(probe?.kind).toBe('FK constraint');
+  });
+
+  it('passes on the SET NULL FK the slot-taxonomy migration writes', async () => {
+    queryRaw.mockResolvedValueOnce([
+      {
+        def: 'FOREIGN KEY ("editorId") REFERENCES "user"(id) ON DELETE SET NULL ON UPDATE CASCADE',
+      },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_slot_definition_revision');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+  });
+
+  it('FAILS when the slot-revision editor FK has drifted to CASCADE', async () => {
+    // The dangerous drift, and the one that looks tidiest: erasing ONE admin
+    // would delete the wording history that OTHER people's answers resolve
+    // through. An existence-only check would pass this.
+    queryRaw.mockResolvedValueOnce([
+      { def: 'FOREIGN KEY ("editorId") REFERENCES "user"(id) ON DELETE CASCADE' },
+    ]);
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find((p) => p.table === 'app_slot_definition_revision');
+
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
   it('keeps the framework probes when the leaf registers its own', () => {
     registerAppDriftProbes();
     const tables = getAppDriftProbes().map((p) => p.table);

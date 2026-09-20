@@ -131,6 +131,10 @@ const LEAF_EXCLUDED_MODELS = [
   // f-safety t-63 — the crisis resource: content, not people.
   'AppCrisisCopy',
   'AppCrisisRegion',
+  // f-slots t-70 — the slot taxonomy and its history: the questions, not the
+  // answers. What was learned about a person is a `framework_slot_value`.
+  'AppSlotDefinition',
+  'AppSlotDefinitionRevision',
 ];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
