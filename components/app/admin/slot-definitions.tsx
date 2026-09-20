@@ -67,8 +67,24 @@ import type {
   SlotUploadPlan,
 } from '@/lib/app/slots/definitions-admin';
 
-/** Dates are strings once serialised. */
-type Jsonified<T> = { [K in keyof T]: T[K] extends Date | null ? string | Date | null : T[K] };
+/**
+ * Dates are strings once serialised.
+ *
+ * The `Date` arm is tested **before** the nullable one, and that ordering is
+ * the point: a non-nullable `Date` also satisfies `Date | null`, so a single
+ * `extends Date | null` arm widened every date on these rows to include `null`
+ * — a value none of them can hold. That forced an `as string` at the one place
+ * a date is read, which is an `as` on API response data and against the house
+ * rule. Splitting the arms keeps the nullability the row actually declares and
+ * lets the cast go.
+ */
+type Jsonified<T> = {
+  [K in keyof T]: T[K] extends Date
+    ? string | Date
+    : T[K] extends Date | null
+      ? string | Date | null
+      : T[K];
+};
 type DefinitionJson = Jsonified<SlotDefinitionRow>;
 type RevisionJson = Jsonified<SlotRevisionRow>;
 
@@ -80,7 +96,19 @@ export interface SlotViewJson {
 
 type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
-/** The first message worth showing from an error envelope: a field's, else the top line. */
+/**
+ * The first message worth showing from an error envelope: a field's, else the
+ * top line.
+ *
+ * **Named by its field where it has one.** Both producers of this shape —
+ * `validateRequestBody` in `lib/api/validation.ts` and the upload's own
+ * `parseTaxonomyUploadFile` — build `path` as an already-joined string
+ * (`issue.path.join('.')`). Dropping it left a bare Zod string on screen:
+ * "Required" against a 200-line taxonomy file names nothing an admin can act
+ * on, which undercuts the upload's stated point that the admin reads the same
+ * errors the seed would. A refinement whose path is empty is self-describing
+ * and is shown unchanged.
+ */
 function errorMessage(error: { message: string; details?: unknown }): string {
   const details = error.details;
   if (details && typeof details === 'object' && 'errors' in details) {
@@ -89,7 +117,10 @@ function errorMessage(error: { message: string; details?: unknown }): string {
       const first: unknown = errors[0];
       if (first && typeof first === 'object' && 'message' in first) {
         const message = first.message;
-        if (typeof message === 'string') return message;
+        if (typeof message === 'string') {
+          const path = 'path' in first ? first.path : undefined;
+          return typeof path === 'string' && path !== '' ? `${path} — ${message}` : message;
+        }
       }
     }
   }
@@ -355,30 +386,47 @@ function DefinitionForm({
   onSaved: (definition: DefinitionJson, sync: SlotSyncOutcome, changed: string[]) => void;
   onError: (message: string) => void;
 }) {
+  /**
+   * The row this draft was made from — **not** the live `definition` prop.
+   *
+   * The prop moves on underneath an open form: opening the import panel does
+   * not close one, and an upload (or a retirement from the row's own button)
+   * re-reads the list at a new version while this form still holds a draft made
+   * from the old wording. Sending the *new* version with that *old* draft is a
+   * write the route cannot refuse — the conditional `updateMany` matches, and
+   * the import's wording is overwritten with nobody told. That is precisely the
+   * lost update `versionMoved` exists to prevent, arriving through the one door
+   * the lock does not watch.
+   *
+   * Snapshotting keeps the draft and the version it was derived from in step,
+   * so such a save is refused 409 and the admin reads "changed by someone else
+   * since you opened it" — with their own text still on screen to re-apply.
+   */
+  const [loaded, setLoaded] = useState(definition);
   const [draft, setDraft] = useState<DraftFields>(() => toDraft(definition));
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
-    // The version from the LOADED row, never from form state: it is what the
-    // route compares to decide whether someone else has saved since this form
-    // was opened.
     const result = await send<{
       definition: DefinitionJson;
       changed: string[];
       sync: SlotSyncOutcome;
-    }>('PUT', slotDefinitionEndpoint(definition.slug), {
+    }>('PUT', slotDefinitionEndpoint(loaded.slug), {
       ...toPayload(draft),
-      version: definition.version,
+      version: loaded.version,
     });
     setBusy(false);
     if (!result.ok) return onError(result.message);
+    // This form now stands on the version it just wrote, so a second save in a
+    // row names that one rather than the version the form was opened at.
+    setLoaded(result.data.definition);
     onSaved(result.data.definition, result.data.sync, result.data.changed);
   }
 
   return (
     <form
-      aria-label={`Edit ${definition.slug}`}
+      aria-label={`Edit ${loaded.slug}`}
       className="grid gap-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
@@ -386,8 +434,8 @@ function DefinitionForm({
       }}
     >
       <div className="sm:col-span-2">
-        <FieldRow id={`${definition.slug}-slug`} label="Slug" help={HELP.slug}>
-          <Input id={`${definition.slug}-slug`} value={definition.slug} disabled readOnly />
+        <FieldRow id={`${loaded.slug}-slug`} label="Slug" help={HELP.slug}>
+          <Input id={`${loaded.slug}-slug`} value={loaded.slug} disabled readOnly />
           <p className="text-muted-foreground text-xs">
             Permanent. To rename, add a data slot under the new name and retire this one — the
             answers already given stay readable under this one.
@@ -396,13 +444,9 @@ function DefinitionForm({
       </div>
 
       <div className="sm:col-span-2">
-        <FieldRow
-          id={`${definition.slug}-description`}
-          label="What it means"
-          help={HELP.description}
-        >
+        <FieldRow id={`${loaded.slug}-description`} label="What it means" help={HELP.description}>
           <Textarea
-            id={`${definition.slug}-description`}
+            id={`${loaded.slug}-description`}
             rows={4}
             maxLength={MAX_DESCRIPTION_LENGTH}
             value={draft.description}
@@ -413,7 +457,7 @@ function DefinitionForm({
       </div>
 
       <ClassifierFields
-        idPrefix={definition.slug}
+        idPrefix={loaded.slug}
         draft={draft}
         groups={groups}
         disabled={busy}
@@ -421,14 +465,17 @@ function DefinitionForm({
       />
 
       <div className="flex items-center gap-2 sm:col-span-2">
+        {/* The version this form will name, which is the one its draft was made
+            from — so the button cannot advertise a version the save is not
+            sending. */}
         <Button type="submit" disabled={busy}>
-          Save v{definition.version}
+          Save v{loaded.version}
         </Button>
         <Button
           type="button"
           variant="ghost"
           disabled={busy}
-          onClick={() => setDraft(toDraft(definition))}
+          onClick={() => setDraft(toDraft(loaded))}
         >
           Undo my changes
         </Button>
@@ -566,7 +613,7 @@ function HistoryList({ slug, onError }: { slug: string; onError: (message: strin
           <div className="flex flex-wrap items-center gap-2">
             <strong>v{revision.version}</strong>
             <span className="text-muted-foreground text-xs">
-              <ClientDate date={new Date(revision.changedAt as string)} />
+              <ClientDate date={new Date(revision.changedAt)} />
             </span>
             <span className="text-muted-foreground text-xs">
               {/* `origin` is what distinguishes the seed from an admin whose
@@ -628,6 +675,27 @@ function PlanSummary({ plan }: { plan: SlotUploadPlan }) {
 /** A sentinel, because `undefined` and `null` are both valid JSON documents. */
 const UNPARSEABLE = Symbol('unparseable');
 
+/** The name the server gave the download, so the filename stays its decision. */
+const EXPORT_FALLBACK_FILENAME = 'lelanea-slot-taxonomy.json';
+
+function exportFilename(response: Response): string {
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  return /filename="([^"]+)"/.exec(disposition)?.[1] ?? EXPORT_FALLBACK_FILENAME;
+}
+
+/**
+ * How long the blob URL outlives the click.
+ *
+ * Not zero, and this is borrowed rather than reasoned out again: Chrome
+ * resolves a blob URL synchronously, but Firefox and Safari begin the read
+ * asynchronously, so a URL revoked on the next tick fails a large download with
+ * a network error while the page says it saved. `components/app/account/
+ * export-data-row.tsx` found that in its own review and settled on the minute
+ * the file-saver libraries use; an export of 1000 slots is the same shape of
+ * payload, so it gets the same treatment.
+ */
+const REVOKE_AFTER_MS = 60_000;
+
 function UploadPanel({
   onApplied,
   onError,
@@ -639,6 +707,50 @@ function UploadPanel({
   const [mode, setMode] = useState<SlotUploadMode>('merge');
   const [plan, setPlan] = useState<SlotUploadPlan | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  /**
+   * Fetch the file, then hand it to the browser — **not** a plain
+   * `<a href download>`.
+   *
+   * A link was the first shape here, justified as "the way the waitlist export
+   * is reached". That precedent was the wrong one to follow: the waitlist is
+   * the **outlier**, and every other download in this tree — Sunrise's backup
+   * panel, its agent export, and our own Art. 15 row — already fetches. This is
+   * the house pattern, not a departure from it.
+   *
+   * The reason is that this route can refuse: `nothing_to_export` when every
+   * slot is retired, and `unexportable` when a hand-edited classifier is
+   * outside the vocabulary. A link answers a 409 by saving the JSON error
+   * envelope to disk and leaving the page silent — and `unexportable` is the
+   * case whose message *names the offending rows*, so it is the one an admin
+   * most needs to read. `components/app/account/export-data-row.tsx` documents
+   * the identical lesson from t-11, where navigating to an Art. 15 route put a
+   * raw `{"success":false,…}` in a tab.
+   */
+  async function download() {
+    setExporting(true);
+    try {
+      const response = await fetch(SLOT_TAXONOMY_EXPORT_ENDPOINT, {
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        const parsed = await parseApiResponse<unknown>(response);
+        onError(parsed.success ? 'The export failed.' : errorMessage(parsed.error));
+        return;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = exportFilename(response);
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+    } catch {
+      onError('The export did not reach the server. Nothing was downloaded.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   /**
    * The file is parsed by the route, not here — one schema, one set of
@@ -705,14 +817,17 @@ function UploadPanel({
             including them would bring them back on the next import.
           </p>
         </div>
-        {/* A plain link, as the waitlist export is reached: the response is an
-            attachment, and the browser's own download handles it better than
-            anything written here would. */}
-        <Button asChild variant="secondary" className="shrink-0">
-          <a href={SLOT_TAXONOMY_EXPORT_ENDPOINT} download>
-            <Download className="mr-1 h-4 w-4" aria-hidden />
-            Download
-          </a>
+        {/* Fetched rather than linked, so a refusal is read rather than saved
+            to disk — see `download()` above. */}
+        <Button
+          type="button"
+          variant="secondary"
+          className="shrink-0"
+          disabled={exporting}
+          onClick={() => void download()}
+        >
+          <Download className="mr-1 h-4 w-4" aria-hidden />
+          {exporting ? 'Preparing…' : 'Download'}
         </Button>
       </div>
 

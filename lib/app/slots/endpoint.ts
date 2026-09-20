@@ -42,9 +42,13 @@ export const SLOT_TAXONOMY_UPLOAD_ENDPOINT = `${SLOT_DEFINITIONS_ENDPOINT}/uploa
 /**
  * Download the taxonomy as a file the upload above accepts. `GET`.
  *
- * A plain link rather than a fetch, the way the waitlist export is reached: the
- * response is an attachment, and the browser's own download is a better handler
- * for it than anything the panel would write.
+ * Reached by a fetch, not by a plain link — which is what every other download
+ * in this tree already does; the waitlist export is the one outlier, and it was
+ * the precedent this originally copied. The route refuses in two cases
+ * (`nothing_to_export`, `unexportable`), and a link answers a refusal by saving
+ * the JSON error envelope to disk while the page says nothing. The panel
+ * fetches, hands a successful body to the browser as a blob under the filename
+ * this route sets, and shows a refusal where every other error appears.
  */
 export const SLOT_TAXONOMY_EXPORT_ENDPOINT = `${SLOT_DEFINITIONS_ENDPOINT}/export`;
 

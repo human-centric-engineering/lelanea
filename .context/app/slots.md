@@ -253,8 +253,11 @@ as the seed.
 
 **Locations:** `lib/app/slots/definitions-admin.ts` (the store) ·
 `lib/app/slots/validation.ts` (the schemas) · `lib/app/slots/endpoint.ts` (the
-paths) · `app/api/v1/admin/app/slots/**` (six handlers) ·
+paths) · `app/api/v1/admin/app/slots/**` (eight handlers in seven files) ·
 `app/admin/app/slots/page.tsx` + `components/app/admin/slot-definitions.tsx`
+
+**This table is the roster.** Count the surface from here, not from the ordinal
+in the line above — and if you add a route, add its row.
 
 | Route                           | Does                                                               |
 | ------------------------------- | ------------------------------------------------------------------ |
@@ -265,10 +268,19 @@ paths) · `app/api/v1/admin/app/slots/**` (six handlers) ·
 | `GET .../slots/[slug]/history`  | every past version, newest first                                   |
 | `POST .../slots/upload/preview` | what a file would do                                               |
 | `POST .../slots/upload`         | do it                                                              |
+| `GET .../slots/export`          | the taxonomy as a file the upload accepts ("Export" below)         |
 
 All `withAdminAuth`. Rate limiting is the `admin` section tier in `proxy.ts`;
-no handler adds a per-flow cap, including the upload — it is bounded by the
-taxonomy's size and is a no-op on a repeat.
+no handler adds a per-flow cap, including the upload, which is a no-op on a
+repeat.
+
+**What bounds an uploaded file is the schema, not the platform.** There is no
+platform-wide body-size ceiling — `lib/api/multipart-guard.ts` guards
+`request.formData()` only, and both upload routes' docblocks once claimed a
+ceiling that does not exist. The bound is `slotTaxonomyFileSchema.slots`,
+`.min(1).max(1000)`, and it lives on the schema so the preview, the apply, the
+seed and the export's round-trip check all inherit the same one. The upload's
+work is bounded by the file, not by the stored taxonomy.
 
 ### The store is not the provider, and its reader is not `listSlotDefinitions`
 
@@ -367,6 +379,26 @@ retirements retired — and plans nothing.
 `GET .../slots/export` answers a JSON attachment in the **same format the
 upload accepts**, so export → edit → import is a real round trip rather than
 two formats that resemble each other.
+
+**The panel fetches it; it is not a plain `<a href download>`.** A link was the
+first shape, justified as following the waitlist export — but that is the wrong
+precedent: the waitlist is the **outlier**, and every other download in the tree
+(Sunrise's backup panel and agent export, our own Art. 15 row in
+`components/app/account/export-data-row.tsx`) already fetches.
+
+The reason is that this route refuses in the two cases below, and a link answers
+a refusal by saving the JSON error envelope to disk while the page stays silent.
+`unexportable`'s message is the one that _names the offending rows_, so it is
+the message that most has to be read. `export-data-row.tsx` records the same
+lesson from t-11, where navigating to an Art. 15 route put a raw
+`{"success":false,…}` in a tab — including the detail that the blob URL must
+outlive the click (Firefox and Safari read it asynchronously), which is why both
+revoke after a minute rather than on the next tick.
+
+**`components/app/admin/waitlist-table.tsx` still has the plain link** and the
+same latent gap. It is ours — absent from both upstreams — so there is nothing
+to file upstream; it is a follow-up on this codebase, deliberately not bundled
+into t-71.
 
 That is an **invariant, not an intention**: `exportTaxonomyFile()` parses what
 it is about to return with `slotTaxonomyFileSchema` — the seed's own schema —

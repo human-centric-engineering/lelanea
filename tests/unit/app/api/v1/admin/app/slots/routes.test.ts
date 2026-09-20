@@ -465,6 +465,33 @@ describe('uploading', () => {
     );
   });
 
+  it('names every reword too, so the log says which slots the file changed', async () => {
+    // The third of the plan's three write lists. Creates and retirements are
+    // named above; an upload that only rewords is the ordinary case — a file
+    // edited and brought back — and counting it would leave the log unable to
+    // answer "which slot did that import reword?" after the fact.
+    admin.applyTaxonomyUpload.mockResolvedValueOnce({
+      plan: {
+        ...EMPTY_PLAN,
+        updates: [{ slug: 'life_work' }, { slug: 'life_money' }],
+      },
+      sync: SYNCED,
+    });
+
+    await applyUpload(req('POST', '/upload', { mode: 'merge', file: { slots: [] } }));
+
+    expect(admin.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'app_slot_definition.upload',
+        metadata: expect.objectContaining({
+          updated: ['life_work', 'life_money'],
+          created: [],
+          retired: [],
+        }),
+      })
+    );
+  });
+
   it('writes no audit entry when a re-applied file wrote nothing', async () => {
     await applyUpload(req('POST', '/upload', { mode: 'merge', file: { slots: [] } }));
 

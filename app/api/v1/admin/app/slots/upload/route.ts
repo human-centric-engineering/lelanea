@@ -12,9 +12,11 @@
  * Idempotent, by construction: every write is driven by
  * `changedDefinitionFields()`, so a second apply of the same file plans nothing.
  *
- * Rate limiting: the `admin` section tier from `proxy.ts`. No per-flow cap —
- * see the preview route's note; the work is bounded by the taxonomy's size, and
- * a repeat is a no-op.
+ * Rate limiting: the `admin` section tier from `proxy.ts`. No per-flow cap — a
+ * repeat is a no-op. The work is bounded by the *file*, not by the stored
+ * taxonomy, and what bounds the file is `slotTaxonomyFileSchema.slots`
+ * (`.max(1000)`) rather than any platform ceiling: see the preview route's
+ * note, which corrects the claim both of these once made.
  *
  * @see lib/app/slots/definitions-admin.ts
  */

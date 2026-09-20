@@ -42,12 +42,14 @@ import { slotSlugSchema } from '@/lib/app/slots/validation';
  * A slug is lower-case, digits and underscores. Immutable once seeded — it is
  * what a captured `framework_slot_value.slotSlug` points at.
  *
- * Read from `lib/validations/app-slot-definitions.ts` rather than declared here
- * (t-71): the editor writes slugs into the same column this file seeds, so one
- * rule has to govern both or a file the seed accepts and a slug the editor
- * accepts drift apart. It lives over there because a client component may
- * import the validation schemas, and importing them from *here* would pull this
- * module's 60KB of bundled JSON into the browser with them.
+ * Read from `lib/app/slots/validation.ts` rather than declared here (t-71): the
+ * editor writes slugs into the same column this file seeds, so one rule has to
+ * govern both or a file the seed accepts and a slug the editor accepts drift
+ * apart. It lives over there because a client component may import the
+ * validation schemas, and importing them from *here* would pull this module's
+ * 60KB of bundled JSON into the browser with them. (That module's own header
+ * records why it is not under `lib/validations/`, which is where this pointer
+ * used to send you.)
  */
 const slugSchema = slotSlugSchema;
 
@@ -91,7 +93,18 @@ export const slotTaxonomyFileSchema = z
       }),
     // Deliberately `.min(1)`: an empty taxonomy is a mistake in this file, and
     // the seed's own "safe on empty" guarantee is about the DATABASE, not here.
-    slots: z.array(slotSchema).min(1),
+    //
+    // `.max()` because this schema is the only thing standing between the admin
+    // upload routes and an unbounded `createMany` inside one transaction: there
+    // is no platform-wide body-size ceiling (`lib/api/multipart-guard.ts` guards
+    // `request.formData()` only), and the routes' docblocks wrongly claimed
+    // there was. It belongs here rather than in a route so the preview, the
+    // apply, the seed and the export's round-trip check all inherit the same
+    // bound. 1000 against today's 53 is headroom, not a target.
+    slots: z
+      .array(slotSchema)
+      .min(1)
+      .max(1000, 'a taxonomy file may not declare more than 1000 slots'),
   })
   // Referential checks, the way the foundational-document loader checks its own
   // cross-references. Both run on the real file in

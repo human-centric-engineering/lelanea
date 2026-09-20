@@ -11,9 +11,15 @@
  * same function.
  *
  * Rate limiting: the `admin` section tier from `proxy.ts`. No per-flow cap. This
- * parses a JSON body and runs one `findMany` — the body-size ceiling the
- * platform applies to every route is what bounds it, and an admin previewing
+ * parses a JSON body and runs one `findMany`, and an admin previewing
  * repeatedly is the flow working.
+ *
+ * **What bounds the body is the schema, not the platform.** An earlier draft of
+ * this note claimed "the body-size ceiling the platform applies to every route"
+ * — there is no such ceiling: `lib/api/multipart-guard.ts` guards
+ * `request.formData()` only. The real bound is `slotTaxonomyFileSchema.slots`,
+ * which is `.min(1).max(1000)`, and it sits on the schema precisely so this
+ * route and the apply beside it inherit the same one.
  *
  * @see lib/app/slots/definitions-admin.ts
  */
