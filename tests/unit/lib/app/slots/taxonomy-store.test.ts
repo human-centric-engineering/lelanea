@@ -38,7 +38,6 @@ import {
 function row(overrides: Partial<StoredSlotDefinition> = {}): StoredSlotDefinition {
   return {
     slug: 'aspirations',
-    version: 1,
     group: 'the_person',
     description: 'What they are reaching for.',
     visibility: 'open',
@@ -78,7 +77,6 @@ describe('loadGlobalSlotDefinitions', () => {
     expect(definition).not.toHaveProperty('scope');
     // `isActive` likewise: the sync derives it from presence or absence.
     expect(definition).not.toHaveProperty('isActive');
-    expect(definition).not.toHaveProperty('version');
   });
 
   it('asks the database for active rows only', async () => {

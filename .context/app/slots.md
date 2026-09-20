@@ -205,8 +205,18 @@ as the seed.
 ## What is not here yet
 
 - **The editor** — t-71. Adding, rewording and retiring a definition, and seeing
-  every past version. `listSlotDefinitions()` and `changedDefinitionFields()`
-  are here for it; the write path is not.
+  every past version. `changedDefinitionFields()` is here for it — it is the
+  executable form of the change rule above — but the read and write paths are
+  not, deliberately: the editor's list needs the revision join, and guessing at
+  that shape now would have shipped an API t-71 then had to change.
+
+  **Name its reader carefully.** `lib/framework/data-slots/queries.ts` already
+  exports a `listSlotDefinitions()`, reachable from the framework barrel, and it
+  reads `framework_slot_definition` — the projection, with no history and no
+  way to tell _our_ retirement from a deactivation. A leaf function by that name
+  is one import away from being the wrong one. An earlier draft of this task had
+  exactly that collision; `/code-review` removed it.
+
 - **Capture** — t-72. `fill_slot` writing a value with its provenance and
   confidence, once per turn.
 - **The panel** — where the picture assembles for the person it is about.

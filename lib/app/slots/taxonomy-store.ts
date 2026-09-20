@@ -61,9 +61,11 @@ import {
  * The definition fields a revision snapshots — the whole authored surface,
  * minus the slug (the identity, which never changes) and the version.
  *
- * Derived rather than hand-listed so a new authored column is added in one
- * place and flows to the snapshot, the diff and the store's reads. Same
- * discipline as the framework sync's `ResolvedSlotDefinition`.
+ * One list rather than three, so a new authored column is added in one place
+ * and flows to the snapshot, the diff and the seed's v1 `changedFields`. Same
+ * discipline as the framework sync's `ResolvedSlotDefinition` — and pinned
+ * against the model itself in this module's test, because a constant that
+ * merely *looks* derived drifts the moment someone adds a column.
  */
 export const SLOT_DEFINITION_FIELDS = [
   'group',
@@ -90,10 +92,15 @@ export interface StoredSlotDefinitionFields {
   isActive: boolean;
 }
 
-/** One stored definition, with its identity and current version. */
+/**
+ * One stored definition, as the provider reads it.
+ *
+ * No `version`: nothing here reads it. The editor (t-71) will, and it can widen
+ * this and {@link DEFINITION_SELECT} together — a select that fetches a column
+ * no caller reads is how a type and a query start disagreeing.
+ */
 export interface StoredSlotDefinition extends StoredSlotDefinitionFields {
   slug: string;
-  version: number;
 }
 
 function isKnown<T extends Record<string, string>>(
@@ -138,7 +145,6 @@ function toSlotDefinitionInput(
 
 const DEFINITION_SELECT = {
   slug: true,
-  version: true,
   group: true,
   description: true,
   visibility: true,
