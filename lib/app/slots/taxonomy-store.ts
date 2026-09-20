@@ -173,22 +173,38 @@ export async function loadGlobalSlotDefinitions(): Promise<SlotDefinitionInput[]
   });
 
   const definitions: SlotDefinitionInput[] = [];
+  const withheld: string[] = [];
   for (const row of rows) {
     const result = toSlotDefinitionInput(row);
     if ('unknownField' in result) {
-      // Withholding is not neutral: the sync's deactivate pass works from the
-      // slugs it was handed, so a withheld slug has its projection DEACTIVATED
-      // — the slot stops being asked. That is the right way to fail (an
-      // unrecognised classifier must not reach the capture prompt), but it is a
-      // retirement nobody asked for, so the log says so rather than implying
-      // the row was merely skipped.
+      withheld.push(row.slug);
       logger.error(
-        'loadGlobalSlotDefinitions: stored slot definition has an unrecognised classifier — withheld from the framework sync, which will DEACTIVATE its projection until the value is corrected',
+        'loadGlobalSlotDefinitions: stored slot definition has an unrecognised classifier — withheld from the framework sync',
         { slug: row.slug, field: result.unknownField, value: result.value }
       );
       continue;
     }
     definitions.push(result.input);
+  }
+
+  // What withholding COSTS depends on whether anything survived, and the two
+  // outcomes are opposites — so say which one happened rather than asserting
+  // the commoner of them.
+  //
+  // Some survived: the sync's deactivate pass works from the slugs it was
+  // handed, so each withheld slug has its projection deactivated and the slot
+  // stops being asked. A retirement nobody asked for, but it fails closed.
+  //
+  // NONE survived: the pass reads an empty provider as a fluke and returns
+  // before it opens a transaction, so nothing is deactivated and every stale
+  // projection stays ACTIVE — the slots keep being asked under their old
+  // wording. That is the failure-open case, and it is the one worth shouting
+  // about. `/code-review` caught the log claiming deactivation here too.
+  if (withheld.length > 0 && definitions.length === 0) {
+    logger.error(
+      'loadGlobalSlotDefinitions: EVERY active definition was withheld — the framework sync treats an empty provider as a fluke, so no projection is deactivated and the stale ones stay live. Correct the classifiers; the taxonomy is not being reconciled.',
+      { withheld }
+    );
   }
 
   return definitions;

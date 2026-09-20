@@ -23,9 +23,20 @@
  * **Safe on empty.** It only ever adds rows. No removal pass, at either tier:
  * the framework's global pass writes nothing when the provider returns nothing.
  *
- * **Idempotent.** The second run reads one row, writes none, and still re-syncs
- * — the sync is itself guarded by a field diff, so it writes nothing when
- * nothing changed.
+ * **Idempotent** in the only sense that is reachable: if this unit runs again it
+ * reads one row and writes none. Note that "runs again" is rarer than it sounds
+ * — `prisma/runner.ts` skips any unit whose source hash matches its
+ * `SeedHistory` row, and this one declares no `hashInputs`, so on a database it
+ * has already applied to, `db:seed` never enters `run()` at all. Only editing
+ * THIS FILE, or `db:reset`, brings it back.
+ *
+ * **So re-seeding is not how a lost projection is repaired**, whatever it looks
+ * like from the outside. If `framework_slot_definition` loses its global rows —
+ * restored from an older dump, say — `db:seed` prints `unchanged, skipping` and
+ * changes nothing. What repairs it is a **server boot**, whose
+ * `syncRegisteredSlotDefinitions()` runs the same global pass, or `db:reset`.
+ * An earlier version of this docblock claimed the repair, and `/code-review`
+ * caught that the runner makes it unreachable.
  *
  * ## Why it calls the sync itself
  *
@@ -74,6 +85,12 @@ const unit: SeedUnit = {
     const existing = await prisma.appSlotDefinition.findFirst({
       select: { slug: true },
     });
+    // "We actually created rows", not "the table was empty" — with a file that
+    // declares no slots the two differ, and only the first makes a non-`synced`
+    // sync status a failure. The shipped file is schema-guarded non-empty, so
+    // this is belt-and-braces; it is also what stops the guard below firing on
+    // a state where nothing is wrong.
+    let wroteDefinitions = false;
     if (existing) {
       const [total, active] = await Promise.all([
         prisma.appSlotDefinition.count(),
@@ -129,25 +146,44 @@ const unit: SeedUnit = {
         }),
       ]);
 
+      wroteDefinitions = file.slots.length > 0;
       const hidden = file.slots.filter((s) => s.visibility === 'hidden').length;
       logger.info(
         `🧬 Seeded the slot taxonomy: ${file.slots.length} definitions in ${file.groups.length} groups (${hidden} hidden), each at v1 (${file.taxonomy.provenance.status})`
       );
     }
 
-    // Project into `framework_slot_definition`, on both paths: a fresh seed has
-    // rows the boot pass could not see, and a re-run repairs a database where
-    // the projection was lost (a framework table restored from an older dump).
-    // Throws on failure rather than warning — a seed that reports success while
-    // the taxonomy reached no agent is the failure this is guarding against.
+    // Project into `framework_slot_definition`. On a fresh seed this is the call
+    // that makes the taxonomy reachable at all: the boot pass already ran, one
+    // unit earlier, against a table that was still empty.
     const result = await syncGlobalSlotDefinitions();
     if (result.status === 'synced') {
       logger.info(
         `🔗 Global slot sync: ${result.provided} provided, ${result.created} created, ${result.updated} updated, ${result.deactivated} deactivated`
       );
-    } else {
-      logger.info(`🔗 Global slot sync: nothing written (${result.status})`);
+      return;
     }
+
+    // Anything else means the definitions we just wrote reached no agent, and a
+    // seed that records success in that state is the exact silent failure this
+    // call exists to prevent — the taxonomy would be absent with nothing saying
+    // so until someone noticed she was asking nothing. A THROW, not a warning:
+    // an unthrown status lets the runner stamp `SeedHistory`, after which this
+    // unit is skipped forever and the repair never runs.
+    //
+    // Only on the path that wrote rows. On the skip path `empty` is reachable
+    // without anything being wrong — an admin who has retired every slot — and
+    // the framework's own safe-on-empty note says that last retirement is not
+    // propagated.
+    if (wroteDefinitions) {
+      throw new Error(
+        `Global slot sync returned "${result.status}" after seeding the taxonomy: ` +
+          'the definitions were written but no framework projection was made, so ' +
+          'nothing can read them. Check that lib/app/leaf-bootstrap.ts still ' +
+          'registers the global slot definition provider.'
+      );
+    }
+    logger.warn(`🔗 Global slot sync: nothing written (${result.status})`);
   },
 };
 

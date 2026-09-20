@@ -303,4 +303,32 @@ describe('011-slot-taxonomy — a failing sync', () => {
     syncGlobalSlotDefinitions.mockRejectedValueOnce(new Error('sync exploded'));
     await expect(run()).rejects.toThrow('sync exploded');
   });
+
+  it.each(['no_provider', 'empty'] as const)(
+    'throws on a "%s" status after writing definitions, rather than logging it',
+    async (status) => {
+      // The status the unit CANNOT let past. It has just written 53 active
+      // rows, so anything but `synced` means they reached no projection — and a
+      // status that only gets logged lets the runner stamp `SeedHistory`, after
+      // which this unit is skipped forever and the repair never runs.
+      syncGlobalSlotDefinitions.mockResolvedValueOnce({ status } as never);
+
+      await expect(run()).rejects.toThrow(/no framework projection was made/);
+      // The definitions were still written — the throw is about the projection,
+      // and the next run (after the file changes) finds them and re-syncs.
+      expect(definitions.length).toBeGreaterThan(0);
+    }
+  );
+
+  it('only WARNS on an empty status when it wrote nothing', async () => {
+    // On the skip path `empty` is reachable with nothing wrong: an admin who
+    // has retired every slot. Throwing there would fail a seed over a state the
+    // framework documents as supported.
+    await run();
+    vi.clearAllMocks();
+    syncGlobalSlotDefinitions.mockResolvedValueOnce({ status: 'empty' } as never);
+
+    await expect(run()).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('nothing written'));
+  });
 });

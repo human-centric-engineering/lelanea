@@ -121,6 +121,46 @@ describe('loadGlobalSlotDefinitions', () => {
     }
   );
 
+  it('shouts when EVERY row is withheld, because that case fails OPEN', async () => {
+    // The opposite outcome to the one above, and the dangerous one. With no
+    // survivor the sync reads an empty provider as a fluke and returns before
+    // opening a transaction — so nothing is deactivated and every stale
+    // projection stays live, the slots still being asked under their old
+    // wording. The per-row error alone would read as "two slots retired".
+    findMany.mockResolvedValue([
+      row({ slug: 'bad_one', mode: 'freeform' }),
+      row({ slug: 'bad_two', sensitivity: 'very_secret' }),
+    ]);
+
+    await expect(loadGlobalSlotDefinitions()).resolves.toEqual([]);
+
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.stringContaining('EVERY active definition was withheld'),
+      { withheld: ['bad_one', 'bad_two'] }
+    );
+  });
+
+  it('does not shout that when something survived — then deactivation is real', async () => {
+    findMany.mockResolvedValue([row({ slug: 'good' }), row({ slug: 'bad', mode: 'freeform' })]);
+
+    await loadGlobalSlotDefinitions();
+
+    expect(loggerError).not.toHaveBeenCalledWith(
+      expect.stringContaining('EVERY active definition was withheld'),
+      expect.anything()
+    );
+  });
+
+  it('does not shout on an unseeded table — nothing was withheld', async () => {
+    // Empty because there is nothing there, not because everything failed
+    // validation. Those must not log the same way.
+    findMany.mockResolvedValue([]);
+
+    await loadGlobalSlotDefinitions();
+
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
   it('does not swallow a read failure', async () => {
     // The sync logs a provider fault at boot and rethrows it on an on-demand
     // re-sync, which is what the caller who asked for the re-sync needs to see.

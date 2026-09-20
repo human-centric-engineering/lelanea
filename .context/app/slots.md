@@ -162,6 +162,23 @@ server.
 It also calls `initLeafApp()` first, because the boot unit that would otherwise
 have registered the provider is skipped on an incremental `db:seed`.
 
+If that sync does not report `synced` on a run that just wrote definitions, the
+unit **throws**. The rows exist but nothing can read them, and a status that was
+merely logged would let the runner stamp `SeedHistory` — after which the unit is
+skipped forever and the repair never runs.
+
+### Re-seeding does not repair a lost projection
+
+`prisma/runner.ts` skips any unit whose source hash matches its `SeedHistory`
+row, and this unit declares no `hashInputs`. So on a database it has already
+applied to, **`db:seed` never enters `run()` at all** — it prints
+`unchanged, skipping`.
+
+That matters most in the case you would reach for it. If
+`framework_slot_definition` loses its global rows — restored from an older dump,
+say — re-seeding changes nothing. What repairs it is a **server boot**, whose
+`syncRegisteredSlotDefinitions()` runs the same global pass, or `db:reset`.
+
 **After merging a change to the taxonomy file, reseed each database** — and
 reseeding only helps a database that was never seeded. See
 [`sunrise.mcp-reseed`](../../CLAUDE.md) for the general shape of this trap.
@@ -177,6 +194,15 @@ slug and the sync would dutifully reactivate its projection.
 
 **Do not hand the sync a `scope`.** It stamps `global` itself. Supplying one
 would put a second copy of the partition key in the payload.
+
+**Do not read "row withheld" as "slot retired" — it depends on what survived.**
+A stored row whose free-form classifier the framework does not recognise is
+dropped rather than passed on. If other rows survived, the sync deactivates that
+slug's projection and the slot stops being asked: fail-closed, which is what we
+want. If **every** row was withheld, the sync reads the empty provider as a
+fluke, opens no transaction, and every stale projection stays **active** — the
+slots keep being asked under their old wording. That is the fail-**open** case,
+and `loadGlobalSlotDefinitions()` logs it distinctly for exactly that reason.
 
 **Do not hand the sync retired rows.** Withholding them _is_ the retirement
 mechanism. `loadGlobalSlotDefinitions()` filters on `isActive: true`, and that
