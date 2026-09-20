@@ -107,6 +107,23 @@ export function registerLeafDriftProbes(): void {
   });
 
   registerAppDriftProbe({
+    name: 'app_turn_slot_write_turnId_fkey (hand-written FK → app_turn)',
+    kind: 'FK constraint',
+    table: 'app_turn_slot_write',
+    // Prisma DOES model this relation, unlike the others in this file — the
+    // probe is here because the migration is hand-written (`migrate dev` cannot
+    // run against this tree; see the migration's own note), so nothing
+    // regenerates the constraint if it is lost.
+    //
+    // `ON DELETE CASCADE` is the second link of this table's Art. 17 chain:
+    // `user` → `app_turn` → here (f-slots t-72). With `NO ACTION`, erasing an
+    // account would fail with `P2003` for anyone who ever had something noted
+    // about them, and the failure would surface in `eraseUser()` — two tables
+    // away from the row that caused it.
+    probe: constraintExists('app_turn_slot_write_turnId_fkey', 'ON DELETE CASCADE'),
+  });
+
+  registerAppDriftProbe({
     name: 'app_safety_event_userId_fkey (hand-written FK → user)',
     kind: 'FK constraint',
     table: 'app_safety_event',

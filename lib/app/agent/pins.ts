@@ -36,6 +36,7 @@
  */
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
+import { readableSlotGroups } from '@/lib/app/content/slot-taxonomy';
 import {
   PINNED_MODEL,
   PINNED_MODEL_CAPABILITIES,
@@ -136,37 +137,125 @@ export const VOICE_INPUT_CHANGE_SUMMARY = 'Voice input switched on (seeded — �
  * produces a confident claim to have looked, and a tool with no instruction is
  * one she may never reach for.
  */
-export const GRANTED_CAPABILITY_SLUGS: readonly ReadOnlyCapabilitySlug[] = [
-  'search_knowledge_base',
-];
+export const GRANTED_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_knowledge_base'];
 
 /**
- * Every capability she may ever hold. Each one was read and found to change
- * nothing, and nothing else is on the list (f-safety t-60).
+ * What the slot-capture seed grants: she reads what is already understood about
+ * a person, and writes what she newly learns (f-slots t-72).
  *
- * Someone who talks her into deleting their account, their data or anything
- * else meets a tool set in which nothing deletes. That is enforced in two
- * places. **The chat path** refuses any tool name the model emits that is not in
- * her advertised set (`tool_not_advertised`, Sunrise's streaming handler).
- * **This list** is what that set may contain. `GRANTED_CAPABILITY_SLUGS` is typed
- * against it, so a grant outside it does not compile. Its test also names every
- * write capability the install ships and fails if one appears here.
+ * A separate list from `GRANTED_CAPABILITY_SLUGS` because these two bindings
+ * carry an exposure allowlist ({@link SLOT_EXPOSURE_CONFIG}) and 007's do not —
+ * the seeds are what differ, not the ceiling, and both lists are checked
+ * against {@link HER_CAPABILITY_SLUGS} by the same test.
  *
- * **Adding a slug is a security review, not an edit.** Read the capability's
- * `execute()` first. It belongs here only if nothing it does writes, deletes,
- * sends or spends on anyone's behalf.
+ * Granted together with the instruction that tells her when to write, for the
+ * reason `GRANTED_CAPABILITY_SLUGS` gives: a tool with no instruction is one she
+ * may never reach for, and an instruction with no tool produces a confident
+ * claim to have done it.
+ */
+export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state', 'fill_slot'];
+
+/**
+ * The exposure allowlist on both slot bindings — what she may read back, and
+ * what she may write (f-slots t-72).
+ *
+ * Daybreak's allowlist filters on a slot's `group` and `scope` only
+ * (`lib/framework/data-slots/capabilities/exposure.ts`), and the two facets are
+ * deliberately asymmetric here:
+ *
+ * - **No `write` facet, which is permissive.** Not an oversight, and not the
+ *   same as forgetting to restrict. An open-mode mint has no definition row, so
+ *   it has no group and no scope — and `facetAllows()` refuses a null group
+ *   against any named list. So ANY write restriction, however wide, also forbids
+ *   her inventing a slot. The owner ruled on 20 Sept 2026 that she may invent
+ *   one; that ruling and a `write` facet cannot both hold. What bounds her
+ *   writing is her instruction, until the admin-mode feature lands (idea #33).
+ * - **A `read` facet naming the groups whose slots are all visible.** §12:
+ *   development is "a tuning signal, never a grade. It must never rank, score,
+ *   or display that as a level." `visibility: hidden` is that mechanism, and
+ *   this is what keeps it true of the model as well as of the panel — she writes
+ *   a development slot and never reads one back, so it cannot reach a sentence
+ *   she says. The cost, accepted with the ruling: the same filter drops her own
+ *   mints, which have no group either, so she cannot read those back.
+ *
+ * **Derived from the bundled taxonomy, never typed out** — see
+ * {@link readableSlotGroups}.
+ */
+export const SLOT_EXPOSURE_CONFIG = {
+  read: { groups: readableSlotGroups() },
+} as const;
+
+/**
+ * The capabilities she holds that only read (f-safety t-60).
  *
  * `search_knowledge_base` reads chunks. It is mounted in this leaf as
  * `LabelledSearchKnowledgeCapability`, which adds an origin label to each
  * result and writes nothing. The query embedding it pays for is a cost row, not
  * a change to anyone's data.
  *
+ * `get_state` reads the head value of the caller's own slots, through
+ * Daybreak's `canRead` guard and this leaf's exposure allowlist
+ * ({@link SLOT_EXPOSURE_CONFIG}). It writes nothing and cannot reach another
+ * person's slots (f-slots t-72).
+ */
+export const READ_ONLY_CAPABILITY_SLUGS = ['search_knowledge_base', 'get_state'] as const;
+
+/**
+ * The one capability she holds that writes — and what makes it admissible
+ * (f-slots t-72).
+ *
+ * **The ceiling f-safety t-60 shipped was "she may only ever hold tools that
+ * read".** §11 needs her to record what she learns about a person as she learns
+ * it, so that rule had to be restated rather than quietly worked around. Owner
+ * ruling, 20 Sept 2026 — the ceiling is now:
+ *
+ * > Nothing she holds may **delete** anything, or act on **anyone else's**
+ * > behalf.
+ *
+ * `fill_slot` is admitted under it, and the argument is made here rather than
+ * assumed:
+ *
+ * - **Own profile only.** It writes `context.userId`'s slots and nothing else —
+ *   the framework's own docblock: "there is no cross-user write and no `canRead`
+ *   on this path". There is no argument by which one person's conversation
+ *   reaches another person's data.
+ * - **Appends, never overwrites.** `framework_slot_value` is insert-only; a
+ *   write is a new version beside the old one. Nothing it does is destructive,
+ *   and the previous reading stays readable and correctable.
+ * - **Sends and spends nothing on anyone's account.** No message leaves, no
+ *   order is placed. The one cost is the prose→typed extraction fallback on a
+ *   typed slot captured as prose (`extract.ts`), which is a cost row on this
+ *   install's own budget, like the search embedding above.
+ *
+ * So the sentence that mattered stays true: **someone who talks her into
+ * deleting their account, their data, or anything else still meets a tool set in
+ * which nothing deletes.**
+ *
+ * **Adding a slug here is a security review, not an edit** — the same bar as
+ * before, against the restated rule. Read the capability's `execute()` first,
+ * and write the argument down as this one is written down.
+ */
+export const SELF_WRITE_CAPABILITY_SLUGS = ['fill_slot'] as const;
+
+/**
+ * Every capability she may ever hold: what reads, plus the sanctioned writes.
+ *
+ * That is enforced in two places. **The chat path** refuses any tool name the
+ * model emits that is not in her advertised set (`tool_not_advertised`,
+ * Sunrise's streaming handler). **This list** is what that set may contain —
+ * every granted list is typed against it, so a grant outside it does not
+ * compile. Its test names every write capability the install ships and fails if
+ * one appears here that {@link SELF_WRITE_CAPABILITY_SLUGS} has not argued for.
+ *
  * What an operator binds in the admin UI is not stopped by a constant. The smoke
  * (`npm run smoke:app-misuse`) reads her advertised set on a real install and
  * fails if it holds anything outside this list.
  */
-export const READ_ONLY_CAPABILITY_SLUGS = ['search_knowledge_base'] as const;
-export type ReadOnlyCapabilitySlug = (typeof READ_ONLY_CAPABILITY_SLUGS)[number];
+export const HER_CAPABILITY_SLUGS = [
+  ...READ_ONLY_CAPABILITY_SLUGS,
+  ...SELF_WRITE_CAPABILITY_SLUGS,
+] as const;
+export type HerCapabilitySlug = (typeof HER_CAPABILITY_SLUGS)[number];
 
 /**
  * The guard modes her agent is pinned to: observe, never speak (f-safety t-60).

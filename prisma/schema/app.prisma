@@ -500,12 +500,62 @@ model AppTurn {
   startedAt          DateTime        @default(now())
   completedAt        DateTime?
 
+  /// Which slots this turn has already written — the retry guard (t-72).
+  slotWrites         AppTurnSlotWrite[]
+
   @@unique([userId, turnId])
   @@index([userId, startedAt])
   @@index([conversationId])
   /// The status read: the most recent turn anyone finished (§08 t-55).
   @@index([completedAt])
   @@map("app_turn")
+}
+
+/// One slot this turn has already written — so re-running the turn cannot write
+/// it a second time (f-slots t-72; product description §8.1).
+///
+/// **What goes wrong without it.** A turn that fails after its tool calls is
+/// settled `failed`, and the same id may run again (`turn-record.ts`). The
+/// second run calls the model from scratch, the model reaches the same
+/// conclusion about the same words, and `fill_slot` appends a SECOND version —
+/// `framework_slot_value` is insert-only and has no turn-scoped idempotency key
+/// of its own, so nothing below this stops it. The person said one thing once
+/// and their profile records them saying it twice, with two timestamps. §8.1
+/// says a retried turn cannot double-write the profile.
+///
+/// **The unique index is the guard, not a read-then-write.** Same shape as the
+/// turn claim one table up: `@@unique([turnId, slotSlug])` is what makes "this
+/// turn has already written this slot" a fact two concurrent dispatches cannot
+/// both miss. `version` is kept so the suppressed call can answer the model with
+/// the version that WAS written rather than an error — the reading is recorded,
+/// which is what the tool was asked to achieve.
+///
+/// **A child of `AppTurn`, keyed on its `id` and not on `(userId, turnId)`.**
+/// The turn row already carries the person, already has `ON DELETE CASCADE` to
+/// `user`, and is already declared as a subject-data source — so this table's
+/// Art. 17 disposition is the turn's, with no second hand-written FK to `user`
+/// and no second erasure story to keep in step. A row cannot outlive the turn it
+/// describes, and cannot describe a turn that is not this person's.
+///
+/// It is a **ledger of writes, not the writes themselves.** What was learned
+/// lives in `framework_slot_value`, which the framework tier declares; this says
+/// only that a write happened, so it is an exclusion in
+/// `lib/app/leaf-data-export.ts` rather than a source.
+model AppTurnSlotWrite {
+  id        String   @id @default(cuid())
+  turnId    String
+  turn      AppTurn  @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  /// The slot the turn filled. Not an FK: an open-mode mint has no definition
+  /// row, for the same reason `framework_slot_value.slotSlug` is not one.
+  slotSlug  String
+  /// The version `fill_slot` wrote, so a suppressed retry answers with it.
+  version   Int
+  /// Whether that write minted a new slug rather than filling an authored slot.
+  minted    Boolean
+  writtenAt DateTime @default(now())
+
+  @@unique([turnId, slotSlug])
+  @@map("app_turn_slot_write")
 }
 
 /// What kind of safety event a row records. `crisis` today; the misuse task

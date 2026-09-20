@@ -83,10 +83,61 @@ describe('the parts', () => {
     expect(accountDetail(input(), parts)).toMatch(/^Nothing was written from this turn\./);
   });
 
-  it('names a capability it has no words for rather than hiding it', () => {
-    const parts = accountParts(input({ capabilities: ['get_state', 'get_state'] }));
+  it('says she looked at what she already understands, without naming a slot', () => {
+    const parts = accountParts(input({ capabilities: ['get_state'] }));
     expect(parts).toEqual([
-      { key: 'other_capability', line: 'Used get state', detail: 'Used get state.' },
+      {
+        key: 'read_profile',
+        line: 'Looked at what she already understands about you',
+        detail: 'Looked at what she already understands about you.',
+      },
+    ]);
+  });
+
+  it('says what it added to the profile, and that the person can correct it', () => {
+    // The guardrail's own line: a capture is silent (D5), so without this the
+    // turn would learn something and say nothing about having done so.
+    const parts = accountParts(input({ capabilities: ['fill_slot'] }));
+    expect(parts).toEqual([
+      {
+        key: 'wrote_profile',
+        line: 'Added something to what she understands about you',
+        detail:
+          'Added something to what she understands about you. You can see it, and correct it.',
+      },
+    ]);
+  });
+
+  it('counts the writes, so three readings do not read as one', () => {
+    const parts = accountParts(input({ capabilities: ['fill_slot', 'fill_slot', 'fill_slot'] }));
+    expect(parts[0].line).toBe('Added 3 things to what she understands about you');
+  });
+
+  it('reads what it consulted before what it wrote, in one line', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['search_knowledge_base', 'get_state', 'fill_slot'],
+        citations: [citation],
+      })
+    );
+    expect(parts.map((part) => part.key)).toEqual(['looked_up', 'read_profile', 'wrote_profile']);
+    expect(accountLine(parts)).toBe(
+      'Looked something up in her material; Looked at what she already understands about you; Added something to what she understands about you'
+    );
+  });
+
+  it('names a capability it has no words for rather than hiding it', () => {
+    // A slug her seat cannot call today. `get_state` used to stand here and now
+    // has a sentence of its own, which is the whole point of this floor: the day
+    // a tool is granted before its words are written, it is named rather than
+    // hidden.
+    const parts = accountParts(input({ capabilities: ['request_transition', 'request_transition'] }));
+    expect(parts).toEqual([
+      {
+        key: 'other_capability',
+        line: 'Used request transition',
+        detail: 'Used request transition.',
+      },
     ]);
   });
 
@@ -98,7 +149,10 @@ describe('the parts', () => {
 
 describe('the line contains no system language', () => {
   it('names neither the model nor the seat, though both are in the data', () => {
-    const data = input({ capabilities: ['search_knowledge_base'], citations: [citation] });
+    const data = input({
+      capabilities: ['search_knowledge_base', 'get_state', 'fill_slot'],
+      citations: [citation],
+    });
     // The population: both really are in the data.
     expect(data.turn?.modelId).toBe('gpt-4o-mini-2024-07-18');
     expect(data.turn?.seat).toBe('facilitator');
@@ -109,6 +163,8 @@ describe('the line contains no system language', () => {
       expect(text).not.toContain('gpt-4o-mini');
       expect(text).not.toContain('facilitator');
       expect(text).not.toContain('search_knowledge_base');
+      expect(text).not.toContain('fill_slot');
+      expect(text).not.toContain('get_state');
     }
   });
 });

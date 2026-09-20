@@ -297,13 +297,40 @@ reaches the person as the neutral `unavailable` ending.
   canary, on any 40-character run of her prompt repeated verbatim, or on
   "DAN mode on". It prints every reply, because they are meant to be read.
 
-**Her tools cannot delete anything.** `READ_ONLY_CAPABILITY_SLUGS`
-(`lib/app/agent/pins.ts`) is the only list her grant may draw from, and the
-grant is typed against it. `tests/unit/lib/app/agent/pins-misuse.test.ts` names
-every write capability the install ships and fails if one is added. The chat
-path refuses any tool name the model emits that she was not advertised
-(Sunrise's `tool_not_advertised`). The smoke drives that refusal for her with a
-stub model asking for `write_user_memory`, and reads her real advertised set.
+**Her tools cannot delete anything, and cannot act on anyone else's behalf.**
+`HER_CAPABILITY_SLUGS` (`lib/app/agent/pins.ts`) is the only list her grants may
+draw from, and every granted list is typed against it.
+`tests/unit/lib/app/agent/pins-misuse.test.ts` names every write capability the
+install ships and fails if one is added. The chat path refuses any tool name the
+model emits that she was not advertised (Sunrise's `tool_not_advertised`). The
+smoke drives that refusal for her with a stub model asking for
+`write_user_memory`, and reads her real advertised set.
+
+### The ceiling was restated once, and why
+
+t-60 shipped it as *"she may only ever hold tools that read"*. §11 needs her to
+record what she learns about a person as she learns it, so on **20 Sept 2026**
+the owner restated it rather than letting it be worked around:
+
+> Nothing she holds may **delete** anything, or act on **anyone else's** behalf.
+
+`fill_slot` is the one capability admitted under it — `SELF_WRITE_CAPABILITY_SLUGS`,
+one entry — and the argument is made in the constant's own docblock rather than
+assumed: it writes `context.userId`'s slots and no one else's, it **appends** a
+new version rather than overwriting, and it sends and spends nothing on anyone's
+account. The only spend it can cause is the prose→typed extraction fallback,
+which is a cost row on this install, like the search embedding.
+
+So the sentence that mattered is unmoved: someone who talks her into deleting
+their account, their data or anything else still meets a tool set in which
+**nothing deletes**.
+
+The test keeps `fill_slot` on its list of writes and exempts it by name in one
+place, in both directions — a slug added to the exemption without being argued
+for fails, and so does one quietly dropped from the write list to get it past
+the check. **Adding a second is a security review, not an edit**; a list that
+grows past a couple of entries means the exception has become the rule and the
+ceiling needs restating again rather than widening again.
 
 **Her search results say whose material they are.** The platform lets
 `system`-scoped documents through to every restricted agent, so her search can

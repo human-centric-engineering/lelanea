@@ -188,6 +188,22 @@ export function initLeafSubjectSources(): void {
         reason:
           'Every past version of that list — the wording as it stood on a given date, which is how an answer you gave is read back against the words you were actually asked under. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
       },
+      {
+        // f-slots t-72. A ledger of writes, not the writes themselves — it
+        // exists so a retried turn cannot record one thing twice, and it holds
+        // a slug, a version number and a timestamp. What was actually learned
+        // is the slot VALUE, a framework table, and the turn it belongs to is
+        // this bundle's `turns` section. Returning this as well would hand a
+        // subject a third view of the same event, in the vocabulary of an
+        // index rather than of anything they said.
+        //
+        // Erasure is the turn's: the row is a child of `AppTurn` with
+        // `onDelete: Cascade`, and that turn cascades from `user`. There is no
+        // second disposition to keep in step.
+        model: 'AppTurnSlotWrite',
+        reason:
+          'A note that one of your conversation turns recorded something in your profile, kept only so that repeating a turn cannot record the same thing twice. What was recorded is in your profile, and the turn itself is in the conversations section of this bundle.',
+      },
     ],
   });
 }

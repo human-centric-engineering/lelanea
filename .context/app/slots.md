@@ -464,8 +464,121 @@ and type names.
   on the button, retired rows stay on the page, and Restore is one click.
 - **Choose `mode`.** Never offered; every row is written `targeted`.
 
+## Capture — she writes the profile herself (t-72)
+
+**Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/capabilities.ts`
+(the mount) · `lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`,
+`SLOT_EXPOSURE_CONFIG`) · `lib/app/voice/fingerprint.ts` (when to write) ·
+`prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
+`scripts/app/smoke-slot-capture.ts`
+
+She holds `get_state` and `fill_slot` and calls them inside her own tool loop.
+There is **no side extractor** — owner ruling at claim: a second model reading
+untrusted text with write access to the profile was rejected, and so was
+delaying `done` to run one.
+
+### The grant, and the two halves of the allowlist
+
+| Facet              | What it says                                 | Why                                                                        |
+| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------- |
+| `write`            | **absent** — she may write anything          | Any restriction also forbids minting; the owner ruled she may mint          |
+| `read` → `groups`  | every group whose slots are all `open`       | §12 — a `development` slot must never reach a sentence she says            |
+
+Daybreak's facet filters on `group` and `scope` only, and **a minted slug has
+neither**. `facetAllows()` refuses a null group against any named list, so a
+`write` facet — however wide — would silently switch minting off. The two
+cannot both hold, and the ruling chose minting. What bounds her writing is her
+instruction, not the allowlist.
+
+The read list is **derived** by `readableSlotGroups()`, never typed out, so
+marking a slot hidden is the whole act. That is only lossless while no group
+mixes `open` and `hidden` slots, which
+`tests/unit/lib/app/content/slot-taxonomy.test.ts` asserts for any taxonomy —
+not just today's.
+
+**The cost, accepted with the ruling:** the same filter drops null-group slots,
+so **she cannot read her own mints back**. The panel (t-73) reads by its own
+path, not through `get_state`.
+
+**The grant is operator-owned and filled once**, like 007's: created with its
+config, and thereafter left alone — switched off, narrowed, widened or cleared.
+So **a taxonomy change does not reach an existing grant**; widening is an admin's
+act. Reconciling it on every seed would revert every narrowing an operator had
+made, which is the worse failure (`fp4`).
+
+### One turn writes a slot once
+
+`framework_slot_value` is insert-only with no turn-scoped idempotency key, and a
+turn that fails after its tool calls **may run again under the same id**
+(`lib/app/agent/turn-record.ts`). The re-run calls the model on the same words,
+it reaches the same reading, and a second version lands. One thing said once,
+recorded twice, minutes apart. §8.1 says that must not happen.
+
+`app_turn_slot_write` is the guard, and **the unique index IS the guard** —
+`@@unique([turnId, slotSlug])`, the same shape as the turn claim, so two
+dispatches cannot both miss it. A suppressed call answers with the version that
+*was* written, not an error: the reading is recorded, which is what the model
+asked for. It carries `skipFollowup` too, or a suppressed write would cost a
+model pass the real one did not.
+
+**Not guarded, deliberately:** two `fill_slot` calls for one slug inside a single
+attempt (a model calling a tool twice, not a retried turn — collapsing it would
+drop a second reading meant as a correction), and any dispatch with no turn id
+(a workflow step, the general consumer chat route), which runs exactly as before.
+
+### The turn id reaches the capability through a carrier meant for something else
+
+`CapabilityContext` has no turn id — Sunrise does not model a turn. But the chat
+handler threads `request.costLogMetadata` into its dispatch context, the
+dispatcher shallow-copies the context before `execute()`, and
+`lib/app/agent/turns.ts` already puts `{ turnId, seat }` there. So it is
+reachable today, through a **cost-attribution** channel.
+
+That is a workaround and `turnIdFrom()` treats it as one: it validates with Zod
+rather than casting, and an unusable value degrades to "no turn" instead of
+throwing. Filed with **Sunrise** — the blobs for
+`lib/orchestration/capabilities/types.ts` are identical across all three tiers,
+so Daybreak could not fix it (`daybreak.filing`).
+
+### Mounting over Daybreak's capability costs one non-obvious line
+
+`GuardedFillSlotCapability` **must re-declare `redactProvenance()`**, even to
+delegate straight to `super`. `capabilityDispatcher.register()` refuses any
+`processesPii` capability whose redactor it cannot see, and
+`isRedactorOverridden()` asks `hasOwnProperty` of the *immediate* prototype — an
+inherited one does not count. That is deliberate upstream.
+
+**The refusal is silent**: it is caught by the registration pass, logged as an
+`UnknownError`, and the slug is simply absent, so she goes on searching normally
+and quietly captures nothing. Nothing in `capture.ts` fails. What catches it is
+the `lib/app/capabilities.ts` row in `tests/unit/lib/app/defaults.test.ts`,
+which asserts the handler the dispatcher **actually holds** for the slug — and
+it caught exactly this during t-72's build.
+
+### What proves the write, until the panel lands
+
+`HB9`: a value written where nobody can read it is indistinguishable from one
+not written. Until t-73, **`npm run smoke:app-slot-capture` is the proof** —
+against the dev database, through the real route, in a running app. It asserts
+the value, its conversation, its confidence and its `sourceType`; that every
+write reached the stream as a `capability_result`; that a forced-failed turn
+re-run under the same id adds no version; and that the hidden group is withheld.
+
+It cannot prove she captures the *right* things at the right confidence. That is
+her judgement, and the voice golden set measures it.
+
+### After a change here
+
+A changed grant or tool schema is dark until each database is reseeded **and the
+server restarted** (`sunrise.mcp-reseed`). The dispatcher also caches an agent's
+bindings for five minutes, so a fresh grant can be invisible for that long on a
+process that had already resolved her.
+
 ## What is not here yet
 
-- **Capture** — t-72. `fill_slot` writing a value with its provenance and
-  confidence, once per turn.
-- **The panel** — where the picture assembles for the person it is about.
+- **The panel** — where the picture assembles for the person it is about (t-73),
+  and the only surface on which a person can correct what she wrote.
+- **Admin control over minting** — whether she may invent a slot at all, against
+  admin-authored guidance, or only by proposing one for approval. Owner ruling
+  20 Sept 2026 that this should be a three-mode setting; captured as its own
+  feature rather than built here.
