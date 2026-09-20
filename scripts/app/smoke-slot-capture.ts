@@ -25,9 +25,10 @@
  *      conversation it came from, a confidence and a `sourceType`; the stream
  *      carried a `capability_result` for `fill_slot`; the account line says she
  *      added something.
- *   4. Re-run the SAME turn id after failing it, the way a retried turn does.
- *      Assert one version per slot, not two — the guard, against a real unique
- *      index rather than a fake one.
+ *   4. Write one slot TWICE under one turn id, through the real dispatcher
+ *      against the real database. Assert one version, not two — the guard, on a
+ *      real unique index rather than a fake one — and that a different turn id
+ *      writing the same slug still appends, so the guard is keyed on the turn.
  *   5. Assert what she may NOT read back: `get_state` returns no `development`
  *      slot even with one written, because §12 says that is never a grade.
  *   6. Remove the member (which cascades the turns, the guard rows and the slot
@@ -62,6 +63,8 @@ import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { SLOT_EXPOSURE_CONFIG } from '@/lib/app/agent/pins';
 import { getSlotTaxonomy } from '@/lib/app/content/slot-taxonomy';
 import { accountLine, accountParts } from '@/lib/app/conversation/account';
+import { capabilityDispatcher } from '@/lib/orchestration/capabilities/dispatcher';
+import { registerBuiltInCapabilities } from '@/lib/orchestration/capabilities/registry';
 
 const BASE_URL =
   process.env.SMOKE_BASE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
@@ -218,6 +221,13 @@ async function main(): Promise<void> {
 
   await sweep();
 
+  // This process dispatches a capability itself in step 3, so it needs the same
+  // registration the server does — `initApp()` for the framework tier's
+  // capabilities, then the built-in/app flush that mounts ours over Daybreak's.
+  const { initApp } = await import('@/lib/app/bootstrap');
+  await initApp();
+  registerBuiltInCapabilities();
+
   try {
     // ---- 0. The grant her seed wrote, read off the real database -------------
     //
@@ -358,38 +368,106 @@ async function main(): Promise<void> {
     }
 
     // ---- 3. The retry — the defect §8.1 names ------------------------------
-    console.log(`\n3. A failed turn, run again under the same id (${TURN_RETRY})`);
-    // Take a turn, then put its record back to `failed` the way the deadline or
-    // a provider error would, so the same id is claimable again. This is the
-    // real claim path, not a simulated one.
-    const retryFirst = await takeTurn(cookie, TURN_RETRY, MESSAGE);
-    if (retryFirst.status !== 200) throw new Error(`retry setup: ${retryFirst.status}`);
+    //
+    // **Dispatched directly rather than driven through the route, on purpose.**
+    // Provoking the double-write through two HTTP turns needs the MODEL to
+    // attempt the same write twice, and it will not: told not to repeat a
+    // reading it has already recorded in this conversation, and holding
+    // `get_state` to check, it declines — correct behaviour that leaves the
+    // load-bearing case unrun. An earlier version of this script skipped the
+    // whole section on that, and printed "all good" having proved nothing
+    // (`fp6`: an absence over an empty population is not evidence).
+    //
+    // So the second write is made deliberately, through the REAL dispatcher
+    // against the REAL database, under the turn id of the turn that just ran —
+    // which is exactly the state a re-claimed failed turn is in. Everything the
+    // unit test has to fake is real here: the binding and its allowlist, the
+    // value engine's version chain, and the unique index that is the guard.
+    console.log('\n3. The same turn, writing the same slot twice');
+    const target = await prisma.slotDefinition.findFirstOrThrow({
+      where: { isActive: true, group: { in: [...SLOT_EXPOSURE_CONFIG.read.groups] } },
+      select: { slug: true },
+      orderBy: { slug: 'asc' },
+    });
+    const dispatchContext = {
+      userId: user.id,
+      agentId: agent.id,
+      conversationId: turnRow.conversationId ?? undefined,
+      // The carrier the chat handler threads and the turn seam fills — the only
+      // route a turn id has to a capability today. If this stops arriving, the
+      // guard stops guarding, and this assertion is what says so.
+      costLogMetadata: { turnId: TURN_CAPTURE, seat: SEAT },
+    };
+    const args = {
+      slotSlug: target.slug,
+      value: 'A reading written twice under one turn id, by the capture smoke.',
+      confidence: 6,
+      reasoningNote: 'Written by npm run smoke:app-slot-capture.',
+      sourceType: 'inferred',
+    };
+
+    const firstWrite = await capabilityDispatcher.dispatch('fill_slot', args, dispatchContext);
+    check(firstWrite.success, `the first write of ${target.slug} succeeded`);
     const afterFirst = await slotValuesFor(user.id);
-    const wroteInRetryTurn = answeredOnStream(retryFirst.frames).filter(
-      (slug) => slug === 'fill_slot'
-    ).length;
+    const firstVersions = afterFirst.filter((value) => value.slotSlug === target.slug);
+    check(firstVersions.length === 1, `${target.slug} is written once, at v${firstVersions[0]?.version}`);
 
-    if (wroteInRetryTurn === 0) {
-      note('she noted nothing on this turn, so there is no double-write to provoke — skipped');
-    } else {
-      await prisma.appTurn.update({
-        where: { userId_turnId: { userId: user.id, turnId: TURN_RETRY } },
-        data: { status: 'failed', errorCode: 'smoke_forced_failure', completedAt: new Date() },
-      });
-      const retrySecond = await takeTurn(cookie, TURN_RETRY, MESSAGE);
-      check(retrySecond.status === 200, 'the same id runs again, as a failed turn should');
-      const afterSecond = await slotValuesFor(user.id);
+    const secondWrite = await capabilityDispatcher.dispatch('fill_slot', args, dispatchContext);
+    const afterSecond = await slotValuesFor(user.id);
+    const secondVersions = afterSecond.filter((value) => value.slotSlug === target.slug);
 
-      // The population is non-empty — the first attempt wrote — so this absence
-      // means something (`fp6`).
-      check(afterFirst.length > 0, `the first attempt wrote ${afterFirst.length} value(s)`);
-      check(
-        afterSecond.length === afterFirst.length,
-        `the re-run added no version (${afterFirst.length} before, ${afterSecond.length} after)`
-      );
-      const maxVersion = Math.max(...afterSecond.map((value) => value.version));
-      check(maxVersion === 1, 'every slot is still at version 1 — one thing said once, noted once');
-    }
+    // The population is non-empty — the first write landed — so this absence
+    // means something.
+    check(
+      secondVersions.length === 1,
+      `the second write added no version (${firstVersions.length} before, ${secondVersions.length} after)`
+    );
+    check(
+      secondVersions[0]?.version === firstVersions[0]?.version,
+      'and the stored version is the one the first write made'
+    );
+    // Not an error: the reading IS recorded, which is what the model asked for.
+    check(secondWrite.success, 'the suppressed write answers success, not a refusal');
+    check(
+      isRecord(secondWrite.data) && secondWrite.data.version === firstVersions[0]?.version,
+      'and answers with the version that actually exists'
+    );
+    // The turn's own ledger did not grow either.
+    const guardAfter = await prisma.appTurnSlotWrite.count({
+      where: { turnId: turnRow.id, slotSlug: target.slug },
+    });
+    check(guardAfter === 1, 'the turn recorded that slot once');
+
+    // And the guard is keyed on the TURN, not on the slot: a different turn id
+    // writing the same slug is a genuine second reading and must still land.
+    const otherTurn = await prisma.appTurn.create({
+      data: {
+        userId: user.id,
+        turnId: TURN_RETRY,
+        clientSupplied: true,
+        requestHash: 'smoke-not-a-real-request',
+        seat: SEAT,
+        agentSlug: VOICE_AGENT_SLUG,
+        conversationId: turnRow.conversationId,
+      },
+      select: { id: true },
+    });
+    const thirdWrite = await capabilityDispatcher.dispatch('fill_slot', args, {
+      ...dispatchContext,
+      costLogMetadata: { turnId: TURN_RETRY, seat: SEAT },
+    });
+    check(thirdWrite.success, 'a different turn writing the same slot is not suppressed');
+    const afterThird = (await slotValuesFor(user.id)).filter(
+      (value) => value.slotSlug === target.slug
+    );
+    check(
+      afterThird.length === 2,
+      `it appends a genuine second reading (now ${afterThird.length} versions)`
+    );
+    check(
+      (await prisma.appTurnSlotWrite.count({ where: { turnId: otherTurn.id } })) === 1,
+      'and that turn records its own write'
+    );
 
     // ---- 4. What she may not read back ------------------------------------
     console.log('\n4. What the allowlist withholds from her');

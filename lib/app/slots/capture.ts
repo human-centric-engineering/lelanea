@@ -96,6 +96,40 @@ export function turnIdFrom(context: CapabilityContext): string | null {
   return parsed.success ? parsed.data.turnId : null;
 }
 
+/**
+ * The framework's result, with `skipFollowup` dropped — so she still speaks.
+ *
+ * **Measured, not reasoned about.** `fill_slot` sets `skipFollowup` so a silent
+ * capture does not cost a second model pass, which is right for an agent that
+ * answers *and* captures in one pass. Her instruction tells her to record
+ * before she answers, and the pinned model obliges literally: a first pass
+ * carrying nothing but tool calls. With the follow-up skipped, that pass IS the
+ * turn — she records what the person told her and replies with an empty string.
+ * Observed on a real turn against the dev database, not predicted.
+ *
+ * Letting the follow-up run costs one extra model call on any turn she captures
+ * in. That is the cost the owner accepted at claim — *"each write also adds a
+ * tool pass to her turn"* — and the alternative is a person who confides
+ * something and is answered with silence.
+ *
+ * **Not fixed in the instruction instead.** "Answer in the same breath as you
+ * record" would make the turn's correctness depend on a model choosing to emit
+ * text alongside a tool call, which is exactly the kind of thing that holds
+ * until a model changes. This holds whatever it emits.
+ *
+ * **Unconditional, and applied on every return** — the guarded write, the
+ * suppressed retry, and the two unguarded paths alike. A pass that ends on a
+ * `fill_slot` result strands the turn whatever that result SAYS, so exempting
+ * refusals would leave the same silence behind a rarer door. The framework does
+ * not set the flag on an error today; this does not depend on that staying
+ * true.
+ */
+function answering(result: FillSlotResult): FillSlotResult {
+  if (!('skipFollowup' in result)) return result;
+  const { skipFollowup: _skipped, ...rest } = result;
+  return rest;
+}
+
 /** What this turn already wrote for a slug, or null. */
 export interface RecordedSlotWrite {
   version: number;
@@ -179,14 +213,14 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
       // guarded" — and note the framework refuses a null `userId` itself, with
       // its own message, which is why that case falls through rather than
       // answering here.
-      return super.execute(args, context);
+      return answering(await super.execute(args, context));
     }
 
     const turn = await readTurnWrite(context.userId, turnId, args.slotSlug);
     if (turn === null) {
       // A turn id the record does not know: a client id on a path that never
       // claimed a turn. Unguarded, not refused.
-      return super.execute(args, context);
+      return answering(await super.execute(args, context));
     }
 
     if (turn.written !== null) {
@@ -198,13 +232,17 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
         turnId,
         version: turn.written.version,
       });
-      return this.success(
-        { slotSlug: args.slotSlug, version: turn.written.version, minted: turn.written.minted },
-        { skipFollowup: true }
-      );
+      // No `skipFollowup` — see `answering()`. A suppressed write must leave
+      // the turn in exactly the state a real one does, or a retry would be the
+      // one attempt that came back silent.
+      return this.success({
+        slotSlug: args.slotSlug,
+        version: turn.written.version,
+        minted: turn.written.minted,
+      });
     }
 
-    const result = await super.execute(args, context);
+    const result = answering(await super.execute(args, context));
     if (!result.success || !result.data) return result;
 
     // Recorded AFTER the write, so a failed append leaves nothing claiming to

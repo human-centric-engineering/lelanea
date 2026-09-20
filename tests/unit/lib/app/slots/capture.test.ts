@@ -108,6 +108,18 @@ function wrote(version: number, minted = false) {
   return { success: true as const, data: { slotSlug: 'primary_goal', version, minted } };
 }
 
+/**
+ * The same, as the framework ACTUALLY returns it — carrying `skipFollowup`.
+ *
+ * The distinction is the point of the `answering()` cases below: every
+ * `framework.mockResolvedValue` in this file hands back the real shape, so a
+ * wrapper that stopped stripping the flag fails rather than passing against a
+ * fake that never had it.
+ */
+function wroteSilently(version: number, minted = false) {
+  return { ...wrote(version, minted), skipFollowup: true };
+}
+
 const ARGS = {
   slotSlug: 'primary_goal',
   value: 'Wants to leave the job by spring',
@@ -136,7 +148,7 @@ beforeEach(() => {
   world.slotWrites = [];
   framework = vi
     .spyOn(FillSlotCapability.prototype, 'execute')
-    .mockResolvedValue(wrote(1) as never);
+    .mockResolvedValue(wroteSilently(1) as never);
 });
 
 describe('the turn id', () => {
@@ -168,12 +180,56 @@ describe('a turn that writes a slot', () => {
   });
 
   it('records a mint as a mint, so a suppressed retry answers with the same shape', async () => {
-    framework.mockResolvedValue(wrote(1, true) as never);
+    framework.mockResolvedValue(wroteSilently(1, true) as never);
     const capability = new GuardedFillSlotCapability();
 
     await capability.execute(ARGS, context());
 
     expect(world.slotWrites[0]).toMatchObject({ minted: true });
+  });
+});
+
+describe('she still speaks after she has recorded', () => {
+  it('drops the framework\'s `skipFollowup`, so the turn does not end on a tool call', async () => {
+    // Found on a real turn, not reasoned about: her instruction tells her to
+    // record before she answers, the pinned model obliges with a first pass
+    // carrying nothing but tool calls, and with the follow-up skipped that pass
+    // IS the turn — she records what the person confided and replies with an
+    // empty string. The population is non-empty: the framework really does set
+    // the flag, which `wroteSilently` carries.
+    expect(wroteSilently(1)).toHaveProperty('skipFollowup', true);
+
+    const result = await new GuardedFillSlotCapability().execute(ARGS, context());
+
+    expect(result).not.toHaveProperty('skipFollowup');
+    expect(result).toEqual(wrote(1));
+  });
+
+  it('drops it from a refusal too — a pass ending on one is just as silent', async () => {
+    // The framework does not set the flag on an error today, so this is
+    // belt-and-braces rather than a live path. It is here because the reason
+    // for stripping is "the pass ended on a fill_slot result", which says
+    // nothing about whether that result was a success — exempting refusals
+    // would leave the same silence behind a rarer door.
+    framework.mockResolvedValue({
+      success: false,
+      error: { code: 'slot_inactive', message: 'retired' },
+      skipFollowup: true,
+    } as never);
+
+    const result = await new GuardedFillSlotCapability().execute(ARGS, context());
+
+    expect(result).not.toHaveProperty('skipFollowup');
+    expect(result).toMatchObject({ error: { code: 'slot_inactive' } });
+  });
+
+  it('drops it on an unguarded dispatch too, so every path behaves alike', async () => {
+    const result = await new GuardedFillSlotCapability().execute(
+      ARGS,
+      context({ costLogMetadata: undefined })
+    );
+
+    expect(result).not.toHaveProperty('skipFollowup');
   });
 });
 
@@ -190,7 +246,7 @@ describe('the same turn run again — the defect §8.1 names', () => {
 
     framework.mockClear();
     // Attempt 2 would append version 2 if it reached the framework.
-    framework.mockResolvedValue(wrote(2) as never);
+    framework.mockResolvedValue(wroteSilently(2) as never);
 
     const second = await capability.execute(ARGS, context());
 
@@ -200,11 +256,11 @@ describe('the same turn run again — the defect §8.1 names', () => {
     // ...and the model is told the reading IS recorded, at the version that
     // actually exists — not an error, and not version 2.
     //
-    // `skipFollowup` is asserted, not tolerated: the framework sets it on a
-    // real write so a silent tool does not cost a second model pass, and a
-    // suppressed write that omitted it would make the retry MORE expensive
-    // than the call it replaced.
-    expect(second).toEqual({ ...wrote(1), skipFollowup: true });
+    // No `skipFollowup`, exactly as a real write carries none: a suppressed
+    // write has to leave the turn in the state a real one does, or the retry
+    // would be the one attempt that came back with no words.
+    expect(second).toEqual(wrote(1));
+    expect(second).not.toHaveProperty('skipFollowup');
   });
 
   it('still writes a DIFFERENT slot, so the guard is per slot and not per turn', async () => {
@@ -214,6 +270,7 @@ describe('the same turn run again — the defect §8.1 names', () => {
     framework.mockResolvedValue({
       success: true,
       data: { slotSlug: 'work_strain', version: 1, minted: false },
+      skipFollowup: true,
     } as never);
 
     await capability.execute({ ...(ARGS as object), slotSlug: 'work_strain' } as never, context());
@@ -303,7 +360,9 @@ describe('when the guard row cannot be written', () => {
     // framework versions them. That is a model calling a tool twice, not a
     // retried turn — see the module docblock's "deliberately NOT guarded".
     const capability = new GuardedFillSlotCapability();
-    framework.mockResolvedValueOnce(wrote(1) as never).mockResolvedValueOnce(wrote(2) as never);
+    framework
+      .mockResolvedValueOnce(wroteSilently(1) as never)
+      .mockResolvedValueOnce(wroteSilently(2) as never);
 
     const [first, second] = await Promise.all([
       capability.execute(ARGS, context()),
