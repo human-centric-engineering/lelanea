@@ -362,6 +362,45 @@ Every write is driven by `changedDefinitionFields()`, so a second apply of the
 same file finds its creates stored and identical, its updates applied and its
 retirements retired — and plans nothing.
 
+### Export, and the round trip
+
+`GET .../slots/export` answers a JSON attachment in the **same format the
+upload accepts**, so export → edit → import is a real round trip rather than
+two formats that resemble each other.
+
+That is an **invariant, not an intention**: `exportTaxonomyFile()` parses what
+it is about to return with `slotTaxonomyFileSchema` — the seed's own schema —
+and throws rather than hand out a file the import would reject. The store's
+test closes the loop by planning an upload of a fresh export and asserting it
+writes nothing.
+
+Three things it does not carry, each said in the file's own `notes` so the
+statement travels with the download:
+
+- **Retired definitions.** The format has no `isActive`, so exporting them
+  would write them as active — and importing that into a fresh database would
+  resurrect every retirement ever made. **An export is therefore not a backup**,
+  and the page says so beside the button.
+- **Group titles and descriptions**, which are not stored (below). They are
+  filled in from the key rather than read out of the bundled file, which would
+  put prose in the download that never described these rows.
+- **Versions and history**, which stay in the database. A file is the wording,
+  not the record of how it got there.
+
+It refuses rather than degrades in two cases: nothing active to export
+(`reason: 'nothing_to_export'`), and a stored row whose free-form classifier is
+not in the vocabulary (`reason: 'unexportable'`, naming the rows). The second
+is the one worth understanding — `loadGlobalSlotDefinitions()` _withholds_ such
+a row from the sync, and an export must not copy that behaviour: a file
+silently missing a definition is how a round trip deletes one.
+
+**No per-flow rate limit**, unlike the waitlist export it is modelled on. That
+sub-cap exists because each waitlist download is a copy of other people's email
+addresses leaving the building. This file holds the questions, not the answers
+— the same reason both definition tables are exclusions in
+`lib/app/leaf-data-export.ts` — so the `admin` section tier is the right and
+only cap.
+
 ### Groups are derived from the rows, not from the file
 
 `app_slot_definition.group` is a free string and there is no group table. The
@@ -374,6 +413,14 @@ The file's group `title` and `description` are therefore not read back anywhere;
 they were decoration on a column that stores a key. **Creating a group from the
 editor is not in t-71** — an upload can introduce one, and allowing free text
 later is a one-field change with no migration.
+
+### The page calls them "data slots"
+
+In admin copy the unit is a **data slot**, not a "slot" — and the model is
+**"the AI"**, never "she". The persona belongs to the member-facing product;
+an operator reading this page is looking at configuration. This document keeps
+"slot definition" and "slot value" because those are the framework's own table
+and type names.
 
 ### What an admin cannot do here, and why the surface says so
 

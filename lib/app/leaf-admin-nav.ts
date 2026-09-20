@@ -121,7 +121,7 @@ export function initLeafAdminNav(): void {
         label: 'What the AI asks about',
         icon: ListTree,
         description:
-          'The slots the app tries to learn about a person, and every past version of each',
+          'The data slots the AI tries to fill in about a person, and every past version of each',
       },
     ],
   });

@@ -31,7 +31,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { History, Plus, Upload } from 'lucide-react';
+import { Download, History, Plus, Upload } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ import {
 import { parseApiResponse } from '@/lib/api/parse-response';
 import {
   SLOT_DEFINITIONS_ENDPOINT,
+  SLOT_TAXONOMY_EXPORT_ENDPOINT,
   SLOT_TAXONOMY_UPLOAD_ENDPOINT,
   SLOT_TAXONOMY_UPLOAD_PREVIEW_ENDPOINT,
   slotDefinitionActiveEndpoint,
@@ -122,7 +123,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<Res
 function syncWarning(sync: SlotSyncOutcome): string | null {
   if (sync.status === 'synced' || sync.status === 'not_needed') return null;
   if (sync.status === 'empty') {
-    return 'Saved. Every slot is now retired, so nothing was handed to the AI — and the last retirement is not propagated until another change is made.';
+    return 'Saved. Every data slot is now retired, so nothing was handed to the AI — and the last retirement is not propagated until another change is made.';
   }
   return 'Saved — but the AI is still reading the previous wording: the projection did not update. Save again to retry it; a server restart also repairs it.';
 }
@@ -147,17 +148,17 @@ const SENSITIVITY = [
 ];
 
 const HELP = {
-  slug: 'The permanent name of this slot, and what every answer already captured points at. It cannot be changed — to rename one, add a slot under the new name and retire this one. The old answers stay readable under the old name.',
+  slug: 'The permanent name of this data slot, and what every answer already captured points at. It cannot be changed — to rename one, add a data slot under the new name and retire this one. The old answers stay readable under the old name.',
   group:
-    'Which cluster this belongs to on this page. Moving a slot between groups changes nothing about what is captured; it is how the taxonomy reads.',
+    'Which cluster this data slot belongs to on this page. Moving one between groups changes nothing about what is captured; it is how the taxonomy reads.',
   description:
-    'What this slot means — and the exact words the capture layer is given, so write it as an instruction rather than as a label. Rewording it does not change any answer already given: each answer is read back against the wording that stood when it was captured.',
+    'What this data slot means — and the exact words the capture layer is given, so write it as an instruction rather than as a label. Rewording it does not change any answer already given: each answer is read back against the wording that stood when it was captured.',
   visibility:
     'Whether the person this is about can see the value and correct it. Hidden means it never leaves the server to a member — which is what keeps a development-stage reading a tuning signal rather than a grade. Development slots must never rank or score someone to their face, and hiding them is the mechanism, not a default.',
   dataType:
     'How the answer is stored in its typed form. The plain-language answer is always kept as text as well, so changing this does not invalidate anything already captured.',
   sensitivity:
-    'How careful the capture layer is with the answer. This classifies the SLOT, not what lands in it — a sensitive slot can still receive something special-category in fact. Do not promote everything to special category: that empties the distinction the masking reads.',
+    'How careful the capture layer is with the answer. This classifies the DATA SLOT, not what lands in it — a sensitive one can still receive something special-category in fact. Do not promote everything to special category: that empties the distinction the masking reads.',
   priorityWeight: 'How early this is asked for, relative to the others. Higher is sooner. 0–100.',
 };
 
@@ -388,8 +389,8 @@ function DefinitionForm({
         <FieldRow id={`${definition.slug}-slug`} label="Slug" help={HELP.slug}>
           <Input id={`${definition.slug}-slug`} value={definition.slug} disabled readOnly />
           <p className="text-muted-foreground text-xs">
-            Permanent. To rename, add a slot under the new name and retire this one — the answers
-            already given stay readable under this one.
+            Permanent. To rename, add a data slot under the new name and retire this one — the
+            answers already given stay readable under this one.
           </p>
         </FieldRow>
       </div>
@@ -472,7 +473,7 @@ function AddDefinitionForm({
 
   return (
     <form
-      aria-label="Add a slot"
+      aria-label="Add a data slot"
       className="bg-muted/40 grid gap-4 rounded-md border p-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
@@ -514,7 +515,7 @@ function AddDefinitionForm({
 
       <div className="sm:col-span-2">
         <Button type="submit" disabled={busy}>
-          Add this slot
+          Add this data slot
         </Button>
       </div>
     </form>
@@ -615,8 +616,8 @@ function PlanSummary({ plan }: { plan: SlotUploadPlan }) {
       ))}
       {plan.skippedRetired.length > 0 && (
         <p className="text-muted-foreground text-xs">
-          A taxonomy file cannot say whether a slot is retired, so a retired slug listed in it is
-          left retired rather than brought back. Restore those individually if that is what you
+          A taxonomy file cannot say whether a data slot is retired, so a retired slug listed in it
+          is left retired rather than brought back. Restore those individually if that is what you
           meant.
         </p>
       )}
@@ -690,12 +691,37 @@ function UploadPanel({
 
   return (
     <div className="bg-muted/40 space-y-4 rounded-md border p-4">
+      {/*
+        Export sits above import on purpose: exporting first is how you get a
+        file in the right shape to edit and bring back, and it is the only one
+        of the two that cannot change anything.
+      */}
+      <div className="flex flex-col gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Export</p>
+          <p className="text-muted-foreground text-xs">
+            Every data slot currently being asked about, as a file you can edit and bring back
+            below. Retired ones are left out — this format cannot say &ldquo;retired&rdquo;, so
+            including them would bring them back on the next import.
+          </p>
+        </div>
+        {/* A plain link, as the waitlist export is reached: the response is an
+            attachment, and the browser's own download handles it better than
+            anything written here would. */}
+        <Button asChild variant="secondary" className="shrink-0">
+          <a href={SLOT_TAXONOMY_EXPORT_ENDPOINT} download>
+            <Download className="mr-1 h-4 w-4" aria-hidden />
+            Download
+          </a>
+        </Button>
+      </div>
+
       <div className="flex items-center gap-1">
-        <Label htmlFor="upload-file">Taxonomy file</Label>
-        <FieldHelp title="Taxonomy file">
-          The whole JSON file, in the same format as the one the app was seeded from. It is checked
-          against the same schema the seed uses, so the errors you get here are the errors the seed
-          would give.
+        <Label htmlFor="upload-file">Import a taxonomy file</Label>
+        <FieldHelp title="Import a taxonomy file">
+          The whole JSON file, in the same format the Download above produces and the app was seeded
+          from. It is checked against the same schema the seed uses, so the errors you get here are
+          the errors the seed would give.
         </FieldHelp>
       </div>
       <Textarea
@@ -862,7 +888,7 @@ export function SlotDefinitionsPanel({
           }}
         >
           <Plus className="mr-1 h-4 w-4" aria-hidden />
-          {adding ? 'Cancel' : 'Add a slot'}
+          {adding ? 'Cancel' : 'Add a data slot'}
         </Button>
         <Button
           type="button"
@@ -873,7 +899,7 @@ export function SlotDefinitionsPanel({
           }}
         >
           <Upload className="mr-1 h-4 w-4" aria-hidden />
-          {uploading ? 'Cancel' : 'Upload a taxonomy file'}
+          {uploading ? 'Close' : 'Import / export'}
         </Button>
         <span className="text-muted-foreground text-xs">
           {definitions.filter((d) => d.isActive).length} being asked about,{' '}
@@ -911,23 +937,51 @@ export function SlotDefinitionsPanel({
         if (inGroup.length === 0) return null;
         return (
           <section key={group} aria-label={group.replace(/_/g, ' ')} className="space-y-2">
-            <h3 className="text-sm font-semibold capitalize">{group.replace(/_/g, ' ')}</h3>
+            <h3 className="flex items-baseline gap-2 text-sm font-semibold capitalize">
+              {group.replace(/_/g, ' ')}
+              {/* The count is how the shape of the taxonomy is legible at all:
+                  21 life areas against 3 development slots is the thing an
+                  operator wants to see before reading any single row. */}
+              <span className="text-muted-foreground text-xs font-normal tabular-nums">
+                {inGroup.length}
+              </span>
+            </h3>
             <ul className="divide-y rounded-md border">
               {inGroup.map((definition) => (
                 <li key={definition.slug} className="space-y-3 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <code className="text-sm">{definition.slug}</code>
-                      <p className="text-muted-foreground line-clamp-2 max-w-2xl text-xs">
+                  {/*
+                    Two columns, and deliberately NOT `flex-wrap`. Wrapping let
+                    each row decide for itself: a one-line description left the
+                    buttons on the right, a two-line one pushed them underneath,
+                    and a list of 53 rows shuffled between the two. The column
+                    stacks at one breakpoint for every row instead.
+                  */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    {/*
+                      The badges belong here, with the slot they describe,
+                      rather than in the button cluster — which is also what
+                      keeps that cluster narrow enough to stay put.
+                    */}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="text-sm font-medium">{definition.slug}</code>
+                        {definitionBadges(definition)}
+                      </div>
+                      <p className="text-muted-foreground line-clamp-2 text-xs">
                         {definition.description}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {definitionBadges(definition)}
+
+                    {/* `shrink-0` so a long description narrows the text column
+                        rather than squeezing the controls. The two toggling
+                        labels carry a min-width so the row does not jitter as
+                        they change. */}
+                    <div className="flex shrink-0 items-center gap-1">
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
+                        className="min-w-14"
                         onClick={() =>
                           setEditing((slug) => (slug === definition.slug ? null : definition.slug))
                         }
@@ -952,6 +1006,7 @@ export function SlotDefinitionsPanel({
                         size="sm"
                         variant={definition.isActive ? 'outline' : 'secondary'}
                         disabled={busySlug === definition.slug}
+                        className="min-w-20"
                         onClick={() => void setActive(definition, !definition.isActive)}
                       >
                         {definition.isActive ? 'Retire' : 'Restore'}

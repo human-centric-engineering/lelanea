@@ -27,6 +27,7 @@ import userEvent from '@testing-library/user-event';
 
 import { SlotDefinitionsPanel } from '@/components/app/admin/slot-definitions';
 import {
+  SLOT_TAXONOMY_EXPORT_ENDPOINT,
   SLOT_TAXONOMY_UPLOAD_ENDPOINT,
   SLOT_TAXONOMY_UPLOAD_PREVIEW_ENDPOINT,
   slotDefinitionActiveEndpoint,
@@ -326,13 +327,36 @@ describe('the history', () => {
   });
 });
 
-describe('uploading a taxonomy file', () => {
+describe('exporting', () => {
+  it('offers the download as a plain link, which needs no fetch', async () => {
+    const user = userEvent.setup();
+    render(<SlotDefinitionsPanel initialView={VIEW} />);
+    await user.click(screen.getByRole('button', { name: 'Import / export' }));
+
+    const link = screen.getByRole('link', { name: /Download/ });
+    expect(link).toHaveAttribute('href', SLOT_TAXONOMY_EXPORT_ENDPOINT);
+    expect(link).toHaveAttribute('download');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('says that retired data slots are left out, where the decision is made', async () => {
+    // Someone exporting to take a backup needs to know before they click that
+    // this is not one.
+    const user = userEvent.setup();
+    render(<SlotDefinitionsPanel initialView={VIEW} />);
+    await user.click(screen.getByRole('button', { name: 'Import / export' }));
+
+    expect(screen.getByText(/Retired ones are left out/)).toBeInTheDocument();
+  });
+});
+
+describe('importing a taxonomy file', () => {
   const FILE = '{"taxonomy":{},"groups":[],"slots":[]}';
 
   async function openUpload(user: ReturnType<typeof userEvent.setup>) {
     render(<SlotDefinitionsPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Upload a taxonomy file' }));
-    return screen.getByLabelText('Taxonomy file');
+    await user.click(screen.getByRole('button', { name: 'Import / export' }));
+    return screen.getByLabelText('Import a taxonomy file');
   }
 
   it('cannot apply until a preview has been read', async () => {
@@ -383,7 +407,7 @@ describe('uploading a taxonomy file', () => {
     const summary = await screen.findByLabelText('What this file would do');
     expect(summary).toHaveTextContent(/Would retire:\s*life_money/);
     expect(summary).toHaveTextContent(/Retired here, left alone:\s*life_old/);
-    expect(summary).toHaveTextContent(/cannot say whether a slot is retired/);
+    expect(summary).toHaveTextContent(/cannot say whether a data slot is retired/);
   });
 
   it('applies, then shows the plan that actually ran', async () => {

@@ -154,6 +154,9 @@ import { loadGlobalSlotDefinitions } from '@/lib/app/slots/taxonomy-store';
 import {
   applyTaxonomyUpload,
   createSlotDefinition,
+  exportTaxonomyFile,
+  taxonomyExportFilename,
+  planTaxonomyUpload,
   getSlotTaxonomyAdminView,
   listSlotDefinitionHistory,
   previewTaxonomyUpload,
@@ -667,5 +670,86 @@ describe('the re-sync', () => {
     const result = await setSlotDefinitionActive('life_work', false, 1, ADMIN);
 
     expect(result.sync.status).toBe('empty');
+  });
+});
+
+describe('exporting the taxonomy', () => {
+  const NOON = new Date('2026-09-20T12:00:00.000Z');
+
+  it('round-trips: importing a fresh export plans nothing', async () => {
+    // The whole reason the export exists in this shape. Not "the formats look
+    // alike" — the planner is run against the exported file and asserted to
+    // find nothing to do.
+    seedDefinition('life_work', { version: 2 });
+    seedDefinition('person_disposition', { group: 'the_person', version: 1 });
+
+    const file = await exportTaxonomyFile(NOON);
+    const { definitions } = await getSlotTaxonomyAdminView();
+    const plan = planTaxonomyUpload(file, 'replace', definitions);
+
+    expect(plan.creates).toEqual([]);
+    expect(plan.updates).toEqual([]);
+    expect(plan.retirements).toEqual([]);
+    expect(plan.unchanged.sort()).toEqual(['life_work', 'person_disposition']);
+  });
+
+  it('leaves retired definitions out, so a round trip cannot resurrect them', async () => {
+    // The format has no `isActive`. Exporting a retired slot would write it as
+    // active, and importing that into a fresh database would undo every
+    // retirement ever made.
+    seedDefinition('life_work', { version: 1 });
+    seedDefinition('life_old', { version: 4, isActive: false });
+
+    const file = await exportTaxonomyFile(NOON);
+
+    expect(file.slots.map((slot) => slot.slug)).toEqual(['life_work']);
+  });
+
+  it('declares exactly the groups its slots use', async () => {
+    // Forced rather than chosen: the schema requires every slot to name a
+    // declared group AND every declared group to hold a slot.
+    seedDefinition('life_work', { version: 1 });
+    seedDefinition('person_disposition', { group: 'the_person', version: 1 });
+    seedDefinition('old_one', { group: 'retired_group', version: 1, isActive: false });
+
+    const file = await exportTaxonomyFile(NOON);
+
+    expect(file.groups.map((group) => group.key)).toEqual(['life_areas', 'the_person']);
+  });
+
+  it('says in the file what the file cannot carry', async () => {
+    seedDefinition('life_work', { version: 1 });
+
+    const file = await exportTaxonomyFile(NOON);
+
+    expect(file.taxonomy.notes.join(' ')).toMatch(/Active slots only/);
+    expect(file.taxonomy.notes.join(' ')).toMatch(/Group titles and descriptions are not stored/);
+    expect(file.taxonomy.notes.join(' ')).toMatch(/versions and their edit history are not/);
+  });
+
+  it('refuses to write an empty taxonomy rather than an invalid file', async () => {
+    seedDefinition('life_work', { version: 1, isActive: false });
+
+    await expect(exportTaxonomyFile(NOON)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'nothing_to_export' },
+    });
+  });
+
+  it('refuses, naming the rows, when a stored classifier is not in the vocabulary', async () => {
+    // Reachable by a hand edit, because the classifier columns are free-form
+    // strings. The provider withholds such a row from the sync; an export must
+    // NOT do the same silently — a file quietly missing a slot is how a round
+    // trip deletes one.
+    seedDefinition('life_work', { version: 1, sensitivity: 'extremely' });
+
+    await expect(exportTaxonomyFile(NOON)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'unexportable' },
+    });
+  });
+
+  it('names the file for the day it was taken', () => {
+    expect(taxonomyExportFilename(NOON)).toBe('lelanea-slot-taxonomy-2026-09-20.json');
   });
 });

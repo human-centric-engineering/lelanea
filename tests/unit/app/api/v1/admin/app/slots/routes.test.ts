@@ -28,6 +28,8 @@ const admin = vi.hoisted(() => ({
   setSlotDefinitionActive: vi.fn(),
   previewTaxonomyUpload: vi.fn(),
   applyTaxonomyUpload: vi.fn(),
+  exportTaxonomyFile: vi.fn(),
+  taxonomyExportFilename: vi.fn(() => 'lelanea-slot-taxonomy-2026-09-20.json'),
   // The real one — a pure predicate over the plan, and the thing the upload
   // route's "audit only if it wrote" decision turns on.
   planWritesNothing: (plan: { creates: unknown[]; updates: unknown[]; retirements: unknown[] }) =>
@@ -50,6 +52,7 @@ import { PUT as putActive } from '@/app/api/v1/admin/app/slots/[slug]/active/rou
 import { GET as getHistory } from '@/app/api/v1/admin/app/slots/[slug]/history/route';
 import { POST as previewUpload } from '@/app/api/v1/admin/app/slots/upload/preview/route';
 import { POST as applyUpload } from '@/app/api/v1/admin/app/slots/upload/route';
+import { GET as exportTaxonomy } from '@/app/api/v1/admin/app/slots/export/route';
 
 const BASE = 'https://lelanea.com/api/v1/admin/app/slots';
 
@@ -125,6 +128,11 @@ beforeEach(() => {
   });
   admin.previewTaxonomyUpload.mockResolvedValue(EMPTY_PLAN);
   admin.applyTaxonomyUpload.mockResolvedValue({ plan: EMPTY_PLAN, sync: SYNCED });
+  admin.exportTaxonomyFile.mockResolvedValue({
+    taxonomy: { id: 'lelanea_slot_taxonomy', notes: [] },
+    groups: [{ key: 'life_areas' }],
+    slots: [{ slug: 'life_work' }],
+  });
 });
 
 describe('the guard', () => {
@@ -150,6 +158,7 @@ describe('the guard', () => {
       () => previewUpload(req('POST', '/upload/preview', { mode: 'merge', file: {} })),
     ],
     ['POST an upload', () => applyUpload(req('POST', '/upload', { mode: 'merge', file: {} }))],
+    ['GET the export', () => exportTaxonomy(req('GET', '/export'))],
   ];
 
   it.each(calls)('refuses %s to a signed-out visitor', async (_label, call) => {
@@ -472,5 +481,51 @@ describe('uploading', () => {
     expect((await applyUpload(req('POST', '/upload', payload))).status).toBe(400);
     expect(admin.previewTaxonomyUpload).not.toHaveBeenCalled();
     expect(admin.applyTaxonomyUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET the export', () => {
+  it('answers a JSON attachment named for the day', async () => {
+    const response = await exportTaxonomy(req('GET', '/export'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="lelanea-slot-taxonomy-2026-09-20.json"'
+    );
+    // A point-in-time snapshot: a cached copy would be a stale taxonomy served
+    // as the current one.
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('returns the file the store built, formatted to be edited by hand', async () => {
+    const response = await exportTaxonomy(req('GET', '/export'));
+    const text = await response.text();
+
+    expect(JSON.parse(text)).toMatchObject({ taxonomy: { id: 'lelanea_slot_taxonomy' } });
+    // Indented: the whole point is that someone opens it, edits it and brings
+    // it back.
+    expect(text).toContain('\n  ');
+  });
+
+  it('writes no audit entry — a download changes nothing', async () => {
+    await exportTaxonomy(req('GET', '/export'));
+    expect(admin.logAdminAction).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the store’s refusal when there is nothing to export', async () => {
+    admin.exportTaxonomyFile.mockRejectedValueOnce(
+      new ConflictError(
+        'There is nothing to export: no data slot is currently being asked about.',
+        {
+          reason: 'nothing_to_export',
+        }
+      )
+    );
+
+    const response = await exportTaxonomy(req('GET', '/export'));
+
+    expect(response.status).toBe(409);
+    expect((await body(response)).error?.details).toMatchObject({ reason: 'nothing_to_export' });
   });
 });

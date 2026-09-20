@@ -39,5 +39,14 @@ export const SLOT_TAXONOMY_UPLOAD_PREVIEW_ENDPOINT = `${SLOT_DEFINITIONS_ENDPOIN
 /** Apply a taxonomy file. `POST { mode, file }`. */
 export const SLOT_TAXONOMY_UPLOAD_ENDPOINT = `${SLOT_DEFINITIONS_ENDPOINT}/upload`;
 
+/**
+ * Download the taxonomy as a file the upload above accepts. `GET`.
+ *
+ * A plain link rather than a fetch, the way the waitlist export is reached: the
+ * response is an attachment, and the browser's own download is a better handler
+ * for it than anything the panel would write.
+ */
+export const SLOT_TAXONOMY_EXPORT_ENDPOINT = `${SLOT_DEFINITIONS_ENDPOINT}/export`;
+
 /** Where an admin edits them. The nav seam and the page both name it here. */
 export const SLOT_DEFINITIONS_PAGE = '/admin/app/slots';

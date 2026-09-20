@@ -7,7 +7,8 @@ import type { SlotTaxonomyAdminView } from '@/lib/app/slots/definitions-admin';
 
 export const metadata: Metadata = {
   title: 'What the AI asks about',
-  description: 'The slots the app tries to learn about a person, and every past version of each',
+  description:
+    'The data slots the AI tries to fill in about a person, and every past version of each',
 };
 
 async function getView(): Promise<SlotTaxonomyAdminView | null> {
@@ -37,19 +38,19 @@ export default async function SlotDefinitionsPage() {
 
   return (
     <div className="space-y-6">
+      {/*
+        One line. An earlier version opened with two paragraphs restating the
+        slug rule, the retirement rule and the versioning rule — all three of
+        which the surface below already says at the point they apply, on the
+        disabled slug field, on the Retire button and in the history view.
+        Saying them here as well pushed the actual taxonomy off the screen.
+      */}
       <div>
         <h2 className="text-lg font-semibold">What the AI asks about</h2>
         <p className="text-muted-foreground max-w-3xl text-sm">
-          Every slot here is something the app is trying to learn about a person — the wording is
-          what the capture layer is actually given, so it reads as an instruction rather than as a
-          label. Changing it takes effect on the next thing the AI writes; it does not change
-          anything already learned.
-        </p>
-        <p className="text-muted-foreground mt-2 max-w-3xl text-sm">
-          <strong>A slug is permanent and nothing here is ever deleted.</strong> Retiring a slot
-          stops it being asked about and leaves every answer already given readable, under the
-          wording it was captured under. Renaming is adding one and retiring the other. Every change
-          is a new version with its own history, and is recorded in the audit log.
+          The data slots the AI tries to fill in about a person. Slugs are permanent and nothing
+          here is deleted: retiring one stops it being asked about and leaves the answers already
+          given readable.
         </p>
       </div>
 

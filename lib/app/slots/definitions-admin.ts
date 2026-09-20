@@ -759,3 +759,116 @@ export async function applyTaxonomyUpload(
   });
   return { plan, sync };
 }
+
+// ─── Export ─────────────────────────────────────────────────────────────────
+
+/** The literal the file schema requires, and the stem of the download's name. */
+const TAXONOMY_FILE_ID = 'lelanea_slot_taxonomy';
+
+/**
+ * The `taxonomy.version` an export carries.
+ *
+ * A constant, because nothing stores a taxonomy-level version — versions here
+ * are per definition, and the schema wants `major.minor`. Fabricating movement
+ * in it would imply the file format had changed when it had not.
+ */
+const TAXONOMY_FILE_VERSION = '1.0';
+
+/** `lelanea-slot-taxonomy-2026-09-20.json` */
+export function taxonomyExportFilename(now: Date): string {
+  return `lelanea-slot-taxonomy-${now.toISOString().slice(0, 10)}.json`;
+}
+
+/**
+ * The stored taxonomy, written back out as a file the upload above accepts.
+ *
+ * **The round trip is the point**, and it is an invariant rather than an
+ * intention: the result is parsed with `slotTaxonomyFileSchema` — the same
+ * schema the import and the seed use — before it is returned, so an export that
+ * could not be imported is a throw here rather than a file that fails at the
+ * other end. `tests/unit/lib/app/slots/definitions-admin.test.ts` closes the
+ * loop by planning an upload of a fresh export and asserting it writes nothing.
+ *
+ * ## Three things it deliberately does not carry, each said in the file itself
+ *
+ * - **Retired slots.** The format has no `isActive`, so exporting them would
+ *   write them as active — and importing that into a fresh database would
+ *   resurrect every retirement. Active only, and `notes` says so.
+ * - **Group titles and descriptions.** They are not stored (see
+ *   {@link SlotTaxonomyAdminView.groups}); the export fills them from the key
+ *   rather than reaching into the bundled file, which would put prose in the
+ *   download that never described these rows.
+ * - **Versions and history.** Per-definition versions and the revision chain
+ *   stay in the database. A file is the wording, not the record of how it got
+ *   there.
+ */
+export async function exportTaxonomyFile(now: Date): Promise<SlotTaxonomyFile> {
+  const { definitions } = await getSlotTaxonomyAdminView();
+  const active = definitions.filter((row) => row.isActive);
+
+  if (active.length === 0) {
+    // The schema refuses an empty `slots` for its own reason — "an empty
+    // taxonomy is a mistake in this file" — so this would fail the parse below
+    // anyway. Refusing here names the actual situation instead.
+    throw new ConflictError(
+      'There is nothing to export: no slot is currently being asked about. Either the taxonomy has not been seeded, or every definition has been retired.',
+      { reason: 'nothing_to_export' }
+    );
+  }
+
+  const file = {
+    taxonomy: {
+      id: TAXONOMY_FILE_ID,
+      title: 'Lelañea slot taxonomy',
+      version: TAXONOMY_FILE_VERSION,
+      locale: 'en-GB',
+      provenance: {
+        status: 'draft' as const,
+        awaitingSignOffFrom: 'the owner',
+        note: 'Exported from the slot editor. The database is the taxonomy; this file is a copy of it taken at the moment below.',
+      },
+      notes: [
+        `Exported ${now.toISOString()}.`,
+        'Active slots only. This format cannot say "retired", so retired slots are left out rather than written as active — importing this file will not bring any of them back, and will not retire anything in merge mode.',
+        'Group titles and descriptions are not stored by the editor, so they are filled in from the group key.',
+        'Per-slot versions and their edit history are not in this format; they stay in the database.',
+      ],
+    },
+    // Exactly the groups the exported slots use: the schema requires every slot
+    // to name a declared group AND every declared group to hold a slot, so this
+    // set is forced rather than chosen.
+    groups: [...new Set(active.map((row) => row.group))].sort().map((key) => ({
+      key,
+      title: key.replace(/_/g, ' '),
+      description: `The ${key.replace(/_/g, ' ')} slots.`,
+    })),
+    slots: active.map((row) => ({
+      slug: row.slug,
+      group: row.group,
+      description: row.description,
+      visibility: row.visibility,
+      mode: row.mode,
+      dataType: row.dataType,
+      sensitivity: row.sensitivity,
+      priorityWeight: row.priorityWeight,
+    })),
+  };
+
+  const parsed = slotTaxonomyFileSchema.safeParse(file);
+  if (!parsed.success) {
+    // Reachable without a bug here: the classifier columns are free-form
+    // `String` (the framework's X1 convention), so a hand edit can put a value
+    // in one that the vocabulary does not recognise. The provider withholds
+    // such a row from the sync; an export must NOT quietly do the same, because
+    // a file silently missing a slot is how a slot gets deleted by a round
+    // trip. Refuse, and name the rows.
+    throw new ConflictError(
+      `The stored taxonomy cannot be written as a file: ${parsed.error.issues
+        .map((issue) => `${issue.path.join('.')} — ${issue.message}`)
+        .join('; ')}. Correct those definitions and export again.`,
+      { reason: 'unexportable' }
+    );
+  }
+
+  return parsed.data;
+}
