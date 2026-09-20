@@ -166,6 +166,22 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'shows up fine. /code-review pushed on this guard being too narrow; the ' +
       'schema settled which half was actually unpinned.) t-44.',
   },
+  {
+    path: 'tests/unit/lib/app/slots/taxonomy-store.test.ts',
+    reason:
+      'reads `prisma/schema/app.prisma` off disk to pin ' +
+      '`SLOT_DEFINITION_FIELDS` against the authored columns of ' +
+      '`AppSlotDefinition`. The SCHEMA half is why this is on the list: the ' +
+      'branch that breaks it adds a column to the model and touches no ' +
+      'TypeScript at all, so no module graph reaches this file and a scoped ' +
+      'run would skip exactly the change it guards. What drift costs is not a ' +
+      'crash — the seed writes a v1 revision whose `changedFields` omits the ' +
+      'new column, and a later edit to that column writes NO revision, so a ' +
+      'version of the wording exists that no captured answer can be read back ' +
+      'against. The file’s other cases are module-reachable and would have ' +
+      'been selected anyway; running them always costs a few hundred ' +
+      'milliseconds. t-70.',
+  },
 ];
 
 /**

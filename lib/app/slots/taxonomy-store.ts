@@ -35,6 +35,12 @@
  * reach `framework_slot_definition` and from there the capture prompt. One bad
  * row does not take the rest of the taxonomy with it.
  *
+ * **Withholding retires that slot, though — say so when it happens.** The sync
+ * deactivates any `global` projection whose slug it was not handed, so a slug
+ * dropped here stops being asked until the value is corrected. Failing closed
+ * is right; failing closed *quietly* would look like a slot that had simply
+ * stopped working, so the log names the consequence rather than the symptom.
+ *
  * @see lib/app/content/slot-taxonomy.ts — the bundled file the seed loads
  * @see .context/app/slots.md
  */
@@ -144,19 +150,6 @@ const DEFINITION_SELECT = {
 } satisfies Prisma.AppSlotDefinitionSelect;
 
 /**
- * Every stored definition, retired ones included, in a stable order.
- *
- * The editor and the history view read this; the provider below reads only the
- * active ones. Ordered by group then slug so two calls render identically.
- */
-export async function listSlotDefinitions(): Promise<StoredSlotDefinition[]> {
-  return prisma.appSlotDefinition.findMany({
-    select: DEFINITION_SELECT,
-    orderBy: [{ group: 'asc' }, { slug: 'asc' }],
-  });
-}
-
-/**
  * The provider Daybreak's global slot sync calls. Active definitions only — a
  * retired row is withheld, which is what makes the sync deactivate its
  * projection (its deactivate pass is scoped to `global` rows, so it touches no
@@ -177,8 +170,14 @@ export async function loadGlobalSlotDefinitions(): Promise<SlotDefinitionInput[]
   for (const row of rows) {
     const result = toSlotDefinitionInput(row);
     if ('unknownField' in result) {
+      // Withholding is not neutral: the sync's deactivate pass works from the
+      // slugs it was handed, so a withheld slug has its projection DEACTIVATED
+      // — the slot stops being asked. That is the right way to fail (an
+      // unrecognised classifier must not reach the capture prompt), but it is a
+      // retirement nobody asked for, so the log says so rather than implying
+      // the row was merely skipped.
       logger.error(
-        'loadGlobalSlotDefinitions: stored slot definition has an unrecognised classifier — withheld from the framework sync',
+        'loadGlobalSlotDefinitions: stored slot definition has an unrecognised classifier — withheld from the framework sync, which will DEACTIVATE its projection until the value is corrected',
         { slug: row.slug, field: result.unknownField, value: result.value }
       );
       continue;
@@ -192,9 +191,12 @@ export async function loadGlobalSlotDefinitions(): Promise<SlotDefinitionInput[]
 /**
  * Which of the snapshot fields differ between two versions of a definition.
  *
- * Exported because the seed and the editor both need it, and because it is what
- * an "edit that changed nothing" test asserts on: an empty result means no
- * revision is written and no version is bumped.
+ * **The editor (t-71) is the caller.** It is here rather than there because it
+ * is the executable form of the change rule `.context/app/slots.md` states — an
+ * edit that changes nothing writes no revision and bumps no version — and
+ * because it is the reason {@link SLOT_DEFINITION_FIELDS} has to stay in step
+ * with the model, which the seed already depends on for a v1 row's
+ * `changedFields`.
  */
 export function changedDefinitionFields(
   before: StoredSlotDefinitionFields,

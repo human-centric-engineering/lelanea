@@ -15,6 +15,9 @@
  * @see lib/app/slots/taxonomy-store.ts
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const findMany = vi.hoisted(() => vi.fn());
@@ -27,7 +30,6 @@ vi.mock('@/lib/logging', () => ({
 
 import {
   loadGlobalSlotDefinitions,
-  listSlotDefinitions,
   changedDefinitionFields,
   SLOT_DEFINITION_FIELDS,
   type StoredSlotDefinition,
@@ -130,18 +132,30 @@ describe('loadGlobalSlotDefinitions', () => {
   });
 });
 
-describe('listSlotDefinitions', () => {
-  it('returns retired rows too, in a stable order', async () => {
-    // The editor and the history view need the retired ones; only the provider
-    // filters. Ordering is pinned so two renders of the editor agree.
-    findMany.mockResolvedValue([row({ slug: 'a' }), row({ slug: 'b', isActive: false })]);
+describe('SLOT_DEFINITION_FIELDS', () => {
+  it('is exactly the authored columns of the model, derived from the schema', () => {
+    // THE guard on this constant, and the one the "every field is diffed" case
+    // below cannot be: that case proves the diff reads every field IN the
+    // constant, which stays true when a column is added to the model and not to
+    // the constant. This reads the schema instead.
+    //
+    // What breaks if they drift: the seed writes a v1 revision whose
+    // `changedFields` omits the new column, and an edit to it writes no
+    // revision at all — a version of the wording that no captured answer can be
+    // read back against.
+    const schema = readFileSync(join(process.cwd(), 'prisma', 'schema', 'app.prisma'), 'utf8');
+    const model = /model AppSlotDefinition \{([\s\S]*?)\n\}/.exec(schema)?.[1];
+    expect(model, 'AppSlotDefinition not found in app.prisma').toBeDefined();
 
-    const rows = await listSlotDefinitions();
-    expect(rows.map((r) => r.slug)).toEqual(['a', 'b']);
-    expect(findMany.mock.calls[0][0]).toMatchObject({
-      orderBy: [{ group: 'asc' }, { slug: 'asc' }],
-    });
-    expect(findMany.mock.calls[0][0]).not.toHaveProperty('where');
+    // Everything the model declares, minus the four this constant deliberately
+    // excludes: `slug` is the identity and never changes, `version` is derived
+    // from the history, and the two timestamps are the database's.
+    const NOT_AUTHORED = new Set(['slug', 'version', 'createdAt', 'updatedAt', 'revisions']);
+    const columns = [...(model ?? '').matchAll(/^\s{2}(\w+)\s+\S/gm)]
+      .map((m) => m[1])
+      .filter((name) => !NOT_AUTHORED.has(name));
+
+    expect([...SLOT_DEFINITION_FIELDS].sort()).toEqual(columns.sort());
   });
 });
 
