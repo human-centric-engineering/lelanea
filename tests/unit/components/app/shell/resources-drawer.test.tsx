@@ -681,6 +681,49 @@ describe('a pinned film', () => {
     expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries`);
     expect(get).not.toHaveBeenCalledWith(expect.stringContaining('boundaries?film'));
   });
+
+  it('is honoured on a new key after a close and a navigation — the t-77 path', async () => {
+    // Pin on Values, close, walk to Boundaries, and a suggestion pins there.
+    // The pin's key was reset only while the drawer was open, so the new pin
+    // inherited Values' key and went out unpinned (review round 3, proved by
+    // a probe).
+    serve({
+      'values?film=four-marks': fullSelection(),
+      'boundaries?film=a-line': fallbackSelection(),
+    });
+    function Opener({ film }: { film: string }) {
+      const { openDrawer } = useShellLayout();
+      return (
+        <button type="button" onClick={() => openDrawer('resources', { film })}>
+          pin {film}
+        </button>
+      );
+    }
+    mockPathname.current = '/app/modules/values';
+    const view = renderInShell(
+      <>
+        <Opener film="four-marks" />
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'pin four-marks' }));
+    await within(panel()).findByText(/anchor/);
+    await userEvent.click(within(panel()).getByRole('button', { name: /Close/ }));
+
+    mockPathname.current = '/app/modules/boundaries';
+    view.rerender(
+      <>
+        <Opener film="a-line" />
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'pin a-line' }));
+    await within(panel()).findByText(/It is an invitation\./);
+
+    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries?film=a-line`);
+  });
 });
 
 describe('the status line is one live region, not a line that mounts with the state', () => {

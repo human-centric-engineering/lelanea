@@ -101,11 +101,14 @@ export function useResourcesSelection(): ResourcesLoad {
   // same key is a no-op, and coming back to it after a detour restores the
   // panel without a round trip.
   const answered = useRef<{ request: string; selection: ResourcesSelection } | null>(null);
-  // The key a pin was made on. A film pinned on Values is for Values: the
-  // shell clears the pin on navigation, but a child's effect runs before its
-  // provider's, so without this the first request after a navigation still
-  // carried the old pin (`/code-review` round 2).
-  const pinKey = useRef<string | null>(null);
+  // The pin and the key it was made on. A film pinned on Values is for
+  // Values: the shell clears the pin on navigation, but a child's effect runs
+  // before its provider's, so without this the first request after a
+  // navigation still carried the old pin (`/code-review` round 2). Keyed on
+  // the film, and settled BEFORE the open guard below, so a pin never inherits
+  // a previous pin's key: a close arrives with the film cleared, and a new pin
+  // is a new film (`/code-review` round 3, proved by a probe).
+  const pin = useRef<{ film: string; key: string } | null>(null);
   // The request in flight, by IDENTITY rather than by its string: a late
   // answer to an earlier request for the SAME key must be dropped too, or a
   // failure that arrives after the reader has come back to that key shadows
@@ -125,10 +128,10 @@ export function useResourcesSelection(): ResourcesLoad {
   }, []);
 
   useEffect(() => {
+    if (drawerFilm === null) pin.current = null;
+    else if (pin.current?.film !== drawerFilm) pin.current = { film: drawerFilm, key };
     if (!open) return;
-    if (drawerFilm === null) pinKey.current = null;
-    else pinKey.current ??= key;
-    const film = drawerFilm !== null && pinKey.current === key ? drawerFilm : null;
+    const film = pin.current?.key === key ? pin.current.film : null;
     const request = film ? `${key}?film=${encodeURIComponent(film)}` : key;
     if (inFlight.current?.request === request) return;
     if (answered.current?.request === request) {
