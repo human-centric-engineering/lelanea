@@ -183,7 +183,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
         <Group
           title="Lelañea’s own headings"
           count={improvised.length}
-          note="Nothing Lelañea was asked to look for covered these, so the headings are Lelañea’s own."
+          note="Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so she named them herself."
         >
           {improvised.map((note) => (
             <li key={note.slotSlug}>

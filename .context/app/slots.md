@@ -782,6 +782,26 @@ just written at the top of its group.
 has no definition and therefore no group; a magic key standing in for "none" is a
 value that eventually gets compared against a real one.
 
+#### A minted heading is permanent, and there is no suggestion step
+
+Worth saying plainly, because the panel makes it look provisional and it is not.
+**Nothing promotes a minted slug into the taxonomy.** She coins the name once, at
+capture, and no later pass reviews it, renames it or proposes it to anybody — the
+"propose a slot for approval" mode is the third of idea #33's three and is
+deliberately not built here.
+
+There **is** a path, and it is an admin's: adding a definition in the editor
+whose `slug` is exactly the minted one. The slug is the join key, so every value
+already captured under it resolves to that definition on the next read — the
+notes leave "Lelañea's own headings" and appear under the group the admin chose,
+with its wording, retrospectively. Nothing is migrated and nothing is rewritten.
+
+The trap is the near miss. A definition added as `weekly_rhythms` leaves every
+`weekly_rhythm` value exactly where it was, under a heading that now looks
+duplicated. There is no fuzzy match, by design: the change rule above makes a
+slug the identity, and guessing at one would orphan answers rather than adopt
+them.
+
 ### What a person is not shown
 
 - **The conversation id.** The panel says a note was _drawn from something you
