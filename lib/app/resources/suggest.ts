@@ -41,7 +41,11 @@ import { z } from 'zod';
 
 import { answeredCalls, type AnsweredCall } from '@/lib/app/agent/capability-answers';
 import { getResourcesLibrary } from '@/lib/app/content/resources';
-import { SUGGEST_RESOURCE_SLUG, type ResourceSuggestion } from '@/lib/app/resources/suggestion';
+import {
+  SUGGEST_RESOURCE_SLUG,
+  uniqueSuggestions,
+  type ResourceSuggestion,
+} from '@/lib/app/resources/suggestion';
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
 import type {
   CapabilityContext,
@@ -176,5 +180,7 @@ export function suggestionsByCall(provenance: unknown): (ResourceSuggestion | nu
 }
 
 export function suggestionsFromProvenance(provenance: unknown): ResourceSuggestion[] {
-  return suggestionsByCall(provenance).filter((s): s is ResourceSuggestion => s !== null);
+  return uniqueSuggestions(
+    suggestionsByCall(provenance).filter((s): s is ResourceSuggestion => s !== null)
+  );
 }

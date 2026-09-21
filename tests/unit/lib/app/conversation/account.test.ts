@@ -192,6 +192,32 @@ describe('the parts', () => {
     expect(parts[0]?.detail).toMatch(/a film and a piece of writing of hers/);
   });
 
+  it('counts two of a kind as two, not as one', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['suggest_resource', 'suggest_resource'],
+        suggestions: [
+          { id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' },
+          { id: 'b', kind: 'film', title: 'B', subtitle: 's', length: '2:00' },
+        ],
+      })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Pointed you to “A” and “B” — two films of hers you can open beside this reply.'
+    );
+    const readings = accountParts(
+      input({
+        capabilities: ['suggest_resource'],
+        suggestions: [
+          { id: 'a', kind: 'reading', title: 'A', subtitle: 's', length: '1 min' },
+          { id: 'b', kind: 'reading', title: 'B', subtitle: 's', length: '2 min' },
+          { id: 'c', kind: 'film', title: 'C', subtitle: 's', length: '3:00' },
+        ],
+      })
+    );
+    expect(readings[0]?.detail).toMatch(/a film and two pieces of writing of hers/);
+  });
+
   it('still says the turn offered something when the resource has since left the library', () => {
     // The trace says the call answered; the resolver found no such id. The
     // turn did something, and the account does not fall silent about it.

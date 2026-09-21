@@ -1031,6 +1031,11 @@ describe('a resource offered with a reply', () => {
         capabilitySlug: 'suggest_resource',
         result: { success: false, error: { code: 'unknown_resource', message: 'no' } },
       });
+      // And the same offer twice is one chip, not two with one key.
+      latestTurn().push('capability_result', {
+        capabilitySlug: 'suggest_resource',
+        result: { success: true, data: onStalling },
+      });
       latestTurn().push('content', { delta: 'There is a piece on exactly this.' });
       latestTurn().push('done', {});
       latestTurn().close();

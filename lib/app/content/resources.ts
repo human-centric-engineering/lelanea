@@ -239,17 +239,20 @@ export function buildResourcesFileSchema(known: {
         });
       }
     }
+    // One namespace across BOTH lists, not one per list: an id is what the
+    // suggestion tool and the drawer's pin resolve by, and a film and a
+    // reading sharing one would always resolve to the film (`/code-review`).
+    const seen = new Set<string>();
     for (const [list, items] of [
       ['films', file.films],
       ['readings', file.readings],
     ] as const) {
-      const seen = new Set<string>();
       for (const [index, item] of items.entries()) {
         if (seen.has(item.id)) {
           ctx.addIssue({
             code: 'custom',
             path: [list, index, 'id'],
-            message: `duplicate ${list} id "${item.id}"`,
+            message: `duplicate resource id "${item.id}" — ids are one namespace across films and readings`,
           });
         }
         seen.add(item.id);

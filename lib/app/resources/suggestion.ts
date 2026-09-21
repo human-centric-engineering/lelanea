@@ -46,3 +46,16 @@ export function suggestionFromResult(result: unknown): ResourceSuggestion | null
   const parsed = suggestionResultSchema.safeParse(result);
   return parsed.success ? parsed.data.data : null;
 }
+
+/**
+ * One offer per resource. A turn that answers the tool twice for the same id
+ * — a retry after a refusal, a duplicate in a parallel batch — offered one
+ * thing; two chips and “X” and “X” in the account would say otherwise
+ * (`/code-review`). Order is first-seen.
+ */
+export function uniqueSuggestions(
+  suggestions: readonly ResourceSuggestion[]
+): ResourceSuggestion[] {
+  const seen = new Set<string>();
+  return suggestions.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
+}

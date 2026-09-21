@@ -315,10 +315,18 @@ describe('a malformed file fails, naming the fault', () => {
     expect(messages.join('\n')).toMatch(/words.default is required/);
   });
 
-  it('rejects a duplicate id within a list', () => {
+  it('rejects a duplicate id within a list, and across the two lists', () => {
     const { ok, messages } = parse(fixture({ films: [film('dup', null), film('dup', null)] }));
     expect(ok).toBe(false);
-    expect(messages.join('\n')).toMatch(/duplicate films id "dup"/);
+    expect(messages.join('\n')).toMatch(/duplicate resource id "dup"/);
+
+    // An id is what the suggestion tool resolves by: a film and a reading
+    // sharing one would always resolve to the film.
+    const across = parse(
+      fixture({ films: [film('same', null)], readings: [reading('same', null)] })
+    );
+    expect(across.ok).toBe(false);
+    expect(across.messages.join('\n')).toMatch(/one namespace/);
   });
 
   it('rejects a film or reading whose link is not http(s)', () => {

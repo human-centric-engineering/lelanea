@@ -24,7 +24,11 @@ import {
 } from '@/lib/app/agent/endings';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
-import { suggestionFromResult, type ResourceSuggestion } from '@/lib/app/resources/suggestion';
+import {
+  suggestionFromResult,
+  uniqueSuggestions,
+  type ResourceSuggestion,
+} from '@/lib/app/resources/suggestion';
 import { SLOT_WRITE_CAPABILITY } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
@@ -389,20 +393,20 @@ export function useConversation(options: Options = {}): ConversationState {
               if (capabilityAnswered(event.result)) {
                 capabilities = [...capabilities, event.capabilitySlug];
                 const suggestion = suggestionFromResult(event.result);
-                if (suggestion) suggestions = [...suggestions, suggestion];
+                if (suggestion) suggestions = uniqueSuggestions([...suggestions, suggestion]);
                 setLive((current) => current && { ...current, capabilities, suggestions });
               }
               return;
             case 'capability_results': {
               const answered = event.results.filter((r) => capabilityAnswered(r.result));
               capabilities = [...capabilities, ...answered.map((r) => r.capabilitySlug)];
-              suggestions = [
+              suggestions = uniqueSuggestions([
                 ...suggestions,
                 ...answered.flatMap((r) => {
                   const suggestion = suggestionFromResult(r.result);
                   return suggestion ? [suggestion] : [];
                 }),
-              ];
+              ]);
               setLive((current) => current && { ...current, capabilities, suggestions });
               return;
             }

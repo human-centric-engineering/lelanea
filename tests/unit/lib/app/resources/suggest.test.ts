@@ -142,6 +142,15 @@ describe('reading a suggestion back', () => {
       'on-stalling',
     ]);
     expect(suggestionsFromProvenance(null)).toEqual([]);
+    // Twice for the same id — a retry after a refusal — is one offer.
+    expect(
+      suggestionsFromProvenance({
+        capabilityCalls: [
+          { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'evidence' } },
+          { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'evidence' } },
+        ],
+      }).map((s) => s.id)
+    ).toEqual(['evidence']);
     expect(suggestionsFromProvenance({ citations: [] })).toEqual([]);
   });
 });

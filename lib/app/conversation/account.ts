@@ -164,14 +164,29 @@ const pointedTo: AccountSource = (input) => {
   const titles = input.suggestions.map((s) => `“${s.title}”`);
   const list =
     titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(', ')} and ${titles.at(-1)}`;
-  const kinds = input.suggestions.map((s) => (s.kind === 'film' ? 'a film' : 'a piece of writing'));
-  const what = kinds.every((k) => k === kinds[0]) ? kinds[0] : 'a film and a piece of writing';
+  const films = input.suggestions.filter((s) => s.kind === 'film').length;
+  const readings = input.suggestions.length - films;
+  // Plural where there is more than one of a kind: "two films" reads as two
+  // films, and "a film" over two of them read as one (`/code-review`).
+  const what =
+    films > 0 && readings > 0
+      ? `${count(films, 'film', 'films')} and ${count(readings, 'piece of writing', 'pieces of writing')}`
+      : films > 0
+        ? count(films, 'film', 'films')
+        : count(readings, 'piece of writing', 'pieces of writing');
   return {
     key: 'pointed_to',
     line: `Pointed you to ${list}`,
     detail: `Pointed you to ${list} — ${what} of hers you can open beside this reply.`,
   };
 };
+
+/** "a film", "two films", "three pieces of writing" — small counts as words. */
+function count(n: number, one: string, many: string): string {
+  const words = ['', 'a', 'two', 'three', 'four', 'five'];
+  const number = words[n] ?? String(n);
+  return n === 1 ? `${number} ${one}` : `${number} ${many}`;
+}
 
 /**
  * A capability this account has no words for. Every slug her seat may call has
