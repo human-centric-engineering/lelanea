@@ -166,5 +166,36 @@ export const slotTaxonomyUploadSchema = z.strictObject({
   file: z.unknown(),
 });
 
+/**
+ * Longest a member's correction may be. A note is a sentence or two she wrote;
+ * this is generous against that without being a door for a paste of a book.
+ */
+export const MAX_NOTE_LENGTH = 2000;
+
+/**
+ * A member correcting one of her notes (t-73).
+ *
+ * Not a definition schema, and it is here for the reason the header gives: the
+ * panel is a client component and imports these bounds, so the schema cannot
+ * live beside the Prisma-backed store it feeds.
+ *
+ * `slotSlug` is in the **body** rather than the path, unlike every admin route
+ * above. A slug is the identity of a question, not of a resource the member
+ * owns — there is no `/notes/<slug>` to `PUT`, because a member cannot create
+ * one and cannot address one that has no answer. The route refuses any slug
+ * with no head of the caller's own, which is what stops the body being a
+ * write-anything door.
+ */
+export const slotCorrectionSchema = z.strictObject({
+  slotSlug: boundedSlug('A slot slug'),
+  value: z
+    .string()
+    .trim()
+    .min(1, 'A correction cannot be empty.')
+    .max(MAX_NOTE_LENGTH, `A correction is longer than ${MAX_NOTE_LENGTH} characters.`),
+});
+
+export type SlotCorrection = z.infer<typeof slotCorrectionSchema>;
+
 export type SlotDefinitionUpdate = z.infer<typeof slotDefinitionUpdateSchema>;
 export type SlotDefinitionCreate = z.infer<typeof slotDefinitionCreateSchema>;

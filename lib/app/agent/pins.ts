@@ -37,6 +37,9 @@
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
 import { readableSlotGroups } from '@/lib/app/content/slot-taxonomy';
+// One spelling of the capture slug, shared with the panel that refreshes when
+// it answers — see the constant's own docblock for why it lives there.
+import { SLOT_WRITE_CAPABILITY } from '@/lib/app/slots/notes-view';
 import {
   PINNED_MODEL,
   PINNED_MODEL_CAPABILITIES,
@@ -235,7 +238,7 @@ export const READ_ONLY_CAPABILITY_SLUGS = ['search_knowledge_base', 'get_state']
  * before, against the restated rule. Read the capability's `execute()` first,
  * and write the argument down as this one is written down.
  */
-export const SELF_WRITE_CAPABILITY_SLUGS = ['fill_slot'] as const;
+export const SELF_WRITE_CAPABILITY_SLUGS = [SLOT_WRITE_CAPABILITY] as const;
 
 /**
  * Every capability she may ever hold: what reads, plus the sanctioned writes.

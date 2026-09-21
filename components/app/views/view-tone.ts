@@ -42,6 +42,13 @@ import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
  */
 export const VIEW_TONES: Readonly<Record<string, string>> = {
   '/app/journey': 'var(--color-status-green)',
+  // Her notes take the blue, which no other destination uses. The band is a
+  // SURFACE, so the raw hue is the right half of the rule — the -ink siblings
+  // are for type (see `shell.md`, "Coloured type is a different table"). It is
+  // deliberately not the secondary ink that usage, account and workspace share:
+  // this is the one destination that changes while you are looking at it, and a
+  // fourth route in the same colour would say it is more of the same.
+  '/app/notes': 'var(--color-status-blue)',
   '/app/situations': 'var(--color-status-yellow)',
   '/app/share': 'var(--color-accent-ink)',
   '/app/usage': 'var(--color-secondary-ink)',

@@ -24,6 +24,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import { initialsFor, ShellNav } from '@/components/app/shell/shell-nav';
 import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
@@ -206,10 +207,14 @@ describe('ShellNav — slim mode', () => {
     // or a screen-reader user loses the nav entirely at 64px.
     expect(screen.queryByText('Lelañea')).toBeNull();
     expect(screen.getByRole('link', { name: 'Life situations' })).toBeTruthy();
-    // Five destinations and the wordmark — which keeps its own `aria-label`
+    // Six destinations and the wordmark — which keeps its own `aria-label`
     // when its text is hidden, so it stays a link. The account footer is a
     // button, not a link, since it opens a menu.
-    expect(screen.getAllByRole('link')).toHaveLength(6);
+    //
+    // Derived from `SHELL_NAV` rather than written as a number: this count had
+    // to be edited by hand when t-73 added her notes, and a literal here fails
+    // in a way that says nothing about what changed.
+    expect(screen.getAllByRole('link')).toHaveLength(SHELL_NAV.filter(isNavItem).length + 1);
     expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();
   });
 

@@ -89,10 +89,25 @@ const STEP_SHIFT = 48;
  * brings it back.
  */
 export function ConversationPane() {
-  const { chatW, chatSlim, setChatSlim, width, wsOpen, pane, modulePlace } = useShellLayout();
+  const {
+    chatW,
+    chatSlim,
+    setChatSlim,
+    width,
+    wsOpen,
+    pane,
+    modulePlace,
+    noteSlotsWritten,
+    ask,
+    takeAsk,
+  } = useShellLayout();
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
-  const conversation = useConversation();
+  // The two cross-pane channels, both explained on the provider: a turn that
+  // captured tells the notes panel to re-read, and "Ask her about this" on a
+  // note puts its question in the box here. Neither is layout, and both live
+  // there because the panes are siblings (see `modulePlace`).
+  const conversation = useConversation({ onSlotsWritten: noteSlotsWritten });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
   const foldByKeyboard = useRef(false);
@@ -289,6 +304,8 @@ export function ConversationPane() {
             onSend={() => conversation.send()}
             busy={conversation.phase !== 'idle'}
             voiceInput={conversation.voiceInput}
+            insert={ask}
+            onInserted={takeAsk}
           />
         </>
       )}
