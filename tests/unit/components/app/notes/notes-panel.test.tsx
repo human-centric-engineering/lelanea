@@ -45,16 +45,31 @@ const nav = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   const state = { entries: ['/app/notes'], index: 0 };
   const emit = () => listeners.forEach((listener) => listener());
+  /**
+   * When set, a `replace` is parked here rather than committed — the way a
+   * real navigation on a dynamic route lands a moment later. `settle()`
+   * commits them.
+   */
+  const held: { on: boolean; replaces: (() => void)[] } = { on: false, replaces: [] };
+  const commitReplace = (href: string) => {
+    state.entries[state.index] = href;
+    emit();
+  };
   return {
     state,
+    held,
+    settle: () => {
+      const pending = held.replaces.splice(0);
+      pending.forEach((commit) => commit());
+    },
     push: (href: string) => {
       state.entries = [...state.entries.slice(0, state.index + 1), href];
       state.index += 1;
       emit();
     },
     replace: (href: string) => {
-      state.entries[state.index] = href;
-      emit();
+      if (held.on) held.replaces.push(() => commitReplace(href));
+      else commitReplace(href);
     },
     back: () => {
       if (state.index > 0) state.index -= 1;
@@ -68,6 +83,8 @@ const nav = vi.hoisted(() => {
     reset: (href = '/app/notes') => {
       state.entries = [href];
       state.index = 0;
+      held.on = false;
+      held.replaces = [];
     },
   };
 });
@@ -920,6 +937,40 @@ describe('finding your way around', () => {
     expect(row?.getAttribute('aria-expanded')).toBe('false');
     // One control, one name: the header announces what it does and what it is.
     expect(screen.getAllByRole('button', { name: /^Fold this note: life work$/ })).toHaveLength(1);
+  });
+
+  it('keeps typing that lands while the last search is still reaching the URL', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    nav.held.on = true;
+
+    await userEvent.type(search(), 'mon');
+    // The pause ends and the box sends "mon" — which has not committed yet.
+    await waitFor(() => expect(nav.held.replaces).toHaveLength(1));
+    await userEvent.type(search(), 'ey');
+    // Now "mon" lands, late. It is the box's own echo, not a Back.
+    await act(async () => nav.settle());
+
+    expect((search() as HTMLInputElement).value).toBe('money');
+    nav.held.on = false;
+    await waitFor(() => expect(nav.current()).toBe('/app/notes?q=money'));
+  });
+
+  it('does not take focus from the search box when a folded note comes back', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    // Fold one note, so it is the note that last took focus.
+    const card = screen.getByText('Money is tight this month.').closest('section') as HTMLElement;
+    await userEvent.click(within(card).getAllByRole('button', { name: /fold this note/i })[0]);
+
+    // Narrow it away, then widen so it comes back — typing throughout.
+    await userEvent.type(search(), 'brother');
+    await waitFor(() => expect(readings()).toHaveLength(1));
+    await userEvent.clear(search());
+    await waitFor(() => expect(readings()).toHaveLength(4));
+
+    expect(document.activeElement).toBe(search());
   });
 
   it('draws the page in the order it was answered in while a new sort is out', async () => {

@@ -227,12 +227,27 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    * middle of typing is not trimmed out from under the caret.
    */
   const [draft, setDraft] = useState(q);
+  /*
+   * Every search this box has sent that the URL has not yet echoed back.
+   *
+   * On a dynamic route `useSearchParams` moves only when the `replace` commits,
+   * and the reader can go on typing meanwhile. Syncing the box to that late
+   * echo put "ab" back over "abc" and lost the "c" (`/code-review`, round 1).
+   * An echo of our own is recognised and skipped; any other move of `q` — Back,
+   * Clear, a followed link — still resets the box.
+   */
+  const sent = useRef(new Set<string>());
   useEffect(() => {
+    if (sent.current.delete(q)) return;
     setDraft((current) => (current.trim() === q ? current : q));
   }, [q]);
   useEffect(() => {
-    if (draft.trim() === q) return;
-    const timer = setTimeout(() => navigate({ q: draft }, 'replace'), SEARCH_PAUSE_MS);
+    const wanted = draft.trim();
+    if (wanted === q) return;
+    const timer = setTimeout(() => {
+      sent.current.add(wanted);
+      navigate({ q: draft }, 'replace');
+    }, SEARCH_PAUSE_MS);
     return () => clearTimeout(timer);
   }, [draft, q, navigate]);
 
@@ -271,6 +286,16 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   }>({ layout, open: new Map() });
   /** The note whose chevron was just used — it takes focus in its new shape. */
   const [focused, setFocused] = useState<string | null>(null);
+  /*
+   * Spent once used. A child's effects run before this one in the same commit,
+   * so the note has taken focus by the time this clears the flag. Left set, a
+   * note that dropped out of the results and came back — a search narrowed and
+   * then widened, or a switch of view — remounted still holding it, and took
+   * focus out of the search box mid-keystroke (`/code-review`, round 1).
+   */
+  useEffect(() => {
+    if (focused !== null) setFocused(null);
+  }, [focused]);
   const isOpen = (slug: string) =>
     (overrides.layout === layout ? overrides.open.get(slug) : undefined) ?? layout === 'cards';
   const toggle = (slug: string) => {
