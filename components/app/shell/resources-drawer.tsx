@@ -97,10 +97,15 @@ export function useResourcesSelection(): ResourcesLoad {
   const key = resourceKeyFor(pathname);
   const [load, setLoad] = useState<ResourcesLoad>({ status: 'idle' });
 
-  // What the current `load` answers, so an open on the same key is a no-op and
-  // a stale response for a key the reader has since left is dropped.
+  // What the current `load` answers, so an open on the same key is a no-op.
   const answered = useRef<string | null>(null);
-  const inFlight = useRef<string | null>(null);
+  // The request in flight, by IDENTITY rather than by its string: a late
+  // answer to an earlier request for the SAME key must be dropped too, or a
+  // failure that arrives after the reader has come back to that key shadows
+  // the fresh success (`/code-review` round 1). A ticket per request, and only
+  // the holder of the current ticket may settle the load.
+  const ticket = useRef(0);
+  const inFlight = useRef<{ request: string; ticket: number } | null>(null);
 
   // Same construction as `map-drawer.tsx`: set in the body and cleared in the
   // cleanup, so StrictMode's mount-unmount-mount leaves it true.
@@ -115,21 +120,23 @@ export function useResourcesSelection(): ResourcesLoad {
   useEffect(() => {
     if (!open) return;
     const request = drawerFilm ? `${key}?film=${encodeURIComponent(drawerFilm)}` : key;
-    if (answered.current === request || inFlight.current === request) return;
-    inFlight.current = request;
+    if (answered.current === request || inFlight.current?.request === request) return;
+    const mine = ++ticket.current;
+    inFlight.current = { request, ticket: mine };
+    const current = (): boolean => mounted.current && inFlight.current?.ticket === mine;
     // Keep the last good panel on screen while the next one loads; only a
     // first open, or an open after a failure, shows the loading line.
-    setLoad((current) => (current.status === 'loaded' ? current : { status: 'loading' }));
+    setLoad((state) => (state.status === 'loaded' ? state : { status: 'loading' }));
     apiClient
       .get<ResourcesSelection>(`${RESOURCES_ENDPOINT}/${request}`)
       .then((selection) => {
-        if (!mounted.current || inFlight.current !== request) return;
+        if (!current()) return;
         inFlight.current = null;
         answered.current = request;
         setLoad({ status: 'loaded', selection });
       })
       .catch(() => {
-        if (!mounted.current || inFlight.current !== request) return;
+        if (!current()) return;
         inFlight.current = null;
         answered.current = null;
         setLoad({ status: 'failed' });
@@ -188,24 +195,41 @@ const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer' } as const;
  * read as her words on Boundaries — which is the wrong kind of true.
  */
 export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
-  if (load.status === 'idle' || load.status === 'loading') {
-    return (
-      <p className="text-muted-foreground text-sm leading-relaxed" aria-live="polite">
-        Finding her words on this…
-      </p>
-    );
-  }
-  if (load.status === 'failed') {
-    return (
-      <p className="text-muted-foreground text-sm leading-relaxed" role="status">
-        Her resources could not be loaded. Close this and open it again in a moment.
-      </p>
-    );
-  }
+  /*
+   * ONE status line, always mounted, whose text changes — never a line that
+   * mounts with the state. A live region announces changes to content it
+   * already had; one that arrives with its text arrives silently, so a
+   * screen-reader user heard neither "Finding…" nor its replacement
+   * (`/code-review` round 1). Empty once loaded, and `sr-only` then so it
+   * takes no room — `hidden` would take it out of the tree and lose the
+   * announcement the same way.
+   */
+  const status =
+    load.status === 'failed'
+      ? 'Her resources could not be loaded. Close this and open it again in a moment.'
+      : load.status === 'loaded'
+        ? ''
+        : 'Finding her words on this…';
 
-  const { words, wordsAreOwn, films, readings } = load.selection;
   return (
     <div className="flex flex-col gap-4">
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn('text-muted-foreground text-sm leading-relaxed', status === '' && 'sr-only')}
+      >
+        {status}
+      </p>
+      {load.status === 'loaded' && <ResourcesSelectionBody selection={load.selection} />}
+    </div>
+  );
+}
+
+/** The panel once the selection is here: the card, `to watch`, `to read`. */
+function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }) {
+  const { words, wordsAreOwn, films, readings } = selection;
+  return (
+    <>
       {/* The prototype's `.words`: her voice on the card wash, not on the page. */}
       <figure className="m-0 rounded-[18px] border border-[var(--color-card-border)] bg-[var(--color-card)] px-5 py-[18px]">
         <blockquote className="m-0">
@@ -351,6 +375,6 @@ export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
           </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }

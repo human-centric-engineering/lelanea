@@ -514,6 +514,93 @@ describe('when it cannot load', () => {
   });
 });
 
+describe('a request is identified, not just named', () => {
+  it('drops a late failure for a request the reader has since superseded on the SAME key', async () => {
+    // Values (A) is slow. The reader goes to Boundaries (B answers), then back
+    // to Values (C answers). A then fails, late. A guard that compares request
+    // STRINGS sees "values" in flight and marks the panel failed — and then
+    // drops C's success because nothing is in flight. Identity, not string
+    // (review round 1).
+    let failA: (e: Error) => void = () => {};
+    const slowA = new Promise<ResourcesSelection>((_, reject) => {
+      failA = reject;
+    });
+    let valuesCalls = 0;
+    get.mockImplementation((path: string) => {
+      if (path === `${RESOURCES_ENDPOINT}/values`) {
+        valuesCalls += 1;
+        return valuesCalls === 1 ? slowA : Promise.resolve(fullSelection());
+      }
+      if (path === `${RESOURCES_ENDPOINT}/boundaries`) return Promise.resolve(fallbackSelection());
+      return new Promise<never>(() => {});
+    });
+    const rerenderAt = (pathname: string) => {
+      mockPathname.current = pathname;
+      view.rerender(
+        <>
+          <ShellRail />
+          <Drawers />
+        </>
+      );
+    };
+    const view = renderDrawers('/app/modules/values');
+    await openResources();
+
+    rerenderAt('/app/modules/boundaries');
+    await within(panel()).findByText(/It is an invitation\./);
+    rerenderAt('/app/modules/values');
+    await within(panel()).findByText(/anchor/);
+
+    await act(async () => {
+      failA(new APIClientError('late', 'INTERNAL_ERROR', 500));
+      await Promise.resolve();
+    });
+
+    // Still Values, still her words — the late failure changed nothing.
+    expect(within(panel()).getByText(/anchor/)).toBeInTheDocument();
+    expect(within(panel()).getByRole('status')).toHaveTextContent('');
+  });
+});
+
+describe('the status line is one live region, not a line that mounts with the state', () => {
+  it('is the same element while loading, once loaded, and on failure', async () => {
+    // A live region announces CHANGES to content it already had; one that
+    // mounts with its text is silent. So the element must persist and only
+    // its text change (review round 1).
+    let answer: (s: ResourcesSelection) => void = () => {};
+    get.mockImplementation(
+      () =>
+        new Promise<ResourcesSelection>((resolve) => {
+          answer = resolve;
+        })
+    );
+    renderDrawers();
+    await openResources();
+    const status = within(panel()).getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveTextContent(/Finding her words/);
+
+    // Loaded: same element, now empty and out of the layout.
+    await act(async () => {
+      answer(fullSelection());
+      await Promise.resolve();
+    });
+    await within(panel()).findByText(/anchor/);
+    expect(within(panel()).getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('');
+    expect(status.className).toContain('sr-only');
+  });
+
+  it('carries the failure in the same element', async () => {
+    serve({ values: new APIClientError('boom', 'INTERNAL_ERROR', 500) });
+    renderDrawers();
+    await openResources();
+    const status = await within(panel()).findByRole('status');
+    await waitFor(() => expect(status).toHaveTextContent(/could not be loaded/));
+    expect(status.className).not.toContain('sr-only');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The document table is pinned to the real collection
 // ---------------------------------------------------------------------------
