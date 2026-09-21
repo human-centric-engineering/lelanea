@@ -112,8 +112,8 @@ export interface Note {
    * (`lib/framework/data-slots/capabilities/masking.ts`). The panel says that in
    * a sentence rather than showing `<redacted: special_category>`.
    *
-   * It is not "nothing was kept": masking covers the value only, so the stored
-   * reasoning note may still paraphrase what was said — see
+   * It is not "nothing was kept": masking covers the value only, so the
+   * reasoning note — a paraphrase of what was said — is stored and shown. See
    * {@link Note.reasoningNote}.
    */
   withheld: boolean;
@@ -122,14 +122,12 @@ export interface Note {
   /** The stored classifier; {@link noteSourceWords} turns it into a sentence. */
   sourceType: string;
   /**
-   * Her one line on how the reading was made — or `null` on every
-   * `special_category` note, where it is withheld (t-80). Masking at capture
-   * covers the value and not this line, and she writes it as a paraphrase of
-   * what the person said, so on an Art. 9 note it would show the very words the
-   * value was masked to keep out. The capture-side fix is Daybreak's
-   * (`daybreak#269`); until then the row at rest still holds it.
+   * Her one line on how the reading was made — a paraphrase of what was said.
+   * On a `withheld` note it is the only trace of the words, and is shown as the
+   * summary that was kept (owner ruling, t-80): masking at capture covers the
+   * value and not this line.
    */
-  reasoningNote: string | null;
+  reasoningNote: string;
   version: number;
   capturedAt: string;
   /** The conversation it was drawn from, where the capture recorded one. */

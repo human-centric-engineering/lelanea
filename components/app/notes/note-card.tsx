@@ -224,21 +224,16 @@ export function formatWhen(iso: string): string {
  * What a withheld note says instead of its sentinel. Exported because the list
  * row says the same thing, and two copies of it would drift.
  *
- * ## It says what the page shows, not what the database holds (t-80)
+ * ## A summary was kept, and it says so (t-80)
  *
  * It used to say Lelañea "kept no record of what you said", which was untrue:
- * masking at capture covers the reading only, and the reasoning note beside it
- * is stored as written — as a paraphrase of what was said. That is Daybreak's
- * to fix (`daybreak#269`), rows already written included. Until it is, every
- * line on an Art. 9 card claims only that the words are left out of **these
- * notes**, which the server makes true by withholding both.
+ * masking at capture covers the reading only, and the reasoning note is stored
+ * as written — a paraphrase of what was said. The owner's ruling was to show
+ * that paraphrase rather than hide it, so this line points at it instead of
+ * denying it exists.
  */
 export const WITHHELD_WORDS =
-  'Lelañea noticed something here. What you say about health, feeling and belief is left out of these notes.';
-
-/** What the reasoning fold says on an Art. 9 note, where the server withholds the line. */
-export const REASONING_WITHHELD_WORDS =
-  'Not shown. Lelañea’s reasoning about health, feeling and belief is left out of these notes too.';
+  'Lelañea kept a summary of this rather than your exact words. It is under “How Lelañea came to this”.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -263,7 +258,7 @@ function excerpt(text: string): string {
  */
 export function askText(note: Note): string {
   if (note.withheld) {
-    return 'There is something you noted about me that isn’t shown in your notes. Can we talk about that?';
+    return 'There is something you noted about me without keeping my exact words. Can we talk about that?';
   }
   return `You wrote down: “${excerpt(note.value)}”. Can we talk about that?`;
 }
@@ -648,7 +643,7 @@ export function NoteCard({
             >
               <p className="whitespace-pre-line text-[var(--color-heading)]">
                 {note.previous.withheld
-                  ? 'Something Lelañea noticed, left out of these notes.'
+                  ? 'Something Lelañea noted without keeping your exact words.'
                   : note.previous.value}
               </p>
               <p>
@@ -661,13 +656,7 @@ export function NoteCard({
           ) : null}
 
           <Disclosure plain summary="How Lelañea came to this">
-            {/*
-              `null` only on an Art. 9 note (t-80): the server withholds the
-              line, because it paraphrases what the value was masked to keep
-              out. Said plainly rather than dropped, so an empty fold does not
-              read as Lelañea having had no reason.
-            */}
-            <p>{note.reasoningNote ?? REASONING_WITHHELD_WORDS}</p>
+            <p>{note.reasoningNote}</p>
             {note.asking ? (
               /*
                 Her wording, quoted. Third person inside the quotation marks is

@@ -25,12 +25,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  certaintyBand,
-  confidenceWords,
-  REASONING_WITHHELD_WORDS,
-  WITHHELD_WORDS,
-} from '@/components/app/notes/note-card';
+import { certaintyBand, confidenceWords, WITHHELD_WORDS } from '@/components/app/notes/note-card';
 import { NotesPanel } from '@/components/app/notes/notes-panel';
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import { notesQuerySchema, queryNotes } from '@/lib/app/slots/notes-query';
@@ -471,8 +466,8 @@ describe('what the panel shows', () => {
   it('says what a withheld note is instead of printing the sentinel', async () => {
     world.reads = [
       view([
-        // A standard note beside it, whose reasoning IS drawn — so the
-        // withheld line below is the Art. 9 card's, not an empty page's.
+        // A standard note beside it, so the correction count below has
+        // something to count.
         note(),
         note({
           slotSlug: 'life_physical_health',
@@ -480,8 +475,9 @@ describe('what the panel shows', () => {
           withheld: true,
           sensitivity: 'special_category',
           correctable: false,
-          // What the server sends for an Art. 9 note since t-80.
-          reasoningNote: null,
+          // Masking covers the value only, so this line is stored and — by the
+          // owner's ruling (t-80) — shown as the summary that was kept.
+          reasoningNote: 'You mentioned the migraines getting worse since the new role.',
         }),
       ]),
     ];
@@ -489,11 +485,11 @@ describe('what the panel shows', () => {
 
     expect(await screen.findByText(WITHHELD_WORDS)).toBeTruthy();
     expect(screen.queryByText(/redacted/)).toBeNull();
-    // The fold says the reasoning is not shown, rather than printing an empty
-    // line — and nothing on the card claims the words were never kept, which
-    // the rows at rest do not bear out (daybreak#269).
-    expect(screen.getByText('She put this together from two things said in passing.')).toBeTruthy();
-    expect(screen.getByText(REASONING_WITHHELD_WORDS)).toBeTruthy();
+    // The summary is on the card, and nothing claims the words were never kept
+    // — the row at rest holds that summary, so the old line was untrue.
+    expect(
+      screen.getByText('You mentioned the migraines getting worse since the new role.')
+    ).toBeTruthy();
     expect(screen.queryByText(/no record|never kept|never stored/i)).toBeNull();
     // The guard's remedy is still on the card (`HB10`): two cards, two asks,
     // and only the standard one offers a correction.

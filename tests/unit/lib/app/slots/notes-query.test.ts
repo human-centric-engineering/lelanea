@@ -94,10 +94,9 @@ describe('search', () => {
     ]);
   });
 
-  it('never matches an Art. 9 note’s stored sentinel or its reasoning — only its wording', () => {
-    // The reasoning is stored unmasked (t-80), so the fixture gives it the
-    // SAME matchable word a standard note carries, and the standard one is
-    // asserted found.
+  it('matches a blanked-out note on its summary and wording, never its sentinel', () => {
+    // The card shows the summary since t-80, so a search finds it there. The
+    // sentinel is never matched: "redacted" would otherwise find every one.
     const art9 = note({
       slotSlug: 'life_physical_health',
       value: '<redacted: special_category>',
@@ -113,7 +112,10 @@ describe('search', () => {
     });
     const both = [art9, standard];
 
-    expect(slugs(queryNotes(both, { q: 'migraines' }).notes)).toEqual(['life_work']);
+    expect(slugs(queryNotes(both, { q: 'migraines' }).notes).sort()).toEqual([
+      'life_physical_health',
+      'life_work',
+    ]);
     expect(slugs(queryNotes(both, { q: 'redacted' }).notes)).toEqual([]);
     expect(slugs(queryNotes(both, { q: 'special_category' }).notes)).toEqual([]);
     // Its wording still finds it — the person can look for what was asked.

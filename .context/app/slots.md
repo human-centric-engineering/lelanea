@@ -731,23 +731,17 @@ it_, which routes the words back through the capture path where the masking
 applies. The panel says what happened in a sentence rather than printing
 `<redacted: special_category>`.
 
-**An Art. 9 note's reasoning is withheld too** (t-80). Masking covers `value`
-and nothing else — Daybreak's `fill_slot` passes the reasoning note straight to
-`appendSlotValue` — and her instructions ask for that line as a paraphrase of
-what the person said ([`voice.md`](./voice.md)). So the card printed the gist of
-exactly the words it had just said were not kept. `getNotes()` now returns
-`reasoningNote: null` for every `special_category` note, decided by the
-classification (like `correctable`) rather than by whether the value happens to
-be the sentinel, and before the search runs. The fold says the reasoning is not
-shown. `previous` never carried reasoning.
-
-**What this does not fix: the rows at rest.** An Art. 9 row still holds its
-reasoning as written, so nothing on the page may say the words were not kept.
-The copy says only that they are _left out of these notes_, which is true of
-what is displayed. Masking the reasoning at capture, and what to do about rows
-already written, are Daybreak's:
+**A blanked-out note shows its summary** (t-80, owner ruling 21 Sept 2026).
+Masking covers `value` and nothing else — Daybreak's `fill_slot` passes the
+reasoning note straight to `appendSlotValue` — and her instructions ask for that
+line as a paraphrase of what the person said ([`voice.md`](./voice.md)). The card
+used to say nothing was kept, then print the gist under "How Lelañea came to
+this". The ruling was to keep the gist rather than hide it — the exact words are
+gone, the summary is not, and a note with neither is worth nothing — so the card
+now says exactly that: _a summary rather than your exact words_, and where to find
+it. Nothing on the page may say the words were never kept. Whether the reasoning
+should be masked at capture too is Daybreak's question,
 [`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269).
-When that lands, the stronger wording can come back.
 
 **A correction cannot mint.** The route refuses any slug with no head of the
 caller's own — and refuses a hidden slug **with the same 404**, because
@@ -935,13 +929,10 @@ notes.** No pagination either: hiding half someone's record behind a control is
 a worse answer to §3.19 than a long page.
 
 **What a search matches.** The reading, how Lelañea came to it, what she was
-looking for, the tag and the heading. **An Art. 9 note matches on the slot's
-wording only — never the sentinel, never the reasoning.** Daybreak's `fill_slot`
-masks `value` and nothing else, so the reasoning note is stored as written
-([`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269));
-matching it would answer "is there a health note mentioning X?" about words the
-page does not show. Since t-80 `getNotes()` withholds that line before the
-search sees it, so this is the second of two. The previous
+looking for, the tag and the heading. **A blanked-out note never matches on its
+reading**, which is a sentinel — a search for "redacted" would find all of them.
+Its summary is searched like any other since t-80, because the card shows it;
+excluding it was right only while the page claimed those words were never kept. The previous
 version is not searched: a match has to be visible in the row it produced.
 
 **The search text is never logged.** The route logs counts, whether a search
@@ -1007,8 +998,7 @@ yet"_, which gets no controls at all.
 **To look at it with a real record**, `npx tsx --env-file=.env.local
 scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
 fortnight's worth: every visible group, a corrected and a twice-revised note,
-two Art. 9 notes (sentinel value, unmasked reasoning — the case search must not
-match), two of her own headings and one hidden development note that must never
+two blanked-out notes (sentinel value, the summary shown beside it), two of her own headings and one hidden development note that must never
 appear. Dev only; nothing runs it.
 
 ### What a person is not shown
