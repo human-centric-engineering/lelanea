@@ -14,6 +14,14 @@
  * The `documentId` → page table is pinned against the REAL collection, so a
  * document renamed in the content fails here rather than as a dead link.
  *
+ * ---------------------------------------------------------------------------
+ * FORK NOTE — the last section reads the real `lib/app/content` seam
+ * ---------------------------------------------------------------------------
+ * `DOCUMENT_PAGES` is pinned against Lelañea's foundational documents, and the
+ * welcome (`the_initiation`) is named as the one with no page. A fork with a
+ * different collection should rewrite that section against its own document
+ * ids and its own pages; everything above it runs on fixtures and can be kept.
+ *
  * @see components/app/shell/resources-drawer.tsx
  */
 
