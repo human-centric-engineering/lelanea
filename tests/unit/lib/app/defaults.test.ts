@@ -319,13 +319,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). TWO registrations, each mounted OVER an
-    // upstream slug rather than beside it: f-safety t-60's search, so each
+    // PINNED, not deleted (`HB2`). THREE registrations: two mounted OVER an
+    // upstream slug rather than beside it — f-safety t-60's search, so each
     // result says whose material it is, and f-slots t-72's `fill_slot`, so one
-    // turn writes a slot once. What is pinned is the handler the dispatcher
-    // ends up holding for each slug after the real lazy registration pass. A
+    // turn writes a slot once — and one of the app's own, f-resources t-77's
+    // `suggest_resource`. What is pinned is the handler the dispatcher ends up
+    // holding for each slug after the real lazy registration pass. A
     // registration under any other slug, or a built-in flush that ran after
-    // ours, fails here. A stray third capability is caught by the count.
+    // ours, fails here. A stray registration of one of THESE classes is caught
+    // by the count; one of a class this row has never heard of is not — the
+    // spy sees every registration including the platform's built-ins, and
+    // nothing on a call says which tier made it. The seam's roster is this
+    // row's list, kept by hand.
     seam: 'lib/app/capabilities.ts',
     risk: 'a stray capability would be dispatchable on every install',
     assert: async () => {
@@ -335,20 +340,27 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const { LabelledSearchKnowledgeCapability } =
         await import('@/lib/app/safety/labelled-search');
       const { GuardedFillSlotCapability } = await import('@/lib/app/slots/capture');
+      const { SuggestResourceCapability } = await import('@/lib/app/resources/suggest');
       const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
       __resetRegistrationForTests();
       registerBuiltInCapabilities();
       const search = capabilityDispatcher.getHandler('search_knowledge_base');
       const capture = capabilityDispatcher.getHandler('fill_slot');
-      const ours = registerSpy.mock.calls.filter(
-        ([capability]) =>
-          capability instanceof LabelledSearchKnowledgeCapability ||
-          capability instanceof GuardedFillSlotCapability
+      const suggest = capabilityDispatcher.getHandler('suggest_resource');
+      const ours = registerSpy.mock.calls.filter(([capability]) =>
+        [
+          LabelledSearchKnowledgeCapability,
+          GuardedFillSlotCapability,
+          SuggestResourceCapability,
+        ].some((cls) => capability instanceof cls)
       );
+      const appHandlers = ['search_knowledge_base', 'fill_slot', 'suggest_resource'];
       registerSpy.mockRestore();
       expect(search).toBeInstanceOf(LabelledSearchKnowledgeCapability);
       expect(capture).toBeInstanceOf(GuardedFillSlotCapability);
-      expect(ours).toHaveLength(2);
+      expect(suggest).toBeInstanceOf(SuggestResourceCapability);
+      expect(ours).toHaveLength(3);
+      expect(appHandlers.every((slug) => capabilityDispatcher.has(slug))).toBe(true);
       expect(initAppCapabilities()).toBeUndefined();
     },
   },

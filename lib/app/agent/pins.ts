@@ -159,6 +159,19 @@ export const GRANTED_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_k
 export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state', 'fill_slot'];
 
 /**
+ * What the resources seed grants: the agent may hand a person one of Lelañea
+ * Fulton's films or pieces of writing (f-resources t-77).
+ *
+ * Its own list because its own seed grants it
+ * (`prisma/seeds/app-lelanea/014-suggest-resource.ts`), which also creates the
+ * capability's row — the app's own tool, not one of Daybreak's or Sunrise's.
+ * No allowlist: an id in, a library record out. The instruction that tells the
+ * agent when to reach for it rides in the facilitation context beside the list
+ * of what may be suggested (`lib/app/resources/offering.ts`), read per turn.
+ */
+export const RESOURCE_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['suggest_resource'];
+
+/**
  * The exposure allowlist on both slot bindings — what she may read back, and
  * what she may write (f-slots t-72).
  *
@@ -201,7 +214,14 @@ export const SLOT_EXPOSURE_CONFIG = {
  * ({@link SLOT_EXPOSURE_CONFIG}). It writes nothing and cannot reach another
  * person's slots (f-slots t-72).
  */
-export const READ_ONLY_CAPABILITY_SLUGS = ['search_knowledge_base', 'get_state'] as const;
+export const READ_ONLY_CAPABILITY_SLUGS = [
+  'search_knowledge_base',
+  'get_state',
+  // Hands the person one of Lelañea Fulton's films or pieces of writing, by
+  // id (f-resources t-77). Reads the library and returns a record: no write,
+  // no delete, nothing on anyone's behalf — `lib/app/resources/suggest.ts`.
+  'suggest_resource',
+] as const;
 
 /**
  * The one capability she holds that writes — and what makes it admissible
