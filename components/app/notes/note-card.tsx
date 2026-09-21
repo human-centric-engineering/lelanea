@@ -33,9 +33,9 @@ import { cn } from '@/lib/utils';
  * ## Correcting, and the one note that cannot be corrected
  *
  * `correctable` is the server's answer and this component does not second-guess
- * it — a retired slot (she is no longer asking) and an Art. 9 slot (the words
- * were never stored, so there is nothing to correct and a correction would put
- * them at rest) both come back false, with the route refusing the same two
+ * it — a retired slot (she is no longer asking) and an Art. 9 slot (the reading
+ * was never stored, so there is nothing to correct and a correction would put
+ * it at rest) both come back false, with the route refusing the same two
  * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
  * card**, including those, because it is the door that still works: `HB10` —
  * the guard ships with its remedy.
@@ -223,9 +223,22 @@ export function formatWhen(iso: string): string {
 /**
  * What a withheld note says instead of its sentinel. Exported because the list
  * row says the same thing, and two copies of it would drift.
+ *
+ * ## It says what the page shows, not what the database holds (t-80)
+ *
+ * It used to say Lelañea "kept no record of what you said", which was untrue:
+ * masking at capture covers the reading only, and the reasoning note beside it
+ * is stored as written — as a paraphrase of what was said. That is Daybreak's
+ * to fix (`daybreak#269`), rows already written included. Until it is, every
+ * line on an Art. 9 card claims only that the words are left out of **these
+ * notes**, which the server makes true by withholding both.
  */
 export const WITHHELD_WORDS =
-  'Lelañea noticed something here and deliberately kept no record of what you said. Health, feeling and belief are left out of the written record.';
+  'Lelañea noticed something here. What you say about health, feeling and belief is left out of these notes.';
+
+/** What the reasoning fold says on an Art. 9 note, where the server withholds the line. */
+export const REASONING_WITHHELD_WORDS =
+  'Not shown. Lelañea’s reasoning about health, feeling and belief is left out of these notes too.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -250,7 +263,7 @@ function excerpt(text: string): string {
  */
 export function askText(note: Note): string {
   if (note.withheld) {
-    return 'There is something you noted about me but kept no record of. Can we talk about that?';
+    return 'There is something you noted about me that isn’t shown in your notes. Can we talk about that?';
   }
   return `You wrote down: “${excerpt(note.value)}”. Can we talk about that?`;
 }
@@ -635,7 +648,7 @@ export function NoteCard({
             >
               <p className="whitespace-pre-line text-[var(--color-heading)]">
                 {note.previous.withheld
-                  ? 'Something Lelañea kept no record of.'
+                  ? 'Something Lelañea noticed, left out of these notes.'
                   : note.previous.value}
               </p>
               <p>
@@ -648,7 +661,13 @@ export function NoteCard({
           ) : null}
 
           <Disclosure plain summary="How Lelañea came to this">
-            <p>{note.reasoningNote}</p>
+            {/*
+              `null` only on an Art. 9 note (t-80): the server withholds the
+              line, because it paraphrases what the value was masked to keep
+              out. Said plainly rather than dropped, so an empty fold does not
+              read as Lelañea having had no reason.
+            */}
+            <p>{note.reasoningNote ?? REASONING_WITHHELD_WORDS}</p>
             {note.asking ? (
               /*
                 Her wording, quoted. Third person inside the quotation marks is

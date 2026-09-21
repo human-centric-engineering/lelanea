@@ -183,6 +183,61 @@ describe('what a person is shown', () => {
     expect(note?.correctable).toBe(false);
   });
 
+  it('withholds the reasoning on an Art. 9 note, which masking never touched (t-80)', async () => {
+    // `fill_slot` masks the value only, so the stored reasoning is the
+    // paraphrase — here, of health prose. A second version, so `previous` is
+    // exercised too. The standard note beside it proves the population carries
+    // reasoning at all, so the absence below cannot pass on an empty set.
+    world.projections.push(definition('life_physical_health', { sensitivity: 'special_category' }));
+    world.values = [
+      value(ME, 'life_work'),
+      value(ME, 'life_physical_health', {
+        version: 1,
+        value: '<redacted: special_category>',
+        reasoningNote: 'Mentioned the migraines are back since the new job.',
+        supersededAt: new Date(1),
+      }),
+      value(ME, 'life_physical_health', {
+        version: 2,
+        value: '<redacted: special_category>',
+        reasoningNote: 'Said the chemo finishes next month.',
+      }),
+    ];
+
+    const view = await getNotes(ME);
+    const standard = view.notes.find((candidate) => candidate.slotSlug === 'life_work');
+    const art9 = view.notes.find((candidate) => candidate.slotSlug === 'life_physical_health');
+
+    expect(standard?.reasoningNote).toBe('She put this together from what was said.');
+    expect(art9?.reasoningNote).toBeNull();
+    expect(art9?.previous?.version).toBe(1);
+    // Nothing of either line reaches the response, on the head or behind it.
+    const wire = JSON.stringify(view);
+    expect(wire).not.toContain('migraines');
+    expect(wire).not.toContain('chemo');
+  });
+
+  it('withholds it by the classification, even where the value is prose', async () => {
+    // Our taxonomy marks it Art. 9; the projection did not, so capture never
+    // masked it. The reasoning is withheld all the same — the same
+    // stricter-of-both answer `correctable` takes.
+    world.projections.push(definition('life_physical_health', { sensitivity: 'standard' }));
+    world.ours.push({
+      slug: 'life_physical_health',
+      visibility: 'open',
+      sensitivity: 'special_category',
+    });
+    world.values.push(
+      value(ME, 'life_physical_health', { reasoningNote: 'Talked about the diagnosis.' })
+    );
+
+    const view = await getNotes(ME);
+    const note = view.notes.find((candidate) => candidate.slotSlug === 'life_physical_health');
+
+    expect(note?.withheld).toBe(false);
+    expect(note?.reasoningNote).toBeNull();
+  });
+
   it('carries the provenance a person is promised (§3.19)', async () => {
     const view = await getNotes(ME);
     const note = view.notes[0];

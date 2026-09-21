@@ -721,9 +721,8 @@ still the person's; but filing a fresh reading against a question nobody will
 ask again is a write nothing will read.
 
 **An Art. 9 note cannot be corrected**, and this is the one worth reading twice.
-`special_category` means masking-before-storage already replaced the prose with
-a sentinel _at capture_, so what the app holds is that something was noted and
-nothing else. A correction runs through `appendSlotValue`, which is the raw
+`special_category` means masking-before-storage already replaced the reading
+with a sentinel _at capture_. A correction runs through `appendSlotValue`, which is the raw
 engine and masks nothing — so "let them fix it" would put raw health and belief
 prose at rest through the one door built to keep it out, and masking the
 correction instead would tell someone their words were kept when they were
@@ -731,6 +730,24 @@ discarded. Refused, with the remedy shipped beside it (`HB10`): _ask her about
 it_, which routes the words back through the capture path where the masking
 applies. The panel says what happened in a sentence rather than printing
 `<redacted: special_category>`.
+
+**An Art. 9 note's reasoning is withheld too** (t-80). Masking covers `value`
+and nothing else — Daybreak's `fill_slot` passes the reasoning note straight to
+`appendSlotValue` — and her instructions ask for that line as a paraphrase of
+what the person said ([`voice.md`](./voice.md)). So the card printed the gist of
+exactly the words it had just said were not kept. `getNotes()` now returns
+`reasoningNote: null` for every `special_category` note, decided by the
+classification (like `correctable`) rather than by whether the value happens to
+be the sentinel, and before the search runs. The fold says the reasoning is not
+shown. `previous` never carried reasoning.
+
+**What this does not fix: the rows at rest.** An Art. 9 row still holds its
+reasoning as written, so nothing on the page may say the words were not kept.
+The copy says only that they are _left out of these notes_, which is true of
+what is displayed. Masking the reasoning at capture, and what to do about rows
+already written, are Daybreak's:
+[`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269).
+When that lands, the stronger wording can come back.
 
 **A correction cannot mint.** The route refuses any slug with no head of the
 caller's own — and refuses a hidden slug **with the same 404**, because
@@ -921,8 +938,10 @@ a worse answer to §3.19 than a long page.
 looking for, the tag and the heading. **An Art. 9 note matches on the slot's
 wording only — never the sentinel, never the reasoning.** Daybreak's `fill_slot`
 masks `value` and nothing else, so the reasoning note is stored as written
-(**t-80**, raised on Daybreak too); matching it would answer "is there a health
-note mentioning X?" about words the page says were never kept. The previous
+([`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269));
+matching it would answer "is there a health note mentioning X?" about words the
+page does not show. Since t-80 `getNotes()` withholds that line before the
+search sees it, so this is the second of two. The previous
 version is not searched: a match has to be visible in the row it produced.
 
 **The search text is never logged.** The route logs counts, whether a search

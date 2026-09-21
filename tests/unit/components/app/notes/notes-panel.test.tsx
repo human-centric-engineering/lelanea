@@ -25,7 +25,12 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { certaintyBand, confidenceWords } from '@/components/app/notes/note-card';
+import {
+  certaintyBand,
+  confidenceWords,
+  REASONING_WITHHELD_WORDS,
+  WITHHELD_WORDS,
+} from '@/components/app/notes/note-card';
 import { NotesPanel } from '@/components/app/notes/notes-panel';
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import { notesQuerySchema, queryNotes } from '@/lib/app/slots/notes-query';
@@ -466,22 +471,34 @@ describe('what the panel shows', () => {
   it('says what a withheld note is instead of printing the sentinel', async () => {
     world.reads = [
       view([
+        // A standard note beside it, whose reasoning IS drawn — so the
+        // withheld line below is the Art. 9 card's, not an empty page's.
+        note(),
         note({
           slotSlug: 'life_physical_health',
           value: '<redacted: special_category>',
           withheld: true,
           sensitivity: 'special_category',
           correctable: false,
+          // What the server sends for an Art. 9 note since t-80.
+          reasoningNote: null,
         }),
       ]),
     ];
     renderBoth();
 
-    expect(await screen.findByText(/deliberately kept no record/)).toBeTruthy();
+    expect(await screen.findByText(WITHHELD_WORDS)).toBeTruthy();
     expect(screen.queryByText(/redacted/)).toBeNull();
-    // The guard's remedy is still on the card (`HB10`).
-    expect(screen.queryByRole('button', { name: /not right/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /ask lela.*about this/i })).toBeTruthy();
+    // The fold says the reasoning is not shown, rather than printing an empty
+    // line — and nothing on the card claims the words were never kept, which
+    // the rows at rest do not bear out (daybreak#269).
+    expect(screen.getByText('She put this together from two things said in passing.')).toBeTruthy();
+    expect(screen.getByText(REASONING_WITHHELD_WORDS)).toBeTruthy();
+    expect(screen.queryByText(/no record|never kept|never stored/i)).toBeNull();
+    // The guard's remedy is still on the card (`HB10`): two cards, two asks,
+    // and only the standard one offers a correction.
+    expect(screen.getAllByRole('button', { name: /not right/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /ask lela.*about this/i })).toHaveLength(2);
   });
 
   it('keeps a slug Lelañea invented under a heading of its own', async () => {
@@ -627,7 +644,7 @@ describe('answering back', () => {
       status: 409,
       reason: 'kept_out_of_the_record',
       message:
-        'Lelañea deliberately keeps no record of what you said here. Ask her about it instead.',
+        'Lelañea keeps what you say about health, feeling and belief out of these notes. Ask her about it instead.',
     };
     renderBoth();
     await screen.findByText(/Work is going badly/);

@@ -107,19 +107,29 @@ export interface Note {
   /** The plain-language reading. A sentinel when `withheld`. */
   value: string;
   /**
-   * The words were never stored. True for a `special_category` slot, where
-   * masking-before-storage replaces the prose with a sentinel at capture
-   * (`lib/framework/data-slots/capabilities/masking.ts`) — so what the app holds
-   * really is only the fact that something was noted. The panel says that in a
-   * sentence rather than showing `<redacted: special_category>`.
+   * The reading was never stored. True for a `special_category` slot, where
+   * masking-before-storage replaces it with a sentinel at capture
+   * (`lib/framework/data-slots/capabilities/masking.ts`). The panel says that in
+   * a sentence rather than showing `<redacted: special_category>`.
+   *
+   * It is not "nothing was kept": masking covers the value only, so the stored
+   * reasoning note may still paraphrase what was said — see
+   * {@link Note.reasoningNote}.
    */
   withheld: boolean;
   /** 1–10, as she judged it. */
   confidence: number;
   /** The stored classifier; {@link noteSourceWords} turns it into a sentence. */
   sourceType: string;
-  /** Her one line on how the reading was made. */
-  reasoningNote: string;
+  /**
+   * Her one line on how the reading was made — or `null` on every
+   * `special_category` note, where it is withheld (t-80). Masking at capture
+   * covers the value and not this line, and she writes it as a paraphrase of
+   * what the person said, so on an Art. 9 note it would show the very words the
+   * value was masked to keep out. The capture-side fix is Daybreak's
+   * (`daybreak#269`); until then the row at rest still holds it.
+   */
+  reasoningNote: string | null;
   version: number;
   capturedAt: string;
   /** The conversation it was drawn from, where the capture recorded one. */

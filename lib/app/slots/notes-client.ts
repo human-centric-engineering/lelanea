@@ -81,7 +81,8 @@ const noteSchema = z.object({
   withheld: z.boolean(),
   confidence: z.number(),
   sourceType: z.string(),
-  reasoningNote: z.string(),
+  // `null` on an Art. 9 note, where the server withholds it (t-80).
+  reasoningNote: z.string().nullable(),
   version: z.number(),
   capturedAt: z.string(),
   conversationId: z.string().nullable(),

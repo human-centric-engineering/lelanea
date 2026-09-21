@@ -35,11 +35,19 @@
  *
  * Nine slots in the taxonomy are `special_category` — physical, emotional and
  * spiritual health, GDPR Art. 9. For those, masking-before-storage replaces the
- * prose with a sentinel *at capture*
- * (`lib/framework/data-slots/capabilities/masking.ts`), so what the app holds is
- * the fact that something was noted and nothing else. That is the point of the
+ * reading with a sentinel *at capture*
+ * (`lib/framework/data-slots/capabilities/masking.ts`). That is the point of the
  * classification, and it is why the panel shows a sentence rather than
  * `<redacted: special_category>`.
+ *
+ * **The reading, and only the reading.** Masking covers `value` and nothing
+ * else: the reasoning note is stored as she wrote it, and her instructions ask
+ * her to write it as a paraphrase of what the person said (`voice.md`). So an
+ * Art. 9 row at rest can still hold the substance of the words, and nothing
+ * here may say otherwise. The capture-side fix is Daybreak's —
+ * [`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269),
+ * rows already written included. Until then this module withholds the
+ * reasoning on the read side (t-80), and the page claims only what it shows.
  *
  * A correction would run through {@link appendSlotValue}, which is the raw
  * engine and masks nothing. So the obvious "let them fix it" puts raw health and
@@ -257,7 +265,12 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
       withheld,
       confidence: head.confidence,
       sourceType: head.sourceType,
-      reasoningNote: head.reasoningNote,
+      // Withheld on every Art. 9 note, not just a masked one — by the
+      // classification, for the reason `correctable` below gives. `fill_slot`
+      // masks the value only, so this line is the paraphrase the value was
+      // masked to keep out (header; t-80). Dropped here, before the query runs
+      // over it, so it can neither be sent nor searched.
+      reasoningNote: sensitivity === SLOT_SENSITIVITY.special_category ? null : head.reasoningNote,
       version: head.version,
       capturedAt: head.capturedAt.toISOString(),
       conversationId: conversationOf(head.provenance),
@@ -348,7 +361,7 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     // Printed verbatim by the panel, so it follows the panel's register:
     // Lelañea by name, never "she" or "her" (`.context/app/slots.md`).
     throw new ConflictError(
-      'Lelañea deliberately keeps no record of what you said here, so there is nothing to correct. Ask Lelañea about it instead, in your own words.',
+      'Lelañea keeps what you say about health, feeling and belief out of these notes, so there is nothing here to correct. Ask Lelañea about it instead, in your own words.',
       { reason: 'kept_out_of_the_record' }
     );
   }

@@ -27,9 +27,10 @@
  * never the reasoning.** The reading is a sentinel, so matching it would find
  * every special-category note for a search on "redacted". The reasoning is
  * worse: Daybreak's `fill_slot` masks `value` and nothing else, so the
- * reasoning note is stored as written (**t-80**, raised on Daybreak too). A
- * search that matched it would answer "is there a health note that mentions
- * X?" with a yes, about words the page tells the person were never kept.
+ * reasoning note is stored as written (`daybreak#269`). A search that matched
+ * it would answer "is there a health note that mentions X?" with a yes, about
+ * words the page does not show. Since **t-80** `getNotes()` withholds that line
+ * before it gets here, so the rule below is the second of two.
  *
  * The version before the current one is not searched. A match has to be
  * visible in the row it produced, and a list row shows the current reading.
@@ -108,7 +109,7 @@ export function noteHeading(note: Note): string {
 function searchableText(note: Note): string {
   const wording = [note.slotSlug.replace(/_/g, ' '), note.asking ?? '', noteHeading(note)];
   if (note.sensitivity === SLOT_SENSITIVITY.special_category) return fold(wording.join('\n'));
-  return fold([note.value, note.reasoningNote, ...wording].join('\n'));
+  return fold([note.value, note.reasoningNote ?? '', ...wording].join('\n'));
 }
 
 function matchesSearch(note: Note, terms: string[]): boolean {
