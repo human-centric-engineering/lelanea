@@ -104,9 +104,15 @@ const relatesToSchema = z
   })
   .nullable();
 
-const resourceIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-  message: 'a resource id is lowercase alphanumeric with hyphens',
-});
+// Bounded to what the suggestion tool accepts (`suggest.ts`, 80): an id the
+// offering lists but the tool refuses would be offered and then rejected at
+// validation, with nothing on the panel saying why (`/code-review` round 2).
+const resourceIdSchema = z
+  .string()
+  .max(80, { message: 'a resource id is at most 80 characters — the suggestion tool’s bound' })
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+    message: 'a resource id is lowercase alphanumeric with hyphens',
+  });
 
 /**
  * A link a client will put in an `<a href>`. `z.url()` alone admits any scheme

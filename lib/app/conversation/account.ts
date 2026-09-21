@@ -150,6 +150,17 @@ const wroteToProfile: AccountSource = (input) => {
  * model's words. A suggestion whose resource has since left the library is
  * still a thing the turn did, so a call with nothing to show is said as such
  * rather than falling silent.
+ *
+ * **Only when NOTHING resolved, and that is a limit rather than an oversight.**
+ * Two offers of which one has since left the library read as one offer here.
+ * The source could count answered `suggest_resource` calls against the
+ * suggestions, but the suggestions are deduped (one offer per resource) and
+ * the calls are not, so "two calls, one suggestion" is a duplicate offer as
+ * often as a lost one — and a clause built on that count would claim a loss
+ * that never happened. Saying it needs the trace's ids, which this input
+ * does not carry; the case needs a resource removed from the file AFTER it
+ * was offered. Accepted (`/code-review` round 2); revisit if the library
+ * starts losing entries.
  */
 const pointedTo: AccountSource = (input) => {
   const called = input.capabilities.includes(OFFERED_A_RESOURCE);

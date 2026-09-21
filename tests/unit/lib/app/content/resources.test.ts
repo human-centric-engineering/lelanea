@@ -315,6 +315,13 @@ describe('a malformed file fails, naming the fault', () => {
     expect(messages.join('\n')).toMatch(/words.default is required/);
   });
 
+  it('rejects an id longer than the suggestion tool accepts', () => {
+    const { ok, messages } = parse(fixture({ films: [film('x'.repeat(81), null)] }));
+    expect(ok).toBe(false);
+    expect(messages.join('\n')).toMatch(/at most 80/);
+    expect(parse(fixture({ films: [film('x'.repeat(80), null)] })).ok).toBe(true);
+  });
+
   it('rejects a duplicate id within a list, and across the two lists', () => {
     const { ok, messages } = parse(fixture({ films: [film('dup', null), film('dup', null)] }));
     expect(ok).toBe(false);
