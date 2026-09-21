@@ -10,6 +10,7 @@ import type {
 } from '@/components/app/conversation/use-conversation';
 import {
   AccountRow,
+  SuggestionChips,
   CrisisRow,
   EndingRow,
   ReplyTurn,
@@ -105,12 +106,19 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
           reply written before the seam has nothing honest to say about itself
           — the prototype renders `.disclose` only when a turn has `meta`.
         */}
+        {/*
+          What the turn offered, before the account that says it did: the chip
+          IS the offer — a film or a piece of Lelañea Fulton's, by id — and the
+          account row below it is the record.
+        */}
+        {entry.suggestions.length > 0 ? <SuggestionChips suggestions={entry.suggestions} /> : null}
         {entry.turn ? (
           <AccountRow
             input={{
               at: entry.at,
               capabilities: entry.capabilities,
               citations: entry.citations,
+              suggestions: entry.suggestions,
               turn: entry.turn,
             }}
           />

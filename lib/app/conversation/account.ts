@@ -35,6 +35,7 @@
  */
 
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
+import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
 
 /** What a source reads: the reply's own data, live or read back. */
@@ -44,6 +45,8 @@ export interface AccountInput {
   /** Capability slugs the turn called, in order. */
   capabilities: string[];
   citations: Citation[];
+  /** What the turn offered the person — a film or a piece of writing (t-77). */
+  suggestions: ResourceSuggestion[];
   /** The turn row, or null for a reply written before the seam. */
   turn: TurnAccount | null;
 }
@@ -63,9 +66,15 @@ export type AccountSource = (input: AccountInput) => AccountPart | null;
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
+const OFFERED_A_RESOURCE = 'suggest_resource';
 
 /** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
-const NAMED_CAPABILITIES = new Set([SEARCH_HER_MATERIAL, READ_THE_PROFILE, WRITE_THE_PROFILE]);
+const NAMED_CAPABILITIES = new Set([
+  SEARCH_HER_MATERIAL,
+  READ_THE_PROFILE,
+  WRITE_THE_PROFILE,
+  OFFERED_A_RESOURCE,
+]);
 
 /** Looked something up in her material — and how many passages it drew on. */
 const lookedUp: AccountSource = (input) => {
@@ -132,6 +141,39 @@ const wroteToProfile: AccountSource = (input) => {
 };
 
 /**
+ * Pointed the person to one of Lelañea Fulton's films or pieces of writing
+ * (f-resources t-77).
+ *
+ * Named, because the chip beside the reply already shows it and the account
+ * is what the person reads to know what the turn DID. The title is the
+ * library's, resolved server-side from the id the model named — never the
+ * model's words. A suggestion whose resource has since left the library is
+ * still a thing the turn did, so a call with nothing to show is said as such
+ * rather than falling silent.
+ */
+const pointedTo: AccountSource = (input) => {
+  const called = input.capabilities.includes(OFFERED_A_RESOURCE);
+  if (!called && input.suggestions.length === 0) return null;
+  if (input.suggestions.length === 0) {
+    return {
+      key: 'pointed_to',
+      line: 'Offered something that is no longer in her library',
+      detail: 'Offered something that is no longer in her library.',
+    };
+  }
+  const titles = input.suggestions.map((s) => `“${s.title}”`);
+  const list =
+    titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(', ')} and ${titles.at(-1)}`;
+  const kinds = input.suggestions.map((s) => (s.kind === 'film' ? 'a film' : 'a piece of writing'));
+  const what = kinds.every((k) => k === kinds[0]) ? kinds[0] : 'a film and a piece of writing';
+  return {
+    key: 'pointed_to',
+    line: `Pointed you to ${list}`,
+    detail: `Pointed you to ${list} — ${what} of hers you can open beside this reply.`,
+  };
+};
+
+/**
  * A capability this account has no words for. Every slug her seat may call has
  * one above (`pins-misuse.test.ts` pins the list against
  * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
@@ -149,14 +191,15 @@ const otherCapability: AccountSource = (input) => {
 };
 
 /**
- * Every source, in the order their sentences read: what she consulted, then
- * what she wrote. §13 adds modules instructed. Exported so a test can see the
- * seam.
+ * Every source, in the order their sentences read: what was consulted, then
+ * what was written, then what was offered. §13 adds modules instructed.
+ * Exported so a test can see the seam.
  */
 export const ACCOUNT_SOURCES: readonly AccountSource[] = [
   lookedUp,
   readTheProfile,
   wroteToProfile,
+  pointedTo,
   otherCapability,
 ];
 

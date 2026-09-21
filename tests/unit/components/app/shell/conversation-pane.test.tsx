@@ -21,6 +21,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
+import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { ENDING_MESSAGES } from '@/lib/app/agent/endings';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
@@ -927,5 +928,126 @@ describe('collapsing the conversation', () => {
   it('offers none on a phone, where the pane switch does this job', () => {
     renderInShell(<ConversationPane />, 'small');
     expect(screen.queryByRole('button', { name: 'Collapse the conversation' })).toBeNull();
+  });
+});
+
+/**
+ * What the turn offered (f-resources t-77): a chip under the reply, the
+ * library's words, that opens the resources drawer pinned to it — live and
+ * read back alike, because both paths carry the same shape.
+ */
+describe('a resource offered with a reply', () => {
+  const onStalling = {
+    id: 'on-stalling',
+    kind: 'film' as const,
+    title: 'On stalling',
+    subtitle: 'why the words you avoid are the work',
+    length: '5:04',
+  };
+  const offeredReply = {
+    kind: 'reply',
+    id: 'a1',
+    text: 'There is a piece on exactly this.',
+    at: '2026-09-19T12:00:05.000Z',
+    turnId: 't1',
+    citations: [],
+    capabilities: ['suggest_resource'],
+    suggestions: [onStalling],
+    turn: {
+      turnId: 't1',
+      seat: 'facilitator',
+      status: 'completed',
+      attempts: 1,
+      modelId: 'gpt-4o-mini-2024-07-18',
+      providerSlug: 'openai',
+      fingerprintVersion: 'v1',
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: 0.001,
+      pricing: 'priced',
+      errorCode: null,
+      startedAt: '2026-09-19T12:00:00.000Z',
+      completedAt: '2026-09-19T12:00:05.000Z',
+    },
+  };
+
+  /** What the shell was asked to open, read off the provider. */
+  function Probe() {
+    const { drawer, drawerPin } = useShellLayout();
+    return <output data-testid="drawer">{`${drawer ?? '-'}:${drawerPin ?? '-'}`}</output>;
+  }
+  async function renderWithProbe() {
+    const result = renderInShell(
+      <>
+        <ConversationPane />
+        <Probe />
+      </>
+    );
+    await waitFor(() => expect(screen.queryByText(CONVERSATION_COPY.loading)).toBeNull());
+    return result;
+  }
+  // The account row's button names it too ("Pointed you to “On stalling”"),
+  // so the chip is found inside its own list.
+  const chip = () =>
+    within(screen.getByRole('list', { name: 'Offered with this reply' })).getByRole('button', {
+      name: /On stalling/,
+    });
+
+  it('is read back as a chip with the library’s title, and the account says so', async () => {
+    seat.transcript = [offeredReply];
+    await renderWithProbe();
+
+    const offered = screen.getByRole('list', { name: 'Offered with this reply' });
+    expect(within(offered).getByRole('button', { name: /On stalling/ })).toHaveTextContent(
+      'Watch · 5:04'
+    );
+    expect(screen.getByRole('button', { name: /Pointed you to “On stalling”/ })).toBeTruthy();
+  });
+
+  it('opens the resources drawer pinned to it', async () => {
+    seat.transcript = [offeredReply];
+    const user = userEvent.setup();
+    await renderWithProbe();
+    expect(screen.getByTestId('drawer').textContent).toBe('-:-');
+
+    await user.click(chip());
+
+    expect(screen.getByTestId('drawer').textContent).toBe('resources:on-stalling');
+  });
+
+  it('arrives live off the capability frame, the same chip as on reload', async () => {
+    motion.reduced = true;
+    const user = userEvent.setup();
+    await renderWithProbe();
+    await user.type(box(), 'I keep putting it off.{Enter}');
+    await act(async () => {
+      latestTurn().push('start', { conversationId: 'c1' });
+      latestTurn().push('capability_result', {
+        capabilitySlug: 'suggest_resource',
+        result: { success: true, data: onStalling },
+      });
+      // A refused one — the model invented an id — is no chip.
+      latestTurn().push('capability_result', {
+        capabilitySlug: 'suggest_resource',
+        result: { success: false, error: { code: 'unknown_resource', message: 'no' } },
+      });
+      latestTurn().push('content', { delta: 'There is a piece on exactly this.' });
+      latestTurn().push('done', {});
+      latestTurn().close();
+    });
+    await waitFor(() => expect(herWords()).toBe('There is a piece on exactly this.'));
+
+    const offered = screen.getByRole('list', { name: 'Offered with this reply' });
+    expect(within(offered).getAllByRole('button')).toHaveLength(1);
+    expect(within(offered).getByRole('button', { name: /On stalling/ })).toBeTruthy();
+    await user.click(chip());
+    expect(screen.getByTestId('drawer').textContent).toBe('resources:on-stalling');
+  });
+
+  it('shows no chip and no such line on a reply that offered nothing', async () => {
+    seat.transcript = [{ ...offeredReply, capabilities: [], suggestions: [] }];
+    await renderWithProbe();
+    expect(screen.queryByRole('list', { name: 'Offered with this reply' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Pointed you to/ })).toBeNull();
   });
 });

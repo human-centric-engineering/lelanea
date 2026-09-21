@@ -39,6 +39,7 @@
 
 import { z } from 'zod';
 
+import { answeredCalls, type AnsweredCall } from '@/lib/app/agent/capability-answers';
 import { getResourcesLibrary } from '@/lib/app/content/resources';
 import { SUGGEST_RESOURCE_SLUG, type ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
@@ -149,20 +150,28 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
  * the library still has: a resource removed from the file after the turn is
  * not shown as a chip to nowhere. Order is the traces' order.
  */
-const suggestionCallSchema = z.object({
-  slug: z.literal(SUGGEST_RESOURCE_SLUG),
-  success: z.literal(true),
-  arguments: z.object({ id: z.string() }),
-});
-const provenanceSchema = z.object({ capabilityCalls: z.array(z.unknown()) });
+const suggestionArgsSchema = z.object({ id: z.string() });
+
+/**
+ * The suggestion one answered call made, or `null` — for a call of another
+ * capability, or an id the library no longer has.
+ */
+export function suggestionForCall(call: AnsweredCall): ResourceSuggestion | null {
+  if (call.slug !== SUGGEST_RESOURCE_SLUG) return null;
+  const args = suggestionArgsSchema.safeParse(call.arguments);
+  return args.success ? findResource(args.data.id) : null;
+}
+
+/**
+ * One entry per answered call, aligned with `answeredCapabilities()`'s order:
+ * the suggestion that call made, or `null`. A replay needs the alignment, so
+ * the data lands on the right slug's frame; the transcript read keeps the
+ * non-null ones.
+ */
+export function suggestionsByCall(provenance: unknown): (ResourceSuggestion | null)[] {
+  return answeredCalls(provenance).map(suggestionForCall);
+}
 
 export function suggestionsFromProvenance(provenance: unknown): ResourceSuggestion[] {
-  const parsed = provenanceSchema.safeParse(provenance);
-  if (!parsed.success) return [];
-  return parsed.data.capabilityCalls.flatMap((raw) => {
-    const call = suggestionCallSchema.safeParse(raw);
-    if (!call.success) return [];
-    const suggestion = findResource(call.data.arguments.id);
-    return suggestion ? [suggestion] : [];
-  });
+  return suggestionsByCall(provenance).filter((s): s is ResourceSuggestion => s !== null);
 }

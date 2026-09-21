@@ -53,6 +53,8 @@ import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { suggestionsFromProvenance } from '@/lib/app/resources/suggest';
+import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -99,6 +101,13 @@ export interface TranscriptReplyEntry {
    * from the `capability_result` frames, and a replay from `readTurnReply`.
    */
   capabilities: string[];
+  /**
+   * What the turn offered the person — Lelañea Fulton's films or writing, by
+   * id, resolved against the library from the same traces (t-77). Empty for
+   * a turn that offered nothing; the live turn collects the same off the
+   * `capability_result` frames.
+   */
+  suggestions: ResourceSuggestion[];
   /** The turn row, when there is one; null for rows written before the seam. */
   turn: TurnAccount | null;
 }
@@ -237,6 +246,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       turnId: turn?.turnId ?? null,
       citations: citationsOf(terminal.provenance),
       capabilities: answeredCapabilities(terminal.provenance),
+      suggestions: suggestionsFromProvenance(terminal.provenance),
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;

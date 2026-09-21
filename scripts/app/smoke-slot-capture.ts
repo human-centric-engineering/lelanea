@@ -392,6 +392,7 @@ async function main(): Promise<void> {
         at: new Date().toISOString(),
         capabilities: answered,
         citations: [],
+        suggestions: [],
         turn: null,
       })
     );

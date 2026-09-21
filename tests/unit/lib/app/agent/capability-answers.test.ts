@@ -7,7 +7,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { answeredCapabilities, capabilityAnswered } from '@/lib/app/agent/capability-answers';
+import {
+  answeredCalls,
+  answeredCapabilities,
+  capabilityAnswered,
+} from '@/lib/app/agent/capability-answers';
 
 describe('capabilityAnswered', () => {
   it('is true only for a result that says success', () => {
@@ -45,6 +49,21 @@ describe('answeredCapabilities', () => {
       ],
     };
     expect(answeredCapabilities(provenance)).toEqual(['search_knowledge_base', 'get_state']);
+  });
+
+  it('hands back each answered call with whatever the trace kept of its arguments', () => {
+    const calls = answeredCalls({
+      capabilityCalls: [
+        { slug: 'suggest_resource', success: true, arguments: { id: 'on-stalling' } },
+        { slug: 'suggest_resource', success: false, arguments: { id: 'nope' } },
+        { slug: 'get_state', success: true },
+      ],
+    });
+    expect(calls).toEqual([
+      { slug: 'suggest_resource', arguments: { id: 'on-stalling' } },
+      { slug: 'get_state', arguments: undefined },
+    ]);
+    expect(answeredCalls(null)).toEqual([]);
   });
 
   it('reads nothing from a row with no traces, and skips a trace it cannot read', () => {

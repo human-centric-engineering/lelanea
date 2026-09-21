@@ -56,6 +56,7 @@ const citation = {
 const input = (fields: Partial<AccountInput> = {}): AccountInput => ({
   at: '2026-09-19T12:00:05.000Z',
   capabilities: [],
+  suggestions: [],
   citations: [],
   turn: turn(),
   ...fields,
@@ -151,6 +152,69 @@ describe('the parts', () => {
         detail: 'Used request transition.',
       },
     ]);
+  });
+
+  it('says what it pointed the person to, by the library’s title, never the model’s', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['suggest_resource'],
+        suggestions: [
+          {
+            id: 'on-stalling',
+            kind: 'film',
+            title: 'On stalling',
+            subtitle: 'why',
+            length: '5:04',
+          },
+        ],
+      })
+    );
+    expect(parts).toEqual([
+      {
+        key: 'pointed_to',
+        line: 'Pointed you to “On stalling”',
+        detail: 'Pointed you to “On stalling” — a film of hers you can open beside this reply.',
+      },
+    ]);
+  });
+
+  it('joins two suggestions in one clause, and says what kinds they were', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['suggest_resource', 'suggest_resource'],
+        suggestions: [
+          { id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' },
+          { id: 'b', kind: 'reading', title: 'B', subtitle: 's', length: '2 min' },
+        ],
+      })
+    );
+    expect(parts[0]?.line).toBe('Pointed you to “A” and “B”');
+    expect(parts[0]?.detail).toMatch(/a film and a piece of writing of hers/);
+  });
+
+  it('still says the turn offered something when the resource has since left the library', () => {
+    // The trace says the call answered; the resolver found no such id. The
+    // turn did something, and the account does not fall silent about it.
+    const parts = accountParts(input({ capabilities: ['suggest_resource'], suggestions: [] }));
+    expect(parts).toEqual([
+      {
+        key: 'pointed_to',
+        line: 'Offered something that is no longer in her library',
+        detail: 'Offered something that is no longer in her library.',
+      },
+    ]);
+    // And never as an unnamed capability.
+    expect(parts.some((p) => p.key === 'other_capability')).toBe(false);
+  });
+
+  it('reads what was offered after what was consulted and written', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['fill_slot', 'suggest_resource', 'search_knowledge_base'],
+        suggestions: [{ id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' }],
+      })
+    );
+    expect(parts.map((p) => p.key)).toEqual(['looked_up', 'wrote_profile', 'pointed_to']);
   });
 
   it('is composed from a list of sources — the seam §11 and §13 add to', () => {
