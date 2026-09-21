@@ -23,7 +23,17 @@ import { mockAuthenticatedUser } from '@/tests/helpers/auth';
 import { definition, ME, resetWorld, value, world } from '@/tests/unit/lib/app/slots/notes-fake';
 
 const { routeLog } = vi.hoisted(() => ({
-  routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  routeLog: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    // Returns itself, so an entry's fields are read off one spy whatever
+    // context the route layers on; the context itself is asserted below.
+    withContext: vi.fn(function (this: unknown) {
+      return this;
+    }),
+  },
 }));
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
@@ -163,5 +173,19 @@ describe('the query string', () => {
       sort: 'recent',
     });
     expect(JSON.stringify(fields)).not.toContain('ladder');
+  });
+
+  it('overrides the request url the route logger carries, so the query never reaches a log', async () => {
+    // `getRouteLogger` puts `url: request.url` — query string included — on
+    // every entry's context. The payload above being clean is not enough on
+    // its own; `/security-review` found the search travelling this way.
+    await read('?q=ladder&group=life_areas');
+
+    expect(routeLog.withContext).toHaveBeenCalledWith({
+      url: 'https://lelanea.com/api/v1/app/notes',
+    });
+    const contexts = JSON.stringify(routeLog.withContext.mock.calls);
+    expect(contexts).not.toContain('ladder');
+    expect(contexts).not.toContain('?');
   });
 });

@@ -61,7 +61,14 @@ const OWNERSHIP: WithAuthOptions = {
 };
 
 export const GET = withAuth(async (request: NextRequest, session) => {
-  const log = await getRouteLogger(request);
+  // The route logger carries `url: request.url` — query string and all — on
+  // every entry (`getRequestContext`), so without this override each search a
+  // person typed would land in the log beside their user id, however careful
+  // the fields below are. The path is what an operator needs; `/security-review`
+  // found the leak through the context, not the payload.
+  const log = (await getRouteLogger(request)).withContext({
+    url: `${request.nextUrl.origin}${request.nextUrl.pathname}`,
+  });
   const query = validateQueryParams(request.nextUrl.searchParams, notesQuerySchema);
   const view = await getNotes(session.user.id, query);
 

@@ -42,7 +42,17 @@ const { store, notes, routeLog } = vi.hoisted(() => {
       })),
       correctNote: vi.fn(async ({ slotSlug }: { slotSlug: string }) => ({ slotSlug, version: 2 })),
     },
-    routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    routeLog: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      // Returns itself, so an entry's fields are read off one spy whatever
+      // context the route layers on; the context itself is asserted below.
+      withContext: vi.fn(function (this: unknown) {
+        return this;
+      }),
+    },
   };
 });
 

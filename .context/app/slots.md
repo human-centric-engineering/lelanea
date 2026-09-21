@@ -926,7 +926,13 @@ note mentioning X?" about words the page says were never kept. The previous
 version is not searched: a match has to be visible in the row it produced.
 
 **The search text is never logged.** The route logs counts, whether a search
-and a filter were on, and the sort — never what was looked for.
+and a filter were on, and the sort — never what was looked for. **And it
+overrides `url` on its logger**: `getRouteLogger` puts `url: request.url`,
+query string included, on every entry's context, so a clean payload alone still
+logged each search beside the user id. Found by `/security-review`; the GET
+logs the path instead. Any other route taking personal text in a query string
+has the same exposure — the platform-level fix is `getRequestContext` logging
+the path, which is Sunrise's to make.
 
 **The page.** Every control is in the URL with defaults left out, so a filtered
 view can be linked and a reload lands where the reader was. Typing **replaces**
