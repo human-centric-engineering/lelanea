@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { NotesPanel } from '@/components/app/notes/notes-panel';
+import { NOTES_LEDE, NOTES_NOTE, NotesPanel } from '@/components/app/notes/notes-panel';
 import { View } from '@/components/app/views/view';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
@@ -38,8 +38,8 @@ export default async function NotesPage() {
       column
       eyebrow="lelañea’s notes"
       title="What Lelañea has written down about you"
-      lede="Everything Lelañea holds about you, where each of it came from, and how certain it is."
-      note="These are Lelañea’s readings, not your words back. She can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation."
+      lede={NOTES_LEDE}
+      note={NOTES_NOTE}
     >
       <NotesPanel />
     </View>

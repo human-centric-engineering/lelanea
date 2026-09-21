@@ -57,6 +57,19 @@ export interface NotesPanelProps {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * The head's copy, exported because THREE things render it: the page, its
+ * loading boundary, and nothing else may invent a fourth. Same reasoning as
+ * `ACCOUNT_LEDE` — the skeleton's bars have to sit on the lines the content
+ * replaces them with, and two hardcoded copies drift the first time one is
+ * edited, silently, with nothing failing.
+ */
+export const NOTES_LEDE =
+  'Everything Lelañea holds about you, where each of it came from, and how certain it is.';
+
+export const NOTES_NOTE =
+  'These are Lelañea’s readings, not your words back. She can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation.';
+
 const EMPTY: NotesView = { groups: [], improvised: [], total: 0 };
 
 export function NotesPanel({ fetchImpl }: NotesPanelProps) {
@@ -131,7 +144,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   const view = notes ?? EMPTY;
   const improvised: Note[] = view.improvised;
 
-  if (notes === null && !unreadable) return <Skeleton />;
+  if (notes === null && !unreadable) return <NotesSkeleton />;
 
   return (
     /*
@@ -245,11 +258,17 @@ function Group({
 /**
  * The first read's placeholder — three card-shaped bars, not a spinner.
  *
+ * Exported, because the route's `loading.tsx` renders the SAME component. The
+ * page waits on a session read and the panel then waits on a fetch, so a
+ * reader crosses two loading states back to back; drawing them from one
+ * component is what stops the second from being a visibly different shape
+ * arriving where the first was.
+ *
  * `aria-hidden` with a live line beside it: the shapes are decoration, and a
  * screen reader is told in words that the page is loading rather than being
  * read three empty boxes.
  */
-function Skeleton() {
+export function NotesSkeleton() {
   return (
     <div className="flex flex-col gap-2.5">
       <p className="sr-only" role="status">
