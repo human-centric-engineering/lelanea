@@ -128,7 +128,9 @@ describe('reading a suggestion back', () => {
         { slug: 'search_knowledge_base', success: true, arguments: { query: 'x' } },
         { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'evidence' } },
         { slug: SUGGEST_RESOURCE_SLUG, success: false, arguments: { id: 'nope' } },
-        { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'on-stalling' } },
+        // The trace keeps the RAW argument; a padded id answered live, so it
+        // must resolve here too.
+        { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: ' on-stalling ' } },
         // A resource the file no longer has: no chip to nowhere.
         { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'removed-since' } },
         'not a trace',

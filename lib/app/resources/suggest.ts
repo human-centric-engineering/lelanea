@@ -150,7 +150,10 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
  * the library still has: a resource removed from the file after the turn is
  * not shown as a chip to nowhere. Order is the traces' order.
  */
-const suggestionArgsSchema = z.object({ id: z.string() });
+// Trimmed as the capability's own schema trims: the trace persists the model's
+// RAW argument, so an id that answered live with padding must resolve the same
+// way on reload (security review).
+const suggestionArgsSchema = z.object({ id: z.string().trim() });
 
 /**
  * The suggestion one answered call made, or `null` — for a call of another
