@@ -134,7 +134,22 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   if (notes === null && !unreadable) return <Skeleton />;
 
   return (
-    <div className="flex flex-col gap-6">
+    /*
+      A column, not the full surface.
+
+      The workspace pane is as wide as a reader drags it, and a card stretched
+      across all of it put a hole between the reading and the aside — 46ch of
+      text, 10rem of facts, and 400px of nothing in between (the owner's note).
+      Capping the CARD is what closes it: the two columns then share a width
+      that suits them, and what is left over becomes margin on the right, which
+      is what the head of this page already does with its lede and its note.
+
+      Left-aligned rather than centred, for the same reason — `View`'s own
+      `max-w-[44ch]` title and `max-w-[52ch]` note sit against the left edge,
+      and a centred block of cards under a left-aligned heading reads as two
+      pages.
+    */
+    <div className="flex max-w-[46rem] flex-col gap-6">
       {unreadable ? (
         <Banner tone="warning" lead={notes ? 'Not refreshed.' : 'Not readable.'}>
           {notes

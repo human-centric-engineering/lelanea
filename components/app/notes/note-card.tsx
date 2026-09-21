@@ -296,6 +296,16 @@ function Disclosure({
       className={cn(
         'group overflow-hidden rounded-lg border border-[var(--color-card-border)]',
         'bg-[var(--color-pill)] shadow-[var(--shadow-rest)]',
+        // Short of the reading, and the SAME short as the other fold.
+        //
+        // Both of these are secondary to the note above them, and running them
+        // to the column's full width made them read as more of it. Stopping
+        // them early is the hierarchy said in geometry rather than in type
+        // size — but only while they agree with each other: two panels at two
+        // different widths is the ragged edge this card has already been
+        // through once, and the measure is therefore here, on the one
+        // component both of them are.
+        'max-w-[27rem]',
         tone === 'history' && 'border-l-2 border-l-[var(--color-status-purple)]'
       )}
     >
@@ -411,15 +421,18 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
       */}
       <div className="grid gap-x-7 gap-y-4 @min-[30rem]:grid-cols-[minmax(0,1fr)_10rem]">
         {/*
-          The measure is on the COLUMN, not on each child, and that is the whole
-          of the ragged-widths fix. With `max-w` on the reading alone, the note
-          stopped at 46ch while the panels under it ran to the grid track's full
-          width, and the withheld paragraph — whose box IS its text — stopped
-          wherever its words ran out. Three blocks, three different right edges,
-          none of them agreeing with the one above. Constraining the column once
-          gives every block the same edge by construction.
+          No measure of its own, and that is deliberate now.
+
+          The ragged right edges this column was built to fix came from putting
+          `max-w` on the READING while the panels under it filled the track. The
+          fix was to constrain one thing rather than three — but constraining it
+          HERE, inside a card that stretches to the pane, only moved the problem:
+          the block sat at 46ch with the aside pinned 400px away at the far
+          right. The cap belongs on the card, and `notes-panel.tsx` carries it;
+          this column takes what the grid gives it and every block in it ends on
+          the same edge, which was the point.
         */}
-        <div className="flex max-w-[46ch] min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           {note.withheld ? (
             /*
               The stored value is a sentinel, so the card says what actually
