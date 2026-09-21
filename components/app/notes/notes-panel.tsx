@@ -135,21 +135,14 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
 
   return (
     /*
-      A column, not the full surface.
+      No width of its own: the page is the column.
 
-      The workspace pane is as wide as a reader drags it, and a card stretched
-      across all of it put a hole between the reading and the aside — 46ch of
-      text, 10rem of facts, and 400px of nothing in between (the owner's note).
-      Capping the CARD is what closes it: the two columns then share a width
-      that suits them, and what is left over becomes margin on the right, which
-      is what the head of this page already does with its lede and its note.
-
-      Left-aligned rather than centred, for the same reason — `View`'s own
-      `max-w-[44ch]` title and `max-w-[52ch]` note sit against the left edge,
-      and a centred block of cards under a left-aligned heading reads as two
-      pages.
+      This carried `max-w-[46rem]` when the cards were the only thing being
+      held in, which put them on a different axis from the title and the lede
+      above them. `View`'s `column` does it for the whole page instead — see
+      the prop, which this view is the reason for.
     */
-    <div className="flex max-w-[46rem] flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {unreadable ? (
         <Banner tone="warning" lead={notes ? 'Not refreshed.' : 'Not readable.'}>
           {notes

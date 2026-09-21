@@ -12,6 +12,26 @@ export interface ViewProps {
   lede?: React.ReactNode;
   /** The small print under the lede, where the honest caveat goes. */
   note?: React.ReactNode;
+  /**
+   * Hold the whole view in a centred column rather than letting it start at
+   * the surface's left edge.
+   *
+   * Opt-in, and off for every view that came before it. The default is right
+   * for a view whose content is a stack of full-width panels — settings, the
+   * account — where a centred column would leave a margin down both sides of
+   * something that wants the width.
+   *
+   * It is for the opposite case: a view whose content has a measure of its
+   * own. `/app/notes` is the first, and it is what forced this prop. Its cards
+   * cap themselves at a reading width, so on a wide workspace every one of
+   * them sat against the left edge with a third of the surface empty beside it
+   * — and centring the cards alone put them on a different axis from the
+   * title and the lede above them, which is two pages sharing a scroll
+   * container. Centring the `<main>` moves the page as one thing: the head
+   * stays left-aligned INSIDE the column, which is where it was always
+   * aligned to.
+   */
+  column?: boolean;
   children?: React.ReactNode;
 }
 
@@ -49,9 +69,17 @@ export interface ViewProps {
  * The eyebrow is `<p>`, NOT a heading: it labels the `<h1>` directly under it,
  * and promoting it would put two headings where the design shows one.
  */
-export function View({ eyebrow, title, lede, note, children }: ViewProps) {
+export function View({ eyebrow, title, lede, note, column, children }: ViewProps) {
   return (
-    <main className="flex flex-col gap-[18px] px-6 pt-[22px] pb-[30px]">
+    <main
+      className={cn(
+        'flex flex-col gap-[18px] px-6 pt-[22px] pb-[30px]',
+        // `w-full` alongside the cap, or a flex/grid parent can size the
+        // column to its content and `mx-auto` centres something narrower than
+        // the reader asked for.
+        column && 'mx-auto w-full max-w-[54rem]'
+      )}
+    >
       <header>
         <Eyebrow as="p" className="block">
           {eyebrow}

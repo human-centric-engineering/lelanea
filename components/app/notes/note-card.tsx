@@ -236,7 +236,7 @@ function Aside({ note }: { note: Note }) {
         // The rule only exists when there is a column to separate. Below the
         // container breakpoint the aside sits under the reading, where a left
         // border would be a stray vertical line.
-        '@min-[30rem]:border-l @min-[30rem]:border-[var(--color-divider)] @min-[30rem]:pl-5'
+        '@min-[32rem]:border-l @min-[32rem]:border-[var(--color-divider)] @min-[32rem]:pl-6'
       )}
     >
       <div className="flex flex-col gap-1.5">
@@ -419,7 +419,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
         itself was 320px wide. `@container` asks the only question that matters:
         is THIS card wide enough for two columns.
       */}
-      <div className="grid gap-x-7 gap-y-4 @min-[30rem]:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-x-8 gap-y-4 @min-[32rem]:grid-cols-[minmax(0,1fr)_11rem]">
         {/*
           No measure of its own, and that is deliberate now.
 
@@ -448,7 +448,10 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             */
             <p
               className={cn(
-                'rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
+                // `pr-3.5` and not just `pl-3.5`: the left edge is a rule and
+                // the right one is the box's own, so the text ran flush into it
+                // and the last word of every line sat on the corner.
+                'rounded-md border-l-2 py-2 pr-3.5 pl-3.5 text-[15px] leading-[1.6]',
                 'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
                 'text-[var(--color-heading)]'
               )}

@@ -35,6 +35,7 @@ export default async function NotesPage() {
 
   return (
     <View
+      column
       eyebrow="lelañea’s notes"
       title="What Lelañea has written down about you"
       lede="Everything Lelañea holds about you, where each of it came from, and how certain it is."
