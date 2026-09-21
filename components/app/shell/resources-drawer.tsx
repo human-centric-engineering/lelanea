@@ -79,8 +79,8 @@ export type ResourcesLoad =
  * a reader. This panel FOLLOWS the reader: open it on Values, close it, walk to
  * Boundaries and open it again, and it must say Boundaries. So the request is
  * keyed on `key` and the pinned film, and a change while open re-fetches; the
- * ETag on the route makes the repeat cheap, and the last good selection stays
- * on screen while the next loads rather than flashing to a spinner.
+ * ETag on the route makes the repeat cheap. While it loads the panel says so
+ * rather than showing the previous key's words under the new key's route.
  *
  * A failure is retried on the next open — the shell stays mounted across every
  * in-app navigation, so without that the panel would be dead until a reload
@@ -97,8 +97,15 @@ export function useResourcesSelection(): ResourcesLoad {
   const key = resourceKeyFor(pathname);
   const [load, setLoad] = useState<ResourcesLoad>({ status: 'idle' });
 
-  // What the current `load` answers, so an open on the same key is a no-op.
-  const answered = useRef<string | null>(null);
+  // The last request that was answered, and its answer — so an open on the
+  // same key is a no-op, and coming back to it after a detour restores the
+  // panel without a round trip.
+  const answered = useRef<{ request: string; selection: ResourcesSelection } | null>(null);
+  // The key a pin was made on. A film pinned on Values is for Values: the
+  // shell clears the pin on navigation, but a child's effect runs before its
+  // provider's, so without this the first request after a navigation still
+  // carried the old pin (`/code-review` round 2).
+  const pinKey = useRef<string | null>(null);
   // The request in flight, by IDENTITY rather than by its string: a late
   // answer to an earlier request for the SAME key must be dropped too, or a
   // failure that arrives after the reader has come back to that key shadows
@@ -119,20 +126,39 @@ export function useResourcesSelection(): ResourcesLoad {
 
   useEffect(() => {
     if (!open) return;
-    const request = drawerFilm ? `${key}?film=${encodeURIComponent(drawerFilm)}` : key;
-    if (answered.current === request || inFlight.current?.request === request) return;
+    if (drawerFilm === null) pinKey.current = null;
+    else pinKey.current ??= key;
+    const film = drawerFilm !== null && pinKey.current === key ? drawerFilm : null;
+    const request = film ? `${key}?film=${encodeURIComponent(film)}` : key;
+    if (inFlight.current?.request === request) return;
+    if (answered.current?.request === request) {
+      // Back on the key already answered — and anything still in flight is
+      // for a key the reader has LEFT, so it must not be allowed to land.
+      // Without this, values → boundaries → values with Boundaries still
+      // loading ended with Boundaries' words under a Values route
+      // (`/code-review` round 2, proved by a probe). The answer is restored
+      // from here, because the detour had put the loading line up.
+      inFlight.current = null;
+      ticket.current += 1;
+      setLoad({ status: 'loaded', selection: answered.current.selection });
+      return;
+    }
     const mine = ++ticket.current;
     inFlight.current = { request, ticket: mine };
     const current = (): boolean => mounted.current && inFlight.current?.ticket === mine;
-    // Keep the last good panel on screen while the next one loads; only a
-    // first open, or an open after a failure, shows the loading line.
-    setLoad((state) => (state.status === 'loaded' ? state : { status: 'loading' }));
+    // ALWAYS the loading line, never the previous key's panel. Keeping the last
+    // good selection up while the next one loads read well for a drawer that
+    // stays open across a navigation — but a fresh open on a different module
+    // then said "On Values" over Boundaries for a whole round trip, with
+    // nothing on the panel saying so. Honest and brief beats smooth and wrong;
+    // the ETag keeps the trip short.
+    setLoad({ status: 'loading' });
     apiClient
       .get<ResourcesSelection>(`${RESOURCES_ENDPOINT}/${request}`)
       .then((selection) => {
         if (!current()) return;
         inFlight.current = null;
-        answered.current = request;
+        answered.current = { request, selection };
         setLoad({ status: 'loaded', selection });
       })
       .catch(() => {

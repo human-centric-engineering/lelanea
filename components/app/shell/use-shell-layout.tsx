@@ -115,8 +115,9 @@ export interface ShellLayout {
   /**
    * A film the resources drawer was asked to put first — `openDrawer('resources',
    * { film })` — and `null` for a plain open. The drawer sends it to the API as
-   * `?film=`; nothing else reads it. Cleared on close, so the next open is a
-   * plain one. This is the whole of what a suggestion made in conversation
+   * `?film=`; nothing else reads it. Cleared on close and on navigation, so
+   * the next open is a plain one and a pin never outlives the route it was
+   * made on. This is the whole of what a suggestion made in conversation
    * needs from the shell (t-77): one field, not a resources-specific API.
    */
   drawerFilm: string | null;
@@ -387,6 +388,10 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    */
   useEffect(() => {
     setNavOpenState(false);
+    // A pinned film is for the place the suggestion was made. Carried across a
+    // navigation with the drawer open, it led the NEXT module's list with a
+    // film chosen for the last one (`/code-review` round 2).
+    setDrawerFilm(null);
   }, [pathname]);
   // `pathname` covers a navigation, and nothing else does: tapping the item for
   // the route already showing produces no change, so the drawer and its scrim

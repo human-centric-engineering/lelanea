@@ -562,6 +562,127 @@ describe('a request is identified, not just named', () => {
   });
 });
 
+describe('coming back to a key already on screen', () => {
+  it('cancels the request still in flight for the key the reader left', async () => {
+    // Values loaded. Boundaries requested but slow. Back to Values — nothing
+    // to fetch, so the effect returned early and left Boundaries live; when it
+    // answered, the panel said Boundaries under the Values route (review
+    // round 2, proved by a probe). The in-flight request must be cancelled.
+    let answerBoundaries: (s: ResourcesSelection) => void = () => {};
+    get.mockImplementation((path: string) => {
+      if (path === `${RESOURCES_ENDPOINT}/values`) return Promise.resolve(fullSelection());
+      if (path === `${RESOURCES_ENDPOINT}/boundaries`) {
+        return new Promise<ResourcesSelection>((resolve) => {
+          answerBoundaries = resolve;
+        });
+      }
+      return new Promise<never>(() => {});
+    });
+    const rerenderAt = (pathname: string) => {
+      mockPathname.current = pathname;
+      view.rerender(
+        <>
+          <ShellRail />
+          <Drawers />
+        </>
+      );
+    };
+    const view = renderDrawers('/app/modules/values');
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+
+    rerenderAt('/app/modules/boundaries');
+    await within(panel()).findByText(/Finding her words/);
+    rerenderAt('/app/modules/values');
+
+    await act(async () => {
+      answerBoundaries(fallbackSelection());
+      await Promise.resolve();
+    });
+
+    expect(within(panel()).getByText(/On Values\./)).toBeInTheDocument();
+    expect(within(panel()).queryByText(/On Boundaries/)).toBeNull();
+    expect(within(panel()).queryByText(/Finding her words/)).toBeNull();
+  });
+});
+
+describe('a fresh open on a different key', () => {
+  it('says it is loading rather than showing the previous module', async () => {
+    let answerBoundaries: (s: ResourcesSelection) => void = () => {};
+    get.mockImplementation((path: string) => {
+      if (path === `${RESOURCES_ENDPOINT}/values`) return Promise.resolve(fullSelection());
+      if (path === `${RESOURCES_ENDPOINT}/boundaries`) {
+        return new Promise<ResourcesSelection>((resolve) => {
+          answerBoundaries = resolve;
+        });
+      }
+      return new Promise<never>(() => {});
+    });
+    const view = renderDrawers('/app/modules/values');
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+    await userEvent.click(within(panel()).getByRole('button', { name: /Close/ }));
+
+    mockPathname.current = '/app/modules/boundaries';
+    view.rerender(
+      <>
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+    await openResources();
+
+    // Not "On Values" over Boundaries: the general lede and the loading line.
+    expect(within(panel()).getByText(RESOURCES_FALLBACK_LEDE)).toBeInTheDocument();
+    expect(within(panel()).getByText(/Finding her words/)).toBeInTheDocument();
+    expect(within(panel()).queryByText(/anchor/)).toBeNull();
+
+    await act(async () => {
+      answerBoundaries(fallbackSelection());
+      await Promise.resolve();
+    });
+    await within(panel()).findByText(/On Boundaries\./);
+  });
+});
+
+describe('a pinned film', () => {
+  it('does not outlive the route it was suggested on', async () => {
+    serve({ 'values?film=four-marks': fullSelection(), boundaries: fallbackSelection() });
+    function Opener() {
+      const { openDrawer } = useShellLayout();
+      return (
+        <button type="button" onClick={() => openDrawer('resources', { film: 'four-marks' })}>
+          pin
+        </button>
+      );
+    }
+    mockPathname.current = '/app/modules/values';
+    const view = renderInShell(
+      <>
+        <Opener />
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'pin' }));
+    await within(panel()).findByText(/anchor/);
+
+    mockPathname.current = '/app/modules/boundaries';
+    view.rerender(
+      <>
+        <Opener />
+        <ShellRail />
+        <Drawers />
+      </>
+    );
+    await within(panel()).findByText(/It is an invitation\./);
+
+    // The Boundaries request carried no pin.
+    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries`);
+    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('boundaries?film'));
+  });
+});
+
 describe('the status line is one live region, not a line that mounts with the state', () => {
   it('is the same element while loading, once loaded, and on failure', async () => {
     // A live region announces CHANGES to content it already had; one that
