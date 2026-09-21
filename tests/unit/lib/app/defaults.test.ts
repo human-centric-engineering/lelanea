@@ -319,12 +319,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). f-safety t-60 fills this with ONE
-    // registration: her search, mounted OVER the built-in slug so each result
-    // says whose material it is. What is pinned is the handler the dispatcher
-    // ends up holding for that slug after the real lazy registration pass. A
+    // PINNED, not deleted (`HB2`). TWO registrations, each mounted OVER an
+    // upstream slug rather than beside it: f-safety t-60's search, so each
+    // result says whose material it is, and f-slots t-72's `fill_slot`, so one
+    // turn writes a slot once. What is pinned is the handler the dispatcher
+    // ends up holding for each slug after the real lazy registration pass. A
     // registration under any other slug, or a built-in flush that ran after
-    // ours, fails here. A stray second capability is caught by the count.
+    // ours, fails here. A stray third capability is caught by the count.
     seam: 'lib/app/capabilities.ts',
     risk: 'a stray capability would be dispatchable on every install',
     assert: async () => {
@@ -333,16 +334,21 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const { capabilityDispatcher } = await import('@/lib/orchestration/capabilities/dispatcher');
       const { LabelledSearchKnowledgeCapability } =
         await import('@/lib/app/safety/labelled-search');
+      const { GuardedFillSlotCapability } = await import('@/lib/app/slots/capture');
       const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
       __resetRegistrationForTests();
       registerBuiltInCapabilities();
-      const handler = capabilityDispatcher.getHandler('search_knowledge_base');
+      const search = capabilityDispatcher.getHandler('search_knowledge_base');
+      const capture = capabilityDispatcher.getHandler('fill_slot');
       const ours = registerSpy.mock.calls.filter(
-        ([capability]) => capability instanceof LabelledSearchKnowledgeCapability
+        ([capability]) =>
+          capability instanceof LabelledSearchKnowledgeCapability ||
+          capability instanceof GuardedFillSlotCapability
       );
       registerSpy.mockRestore();
-      expect(handler).toBeInstanceOf(LabelledSearchKnowledgeCapability);
-      expect(ours).toHaveLength(1);
+      expect(search).toBeInstanceOf(LabelledSearchKnowledgeCapability);
+      expect(capture).toBeInstanceOf(GuardedFillSlotCapability);
+      expect(ours).toHaveLength(2);
       expect(initAppCapabilities()).toBeUndefined();
     },
   },
@@ -535,6 +541,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppSlotDefinition',
         'AppSlotDefinitionRevision',
         'AppTurn',
+        'AppTurnSlotWrite',
         'AppUserBudget',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
@@ -600,6 +607,12 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // above, not here.
         'AppSlotDefinition',
         'AppSlotDefinitionRevision',
+        // f-slots t-72 — the retry guard's ledger. A slug, a version number and
+        // a timestamp, kept so a re-run turn cannot record one thing twice. The
+        // rule above still holds and this row is the edge case that tests it:
+        // it is ABOUT a slot value without BEING one. What was learned is the
+        // `framework_slot_value`; the turn is this bundle's `turns` section.
+        'AppTurnSlotWrite',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
       // is what lets them tell "we hold nothing about you" apart from "we decided

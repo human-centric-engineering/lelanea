@@ -15,19 +15,33 @@
  *
  * ## What Lelañea registers
  *
- * One capability, mounted OVER a built-in rather than beside it: her search,
- * with each result labelled by whose material it is (f-safety t-60). Same slug,
- * same schema and function definition. The subclass runs the platform's search
- * unchanged, then adds the label for her agents only. A new slug would lose the
- * chat handler's citation path, which is keyed on this one.
+ * Two capabilities, each mounted OVER an upstream one rather than beside it —
+ * same slug, same schema, same function definition. A new slug would lose what
+ * is keyed on the old one, and would advertise a second tool for the same job.
  *
- * The registry flushes app capabilities after the built-ins, so this handler is
- * the one the dispatcher holds. Pinned in `tests/unit/lib/app/defaults.test.ts`
- * (`HB2`: pin the new value, never delete the row).
+ * - **`search_knowledge_base`** — her search, with each result labelled by whose
+ *   material it is (f-safety t-60). The subclass runs the platform's search
+ *   unchanged, then adds the label for her agents only. A new slug would lose
+ *   the chat handler's citation path, which is keyed on this one.
+ * - **`fill_slot`** — Daybreak's capture, guarded so one turn writes a slot once
+ *   (f-slots t-72). The subclass adds the turn-scoped idempotency the framework
+ *   cannot have, because the turn id is this leaf's. Everything else — the
+ *   exposure allowlist, masking, the typed-value extraction, the audit
+ *   redaction — is inherited untouched.
+ *
+ * `get_state` is granted but NOT mounted here: it is read-only, and nothing
+ * about it needs a leaf's turn.
+ *
+ * The registry flushes app capabilities after the built-ins, so these handlers
+ * are the ones the dispatcher holds. Pinned in
+ * `tests/unit/lib/app/defaults.test.ts` (`HB2`: pin the new value, never delete
+ * the row).
  */
 import { registerAppCapability } from '@/lib/orchestration/capabilities/registry';
 import { LabelledSearchKnowledgeCapability } from '@/lib/app/safety/labelled-search';
+import { GuardedFillSlotCapability } from '@/lib/app/slots/capture';
 
 export function initAppCapabilities(): void {
   registerAppCapability(new LabelledSearchKnowledgeCapability());
+  registerAppCapability(new GuardedFillSlotCapability());
 }

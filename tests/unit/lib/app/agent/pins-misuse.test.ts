@@ -7,6 +7,15 @@
  * never be ADDED to the allowlist itself. It names every write capability the
  * install ships, in Sunrise and in Daybreak, and fails if one appears.
  *
+ * **One exception is now argued for rather than assumed** (f-slots t-72). §11
+ * needs her to record what she learns about a person, so the ceiling was
+ * restated by the owner on 20 Sept 2026 from "she may only hold tools that
+ * read" to "nothing she holds may delete anything, or act on anyone else's
+ * behalf". `fill_slot` is admitted under it and is listed in
+ * {@link SANCTIONED_SELF_WRITES} below — still named as a write, still failing
+ * every case but the one that names it. The sentence that mattered is unmoved:
+ * nothing she holds deletes.
+ *
  * The guard modes and the escalation payloads are pinned for the same reason.
  * `block` would turn a heuristic false positive into her `unavailable` ending,
  * and a payload the framework's schema refuses would never fire.
@@ -23,7 +32,10 @@ import {
   ESCALATION_POLICIES,
   GRANTED_CAPABILITY_SLUGS,
   GUARD_MODES,
+  HER_CAPABILITY_SLUGS,
   READ_ONLY_CAPABILITY_SLUGS,
+  SELF_WRITE_CAPABILITY_SLUGS,
+  SLOT_CAPABILITY_SLUGS,
   SEATED_ROLES,
 } from '@/lib/app/agent/pins';
 import { assertValidFacilitationPolicy } from '@/lib/framework/facilitation/policies/kinds';
@@ -60,19 +72,59 @@ const WRITE_CAPABILITY_SLUGS = [
   'submit_proposal',
 ];
 
+/**
+ * The one write she is allowed, and the whole reason it is allowed.
+ *
+ * Owner ruling, 20 Sept 2026 (f-slots t-72): the ceiling became "nothing she
+ * holds may delete anything, or act on anyone else's behalf". `fill_slot`
+ * qualifies — own profile only, appends rather than overwrites, sends and
+ * spends nothing on anyone's account. The argument is in
+ * `SELF_WRITE_CAPABILITY_SLUGS`' docblock; this constant is what stops the
+ * exception becoming a habit.
+ *
+ * **Adding a second slug here is a security review, not an edit**, and if this
+ * list ever grows past a couple of entries the exception has become the rule
+ * and the ceiling needs restating again rather than widening again.
+ */
+const SANCTIONED_SELF_WRITES = ['fill_slot'];
+
 describe('her tools', () => {
-  it('are exactly the read-only allowlist', () => {
-    expect([...GRANTED_CAPABILITY_SLUGS]).toEqual([...READ_ONLY_CAPABILITY_SLUGS]);
+  it('are exactly what the two seeds grant, and nothing else', () => {
+    expect([...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS].sort()).toEqual(
+      [...HER_CAPABILITY_SLUGS].sort()
+    );
   });
 
-  it('never include anything that writes', () => {
+  it('never include anything that writes, bar the one sanctioned self-write', () => {
     // The population is non-empty, so an empty intersection means something.
-    expect(READ_ONLY_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
-    const allowed: readonly string[] = READ_ONLY_CAPABILITY_SLUGS;
-    const granted: readonly string[] = GRANTED_CAPABILITY_SLUGS;
+    expect(HER_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
+    expect(WRITE_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
+    const allowed: readonly string[] = HER_CAPABILITY_SLUGS;
+    const granted: readonly string[] = [...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
+      if (SANCTIONED_SELF_WRITES.includes(slug)) continue;
       expect(allowed, `${slug} writes — it cannot be on her allowlist`).not.toContain(slug);
       expect(granted, `${slug} writes — it cannot be granted to her`).not.toContain(slug);
+    }
+  });
+
+  it('keep the sanctioned exception to exactly what was argued for', () => {
+    // Both directions. A slug added to `SELF_WRITE_CAPABILITY_SLUGS` without
+    // being argued for here fails; so does one quietly dropped from the write
+    // list above to get it past the case before this one.
+    expect([...SELF_WRITE_CAPABILITY_SLUGS]).toEqual(SANCTIONED_SELF_WRITES);
+    for (const slug of SANCTIONED_SELF_WRITES) {
+      expect(
+        WRITE_CAPABILITY_SLUGS,
+        `${slug} is exempted as a write — it must still be listed as one`
+      ).toContain(slug);
+    }
+  });
+
+  it('keep every read-only slug genuinely read-only', () => {
+    const readOnly: readonly string[] = READ_ONLY_CAPABILITY_SLUGS;
+    for (const slug of WRITE_CAPABILITY_SLUGS) {
+      expect(readOnly, `${slug} writes — it is not read-only`).not.toContain(slug);
     }
   });
 });

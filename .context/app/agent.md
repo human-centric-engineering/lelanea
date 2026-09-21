@@ -284,6 +284,30 @@ so the tool sees only what t-25's designation rule lets her quote.
 The members' way in is `POST /api/v1/framework/facilitation/{onboarding|facilitator}/chat/stream`,
 body `{ message, turnId? }`.
 
+### The three tools she holds
+
+Two seeds, because they grant different things. 007 grants a slug and nothing
+else; 013's two bindings each carry an exposure allowlist, and that config has
+to be written **with** the binding — a grant created first and configured second
+is permissive in between.
+
+| Tool                    | Seed | Does                                                       |
+| ----------------------- | ---- | ---------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is |
+| `get_state`             | 013  | reads back what is already understood about this person    |
+| `fill_slot`             | 013  | writes what she has newly learned, once per turn           |
+
+`fill_slot` is the **one** tool she holds that writes, and the ceiling it is
+admitted under is in [`safety.md`](./safety.md) — "nothing she holds may delete
+anything, or act on anyone else's behalf". What she may read back, what bounds
+what she writes, and why a retried turn cannot record one thing twice are in
+[`slots.md`](./slots.md), "Capture".
+
+Both slot tools arrived with the instruction that tells her when to use them,
+for the reason the search tool did: a tool with no instruction is one she may
+never reach for, and an instruction with no tool produces a confident claim to
+have done it.
+
 ### Where else she can be reached
 
 **Not through Sunrise's consumer chat routes.** `public` would also open Sunrise's general consumer

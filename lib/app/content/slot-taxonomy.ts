@@ -146,3 +146,33 @@ export function getSlotTaxonomy(): SlotTaxonomyFile {
   parsed ??= deepFreezeParsed(slotTaxonomyFileSchema.parse(rawSlotTaxonomy));
   return parsed;
 }
+
+/**
+ * The groups she may read back — every declared group none of whose slots is
+ * hidden (f-slots t-72).
+ *
+ * This is the `read` half of her slot exposure allowlist
+ * (`SLOT_EXPOSURE_CONFIG` in `lib/app/agent/pins.ts`), and it is **derived from
+ * the taxonomy rather than typed out** so that marking a slot hidden is the
+ * whole act. Naming the five open groups by hand would mean a slot turned hidden
+ * inside one of them kept being read back into her context — §12's "never a
+ * grade" undone by a list nobody remembered to edit.
+ *
+ * **Group-level, because the allowlist is.** Daybreak's facet filters on
+ * `group`, so a group is readable or it is not; there is no per-slot axis to
+ * filter on. `tests/unit/lib/app/content/slot-taxonomy.test.ts` asserts each
+ * group is wholly open or wholly hidden, which is what makes that coarseness
+ * lossless — and fails, loudly, on the first mixed group, rather than letting
+ * this quietly withhold a group's open slots or expose its hidden one.
+ *
+ * Read from the BUNDLED file, which is what a fresh database is seeded from and
+ * what the grant's stored config is written from — once, at seed, after which
+ * the config is operator-owned like the grant itself.
+ */
+export function readableSlotGroups(): string[] {
+  const file = getSlotTaxonomy();
+  const hidden = new Set(
+    file.slots.filter((slot) => slot.visibility === 'hidden').map((slot) => slot.group)
+  );
+  return file.groups.map((group) => group.key).filter((key) => !hidden.has(key));
+}

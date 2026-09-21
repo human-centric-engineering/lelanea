@@ -18,7 +18,11 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { getSlotTaxonomy, slotTaxonomyFileSchema } from '@/lib/app/content/slot-taxonomy';
+import {
+  getSlotTaxonomy,
+  readableSlotGroups,
+  slotTaxonomyFileSchema,
+} from '@/lib/app/content/slot-taxonomy';
 import {
   SLOT_VISIBILITY,
   SLOT_MODE,
@@ -107,6 +111,40 @@ describe('the bundled taxonomy', () => {
       (s) => s.visibility === 'hidden' && s.group !== 'development'
     );
     expect(hiddenElsewhere).toEqual([]);
+  });
+
+  it('keeps every group wholly open or wholly hidden, which is what makes the read allowlist lossless', () => {
+    // Her `get_state` allowlist filters by GROUP — Daybreak's exposure facet
+    // has no per-slot axis (f-slots t-72). So `readableSlotGroups()` can only
+    // be honest while no group mixes the two: a mixed group would either
+    // withhold its open slots from her or read its hidden one back, and which
+    // of those happened would depend on a rule nobody chose.
+    //
+    // This is the assertion that has to fail FIRST, before the derivation
+    // quietly does the wrong thing. It is stricter than the case above, which
+    // pins today's taxonomy; this one holds for any taxonomy.
+    const file = getSlotTaxonomy();
+    for (const group of file.groups) {
+      const visibilities = new Set(
+        file.slots.filter((s) => s.group === group.key).map((s) => s.visibility)
+      );
+      expect(visibilities.size, `group "${group.key}" mixes open and hidden slots`).toBe(1);
+    }
+  });
+
+  it('offers her back every group but the hidden one', () => {
+    // Derived, never typed out — the point being that marking a slot hidden is
+    // the whole act. Both directions, so a derivation that returned everything
+    // (or nothing) fails.
+    const groups = readableSlotGroups();
+    expect(groups).not.toContain('development');
+    expect(new Set(groups)).toEqual(
+      new Set(
+        getSlotTaxonomy()
+          .groups.map((g) => g.key)
+          .filter((key) => key !== 'development')
+      )
+    );
   });
 
   it('declares every slot pre-declared — open-mode slugs are minted, not authored', () => {

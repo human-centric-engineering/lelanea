@@ -464,8 +464,206 @@ and type names.
   on the button, retired rows stay on the page, and Restore is one click.
 - **Choose `mode`.** Never offered; every row is written `targeted`.
 
+## Capture — she writes the profile herself (t-72)
+
+**Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/slots/vocabulary.ts`
+(what she can see) · `lib/app/capabilities.ts` (the mount) ·
+`lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`, `SLOT_EXPOSURE_CONFIG`) ·
+`lib/app/voice/fingerprint.ts` (when to write) ·
+`lib/app/voice/context-contributor.ts` (where the vocabulary is spliced in) ·
+`prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
+`scripts/app/smoke-slot-capture.ts`
+
+She holds `get_state` and `fill_slot` and calls them inside her own tool loop.
+There is **no side extractor** — owner ruling at claim: a second model reading
+untrusted text with write access to the profile was rejected, and so was
+delaying `done` to run one.
+
+### The grant, and the two halves of the allowlist
+
+| Facet             | What it says                           | Why                                                                |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| `write`           | **absent** — she may write anything    | Any restriction also forbids minting; the owner ruled she may mint |
+| `read` → `groups` | every group whose slots are all `open` | §12 — a `development` slot must never reach a sentence she says    |
+
+Daybreak's facet filters on `group` and `scope` only, and **a minted slug has
+neither**. `facetAllows()` refuses a null group against any named list, so a
+`write` facet — however wide — would silently switch minting off. The two
+cannot both hold, and the ruling chose minting. What bounds her writing is her
+instruction, not the allowlist.
+
+The read list is **derived** by `readableSlotGroups()`, never typed out, so
+marking a slot hidden is the whole act. That is only lossless while no group
+mixes `open` and `hidden` slots, which
+`tests/unit/lib/app/content/slot-taxonomy.test.ts` asserts for any taxonomy —
+not just today's.
+
+**The cost, accepted with the ruling:** the same filter drops null-group slots,
+so **she cannot read her own mints back**. The panel (t-73) reads by its own
+path, not through `get_state`.
+
+**The grant is operator-owned and filled once**, like 007's: created with its
+config, and thereafter left alone — switched off, narrowed, widened or cleared.
+So **a taxonomy change does not reach an existing grant**; widening is an admin's
+act. Reconciling it on every seed would revert every narrowing an operator had
+made, which is the worse failure (`fp4`).
+
+### One turn writes a slot once
+
+`framework_slot_value` is insert-only with no turn-scoped idempotency key, and a
+turn that fails after its tool calls **may run again under the same id**
+(`lib/app/agent/turn-record.ts`). The re-run calls the model on the same words,
+it reaches the same reading, and a second version lands. One thing said once,
+recorded twice, minutes apart. §8.1 says that must not happen.
+
+`app_turn_slot_write` is the guard, and **the unique index IS the guard** —
+`@@unique([turnId, slotSlug])`, the same shape as the turn claim, so two
+dispatches cannot both miss it. A suppressed call answers with the version that
+_was_ written, not an error: the reading is recorded, which is what the model
+asked for. It carries `skipFollowup` too, or a suppressed write would cost a
+model pass the real one did not.
+
+**Not guarded, deliberately:** two `fill_slot` calls for one slug inside a single
+attempt (a model calling a tool twice, not a retried turn — collapsing it would
+drop a second reading meant as a correction), and any dispatch with no turn id
+(a workflow step, the general consumer chat route), which runs exactly as before.
+
+### The turn id reaches the capability through a carrier meant for something else
+
+`CapabilityContext` has no turn id — Sunrise does not model a turn. But the chat
+handler threads `request.costLogMetadata` into its dispatch context, the
+dispatcher shallow-copies the context before `execute()`, and
+`lib/app/agent/turns.ts` already puts `{ turnId, seat }` there. So it is
+reachable today, through a **cost-attribution** channel.
+
+That is a workaround and `turnIdFrom()` treats it as one: it validates with Zod
+rather than casting, and an unusable value degrades to "no turn" instead of
+throwing. Filed as
+[`sunrise#822`](https://github.com/human-centric-engineering/sunrise/issues/822) —
+the blobs for `lib/orchestration/capabilities/types.ts`,
+`streaming-handler.ts` and `dispatcher.ts` are identical across all three tiers,
+so Daybreak could not have fixed it (`daybreak.filing`). Our evidence on the
+write side is commented on
+[`daybreak#167`](https://github.com/human-centric-engineering/daybreak/issues/167)
+and [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156),
+which is where the framework tier tracks run provenance on slot values.
+
+### Mounting over Daybreak's capability costs one non-obvious line
+
+`GuardedFillSlotCapability` **must re-declare `redactProvenance()`**, even to
+delegate straight to `super`. `capabilityDispatcher.register()` refuses any
+`processesPii` capability whose redactor it cannot see, and
+`isRedactorOverridden()` asks `hasOwnProperty` of the _immediate_ prototype — an
+inherited one does not count. That is deliberate upstream.
+
+**The refusal is silent**: it is caught by the registration pass, logged as an
+`UnknownError`, and the slug is simply absent, so she goes on searching normally
+and quietly captures nothing. Nothing in `capture.ts` fails. What catches it is
+the `lib/app/capabilities.ts` row in `tests/unit/lib/app/defaults.test.ts`,
+which asserts the handler the dispatcher **actually holds** for the slug — and
+it caught exactly this during t-72's build. Noted on `daybreak#167` for the
+next fork.
+
+### And she has to be left able to speak
+
+`fill_slot` sets `skipFollowup`, so a silent capture does not cost a second
+model pass. That is right for an agent that answers _and_ captures in one pass.
+Hers does not: she is told to record before she answers, and the pinned model
+obliges with a first pass carrying nothing but tool calls — with the follow-up
+skipped, **that pass is the whole turn**, and someone who has just confided
+something is answered with an empty string. Measured on a real turn, not
+predicted.
+
+`answering()` drops the flag on every return, so the turn always gets a pass in
+which she speaks. It costs one extra model call on any turn she captures in —
+the cost the owner accepted at claim ("each write also adds a tool pass to her
+turn"). It is **not** fixed by rewording the instruction, which would make the
+turn's correctness depend on a model choosing to emit text beside a tool call.
+
+### She has to be able to SEE the taxonomy, or none of the above is true
+
+**Granting `fill_slot` does not make her fill an authored slot.** Nothing in the
+platform tells a model which slugs exist: the tool's advertised schema names one
+example (`"primary_goal"`, not even in this taxonomy), `get_state` returns only
+slots already filled so it cannot introduce an empty one, and Daybreak's module
+context injects a module's slot _values_ — and this taxonomy hangs on no module
+by design.
+
+Measured on the first real turn of the capture smoke: told that someone had not
+spoken to their brother since their father died, she minted
+`family_communication` and used none of the 50 authored slots covering exactly
+that. t-70's taxonomy and t-71's editor were both unreachable from the only path
+that writes.
+
+**And it was a data-protection gap, not a wasted feature.** Sensitivity is read
+off the slot's _definition_, and masking fires only for `special_category`. A
+minted slug has no definition ⇒ always `standard` ⇒ never masked. Nine slots
+here are `special_category` — physical, emotional and spiritual health, i.e.
+GDPR Art. 9 — so the classification was a no-op on the capture path and raw
+health and belief prose was landing in `framework_slot_value.value`. Found by
+`/security-review`; the cause was worse than the finding.
+
+`lib/app/slots/vocabulary.ts` is the fix: the live taxonomy, one line per slot,
+spliced into her facilitation block per turn. The same message now fills
+`life_family_strain`, and an Art. 9 slug stores `<redacted: special_category>`.
+Both are asserted in the smoke.
+
+Four things about it worth knowing before you change it:
+
+- **It is not in the tool schema, where it belongs.** `getCapabilityDefinitions()`
+  advertises `ai_capability.functionDefinition` from the **database row**, and
+  `syncFrameworkCapabilities()` projects that row from Daybreak's own registry
+  and reconciles it on every boot. Our subclass wins the _dispatch_, never the
+  _advertisement_, so a leaf cannot put the slugs in the schema. Asked for in
+  [`daybreak#268`](https://github.com/human-centric-engineering/daybreak/issues/268),
+  along with the mint-sensitivity default.
+- **It rides in the voice contributor because a request carries one context
+  tuple.** A second `registerContextContributor(FACILITATION_CONTEXT_TYPE, …)`
+  would _replace_ her voice block, not add to it.
+- **Facilitation only.** The admin `voice` path is what the voice comparison
+  measures, so adding ~2,000 tokens to it would change what the golden set
+  compares between runs.
+- **Hidden slots are left out**, so she cannot fill `development`. The strict
+  reading of §12 — putting a development scale's descriptions in her prompt is
+  the first step toward her reasoning aloud about which rung someone is on.
+  Whoever fills development decides how, with that risk in front of them.
+
+**Inventing is the exception, and the rule travels with the list.** Owner
+ruling, 21 Sept 2026: she may mint, but only on a strong case — genuinely
+salient information with a real gap in the taxonomy — and the behaviour belongs
+behind an admin setting we can switch off while we learn what it does (idea
+#33). The rule is in her instructions _and_ beside the list, because that is
+where a model weighing "does anything here fit?" is reading.
+
+**The residual, accepted:** she can still mint, and a mint still cannot be
+masked. That is inherent — an invented slug is unclassified, and the only
+fail-safe default would redact every minted value into a sentinel. What reduces
+it is her seeing the taxonomy; what would remove it is the admin setting.
+
+### What proves the write, until the panel lands
+
+`HB9`: a value written where nobody can read it is indistinguishable from one
+not written. Until t-73, **`npm run smoke:app-slot-capture` is the proof** —
+against the dev database, through the real route, in a running app. It asserts
+the value, its conversation, its confidence and its `sourceType`; that every
+write reached the stream as a `capability_result`; that a forced-failed turn
+re-run under the same id adds no version; and that the hidden group is withheld.
+
+It cannot prove she captures the _right_ things at the right confidence. That is
+her judgement, and the voice golden set measures it.
+
+### After a change here
+
+A changed grant or tool schema is dark until each database is reseeded **and the
+server restarted** (`sunrise.mcp-reseed`). The dispatcher also caches an agent's
+bindings for five minutes, so a fresh grant can be invisible for that long on a
+process that had already resolved her.
+
 ## What is not here yet
 
-- **Capture** — t-72. `fill_slot` writing a value with its provenance and
-  confidence, once per turn.
-- **The panel** — where the picture assembles for the person it is about.
+- **The panel** — where the picture assembles for the person it is about (t-73),
+  and the only surface on which a person can correct what she wrote.
+- **Admin control over minting** — whether she may invent a slot at all, against
+  admin-authored guidance, or only by proposing one for approval. Owner ruling
+  20 Sept 2026 that this should be a three-mode setting; captured as its own
+  feature rather than built here.

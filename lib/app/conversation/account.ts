@@ -59,8 +59,13 @@ export interface AccountPart {
 
 export type AccountSource = (input: AccountInput) => AccountPart | null;
 
-/** The one capability her seat may call today (`READ_ONLY_CAPABILITY_SLUGS`). */
+/** The capabilities her seat may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
+const READ_THE_PROFILE = 'get_state';
+const WRITE_THE_PROFILE = 'fill_slot';
+
+/** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
+const NAMED_CAPABILITIES = new Set([SEARCH_HER_MATERIAL, READ_THE_PROFILE, WRITE_THE_PROFILE]);
 
 /** Looked something up in her material — and how many passages it drew on. */
 const lookedUp: AccountSource = (input) => {
@@ -77,12 +82,63 @@ const lookedUp: AccountSource = (input) => {
 };
 
 /**
- * A capability this account has no words for. Her seat cannot call one today
- * (`pins-misuse.test.ts` pins the list), so this is the honest floor for the
- * day one is added before its sentence is: named, never hidden.
+ * Looked at what she already understands about the person (§11 t-72).
+ *
+ * Said without naming a slot, and that is not vagueness. The line is what a
+ * member reads, `development` slots are hidden from them by §12 — "a tuning
+ * signal, never a grade" — and this source cannot tell which slugs a read
+ * covered anyway: the frame carries the capability, not its result. "What she
+ * understands about you" is true of all of it and discloses none of it.
+ */
+const readTheProfile: AccountSource = (input) => {
+  if (!input.capabilities.includes(READ_THE_PROFILE)) return null;
+  return {
+    key: 'read_profile',
+    line: 'Looked at what she already understands about you',
+    detail: 'Looked at what she already understands about you.',
+  };
+};
+
+/**
+ * Wrote something new into what she understands about the person (§11 t-72).
+ *
+ * **This is the guardrail's own line** — "nothing is understood invisibly". A
+ * capture is a silent tool (D5): the model is told not to announce it, and
+ * without this source a turn would learn something about someone and say
+ * nothing about having done so.
+ *
+ * **No count, deliberately** — an earlier version said "Added 3 things" and it
+ * could not be right. What this source has is `input.capabilities`: one entry
+ * per *successful call*, with no slot slug on it. Two of those can be one
+ * reading — the model calling the tool twice for the same slug inside one
+ * attempt, which `capture.ts` explicitly declines to collapse — so the count
+ * would say "2 things" where the panel (t-73) shows one item, and the person
+ * reading both would be right to trust the panel. A suppressed retry counts too,
+ * because it returns a success like any other. The frame cannot tell us how many
+ * things were learned, so this does not claim to know. Found by /code-review,
+ * which also caught the docblock asserting the retry guard prevented exactly
+ * this.
+ *
+ * No slug either, for `readTheProfile`'s reasons, and no value — the panel is
+ * where a person sees what was written and corrects it.
+ */
+const wroteToProfile: AccountSource = (input) => {
+  if (!input.capabilities.includes(WRITE_THE_PROFILE)) return null;
+  return {
+    key: 'wrote_profile',
+    line: 'Added something to what she understands about you',
+    detail: 'Added something to what she understands about you. You can see it, and correct it.',
+  };
+};
+
+/**
+ * A capability this account has no words for. Every slug her seat may call has
+ * one above (`pins-misuse.test.ts` pins the list against
+ * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
+ * added before its sentence is: named, never hidden.
  */
 const otherCapability: AccountSource = (input) => {
-  const others = [...new Set(input.capabilities.filter((slug) => slug !== SEARCH_HER_MATERIAL))];
+  const others = [...new Set(input.capabilities.filter((slug) => !NAMED_CAPABILITIES.has(slug)))];
   if (others.length === 0) return null;
   const named = others.map((slug) => slug.replace(/_/g, ' ')).join(', ');
   return {
@@ -93,10 +149,16 @@ const otherCapability: AccountSource = (input) => {
 };
 
 /**
- * Every source, in the order their sentences read. §11 adds slots written
- * here; §13 adds modules instructed. Exported so a test can see the seam.
+ * Every source, in the order their sentences read: what she consulted, then
+ * what she wrote. §13 adds modules instructed. Exported so a test can see the
+ * seam.
  */
-export const ACCOUNT_SOURCES: readonly AccountSource[] = [lookedUp, otherCapability];
+export const ACCOUNT_SOURCES: readonly AccountSource[] = [
+  lookedUp,
+  readTheProfile,
+  wroteToProfile,
+  otherCapability,
+];
 
 export const NOTHING_WRITTEN = 'Nothing was written from this turn';
 

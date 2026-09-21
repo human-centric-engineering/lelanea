@@ -21,7 +21,8 @@
  *      platform's reference corpus holds. Assert every result carries an origin,
  *      and none of the platform's is labelled hers.
  *   4. Her advertised tool set (from her real grants) is non-empty and inside
- *      `READ_ONLY_CAPABILITY_SLUGS`.
+ *      `HER_CAPABILITY_SLUGS`, with the writing ones among them named in the
+ *      output for whoever is reading it.
  *   5. With a stub model that emits `write_user_memory`, run a real
  *      `streamChat` turn for her. Assert the call is refused as
  *      `tool_not_advertised` and nothing was written.
@@ -68,7 +69,8 @@ import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import {
   ESCALATION_POLICIES,
   GUARD_MODES,
-  READ_ONLY_CAPABILITY_SLUGS,
+  HER_CAPABILITY_SLUGS,
+  SELF_WRITE_CAPABILITY_SLUGS,
   SEATED_ROLES,
 } from '@/lib/app/agent/pins';
 import {
@@ -248,10 +250,20 @@ async function main(): Promise<void> {
     const advertised = (await getCapabilityDefinitions(agent.id)).map((tool) => tool.name);
     console.log(`\n[4] advertised to her: ${advertised.join(', ') || '(nothing)'}`);
     check(advertised.length > 0, 'she has a tool to search with');
+    const allowed: readonly string[] = HER_CAPABILITY_SLUGS;
     check(
-      advertised.every((name) => (READ_ONLY_CAPABILITY_SLUGS as readonly string[]).includes(name)),
-      'every tool she is advertised is on the read-only allowlist'
+      advertised.every((name) => allowed.includes(name)),
+      'every tool she is advertised is on her allowlist'
     );
+    // Which of them write, named in the output rather than only checked. The
+    // allowlist test above already bounds this set — `HER_CAPABILITY_SLUGS` is
+    // the read-only slugs plus the sanctioned self-writes — so this is here to
+    // be READ by whoever runs the smoke, not to assert something new
+    // (f-slots t-72). An operator seeing a slug here they did not expect has
+    // found something no constant could have told them.
+    const selfWrites: readonly string[] = SELF_WRITE_CAPABILITY_SLUGS;
+    const writes = advertised.filter((name) => selfWrites.includes(name));
+    console.log(`    of those, writing: ${writes.join(', ') || '(none)'}`);
 
     // ---- 5. A write tool named by the model is refused ---------------------------
     console.log('\n[5] a stub model asks for write_user_memory on her chat path');
