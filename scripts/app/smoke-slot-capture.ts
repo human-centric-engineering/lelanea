@@ -29,6 +29,8 @@
  *      against the real database. Assert one version, not two — the guard, on a
  *      real unique index rather than a fake one — and that a different turn id
  *      writing the same slug still appends, so the guard is keyed on the turn.
+ *   4b. Assert a `special_category` slot masks its prose at rest — the control
+ *      that only works while she fills AUTHORED slots.
  *   5. Assert what she may NOT read back: `get_state` returns no `development`
  *      slot even with one written, because §12 says that is never a grade.
  *   6. Remove the member (which cascades the turns, the guard rows and the slot
@@ -328,6 +330,30 @@ async function main(): Promise<void> {
       `every write she made is on the stream (${wroteOnStream} frames, ${values.length} values)`
     );
 
+    // **The assertion the security review bought.** Before the taxonomy was put
+    // in front of her (`lib/app/slots/vocabulary.ts`) she invented
+    // `family_communication` here and used none of the 50 authored slots that
+    // cover it — which also meant the `special_category` classification could
+    // never fire, because masking reads the slot's DEFINITION and an invented
+    // slug has none. So this is not a tidiness check: a mint on this message is
+    // the data-protection gap coming back.
+    const authored = new Set(
+      (
+        await prisma.slotDefinition.findMany({
+          where: { isActive: true },
+          select: { slug: true },
+        })
+      ).map((row) => row.slug)
+    );
+    check(authored.size > 0, `${authored.size} authored slots are active`);
+    const invented = values.filter((value) => !authored.has(value.slotSlug));
+    check(
+      invented.length === 0,
+      invented.length === 0
+        ? 'she filled authored slots, inventing none — she can see the taxonomy'
+        : `she invented ${invented.map((v) => v.slotSlug).join(', ')} — is the vocabulary block reaching her prompt?`
+    );
+
     console.log('\n2. What each one carries');
     const turnRow = await prisma.appTurn.findUniqueOrThrow({
       where: { userId_turnId: { userId: user.id, turnId: TURN_CAPTURE } },
@@ -481,6 +507,49 @@ async function main(): Promise<void> {
     check(
       (await prisma.appTurnSlotWrite.count({ where: { turnId: otherTurn.id } })) === 1,
       'and that turn records its own write'
+    );
+
+    // ---- 3b. Special-category prose is masked at rest ----------------------
+    //
+    // The control this branch nearly shipped as a no-op. Sensitivity is read off
+    // the slot DEFINITION, so it only means anything while she fills authored
+    // slots — which is what 1 and 3 above assert she now does. This asserts the
+    // other half: that reaching an Art. 9 slot actually redacts the prose.
+    // Dispatched directly, because making the model volunteer a health
+    // disclosure to order is neither reliable nor a thing to write into a test.
+    console.log('\n3b. Health and belief prose does not land as prose');
+    const art9 = await prisma.slotDefinition.findFirst({
+      where: { isActive: true, sensitivity: 'special_category' },
+      select: { slug: true },
+      orderBy: { slug: 'asc' },
+    });
+    if (!art9) {
+      throw new Error(
+        'no active special_category slot — the taxonomy classifies 9 of them, so this means the projection is wrong, not that the check is unnecessary'
+      );
+    }
+    const secret = 'A specific diagnosis, written by the capture smoke.';
+    const art9Write = await capabilityDispatcher.dispatch(
+      'fill_slot',
+      {
+        slotSlug: art9.slug,
+        value: secret,
+        confidence: 7,
+        reasoningNote: 'Written by npm run smoke:app-slot-capture.',
+        sourceType: 'direct',
+      },
+      { ...dispatchContext, costLogMetadata: { turnId: TURN_RETRY, seat: SEAT } }
+    );
+    check(art9Write.success, `${art9.slug} accepted a write`);
+    const stored = (await slotValuesFor(user.id)).find((value) => value.slotSlug === art9.slug);
+    check(stored !== undefined, `${art9.slug} was stored`);
+    check(
+      stored?.value !== secret,
+      `${art9.slug} did not store the prose verbatim (stored: "${stored?.value ?? ''}")`
+    );
+    check(
+      !(stored?.value ?? '').includes('diagnosis'),
+      'and nothing of the disclosure survives in the stored value'
     );
 
     // ---- 4. What she may not read back ------------------------------------

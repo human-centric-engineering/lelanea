@@ -16,6 +16,16 @@
  *    matches.
  * 2. **Her own passages** — retrieved by `lib/app/voice/exemplars.ts` from
  *    voice-designated documents only, each one labelled with its origin.
+ * 3. **On a facilitation seat only: what she is looking for** — the live slot
+ *    taxonomy (`lib/app/slots/vocabulary.ts`), so a capture can name an
+ *    authored slot instead of inventing one (f-slots t-72).
+ *
+ * The third is here rather than in its own contributor because **a request
+ * carries one context tuple**, so registering a second loader for
+ * `facilitation` would replace this block rather than add to it. It is on the
+ * facilitation path only: the admin `voice` path is what the voice comparison
+ * measures, and adding a 2,000-token block to it would change what the golden
+ * set is comparing.
  *
  * The always-on core is not here and must never be: it rides on the agent's
  * profile (`lib/app/voice/fingerprint.ts`) and is present whether or not this
@@ -90,6 +100,7 @@ import { selectOverlay } from '@/lib/app/voice/overlays';
 import { retrieveVoiceExemplarsSafely, type VoiceExemplar } from '@/lib/app/voice/exemplars';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
+import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -255,5 +266,17 @@ export async function loadFacilitationVoiceContext(seat: string): Promise<string
   // /code-review. An empty body frames an empty block, which says nothing.
   const binding = await getFacilitationBindingByRole(seat);
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
-  return loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
+
+  // The voice block and the taxonomy in one body, because a request carries ONE
+  // context tuple: a turn gets one contributor's block and no other, so a second
+  // `registerContextContributor(FACILITATION_CONTEXT_TYPE, …)` would not add a
+  // block — it would replace this one. See this module's header.
+  //
+  // Both reads in parallel: neither needs the other, and the voice half already
+  // costs an embedding on a cache miss.
+  const [voice, vocabulary] = await Promise.all([
+    loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? ''),
+    slotVocabulary(),
+  ]);
+  return [voice, vocabulary].filter(Boolean).join('\n\n');
 }

@@ -188,6 +188,15 @@ worth knowing before editing it:
   instructions rather than the guardrails because it is about what she does with
   a tool, and the guardrails are inherited by agents that hold no tools at all.
 
+**Inventing a slot is the exception, and the list is what makes that sayable.**
+Owner ruling, 21 Sept 2026. Before `lib/app/slots/vocabulary.ts` put the
+taxonomy in front of her, "only invent when nothing fits" was unanswerable — she
+had no way to know what fitted, and on the first real turn she invented a slug
+over 50 authored slots covering the same thing. An instruction about a list the
+model cannot see is not a weaker instruction; it is no instruction. The clause
+therefore tells her a list exists and puts inventing second, and the same rule
+is repeated beside the list itself.
+
 **The instruction arrived with the tools**, as the search clause did. An
 instruction to remember with nothing to remember into produces a model that says
 it will and does not — and each clause is worded so that a tool an operator

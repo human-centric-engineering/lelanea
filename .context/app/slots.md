@@ -466,9 +466,11 @@ and type names.
 
 ## Capture — she writes the profile herself (t-72)
 
-**Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/capabilities.ts`
-(the mount) · `lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`,
-`SLOT_EXPOSURE_CONFIG`) · `lib/app/voice/fingerprint.ts` (when to write) ·
+**Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/slots/vocabulary.ts`
+(what she can see) · `lib/app/capabilities.ts` (the mount) ·
+`lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`, `SLOT_EXPOSURE_CONFIG`) ·
+`lib/app/voice/fingerprint.ts` (when to write) ·
+`lib/app/voice/context-contributor.ts` (where the vocabulary is spliced in) ·
 `prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
 `scripts/app/smoke-slot-capture.ts`
 
@@ -577,6 +579,66 @@ which she speaks. It costs one extra model call on any turn she captures in —
 the cost the owner accepted at claim ("each write also adds a tool pass to her
 turn"). It is **not** fixed by rewording the instruction, which would make the
 turn's correctness depend on a model choosing to emit text beside a tool call.
+
+### She has to be able to SEE the taxonomy, or none of the above is true
+
+**Granting `fill_slot` does not make her fill an authored slot.** Nothing in the
+platform tells a model which slugs exist: the tool's advertised schema names one
+example (`"primary_goal"`, not even in this taxonomy), `get_state` returns only
+slots already filled so it cannot introduce an empty one, and Daybreak's module
+context injects a module's slot _values_ — and this taxonomy hangs on no module
+by design.
+
+Measured on the first real turn of the capture smoke: told that someone had not
+spoken to their brother since their father died, she minted
+`family_communication` and used none of the 50 authored slots covering exactly
+that. t-70's taxonomy and t-71's editor were both unreachable from the only path
+that writes.
+
+**And it was a data-protection gap, not a wasted feature.** Sensitivity is read
+off the slot's _definition_, and masking fires only for `special_category`. A
+minted slug has no definition ⇒ always `standard` ⇒ never masked. Nine slots
+here are `special_category` — physical, emotional and spiritual health, i.e.
+GDPR Art. 9 — so the classification was a no-op on the capture path and raw
+health and belief prose was landing in `framework_slot_value.value`. Found by
+`/security-review`; the cause was worse than the finding.
+
+`lib/app/slots/vocabulary.ts` is the fix: the live taxonomy, one line per slot,
+spliced into her facilitation block per turn. The same message now fills
+`life_family_strain`, and an Art. 9 slug stores `<redacted: special_category>`.
+Both are asserted in the smoke.
+
+Four things about it worth knowing before you change it:
+
+- **It is not in the tool schema, where it belongs.** `getCapabilityDefinitions()`
+  advertises `ai_capability.functionDefinition` from the **database row**, and
+  `syncFrameworkCapabilities()` projects that row from Daybreak's own registry
+  and reconciles it on every boot. Our subclass wins the _dispatch_, never the
+  _advertisement_, so a leaf cannot put the slugs in the schema. Asked for in
+  [`daybreak#268`](https://github.com/human-centric-engineering/daybreak/issues/268),
+  along with the mint-sensitivity default.
+- **It rides in the voice contributor because a request carries one context
+  tuple.** A second `registerContextContributor(FACILITATION_CONTEXT_TYPE, …)`
+  would _replace_ her voice block, not add to it.
+- **Facilitation only.** The admin `voice` path is what the voice comparison
+  measures, so adding ~2,000 tokens to it would change what the golden set
+  compares between runs.
+- **Hidden slots are left out**, so she cannot fill `development`. The strict
+  reading of §12 — putting a development scale's descriptions in her prompt is
+  the first step toward her reasoning aloud about which rung someone is on.
+  Whoever fills development decides how, with that risk in front of them.
+
+**Inventing is the exception, and the rule travels with the list.** Owner
+ruling, 21 Sept 2026: she may mint, but only on a strong case — genuinely
+salient information with a real gap in the taxonomy — and the behaviour belongs
+behind an admin setting we can switch off while we learn what it does (idea
+#33). The rule is in her instructions _and_ beside the list, because that is
+where a model weighing "does anything here fit?" is reading.
+
+**The residual, accepted:** she can still mint, and a mint still cannot be
+masked. That is inherent — an invented slug is unclassified, and the only
+fail-safe default would redact every minted value into a sentinel. What reduces
+it is her seeing the taxonomy; what would remove it is the admin setting.
 
 ### What proves the write, until the panel lands
 
