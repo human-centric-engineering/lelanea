@@ -108,7 +108,7 @@ The ETag is recomputed per request and deliberately not memoised, even though
 the payloads are constant for the life of the process. `computeETag` lives in
 `lib/api/etag.ts`, which imports `node:crypto`; caching it inside
 `lib/app/content` would pull a Node built-in into the tier that must stay
-framework- and runtime-agnostic, and caching it in each route means four copies
+framework- and runtime-agnostic, and caching it in each route means six copies
 of a mutable module-level variable. The saving is a SHA-256 over a few tens of
 kilobytes — well under a millisecond, against request overhead orders of
 magnitude larger. Not worth either price.
