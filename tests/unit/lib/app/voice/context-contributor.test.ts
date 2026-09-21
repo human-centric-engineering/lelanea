@@ -136,6 +136,20 @@ vi.mock('@/lib/logging', () => ({
 }));
 
 /**
+ * The offering (t-77), controllable per case: what the block says the agent
+ * may offer, or a throw — because a contributor that throws blanks the WHOLE
+ * block, and the guard around this read is only worth having if it is seen to
+ * hold.
+ */
+const offering = vi.hoisted(() => ({ text: '', fail: false }));
+vi.mock('@/lib/app/resources/offering', () => ({
+  resourceOffering: () => {
+    if (offering.fail) throw new Error('library unreadable');
+    return offering.text;
+  },
+}));
+
+/**
  * A search service that HONOURS the allowlist it is handed.
  *
  * The whole safety claim of this path is that it searches voice-designated
@@ -610,6 +624,40 @@ describe('a passage cannot escape the block that labels it', () => {
  * `buildMessages` builds from the block, exactly as the chat handler calls it —
  * not on the registration, which `context-contributors.test.ts` already pins.
  */
+describe('what may be offered rides in the block (t-77)', () => {
+  beforeEach(() => {
+    offering.text = '';
+    offering.fail = false;
+  });
+
+  it('is in the voice block when the library has something, after the register', async () => {
+    offering.text =
+      'Films and writing of Lelañea’s you may offer this person, by id:\n\n- on-stalling (film, 5:04): On stalling — why';
+    const block = await buildContext(VOICE_CONTEXT_TYPE, 'first-meeting', { userId: 'user-1' });
+    expect(block).toContain('- on-stalling (film, 5:04)');
+    expect(block.indexOf('Register for this moment')).toBeLessThan(block.indexOf('on-stalling'));
+  });
+
+  it('adds nothing when there is nothing to offer', async () => {
+    const block = await buildContext(VOICE_CONTEXT_TYPE, 'first-meeting', { userId: 'user-1' });
+    expect(block).not.toContain('you may offer');
+    expect(block).toContain('Register for this moment');
+  });
+
+  it('keeps the voice block when the library cannot be read, and says so in the log', async () => {
+    offering.fail = true;
+    const { logger } = await import('@/lib/logging');
+    const block = await buildContext(VOICE_CONTEXT_TYPE, 'first-meeting', { userId: 'user-1' });
+    // The register survives — a throw here would have blanked everything.
+    expect(block).toContain('Register for this moment');
+    expect(block).not.toContain('you may offer');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('resourceOffering'),
+      expect.objectContaining({ error: 'library unreadable' })
+    );
+  });
+});
+
 describe('a facilitation seat turn', () => {
   beforeEach(() => {
     seats.boundTo = new Map([
