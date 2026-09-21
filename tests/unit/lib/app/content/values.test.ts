@@ -109,6 +109,8 @@ describe('release-2 authored content', () => {
         'app/api/v1/app/content/documents/[id]/route.ts',
         'app/api/v1/app/content/journey-structure/route.ts',
         'app/api/v1/app/content/discovery-questions/route.ts',
+        'app/api/v1/app/content/resources/route.ts',
+        'app/api/v1/app/content/resources/[key]/route.ts',
       ];
 
       for (const route of routes) {

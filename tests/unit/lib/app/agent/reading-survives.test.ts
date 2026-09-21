@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 
 const world = vi.hoisted(() => ({ paused: false }));
 
@@ -52,6 +52,8 @@ import { GET as documentsIndex } from '@/app/api/v1/app/content/documents/route'
 import { GET as documentById } from '@/app/api/v1/app/content/documents/[id]/route';
 import { GET as journeyStructure } from '@/app/api/v1/app/content/journey-structure/route';
 import { GET as discoveryQuestions } from '@/app/api/v1/app/content/discovery-questions/route';
+import { GET as resourcesLibrary } from '@/app/api/v1/app/content/resources/route';
+import { GET as resourcesForKey } from '@/app/api/v1/app/content/resources/[key]/route';
 import { GET as journeyMap } from '@/app/api/v1/app/journey/map/route';
 import { auth } from '@/lib/auth/config';
 import { isGenerationPaused } from '@/lib/app/agent/availability';
@@ -61,8 +63,11 @@ import { JOURNEY_MAP_SLUG, buildJourneyMapDefinition } from '@/lib/app/journey/m
 import { __resetModuleRegistryForTests } from '@/lib/framework/modules/registry';
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 
+// A real request rather than a `{ headers, url }` stand-in: the resources
+// selection route reads `nextUrl.searchParams` for its `?film=` pin, and a
+// stand-in without `nextUrl` would fail it for a reason nothing here is about.
 function request(path: string): NextRequest {
-  return { headers: new Headers(), url: `http://localhost:3000${path}` } as unknown as NextRequest;
+  return new NextRequest(`http://localhost:3000${path}`);
 }
 
 function memberSession() {
@@ -103,6 +108,11 @@ async function readEverything(): Promise<Record<string, number>> {
     'content/discovery-questions': await discoveryQuestions(
       request('/api/v1/app/content/discovery-questions')
     ),
+    'content/resources': await resourcesLibrary(request('/api/v1/app/content/resources')),
+    'content/resources/:key': await resourcesForKey(
+      request('/api/v1/app/content/resources/values'),
+      { params: Promise.resolve({ key: 'values' }) }
+    ),
     'journey/map': await journeyMap(request('/api/v1/app/journey/map')),
   };
   return Object.fromEntries(
@@ -115,6 +125,8 @@ const ALL_OK = {
   'content/documents/:id': 200,
   'content/journey-structure': 200,
   'content/discovery-questions': 200,
+  'content/resources': 200,
+  'content/resources/:key': 200,
   'journey/map': 200,
 };
 

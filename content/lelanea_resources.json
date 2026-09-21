@@ -1,0 +1,46 @@
+{
+  "resources": {
+    "id": "lelanea_resources",
+    "title": "Lelañea — films and reading, in her own words",
+    "version": "0.1",
+    "locale": "en-US",
+    "provenance": {
+      "status": "draft",
+      "awaitingSignOffFrom": "Lelañea Fulton",
+      "note": "The shape of the resources drawer (f-resources t-74). The two passages here are verbatim excerpts of her authored material, chosen by the builder as a starting point and awaiting her confirmation or replacement; the film and reading lists are empty because no film of hers exists yet and only she can say which pieces belong beside which module. Her list lands in t-76."
+    },
+    "notes": [
+      "Every `words` passage is a verbatim excerpt of a source this repository already holds, and a test proves it character for character. Nothing here is drafted in her register: the drawer says these are her words, so they are.",
+      "Keys are module ids as in lelanea_module_structure.json, plus `journey`, `situations` and `default`. A key with no words of its own falls back to `default`.",
+      "`relatesTo` on a film or a reading names the module id it belongs beside, or `journey`, `situations`, or null for a piece that belongs to everything — never `default`, which is the words fallback and which the schema refuses on a piece. The drawer shows what belongs to the open thing first, then what belongs to everything: two films, three readings.",
+      "A film links out (`href`); there is no inline player until where her films are hosted is decided. A reading is either a foundational document (`documentId`) or a link (`href`), never both."
+    ]
+  },
+  "films": [],
+  "readings": [],
+  "words": {
+    "module_01_values": {
+      "quote": "If you don't shape your values, the world will shape them for you.",
+      "paragraphs": [
+        "When you know your values deeply — not as nice words on a wall, but as lived principles — you become centered, congruent, and grounded in your being.",
+        "You are no longer a sponge soaking up the expectations of the world. You become an anchor."
+      ],
+      "source": {
+        "collection": "values_module",
+        "id": "lesson_centered_living"
+      }
+    },
+    "default": {
+      "quote": "Whatever it is that brought you here, you listened.",
+      "paragraphs": [
+        "This is not simply an app.",
+        "It is an invitation.",
+        "An invitation to explore the relationship you have with yourself, your consciousness, and the magnificent intelligence that has always existed beneath the noise of the human experience."
+      ],
+      "source": {
+        "collection": "foundational_documents",
+        "id": "the_initiation"
+      }
+    }
+  }
+}

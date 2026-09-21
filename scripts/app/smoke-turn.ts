@@ -232,6 +232,8 @@ async function readRoutes(cookie: string): Promise<Record<string, number>> {
     '/api/v1/app/content/documents/the_mission',
     '/api/v1/app/content/journey-structure',
     '/api/v1/app/content/discovery-questions',
+    '/api/v1/app/content/resources',
+    '/api/v1/app/content/resources/values',
     '/api/v1/app/journey/map',
   ];
   const statuses: Record<string, number> = {};
