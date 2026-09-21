@@ -17,6 +17,7 @@ import {
   notesSearch,
   readNotesParams,
   type NotesParams,
+  type NotesQuery,
 } from '@/lib/app/slots/notes-query';
 import {
   NOTES_OWN_TITLE,
@@ -152,18 +153,28 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    */
   const latest = useRef(0);
   const asked = notesSearch({ q, group, sort });
+  /** What the URL asks the server for — the search, the group, the sort. */
+  const current: NotesQuery = { q: q || undefined, group: group ?? undefined, sort };
+  /** The URL as it has committed, view included — see `target` below. */
+  const committed = notesSearch({ q, group, sort, view: layout });
 
+  /*
+   * The query is an argument, not a closure over the URL. Each caller says
+   * what it is reading — and `read` then depends on `fetchImpl` alone, which is
+   * what keeps the React Compiler optimising this component: with `q`, `group`
+   * and `sort` in this memo's dependencies it could not prove them unmutated
+   * once `navigate` stopped reading them, and skipped the whole component.
+   */
   const read = useCallback(
-    (signal?: AbortSignal) => {
+    (query: NotesQuery, signal?: AbortSignal) => {
       const mine = ++latest.current;
       const stale = () => signal?.aborted || !mounted.current || mine !== latest.current;
-      const query = { q, group: group ?? undefined, sort };
       return fetchNotes({ signal, fetchImpl, query })
         .then((view) => {
           if (stale()) return;
           setNotes(view);
           setAnswered(notesSearch(query));
-          setAnsweredSort(sort);
+          setAnsweredSort(query.sort ?? NOTES_DEFAULTS.sort);
           setUnreadable(false);
         })
         .catch((error: unknown) => {
@@ -176,7 +187,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
     },
     // The setters are stable; they are listed because the React Compiler's
     // inference asks for them here, and a mismatch makes it skip the component.
-    [fetchImpl, q, group, sort, setNotes, setAnswered, setAnsweredSort, setUnreadable]
+    [fetchImpl, setNotes, setAnswered, setAnsweredSort, setUnreadable]
   );
 
   // The first read, on mount — and again whenever the search, the group or the
@@ -184,9 +195,11 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   // which is what makes a cards/list switch cost nothing.
   useEffect(() => {
     const controller = new AbortController();
-    void read(controller.signal);
+    void read(current, controller.signal);
     return () => controller.abort();
-  }, [read]);
+    // `current` is rebuilt every render; `asked` is its identity as a string.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [read, asked]);
 
   /*
    * And again whenever a turn has written — measured against the counter as it
@@ -206,72 +219,82 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   useEffect(() => {
     if (slotsWritten === seenWrites.current) return;
     seenWrites.current = slotsWritten;
-    void read();
+    void read(current);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [slotsWritten]);
 
-  /** Move the URL: `push` for a choice Back should undo, `replace` for typing. */
-  const navigate = useCallback(
-    (next: Partial<NotesParams>, how: 'push' | 'replace') => {
-      const target = `${pathname}${notesSearch({ q, group, sort, view: layout, ...next })}`;
-      router[how](target, { scroll: false });
-    },
-    [router, pathname, q, group, sort, layout]
-  );
-
   /*
-   * The search box's own text, ahead of the URL by up to one pause.
+   * Where the page has asked the URL to be — which, on this route, runs ahead
+   * of where it is.
    *
-   * It follows the URL when the URL moves for another reason — Back, or
-   * "Clear" — and not otherwise, so a trailing space the reader is in the
-   * middle of typing is not trimmed out from under the caret.
+   * `useSearchParams` moves only when a navigation commits, a server round trip
+   * after it is sent, and the reader goes on typing and clicking meanwhile.
+   * Three review rounds found the same shape of defect three ways, every one of
+   * them a navigation built from the COMMITTED URL while a newer one was still
+   * in flight: a late echo reset the box over newer typing and lost keystrokes
+   * (round 1); a pending search fired after a group pick and put the old group
+   * back (round 2); Clear re-armed the search, which then restored the filter
+   * Clear had just removed, and a pick's own echo was taken for a Back (round
+   * 3). So every navigation is built from `target` — the last URL asked for —
+   * and never from the committed one.
+   *
+   * `sent` is the queries asked for and not yet seen commit, oldest first. A
+   * committed URL found there is our own echo: it, and anything older (the
+   * router abandons a navigation a newer one overtakes, so an older echo may
+   * never come), are dropped, and nothing else happens. A committed URL NOT
+   * there — Back, Forward, a followed link — is the reader going somewhere
+   * else, and the page follows it: the box takes its search, `target` resets
+   * to it.
    */
-  const [draft, setDraft] = useState(q);
-  /*
-   * Every search this box has sent that the URL has not yet echoed back.
-   *
-   * On a dynamic route `useSearchParams` moves only when the `replace` commits,
-   * and the reader can go on typing meanwhile. Syncing the box to that late
-   * echo put "ab" back over "abc" and lost the "c" (`/code-review`, round 1).
-   * An echo of our own is recognised and skipped; any other move of `q` — Back,
-   * a followed link — still resets the box.
-   *
-   * In order, and an echo drops everything sent BEFORE it too: the router
-   * abandons a navigation a newer one overtakes, so an earlier search's echo
-   * may never arrive, and a leftover entry would later swallow a real Back to
-   * that value (`/code-review`, round 2).
-   */
+  /** The last search asked for, as its query string — parsed where it is used. */
+  const target = useRef('');
   const sent = useRef<string[]>([]);
+  /** The search waiting out its pause, so a choice made meanwhile can cancel it. */
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [draft, setDraft] = useState(q);
+
   useEffect(() => {
-    const echo = sent.current.indexOf(q);
+    const echo = sent.current.indexOf(committed);
     if (echo !== -1) {
       sent.current.splice(0, echo + 1);
       return;
     }
-    setDraft((current) => (current.trim() === q ? current : q));
-  }, [q]);
-  /** The search waiting out its pause, so a choice made meanwhile can cancel it. */
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+    sent.current = [];
+    // This is also the mount: the first commit is "somewhere else".
+    target.current = committed;
+    const moved = readNotesParams(new URLSearchParams(committed)).q;
+    // Not trimmed out from under the caret when the words already agree.
+    setDraft((current) => (current.trim() === moved ? current : moved));
+  }, [committed]);
+
+  /** Move the URL: `push` for a choice Back should undo, `replace` for typing. */
+  const navigate = useCallback(
+    (next: Partial<NotesParams>, how: 'push' | 'replace') => {
+      const base = readNotesParams(new URLSearchParams(target.current));
+      const search = notesSearch({ ...base, ...next, q: (next.q ?? base.q).trim() });
+      target.current = search;
+      sent.current.push(search);
+      router[how](`${pathname}${search}`, { scroll: false });
+    },
+    [router, pathname]
+  );
+
+  // The search box's text reaches the URL after a pause, as a `replace`.
   useEffect(() => {
-    const wanted = draft.trim();
-    if (wanted === q) return;
+    if (draft.trim() === readNotesParams(new URLSearchParams(target.current)).q) return;
     const timer = setTimeout(() => {
       pending.current = null;
-      sent.current.push(wanted);
       navigate({ q: draft }, 'replace');
     }, SEARCH_PAUSE_MS);
     pending.current = timer;
     return () => clearTimeout(timer);
-  }, [draft, q, navigate]);
+  }, [draft, navigate]);
 
-  /*
-   * A group, a sort, a view or a Clear — each pushes a history entry.
-   *
-   * It cancels a search still waiting out its pause and carries the box's
-   * current text instead. Otherwise the timer, holding the render before the
-   * choice, fired after it with the OLD group, sort and view and replaced the
-   * entry the choice had just pushed: type "c" and pick a group inside 300ms,
-   * and the pick silently vanished (`/code-review`, round 2).
+  /**
+   * A group, a sort, a view or a Clear — each pushes a history entry, and
+   * carries the box's current text, cancelling a search still waiting out its
+   * pause rather than letting it land on top afterwards.
    */
   const choose = (next: Partial<NotesParams>) => {
     if (pending.current !== null) {
@@ -337,10 +360,10 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
 
   /** Search and group back to their defaults; the sort and the view are kept. */
   const clear = () => {
-    // The box is emptied here rather than left to follow the URL, so a late
-    // echo of an earlier search cannot put text back into it.
-    setDraft(NOTES_DEFAULTS.q);
+    // `choose` first, so `target` already holds the empty search by the time
+    // the emptied box is compared against it — no pause is armed.
     choose({ q: NOTES_DEFAULTS.q, group: NOTES_DEFAULTS.group });
+    setDraft(NOTES_DEFAULTS.q);
   };
 
   if (notes === null && !unreadable) return <NotesSkeleton />;
@@ -360,7 +383,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           <NoteCard
             note={note}
             onAsk={ask}
-            onCorrected={() => void read()}
+            onCorrected={() => void read(current)}
             fetchImpl={fetchImpl}
             heading={heading}
             onFold={() => toggle(note.slotSlug)}

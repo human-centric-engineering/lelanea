@@ -942,6 +942,18 @@ same response drawn two ways, so switching re-reads nothing. When a turn writes,
 the panel re-reads with the current filters, and the stale-response guard still
 applies.
 
+**Every navigation is built from the URL last asked for, never the one on
+screen.** On this route `useSearchParams` moves only when a navigation commits,
+a server round trip later, and the reader goes on typing and clicking
+meanwhile. Three `/code-review` rounds found the same defect three ways, each a
+navigation built from the committed URL while a newer one was in flight: lost
+keystrokes, a group pick undone by a late search, and a filter Clear had removed
+coming back. So the panel keeps `target` (the last query string it asked for)
+and `sent` (those not yet seen commit, oldest first). A committed URL found in
+`sent` is its own echo and changes nothing; one not found — Back, a link — is
+the reader going elsewhere, and the box and `target` follow it. The test fake
+holds navigations back to prove each case.
+
 The controls are two lines at most — the search, then a group select, a sort
 select and a Cards/List pair — because on a narrow pane every row of chrome
 pushes the reading down. Selects rather than chip rows: five groups as chips

@@ -1005,6 +1005,38 @@ describe('finding your way around', () => {
     expect(nav.current()).toBe('/app/notes');
   });
 
+  it('does not bring back the filter Clear removed, however late Clear lands', async () => {
+    nav.reset('/app/notes?q=money&group=life_areas');
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    nav.held.on = true;
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    // Longer than the search's pause, with Clear's push still in flight.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await act(async () => nav.settle());
+
+    expect(nav.current()).toBe('/app/notes');
+    expect(nav.state.entries).toEqual(['/app/notes?q=money&group=life_areas', '/app/notes']);
+    expect((search() as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps typing that follows a group pick still in flight, and keeps the pick', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    nav.held.on = true;
+
+    await userEvent.type(search(), 'mon');
+    await userEvent.selectOptions(groupPicker(), 'life_areas');
+    await userEvent.type(search(), 'ey');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await act(async () => nav.settle());
+
+    // The pick's own echo ("mon") is not a Back: the box keeps "money".
+    expect((search() as HTMLInputElement).value).toBe('money');
+    expect(nav.current()).toBe('/app/notes?q=money&group=life_areas');
+  });
+
   it('does not leave the page dimmed and busy after a read fails', async () => {
     renderBoth();
     await screen.findByText('Money is tight this month.');
