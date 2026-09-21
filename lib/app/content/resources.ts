@@ -4,8 +4,12 @@
  *
  * Authored content, served the way the rest of `content/` is: validated once,
  * frozen, reached only through here. Its own module rather than a member of
- * `./index` for the reason `crisis-resources.ts` gives — the drawer's route
- * wants this file and nothing else `./index` bundles.
+ * `./index` — but NOT for the bundle-size reason `crisis-resources.ts` gives:
+ * this module imports the structure and the documents from `./index` for its
+ * referential checks, so a route that wants it carries the index anyway. The
+ * separation here is about direction: `./index` is the loader the other
+ * content modules build on, and folding a consumer of two of its accessors
+ * back into it would make it depend on its own dependents' shape.
  *
  * ## The shape
  *
