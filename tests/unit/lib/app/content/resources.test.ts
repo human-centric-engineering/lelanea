@@ -257,6 +257,15 @@ describe('a malformed file fails, naming the fault', () => {
     expect(messages.join('\n')).toMatch(/film "x" relates to unknown key "module_99_nowhere"/);
   });
 
+  it('rejects a piece that relates to `default` — that is spelled null', () => {
+    // `default` is the words fallback, not a place a piece can belong; the
+    // picker would never show it for any module (review round 1).
+    const { ok, messages } = parse(fixture({ films: [film('x', 'default')] }));
+    expect(ok).toBe(false);
+    expect(messages.join('\n')).toMatch(/never default/);
+    expect(parse(fixture({ readings: [reading('r', 'default')] })).ok).toBe(false);
+  });
+
   it('rejects a key that is neither a module id nor a fixed key', () => {
     const { ok, messages } = parse(fixture({ films: [film('x', 'values')] }));
     expect(ok).toBe(false);

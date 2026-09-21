@@ -349,7 +349,9 @@ browsable directly.
 **Keyed like the structure file.** `films[]` and `readings[]` each carry what
 the piece is for (`subtitle`) and where it belongs (`relatesTo`: a module id
 such as `module_01_values`, or `journey`, `situations`, or `null` for a piece
-that belongs to everything). `words` is per key — a `quote` and a few short
+that belongs to everything — never `default`, which the schema refuses on a
+piece: it is the `words` fallback, and a piece tagged with it would show for
+nothing). `words` is per key — a `quote` and a few short
 `paragraphs` — with `default` required, because it is what every key without
 words of its own reads. A film links out (`href`); a reading is a foundational
 document (`documentId`) or a link (`href`), never both, as a union. No

@@ -12,7 +12,7 @@
     "notes": [
       "Every `words` passage is a verbatim excerpt of a source this repository already holds, and a test proves it character for character. Nothing here is drafted in her register: the drawer says these are her words, so they are.",
       "Keys are module ids as in lelanea_module_structure.json, plus `journey`, `situations` and `default`. A key with no words of its own falls back to `default`.",
-      "`relatesTo` on a film or a reading names the module id it belongs beside, or `journey`, `situations`, or null for a piece that belongs to everything. The drawer shows what belongs to the open thing first, then what belongs to everything: two films, three readings.",
+      "`relatesTo` on a film or a reading names the module id it belongs beside, or `journey`, `situations`, or null for a piece that belongs to everything — never `default`, which is the words fallback and which the schema refuses on a piece. The drawer shows what belongs to the open thing first, then what belongs to everything: two films, three readings.",
       "A film links out (`href`); there is no inline player until where her films are hosted is decided. A reading is either a foundational document (`documentId`) or a link (`href`), never both."
     ]
   },

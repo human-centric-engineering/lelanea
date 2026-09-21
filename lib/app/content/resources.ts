@@ -81,8 +81,24 @@ const resourceKeySchema = z
     message: 'a resource key is a module id (module_NN_words) or journey | situations | default',
   });
 
-/** Where a passage or a piece belongs: a key, or nowhere in particular. */
-const relatesToSchema = resourceKeySchema.nullable();
+/**
+ * Where a piece belongs: a module, the journey, situations — or `null` for a
+ * piece that belongs to everything.
+ *
+ * **Not `default`.** For `words`, `default` means "the fallback every key
+ * reads"; for a piece, "belongs to everything" is spelled `null`, and the
+ * picker matches a piece by its own key or by `null` — so a film tagged
+ * `default` would parse clean and show for nothing but the literal `default`
+ * key. Refused here rather than left to be discovered as a missing film
+ * (`/code-review` round 1).
+ */
+const relatesToSchema = z
+  .string()
+  .refine((key) => moduleIdPattern.test(key) || key === 'journey' || key === 'situations', {
+    message:
+      'relatesTo is a module id (module_NN_words), journey, situations, or null for a piece that belongs to everything — never default',
+  })
+  .nullable();
 
 const resourceIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
   message: 'a resource id is lowercase alphanumeric with hyphens',
@@ -171,10 +187,12 @@ export function buildResourcesFileSchema(known: {
 }): z.ZodType<ResourcesFile> {
   const isKey = (key: string): boolean =>
     known.moduleIds.has(key) || FIXED_RESOURCE_KEYS.some((k) => k === key);
+  /** A piece's key: the shape check above already refused `default`. */
+  const isPieceKey = (key: string): boolean => isKey(key) && key !== 'default';
 
   return resourcesFileBase.superRefine((file, ctx) => {
     for (const [index, film] of file.films.entries()) {
-      if (film.relatesTo !== null && !isKey(film.relatesTo)) {
+      if (film.relatesTo !== null && !isPieceKey(film.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
           path: ['films', index, 'relatesTo'],
@@ -183,7 +201,7 @@ export function buildResourcesFileSchema(known: {
       }
     }
     for (const [index, reading] of file.readings.entries()) {
-      if (reading.relatesTo !== null && !isKey(reading.relatesTo)) {
+      if (reading.relatesTo !== null && !isPieceKey(reading.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
           path: ['readings', index, 'relatesTo'],
