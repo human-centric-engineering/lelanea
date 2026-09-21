@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { Card } from '@/components/app/ui/card';
-import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { correctNote, NotesRefused } from '@/lib/app/slots/notes-client';
 import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
@@ -254,28 +253,57 @@ function Aside({ note }: { note: Note }) {
 }
 
 /**
- * The disclosure, as a box of its own.
+ * One folded panel on a card — the shape both disclosures share.
  *
- * Boxed because the three lines inside it are *about* the note rather than part
- * of it — her reasoning, her wording, where it came from — and unboxed they ran
- * on from the reading as more of the same prose. The summary is the box's head
- * and the body sits under a hairline inside the same border, so open and closed
- * are plainly one object. The marker is ours: `list-none` kills the native
- * triangle, which sits on the text baseline and cannot be positioned.
+ * ## One component, because two of them side by side have to agree
+ *
+ * The card carries two things that are *about* the note rather than part of
+ * it: how Lelañea came to the reading, and what she had written before it.
+ * They were built differently — one a bordered box, the other a washed inset
+ * with a coloured edge, open always — and stacked they read as two unrelated
+ * kinds of object at two different widths. The owner's note, and it was the
+ * visible half of a layout mistake: the measure was on each child rather than
+ * on the column they share, so each block sized itself to its own content.
+ *
+ * `tone` is the only thing that differs now. The history panel keeps its
+ * purple left edge, because it is the one saying something was superseded and
+ * that is worth being able to spot at a glance; everything else about the two
+ * is identical.
+ *
+ * ## The summary carries the answer when it is shut
+ *
+ * A fold that says only "before this" makes a reader open it to find out
+ * whether it is worth opening. So the head carries the previous reading's
+ * provenance — who said it and when — and the body carries the words. That is
+ * the owner's ask, and it is also what makes folding it honest: nothing is
+ * hidden that a reader needs in order to decide.
+ *
+ * The marker is ours: `list-none` kills the native triangle, which sits on the
+ * text baseline and cannot be positioned.
  */
-function HowSheKnows({ note }: { note: Note }) {
+function Disclosure({
+  summary,
+  tone,
+  children,
+}: {
+  summary: React.ReactNode;
+  /** A left edge in the palette's reflective hue, for the history panel. */
+  tone?: 'history';
+  children: React.ReactNode;
+}) {
   return (
     <details
       className={cn(
-        'group rounded-lg border border-[var(--color-card-border)]',
-        'bg-[var(--color-pill)] shadow-[var(--shadow-rest)]'
+        'group overflow-hidden rounded-lg border border-[var(--color-card-border)]',
+        'bg-[var(--color-pill)] shadow-[var(--shadow-rest)]',
+        tone === 'history' && 'border-l-2 border-l-[var(--color-status-purple)]'
       )}
     >
       <summary
         className={cn(
           'text-muted-foreground flex cursor-pointer list-none items-center gap-2',
-          'px-3.5 py-2.5 text-[12.5px] select-none',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+          'px-3.5 py-2.5 text-[12.5px] leading-[1.45] select-none',
+          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
           'focus-visible:outline-[var(--color-ring)]'
         )}
       >
@@ -284,11 +312,11 @@ function HowSheKnows({ note }: { note: Note }) {
           strokeWidth={1.8}
           aria-hidden="true"
           className={cn(
-            'flex-none transition-transform duration-200 ease-[var(--ease-brand)]',
-            'group-open:rotate-90 motion-reduce:transition-none'
+            'mt-[3px] flex-none self-start transition-transform duration-200',
+            'ease-[var(--ease-brand)] group-open:rotate-90 motion-reduce:transition-none'
           )}
         />
-        How Lelañea came to this
+        <span className="min-w-0">{summary}</span>
       </summary>
       <div
         className={cn(
@@ -296,28 +324,7 @@ function HowSheKnows({ note }: { note: Note }) {
           'border-[var(--color-divider)] text-[13px] leading-[1.6]'
         )}
       >
-        <p className="max-w-[52ch]">{note.reasoningNote}</p>
-        {note.asking ? (
-          /*
-            Her wording, quoted. Third person inside the quotation marks is the
-            taxonomy speaking to a model, which is what it is — the panel is not
-            addressing the reader as "this person".
-          */
-          <p className="max-w-[52ch]">
-            <span className="text-[var(--color-heading)]">What Lelañea was looking for: </span>“
-            {note.asking}”
-          </p>
-        ) : null}
-        {note.conversationId ? (
-          /*
-            The id is not shown and is not a link. There is no member-facing
-            route that opens one exchange yet — the journey view is still a
-            placeholder — and a link to nowhere, or a cuid printed as evidence,
-            would both be worse than saying plainly that it came from talking.
-            When the journey lands, this line is where it becomes a link.
-          */
-          <p>Drawn from something you said in conversation.</p>
-        ) : null}
+        {children}
       </div>
     </details>
   );
@@ -403,7 +410,16 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
         is THIS card wide enough for two columns.
       */}
       <div className="grid gap-x-7 gap-y-4 @min-[30rem]:grid-cols-[minmax(0,1fr)_10rem]">
-        <div className="flex min-w-0 flex-col gap-3.5">
+        {/*
+          The measure is on the COLUMN, not on each child, and that is the whole
+          of the ragged-widths fix. With `max-w` on the reading alone, the note
+          stopped at 46ch while the panels under it ran to the grid track's full
+          width, and the withheld paragraph — whose box IS its text — stopped
+          wherever its words ran out. Three blocks, three different right edges,
+          none of them agreeing with the one above. Constraining the column once
+          gives every block the same edge by construction.
+        */}
+        <div className="flex max-w-[46ch] min-w-0 flex-col gap-3">
           {note.withheld ? (
             /*
               The stored value is a sentinel, so the card says what actually
@@ -419,7 +435,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             */
             <p
               className={cn(
-                'max-w-[46ch] rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
+                'rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
                 'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
                 'text-[var(--color-heading)]'
               )}
@@ -428,16 +444,9 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
               Health, feeling and belief are left out of the written record.
             </p>
           ) : (
-            /*
-              46ch, and the reading is the only thing on the card that gets to
-              be this size. It ran the full width of the surface — 100+
-              characters on a wide pane, which is twice a comfortable measure
-              and reads as a wall (the owner's note). The aside took the three
-              facts that were padding it out; this is what the space was for.
-            */
             <p
               className={cn(
-                'max-w-[46ch] text-[15.5px] leading-[1.65] whitespace-pre-line',
+                'text-[15.5px] leading-[1.65] whitespace-pre-line',
                 'text-[var(--color-heading)]'
               )}
             >
@@ -445,48 +454,70 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             </p>
           )}
 
-          <HowSheKnows note={note} />
-
           {note.previous ? (
             /*
-              The reflective hue, and NOT the red one. A superseded reading is
-              not a mistake that was corrected — §3.12 says a contradiction is a
-              door — and the palette's red is what this app uses for things that
-              have gone wrong. Purple carries Settings' tone for the same
-              reason: it marks something to sit with. Left edge only, so the
-              inset reads as an aside rather than as a second card.
+              Folded, and quieter than it was. It was an always-open washed
+              inset that competed with the reading above it for attention —
+              which gets the emphasis backwards, because the current reading is
+              what the page is for and this is the door beside it (§3.12).
+
+              The head carries the previous reading's provenance so a reader can
+              decide whether to open it without opening it, and the count of
+              anything older rides there too rather than inside.
             */
-            <div
-              className={cn(
-                'rounded-md border-l-2 py-2 pl-3.5',
-                'border-[var(--color-status-purple)] bg-[var(--color-status-purple-bg)]'
-              )}
+            <Disclosure
+              tone="history"
+              summary={
+                <>
+                  <span className="text-[var(--color-heading)]">Before this</span>
+                  {' · '}
+                  {noteSourceWords(note.previous.sourceType)},{' '}
+                  {formatWhen(note.previous.capturedAt)}
+                  {older > 0
+                    ? ` · ${older === 1 ? '1 older reading' : `${older} older readings`} as well`
+                    : ''}
+                </>
+              }
             >
-              <Eyebrow as="p" className="block">
-                before this
-              </Eyebrow>
-              <p
-                className={cn(
-                  'text-muted-foreground mt-1 max-w-[46ch] text-[13.5px] leading-[1.6]',
-                  'whitespace-pre-line'
-                )}
-              >
+              <p className="whitespace-pre-line text-[var(--color-heading)]">
                 {note.previous.withheld
                   ? 'Something Lelañea kept no record of.'
                   : note.previous.value}
               </p>
-              <p className="text-muted-foreground mt-1.5 text-[12px]">
-                {noteSourceWords(note.previous.sourceType)} · {formatWhen(note.previous.capturedAt)}{' '}
-                · kept, not replaced
+              <p>
+                Kept, not replaced.
+                {older > 0
+                  ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
+                  : ''}
               </p>
-              {older > 0 ? (
-                <p className="text-muted-foreground mt-1.5 text-[12px]">
-                  {older === 1 ? 'One earlier reading' : `${older} earlier readings`} before that,
-                  kept but not shown here.
-                </p>
-              ) : null}
-            </div>
+            </Disclosure>
           ) : null}
+
+          <Disclosure summary="How Lelañea came to this">
+            <p>{note.reasoningNote}</p>
+            {note.asking ? (
+              /*
+                Her wording, quoted. Third person inside the quotation marks is
+                the taxonomy speaking to a model, which is what it is — the
+                panel is not addressing the reader as "this person".
+              */
+              <p>
+                <span className="text-[var(--color-heading)]">What Lelañea was looking for: </span>“
+                {note.asking}”
+              </p>
+            ) : null}
+            {note.conversationId ? (
+              /*
+                The id is not shown and is not a link. There is no member-facing
+                route that opens one exchange yet — the journey view is still a
+                placeholder — and a link to nowhere, or a cuid printed as
+                evidence, would both be worse than saying plainly that it came
+                from talking. When the journey lands, this is the line that
+                becomes a link.
+              */
+              <p>Drawn from something you said in conversation.</p>
+            ) : null}
+          </Disclosure>
         </div>
 
         <Aside note={note} />

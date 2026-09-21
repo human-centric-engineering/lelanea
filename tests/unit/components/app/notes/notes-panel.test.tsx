@@ -254,7 +254,13 @@ describe('what the panel shows', () => {
 
     expect(await screen.findByText('Work is going fine.')).toBeTruthy();
     expect(screen.getByText('Work is going badly.')).toBeTruthy();
-    expect(screen.getByText(/kept, not replaced/)).toBeTruthy();
+    expect(screen.getByText(/Kept, not replaced/)).toBeTruthy();
+    // Folded, the head still says whose reading it was and when — so a reader
+    // can decide whether to open it without opening it.
+    const fold = screen.getByText('Before this').closest('summary') as HTMLElement;
+    expect(fold.textContent?.replace(/\s+/g, ' ')).toMatch(
+      /Before this · Lelañea inferred it, 20 September/
+    );
     // §3.12: a door, not a fault. Nothing on the card interrupts a reader.
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -283,7 +289,10 @@ describe('what the panel shows', () => {
     renderBoth();
 
     expect(await screen.findByText('It was going badly.')).toBeTruthy();
-    expect(screen.getByText(/2 earlier readings before that, kept but not shown/)).toBeTruthy();
+    // On the head, where a reader sees it without opening the fold.
+    const fold = screen.getByText('Before this').closest('summary') as HTMLElement;
+    expect(fold.textContent).toMatch(/2 older readings as well/);
+    expect(screen.getByText(/The readings before that are kept too/)).toBeTruthy();
   });
 
   it('says "one" rather than "1" when a single reading is uncounted', async () => {
@@ -304,7 +313,9 @@ describe('what the panel shows', () => {
     ];
     renderBoth();
 
-    expect(await screen.findByText(/One earlier reading before that/)).toBeTruthy();
+    const fold = (await screen.findByText('Before this')).closest('summary') as HTMLElement;
+    expect(fold.textContent).toMatch(/1 older reading as well/);
+    expect(screen.getByText(/The reading before that is kept too/)).toBeTruthy();
   });
 
   it('counts nothing when the shown version is the only earlier one', async () => {
@@ -328,7 +339,8 @@ describe('what the panel shows', () => {
     // The population is non-empty — the inset is on screen — so the absence
     // below is the arithmetic working rather than a card that rendered nothing.
     expect(await screen.findByText('It was going badly.')).toBeTruthy();
-    expect(screen.queryByText(/earlier reading/i)).toBeNull();
+    expect(screen.queryByText(/older reading/i)).toBeNull();
+    expect(screen.queryByText(/before that/i)).toBeNull();
   });
 
   it('says what a withheld note is instead of printing the sentinel', async () => {
