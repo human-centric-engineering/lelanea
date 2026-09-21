@@ -45,7 +45,8 @@ const nav = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   const state = { entries: ['/app/notes'], index: 0 };
   const emit = () => listeners.forEach((listener) => listener());
-  const router = {
+  return {
+    state,
     push: (href: string) => {
       state.entries = [...state.entries.slice(0, state.index + 1), href];
       state.index += 1;
@@ -59,13 +60,6 @@ const nav = vi.hoisted(() => {
       if (state.index > 0) state.index -= 1;
       emit();
     },
-    forward: () => {},
-    refresh: () => {},
-    prefetch: () => {},
-  };
-  return {
-    state,
-    router,
     current: () => state.entries[state.index] ?? '/app/notes',
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -80,9 +74,17 @@ const nav = vi.hoisted(() => {
 
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
+  const { createMockRouter } = await import('@/tests/types/mocks');
+  // Built once, so `useRouter()` is stable across renders as the real one is.
+  // The factory supplies every member; the history-moving three are ours.
+  const router = createMockRouter({
+    push: vi.fn(nav.push),
+    replace: vi.fn(nav.replace),
+    back: vi.fn(nav.back),
+  });
   return {
     usePathname: () => '/app/notes',
-    useRouter: () => nav.router,
+    useRouter: () => router,
     useSearchParams: () => {
       const href = useSyncExternalStore(nav.subscribe, nav.current);
       return new URLSearchParams(href.split('?')[1] ?? '');
@@ -812,15 +814,15 @@ describe('finding your way around', () => {
     ]);
     expect(screen.getAllByRole('button', { expanded: false })).toHaveLength(2);
 
-    await act(async () => nav.router.back());
+    await act(async () => nav.back());
     // Back to cards: the rows are gone and a card's own controls are back.
     expect(screen.queryAllByRole('button', { expanded: false })).toHaveLength(0);
     expect(screen.getAllByRole('button', { name: /ask lela.*about this/i })).toHaveLength(2);
 
-    await act(async () => nav.router.back());
+    await act(async () => nav.back());
     expect((sortPicker() as HTMLSelectElement).value).toBe('grouped');
 
-    await act(async () => nav.router.back());
+    await act(async () => nav.back());
     expect((groupPicker() as HTMLSelectElement).value).toBe('');
     await waitFor(() => expect(readings()).toHaveLength(4));
   });

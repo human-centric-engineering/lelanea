@@ -967,6 +967,13 @@ the owner looking at the page.
 with a clear — distinct from a new account's _"Lelañea has written nothing down
 yet"_, which gets no controls at all.
 
+**To look at it with a real record**, `npx tsx --env-file=.env.local
+scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
+fortnight's worth: every visible group, a corrected and a twice-revised note,
+two Art. 9 notes (sentinel value, unmasked reasoning — the case search must not
+match), two of her own headings and one hidden development note that must never
+appear. Dev only; nothing runs it.
+
 ### What a person is not shown
 
 - **The conversation id.** The panel says a note was _drawn from something you

@@ -26,7 +26,7 @@
  * writes the set. It touches no other account and no other table.
  *
  * Run with:
- *   npx tsx --env-file=.env.local scripts/app/seed-dev-notes.ts <email>
+ *   npx tsx --env-file=.env.local scripts/db/seed-dev-notes.ts <email>
  *
  * Refuses to run with NODE_ENV=production.
  */
