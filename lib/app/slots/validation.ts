@@ -167,6 +167,13 @@ export const slotTaxonomyUploadSchema = z.strictObject({
 });
 
 /**
+ * The longest slug a note can sit under — `fill_slot`'s own bound
+ * (`lib/framework/data-slots/capabilities/fill-slot.ts`, `slotSlug`), restated
+ * here because that schema is not exported. A test pins the two together.
+ */
+export const MAX_MINTED_SLUG_LENGTH = 120;
+
+/**
  * Longest a member's correction may be. A note is a sentence or two she wrote;
  * this is generous against that without being a door for a paste of a book.
  */
@@ -185,9 +192,32 @@ export const MAX_NOTE_LENGTH = 2000;
  * one and cannot address one that has no answer. The route refuses any slug
  * with no head of the caller's own, which is what stops the body being a
  * write-anything door.
+ *
+ * ## It is NOT {@link slotSlugSchema}, and the difference is the point
+ *
+ * That schema is the rule for a slug an ADMIN writes into the taxonomy. A note
+ * can sit under a slug nobody wrote there: open-mode capture mints one, and
+ * Daybreak's `fill_slot` accepts any string of 1–120 characters for it. The
+ * first cut validated corrections with the taxonomy rule, so a note under a
+ * minted `Weekly-Rhythm` — or anything over 80 characters — showed "That's not
+ * right" and then refused every save with a 400: a control offered that could
+ * never work. Found by `/security-review`, as a usability gap it declined to
+ * call a vulnerability.
+ *
+ * So this accepts exactly what the WRITE path accepts, and no more. Loosening
+ * it opens nothing: the slug only ever reaches parameterised Prisma queries
+ * keyed on the caller's own id, and the route refuses any slug that is not
+ * already one of their heads — the accepted set is precisely "slugs you
+ * already have a note under".
  */
 export const slotCorrectionSchema = z.strictObject({
-  slotSlug: boundedSlug('A slot slug'),
+  slotSlug: z
+    .string()
+    .min(1, 'A slot slug cannot be empty.')
+    .max(
+      MAX_MINTED_SLUG_LENGTH,
+      `A slot slug is longer than ${MAX_MINTED_SLUG_LENGTH} characters.`
+    ),
   value: z
     .string()
     .trim()

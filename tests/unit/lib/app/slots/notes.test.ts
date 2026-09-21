@@ -67,7 +67,7 @@ const world = {
   /** Daybreak's projection — the row `fill_slot` judges a slot by. */
   projections: [] as DefinitionRow[],
   /** Ours — the taxonomy an admin edits. Only `visibility` is read from it. */
-  ours: [] as { slug: string; visibility: string }[],
+  ours: [] as { slug: string; visibility: string; sensitivity?: string }[],
   nextId: 0,
 };
 
@@ -430,12 +430,40 @@ describe('a correction is a new version, never an overwrite', () => {
     expect(world.values).toHaveLength(1);
   });
 
+  it('refuses an Art. 9 slot our taxonomy marks even when the projection says standard', async () => {
+    // The tiers can disagree — a row with a classifier the sync cannot read is
+    // withheld from it, leaving a stale projection. Only the union fails
+    // closed, which is the rule the hidden check already followed and this one
+    // did not until /security-review.
+    world.projections = [definition('life_work', { sensitivity: 'standard' })];
+    world.ours = [{ slug: 'life_work', visibility: 'open', sensitivity: 'special_category' }];
+
+    await expect(
+      correctNote({ userId: ME, slotSlug: 'life_work', value: 'raw health prose' })
+    ).rejects.toThrow(/ask Lelañea about it/i);
+    expect(JSON.stringify(world.values)).not.toContain('raw health prose');
+  });
+
+  it('corrects a note under a slug she coined that the taxonomy rule would reject', async () => {
+    // `fill_slot` accepts any slug of 1–120 characters, so a note can sit
+    // under one with capitals and a hyphen. The first cut validated
+    // corrections with the TAXONOMY rule, and a note like this offered
+    // "That's not right" and then refused every save.
+    world.projections = [];
+    world.ours = [];
+    world.values = [value(ME, 'Weekly-Rhythm', { value: 'Sundays are for thinking.' })];
+
+    await expect(
+      correctNote({ userId: ME, slotSlug: 'Weekly-Rhythm', value: 'Saturdays, actually.' })
+    ).resolves.toEqual({ slotSlug: 'Weekly-Rhythm', version: 2 });
+  });
+
   it('refuses an Art. 9 slot and names the remedy rather than the rule (HB10)', async () => {
     world.projections = [definition('life_work', { sensitivity: 'special_category' })];
 
     await expect(
       correctNote({ userId: ME, slotSlug: 'life_work', value: 'raw health prose' })
-    ).rejects.toThrow(/ask her about it/i);
+    ).rejects.toThrow(/ask Lelañea about it/i);
     // The words the guard exists to keep out are not at rest.
     expect(world.values).toHaveLength(1);
     expect(JSON.stringify(world.values)).not.toContain('raw health prose');

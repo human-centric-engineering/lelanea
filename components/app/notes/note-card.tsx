@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
@@ -364,6 +364,10 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
   const [draft, setDraft] = useState(note.value);
   const [saving, setSaving] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Not `correct-${slotSlug}`. A slug she coins can be any string `fill_slot`
+  // accepts — spaces included — and an id with a space in it silently breaks
+  // the label's `htmlFor`, leaving the box unnamed to a screen reader.
+  const correctionId = useId();
 
   const save = async () => {
     const value = draft.trim();
@@ -560,11 +564,11 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
 
       {editing ? (
         <div className="mt-4">
-          <label className="sr-only" htmlFor={`correct-${note.slotSlug}`}>
+          <label className="sr-only" htmlFor={correctionId}>
             Your correction
           </label>
           <textarea
-            id={`correct-${note.slotSlug}`}
+            id={correctionId}
             value={draft}
             rows={3}
             onChange={(event) => setDraft(event.currentTarget.value)}

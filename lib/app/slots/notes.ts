@@ -289,13 +289,13 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
 
   // Both tiers, as in the read — and before the head lookup, so a hidden slot
   // takes the same path whether or not it has ever been filled.
-  const ourHidden = await prisma.appSlotDefinition.findUnique({
+  const ours = await prisma.appSlotDefinition.findUnique({
     where: { slug: input.slotSlug },
-    select: { visibility: true },
+    select: { visibility: true, sensitivity: true },
   });
   const isHidden =
     definition?.visibility === SLOT_VISIBILITY.hidden ||
-    ourHidden?.visibility === SLOT_VISIBILITY.hidden;
+    ours?.visibility === SLOT_VISIBILITY.hidden;
 
   const [head] = isHidden ? [] : await getSlotHeads(input.userId, { slotSlugs: [input.slotSlug] });
   if (!head) {
@@ -311,11 +311,22 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     );
   }
 
-  if (
-    (definition?.sensitivity ?? SLOT_SENSITIVITY.standard) === SLOT_SENSITIVITY.special_category
-  ) {
+  // Both tiers again, for the reason the hidden check reads both: they can
+  // disagree, and only the union fails closed. `/security-review` found this
+  // reading the projection alone — not exploitable, since a slot the projection
+  // calls `standard` was never masked at capture either, so a correction could
+  // only replace the person's own raw words with other raw words. But the rule
+  // this module states is that a disagreement between the tiers resolves to the
+  // stricter answer, and the one check that did not was the one guarding Art. 9
+  // prose.
+  const isSpecialCategory =
+    definition?.sensitivity === SLOT_SENSITIVITY.special_category ||
+    ours?.sensitivity === SLOT_SENSITIVITY.special_category;
+  if (isSpecialCategory) {
+    // Printed verbatim by the panel, so it follows the panel's register:
+    // Lelañea by name, never "she" or "her" (`.context/app/slots.md`).
     throw new ConflictError(
-      'Lelañea deliberately keeps no record of what you said here, so there is nothing to correct. Ask her about it instead — she will take it as you say it.',
+      'Lelañea deliberately keeps no record of what you said here, so there is nothing to correct. Ask Lelañea about it instead, in your own words.',
       { reason: 'kept_out_of_the_record' }
     );
   }
