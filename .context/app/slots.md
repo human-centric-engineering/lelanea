@@ -1,9 +1,9 @@
 # The slot taxonomy — what the app aims to learn, as data
 
 What Lelañea learns about a person is a **slot value**; what she is looking for
-is a **slot definition**. This document is about the second: where the taxonomy
-lives, how it changes, and how an answer given months ago is read back against
-the words it was actually captured under.
+is a **slot definition**. This document covers both: where the taxonomy lives
+and how it changes, how she fills it, and — since t-73 — how the person it is
+about reads it back, corrects it, or argues with it ("Her notes", below).
 
 **Locations:** `content/lelanea_slot_taxonomy.json` (the v1 draft) ·
 `lib/app/content/slot-taxonomy.ts` (schema + loader) ·
@@ -79,9 +79,9 @@ decision** — the file ships `provenance.status: draft`.
 §12: _"Development is a tuning signal, never a grade. It must never rank, score,
 or display that as a level."_ `visibility: hidden` is the mechanism — the value
 never leaves the server to a member. The content test asserts it **in both
-directions**: a development slot that became `open` would reach a member's
-profile panel, and an unrelated slot that became `hidden` would be withheld from
-the person it is about for no reason.
+directions**: a development slot that became `open` would reach her notes
+(`/app/notes`), and an unrelated slot that became `hidden` would be withheld
+from the person it is about for no reason.
 
 ### `sensitivity` classifies the slot, not the answer
 
@@ -640,11 +640,16 @@ masked. That is inherent — an invented slug is unclassified, and the only
 fail-safe default would redact every minted value into a sentinel. What reduces
 it is her seeing the taxonomy; what would remove it is the admin setting.
 
-### What proves the write, until the panel lands
+### What proves the write
 
 `HB9`: a value written where nobody can read it is indistinguishable from one
-not written. Until t-73, **`npm run smoke:app-slot-capture` is the proof** —
-against the dev database, through the real route, in a running app. It asserts
+not written. t-73 closed that — "Her notes" below is the read surface, and it
+is where a person sees the write happen inside the turn that made it. The
+smoke stays, because it proves a different thing: the write itself, end to
+end.
+
+**`npm run smoke:app-slot-capture`** runs against the dev database, through the
+real route, in a running app. It asserts
 the value, its conversation, its confidence and its `sourceType`; that every
 write reached the stream as a `capability_result`; that a forced-failed turn
 re-run under the same id adds no version; and that the hidden group is withheld.
@@ -659,10 +664,142 @@ server restarted** (`sunrise.mcp-reseed`). The dispatcher also caches an agent's
 bindings for five minutes, so a fresh grant can be invisible for that long on a
 process that had already resolved her.
 
+## Her notes — the member surface (t-73)
+
+**Locations:** `lib/app/slots/notes.ts` (the read and the correction) ·
+`lib/app/slots/notes-view.ts` (the wire shape, and the one import-free module) ·
+`lib/app/slots/notes-client.ts` (the browser's side) ·
+`app/api/v1/app/notes/route.ts` · `app/(lelanea)/app/notes/page.tsx` ·
+`components/app/notes/notes-panel.tsx` + `note-card.tsx`
+
+This is the other half of §3.3's pairing, and the answer to `HB9`: until it
+landed, a value written where nobody could read it was indistinguishable from
+one not written, and the only proof was a smoke script.
+
+**Owner rulings, 21 September 2026.** It is **Lelañea's notes**, not a profile —
+`/app/notes`, a **sixth nav destination** after "Your journey". The 15 September
+ruling sent person-things to the account menu and this looked like one; it is
+not, because a note appearing inside the turn that wrote it is the whole
+demonstration and nobody witnesses that from inside a popover. And a note has
+**two** doors: correct it, or take it back to her.
+
+### The route
+
+| Route                    | Does                                                                 |
+| ------------------------ | -------------------------------------------------------------------- |
+| `GET /api/v1/app/notes`  | every current reading about the caller, grouped as the taxonomy does |
+| `POST /api/v1/app/notes` | `{ slotSlug, value }` — a new version at `user_confirmed`            |
+
+Both `withAuth` with `decidedBy: 'self'`, **never `'policy'`**: `subjectScope`
+widens to `{}` for a platform admin, and on this endpoint that would hand an
+operator the intimate record of whoever they were signed in beside. There is no
+admin door to a member's notes here; an operator reads a slot value through the
+admin values browser, which masks by default and audits a reveal.
+
+`no-store`, because a note can land mid-turn and the point of the panel is that
+it shows that. No per-flow rate cap — the `/api/v1/**` section tier covers a
+small read and a single-row insert on the caller's own rows.
+
+### Four guarantees, and where each one is enforced
+
+**Hidden slots never leave the server.** Applied as a withholding of _values_,
+before anything is shaped, so no later branch can put one back. And the check is
+the **union of both tiers** — hidden in `framework_slot_definition` _or_ in
+`app_slot_definition`. Those can disagree: `loadGlobalSlotDefinitions()`
+withholds a row whose free-form classifier it cannot read, so a slot an admin
+has hidden can have a stale projection or none. Either table alone leaves a case
+where a development-stage reading reaches a member.
+
+**A retired slot's notes are shown, labelled "no longer asked about", and not
+correctable.** Retirement deletes nothing at either tier, so the answers are
+still the person's; but filing a fresh reading against a question nobody will
+ask again is a write nothing will read.
+
+**An Art. 9 note cannot be corrected**, and this is the one worth reading twice.
+`special_category` means masking-before-storage already replaced the prose with
+a sentinel _at capture_, so what the app holds is that something was noted and
+nothing else. A correction runs through `appendSlotValue`, which is the raw
+engine and masks nothing — so "let them fix it" would put raw health and belief
+prose at rest through the one door built to keep it out, and masking the
+correction instead would tell someone their words were kept when they were
+discarded. Refused, with the remedy shipped beside it (`HB10`): _ask her about
+it_, which routes the words back through the capture path where the masking
+applies. The panel says what happened in a sentence rather than printing
+`<redacted: special_category>`.
+
+**A correction cannot mint.** The route refuses any slug with no head of the
+caller's own — and refuses a hidden slug **with the same 404**, because
+answering differently would disclose that one exists and is filled. Without
+that rule the correction surface would double as an unbounded self-write.
+
+### The contradiction is a door (§3.12)
+
+`GET` carries `previous` — the version immediately before the head, or `null`.
+The card shows it in a quiet inset with _"kept, not replaced"_, and deliberately
+not as a banner, a tone or an alert: the app has no opinion about whether
+someone changed their mind, and dressing a second reading as a problem teaches
+people that changing is a fault.
+
+The read for it goes **straight to `framework_slot_value`**, because
+`getSlotHeads()` returns current values only and Daybreak has no history read.
+One query for the whole page (`version - 1` per head, batched), and our case is
+commented on [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156)
+and [`daybreak#162`](https://github.com/human-centric-engineering/daybreak/issues/162).
+Delete `readPreviousVersions()` when one lands.
+
+### Two cross-pane channels, both on `ShellLayoutProvider`
+
+The conversation and the workspace are **siblings** and context flows downward
+only, so both ride on the provider for `modulePlace`'s reason
+([`shell.md`](./shell.md)). Neither is layout, and that is said at both ends.
+
+- **`slotsWritten`** — a counter, incremented **once per turn that wrote**, read
+  off `useConversation`'s `capabilities` list so a _refused_ `fill_slot` causes
+  no refresh. A counter rather than a boolean (nowhere to go after the first
+  turn) or a clock (two turns in one millisecond). The panel's first read is its
+  mount, so a mount is never a refresh.
+- **`ask` / `takeAsk`** — "Ask her about this" hands the note's question to the
+  composer through the **same `insertAtCaret`** the microphone uses. Three rounds
+  of review went into where those words land and whether focus is taken; a second
+  path would get one of them wrong. `takeAsk` clearing to `null` is what lets the
+  same words be handed over twice.
+
+### Group headings are derived, and the order is not the taxonomy's
+
+`life_areas` → `Life areas`: the key with underscores replaced and the first
+letter raised, which reproduces five of the six authored titles exactly. The
+bundled file's `title` is deliberately **not** read — once seeded the tables are
+the taxonomy, and an upload can introduce a group the file never described.
+
+Groups are ordered by that heading, alphabetically. **Not by `priorityWeight`**,
+which looked tempting and is a borrowed rationale that does not transfer
+(`fp5`): it is capture sequencing — what she should ask about soonest — and says
+nothing about how a person wants to read their own record. Within a group the
+order is `getSlotHeads`' own, freshest first, which is what puts the note she has
+just written at the top of its group.
+
+**Slugs she invented are a separate list, not a group with a null key.** A mint
+has no definition and therefore no group; a magic key standing in for "none" is a
+value that eventually gets compared against a real one.
+
+### What a person is not shown
+
+- **The conversation id.** The panel says a note was _drawn from something you
+  said in conversation_ and stops there. There is no member-facing route that
+  opens one exchange yet — the journey view is still a placeholder — and a link
+  to nowhere, or a cuid printed as evidence, would both be worse. When the
+  journey lands, that line becomes the link.
+- **Anything about another person**, obviously; and no log line here carries a
+  slug or a value, because a minted slug is model-authored free text drawn from
+  what the person said and durable app logs are not erasure-covered — the same
+  reasoning `capture.ts` gives for its own.
+
 ## What is not here yet
 
-- **The panel** — where the picture assembles for the person it is about (t-73),
-  and the only surface on which a person can correct what she wrote.
+- **Deleting one note.** There is no per-answer deletion at any tier: erasure
+  takes the account or nothing. Filed against `f-memory`, which owns deletion
+  propagation — and §3.19 asks for a single exchange, a session or a module's
+  worth to be deletable, so it is a feature rather than a field.
 - **Admin control over minting** — whether she may invent a slot at all, against
   admin-authored guidance, or only by proposing one for approval. Owner ruling
   20 Sept 2026 that this should be a three-mode setting; captured as its own
