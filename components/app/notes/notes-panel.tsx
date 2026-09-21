@@ -85,17 +85,33 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
     };
   }, []);
 
+  /*
+   * The number of the most recent read this panel has STARTED.
+   *
+   * Reads are not cancelled and not queued — a correction's re-read and a
+   * turn's can be in flight together — so they can answer in either order.
+   * Before this, whichever response arrived last was what `setNotes` kept: an
+   * older page could land after a newer one and put a note back on screen as
+   * it was before the write that changed it, until the next write. Found by
+   * `/code-review`, round 1. A response now applies only if nothing started
+   * after it did. Sequencing rather than aborting, because an abort would also
+   * discard a read that failed for a real reason the reader should be told.
+   */
+  const latest = useRef(0);
+
   const read = useCallback(
     (signal?: AbortSignal) => {
+      const mine = ++latest.current;
+      const stale = () => signal?.aborted || !mounted.current || mine !== latest.current;
       return fetchNotes({ signal, fetchImpl })
         .then((view) => {
-          if (signal?.aborted || !mounted.current) return;
+          if (stale()) return;
           setNotes(view);
           setUnreadable(false);
         })
         .catch((error: unknown) => {
-          if (signal?.aborted || !mounted.current) return;
-          logger.warn('Her notes could not be read', {
+          if (stale()) return;
+          logger.warn('Lelañea’s notes could not be read', {
             error: error instanceof Error ? error.message : String(error),
           });
           setUnreadable(true);
@@ -112,12 +128,22 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   }, [read]);
 
   /*
-   * And again whenever a turn has written. Keyed on the counter alone: the
-   * mount effect above already did the first read, and adding `read` to this
-   * list would make a re-created `fetchImpl` a phantom turn.
+   * And again whenever a turn has written — measured against the counter as it
+   * stood when THIS panel mounted, not against zero.
+   *
+   * The provider outlives the panel. Leave `/app/notes` after a turn wrote, and
+   * come back: the new panel mounts under a provider whose counter is already
+   * above zero, so a `slotsWritten === 0` guard let this fire on mount beside
+   * the mount read — two requests for one arrival. Remembering the value at
+   * mount makes a mount a mount (`/code-review`, round 1).
+   *
+   * Keyed on the counter alone: adding `read` would make a re-created
+   * `fetchImpl` a phantom turn.
    */
+  const seenWrites = useRef(slotsWritten);
   useEffect(() => {
-    if (slotsWritten === 0) return;
+    if (slotsWritten === seenWrites.current) return;
+    seenWrites.current = slotsWritten;
     void read();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [slotsWritten]);

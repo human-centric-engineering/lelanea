@@ -96,6 +96,11 @@ const world = {
   failNextReads: 0,
   corrections: [] as { slotSlug: string; value: string }[],
   turn: null as ReturnType<typeof openTurn> | null,
+  /**
+   * When set, notes GETs are NOT answered: each parks a resolver here instead,
+   * and the test releases them in whatever order it is proving something about.
+   */
+  hold: null as null | ((view: NotesView) => void)[],
 };
 
 const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -125,6 +130,14 @@ const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) 
       );
     }
     world.notesReads += 1;
+    if (world.hold) {
+      const parked = world.hold;
+      return new Promise<Response>((resolve) => {
+        parked.push((view) =>
+          resolve(new Response(JSON.stringify({ success: true, data: view }), { status: 200 }))
+        );
+      });
+    }
     if (world.failNextReads > 0) {
       world.failNextReads -= 1;
       return new Response('', { status: 500 });
@@ -176,6 +189,7 @@ beforeEach(() => {
   world.failNextReads = 0;
   world.corrections = [];
   world.turn = null;
+  world.hold = null;
   vi.mocked(fetchImpl).mockClear();
   vi.stubGlobal('fetch', fetchImpl);
 });
@@ -560,5 +574,84 @@ describe('when the read does not get through', () => {
 
     expect(await screen.findByText(/as it stood a moment ago/)).toBeTruthy();
     expect(screen.getByText(/Work is going badly/)).toBeTruthy();
+  });
+});
+
+/**
+ * The panel's reads are ordered, and a remount is a mount (/code-review round 1).
+ *
+ * The provider outlives the panel: navigating away from `/app/notes` and back
+ * unmounts the panel and mounts a new one under the SAME provider, whose write
+ * counter is by then above zero. Both cases are asserted against the shape of
+ * the defect, not against a spy — the first counts real requests, the second
+ * releases two real responses in the wrong order and reads the screen.
+ */
+describe('the reads are ordered', () => {
+  const wroteNote = async () => {
+    await userEvent.type(composer(), 'work is going badly');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(world.turn).not.toBeNull());
+    await act(async () => {
+      world.turn!.push('start', { conversationId: 'c1' });
+      world.turn!.push('capability_result', {
+        capabilitySlug: 'fill_slot',
+        result: { success: true, data: { slotSlug: 'life_money', version: 1, minted: false } },
+      });
+      world.turn!.push('done', {});
+      world.turn!.close();
+    });
+  };
+
+  it('reads once when it comes back, however many turns wrote while it was away', async () => {
+    const { rerender } = renderBoth();
+    await screen.findByText(/Work is going badly/);
+    await wroteNote();
+    await waitFor(() => expect(world.notesReads).toBe(2));
+
+    // Away, and back — the provider lives on with its counter at 1.
+    rerender(<ConversationPane />);
+    const before = world.notesReads;
+    rerender(
+      <>
+        <ConversationPane />
+        <NotesPanel fetchImpl={fetchImpl} />
+      </>
+    );
+    await screen.findByText(/Work is going badly/);
+
+    // A mount is a mount. The counter effect used to fire alongside the mount
+    // read because the counter was already non-zero — two requests for one
+    // arrival.
+    expect(world.notesReads - before).toBe(1);
+  });
+
+  it('keeps the newest answer when an older one lands after it', async () => {
+    renderBoth();
+    await screen.findByText(/Work is going badly/);
+
+    // Two reads in flight at once: a correction's re-read, then a turn's.
+    world.hold = [];
+    await userEvent.click(screen.getByRole('button', { name: /not right/i }));
+    await userEvent.clear(screen.getByRole('textbox', { name: /your correction/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /your correction/i }), 'older');
+    await userEvent.click(screen.getByRole('button', { name: /save this instead/i }));
+    await waitFor(() => expect(world.hold).toHaveLength(1));
+    await wroteNote();
+    await waitFor(() => expect(world.hold).toHaveLength(2));
+
+    // A guard rather than `!`: if the setup ever parks fewer than two reads,
+    // this says so, instead of the release below throwing on `undefined`.
+    const [olderRead, newerRead] = world.hold;
+    if (!olderRead || !newerRead) throw new Error('expected two reads in flight');
+    // The NEWER request answers first, then the older one straggles in.
+    await act(async () => newerRead(view([note({ value: 'The newest page.' })])));
+    await screen.findByText('The newest page.');
+    await act(async () => olderRead(view([note({ value: 'A page from before.' })])));
+
+    // The straggler must not win. Before the fix, whichever response arrived
+    // last was what `setNotes` kept — an older page on screen, missing the
+    // newest note, until the next write.
+    expect(screen.getByText('The newest page.')).toBeTruthy();
+    expect(screen.queryByText('A page from before.')).toBeNull();
   });
 });

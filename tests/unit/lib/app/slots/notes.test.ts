@@ -146,9 +146,22 @@ const prismaFake = {
     }),
   },
   appSlotDefinition: {
-    findMany: vi.fn(async ({ where }: { where: { visibility: string } }) =>
-      world.ours.filter((row) => row.visibility === where.visibility).map((row) => ({ ...row }))
-    ),
+    // Honours the ONE shape `ourVerdicts()` sends — an OR of equality clauses —
+    // and throws on anything else, for the reason `matches()` above does: a
+    // query added later must fail loudly rather than match every row.
+    findMany: vi.fn(async ({ where }: { where: { OR?: Record<string, string>[] } }) => {
+      if (!where.OR) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      const clauses = where.OR;
+      return world.ours
+        .filter((row) =>
+          clauses.some((clause) =>
+            Object.entries(clause).every(
+              ([key, want]) => (row as Record<string, string | undefined>)[key] === want
+            )
+          )
+        )
+        .map((row) => ({ sensitivity: 'standard', ...row }));
+    }),
     findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
       const row = world.ours.find((candidate) => candidate.slug === where.slug);
       return row ? { ...row } : null;
@@ -287,6 +300,35 @@ describe('what a person is shown', () => {
     // Retirement deletes nothing: the note is still the person's.
     expect(note?.retired).toBe(true);
     expect(note?.correctable).toBe(false);
+  });
+
+  it('takes the stricter sensitivity of the two tiers, so it never offers a correction the route refuses', async () => {
+    // Only OUR taxonomy calls this slot special-category; the projection says
+    // standard. `correctNote` refuses a correction here — so offering one would
+    // be a button whose every save returns 409. /code-review, round 1: the
+    // read went on consulting the projection alone after the write learned to
+    // read both.
+    world.projections.push(definition('life_physical_health', { sensitivity: 'standard' }));
+    world.ours.push({
+      slug: 'life_physical_health',
+      visibility: 'open',
+      sensitivity: 'special_category',
+    });
+    world.values.push(value(ME, 'life_physical_health', { value: '<redacted: special_category>' }));
+
+    const view = await getNotes(ME);
+    const note = view.groups
+      .flatMap((group) => group.notes)
+      .find((candidate) => candidate.slotSlug === 'life_physical_health');
+
+    expect(note?.sensitivity).toBe('special_category');
+    expect(note?.correctable).toBe(false);
+    // And the sentinel is read as what it is, not printed raw.
+    expect(note?.withheld).toBe(true);
+    // The read and the write agree: the route refuses the same slot.
+    await expect(
+      correctNote({ userId: ME, slotSlug: 'life_physical_health', value: 'x' })
+    ).rejects.toThrow(/ask Lelañea about it/i);
   });
 
   it('says an Art. 9 note was never written down, rather than printing the sentinel', async () => {

@@ -116,23 +116,44 @@ function conversationOf(provenance: unknown): string | null {
 }
 
 /**
- * Every slug a member must not be shown, from both tiers.
+ * What our own taxonomy says about the slugs where the answer matters: which are
+ * hidden, and which are special-category.
  *
- * See the header: the two tables can disagree, and only their **union** is
+ * ## Both halves of the union, from one read
+ *
+ * See the header: the two tiers can disagree, and only their **union** is
  * fail-closed. `framework_slot_definition` is the row the write path judged the
- * slot by; `app_slot_definition` is the taxonomy an admin actually edits.
+ * slot by; `app_slot_definition` is the taxonomy an admin actually edits. This
+ * started as a hidden-set only, and the correction route then learned to read
+ * both tiers for sensitivity too (`/security-review`) — while this read went on
+ * reading only the projection. So a slot our taxonomy marked special-category
+ * was offered for correction here and refused on save there: a button that
+ * could never work, on the one kind of note where a dead end is least
+ * forgivable. Found by `/code-review`. The read and the write now take the same
+ * stricter-of-both answer, from the same query shape.
+ *
+ * Narrowed to the rows that can change an answer — a slug our taxonomy calls
+ * open and standard adds nothing to the projection's verdict.
  */
-async function hiddenSlugs(
-  projections: { slug: string; visibility: string }[]
-): Promise<Set<string>> {
-  const ours = await prisma.appSlotDefinition.findMany({
-    where: { visibility: SLOT_VISIBILITY.hidden },
-    select: { slug: true },
+async function ourVerdicts(): Promise<{
+  hidden: Set<string>;
+  specialCategory: Set<string>;
+}> {
+  const rows = await prisma.appSlotDefinition.findMany({
+    where: {
+      OR: [
+        { visibility: SLOT_VISIBILITY.hidden },
+        { sensitivity: SLOT_SENSITIVITY.special_category },
+      ],
+    },
+    select: { slug: true, visibility: true, sensitivity: true },
   });
-  return new Set([
-    ...projections.filter((row) => row.visibility === SLOT_VISIBILITY.hidden).map((r) => r.slug),
-    ...ours.map((row) => row.slug),
-  ]);
+  return {
+    hidden: new Set(rows.filter((r) => r.visibility === SLOT_VISIBILITY.hidden).map((r) => r.slug)),
+    specialCategory: new Set(
+      rows.filter((r) => r.sensitivity === SLOT_SENSITIVITY.special_category).map((r) => r.slug)
+    ),
+  };
 }
 
 /**
@@ -188,15 +209,20 @@ async function readPreviousVersions(
  * groups it — and nothing else.
  *
  * Four queries for the whole panel, whatever the number of notes: the heads,
- * the definitions, our hidden set, and one batched read for the previous
- * versions. No per-row fetch on either side of the wire.
+ * the definitions, our own verdicts on hidden and special-category slugs, and
+ * one batched read for the previous versions. No per-row fetch on either side
+ * of the wire.
  */
 export async function getNotes(userId: string): Promise<NotesView> {
   const heads = await getSlotHeads(userId);
   if (heads.length === 0) return { groups: [], improvised: [], total: 0 };
 
   const definitions = await listSlotDefinitions();
-  const hidden = await hiddenSlugs(definitions);
+  const ours = await ourVerdicts();
+  const hidden = new Set([
+    ...definitions.filter((d) => d.visibility === SLOT_VISIBILITY.hidden).map((d) => d.slug),
+    ...ours.hidden,
+  ]);
 
   // Withheld first, and before anything is shaped: a value that must not leave
   // the server should not exist in a structure a later branch can read from.
@@ -211,7 +237,11 @@ export async function getNotes(userId: string): Promise<NotesView> {
 
   for (const head of shown) {
     const definition = byslug.get(head.slotSlug) ?? null;
-    const sensitivity = definition?.sensitivity ?? SLOT_SENSITIVITY.standard;
+    // The stricter of the two tiers — the same answer `correctNote` reaches, so
+    // what this offers and what that accepts cannot disagree.
+    const sensitivity = ours.specialCategory.has(head.slotSlug)
+      ? SLOT_SENSITIVITY.special_category
+      : (definition?.sensitivity ?? SLOT_SENSITIVITY.standard);
     const retired = definition ? !definition.isActive : false;
     const withheld = sensitivity === SLOT_SENSITIVITY.special_category && head.value === WITHHELD;
 
