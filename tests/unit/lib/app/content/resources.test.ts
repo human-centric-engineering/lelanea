@@ -272,11 +272,14 @@ describe('a malformed file fails, naming the fault', () => {
   });
 
   it('rejects a reading that is both a document and a link, and one that is neither', () => {
-    const both = { ...reading('r', null), documentId: 'the_mission' };
-    expect(parse(fixture({ readings: [both] })).ok).toBe(false);
+    // Neither shape is representable in `ResourcesFile` — that is the point of
+    // the union — so both are built as the untyped JSON the schema actually reads.
+    const base: Record<string, unknown> = { ...reading('r', null) };
+    const both = { ...base, documentId: 'the_mission' };
+    expect(parse({ ...fixture(), readings: [both] }).ok).toBe(false);
 
-    const { href: _href, ...neither } = reading('r', null);
-    expect(parse(fixture({ readings: [neither] })).ok).toBe(false);
+    const { href: _href, ...neither } = base;
+    expect(parse({ ...fixture(), readings: [neither] }).ok).toBe(false);
   });
 
   it('rejects words citing a document that does not exist', () => {
