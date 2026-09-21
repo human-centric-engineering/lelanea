@@ -223,16 +223,12 @@ describe('what the panel shows', () => {
     expect(screen.getByText('life work')).toBeTruthy();
     expect(screen.getByText(/What Lelañea was looking for/)).toBeTruthy();
     expect(screen.getByText(/How work stands for this person right now/)).toBeTruthy();
-    // §3.19: how it was known, and how sure — in words and in the number. The
-    // meta line interpolates three fragments, so it is asserted whole rather
-    // than by a text matcher that would not see across the element boundaries.
-    const meta = screen.getByText(
-      (_, element) =>
-        element?.tagName === 'P' && /Lelañea inferred it/.test(element.textContent ?? '')
-    );
-    expect(meta.textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Lelañea inferred it · Not certain \(6 of 10\) · 21 September/
-    );
+    // §3.19: how it was known, how sure, and when — the three facts that now
+    // live in the aside, each on its own line rather than run together.
+    expect(screen.getByText('Lelañea inferred it')).toBeTruthy();
+    expect(screen.getByText('Not certain')).toBeTruthy();
+    expect(screen.getByText(/6 of 10/)).toBeTruthy();
+    expect(screen.getByText(/21 September/)).toBeTruthy();
     expect(screen.getByText(/two things said in passing/)).toBeTruthy();
   });
 
@@ -261,6 +257,78 @@ describe('what the panel shows', () => {
     expect(screen.getByText(/kept, not replaced/)).toBeTruthy();
     // §3.12: a door, not a fault. Nothing on the card interrupts a reader.
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('counts the readings it is not showing, rather than pretending there were two', async () => {
+    // Version 4 means three earlier readings: one in the inset, two counted.
+    // §3.12 wants the previous answer beside the new one, not a changelog —
+    // but a card that said nothing about the other two would read as though
+    // this had only ever changed once.
+    world.reads = [
+      view([
+        note({
+          version: 4,
+          value: 'It is going fine now.',
+          previous: {
+            version: 3,
+            value: 'It was going badly.',
+            withheld: false,
+            sourceType: 'inferred',
+            confidence: 6,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        }),
+      ]),
+    ];
+    renderBoth();
+
+    expect(await screen.findByText('It was going badly.')).toBeTruthy();
+    expect(screen.getByText(/2 earlier readings before that, kept but not shown/)).toBeTruthy();
+  });
+
+  it('says "one" rather than "1" when a single reading is uncounted', async () => {
+    world.reads = [
+      view([
+        note({
+          version: 3,
+          previous: {
+            version: 2,
+            value: 'It was going badly.',
+            withheld: false,
+            sourceType: 'inferred',
+            confidence: 6,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        }),
+      ]),
+    ];
+    renderBoth();
+
+    expect(await screen.findByText(/One earlier reading before that/)).toBeTruthy();
+  });
+
+  it('counts nothing when the shown version is the only earlier one', async () => {
+    world.reads = [
+      view([
+        note({
+          version: 2,
+          previous: {
+            version: 1,
+            value: 'It was going badly.',
+            withheld: false,
+            sourceType: 'inferred',
+            confidence: 6,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        }),
+      ]),
+    ];
+    renderBoth();
+
+    // The population is non-empty — the inset is on screen — so the absence
+    // below is the arithmetic working rather than a card that rendered nothing.
+    expect(await screen.findByText('It was going badly.')).toBeTruthy();
+    expect(screen.queryByText(/earlier reading/i)).toBeNull();
   });
 
   it('says what a withheld note is instead of printing the sentinel', async () => {
@@ -299,9 +367,11 @@ describe('what the panel shows', () => {
     ];
     renderBoth();
 
+    // The heading now sits in a row beside the rule and the count, so the
+    // section is two levels up rather than one.
     const section = (
       await screen.findByRole('heading', { level: 2, name: 'Lelañea’s own headings' })
-    ).parentElement as HTMLElement;
+    ).closest('section') as HTMLElement;
     expect(within(section).getByText('Has not called his brother.')).toBeTruthy();
     expect(within(section).queryByText(/Work is going badly/)).toBeNull();
   });

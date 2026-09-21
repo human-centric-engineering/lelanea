@@ -1,5 +1,6 @@
 'use client';
 
+import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
 import { Banner } from '@/components/app/ui/banner';
@@ -97,6 +98,15 @@ export function confidenceWords(confidence: number): string {
  * it repeats what the sentence next to it already says, and announcing "meter,
  * 6 of 10" after "Not certain (6 of 10)" is noise.
  *
+ * ## The top band says "Confident", and never more than that
+ *
+ * It said "As certain as it gets", which the owner read as arrogant, and it
+ * was: the scale's ceiling is her own judgement, not a fact, and a phrase that
+ * closes the question invites nobody to correct it. Every rung is now a claim
+ * she could be wrong about — *Confident · Fairly sure · Not certain · Only a
+ * guess* — which is the register the rest of the panel is in and the posture
+ * §3.12 asks for. Owner ruling, 21 September 2026.
+ *
  * ## Why these four hues, in this order
  *
  * Green → amber → purple → grey, deliberately **not** green → amber → red. Red
@@ -113,10 +123,10 @@ export function confidenceWords(confidence: number): string {
  * unfilled part of it visible at all.
  */
 const CERTAINTY = {
-  high: { words: 'As certain as it gets', bar: 'var(--color-status-green)' },
+  high: { words: 'Confident', bar: 'var(--color-status-green)' },
   fair: { words: 'Fairly sure', bar: 'var(--color-status-yellow)' },
   low: { words: 'Not certain', bar: 'var(--color-status-purple)' },
-  guess: { words: 'Guessing', bar: 'var(--color-muted-foreground)' },
+  guess: { words: 'Only a guess', bar: 'var(--color-muted-foreground)' },
 } as const;
 
 export type CertaintyBand = keyof typeof CERTAINTY;
@@ -135,19 +145,23 @@ export function certaintyBand(confidence: number): CertaintyBand {
  * Notches rather than a continuous bar because the value is an integer out of
  * ten and a smooth fill implies a precision the scale does not have. She stored
  * "6", not "63%".
+ *
+ * **It sits directly above the words it measures**, in the aside. It used to
+ * float between the reading and the meta line, a row of coloured dashes with
+ * its own sentence three lines away — the owner's note, and correct: a measure
+ * separated from its statement is decoration, because nothing on screen says
+ * what it is measuring.
  */
 function CertaintyBar({ confidence }: { confidence: number }) {
   const filled = Math.max(0, Math.min(10, Math.round(confidence)));
   const { bar } = CERTAINTY[certaintyBand(confidence)];
   return (
-    <span aria-hidden="true" className="mt-2.5 flex items-center gap-[3px]">
+    <span aria-hidden="true" className="flex items-center gap-[3px]">
       {Array.from({ length: 10 }, (_, notch) => (
         <span
           key={notch}
-          className="h-[3px] w-[9px] rounded-full"
-          style={{
-            backgroundColor: notch < filled ? bar : 'var(--color-divider)',
-          }}
+          className="h-[3px] flex-1 rounded-full"
+          style={{ backgroundColor: notch < filled ? bar : 'var(--color-divider)' }}
         />
       ))}
     </span>
@@ -198,16 +212,114 @@ export function askText(note: Note): string {
   return `You wrote down: “${excerpt(note.value)}”. Can we talk about that?`;
 }
 
-/** The certainty measure, and the muted line under it: how she knows, how sure, when. */
-function Meta({ note }: { note: Note }) {
+/**
+ * The right-hand column: how certain, how known, and when.
+ *
+ * ## Why these three left the reading's own column
+ *
+ * They were one muted sentence running the full width of the card under the
+ * note — *"Lelañea inferred it · Not certain (6 of 10) · 21 September at
+ * 13:23"* — which is three unrelated facts joined by interpuncts because there
+ * was nowhere else to put them, and it pushed every card's real content into a
+ * measure that ran right across the surface. The owner's note; the fix is the
+ * obvious one, and it buys the reading a proper measure at the same time.
+ *
+ * Stacked rather than tabulated: each fact is a different kind of thing, and a
+ * two-column definition list here would imply a schema the reader does not
+ * need. The certainty is the one with weight, because it is the one that
+ * decides how much of the note to believe.
+ */
+function Aside({ note }: { note: Note }) {
   return (
-    <>
-      <CertaintyBar confidence={note.confidence} />
-      <p className="text-muted-foreground mt-1.5 text-[12.5px] leading-[1.6]">
-        {noteSourceWords(note.sourceType)} · {confidenceWords(note.confidence)} ({note.confidence}{' '}
-        of 10) · {formatWhen(note.capturedAt)}
-      </p>
-    </>
+    <aside
+      className={cn(
+        'flex flex-col gap-3 text-[12px] leading-[1.5]',
+        // The rule only exists when there is a column to separate. Below the
+        // container breakpoint the aside sits under the reading, where a left
+        // border would be a stray vertical line.
+        '@min-[30rem]:border-l @min-[30rem]:border-[var(--color-divider)] @min-[30rem]:pl-5'
+      )}
+    >
+      <div className="flex flex-col gap-1.5">
+        <CertaintyBar confidence={note.confidence} />
+        <p className="text-[var(--color-heading)]">
+          <span className="font-medium">{confidenceWords(note.confidence)}</span>
+          <span className="text-muted-foreground"> · {note.confidence} of 10</span>
+        </p>
+      </div>
+      <p className="text-muted-foreground">{noteSourceWords(note.sourceType)}</p>
+      <p className="text-muted-foreground">{formatWhen(note.capturedAt)}</p>
+    </aside>
+  );
+}
+
+/**
+ * The disclosure, as a box of its own.
+ *
+ * Boxed because the three lines inside it are *about* the note rather than part
+ * of it — her reasoning, her wording, where it came from — and unboxed they ran
+ * on from the reading as more of the same prose. The summary is the box's head
+ * and the body sits under a hairline inside the same border, so open and closed
+ * are plainly one object. The marker is ours: `list-none` kills the native
+ * triangle, which sits on the text baseline and cannot be positioned.
+ */
+function HowSheKnows({ note }: { note: Note }) {
+  return (
+    <details
+      className={cn(
+        'group rounded-lg border border-[var(--color-card-border)]',
+        'bg-[var(--color-pill)] shadow-[var(--shadow-rest)]'
+      )}
+    >
+      <summary
+        className={cn(
+          'text-muted-foreground flex cursor-pointer list-none items-center gap-2',
+          'px-3.5 py-2.5 text-[12.5px] select-none',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+          'focus-visible:outline-[var(--color-ring)]'
+        )}
+      >
+        <ChevronRight
+          size={13}
+          strokeWidth={1.8}
+          aria-hidden="true"
+          className={cn(
+            'flex-none transition-transform duration-200 ease-[var(--ease-brand)]',
+            'group-open:rotate-90 motion-reduce:transition-none'
+          )}
+        />
+        How Lelañea came to this
+      </summary>
+      <div
+        className={cn(
+          'text-muted-foreground flex flex-col gap-2 border-t px-3.5 py-3',
+          'border-[var(--color-divider)] text-[13px] leading-[1.6]'
+        )}
+      >
+        <p className="max-w-[52ch]">{note.reasoningNote}</p>
+        {note.asking ? (
+          /*
+            Her wording, quoted. Third person inside the quotation marks is the
+            taxonomy speaking to a model, which is what it is — the panel is not
+            addressing the reader as "this person".
+          */
+          <p className="max-w-[52ch]">
+            <span className="text-[var(--color-heading)]">What Lelañea was looking for: </span>“
+            {note.asking}”
+          </p>
+        ) : null}
+        {note.conversationId ? (
+          /*
+            The id is not shown and is not a link. There is no member-facing
+            route that opens one exchange yet — the journey view is still a
+            placeholder — and a link to nowhere, or a cuid printed as evidence,
+            would both be worse than saying plainly that it came from talking.
+            When the journey lands, this line is where it becomes a link.
+          */
+          <p>Drawn from something you said in conversation.</p>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -260,102 +372,125 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
   // nobody hears is worse than none, because it reads in source as if the card
   // announces itself. The panel renders each card in a list item under a group
   // heading, which is what places it.
+  /**
+   * How many readings stand behind this one.
+   *
+   * `version` is monotonic per `(userId, slotSlug)` from 1 and the engine never
+   * deletes, so the count is arithmetic — no second query, and no API field.
+   *
+   * **The owner asked what happens when there are several, and the answer is
+   * that one is shown and the rest are counted.** §3.12 asks for the previous
+   * answer beside the new one as an invitation to revisit, not for a changelog:
+   * a card that unrolled six readings would bury the current one, which is the
+   * thing the page is for. Saying how many there are is what stops "before
+   * this" reading as though there had only ever been two — and what would make
+   * a full history worth building, when somebody asks for it.
+   */
+  const earlier = Math.max(0, note.version - 1);
+  const older = earlier - (note.previous ? 1 : 0);
+
   return (
-    <Card className="p-[22px]" eyebrow={note.retired ? `${tag} · no longer asked about` : tag}>
-      {note.withheld ? (
-        /*
-          The stored value is a sentinel, so the card says what actually
-          happened instead of printing it. This is the classification doing its
-          job — `.context/app/slots.md`, "Capture" — and reading it as a failure
-          is the misunderstanding this sentence exists to prevent.
+    <Card
+      className="@container p-[22px]"
+      eyebrow={note.retired ? `${tag} · no longer asked about` : tag}
+    >
+      {/*
+        The container query is the point, and it is the repo's first.
+        This card's width is set by the workspace pane — which a reader drags,
+        and which the conversation overlays at `medium` — so a viewport
+        breakpoint would split the columns on a 1400px window while the pane
+        itself was 320px wide. `@container` asks the only question that matters:
+        is THIS card wide enough for two columns.
+      */}
+      <div className="grid gap-x-7 gap-y-4 @min-[30rem]:grid-cols-[minmax(0,1fr)_10rem]">
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {note.withheld ? (
+            /*
+              The stored value is a sentinel, so the card says what actually
+              happened instead of printing it. This is the classification doing
+              its job — `.context/app/slots.md`, "Capture" — and reading it as a
+              failure is the misunderstanding this sentence exists to prevent.
 
-          It carries the info wash for that reason: it is the one card that says
-          something about the RECORD rather than about the person, and reading
-          as a statement rather than as a reading is the whole point of it. The
-          hue is `Banner`'s `info` pairing — wash and edge from the same trio,
-          measured there — and the words on it stay `--color-heading`, which is
-          darker than the ink that pairing normally uses.
-        */
-        <p
-          className={cn(
-            'rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
-            'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
-            'text-[var(--color-heading)]'
+              It carries the info wash for that reason: it is the one card that
+              says something about the RECORD rather than about the person. The
+              hue is `Banner`'s `info` pairing — wash and edge from the same
+              trio, measured there — and the words on it stay `--color-heading`,
+              which is darker than the ink that pairing normally uses.
+            */
+            <p
+              className={cn(
+                'max-w-[46ch] rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
+                'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
+                'text-[var(--color-heading)]'
+              )}
+            >
+              Lelañea noticed something here and deliberately kept no record of what you said.
+              Health, feeling and belief are left out of the written record.
+            </p>
+          ) : (
+            /*
+              46ch, and the reading is the only thing on the card that gets to
+              be this size. It ran the full width of the surface — 100+
+              characters on a wide pane, which is twice a comfortable measure
+              and reads as a wall (the owner's note). The aside took the three
+              facts that were padding it out; this is what the space was for.
+            */
+            <p
+              className={cn(
+                'max-w-[46ch] text-[15.5px] leading-[1.65] whitespace-pre-line',
+                'text-[var(--color-heading)]'
+              )}
+            >
+              {note.value}
+            </p>
           )}
-        >
-          Lelañea noticed something here and deliberately kept no record of what you said. Health,
-          feeling and belief are left out of the written record.
-        </p>
-      ) : (
-        <p className="text-[15px] leading-[1.6] whitespace-pre-line text-[var(--color-heading)]">
-          {note.value}
-        </p>
-      )}
 
-      <Meta note={note} />
+          <HowSheKnows note={note} />
 
-      <details className="mt-3">
-        <summary
-          className={cn(
-            'text-muted-foreground cursor-pointer text-[12.5px] select-none',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-            'focus-visible:outline-[var(--color-ring)]'
-          )}
-        >
-          How Lelañea came to this
-        </summary>
-        <p className="text-muted-foreground mt-2 text-[13px] leading-[1.6]">{note.reasoningNote}</p>
-        {note.asking ? (
-          /*
-            Her wording, quoted. Third person inside the quotation marks is the
-            taxonomy speaking to a model, which is what it is — the panel is not
-            addressing the reader as "this person".
-          */
-          <p className="text-muted-foreground mt-1.5 text-[13px] leading-[1.6]">
-            What Lelañea was looking for: “{note.asking}”
-          </p>
-        ) : null}
-        {note.conversationId ? (
-          /*
-            The id is not shown and is not a link. There is no member-facing
-            route that opens one exchange yet — the journey view is still a
-            placeholder — and a link to nowhere, or a cuid printed as evidence,
-            would both be worse than saying plainly that it came from talking.
-            When the journey lands, this line is where it becomes a link.
-          */
-          <p className="text-muted-foreground mt-1.5 text-[13px] leading-[1.6]">
-            Drawn from something you said in conversation.
-          </p>
-        ) : null}
-      </details>
-
-      {note.previous ? (
-        /*
-          The reflective hue, and NOT the red one. A superseded reading is not a
-          mistake that was corrected — §3.12 says a contradiction is a door —
-          and the palette's red is what this app uses for things that have gone
-          wrong. Purple carries Settings' tone for the same reason: it marks
-          something to sit with. Left edge only, so the inset reads as an aside
-          rather than as a second card.
-        */
-        <div
-          className={cn(
-            'mt-3.5 rounded-md border-l-2 py-1.5 pl-3.5',
-            'border-[var(--color-status-purple)] bg-[var(--color-status-purple-bg)]'
-          )}
-        >
-          <Eyebrow as="p" className="block">
-            before this
-          </Eyebrow>
-          <p className="text-muted-foreground mt-1 text-[13.5px] leading-[1.6] whitespace-pre-line">
-            {note.previous.withheld ? 'Something Lelañea kept no record of.' : note.previous.value}
-          </p>
-          <p className="text-muted-foreground mt-1.5 text-[12.5px]">
-            {noteSourceWords(note.previous.sourceType)} · {formatWhen(note.previous.capturedAt)} ·
-            kept, not replaced
-          </p>
+          {note.previous ? (
+            /*
+              The reflective hue, and NOT the red one. A superseded reading is
+              not a mistake that was corrected — §3.12 says a contradiction is a
+              door — and the palette's red is what this app uses for things that
+              have gone wrong. Purple carries Settings' tone for the same
+              reason: it marks something to sit with. Left edge only, so the
+              inset reads as an aside rather than as a second card.
+            */
+            <div
+              className={cn(
+                'rounded-md border-l-2 py-2 pl-3.5',
+                'border-[var(--color-status-purple)] bg-[var(--color-status-purple-bg)]'
+              )}
+            >
+              <Eyebrow as="p" className="block">
+                before this
+              </Eyebrow>
+              <p
+                className={cn(
+                  'text-muted-foreground mt-1 max-w-[46ch] text-[13.5px] leading-[1.6]',
+                  'whitespace-pre-line'
+                )}
+              >
+                {note.previous.withheld
+                  ? 'Something Lelañea kept no record of.'
+                  : note.previous.value}
+              </p>
+              <p className="text-muted-foreground mt-1.5 text-[12px]">
+                {noteSourceWords(note.previous.sourceType)} · {formatWhen(note.previous.capturedAt)}{' '}
+                · kept, not replaced
+              </p>
+              {older > 0 ? (
+                <p className="text-muted-foreground mt-1.5 text-[12px]">
+                  {older === 1 ? 'One earlier reading' : `${older} earlier readings`} before that,
+                  kept but not shown here.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+
+        <Aside note={note} />
+      </div>
 
       {editing ? (
         <div className="mt-4">

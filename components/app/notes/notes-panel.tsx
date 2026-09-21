@@ -157,7 +157,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
       ) : null}
 
       {view.groups.map((group) => (
-        <Group key={group.key} title={group.title}>
+        <Group key={group.key} title={group.title} count={group.notes.length}>
           {group.notes.map((note) => (
             <li key={note.slotSlug}>
               <NoteCard
@@ -174,6 +174,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
       {improvised.length > 0 ? (
         <Group
           title="Lelañea’s own headings"
+          count={improvised.length}
           note="Nothing Lelañea was asked to look for covered these, so the headings are Lelañea’s own."
         >
           {improvised.map((note) => (
@@ -192,20 +193,37 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   );
 }
 
+/**
+ * A group of notes under its heading.
+ *
+ * The heading is an eyebrow, a hairline that runs to the edge, and a count —
+ * the editorial rule the design uses to separate sections, and the reason it
+ * earns its keep here is the count: it tells a reader at a glance whether
+ * "Life areas" is three notes or twenty before they scroll into it. Without
+ * the rule the eyebrow floated between two cards and read as a caption on the
+ * one below it.
+ */
 function Group({
   title,
+  count,
   note,
   children,
 }: {
   title: string;
+  count: number;
   note?: string;
   children: React.ReactNode;
 }) {
   return (
     <section>
-      <Eyebrow as="h2" className="block px-1 pb-2">
-        {title}
-      </Eyebrow>
+      <div className="flex items-baseline gap-3 px-1 pb-2.5">
+        <Eyebrow as="h2">{title}</Eyebrow>
+        <span
+          aria-hidden="true"
+          className="h-px min-w-6 flex-1 translate-y-[-3px] bg-[var(--color-divider)]"
+        />
+        <span className="text-muted-foreground flex-none text-[11.5px] tabular-nums">{count}</span>
+      </div>
       {note ? (
         <p className="text-muted-foreground max-w-[52ch] px-1 pb-2.5 text-[12.5px] leading-[1.6]">
           {note}
