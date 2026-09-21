@@ -563,9 +563,54 @@ async function main(): Promise<void> {
     for (const group of hiddenGroups) {
       check(
         !SLOT_EXPOSURE_CONFIG.read.groups.includes(group),
-        `"${group}" is write-only to her — §12, never a grade`
+        `"${group}" is left out of her read allowlist — §12, never a grade`
       );
     }
+
+    // The above asserts the CONFIG. This asserts the behaviour, which is the
+    // only thing §12 actually rests on: write a hidden slot, then read through
+    // the real `get_state` with the real binding and confirm it does not come
+    // back — while an open slot written the same way does. A config assertion
+    // alone would pass against an allowlist the dispatcher never applied.
+    const hidden = await prisma.slotDefinition.findFirst({
+      where: { isActive: true, visibility: 'hidden' },
+      select: { slug: true },
+      orderBy: { slug: 'asc' },
+    });
+    if (!hidden) throw new Error('no active hidden slot — the projection is wrong');
+    await capabilityDispatcher.dispatch(
+      'fill_slot',
+      {
+        slotSlug: hidden.slug,
+        value: 'A development reading, written by the capture smoke.',
+        confidence: 5,
+        reasoningNote: 'Written by npm run smoke:app-slot-capture.',
+        sourceType: 'inferred',
+      },
+      { ...dispatchContext, costLogMetadata: { turnId: TURN_RETRY, seat: SEAT } }
+    );
+    const wroteHidden = (await slotValuesFor(user.id)).some(
+      (value) => value.slotSlug === hidden.slug
+    );
+    check(wroteHidden, `${hidden.slug} was written — hidden is write-only, not unwritable`);
+
+    const read = await capabilityDispatcher.dispatch('get_state', {}, dispatchContext);
+    const readSlugs =
+      read.success && isRecord(read.data) && Array.isArray(read.data.slots)
+        ? read.data.slots.flatMap((entry) =>
+            isRecord(entry) && typeof entry.slug === 'string' ? [entry.slug] : []
+          )
+        : [];
+    // Non-empty population first, or "the hidden slug is absent" passes for free.
+    check(readSlugs.length > 0, `get_state read ${readSlugs.length} slot(s) back`);
+    check(
+      !readSlugs.includes(hidden.slug),
+      `and ${hidden.slug} is not among them — she cannot read it back`
+    );
+    check(
+      readSlugs.includes(target.slug),
+      `while ${target.slug}, an open slot, is — so this is a filter, not an empty read`
+    );
 
     console.log('\nall good.\n');
   } finally {

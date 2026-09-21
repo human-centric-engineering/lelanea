@@ -16,16 +16,27 @@
  *    matches.
  * 2. **Her own passages** — retrieved by `lib/app/voice/exemplars.ts` from
  *    voice-designated documents only, each one labelled with its origin.
- * 3. **On a facilitation seat only: what she is looking for** — the live slot
- *    taxonomy (`lib/app/slots/vocabulary.ts`), so a capture can name an
- *    authored slot instead of inventing one (f-slots t-72).
+ * 3. **What she is looking for** — the live slot taxonomy
+ *    (`lib/app/slots/vocabulary.ts`), so a capture can name an authored slot
+ *    instead of inventing one (f-slots t-72).
  *
  * The third is here rather than in its own contributor because **a request
- * carries one context tuple**, so registering a second loader for
- * `facilitation` would replace this block rather than add to it. It is on the
- * facilitation path only: the admin `voice` path is what the voice comparison
- * measures, and adding a 2,000-token block to it would change what the golden
- * set is comparing.
+ * carries one context tuple**, so registering a second loader for either type
+ * would replace this block rather than add to it.
+ *
+ * It is on **both** registered types, and the first cut got that wrong: it was
+ * facilitation-only, on the grounds that a 2,000-token block would change what
+ * the voice comparison measures. The comparison sends no `contextType` at all
+ * (`comparison.ts`), so no contributor runs on the golden-set path and there
+ * was nothing to protect — while the admin chat, which does pin `voice`, was
+ * left talking to an agent that holds `fill_slot` with no list in front of it.
+ * Caught by /code-review.
+ *
+ * **Paths that carry no context type still have no list.** The embed widget and
+ * a workflow `agent_call` reach her agent without one, so a capture there mints
+ * — and a mint is never masked. That residual belongs to the admin setting that
+ * governs minting (idea #33) rather than to a contributor, because no
+ * contributor runs on a path that requests none.
  *
  * The always-on core is not here and must never be: it rides on the agent's
  * profile (`lib/app/voice/fingerprint.ts`) and is present whether or not this
@@ -219,7 +230,19 @@ export async function loadVoiceContext(id: string): Promise<string> {
   const exemplars =
     overlay === null ? [] : await retrieveVoiceExemplarsSafely(overlay.exemplarQuery);
 
-  return composeVoiceContext(overlay, exemplars);
+  // The taxonomy rides along on BOTH registered paths, not just the seats.
+  //
+  // It was facilitation-only in the first cut, justified as keeping a
+  // 2,000-token block out of what the voice comparison measures. That
+  // justification was wrong: `comparison.ts` calls `drainStreamChat` with no
+  // `contextType`/`contextId` at all, so no contributor runs on the golden-set
+  // path and there was never anything to protect. What the mistake DID leave
+  // was the admin orchestration chat — which pins `voice` — talking to an agent
+  // that holds `fill_slot` and is told to record, with no list in front of it.
+  // So it minted there, and a mint is never masked (`vocabulary.ts`). Found by
+  // /code-review.
+  const vocabulary = await slotVocabulary();
+  return [composeVoiceContext(overlay, exemplars), vocabulary].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -267,16 +290,6 @@ export async function loadFacilitationVoiceContext(seat: string): Promise<string
   const binding = await getFacilitationBindingByRole(seat);
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
 
-  // The voice block and the taxonomy in one body, because a request carries ONE
-  // context tuple: a turn gets one contributor's block and no other, so a second
-  // `registerContextContributor(FACILITATION_CONTEXT_TYPE, …)` would not add a
-  // block — it would replace this one. See this module's header.
-  //
-  // Both reads in parallel: neither needs the other, and the voice half already
-  // costs an embedding on a cache miss.
-  const [voice, vocabulary] = await Promise.all([
-    loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? ''),
-    slotVocabulary(),
-  ]);
-  return [voice, vocabulary].filter(Boolean).join('\n\n');
+  // `loadVoiceContext` carries the taxonomy as well, for every path — see there.
+  return loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
 }

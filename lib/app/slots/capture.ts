@@ -23,11 +23,20 @@
  * true and one of them spurious. §8.1: a retried turn cannot double-write the
  * profile.
  *
- * So the guard is keyed on the turn, and the unique index is the guard — the
- * same shape as the turn claim itself, for the same reason: two dispatches
- * cannot both miss a row neither of them can insert twice. A suppressed call
- * answers with the version that **was** written rather than an error, because
- * the reading is recorded, which is what the model asked for.
+ * So the guard is keyed on the turn: a ledger row per `(turn, slot)`, read
+ * before delegating and written after. A suppressed call answers with the
+ * version that **was** written rather than an error, because the reading is
+ * recorded, which is what the model asked for.
+ *
+ * **It is a read-then-write, and it is not concurrency-safe** — found by
+ * /code-review, which caught this paragraph claiming the opposite. The unique
+ * index dedupes the LEDGER, so two dispatches racing for one slot leave one row
+ * rather than two; it does not stop the second `fill_slot` from appending a
+ * second version first, because the append happens before the row exists. That
+ * is the case under "What is deliberately NOT guarded" below, and it is
+ * deliberate: the defect this guards is a retried turn, which is sequential by
+ * construction — the first attempt has been settled `failed` before the second
+ * is claimed (`turn-record.ts`). Do not read this as a lock.
  *
  * ## Where the turn id comes from, and why that is worth a paragraph
  *

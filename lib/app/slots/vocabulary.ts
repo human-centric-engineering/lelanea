@@ -101,9 +101,23 @@ const RULE = [
  * instructions — the same hole `exemplars.ts` quotes every passage line to
  * close. One line per slot means nothing from the table can reach column 0
  * except the `- ` this writes.
+ *
+ * **The slug is flattened too, not just the description** — found by
+ * /code-review. `app_slot_definition.slug` is a plain `String` with no database
+ * constraint, and `loadGlobalSlotDefinitions()` validates only the four
+ * classifier columns. Today's writers (the seed, t-71's editor) both validate a
+ * slug, so a newline in one needs a hand edit to the table — but the invariant
+ * above is stated absolutely, and enforcing it for one field while assuming it
+ * of the other is how a stated invariant becomes untrue without anyone editing
+ * the sentence.
  */
 function line(slot: { slug: string; description: string }): string {
-  return `- ${slot.slug}: ${slot.description.replace(/\s+/g, ' ').trim()}`;
+  return `- ${flatten(slot.slug)}: ${flatten(slot.description)}`;
+}
+
+/** Any run of whitespace to one space. Applied to the SLUG as well — see {@link line}. */
+function flatten(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 /**

@@ -109,6 +109,7 @@ const unit: SeedUnit = {
     // Prisma's JSON input wants a mutable value. No `as`.
     const customConfig = { read: { groups: [...SLOT_EXPOSURE_CONFIG.read.groups] } };
 
+    let created = 0;
     for (const capability of capabilities) {
       const existing = await prisma.aiAgentCapability.findUnique({
         where: { agentId_capabilityId: { agentId: agent.id, capabilityId: capability.id } },
@@ -125,11 +126,20 @@ const unit: SeedUnit = {
       await prisma.aiAgentCapability.create({
         data: { agentId: agent.id, capabilityId: capability.id, customConfig },
       });
+      created += 1;
       logger.info(`🧬 Granted ${capability.slug}`);
     }
 
+    // Only where this run actually wrote the config. On the skip path the stored
+    // allowlist is whatever an operator left it as, and a taxonomy edit re-runs
+    // this unit (it is in `hashInputs`) — so printing the freshly DERIVED list
+    // there would announce a widening that did not happen, which is the exact
+    // opposite of what this unit's `fp4` section promises. Found by
+    // /code-review.
     logger.info(
-      `🔒 She may read back: ${SLOT_EXPOSURE_CONFIG.read.groups.join(', ')} — and writes anywhere, bounded by her instructions`
+      created === 0
+        ? '🔒 Her slot grants already existed — their allowlists are left as configured'
+        : `🔒 She may read back: ${SLOT_EXPOSURE_CONFIG.read.groups.join(', ')} — and writes anywhere, bounded by her instructions`
     );
   },
 };

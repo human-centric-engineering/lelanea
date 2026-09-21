@@ -108,9 +108,19 @@ describe('the parts', () => {
     ]);
   });
 
-  it('counts the writes, so three readings do not read as one', () => {
-    const parts = accountParts(input({ capabilities: ['fill_slot', 'fill_slot', 'fill_slot'] }));
-    expect(parts[0].line).toBe('Added 3 things to what she understands about you');
+  it('does not count the writes, because the frame cannot say how many things were learned', () => {
+    // Three successful `fill_slot` calls can be fewer than three readings — the
+    // model calling the tool twice for one slug inside one attempt is a case
+    // `capture.ts` deliberately does not collapse, and a suppressed retry
+    // returns a success like any other. "Added 3 things" where the panel shows
+    // one item is a number the person would be right to distrust. Found by
+    // /code-review.
+    const three = accountParts(input({ capabilities: ['fill_slot', 'fill_slot', 'fill_slot'] }));
+    const one = accountParts(input({ capabilities: ['fill_slot'] }));
+
+    expect(three[0].line).toBe('Added something to what she understands about you');
+    expect(three[0].line).toBe(one[0].line);
+    expect(three[0].line).not.toMatch(/\d/);
   });
 
   it('reads what it consulted before what it wrote, in one line', () => {

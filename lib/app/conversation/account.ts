@@ -105,21 +105,29 @@ const readTheProfile: AccountSource = (input) => {
  * **This is the guardrail's own line** — "nothing is understood invisibly". A
  * capture is a silent tool (D5): the model is told not to announce it, and
  * without this source a turn would learn something about someone and say
- * nothing about having done so. The count is how many writes the turn made, one
- * `capability_result` each; the retry guard is what stops a re-run of one turn
- * counting the same reading twice (`lib/app/slots/capture.ts`).
+ * nothing about having done so.
  *
- * No slug, for `readTheProfile`'s reasons, and no value — the panel (t-73) is
+ * **No count, deliberately** — an earlier version said "Added 3 things" and it
+ * could not be right. What this source has is `input.capabilities`: one entry
+ * per *successful call*, with no slot slug on it. Two of those can be one
+ * reading — the model calling the tool twice for the same slug inside one
+ * attempt, which `capture.ts` explicitly declines to collapse — so the count
+ * would say "2 things" where the panel (t-73) shows one item, and the person
+ * reading both would be right to trust the panel. A suppressed retry counts too,
+ * because it returns a success like any other. The frame cannot tell us how many
+ * things were learned, so this does not claim to know. Found by /code-review,
+ * which also caught the docblock asserting the retry guard prevented exactly
+ * this.
+ *
+ * No slug either, for `readTheProfile`'s reasons, and no value — the panel is
  * where a person sees what was written and corrects it.
  */
 const wroteToProfile: AccountSource = (input) => {
-  const writes = input.capabilities.filter((slug) => slug === WRITE_THE_PROFILE).length;
-  if (writes === 0) return null;
-  const what = writes === 1 ? 'something' : `${writes} things`;
+  if (!input.capabilities.includes(WRITE_THE_PROFILE)) return null;
   return {
     key: 'wrote_profile',
-    line: `Added ${what} to what she understands about you`,
-    detail: `Added ${what} to what she understands about you. You can see it, and correct it.`,
+    line: 'Added something to what she understands about you',
+    detail: 'Added something to what she understands about you. You can see it, and correct it.',
   };
 };
 

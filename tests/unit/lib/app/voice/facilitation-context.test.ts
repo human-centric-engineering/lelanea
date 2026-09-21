@@ -108,15 +108,17 @@ describe('a seat that is not hers', () => {
 });
 
 describe('the admin voice path', () => {
-  it('does NOT carry the taxonomy', async () => {
-    // `loadVoiceContext` is what the admin orchestration chat and the voice
-    // comparison use. The comparison is what the golden set measures, so adding
-    // a 2,000-token block to it would change what is being compared between
-    // runs — and the admin chat is not capturing anything.
+  it('carries the taxonomy too, because it talks to an agent that can write', async () => {
+    // The first cut deliberately withheld it here, to keep a 2,000-token block
+    // out of what the voice comparison measures. That reasoning was wrong:
+    // `comparison.ts` sends no `contextType`, so no contributor runs on the
+    // golden-set path at all — while the admin orchestration chat, which DOES
+    // pin `voice`, was left talking to an agent holding `fill_slot` with no
+    // list in front of it. It minted there, and a mint is never masked. Found
+    // by /code-review.
     const body = await loadVoiceContext('first-meeting');
 
     expect(body).toContain('Meet them where they are.');
-    expect(body).not.toContain('- life_wealth: Money.');
-    expect(slotVocabulary).not.toHaveBeenCalled();
+    expect(body).toContain('- life_wealth: Money.');
   });
 });
