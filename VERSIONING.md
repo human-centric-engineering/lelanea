@@ -154,6 +154,7 @@ covered by the version contract.
   - `lib/app/gateway/` — the acknowledgement gate: kinds, current versions, a member's standing at the gate
   - `lib/app/journey/` — the published journey map, its module registry and path helpers
   - `lib/app/modules/` — the leaf's module definitions, registered with Daybreak's module registry
+  - `lib/app/resources/` — the resources tool: `suggest_resource`, the suggestion shape the pane reads, and the offering the agent is shown
   - `lib/app/safety/` — the crisis path: deterministic detection, the context check, the regional resource and the safety record
   - `lib/app/slots/` — the authored slot taxonomy: the store, and the provider Daybreak's global slot sync reads
   - `lib/app/voice/` — the voice corpus: designation, comparison, corpus access and the chat context contributor
