@@ -15,6 +15,7 @@
 
 import { z } from 'zod';
 
+import { notesSearch, type NotesQuery } from '@/lib/app/slots/notes-query';
 import type { NotesView } from '@/lib/app/slots/notes-view';
 
 /** Her notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
@@ -88,25 +89,30 @@ const noteSchema = z.object({
   retired: z.boolean(),
   correctable: z.boolean(),
   previous: historySchema.nullable(),
+  group: z.string().nullable(),
 });
 
 const notesEnvelopeSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    groups: z.array(z.object({ key: z.string(), title: z.string(), notes: z.array(noteSchema) })),
-    improvised: z.array(noteSchema),
+    notes: z.array(noteSchema),
+    groups: z.array(z.object({ key: z.string(), title: z.string(), count: z.number() })),
+    own: z.number(),
     total: z.number(),
+    matched: z.number(),
   }),
 });
 
 interface Options {
   signal?: AbortSignal;
+  /** The search, the group and the sort. Defaults are left out of the URL. */
+  query?: NotesQuery;
   /** Injectable for tests; defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
 }
 
 /**
- * The whole page, in one read.
+ * The page as asked for, in one read.
  *
  * Validated as a unit rather than per note, unlike the transcript: there, a row
  * the client cannot read costs that row and the conversation survives. Here a
@@ -116,7 +122,9 @@ interface Options {
  */
 export async function fetchNotes(options: Options = {}): Promise<NotesView> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const response = await fetchImpl(NOTES_ENDPOINT, {
+  const query = options.query ?? {};
+  const search = notesSearch({ q: query.q, group: query.group, sort: query.sort });
+  const response = await fetchImpl(`${NOTES_ENDPOINT}${search}`, {
     credentials: 'include',
     signal: options.signal,
     headers: { Accept: 'application/json' },

@@ -4,7 +4,8 @@
  *
  * What the read and the correction actually DO is
  * `tests/unit/lib/app/slots/notes.test.ts`, against a Prisma fake with
- * Daybreak's value engine running for real. This file is the layer above: who
+ * Daybreak's value engine running for real — and the query surface (t-79) is
+ * `route-query.test.ts`, which runs this route over that same fake. This file is the layer above: who
  * may call, whose id reaches the store, what a refusal looks like on the wire,
  * and what does not reach the log.
  *
@@ -31,17 +32,13 @@ const { store, notes, routeLog } = vi.hoisted(() => {
     store,
     notes: {
       getNotes: vi.fn(async (userId: string) => ({
-        groups: store.has(userId)
-          ? [
-              {
-                key: 'life_areas',
-                title: 'Life areas',
-                notes: [{ slotSlug: 'life_work', value: store.get(userId) }],
-              },
-            ]
+        notes: store.has(userId)
+          ? [{ slotSlug: 'life_work', group: 'life_areas', value: store.get(userId) }]
           : [],
-        improvised: [],
+        groups: store.has(userId) ? [{ key: 'life_areas', title: 'Life areas', count: 1 }] : [],
+        own: 0,
         total: store.has(userId) ? 1 : 0,
+        matched: store.has(userId) ? 1 : 0,
       })),
       correctNote: vi.fn(async ({ slotSlug }: { slotSlug: string }) => ({ slotSlug, version: 2 })),
     },
@@ -91,7 +88,8 @@ describe('GET /api/v1/app/notes', () => {
     // The other person's row exists in the same store, so this is the id being
     // carried rather than there being nothing else to find.
     expect(JSON.stringify(body)).not.toContain('theirs');
-    expect(notes.getNotes).toHaveBeenCalledWith(ME);
+    // No query string, so no query: the whole record, in the default order.
+    expect(notes.getNotes).toHaveBeenCalledWith(ME, {});
   });
 
   it('is closed to a caller with no session', async () => {

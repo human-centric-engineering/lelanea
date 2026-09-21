@@ -38,9 +38,11 @@ describe('a server that answers the wrong shape', () => {
     const body = JSON.stringify({
       success: true,
       data: {
-        groups: [{ key: 'life_areas', title: 'Life areas', notes: [{ slotSlug: 'life_work' }] }],
-        improvised: [],
+        notes: [{ slotSlug: 'life_work', group: 'life_areas' }],
+        groups: [{ key: 'life_areas', title: 'Life areas', count: 1 }],
+        own: 0,
         total: 1,
+        matched: 1,
       },
     });
 
@@ -59,6 +61,29 @@ describe('a server that answers the wrong shape', () => {
     await expect(
       correctNote({ slotSlug: 'life_work', value: 'x' }, { fetchImpl: answering(body) })
     ).rejects.toMatchObject({ code: 'malformed' });
+  });
+});
+
+describe('what it asks for', () => {
+  const empty = JSON.stringify({
+    success: true,
+    data: { notes: [], groups: [], own: 0, total: 0, matched: 0 },
+  });
+
+  it('sends the search, the group and the sort, and leaves the defaults out', async () => {
+    const fetchImpl = answering(empty);
+    await fetchNotes({ fetchImpl, query: { q: ' brother ', group: '_own', sort: 'recent' } });
+    await fetchNotes({ fetchImpl, query: { sort: 'grouped' } });
+
+    // The client always passes a string; anything else fails the comparison.
+    const urls = vi
+      .mocked(fetchImpl)
+      .mock.calls.map(([url]) => (typeof url === 'string' ? url : ''));
+    expect(urls).toEqual([
+      '/api/v1/app/notes?q=brother&group=_own&sort=recent',
+      // `grouped` is the default, so the plain page is the plain URL.
+      '/api/v1/app/notes',
+    ]);
   });
 });
 

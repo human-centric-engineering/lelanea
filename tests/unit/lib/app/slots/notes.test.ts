@@ -18,7 +18,7 @@
  *
  * ## What is faked, and what is not
  *
- * The Prisma client only. Daybreak's value engine (`appendSlotValue`,
+ * The Prisma client only — `notes-fake.ts`, shared with the route's query tests. Daybreak's value engine (`appendSlotValue`,
  * `getSlotHeads`) and its definition queries run for REAL against it, because
  * the properties above are properties of those queries — a test that mocked
  * `getSlotHeads` to filter by person would be asserting its own fake (`B9`).
@@ -32,195 +32,32 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const ME = 'cmjbv4i3x00003wsloputgwul';
-const THEM = 'cmu7other0000000000000000';
+import {
+  definition,
+  ME,
+  resetWorld,
+  THEM,
+  value,
+  world,
+} from '@/tests/unit/lib/app/slots/notes-fake';
 
-interface ValueRow {
-  id: string;
-  userId: string;
-  slotSlug: string;
-  version: number;
-  value: string;
-  confidence: number;
-  sourceType: string;
-  reasoningNote: string;
-  provenance: unknown;
-  supersededAt: Date | null;
-  capturedAt: Date;
-}
-
-interface DefinitionRow {
-  slug: string;
-  group: string;
-  description: string;
-  scope: string;
-  visibility: string;
-  mode: string;
-  dataType: string;
-  sensitivity: string;
-  priorityWeight: number;
-  isActive: boolean;
-}
-
-const world = {
-  values: [] as ValueRow[],
-  /** Daybreak's projection — the row `fill_slot` judges a slot by. */
-  projections: [] as DefinitionRow[],
-  /** Ours — the taxonomy an admin edits. Only `visibility` is read from it. */
-  ours: [] as { slug: string; visibility: string; sensitivity?: string }[],
-  nextId: 0,
-};
-
-/**
- * A `where` this fake understands, applied honestly.
- *
- * Deliberately strict: an operator it does not model throws, so a query added
- * to `notes.ts` later cannot silently match every row and turn a real filter
- * into a passing test.
- */
-function matches(row: ValueRow, where: Record<string, unknown>): boolean {
-  return Object.entries(where).every(([key, condition]) => {
-    if (key === 'OR') {
-      const clauses = condition as Record<string, unknown>[];
-      return clauses.some((clause) => matches(row, clause));
-    }
-    const actual = (row as unknown as Record<string, unknown>)[key];
-    if (condition === null) return actual === null;
-    if (typeof condition === 'object') {
-      const operators = condition as Record<string, unknown>;
-      if ('in' in operators) return (operators.in as unknown[]).includes(actual);
-      throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
-    }
-    return actual === condition;
-  });
-}
-
-const prismaFake = {
-  slotValue: {
-    findMany: vi.fn(
-      async ({
-        where,
-        orderBy,
-      }: {
-        where: Record<string, unknown>;
-        orderBy?: { capturedAt?: string; slotSlug?: string }[];
-      }) => {
-        const rows = world.values.filter((row) => matches(row, where));
-        if (orderBy) {
-          // `getSlotHeads` orders freshest first, then slug — and the panel's
-          // "the note she just wrote is at the top of its group" depends on it.
-          rows.sort(
-            (a, b) =>
-              b.capturedAt.getTime() - a.capturedAt.getTime() ||
-              a.slotSlug.localeCompare(b.slotSlug)
-          );
-        }
-        return rows.map((row) => ({ ...row }));
-      }
-    ),
-    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
-      const rows = world.values
-        .filter((row) => matches(row, where))
-        .sort((a, b) => b.version - a.version);
-      return rows[0] ? { ...rows[0] } : null;
-    }),
-    update: vi.fn(
-      async ({ where, data }: { where: { id: string }; data: { supersededAt: Date } }) => {
-        const row = world.values.find((candidate) => candidate.id === where.id);
-        if (!row) throw new Error('no such row');
-        row.supersededAt = data.supersededAt;
-        return { ...row };
-      }
-    ),
-    create: vi.fn(async ({ data }: { data: Omit<ValueRow, 'id' | 'supersededAt'> }) => {
-      const row: ValueRow = { id: `v${++world.nextId}`, supersededAt: null, ...data };
-      world.values.push(row);
-      return { ...row };
-    }),
-  },
-  slotDefinition: {
-    findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
-    findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
-      const row = world.projections.find((candidate) => candidate.slug === where.slug);
-      return row ? { ...row } : null;
-    }),
-  },
-  appSlotDefinition: {
-    // Honours the ONE shape `ourVerdicts()` sends — an OR of equality clauses —
-    // and throws on anything else, for the reason `matches()` above does: a
-    // query added later must fail loudly rather than match every row.
-    findMany: vi.fn(async ({ where }: { where: { OR?: Record<string, string>[] } }) => {
-      if (!where.OR) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
-      const clauses = where.OR;
-      return world.ours
-        .filter((row) =>
-          clauses.some((clause) =>
-            Object.entries(clause).every(
-              ([key, want]) => (row as Record<string, string | undefined>)[key] === want
-            )
-          )
-        )
-        .map((row) => ({ sensitivity: 'standard', ...row }));
-    }),
-    findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
-      const row = world.ours.find((candidate) => candidate.slug === where.slug);
-      return row ? { ...row } : null;
-    }),
-  },
-};
-
-vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
-vi.mock('@/lib/db/utils', () => ({
-  executeTransaction: (work: (tx: typeof prismaFake) => Promise<unknown>) => work(prismaFake),
+vi.mock('@/lib/db/client', async () => ({
+  prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));
+vi.mock('@/lib/db/utils', async () => {
+  const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
+  return {
+    executeTransaction: (work: (tx: typeof prismaFake) => Promise<unknown>) => work(prismaFake),
+  };
+});
 
-// Imported dynamically, after the mocks above: a static import is hoisted
-// past `prismaFake`'s declaration and the factory then reads it uninitialised.
-// Same shape as `capture.test.ts` next door, for the same reason.
+// Imported dynamically, after the mocks above — the same shape as
+// `capture.test.ts` next door.
 const { getNotes, correctNote, CORRECTION_CONFIDENCE } = await import('@/lib/app/slots/notes');
-
-function definition(slug: string, overrides: Partial<DefinitionRow> = {}): DefinitionRow {
-  return {
-    slug,
-    group: 'life_areas',
-    description: `What ${slug} looks like for this person.`,
-    scope: 'global',
-    visibility: 'open',
-    mode: 'targeted',
-    dataType: 'text',
-    sensitivity: 'standard',
-    priorityWeight: 50,
-    isActive: true,
-    ...overrides,
-  };
-}
-
-let clock = 0;
-function value(userId: string, slotSlug: string, overrides: Partial<ValueRow> = {}): ValueRow {
-  clock += 1000;
-  return {
-    id: `v${++world.nextId}`,
-    userId,
-    slotSlug,
-    version: 1,
-    value: `something about ${slotSlug}`,
-    confidence: 6,
-    sourceType: 'inferred',
-    reasoningNote: 'She put this together from what was said.',
-    provenance: { conversationId: 'conv-1' },
-    supersededAt: null,
-    capturedAt: new Date(clock),
-    ...overrides,
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  world.values = [];
-  world.projections = [];
-  world.ours = [];
-  world.nextId = 0;
-  clock = 0;
+  resetWorld();
 });
 
 describe('what a person is shown', () => {
@@ -244,7 +81,7 @@ describe('what a person is shown', () => {
     // The population is non-empty and two of its three rows come back, so the
     // absence below is a filter doing work rather than an empty store.
     expect(view.total).toBe(2);
-    const slugs = view.groups.flatMap((group) => group.notes.map((note) => note.slotSlug));
+    const slugs = view.notes.map((note) => note.slotSlug);
     expect(slugs).toEqual(expect.arrayContaining(['life_work', 'the_person_disposition']));
     expect(slugs).not.toContain('development_stage');
     expect(JSON.stringify(view)).not.toContain('they are at stage two');
@@ -264,11 +101,17 @@ describe('what a person is shown', () => {
     expect(JSON.stringify(view)).not.toContain('they are at stage two');
   });
 
-  it('groups by the taxonomy and titles each group from its key', async () => {
+  it('files each note under its taxonomy group, and counts the groups in use by title', async () => {
     const view = await getNotes(ME);
-    expect(view.groups.map((group) => [group.key, group.title])).toEqual([
-      ['life_areas', 'Life areas'],
-      ['the_person', 'The person'],
+    expect(view.notes.map((note) => [note.slotSlug, note.group])).toEqual([
+      ['life_work', 'life_areas'],
+      ['the_person_disposition', 'the_person'],
+    ]);
+    // The hidden `development` group has a note in the store and is still not
+    // offered as a group — it never reaches the counts.
+    expect(view.groups).toEqual([
+      { key: 'life_areas', title: 'Life areas', count: 1 },
+      { key: 'the_person', title: 'The person', count: 1 },
     ]);
   });
 
@@ -279,12 +122,13 @@ describe('what a person is shown', () => {
 
     const view = await getNotes(ME);
 
-    expect(view.improvised.map((note) => note.slotSlug)).toEqual(['family_communication']);
-    expect(view.groups.flatMap((group) => group.notes.map((note) => note.slotSlug))).not.toContain(
-      'family_communication'
-    );
-    // No definition means nothing to have been measured against.
-    expect(view.improvised[0]?.asking).toBeNull();
+    const mint = view.notes.find((note) => note.slotSlug === 'family_communication');
+    // No definition means no group, and nothing to have been measured against.
+    expect(mint?.group).toBeNull();
+    expect(mint?.asking).toBeNull();
+    expect(view.own).toBe(1);
+    // Lelañea's own headings come after every taxonomy group, however fresh.
+    expect(view.notes.at(-1)?.slotSlug).toBe('family_communication');
   });
 
   it('labels a retired slot and refuses to offer a correction on it', async () => {
@@ -293,9 +137,7 @@ describe('what a person is shown', () => {
     );
 
     const view = await getNotes(ME);
-    const note = view.groups
-      .flatMap((group) => group.notes)
-      .find((candidate) => candidate.slotSlug === 'life_work');
+    const note = view.notes.find((candidate) => candidate.slotSlug === 'life_work');
 
     // Retirement deletes nothing: the note is still the person's.
     expect(note?.retired).toBe(true);
@@ -317,9 +159,7 @@ describe('what a person is shown', () => {
     world.values.push(value(ME, 'life_physical_health', { value: '<redacted: special_category>' }));
 
     const view = await getNotes(ME);
-    const note = view.groups
-      .flatMap((group) => group.notes)
-      .find((candidate) => candidate.slotSlug === 'life_physical_health');
+    const note = view.notes.find((candidate) => candidate.slotSlug === 'life_physical_health');
 
     expect(note?.sensitivity).toBe('special_category');
     expect(note?.correctable).toBe(false);
@@ -337,9 +177,7 @@ describe('what a person is shown', () => {
     world.values.push(value(ME, 'life_physical_health', { value: '<redacted: special_category>' }));
 
     const view = await getNotes(ME);
-    const note = view.groups
-      .flatMap((group) => group.notes)
-      .find((candidate) => candidate.slotSlug === 'life_physical_health');
+    const note = view.notes.find((candidate) => candidate.slotSlug === 'life_physical_health');
 
     expect(note?.withheld).toBe(true);
     expect(note?.correctable).toBe(false);
@@ -347,7 +185,7 @@ describe('what a person is shown', () => {
 
   it('carries the provenance a person is promised (§3.19)', async () => {
     const view = await getNotes(ME);
-    const note = view.groups[0]?.notes[0];
+    const note = view.notes[0];
 
     expect(note).toMatchObject({
       confidence: 6,
@@ -360,7 +198,13 @@ describe('what a person is shown', () => {
 
   it('is empty, not broken, for someone she has learned nothing about', async () => {
     world.values = [];
-    await expect(getNotes(ME)).resolves.toEqual({ groups: [], improvised: [], total: 0 });
+    await expect(getNotes(ME)).resolves.toEqual({
+      notes: [],
+      groups: [],
+      own: 0,
+      total: 0,
+      matched: 0,
+    });
   });
 });
 
@@ -378,8 +222,8 @@ describe('one person’s notes are not another’s', () => {
 
     // Both populations are non-empty, so "does not contain theirs" is the read
     // being scoped rather than there being nothing to find.
-    expect(mine.groups[0]?.notes[0]?.value).toBe('mine');
-    expect(theirs.groups[0]?.notes[0]?.value).toBe('theirs');
+    expect(mine.notes[0]?.value).toBe('mine');
+    expect(theirs.notes[0]?.value).toBe('theirs');
     expect(JSON.stringify(mine)).not.toContain('theirs');
   });
 
@@ -431,7 +275,7 @@ describe('a correction is a new version, never an overwrite', () => {
     await correctNote({ userId: ME, slotSlug: 'life_work', value: 'it is going fine, actually' });
 
     const view = await getNotes(ME);
-    const note = view.groups[0]?.notes[0];
+    const note = view.notes[0];
 
     expect(note?.value).toBe('it is going fine, actually');
     expect(note?.previous).toMatchObject({

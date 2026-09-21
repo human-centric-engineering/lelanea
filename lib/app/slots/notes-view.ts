@@ -137,31 +137,85 @@ export interface Note {
   correctable: boolean;
   /** The version before this one, where there is one. */
   previous: NoteHistory | null;
+  /**
+   * The taxonomy group it is filed under — `life_areas` — or `null` for a
+   * heading Lelañea made up, which has no definition and so no group.
+   *
+   * Carried on the note since t-79 flattened the response: the panel groups by
+   * this, and the `recent` sort labels each note with it.
+   */
+  group: string | null;
 }
 
-/** One taxonomy group, with the notes filed under it. */
-export interface NoteGroup {
+/**
+ * A group that has notes in it, with how many — the options the panel's filter
+ * offers.
+ *
+ * Counted **before** the search and the filter are applied, so narrowing never
+ * makes an option vanish from under the reader: a group with no match still has
+ * notes, and picking it is still a thing someone can mean.
+ */
+export interface NoteGroupCount {
   /** The stored group key — `life_areas`. */
   key: string;
   /** The key as a heading: `life_areas` → `Life areas`. */
   title: string;
-  notes: Note[];
+  count: number;
 }
+
+/**
+ * The `group` value that asks for Lelañea's own headings.
+ *
+ * It cannot collide with a real group: group keys are slugs, and a slug starts
+ * with a letter (`slotSlugSchema`). It is a **query** value only — on a note the
+ * same fact is `group: null`, so no stored or returned key is ever compared
+ * against it.
+ */
+export const NOTES_OWN_GROUP = '_own';
+
+/** The heading Lelañea's own headings are filed under. One spelling, both views. */
+export const NOTES_OWN_TITLE = 'Lelañea’s own headings';
+
+/**
+ * `grouped` is by taxonomy group, freshest first within each, and is the
+ * default. `recent` is one list across every group, freshest first — "the last
+ * five things noted".
+ */
+export const NOTES_SORTS = ['grouped', 'recent'] as const;
+export type NotesSort = (typeof NOTES_SORTS)[number];
+
+/** How the page draws one response. Never sent to the server. */
+export const NOTES_LAYOUTS = ['cards', 'list'] as const;
+export type NotesLayout = (typeof NOTES_LAYOUTS)[number];
+
+/** Longest search the route accepts. The input carries the same cap. */
+export const NOTES_SEARCH_MAX = 200;
 
 /**
  * `GET /api/v1/app/notes`.
  *
- * `improvised` is kept apart from `groups` rather than given a group of its own
- * with a null key: an open-mode mint has no definition, so it has no group, and
- * a magic key standing in for "none" is a value that eventually gets compared
- * against a real one.
+ * ## Flat, since t-79
+ *
+ * It was `{ groups: [{ key, title, notes }], improvised, total }`, and the
+ * panel was its only reader. A `recent` sort has no groups to put notes in, so
+ * the list is flat and each note carries its `group`; the panel groups
+ * consecutive runs when the sort is `grouped`. One shape rather than a grouped
+ * variant kept beside a flat one — two shapes would be two readers to keep in
+ * step.
+ *
+ * `notes` is already in display order for the sort asked for.
  */
 export interface NotesView {
-  groups: NoteGroup[];
-  /** Notes she filed under a heading she invented. */
-  improvised: Note[];
-  /** Every note, however filed — so the panel's empty state is one test. */
+  /** The notes that match, in the order they are to be read. */
+  notes: Note[];
+  /** Taxonomy groups with notes in them, before filtering. Ordered by title. */
+  groups: NoteGroupCount[];
+  /** How many notes are under Lelañea's own headings, before filtering. */
+  own: number;
+  /** Every note, however filed and whatever the filter — so "a new account" is one test. */
   total: number;
+  /** How many of those the search and the group filter kept. */
+  matched: number;
 }
 
 /** `life_areas` → `Life areas`. The convention the admin browser already uses. */

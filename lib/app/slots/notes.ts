@@ -86,8 +86,8 @@ import {
 } from '@/lib/framework/data-slots';
 import { getSlotDefinition } from '@/lib/framework/data-slots/queries';
 import { redactedString } from '@/lib/security/redact';
-import type { Note, NoteGroup, NoteHistory, NotesView } from '@/lib/app/slots/notes-view';
-import { noteGroupTitle } from '@/lib/app/slots/notes-view';
+import type { Note, NoteHistory, NotesView } from '@/lib/app/slots/notes-view';
+import { queryNotes, type NotesQuery } from '@/lib/app/slots/notes-query';
 
 /** What masking leaves behind for an Art. 9 slot. Compared, never constructed twice. */
 const WITHHELD = redactedString('special_category');
@@ -205,17 +205,24 @@ async function readPreviousVersions(
 }
 
 /**
- * Everything she currently holds about this person, grouped as the taxonomy
- * groups it — and nothing else.
+ * Everything she currently holds about this person — and nothing else — as the
+ * page asked to see it.
  *
  * Four queries for the whole panel, whatever the number of notes: the heads,
  * the definitions, our own verdicts on hidden and special-category slugs, and
  * one batched read for the previous versions. No per-row fetch on either side
  * of the wire.
+ *
+ * ## The search, the filter and the sort come last, over the cleaned list (t-79)
+ *
+ * `query` is applied by {@link queryNotes} to the notes this function has
+ * already shaped — after the hidden slots are gone. There is no query path
+ * that reaches a value before that removal, so the guardrail is still enforced
+ * in exactly one place. See `notes-query.ts` for why this is not SQL.
  */
-export async function getNotes(userId: string): Promise<NotesView> {
+export async function getNotes(userId: string, query: NotesQuery = {}): Promise<NotesView> {
   const heads = await getSlotHeads(userId);
-  if (heads.length === 0) return { groups: [], improvised: [], total: 0 };
+  if (heads.length === 0) return queryNotes([], query);
 
   const definitions = await listSlotDefinitions();
   const ours = await ourVerdicts();
@@ -227,25 +234,23 @@ export async function getNotes(userId: string): Promise<NotesView> {
   // Withheld first, and before anything is shaped: a value that must not leave
   // the server should not exist in a structure a later branch can read from.
   const shown = heads.filter((head) => !hidden.has(head.slotSlug));
-  if (shown.length === 0) return { groups: [], improvised: [], total: 0 };
+  if (shown.length === 0) return queryNotes([], query);
 
   const previous = await readPreviousVersions(userId, shown);
   const byslug = new Map(definitions.map((definition) => [definition.slug, definition]));
 
-  const grouped = new Map<string, Note[]>();
-  const improvised: Note[] = [];
-
-  for (const head of shown) {
+  const notes: Note[] = shown.map((head) => {
     const definition = byslug.get(head.slotSlug) ?? null;
     // The stricter of the two tiers — the same answer `correctNote` reaches, so
-    // what this offers and what that accepts cannot disagree.
+    // what this offers and what that accepts cannot disagree. The search reads
+    // it too: an Art. 9 note is matched on its wording only (`notes-query.ts`).
     const sensitivity = ours.specialCategory.has(head.slotSlug)
       ? SLOT_SENSITIVITY.special_category
       : (definition?.sensitivity ?? SLOT_SENSITIVITY.standard);
     const retired = definition ? !definition.isActive : false;
     const withheld = sensitivity === SLOT_SENSITIVITY.special_category && head.value === WITHHELD;
 
-    const note: Note = {
+    return {
       slotSlug: head.slotSlug,
       asking: definition?.description ?? null,
       value: head.value,
@@ -263,25 +268,12 @@ export async function getNotes(userId: string): Promise<NotesView> {
       // classification rather than what one row happens to contain.
       correctable: !retired && sensitivity !== SLOT_SENSITIVITY.special_category,
       previous: previous.get(head.slotSlug) ?? null,
+      // An open-mode mint has no definition, and so no group.
+      group: definition?.group ?? null,
     };
+  });
 
-    if (definition === null) {
-      improvised.push(note);
-      continue;
-    }
-    const existing = grouped.get(definition.group);
-    if (existing) existing.push(note);
-    else grouped.set(definition.group, [note]);
-  }
-
-  // `getSlotHeads` already returns freshest first, so each list arrives in the
-  // order the panel wants — the note she has just written is at the top of its
-  // group, which is what makes "watch it form" true.
-  const groups: NoteGroup[] = [...grouped.entries()]
-    .map(([key, notes]) => ({ key, title: noteGroupTitle(key), notes }))
-    .sort((a, b) => a.title.localeCompare(b.title));
-
-  return { groups, improvised, total: shown.length };
+  return queryNotes(notes, query);
 }
 
 export interface NoteCorrection {
