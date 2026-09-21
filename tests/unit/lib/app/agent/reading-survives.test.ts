@@ -64,7 +64,7 @@ import { __resetModuleRegistryForTests } from '@/lib/framework/modules/registry'
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 
 // A real request rather than a `{ headers, url }` stand-in: the resources
-// selection route reads `nextUrl.searchParams` for its `?film=` pin, and a
+// selection route reads `nextUrl.searchParams` for its `?pin=`, and a
 // stand-in without `nextUrl` would fail it for a reason nothing here is about.
 function request(path: string): NextRequest {
   return new NextRequest(`http://localhost:3000${path}`);

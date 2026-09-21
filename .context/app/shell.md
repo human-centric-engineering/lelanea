@@ -415,13 +415,13 @@ has no arc and keeps the secondary ink. See `resourcesHead()` in
 open and keeps the result, because the map does not change under a reader. The
 resources panel follows the reader, so `useResourcesSelection()` is keyed on
 the route's key (`resourceKeyFor(pathname)`: a module slug, `journey`,
-`situations` or `default`) and the pinned film, re-fetches when either changes
+`situations` or `default`) and the pin, re-fetches when either changes
 while open, says it is loading rather than showing the previous key's words
 under the new route, drops an answer for a key the reader has since left —
 including one still in flight when the reader comes back to a key already on
 screen — and retries a failure on the next open. It lives in `Drawers`' render rather than the body's because the head
-needs the answer too. `openDrawer('resources', { film })` is the one widening
-the shell gained: `drawerFilm`, sent as `?film=` and cleared on close and on
+needs the answer too. `openDrawer('resources', { pin })` is the one widening
+the shell gained: `drawerPin`, sent as `?pin=` and cleared on close and on
 navigation, for a suggestion made in conversation (t-77).
 
 ## `recently` is real now, and its empty state is the point

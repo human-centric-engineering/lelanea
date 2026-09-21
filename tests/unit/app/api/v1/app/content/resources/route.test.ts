@@ -3,7 +3,7 @@
  *
  * The library and the selection. Covers the 200 payloads, the 304, the 401 an
  * anonymous caller must get, the 404 for a key that is nothing, the 400 for a
- * key or a pin that is not even a slug, the `?film=` pin, and the private
+ * key or a pin that is not even a slug, the `?pin=` pin, and the private
  * cache directive that keeps a shared cache out of a session-gated payload.
  *
  * The real file is read (as the sibling content route tests do), so the
@@ -215,13 +215,13 @@ describe('GET /api/v1/app/content/resources/:key', () => {
     expect(body.error.details).toHaveProperty('key');
   });
 
-  it('accepts a ?film= pin and refuses one that is not an id', async () => {
+  it('accepts a ?pin= and refuses one that is not an id', async () => {
     // Nothing to pin yet, so the pin is a no-op on the shipped file — but it
     // must be accepted, because t-77 sends it.
-    const ok = selectionRequest('values', '?film=on-stalling');
+    const ok = selectionRequest('values', '?pin=on-stalling');
     expect((await getSelection(ok.request, ok.context)).status).toBe(200);
 
-    const bad = selectionRequest('values', '?film=not%20an%20id');
+    const bad = selectionRequest('values', '?pin=not%20an%20id');
     const response = await getSelection(bad.request, bad.context);
     expect(response.status).toBe(400);
   });

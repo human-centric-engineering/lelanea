@@ -399,6 +399,16 @@ describe('the selection', () => {
     expect(foreign?.films.map((f) => f.id)).toEqual(['boundaries-a', 'values-a']);
   });
 
+  it('pins a reading too, in its own list, and leaves the films alone', () => {
+    const pinned = selectResources(file, MODULES, 'values', { pin: 'read-general-c' });
+    expect(pinned?.readings.map((r) => r.id)).toEqual([
+      'read-general-c',
+      'read-values',
+      'read-general-a',
+    ]);
+    expect(pinned?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
+  });
+
   it('ignores a pin that names nothing', () => {
     const selection = selectResources(file, MODULES, 'values', { pin: 'ghost' });
     expect(selection?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);

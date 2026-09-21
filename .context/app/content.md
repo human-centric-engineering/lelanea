@@ -86,14 +86,14 @@ explorations — is validated but not served, and lives in
 
 ## Endpoints
 
-| Route                                         | Auth       | Notes                                                       |
-| --------------------------------------------- | ---------- | ----------------------------------------------------------- |
-| `GET /api/v1/app/content/documents`           | public     | index, no prose                                             |
-| `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id                                   |
-| `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases                                      |
-| `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets                                 |
-| `GET /api/v1/app/content/resources`           | `withAuth` | the library: films, reading, her words per key              |
-| `GET /api/v1/app/content/resources/[key]`     | `withAuth` | what the drawer shows for one open thing; `?film=` pins one |
+| Route                                         | Auth       | Notes                                                            |
+| --------------------------------------------- | ---------- | ---------------------------------------------------------------- |
+| `GET /api/v1/app/content/documents`           | public     | index, no prose                                                  |
+| `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id                                        |
+| `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases                                           |
+| `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets                                      |
+| `GET /api/v1/app/content/resources`           | `withAuth` | the library: films, reading, her words per key                   |
+| `GET /api/v1/app/content/resources/[key]`     | `withAuth` | what the drawer shows for one open thing; `?pin=` puts one first |
 
 All six carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
 all six keep the platform's `private, no-cache` default.
@@ -396,7 +396,7 @@ withheld, as every file's are.
 **The selection is the prototype's `pickFor`.** What belongs to the open thing
 first, then what belongs to everything, capped at two films and three readings
 ("the drawer is for one thing at a time"); a key with no words of its own reads
-`default`'s and says so (`wordsAreOwn: false`). `pin` puts one film first,
+`default`'s and says so (`wordsAreOwn: false`). `pin` puts one film or reading first in its list,
 which is how a suggestion made in conversation opens the drawer on it (t-77).
 
 **Slugs in, ids inside.** The shell asks by module slug (`values`), the file
