@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { Card } from '@/components/app/ui/card';
+import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { correctNote, NotesRefused } from '@/lib/app/slots/notes-client';
 import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
@@ -323,17 +324,62 @@ function Aside({ note }: { note: Note }) {
  *
  * The marker is ours: `list-none` kills the native triangle, which sits on the
  * text baseline and cannot be positioned.
+ *
+ * ## "How Lelañea came to this" is plain text, not a panel (t-79)
+ *
+ * `plain` drops the lozenge: the summary is a line of muted text with its
+ * chevron, and opening it shows the detail beside a left rule and nothing
+ * else. The owner's note from the running page — a boxed control under every
+ * reading was more chrome than a line of provenance deserves, and it competed
+ * with the reading for weight.
  */
 function Disclosure({
   summary,
   tone,
+  plain,
   children,
 }: {
   summary: React.ReactNode;
   /** A left edge in the palette's reflective hue, for the history panel. */
   tone?: 'history';
+  /** Text and a chevron, no box; the open detail sits beside a left rule. */
+  plain?: boolean;
   children: React.ReactNode;
 }) {
+  if (plain) {
+    return (
+      <details className="group">
+        <summary
+          className={cn(
+            'text-muted-foreground inline-flex cursor-pointer list-none items-center gap-1.5',
+            'rounded-sm text-[12.5px] leading-[1.45] select-none',
+            'transition-colors duration-200 hover:text-[var(--color-heading)]',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-[var(--color-ring)]'
+          )}
+        >
+          <ChevronRight
+            size={13}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className={cn(
+              'flex-none transition-transform duration-200 ease-[var(--ease-brand)]',
+              'group-open:rotate-90 motion-reduce:transition-none'
+            )}
+          />
+          {summary}
+        </summary>
+        <div
+          className={cn(
+            'text-muted-foreground mt-2 ml-[6px] flex max-w-[27rem] flex-col gap-2',
+            'border-l-2 border-[var(--color-divider)] pl-3.5 text-[13px] leading-[1.6]'
+          )}
+        >
+          {children}
+        </div>
+      </details>
+    );
+  }
   return (
     <details
       className={cn(
@@ -471,23 +517,37 @@ export function NoteCard({
   const older = earlier - (note.previous ? 1 : 0);
 
   return (
-    <Card className={cn('@container relative p-[22px]', onFold && 'pr-12')} eyebrow={eyebrow}>
+    <Card className="@container p-[22px]" eyebrow={onFold ? undefined : eyebrow}>
       {onFold ? (
+        /*
+          The whole header is the fold control (owner ruling, t-79): the eyebrow
+          row, run out to the card's edges, with the chevron at its end. A real
+          button rather than a clickable div — `Card`'s own rule — so it takes
+          focus, answers Enter and Space, and says what it does. The negative
+          margins pull its hit area over the card's padding, so a click anywhere
+          along the top of the card folds it.
+        */
         <button
           ref={foldRef}
           type="button"
           aria-expanded={true}
-          aria-label="Fold this note"
+          aria-label={`Fold this note: ${eyebrow}`}
           onClick={onFold}
           className={cn(
-            'text-muted-foreground absolute top-3.5 right-3.5 grid size-8 place-items-center rounded-full',
+            'group/fold -mx-[22px] -mt-[22px] mb-1 flex w-[calc(100%+44px)] items-center gap-3',
+            'rounded-t-lg px-[22px] pt-[18px] pb-2 text-left',
             'transition-colors duration-200 ease-[var(--ease-brand)] hover:bg-[var(--color-pill-hover)]',
-            'hover:text-[var(--color-heading)]',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
             'focus-visible:outline-[var(--color-ring)]'
           )}
         >
-          <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" className="rotate-180" />
+          <Eyebrow className="min-w-0 flex-1">{eyebrow}</Eyebrow>
+          <ChevronDown
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className="text-muted-foreground flex-none rotate-180 group-hover/fold:text-[var(--color-heading)]"
+          />
         </button>
       ) : null}
       {/*
@@ -587,7 +647,7 @@ export function NoteCard({
             </Disclosure>
           ) : null}
 
-          <Disclosure summary="How Lelañea came to this">
+          <Disclosure plain summary="How Lelañea came to this">
             <p>{note.reasoningNote}</p>
             {note.asking ? (
               /*

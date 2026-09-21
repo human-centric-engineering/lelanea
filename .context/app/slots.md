@@ -792,6 +792,10 @@ now say to write the reading **to** them and to make the reasoning a paraphrase
 of what they did with the act named — said, mentioned, noticed, wondered. See
 [`voice.md`](./voice.md#the-instructions-are-where-when-to-note-something-lives-t-72).
 
+**"How Lelañea came to this" is a line of text, not a panel** (owner ruling, t-79):
+a chevron and muted words, and when opened the detail sits beside a plain left
+rule. "Before this" keeps its panel and its purple edge.
+
 ### Colour carries a fact, never decoration
 
 Ten notches under the certainty words, the first N filled, in **green / amber /
@@ -943,8 +947,10 @@ whole row is the control: it opens the full card in place, where correcting and
 "Ask Lelañea about this" work as ever.
 
 **Every note folds and opens by a chevron, in both views (owner ruling).** A row
-carries one pointing down; a card carries one pointing up in its top corner,
-which folds it to its row. The view only sets the default — all open in cards,
+carries one pointing down; a card's whole header — the eyebrow row, run out to
+the card's edges, with a chevron pointing up at its end — is one `<button>`
+that folds it to its row, so a click anywhere along the top of a card closes
+it. The view only sets the default — all open in cards,
 all folded in a list — and a chevron overrides it for that note until the view
 changes. Focus follows the note into its new shape. The first cut had a "Back to
 the list" button on an opened card instead, which read as navigation and only

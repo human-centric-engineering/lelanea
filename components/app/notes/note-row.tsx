@@ -87,7 +87,7 @@ export function NoteRow({ note, heading, onOpen, focusOnMount }: NoteRowProps) {
         size={16}
         strokeWidth={1.8}
         aria-hidden="true"
-        className="text-muted-foreground absolute top-5.5 right-5.5"
+        className="text-muted-foreground absolute top-[19px] right-[22px]"
       />
     </button>
   );

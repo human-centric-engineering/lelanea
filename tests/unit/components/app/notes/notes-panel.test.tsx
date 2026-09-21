@@ -904,7 +904,20 @@ describe('finding your way around', () => {
 
     await userEvent.click(row);
     expect(screen.getAllByRole('button', { name: /fold this note/i })).toHaveLength(4);
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Fold this note');
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^Fold this note/);
+  });
+
+  it('folds a card from anywhere along its header, not only the chevron', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    // The tag is the header's own text; clicking it is clicking the header.
+    await userEvent.click(screen.getByText('life money'));
+
+    const row = screen.getByText('Money is tight this month.').closest('button');
+    expect(row?.getAttribute('aria-expanded')).toBe('false');
+    // One control, one name: the header announces what it does and what it is.
+    expect(screen.getAllByRole('button', { name: /^Fold this note: life work$/ })).toHaveLength(1);
   });
 
   it('draws the page in the order it was answered in while a new sort is out', async () => {
