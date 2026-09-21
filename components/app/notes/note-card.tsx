@@ -130,11 +130,30 @@ const CERTAINTY = {
 
 export type CertaintyBand = keyof typeof CERTAINTY;
 
-/** The stored 1–10 to one of four bands. Out-of-range values clamp rather than throw. */
+/**
+ * The stored 1–10 to one of four bands. Out-of-range values clamp rather than
+ * throw.
+ *
+ * ## The thresholds are hers, not the panel's
+ *
+ * They follow the bands her instructions tell her to WRITE in
+ * (`VOICE_AGENT_SYSTEM_INSTRUCTIONS`; `.context/app/voice.md`): **8–10** when a
+ * person said it plainly about themselves, **5–7** when they clearly meant it
+ * without saying it outright, **1–4** when she inferred it. The first cut here
+ * was 9 / 7 / 4, chosen without reading those — so a plainly-stated 8 showed as
+ * "Fairly sure" in amber, and the panel undersold exactly the readings a person
+ * had been most direct about. Found by `/pre-pr`'s docs-against-code step.
+ *
+ * The display is one band FINER than the capture at the bottom, and that is
+ * deliberate: her "inferred" band splits into *Not certain* (3–4) and *Only a
+ * guess* (1–2), because a 1 and a 4 are different amounts of evidence and the
+ * owner asked for colour that tells them apart. The top two bands map one to
+ * one, which is the part that has to agree.
+ */
 export function certaintyBand(confidence: number): CertaintyBand {
-  if (confidence >= 9) return 'high';
-  if (confidence >= 7) return 'fair';
-  if (confidence >= 4) return 'low';
+  if (confidence >= 8) return 'high';
+  if (confidence >= 5) return 'fair';
+  if (confidence >= 3) return 'low';
   return 'guess';
 }
 

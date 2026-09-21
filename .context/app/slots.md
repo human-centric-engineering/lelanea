@@ -735,10 +735,21 @@ that rule the correction surface would double as an unbounded self-write.
 ### The contradiction is a door (§3.12)
 
 `GET` carries `previous` — the version immediately before the head, or `null`.
-The card shows it in a quiet inset with _"kept, not replaced"_, and deliberately
-not as a banner, a tone or an alert: the app has no opinion about whether
-someone changed their mind, and dressing a second reading as a problem teaches
-people that changing is a fault.
+The card shows it in a **fold**, closed by default, whose head carries the
+previous reading's provenance — _"Before this · Lelañea inferred it, 20
+September at 12:51"_ — so a reader can decide whether to open it without opening
+it. Deliberately not a banner, a tone or an alert: the app has no opinion about
+whether someone changed their mind, and dressing a second reading as a problem
+teaches people that changing is a fault. It is folded rather than always open
+because an open inset put the superseded reading in visual competition with the
+current one, which gets the emphasis backwards.
+
+**Several earlier versions: one is shown, the rest are counted** — _"· 2 older
+readings as well"_ on the fold's head. §3.12 asks for the previous answer beside
+the new one, not a changelog, and a card that unrolled six would bury the
+reading the page is for. The count is `version - 1`: versions are monotonic and
+nothing is deleted, so it needs no query and no API field. A full, expandable
+history is a real history read, which is what `daybreak#156` blocks.
 
 The read for it goes **straight to `framework_slot_value`**, because
 `getSlotHeads()` returns current values only and Daybreak has no history read.
@@ -746,6 +757,59 @@ One query for the whole page (`version - 1` per head, batched), and our case is
 commented on [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156)
 and [`daybreak#162`](https://github.com/human-centric-engineering/daybreak/issues/162).
 Delete `readPreviousVersions()` when one lands.
+
+### The register — owner rulings, 21 September 2026
+
+Four rules, each from a screenshot of the running page, and each easy to undo
+by someone reading the prototype or the persona doc instead of this.
+
+- **Lelañea by name, never "she" or "her".** A panel that pronouns her
+  throughout reads as somebody else describing her to you, and this is the one
+  surface where the reader needs to know exactly who is making each claim. (The
+  admin surfaces have the opposite rule — "the AI" — for the opposite reason.)
+- **The reader is "you", never "they".** Which is why the taxonomy's own
+  `description` — third person, written for a model — is not the card's head.
+  It is quoted inside "How Lelañea came to this" as _what Lelañea was looking
+  for_, where being third person is honest rather than the panel addressing the
+  reader as "this person". The slug, humanised, is the card's tag instead.
+- **Certainty is humble at every rung** — _Confident · Fairly sure · Not certain
+  · Only a guess_. The top rung said "As certain as it gets", which the owner
+  read as arrogant, and it was: the scale's ceiling is her judgement, not a fact.
+- **The bands are hers.** **8–10 / 5–7 / 3–4 / 1–2**, following the bands her
+  instructions tell her to write in (see [`voice.md`](./voice.md)), with her
+  "inferred" band split in two for display. The first cut used 9 / 7 / 4 and
+  showed a plainly-stated 8 as "Fairly sure" — found by `/pre-pr`'s
+  docs-against-code step, which is the only reason it did not ship.
+
+**And the same register one layer down, in what she writes.** A reading and its
+reasoning note are read back by the person they are about, so her instructions
+now say to write the reading **to** them and to make the reasoning a paraphrase
+of what they did with the act named — said, mentioned, noticed, wondered. See
+[`voice.md`](./voice.md#the-instructions-are-where-when-to-note-something-lives-t-72).
+
+### Colour carries a fact, never decoration
+
+Ten notches under the certainty words, the first N filled, in **green / amber /
+purple / grey** by band — deliberately not green / amber / red, because red is
+this palette's error hue and an uncertain reading is not an error. The bar is
+`aria-hidden` and the words beside it say the same thing (WCAG 1.4.1), with a
+test that the four bands keep four distinct words, since that is what the hidden
+attribute relies on. The superseded fold takes the reflective purple as a left
+edge; the Art. 9 card takes `Banner`'s info wash, because it is the one card that
+says something about the record rather than about the person.
+
+### Layout: the page is a column, the card is two
+
+`View` gains an opt-in `column` (see [`shell.md`](./shell.md#adding-a-view)) that
+centres the whole `<main>` at 54rem, so the head and the cards share one axis.
+Inside each card the reading takes the main track and certainty, source and date
+take an 11rem aside — they were one interpuncted sentence under the note because
+there was nowhere else to put them. The split is a **container query**, the
+repo's first: the card's width is set by the workspace pane, which a reader
+drags, so a viewport breakpoint would split the columns on a 1400px window while
+the pane was 320px wide. Both folds share one component and one `max-w-[27rem]`,
+short of the reading, so they read as subordinate to it and cannot go ragged
+against each other.
 
 ### Two cross-pane channels, both on `ShellLayoutProvider`
 

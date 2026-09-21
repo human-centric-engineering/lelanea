@@ -185,8 +185,12 @@ afterEach(() => {
 });
 
 describe('how sure Lelañea is', () => {
-  it('bands the stored 1-10, and clamps rather than throwing at the edges', () => {
-    expect([10, 9, 8, 7, 6, 4, 3, 1].map(certaintyBand)).toEqual([
+  it('bands the stored 1-10 on HER bands, and clamps rather than throwing', () => {
+    // 8 is where "said it plainly about themselves" starts in her instructions
+    // (`.context/app/voice.md`), so an 8 must read as Confident. The first cut
+    // put it at 9 and undersold exactly the readings a person was most direct
+    // about. Each boundary is asserted from both sides.
+    expect([10, 8, 7, 5, 4, 3, 2, 1].map(certaintyBand)).toEqual([
       'high',
       'high',
       'fair',
@@ -206,8 +210,8 @@ describe('how sure Lelañea is', () => {
     // The bar is `aria-hidden` precisely because this line carries the fact.
     // If the words ever stop tracking the bands, the colour becomes the only
     // channel — which is the failure the hidden attribute would then hide.
-    expect(new Set([10, 8, 5, 2].map(confidenceWords)).size).toBe(4);
-    expect(confidenceWords(6)).toBe('Not certain');
+    expect(new Set([10, 6, 4, 1].map(confidenceWords)).size).toBe(4);
+    expect(confidenceWords(4)).toBe('Not certain');
   });
 });
 
@@ -226,7 +230,10 @@ describe('what the panel shows', () => {
     // §3.19: how it was known, how sure, and when — the three facts that now
     // live in the aside, each on its own line rather than run together.
     expect(screen.getByText('Lelañea inferred it')).toBeTruthy();
-    expect(screen.getByText('Not certain')).toBeTruthy();
+    // A 6 is "clearly meant without saying it outright" in her own bands, so
+    // it reads Fairly sure — not the Not certain the first cut of the bands
+    // gave it.
+    expect(screen.getByText('Fairly sure')).toBeTruthy();
     expect(screen.getByText(/6 of 10/)).toBeTruthy();
     expect(screen.getByText(/21 September/)).toBeTruthy();
     expect(screen.getByText(/two things said in passing/)).toBeTruthy();

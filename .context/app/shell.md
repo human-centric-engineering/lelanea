@@ -255,9 +255,13 @@ muted suffix beside a link that is already correct, not the page's heading.
    `<View>`.
 2. **`metadata.title`** matching the nav item's own words, as a plain string — a
    `{ absolute }` or `{ template }` object defeats the layout's `%s`.
-3. **`<View eyebrow title lede? note?>`** from `components/app/views/view.tsx`.
+3. **`<View eyebrow title lede? note? column?>`** from `components/app/views/view.tsx`.
    It owns the `<main>` and the `<h1>`; the shell has neither, so a reader had no
    landmark to skip to and no heading naming the page until it existed.
+   **`column`** centres the whole `<main>` at 54rem — head included, so the page
+   keeps one axis. Opt-in and off by default: it is for a view whose content has
+   a measure of its own (`/app/notes` is the first), and wrong for a stack of
+   full-width panels like settings, which wants the width.
 4. **A `VIEW_TONES` row**, or the band stays transparent and it looks unstyled.
 5. **`<PlaceholderCard>`** for anything not built, rather than new markup — see
    D6 below.
