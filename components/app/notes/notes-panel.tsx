@@ -34,6 +34,14 @@ import { cn } from '@/lib/utils';
  * first read is the mount rather than a reaction to the counter, a mount is
  * never counted as a refresh.
  *
+ * ## The register: Lelañea by name, and the reader as "you"
+ *
+ * Owner corrections, 21 September 2026. Nothing on this surface says "she" or
+ * "her" where a name would do, and nothing calls the reader "they". The one
+ * third-person wording that survives is the taxonomy's own `description`, shown
+ * inside a card's disclosure as a quotation of what Lelañea was looking for —
+ * see `note-card.tsx`, where both rules and their reasons are set out.
+ *
  * ## An in-turn refresh must not blank the page
  *
  * The fetch keeps the notes it already has on screen while it runs, and a
@@ -130,8 +138,8 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
       {unreadable ? (
         <Banner tone="warning" lead={notes ? 'Not refreshed.' : 'Not readable.'}>
           {notes
-            ? 'Her notes are as they were a moment ago — the last read did not get through.'
-            : 'Her notes could not be read just now. Nothing has been lost; try again shortly.'}
+            ? 'This page is as it stood a moment ago — the last read did not get through.'
+            : 'Lelañea’s notes could not be read just now. Nothing has been lost; try again shortly.'}
         </Banner>
       ) : null}
 
@@ -142,9 +150,9 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           feature rather than as a new account.
         */
         <p className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.7]">
-          She has written nothing down yet. As you talk, anything she takes to be worth remembering
-          appears here while you are still in the conversation — with where it came from, and how
-          sure she is.
+          Lelañea has written nothing down yet. As you talk, anything worth remembering appears here
+          while you are still in the conversation — with where it came from, and how sure Lelañea is
+          of it.
         </p>
       ) : null}
 
@@ -165,8 +173,8 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
 
       {improvised.length > 0 ? (
         <Group
-          title="Her own headings"
-          note="Nothing she was asked to look for covered these, so she chose the heading herself."
+          title="Lelañea’s own headings"
+          note="Nothing Lelañea was asked to look for covered these, so the headings are Lelañea’s own."
         >
           {improvised.map((note) => (
             <li key={note.slotSlug}>
@@ -219,7 +227,7 @@ function Skeleton() {
   return (
     <div className="flex flex-col gap-2.5">
       <p className="sr-only" role="status">
-        Reading her notes.
+        Reading Lelañea’s notes.
       </p>
       {[0, 1, 2].map((row) => (
         <div

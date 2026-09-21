@@ -73,7 +73,7 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   {
     href: NOTES_PAGE,
     label: 'Lelañea’s notes',
-    hint: 'What she has written down, and why',
+    hint: 'What is written down about you, and why',
     icon: NotebookPen,
   },
   {

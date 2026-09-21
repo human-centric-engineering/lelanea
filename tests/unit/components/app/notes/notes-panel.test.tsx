@@ -25,6 +25,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { certaintyBand, confidenceWords } from '@/components/app/notes/note-card';
 import { NotesPanel } from '@/components/app/notes/notes-panel';
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import type { Note, NotesView } from '@/lib/app/slots/notes-view';
@@ -183,16 +184,55 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('how sure Lelañea is', () => {
+  it('bands the stored 1-10, and clamps rather than throwing at the edges', () => {
+    expect([10, 9, 8, 7, 6, 4, 3, 1].map(certaintyBand)).toEqual([
+      'high',
+      'high',
+      'fair',
+      'fair',
+      'low',
+      'low',
+      'guess',
+      'guess',
+    ]);
+    // A free-form column upstream could hand us anything; the bar must not
+    // decide there are eleven notches or minus one.
+    expect(certaintyBand(99)).toBe('high');
+    expect(certaintyBand(0)).toBe('guess');
+  });
+
+  it('says the same thing in words as the bar says in colour (WCAG 1.4.1)', () => {
+    // The bar is `aria-hidden` precisely because this line carries the fact.
+    // If the words ever stop tracking the bands, the colour becomes the only
+    // channel — which is the failure the hidden attribute would then hide.
+    expect(new Set([10, 8, 5, 2].map(confidenceWords)).size).toBe(4);
+    expect(confidenceWords(6)).toBe('Not certain');
+  });
+});
+
 describe('what the panel shows', () => {
-  it('carries the reading, what she was looking for, and how she knows', async () => {
+  it('carries the reading, how Lelañea knows, and her wording behind the disclosure', async () => {
     renderBoth();
 
     expect(await screen.findByText(/Work is going badly/)).toBeTruthy();
-    expect(screen.getByText('How work stands for this person right now.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'Life areas' })).toBeTruthy();
-    // §3.19: how it was known, and how sure she is — in words and in the number.
-    expect(screen.getByText(/she inferred it/)).toBeTruthy();
-    expect(screen.getByText(/6 of\s*10/)).toBeTruthy();
+    // The slug is the card's tag; the taxonomy's own third-person wording is
+    // quoted inside the disclosure, where it is plainly Lelañea's words rather
+    // than the panel calling the reader "this person".
+    expect(screen.getByText('life work')).toBeTruthy();
+    expect(screen.getByText(/What Lelañea was looking for/)).toBeTruthy();
+    expect(screen.getByText(/How work stands for this person right now/)).toBeTruthy();
+    // §3.19: how it was known, and how sure — in words and in the number. The
+    // meta line interpolates three fragments, so it is asserted whole rather
+    // than by a text matcher that would not see across the element boundaries.
+    const meta = screen.getByText(
+      (_, element) =>
+        element?.tagName === 'P' && /Lelañea inferred it/.test(element.textContent ?? '')
+    );
+    expect(meta.textContent?.replace(/\s+/g, ' ')).toMatch(
+      /Lelañea inferred it · Not certain \(6 of 10\) · 21 September/
+    );
     expect(screen.getByText(/two things said in passing/)).toBeTruthy();
   });
 
@@ -241,10 +281,10 @@ describe('what the panel shows', () => {
     expect(screen.queryByText(/redacted/)).toBeNull();
     // The guard's remedy is still on the card (`HB10`).
     expect(screen.queryByRole('button', { name: /not right/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /ask her about this/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ask lela.*about this/i })).toBeTruthy();
   });
 
-  it('keeps a slug she invented under a heading of its own', async () => {
+  it('keeps a slug Lelañea invented under a heading of its own', async () => {
     world.reads = [
       view(
         [note()],
@@ -259,8 +299,9 @@ describe('what the panel shows', () => {
     ];
     renderBoth();
 
-    const section = (await screen.findByRole('heading', { level: 2, name: 'Her own headings' }))
-      .parentElement as HTMLElement;
+    const section = (
+      await screen.findByRole('heading', { level: 2, name: 'Lelañea’s own headings' })
+    ).parentElement as HTMLElement;
     expect(within(section).getByText('Has not called his brother.')).toBeTruthy();
     expect(within(section).queryByText(/Work is going badly/)).toBeNull();
   });
@@ -269,7 +310,7 @@ describe('what the panel shows', () => {
     world.reads = [view([])];
     renderBoth();
 
-    expect(await screen.findByText(/She has written nothing down yet/)).toBeTruthy();
+    expect(await screen.findByText(/Lelañea has written nothing down yet/)).toBeTruthy();
   });
 });
 
@@ -328,7 +369,7 @@ describe('answering back', () => {
     renderBoth();
     await screen.findByText(/Work is going badly/);
 
-    await userEvent.click(screen.getByRole('button', { name: /ask her about this/i }));
+    await userEvent.click(screen.getByRole('button', { name: /ask lela.*about this/i }));
 
     await waitFor(() =>
       expect((composer() as HTMLTextAreaElement).value).toContain('Work is going badly')
@@ -428,7 +469,7 @@ describe('when the read does not get through', () => {
       world.turn!.close();
     });
 
-    expect(await screen.findByText(/as they were a moment ago/)).toBeTruthy();
+    expect(await screen.findByText(/as it stood a moment ago/)).toBeTruthy();
     expect(screen.getByText(/Work is going badly/)).toBeTruthy();
   });
 });

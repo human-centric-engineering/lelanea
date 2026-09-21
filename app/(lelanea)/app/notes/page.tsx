@@ -37,8 +37,8 @@ export default async function NotesPage() {
     <View
       eyebrow="lelañea’s notes"
       title="What Lelañea has written down about you"
-      lede="Everything she is holding, where each of it came from, and how sure she is."
-      note="These are her readings, not your words back — she can be wrong, and nothing here is fixed. Correct one and both versions are kept, or ask her about it and take it up in the conversation."
+      lede="Everything Lelañea holds about you, where each of it came from, and how certain it is."
+      note="These are Lelañea’s readings, not your words back. She can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation."
     >
       <NotesPanel />
     </View>

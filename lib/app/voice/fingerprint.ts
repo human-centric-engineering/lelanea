@@ -164,6 +164,33 @@ export function readFingerprintVersion(prompt: string): string | null {
  * over 50 authored slots covering exactly that. An instruction about a list the
  * model cannot see is not a weaker instruction; it is no instruction.
  *
+ * ## Two clauses about register, and they are the panel's doing (t-73)
+ *
+ * A reading and its reasoning note are both **read back by the person they are
+ * about**, on `/app/notes`. Nothing here said so until that surface existed, and
+ * what she wrote in the meantime was third-person prose aimed at a future reader
+ * of a file: *"His brother has not spoken to him since their father died."*
+ * Shown to the person whose brother it is, that is not a small register error —
+ * it reads as a dossier rather than as something she understood.
+ *
+ * So: the reading is written **to** them, and the reasoning note is a
+ * **paraphrase of what they did**, with the act named. Said, mentioned,
+ * noticed, remembered, suggested, wondered are different things, and which one
+ * it was is exactly what makes a reading checkable by the person checking it —
+ * "you mentioned it in passing" invites a different answer from "you said it
+ * plainly". Owner ruling, 21 September 2026, from a screenshot of the panel.
+ *
+ * **Second person rather than their name**, which the ruling illustrated with
+ * one ("John said…"). She does not have it: nothing in her context carries the
+ * account's name, and a name she picked up mid-conversation is a reading like
+ * any other and can be wrong. "You" needs no such luck, and it is the rule the
+ * panel already follows everywhere else.
+ *
+ * **This moves the voice golden set.** These clauses are in the agent's system
+ * instructions, so the comparison's baseline shifts with them; that is expected
+ * rather than a regression, and the run after this lands is the one to read
+ * carefully.
+ *
  * ## The last clause is §8.6, and it is a safety clause
  *
  * She now holds a tool that writes. Text a person types is **data**, and a
@@ -185,6 +212,8 @@ In a turn:
 What to record, and what to say about it:
 - What they are living through, what they want, what they keep running into, how they want to be met. Not passing detail, and not what they asked you to do just now.
 - Record it as it comes up. Do not save it all until the end of the turn, and do not repeat a reading you have already recorded in this conversation unless it has actually changed.
+- Write the reading TO them, in the second person: "Your brother has not spoken to you since your father died", never "his brother" or "the person's brother". They read these back, in their own words as far as you can manage, and a note written about them in the third person reads as a file somebody is keeping.
+- Write the note about how you know as a paraphrase of what they actually did, naming the act: "You said it plainly, unprompted", "You mentioned it while talking about something else", "You came back to it three times without naming it", "You wondered aloud whether it was true". Said, mentioned, noticed, remembered, suggested, asserted, wondered — they are different things and the difference is what makes the reading checkable. Describe what they did, not what you concluded; the reading above is the conclusion.
 - Say how sure you are, honestly: 8 to 10 when they said it plainly about themselves, 5 to 7 when they clearly meant it without saying it outright, 1 to 4 when you are inferring it from something they said in passing. A low reading is worth noting — it is how you know to come back to it — but treat it as unsettled until they confirm it, and never repeat it back as though they had told you.
 - Say where it came from: "direct" when you asked and they answered, "unprompted" when they offered it, "emerged_naturally" when it came out of the conversation, "built_across_turns" when it took several exchanges to see, "inferred" when you worked it out rather than heard it.
 - You are given the list of what can already be recorded, with what each one means. Use a name from that list whenever one fits, even loosely. Inventing a new name is the exception: it needs something that genuinely matters to this person and a real gap in the list, not just an imperfect fit. When you do invent one, make it a short plain name for the thing itself — never a name that quotes them, labels them, or describes them as a person.

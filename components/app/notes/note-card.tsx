@@ -35,10 +35,29 @@ import { cn } from '@/lib/utils';
  * it — a retired slot (she is no longer asking) and an Art. 9 slot (the words
  * were never stored, so there is nothing to correct and a correction would put
  * them at rest) both come back false, with the route refusing the same two
- * cases if anything reached it anyway. **Ask her about this is offered on every
+ * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
  * card**, including those, because it is the door that still works: `HB10` —
  * the guard ships with its remedy.
  */
+
+/**
+ * An OUTLINED pill, because a bare one did not read as a control.
+ *
+ * `Button variant="ghost"` carries no fill and no edge at rest, so on the
+ * card's own ground the two controls looked like two run-on labels under the
+ * note — the owner's first correction, from a screenshot. The design's
+ * `.btn.btn-sm.btn-ghost` is outlined, and `workspace.tsx`'s "Return to the
+ * conversation" is the same shape for the same reason: an affordance a reader
+ * has to guess at is not one.
+ *
+ * The border is added here rather than in `components/app/ui/button.tsx`,
+ * deliberately. `ghost` is shared, and giving every ghost button in the app an
+ * edge is a change to surfaces this task never looked at — a fill-less variant
+ * is the right thing inside a toolbar or beside a filled primary, which is
+ * where the other call sites use it. Two low-commitment actions standing alone
+ * on a card is the case that needs the edge.
+ */
+const PILL = 'border border-[var(--color-border)]';
 export interface NoteCardProps {
   note: Note;
   /** Hand a question to the composer and bring the conversation forward. */
@@ -53,14 +72,86 @@ export interface NoteCardProps {
  * The stored 1–10 in words, with the number kept beside it.
  *
  * Both halves on purpose. The words are what a person actually reads; the
- * number is what she stored, and hiding it would make the panel a paraphrase of
+ * number is what was stored, and hiding it would make the panel a paraphrase of
  * the record rather than a view of it — which is the thing §3.19 is about.
+ *
+ * Adjectival rather than a clause: the meta line already opens with who made
+ * the reading, so "Lelañea inferred it · Lelañea is not certain" says her name
+ * twice in nine words. A capitalised fragment reads as the second of three
+ * facts, which is what it is.
  */
 export function confidenceWords(confidence: number): string {
-  if (confidence >= 9) return 'she is as sure as she gets';
-  if (confidence >= 7) return 'she is fairly sure';
-  if (confidence >= 4) return 'she is not certain';
-  return 'she is guessing';
+  return CERTAINTY[certaintyBand(confidence)].words;
+}
+
+/**
+ * Four bands, each with the hue it is read in — the palette's own functional
+ * colours, never a new one (§6.2 names five and the page uses three of them).
+ *
+ * ## The hue carries the band; it never carries the meaning alone
+ *
+ * WCAG 1.4.1. The same fact is in the words beside the bar and in the number
+ * beside those, so a reader who cannot tell the green from the amber loses
+ * nothing — the colour is the thing that makes the page scannable, not the
+ * thing that makes it legible. The bar is `aria-hidden` for the same reason:
+ * it repeats what the sentence next to it already says, and announcing "meter,
+ * 6 of 10" after "Not certain (6 of 10)" is noise.
+ *
+ * ## Why these four hues, in this order
+ *
+ * Green → amber → purple → grey, deliberately **not** green → amber → red. Red
+ * in this palette is the destructive/error hue, and a low reading is not an
+ * error: §3.12 says an uncertain note is worth having precisely so it can be
+ * come back to, and painting it in the colour the app uses for things that have
+ * gone wrong teaches the opposite. Purple is the palette's reflective hue (it
+ * carries Settings' tone) and grey says "barely there" without saying "bad".
+ *
+ * The bar is a SURFACE, so it takes the raw hue; the words beside it stay
+ * `--color-muted-foreground`, because a raw status hue cannot carry 12px type
+ * on this ground — that is `shell.md`'s rule and the reason `TIER_INKS` exists.
+ * The wash behind the bar is the matching `-bg` token, which is what makes the
+ * unfilled part of it visible at all.
+ */
+const CERTAINTY = {
+  high: { words: 'As certain as it gets', bar: 'var(--color-status-green)' },
+  fair: { words: 'Fairly sure', bar: 'var(--color-status-yellow)' },
+  low: { words: 'Not certain', bar: 'var(--color-status-purple)' },
+  guess: { words: 'Guessing', bar: 'var(--color-muted-foreground)' },
+} as const;
+
+export type CertaintyBand = keyof typeof CERTAINTY;
+
+/** The stored 1–10 to one of four bands. Out-of-range values clamp rather than throw. */
+export function certaintyBand(confidence: number): CertaintyBand {
+  if (confidence >= 9) return 'high';
+  if (confidence >= 7) return 'fair';
+  if (confidence >= 4) return 'low';
+  return 'guess';
+}
+
+/**
+ * Ten notches, the first `confidence` of them filled — a measure, not a meter.
+ *
+ * Notches rather than a continuous bar because the value is an integer out of
+ * ten and a smooth fill implies a precision the scale does not have. She stored
+ * "6", not "63%".
+ */
+function CertaintyBar({ confidence }: { confidence: number }) {
+  const filled = Math.max(0, Math.min(10, Math.round(confidence)));
+  const { bar } = CERTAINTY[certaintyBand(confidence)];
+  return (
+    <span aria-hidden="true" className="mt-2.5 flex items-center gap-[3px]">
+      {Array.from({ length: 10 }, (_, notch) => (
+        <span
+          key={notch}
+          className="h-[3px] w-[9px] rounded-full"
+          style={{
+            backgroundColor: notch < filled ? bar : 'var(--color-divider)',
+          }}
+        />
+      ))}
+    </span>
+  );
 }
 
 /**
@@ -95,25 +186,28 @@ function excerpt(text: string): string {
  * The words handed to the composer, written as the person's opening rather than
  * as a command — they are about to send it, and it has to sound like them.
  *
- * A withheld note quotes the **question** instead of the value, because the
- * value is a sentinel: quoting it back would put `<redacted: special_category>`
- * in someone's own message.
+ * A withheld note quotes **nothing**, because the value is a sentinel and the
+ * question is the taxonomy's third-person wording: one would put
+ * `<redacted: special_category>` in someone's own message and the other would
+ * put "this person" in it. She has the conversation and knows what she asked.
  */
 export function askText(note: Note): string {
   if (note.withheld) {
-    const about = note.asking ? ` — “${excerpt(note.asking)}”` : '';
-    return `There is something you noted about me but kept no record of${about}. Can we talk about that?`;
+    return 'There is something you noted about me but kept no record of. Can we talk about that?';
   }
   return `You wrote down: “${excerpt(note.value)}”. Can we talk about that?`;
 }
 
-/** The muted line under a value: how she knows, how sure, and when. */
+/** The certainty measure, and the muted line under it: how she knows, how sure, when. */
 function Meta({ note }: { note: Note }) {
   return (
-    <p className="text-muted-foreground mt-2.5 text-[12.5px] leading-[1.6]">
-      {noteSourceWords(note.sourceType)} · {confidenceWords(note.confidence)} ({note.confidence} of
-      10) · {formatWhen(note.capturedAt)}
-    </p>
+    <>
+      <CertaintyBar confidence={note.confidence} />
+      <p className="text-muted-foreground mt-1.5 text-[12.5px] leading-[1.6]">
+        {noteSourceWords(note.sourceType)} · {confidenceWords(note.confidence)} ({note.confidence}{' '}
+        of 10) · {formatWhen(note.capturedAt)}
+      </p>
+    </>
   );
 }
 
@@ -148,26 +242,48 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
     }
   };
 
+  /*
+   * The slug as a tag, in the eyebrow's lower-case tracked register.
+   *
+   * The taxonomy's `description` used to sit here, and it is written for a
+   * MODEL: "how their body, energy and sleep stands for this person right now".
+   * On a panel read by the person it is about, that is the app calling them
+   * "they" — the owner's second correction. It has moved into the disclosure as
+   * a quotation of her wording, where being third-person is honest rather than
+   * jarring, and its place is taken by the slug, which is short, neutral and
+   * already the thing the note is filed under.
+   */
+  const tag = note.slotSlug.replace(/_/g, ' ');
+
   // No `aria-label` on the card. `Card` is a plain `<div>`, and an `aria-label`
   // on an element with no role is ignored by assistive technology — a label
   // nobody hears is worse than none, because it reads in source as if the card
   // announces itself. The panel renders each card in a list item under a group
   // heading, which is what places it.
   return (
-    <Card className="p-[22px]" eyebrow={note.retired ? 'no longer asked about' : undefined}>
-      {note.asking ? (
-        <p className="text-muted-foreground mb-2 text-[12.5px] leading-[1.6]">{note.asking}</p>
-      ) : null}
-
+    <Card className="p-[22px]" eyebrow={note.retired ? `${tag} · no longer asked about` : tag}>
       {note.withheld ? (
         /*
           The stored value is a sentinel, so the card says what actually
           happened instead of printing it. This is the classification doing its
           job — `.context/app/slots.md`, "Capture" — and reading it as a failure
           is the misunderstanding this sentence exists to prevent.
+
+          It carries the info wash for that reason: it is the one card that says
+          something about the RECORD rather than about the person, and reading
+          as a statement rather than as a reading is the whole point of it. The
+          hue is `Banner`'s `info` pairing — wash and edge from the same trio,
+          measured there — and the words on it stay `--color-heading`, which is
+          darker than the ink that pairing normally uses.
         */
-        <p className="text-[15px] leading-[1.6] text-[var(--color-heading)]">
-          She noticed something here and deliberately kept no record of what you said. Health,
+        <p
+          className={cn(
+            'rounded-md border-l-2 py-2 pl-3.5 text-[15px] leading-[1.6]',
+            'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
+            'text-[var(--color-heading)]'
+          )}
+        >
+          Lelañea noticed something here and deliberately kept no record of what you said. Health,
           feeling and belief are left out of the written record.
         </p>
       ) : (
@@ -186,9 +302,19 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             'focus-visible:outline-[var(--color-ring)]'
           )}
         >
-          How she came to this
+          How Lelañea came to this
         </summary>
         <p className="text-muted-foreground mt-2 text-[13px] leading-[1.6]">{note.reasoningNote}</p>
+        {note.asking ? (
+          /*
+            Her wording, quoted. Third person inside the quotation marks is the
+            taxonomy speaking to a model, which is what it is — the panel is not
+            addressing the reader as "this person".
+          */
+          <p className="text-muted-foreground mt-1.5 text-[13px] leading-[1.6]">
+            What Lelañea was looking for: “{note.asking}”
+          </p>
+        ) : null}
         {note.conversationId ? (
           /*
             The id is not shown and is not a link. There is no member-facing
@@ -204,14 +330,25 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
       </details>
 
       {note.previous ? (
+        /*
+          The reflective hue, and NOT the red one. A superseded reading is not a
+          mistake that was corrected — §3.12 says a contradiction is a door —
+          and the palette's red is what this app uses for things that have gone
+          wrong. Purple carries Settings' tone for the same reason: it marks
+          something to sit with. Left edge only, so the inset reads as an aside
+          rather than as a second card.
+        */
         <div
-          className={cn('mt-3.5 rounded-md border-l-2 border-[var(--color-divider)] py-1 pl-3.5')}
+          className={cn(
+            'mt-3.5 rounded-md border-l-2 py-1.5 pl-3.5',
+            'border-[var(--color-status-purple)] bg-[var(--color-status-purple-bg)]'
+          )}
         >
           <Eyebrow as="p" className="block">
             before this
           </Eyebrow>
           <p className="text-muted-foreground mt-1 text-[13.5px] leading-[1.6] whitespace-pre-line">
-            {note.previous.withheld ? 'Something she kept no record of.' : note.previous.value}
+            {note.previous.withheld ? 'Something Lelañea kept no record of.' : note.previous.value}
           </p>
           <p className="text-muted-foreground mt-1.5 text-[12.5px]">
             {noteSourceWords(note.previous.sourceType)} · {formatWhen(note.previous.capturedAt)} ·
@@ -237,8 +374,8 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             )}
           />
           <p className="text-muted-foreground mt-2 text-[12.5px] leading-[1.6]">
-            What she wrote is kept either way — your words go in beside hers as the current reading,
-            and hers stays underneath.
+            What Lelañea wrote is kept either way — your words go in beside it as the current
+            reading, and Lelañea’s stays underneath.
           </p>
           {refusal ? (
             <Banner tone="error" className="mt-2.5" lead="Not saved.">
@@ -256,6 +393,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             <Button
               size="sm"
               variant="ghost"
+              className={PILL}
               disabled={saving}
               onClick={() => {
                 setEditing(false);
@@ -273,6 +411,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             <Button
               size="sm"
               variant="ghost"
+              className={PILL}
               onClick={() => {
                 // From the note as it stands NOW, not from whatever this card
                 // held when it mounted. A correction re-reads the page, so the
@@ -285,8 +424,8 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
               That’s not right
             </Button>
           ) : null}
-          <Button size="sm" variant="ghost" onClick={() => onAsk(askText(note))}>
-            Ask her about this
+          <Button size="sm" variant="ghost" className={PILL} onClick={() => onAsk(askText(note))}>
+            Ask Lelañea about this
           </Button>
         </div>
       )}

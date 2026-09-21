@@ -34,15 +34,36 @@
  */
 export const SLOT_WRITE_CAPABILITY = 'fill_slot';
 
-/** How a reading was made, in her own register rather than the stored classifier. */
+/**
+ * How a reading was made, in plain words rather than the stored classifier.
+ *
+ * ## Two rules of register, both owner corrections (21 September 2026)
+ *
+ * **Lelañea is named, never pronouned.** Every line says *Lelañea*, not *she*
+ * or *her*. The persona is hers and the product uses it, but a panel that calls
+ * her "she" throughout starts to read as though somebody else were describing
+ * her to you — and this is the one surface where the reader needs to know
+ * exactly who is making each claim. (The admin surfaces have the opposite rule
+ * and the opposite reason: there she is "the AI", because an operator is
+ * looking at configuration.)
+ *
+ * **And the reader is "you", never "they".** These lines are read by the person
+ * they are about. The taxonomy's own `description` is third-person because its
+ * audience is a model, which is why the card shows it as a quotation inside the
+ * disclosure rather than as the panel speaking.
+ *
+ * Each value stands alone as a **capitalised fragment**: the card's meta line
+ * joins three of them with `·`, so lower-case openings read as one sentence
+ * broken into pieces rather than as three separate facts.
+ */
 export const NOTE_SOURCES: Readonly<Record<string, string>> = {
-  direct: 'you told her directly',
-  unprompted: 'you brought it up yourself',
-  emerged_naturally: 'it came up in passing',
-  built_across_turns: 'she put it together over several things you said',
-  inferred: 'she inferred it',
-  user_confirmed: 'you corrected this yourself',
-  synthesised: 'she drew it together from other things she holds',
+  direct: 'You told Lelañea directly',
+  unprompted: 'You brought it up yourself',
+  emerged_naturally: 'It came up in passing',
+  built_across_turns: 'Lelañea put it together over several things you said',
+  inferred: 'Lelañea inferred it',
+  user_confirmed: 'You corrected this yourself',
+  synthesised: 'Lelañea drew it together from other things already noted',
 };
 
 /**
@@ -55,7 +76,12 @@ export const NOTE_SOURCES: Readonly<Record<string, string>> = {
  * still more honest to a member than a shrug.
  */
 export function noteSourceWords(sourceType: string): string {
-  return NOTE_SOURCES[sourceType] ?? sourceType.replace(/_/g, ' ');
+  const known = NOTE_SOURCES[sourceType];
+  if (known) return known;
+  // Capitalised like the rest, so an unrecognised classifier still reads as a
+  // fragment of the meta line rather than as the one lower-case thing on it.
+  const words = sourceType.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** A version of a note that is no longer the current one. */
