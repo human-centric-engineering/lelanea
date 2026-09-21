@@ -149,6 +149,63 @@ beforeEach(() => {
   framework = vi.spyOn(FillSlotCapability.prototype, 'execute').mockResolvedValue(wroteSilently(1));
 });
 
+describe('the redaction it inherits', () => {
+  /**
+   * `/test-coverage` found this function had never been called by any test —
+   * which is the wrong state for the one method on this class that exists to
+   * satisfy a PII check. The dispatcher refuses a `processesPii` capability
+   * whose redactor is merely inherited, and the refusal is SILENT, so the
+   * defaults-test registration row catches its absence. Nothing caught a wrong
+   * implementation of it. These assert the policy still applies through the
+   * delegation, against the real parent rather than a spy.
+   */
+  const ARGS_FOR_REDACTION = {
+    slotSlug: 'primary_goal',
+    value: 'Wants to leave the job by spring',
+    confidence: 9,
+    reasoningNote: 'They said so plainly: "wants to leave the job by spring".',
+    sourceType: 'unprompted',
+  } as never;
+
+  it('masks the value and the reasoning note, which quote the person', () => {
+    const { args } = new GuardedFillSlotCapability().redactProvenance(ARGS_FOR_REDACTION, wrote(1));
+
+    const safe = args as Record<string, unknown>;
+    expect(safe.value).not.toBe('Wants to leave the job by spring');
+    expect(String(safe.reasoningNote)).not.toContain('leave the job');
+    // The shape an auditor still needs is kept.
+    expect(safe.confidence).toBe(9);
+    expect(safe.sourceType).toBe('unprompted');
+  });
+
+  it('keeps a vetted targeted slug, which is a slug an admin authored', () => {
+    const { args } = new GuardedFillSlotCapability().redactProvenance(ARGS_FOR_REDACTION, wrote(1));
+
+    expect((args as Record<string, unknown>).slotSlug).toBe('primary_goal');
+  });
+
+  it('masks a MINTED slug, because the model wrote it out of what the person said', () => {
+    // The framework's own example of the hazard is a slug like
+    // `recently_divorced`. Both directions are asserted, over the same args, so
+    // this cannot pass by masking everything unconditionally.
+    const { args } = new GuardedFillSlotCapability().redactProvenance(
+      ARGS_FOR_REDACTION,
+      wrote(1, true)
+    );
+
+    expect((args as Record<string, unknown>).slotSlug).not.toBe('primary_goal');
+  });
+
+  it('masks the slug on a failure too, where a mint cannot be told from a targeted write', () => {
+    const { args } = new GuardedFillSlotCapability().redactProvenance(ARGS_FOR_REDACTION, {
+      success: false,
+      error: { code: 'execution_error', message: 'boom' },
+    });
+
+    expect((args as Record<string, unknown>).slotSlug).not.toBe('primary_goal');
+  });
+});
+
 describe('the turn id', () => {
   it('is read out of the cost-attribution carrier the turn seam fills', () => {
     expect(turnIdFrom(context())).toBe(TURN);

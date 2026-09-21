@@ -169,4 +169,15 @@ describe('when the taxonomy cannot be read', () => {
     await expect(slotVocabulary()).resolves.toBe('');
     expect(logger.warn).toHaveBeenCalled();
   });
+
+  it('degrades the same way when what was thrown is not an Error', async () => {
+    // A rejection carrying a string or a Prisma error object still has to
+    // degrade rather than throw — the branch that formats it for the log is the
+    // one place this could itself throw on the way out. Found by
+    // /test-coverage, which had it as the only uncovered branch in the file.
+    loadGlobalSlotDefinitions.mockRejectedValue('the pool is gone');
+
+    await expect(slotVocabulary()).resolves.toBe('');
+    expect(logger.warn).toHaveBeenCalled();
+  });
 });
