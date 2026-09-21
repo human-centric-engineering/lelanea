@@ -149,18 +149,18 @@ the authored shape drops to `undefined` and the frame still arrives, because
 
 ## What the pane does with each frame
 
-| Frame                      | Then                                                                                                                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `start`                    | the draft clears — the words leave the box only once the server has them (§8.1)                                                                                                |
-| `content`                  | her words grow; the thinking row becomes her bubble on the first one                                                                                                           |
-| `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                              |
-| `warning` `crisis` (soft)  | the authored `resource` laid out as an `alert` row ahead of her reply, live and once folded; its `message` — the whole resource as text — where the resource did not parse     |
-| `status`                   | the platform's operator strings — never shown                                                                                                                                  |
-| `capability_result(s)`     | slugs collected for the drawer (t-66); an answering `fill_slot` also arms the notes refresh below (t-73)                                                                       |
-| `citations`                | carried on the reply (t-66)                                                                                                                                                    |
-| `content_reset`            | her words start over                                                                                                                                                           |
-| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame; the notes panel is told, if the turn wrote (t-73)                                         |
-| `error`                    | an `ending` entry: the words back in the box, bound to the turn id, and her words where the reply would have been (below); a hard `crisis` frame lays the resource out instead |
+| Frame                      | Then                                                                                                                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`                    | the draft clears — the words leave the box only once the server has them (§8.1)                                                                                                                                 |
+| `content`                  | her words grow; the thinking row becomes her bubble on the first one                                                                                                                                            |
+| `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                                                               |
+| `warning` `crisis` (soft)  | the authored `resource` laid out as an `alert` row ahead of her reply, live and once folded; its `message` — the whole resource as text — where the resource did not parse                                      |
+| `status`                   | the platform's operator strings — never shown                                                                                                                                                                   |
+| `capability_result(s)`     | slugs collected for the drawer (t-66); an answering `fill_slot` also arms the notes refresh below (t-73); an answering `suggest_resource` carries the offered resource as `data`, collected for the chip (t-77) |
+| `citations`                | carried on the reply (t-66)                                                                                                                                                                                     |
+| `content_reset`            | her words start over                                                                                                                                                                                            |
+| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame; the notes panel is told, if the turn wrote (t-73)                                                                          |
+| `error`                    | an `ending` entry: the words back in the box, bound to the turn id, and her words where the reply would have been (below); a hard `crisis` frame lays the resource out instead                                  |
 
 The account built live from `done` carries model, provider, tokens and
 `costUsd`; `fingerprintVersion` and `pricing` are `null` until the read route
@@ -237,17 +237,32 @@ transcript reads as a trace.
 **Composed from parts — the seam §11 and §13 add to.** `lib/app/conversation/
 account.ts` holds a list of sources, `ACCOUNT_SOURCES`, each a small function
 from the reply's data (`AccountInput`: when, the capabilities called, the
-citations, the turn row) to one `AccountPart` — a clause for the line and a
-sentence for the detail. `accountLine` joins the clauses; `accountDetail`
-puts one sentence to a line and the figures last. Slots written (§11) and
-modules instructed (§13) add a source each; the row does not change. Today
-there is one thing a turn can be shown to have done:
+citations, the resources offered, the turn row) to one `AccountPart` — a
+clause for the line and a sentence for the detail. `accountLine` joins the
+clauses; `accountDetail` puts one sentence to a line and the figures last.
+Modules instructed (§13) add a source; the row does not change.
 
-| The turn…                             | Line                                | Detail                                                         |
-| ------------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
-| called `search_knowledge_base`        | Looked something up in her material | …and drew on N passages of it. (the citations on the reply)    |
-| called a capability with no words yet | Used <slug, as words>               | the same — named, never hidden; her seat cannot call one today |
-| called nothing                        | Nothing was written from this turn  | the same, as a sentence                                        |
+| The turn…                             | Line                                               | Detail                                                                 |
+| ------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| called `search_knowledge_base`        | Looked something up in her material                | …and drew on N passages of it. (the citations on the reply)            |
+| called `get_state`                    | Looked at what she already understands about you   | the same                                                               |
+| called `fill_slot`                    | Added something to what she understands about you  | …You can see it, and correct it.                                       |
+| called `suggest_resource` (t-77)      | Pointed you to “<title>”                           | …— a film / a piece of writing of hers you can open beside this reply. |
+| …for an id the library has since lost | Offered something that is no longer in her library | the same                                                               |
+| called a capability with no words yet | Used <slug, as words>                              | the same — named, never hidden                                         |
+| called nothing                        | Nothing was written from this turn                 | the same, as a sentence                                                |
+
+**The offer itself is a chip under the reply** (`SuggestionChips` in
+`turns.tsx`), before the account row: the library's title, its kind and its
+length, on a button that opens the resources drawer pinned to it
+(`openDrawer('resources', { pin })`, [`shell.md`](./shell.md)). Live, the
+suggestion is read off the `capability_result` frame's `data`
+(`lib/app/resources/suggestion.ts`, import-light for the browser); on reload,
+the transcript read resolves it from the trace's `arguments.id` against the
+library (`suggestionsFromProvenance`); on a replay, `readTurnReply` resolves
+per call and the replay puts the record back on that call's frame, aligned, so
+all three paths give the same chip. Nothing the model wrote reaches any of
+them.
 
 **Which capabilities answered the turn, on all three paths.** Live, from the
 `capability_result(s)` frames. On reload, from the terminal assistant row's

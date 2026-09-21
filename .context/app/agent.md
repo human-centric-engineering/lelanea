@@ -284,18 +284,35 @@ so the tool sees only what t-25's designation rule lets her quote.
 The members' way in is `POST /api/v1/framework/facilitation/{onboarding|facilitator}/chat/stream`,
 body `{ message, turnId? }`.
 
-### The three tools she holds
+### The four tools the guide holds
 
-Two seeds, because they grant different things. 007 grants a slug and nothing
+Three seeds, because they grant different things. 007 grants a slug and nothing
 else; 013's two bindings each carry an exposure allowlist, and that config has
 to be written **with** the binding — a grant created first and configured second
-is permissive in between.
+is permissive in between; 014 creates the capability's own row as well as the
+grant, because `suggest_resource` is the app's tool rather than Daybreak's or
+Sunrise's, and a row with no grant is a tool nobody holds.
 
-| Tool                    | Seed | Does                                                       |
-| ----------------------- | ---- | ---------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is |
-| `get_state`             | 013  | reads back what is already understood about this person    |
-| `fill_slot`             | 013  | writes what she has newly learned, once per turn           |
+| Tool                    | Seed | Does                                                                 |
+| ----------------------- | ---- | -------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is           |
+| `get_state`             | 013  | reads back what is already understood about this person              |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn               |
+| `suggest_resource`      | 014  | hands the person one of her films or pieces of writing, by id (t-77) |
+
+`suggest_resource` is read-only — an id in, the library's record out
+(`lib/app/resources/suggest.ts`) — and sits on `READ_ONLY_CAPABILITY_SLUGS`.
+The model never supplies a title: it names an id it was shown in its context
+block (`lib/app/resources/offering.ts`, spliced into the voice block beside the
+slot vocabulary, for the same reason — a tool nobody is told about is never
+used), the id is looked up server-side, and an unknown one is refused with a
+structured error rather than thrown. Everything the person then sees — the chip
+beside the reply, the account line, the drawer pinned to it — is the file's
+words. The offering block is empty until Lelañea Fulton's list lands (t-76),
+and then nothing is offered, which is the truth.
+
+**Not on the control agent.** `voice-control-bare` holds no tools and gets no
+context block (the comparison sends none), so the offer cannot reach it.
 
 `fill_slot` is the **one** tool she holds that writes, and the ceiling it is
 admitted under is in [`safety.md`](./safety.md) — "nothing she holds may delete
