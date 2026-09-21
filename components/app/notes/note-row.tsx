@@ -1,5 +1,6 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import {
@@ -28,9 +29,11 @@ import { cn } from '@/lib/utils';
  * with its own buttons would be a small card, and the page would then have two
  * places to do each thing.
  *
- * `aria-expanded` rather than a link: nothing is navigated to. The row is
- * replaced by its card, which takes focus (`OpenedCard` in the panel), and
- * "Back to the list" on the card brings the row — and focus — back.
+ * A chevron in the corner says so, pointing down; the open card carries the
+ * same chevron pointing up, which folds it back — in both views, not only the
+ * list (owner ruling, 21 September 2026: a "Back to the list" button read as
+ * navigation). `aria-expanded` rather than a link: nothing is navigated to,
+ * and focus follows the note into whichever shape it takes.
  */
 export interface NoteRowProps {
   note: Note;
@@ -62,7 +65,7 @@ export function NoteRow({ note, heading, onOpen, focusOnMount }: NoteRowProps) {
       aria-expanded={false}
       onClick={onOpen}
       className={cn(
-        'bg-card block w-full rounded-lg border border-[var(--color-card-border)] px-4 py-3 text-left',
+        'bg-card relative block w-full rounded-lg border border-[var(--color-card-border)] py-3 pr-12 pl-4 text-left',
         'shadow-[var(--shadow-rest)] transition-colors duration-200 ease-[var(--ease-brand)]',
         'hover:bg-[var(--color-pill-hover)]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
@@ -80,6 +83,12 @@ export function NoteRow({ note, heading, onOpen, focusOnMount }: NoteRowProps) {
       <span className="text-muted-foreground mt-1 block text-[12px] leading-[1.5]">
         {details.join(' · ')}
       </span>
+      <ChevronDown
+        size={16}
+        strokeWidth={1.8}
+        aria-hidden="true"
+        className="text-muted-foreground absolute top-5.5 right-5.5"
+      />
     </button>
   );
 }

@@ -878,11 +878,54 @@ describe('finding your way around', () => {
       expect(world.corrections).toEqual([{ slotSlug: 'life_money', value: 'Money is fine.' }])
     );
 
-    // Still open after the re-read the correction caused.
-    await userEvent.click(await screen.findByRole('button', { name: /back to the list/i }));
+    // Still open after the re-read the correction caused — then folded back
+    // by the chevron, with focus on the row it became.
+    const fold = await screen.findByRole('button', { name: /fold this note/i });
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    await userEvent.click(fold);
     const folded = screen.getByText('Money is tight this month.').closest('button');
     expect(folded?.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(folded);
+  });
+
+  it('folds a card to its row in cards view too, and opens it again', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    // Every note is open in cards view: four chevrons, no rows.
+    expect(screen.getAllByRole('button', { name: /fold this note/i })).toHaveLength(4);
+    expect(screen.queryAllByRole('button', { expanded: false })).toHaveLength(0);
+
+    const card = screen.getByText('Money is tight this month.').closest('section') as HTMLElement;
+    await userEvent.click(within(card).getAllByRole('button', { name: /fold this note/i })[0]);
+
+    const row = screen.getByText('Money is tight this month.').closest('button') as HTMLElement;
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getAllByRole('button', { name: /fold this note/i })).toHaveLength(3);
+
+    await userEvent.click(row);
+    expect(screen.getAllByRole('button', { name: /fold this note/i })).toHaveLength(4);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Fold this note');
+  });
+
+  it('draws the page in the order it was answered in while a new sort is out', async () => {
+    // The defect: the URL moved to `grouped` while the notes on screen were
+    // still the `recent` answer, and grouping that list split each heading
+    // into several runs — the same heading drawn twice, and duplicate keys.
+    nav.reset('/app/notes?sort=recent');
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    world.hold = [];
+    await userEvent.selectOptions(sortPicker(), 'grouped');
+    await waitFor(() => expect(world.hold).toHaveLength(1));
+
+    // Still the recent answer, so still drawn as one list with no headings.
+    expect(screen.queryAllByRole('heading', { level: 2 })).toHaveLength(0);
+
+    const [pending] = world.hold;
+    await act(async () => pending(record()));
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Life areas', 'The person', 'Lelañea’s own headings']);
   });
 
   it('labels each note with its heading when sorted by recency, freshest first', async () => {

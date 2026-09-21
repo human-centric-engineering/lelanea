@@ -1,7 +1,7 @@
 'use client';
 
-import { ChevronRight } from 'lucide-react';
-import { useId, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
@@ -72,10 +72,12 @@ export interface NoteCardProps {
    */
   heading?: string;
   /**
-   * Set when the card was opened from a list row (t-79): a third control that
-   * folds it back into the row it came from.
+   * Fold the card to its one-line row (t-79). Drawn as a chevron in the card's
+   * top corner — the same chevron, pointing the other way, is what opens a row.
    */
   onFold?: () => void;
+  /** Take focus on the chevron when drawn — set when the row was just opened. */
+  focusFold?: boolean;
 }
 
 /**
@@ -381,7 +383,21 @@ function Disclosure({
   );
 }
 
-export function NoteCard({ note, onAsk, onCorrected, fetchImpl, heading, onFold }: NoteCardProps) {
+export function NoteCard({
+  note,
+  onAsk,
+  onCorrected,
+  fetchImpl,
+  heading,
+  onFold,
+  focusFold,
+}: NoteCardProps) {
+  const foldRef = useRef<HTMLButtonElement>(null);
+  // A keyboard or screen-reader user who opened a row lands on the card they
+  // opened, at the control that closes it again, not on a row that is gone.
+  useEffect(() => {
+    if (focusFold) foldRef.current?.focus();
+  }, [focusFold]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.value);
   const [saving, setSaving] = useState(false);
@@ -455,7 +471,25 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl, heading, onFold 
   const older = earlier - (note.previous ? 1 : 0);
 
   return (
-    <Card className="@container p-[22px]" eyebrow={eyebrow}>
+    <Card className={cn('@container relative p-[22px]', onFold && 'pr-12')} eyebrow={eyebrow}>
+      {onFold ? (
+        <button
+          ref={foldRef}
+          type="button"
+          aria-expanded={true}
+          aria-label="Fold this note"
+          onClick={onFold}
+          className={cn(
+            'text-muted-foreground absolute top-3.5 right-3.5 grid size-8 place-items-center rounded-full',
+            'transition-colors duration-200 ease-[var(--ease-brand)] hover:bg-[var(--color-pill-hover)]',
+            'hover:text-[var(--color-heading)]',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-[var(--color-ring)]'
+          )}
+        >
+          <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" className="rotate-180" />
+        </button>
+      ) : null}
       {/*
         The container query is the point, and it is the repo's first.
         This card's width is set by the workspace pane — which a reader drags,
@@ -653,11 +687,6 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl, heading, onFold 
           <Button size="sm" variant="ghost" className={PILL} onClick={() => onAsk(askText(note))}>
             Ask Lelañea about this
           </Button>
-          {onFold ? (
-            <Button size="sm" variant="ghost" className={PILL} onClick={onFold}>
-              Back to the list
-            </Button>
-          ) : null}
         </div>
       )}
     </Card>

@@ -940,9 +940,22 @@ wrap to three lines at 320px.
 **A list row (owner ruling)** is the full reading plus one line of details —
 heading (when sorted by recency), tag, certainty, date — and no buttons. The
 whole row is the control: it opens the full card in place, where correcting and
-"Ask Lelañea about this" work as ever, with a third "Back to the list" that
-folds it and returns focus to the row. Open rows survive a re-read, so a card
-someone just corrected does not snap shut.
+"Ask Lelañea about this" work as ever.
+
+**Every note folds and opens by a chevron, in both views (owner ruling).** A row
+carries one pointing down; a card carries one pointing up in its top corner,
+which folds it to its row. The view only sets the default — all open in cards,
+all folded in a list — and a chevron overrides it for that note until the view
+changes. Focus follows the note into its new shape. The first cut had a "Back to
+the list" button on an opened card instead, which read as navigation and only
+existed in one view. Folds survive a re-read, so a card someone just corrected
+does not snap shut.
+
+**The page is drawn in the sort it was answered in**, not the one the URL has
+just moved to. Between choosing a new sort and its answer landing, the notes on
+screen are still the old response; grouping a `recent` list split each heading
+into several runs — the same heading twice, and duplicate React keys. Found by
+the owner looking at the page.
 
 **No matches is its own message** — _"Nothing in Lelañea's notes matches that"_
 with a clear — distinct from a new account's _"Lelañea has written nothing down

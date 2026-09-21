@@ -18,7 +18,13 @@ import {
   readNotesParams,
   type NotesParams,
 } from '@/lib/app/slots/notes-query';
-import { NOTES_OWN_TITLE, type Note, type NotesView } from '@/lib/app/slots/notes-view';
+import {
+  NOTES_OWN_TITLE,
+  type Note,
+  type NotesLayout,
+  type NotesSort,
+  type NotesView,
+} from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
@@ -113,6 +119,13 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   const [unreadable, setUnreadable] = useState(false);
   /** The query the notes on screen answer — behind the URL while a read is out. */
   const [answered, setAnswered] = useState<string | null>(null);
+  /**
+   * The sort the notes on screen were fetched with — which is not the URL's
+   * while a read is out. Drawing a `recent` response as `grouped` splits each
+   * heading into several runs (duplicate React keys, the same heading drawn
+   * twice), so the page is always drawn in the order it was answered in.
+   */
+  const [answeredSort, setAnsweredSort] = useState<NotesSort>(NOTES_DEFAULTS.sort);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -150,6 +163,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           if (stale()) return;
           setNotes(view);
           setAnswered(notesSearch(query));
+          setAnsweredSort(sort);
           setUnreadable(false);
         })
         .catch((error: unknown) => {
@@ -162,7 +176,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
     },
     // The setters are stable; they are listed because the React Compiler's
     // inference asks for them here, and a mismatch makes it skip the component.
-    [fetchImpl, q, group, sort, setNotes, setAnswered, setUnreadable]
+    [fetchImpl, q, group, sort, setNotes, setAnswered, setAnsweredSort, setUnreadable]
   );
 
   // The first read, on mount — and again whenever the search, the group or the
@@ -242,21 +256,28 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   );
 
   /*
-   * Which list rows are open as cards. Kept here rather than in each row so it
-   * survives a re-read — a correction re-reads the page, and the card someone
-   * just corrected must not snap shut on them.
+   * Which notes are open as cards, and which are folded to rows.
+   *
+   * The view sets the default — every note open in `cards`, every note folded
+   * in `list` — and a chevron on each note overrides it for that note. The
+   * overrides belong to the view they were made in, so switching view starts
+   * from that view's default rather than carrying a half-folded page across.
+   * Kept here rather than in each note so they survive a re-read: a correction
+   * re-reads the page, and the card someone just corrected must not snap shut.
    */
-  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  /** The row to hand focus back to when its card folds. */
-  const [refocus, setRefocus] = useState<string | null>(null);
-  const toggle = (slug: string, to: boolean) => {
-    setOpen((current) => {
-      const next = new Set(current);
-      if (to) next.add(slug);
-      else next.delete(slug);
-      return next;
-    });
-    setRefocus(to ? null : slug);
+  const [overrides, setOverrides] = useState<{
+    layout: NotesLayout;
+    open: ReadonlyMap<string, boolean>;
+  }>({ layout, open: new Map() });
+  /** The note whose chevron was just used — it takes focus in its new shape. */
+  const [focused, setFocused] = useState<string | null>(null);
+  const isOpen = (slug: string) =>
+    (overrides.layout === layout ? overrides.open.get(slug) : undefined) ?? layout === 'cards';
+  const toggle = (slug: string) => {
+    const next = new Map(overrides.layout === layout ? overrides.open : []);
+    next.set(slug, !isOpen(slug));
+    setOverrides({ layout, open: next });
+    setFocused(slug);
   };
 
   /** Search and group back to their defaults; the sort and the view are kept. */
@@ -268,28 +289,26 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   const busy = notes !== null && answered !== asked;
 
   const item = (note: Note) => {
-    const heading = sort === 'recent' ? noteHeading(note) : undefined;
-    const card = (onFold?: () => void) => (
-      <NoteCard
-        note={note}
-        onAsk={ask}
-        onCorrected={() => void read()}
-        fetchImpl={fetchImpl}
-        heading={heading}
-        onFold={onFold}
-      />
-    );
-    if (layout === 'cards') return <li key={note.slotSlug}>{card()}</li>;
+    const heading = answeredSort === 'recent' ? noteHeading(note) : undefined;
+    const focus = focused === note.slotSlug;
     return (
       <li key={note.slotSlug}>
-        {open.has(note.slotSlug) ? (
-          <OpenedCard>{card(() => toggle(note.slotSlug, false))}</OpenedCard>
+        {isOpen(note.slotSlug) ? (
+          <NoteCard
+            note={note}
+            onAsk={ask}
+            onCorrected={() => void read()}
+            fetchImpl={fetchImpl}
+            heading={heading}
+            onFold={() => toggle(note.slotSlug)}
+            focusFold={focus}
+          />
         ) : (
           <NoteRow
             note={note}
             heading={heading}
-            onOpen={() => toggle(note.slotSlug, true)}
-            focusOnMount={refocus === note.slotSlug}
+            onOpen={() => toggle(note.slotSlug)}
+            focusOnMount={focus}
           />
         )}
       </li>
@@ -357,7 +376,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           >
             {notes.matched === 0 ? (
               <NoMatches onClear={clear} />
-            ) : sort === 'recent' ? (
+            ) : answeredSort === 'recent' ? (
               <ul className={LIST[layout]}>{notes.notes.map(item)}</ul>
             ) : (
               runsOf(notes.notes).map((run) => (
@@ -417,23 +436,6 @@ function runsOf(notes: Note[]): { key: string | typeof OWN_RUN; title: string; n
       });
   }
   return runs;
-}
-
-/**
- * A list row opened as its card. Focus moves to the card, so a keyboard or
- * screen-reader user lands on what they opened rather than being left on a
- * row that no longer exists.
- */
-function OpenedCard({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  return (
-    <div ref={ref} tabIndex={-1} className="rounded-lg outline-none">
-      {children}
-    </div>
-  );
 }
 
 /**
