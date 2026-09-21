@@ -232,8 +232,13 @@ export function formatWhen(iso: string): string {
  * that paraphrase rather than hide it, so this line points at it instead of
  * denying it exists.
  */
-export const WITHHELD_WORDS =
-  'Lelañea kept a summary of this rather than your exact words. It is under “How Lelañea came to this”.';
+export const WITHHELD_WORDS = 'Lelañea kept a summary of this rather than your exact words.';
+
+/**
+ * Where that summary is — the card only. The list row shows {@link WITHHELD_WORDS}
+ * alone, because the fold this names exists only once the card is open.
+ */
+export const WITHHELD_POINTER = 'It is under “How Lelañea came to this”.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -603,7 +608,7 @@ export function NoteCard({
                 'text-[var(--color-heading)]'
               )}
             >
-              {WITHHELD_WORDS}
+              {WITHHELD_WORDS} {WITHHELD_POINTER}
             </p>
           ) : (
             <p

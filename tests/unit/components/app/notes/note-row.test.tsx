@@ -64,6 +64,8 @@ describe('NoteRow', () => {
 
     expect(screen.getByText(WITHHELD_WORDS)).toBeTruthy();
     expect(screen.queryByText(/redacted/)).toBeNull();
+    // No pointer to "How Lelañea came to this": a row has no such fold.
+    expect(screen.queryByText(/came to this/)).toBeNull();
   });
 
   it('labels a retired slot and carries the heading it was given', () => {

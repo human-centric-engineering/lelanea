@@ -25,7 +25,12 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { certaintyBand, confidenceWords, WITHHELD_WORDS } from '@/components/app/notes/note-card';
+import {
+  certaintyBand,
+  confidenceWords,
+  WITHHELD_POINTER,
+  WITHHELD_WORDS,
+} from '@/components/app/notes/note-card';
 import { NotesPanel } from '@/components/app/notes/notes-panel';
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import { notesQuerySchema, queryNotes } from '@/lib/app/slots/notes-query';
@@ -483,7 +488,8 @@ describe('what the panel shows', () => {
     ];
     renderBoth();
 
-    expect(await screen.findByText(WITHHELD_WORDS)).toBeTruthy();
+    // The card carries the pointer to its fold as well; the list row does not.
+    expect(await screen.findByText(`${WITHHELD_WORDS} ${WITHHELD_POINTER}`)).toBeTruthy();
     expect(screen.queryByText(/redacted/)).toBeNull();
     // The summary is on the card, and nothing claims the words were never kept
     // — the row at rest holds that summary, so the old line was untrue.

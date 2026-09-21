@@ -355,7 +355,10 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     // Printed verbatim by the panel, so it follows the panel's register:
     // Lelañea by name, never "she" or "her" (`.context/app/slots.md`).
     throw new ConflictError(
-      'Lelañea keeps only a summary of what you said about this, not your exact words, so there is nothing here to correct. Ask Lelañea about it instead, in your own words.',
+      // Says nothing about what is stored: this refusal is by classification,
+      // so it also reaches a note captured before its slot was marked, whose
+      // words were kept (`/code-review`, t-80).
+      'Notes on this subject can’t be corrected here. Ask Lelañea about it instead, in your own words.',
       { reason: 'kept_out_of_the_record' }
     );
   }
