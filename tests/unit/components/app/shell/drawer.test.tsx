@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
 /**
- * The drawers: a mechanism now, contents later.
+ * The drawers: the mechanism.
  *
- * Both panels are stubs (D6) — the map needs §05's modules, the resources need
- * phase 3 — so what is worth testing is the machinery §05 and f-resources will
- * inherit rather than build: the slide, the scrim, the focus handling and the
- * Escape rung.
+ * Both panels are filled now — the map from §05 (`map-drawer.test.tsx`), the
+ * resources from §14 (`resources-drawer.test.tsx`) — so what this file tests is
+ * what they share rather than what is in them: the slide, the scrim, the focus
+ * handling and the Escape rung. Nothing here mocks the API client, so both
+ * bodies sit in their loading or failed state; the chrome is what is measured.
  *
  * Focus is the half that has no visual tell at all. Closing a drawer that drops
  * focus on `<body>` puts a keyboard reader back at the top of the document, and
@@ -146,32 +147,17 @@ describe('focus', () => {
   });
 });
 
-describe('what the stubs say', () => {
-  it('says what each is for rather than showing an empty list', () => {
-    // An empty panel reads as broken; a panel that says what it is for reads as
-    // unfinished, which is what it is (D6, B31). The map is real from §05 t-14
-    // (`map-drawer.test.tsx`); its head still says what it holds. The resources
-    // are the designed placeholder now rather than a grey paragraph — but still
-    // a placeholder, with no invented films behind it.
+describe('what the heads say', () => {
+  it('says what each panel is for before anything has loaded', () => {
+    // A panel's head is true whether or not its body has arrived: the map's
+    // lede is constant, and the resources' is the general line until the
+    // selection names a module (`resources-drawer.test.tsx` covers that).
     renderDrawers();
     expect(screen.getByText(/Sixteen modules/)).toBeTruthy();
-    expect(screen.getByText(/Films and reading/)).toBeTruthy();
-    expect(screen.getByText(/arrive with the programme/)).toBeTruthy();
+    expect(screen.getByText(/Films and reading, in her own words/)).toBeTruthy();
   });
 
-  it("builds the resources panel's sections without inventing anything to put in them", () => {
-    // The chrome and the placeholder are this task's; the films are
-    // f-resources', in phase 3. So the section exists and is honestly empty,
-    // rather than carrying two plausible films with a stock thumbnail on them.
-    renderDrawers();
-    const watch = screen.getByRole('heading', { name: 'to watch' });
-    expect(watch).toBeTruthy();
-    expect(screen.getByText(/Nothing to watch yet/)).toBeTruthy();
-    // A duration pill is the tell that something got invented.
-    expect(screen.queryByText(/\d+ ?min/i)).toBeNull();
-  });
-
-  it('invents no counts', () => {
+  it('invents no counts while nothing has loaded', () => {
     const { container } = renderDrawers();
     const panels = Array.from(container.querySelectorAll('[role="dialog"]'));
     for (const p of panels) expect(p.textContent ?? '').not.toMatch(/\d/);

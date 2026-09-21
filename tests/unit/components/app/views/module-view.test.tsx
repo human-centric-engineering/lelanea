@@ -114,6 +114,9 @@ describe('ModuleView', () => {
     await userEvent.click(screen.getByRole('button', { name: /own words/ }));
 
     expect(resources).not.toHaveAttribute('inert');
-    expect(within(resources).getByText(/arrive with the programme/)).toBeInTheDocument();
+    // The client is mocked to never answer, so the drawer is finding her words
+    // on this module — what it says once they arrive is
+    // `resources-drawer.test.tsx`'s.
+    expect(within(resources).getByText(/Finding her words/)).toBeInTheDocument();
   });
 });

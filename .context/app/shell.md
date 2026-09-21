@@ -377,10 +377,25 @@ closed panel, and Escape as the second rung of the chain.
 **Each drawer carries its own colour**, not the view's — a 3px top rule on the
 head and the eyebrow in the same hue. The design sets it per panel (`#dr-map` is
 always the secondary ink), because a panel riding over the work is not part of
-the work. It is one token today because both drawers are teal; when resources
-starts following the open module, the rule and the eyebrow will need **different**
-tokens, since a rule is a surface and an eyebrow is 12px type. See the `tone`
-column in `drawer.tsx`.
+the work. The resources panel follows the open module (§14 t-75): its lede reads
+_On Values. This follows whatever you have open in the workspace._ and its tone
+is that module's arc through `TIER_INKS` — the `-ink` sibling of each hue, never
+the raw one, because the same value paints the 12px eyebrow and a raw arc hue
+fails AA there. A fixed key (the journey, situations, the clean conversation)
+has no arc and keeps the secondary ink. See `resourcesHead()` in
+`resources-drawer.tsx` and the `tone` column in `drawer.tsx`.
+
+**The resources drawer fetches per key, not once.** The map fetches on first
+open and keeps the result, because the map does not change under a reader. The
+resources panel follows the reader, so `useResourcesSelection()` is keyed on
+the route's key (`resourceKeyFor(pathname)`: a module slug, `journey`,
+`situations` or `default`) and the pinned film, re-fetches when either changes
+while open, keeps the last good panel on screen while the next loads, drops an
+answer for a key the reader has since left, and retries a failure on the next
+open. It lives in `Drawers`' render rather than the body's because the head
+needs the answer too. `openDrawer('resources', { film })` is the one widening
+the shell gained: `drawerFilm`, sent as `?film=` and cleared on close, for a
+suggestion made in conversation (t-77).
 
 ## `recently` is real now, and its empty state is the point
 
@@ -536,11 +551,11 @@ is the specific failure D6 names.
 - **The eleven voice leanings** — rendered as disabled sliders with the reason
   beside them. Nothing reads a leaning until a model is answering, which is
   phase 2.
-- **The resources drawer's films.** `resources-drawer.tsx` builds the designed
-  placeholder card and the `to watch` section, and leaves the list behind it
-  empty — the films are **f-resources'**, in phase 3. A thumbnail and a duration
-  pill are what an invention would look like here, so the section says it is
-  empty rather than carrying two plausible films.
+- **The resources drawer's lists.** The drawer is real from §14 t-75 — it
+  follows the open module and shows her words on it from the API — but until her
+  list lands (t-76) both `to watch` and `to read` are empty, and each section
+  says so under its eyebrow rather than carrying two plausible films. See
+  [`content.md`](./content.md#resources--her-films-and-reading-and-her-words-on-whatever-is-open).
 - **A module's real state in the map.** Every row reads `not started ○`, because
   no per-user journey exists. `open` — which the API returns — is a fact about
   the system rather than about the reader, and putting it in the column made all
