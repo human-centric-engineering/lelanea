@@ -234,22 +234,52 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    * and the reader can go on typing meanwhile. Syncing the box to that late
    * echo put "ab" back over "abc" and lost the "c" (`/code-review`, round 1).
    * An echo of our own is recognised and skipped; any other move of `q` — Back,
-   * Clear, a followed link — still resets the box.
+   * a followed link — still resets the box.
+   *
+   * In order, and an echo drops everything sent BEFORE it too: the router
+   * abandons a navigation a newer one overtakes, so an earlier search's echo
+   * may never arrive, and a leftover entry would later swallow a real Back to
+   * that value (`/code-review`, round 2).
    */
-  const sent = useRef(new Set<string>());
+  const sent = useRef<string[]>([]);
   useEffect(() => {
-    if (sent.current.delete(q)) return;
+    const echo = sent.current.indexOf(q);
+    if (echo !== -1) {
+      sent.current.splice(0, echo + 1);
+      return;
+    }
     setDraft((current) => (current.trim() === q ? current : q));
   }, [q]);
+  /** The search waiting out its pause, so a choice made meanwhile can cancel it. */
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const wanted = draft.trim();
     if (wanted === q) return;
     const timer = setTimeout(() => {
-      sent.current.add(wanted);
+      pending.current = null;
+      sent.current.push(wanted);
       navigate({ q: draft }, 'replace');
     }, SEARCH_PAUSE_MS);
+    pending.current = timer;
     return () => clearTimeout(timer);
   }, [draft, q, navigate]);
+
+  /*
+   * A group, a sort, a view or a Clear — each pushes a history entry.
+   *
+   * It cancels a search still waiting out its pause and carries the box's
+   * current text instead. Otherwise the timer, holding the render before the
+   * choice, fired after it with the OLD group, sort and view and replaced the
+   * entry the choice had just pushed: type "c" and pick a group inside 300ms,
+   * and the pick silently vanished (`/code-review`, round 2).
+   */
+  const choose = (next: Partial<NotesParams>) => {
+    if (pending.current !== null) {
+      clearTimeout(pending.current);
+      pending.current = null;
+    }
+    navigate({ q: draft, ...next }, 'push');
+  };
 
   /**
    * Bring the question to the composer, and bring the composer into view.
@@ -306,12 +336,20 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   };
 
   /** Search and group back to their defaults; the sort and the view are kept. */
-  const clear = () => navigate({ q: NOTES_DEFAULTS.q, group: NOTES_DEFAULTS.group }, 'push');
+  const clear = () => {
+    // The box is emptied here rather than left to follow the URL, so a late
+    // echo of an earlier search cannot put text back into it.
+    setDraft(NOTES_DEFAULTS.q);
+    choose({ q: NOTES_DEFAULTS.q, group: NOTES_DEFAULTS.group });
+  };
 
   if (notes === null && !unreadable) return <NotesSkeleton />;
 
   const filtering = q !== '' || group !== null;
-  const busy = notes !== null && answered !== asked;
+  // Not busy once a read has failed: the banner already says the page is as it
+  // stood, and a page left dimmed and `aria-busy` forever reads as still
+  // loading (`/code-review`, round 2).
+  const busy = notes !== null && answered !== asked && !unreadable;
 
   const item = (note: Note) => {
     const heading = answeredSort === 'recent' ? noteHeading(note) : undefined;
@@ -379,11 +417,11 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
             draft={draft}
             onDraft={setDraft}
             group={group}
-            onGroup={(next) => navigate({ group: next }, 'push')}
+            onGroup={(next) => choose({ group: next })}
             sort={sort}
-            onSort={(next) => navigate({ sort: next }, 'push')}
+            onSort={(next) => choose({ sort: next })}
             layout={layout}
-            onLayout={(next) => navigate({ view: next }, 'push')}
+            onLayout={(next) => choose({ view: next })}
             groups={notes.groups}
             own={notes.own}
             total={notes.total}

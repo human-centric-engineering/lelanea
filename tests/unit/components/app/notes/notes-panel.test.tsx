@@ -46,11 +46,17 @@ const nav = vi.hoisted(() => {
   const state = { entries: ['/app/notes'], index: 0 };
   const emit = () => listeners.forEach((listener) => listener());
   /**
-   * When set, a `replace` is parked here rather than committed — the way a
-   * real navigation on a dynamic route lands a moment later. `settle()`
-   * commits them.
+   * When set, a navigation is parked here rather than committed — the way a
+   * real one on a dynamic route lands a server round trip later. `settle()`
+   * commits them in order; `settleLast()` commits only the newest, as the
+   * router does when a newer navigation overtakes an older one.
    */
-  const held: { on: boolean; replaces: (() => void)[] } = { on: false, replaces: [] };
+  const held: { on: boolean; moves: (() => void)[] } = { on: false, moves: [] };
+  const commitPush = (href: string) => {
+    state.entries = [...state.entries.slice(0, state.index + 1), href];
+    state.index += 1;
+    emit();
+  };
   const commitReplace = (href: string) => {
     state.entries[state.index] = href;
     emit();
@@ -59,16 +65,19 @@ const nav = vi.hoisted(() => {
     state,
     held,
     settle: () => {
-      const pending = held.replaces.splice(0);
+      const pending = held.moves.splice(0);
       pending.forEach((commit) => commit());
     },
+    settleLast: () => {
+      const pending = held.moves.splice(0);
+      pending.at(-1)?.();
+    },
     push: (href: string) => {
-      state.entries = [...state.entries.slice(0, state.index + 1), href];
-      state.index += 1;
-      emit();
+      if (held.on) held.moves.push(() => commitPush(href));
+      else commitPush(href);
     },
     replace: (href: string) => {
-      if (held.on) held.replaces.push(() => commitReplace(href));
+      if (held.on) held.moves.push(() => commitReplace(href));
       else commitReplace(href);
     },
     back: () => {
@@ -84,7 +93,7 @@ const nav = vi.hoisted(() => {
       state.entries = [href];
       state.index = 0;
       held.on = false;
-      held.replaces = [];
+      held.moves = [];
     },
   };
 });
@@ -946,7 +955,7 @@ describe('finding your way around', () => {
 
     await userEvent.type(search(), 'mon');
     // The pause ends and the box sends "mon" — which has not committed yet.
-    await waitFor(() => expect(nav.held.replaces).toHaveLength(1));
+    await waitFor(() => expect(nav.held.moves).toHaveLength(1));
     await userEvent.type(search(), 'ey');
     // Now "mon" lands, late. It is the box's own echo, not a Back.
     await act(async () => nav.settle());
@@ -954,6 +963,57 @@ describe('finding your way around', () => {
     expect((search() as HTMLInputElement).value).toBe('money');
     nav.held.on = false;
     await waitFor(() => expect(nav.current()).toBe('/app/notes?q=money'));
+  });
+
+  it('keeps a group picked while a search is still waiting out its pause', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    nav.held.on = true;
+
+    // Type, then pick a group inside the pause. The pick's push is parked, so
+    // the page still holds the render before it — which is what the search's
+    // timer was built from.
+    await userEvent.type(search(), 'money');
+    await userEvent.selectOptions(groupPicker(), 'life_areas');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await act(async () => nav.settle());
+
+    // One entry for the pick, carrying the search — not a late replace that
+    // put the old group back over it.
+    expect(nav.current()).toBe('/app/notes?q=money&group=life_areas');
+    expect(nav.state.entries).toEqual(['/app/notes', '/app/notes?q=money&group=life_areas']);
+  });
+
+  it('clears the box on Clear even after the router dropped an earlier search', async () => {
+    nav.reset('/app/notes?q=money');
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    nav.held.on = true;
+
+    await userEvent.clear(search());
+    await waitFor(() => expect(nav.held.moves).toHaveLength(1));
+    await userEvent.type(search(), 'q');
+    await waitFor(() => expect(nav.held.moves).toHaveLength(2));
+    // The router lands the newer search and abandons the older one, so the
+    // empty search is never echoed back.
+    await act(async () => nav.settleLast());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    await act(async () => nav.settle());
+
+    expect((search() as HTMLInputElement).value).toBe('');
+    expect(nav.current()).toBe('/app/notes');
+  });
+
+  it('does not leave the page dimmed and busy after a read fails', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    world.failNextReads = 1;
+
+    await userEvent.selectOptions(groupPicker(), 'the_person');
+
+    expect(await screen.findByText(/as it stood a moment ago/)).toBeTruthy();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   it('does not take focus from the search box when a folded note comes back', async () => {
