@@ -797,9 +797,13 @@ value that eventually gets compared against a real one.
 ## What is not here yet
 
 - **Deleting one note.** There is no per-answer deletion at any tier: erasure
-  takes the account or nothing. Filed against `f-memory`, which owns deletion
-  propagation — and §3.19 asks for a single exchange, a session or a module's
-  worth to be deletable, so it is a feature rather than a field.
+  takes the account or nothing. Filed as **t-78 on `f-memory`**, which owns
+  deletion propagation — deleting the reading is the easy half, and the
+  embedding that carries it is the reason it hangs there rather than here. The
+  framework half is a paragraph on
+  [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156),
+  offered rather than assumed: `values.ts` is insert-only by design, and whether
+  it should expose a removal is a product decision as much as an API one.
 - **Admin control over minting** — whether she may invent a slot at all, against
   admin-authored guidance, or only by proposing one for approval. Owner ruling
   20 Sept 2026 that this should be a three-mode setting; captured as its own

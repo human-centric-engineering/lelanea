@@ -56,12 +56,17 @@
  * read — `daybreak#156` / `daybreak#162`. §3.12 needs exactly one row more than
  * the head: the version before it, so a contradiction can be shown as a door
  * rather than an error. That is read straight off `framework_slot_value` here,
- * in **one** query for the whole page, and our case is commented on both issues.
+ * in **one** query for the whole page.
  * Delete {@link readPreviousVersions} and call the framework's reader when one
  * lands.
  *
+ * Our case is on both issues as of 21 September 2026: we have no runs, so none
+ * of `runId` applies to us, and we still land in the same missing cell from the
+ * other side — many slugs, one user, one version back.
+ *
  * Per-answer deletion has no path at all — erasure takes the account or nothing
- * (gap 5). Filed against `f-memory`, which owns deletion propagation.
+ * (gap 5). Filed as **t-78 on `f-memory`**, which owns deletion propagation,
+ * with the framework half raised as a paragraph on `daybreak#156`.
  *
  * @see lib/app/slots/notes-view.ts — the wire shape
  * @see .context/app/slots.md — "Her notes"
