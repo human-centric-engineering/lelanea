@@ -6,7 +6,12 @@ import { useEffect, useRef } from 'react';
 import { type DrawerId, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { ICON_RADIUS } from '@/components/app/shell/chrome';
 import { MapDrawerBody } from '@/components/app/shell/map-drawer';
-import { ResourcesDrawerBody } from '@/components/app/shell/resources-drawer';
+import {
+  ResourcesDrawerBody,
+  resourcesHead,
+  useResourcesSelection,
+  type ResourcesLoad,
+} from '@/components/app/shell/resources-drawer';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { cn } from '@/lib/utils';
 
@@ -34,8 +39,13 @@ const PANEL_W = 'w-[min(432px,100%)]';
  * `Object.keys()` returns `string[]`, so a record needed an assertion back to
  * the id union at the one place that iterates it — and it left the render order
  * as whatever the object literal happened to give. A list states both.
+ *
+ * A function of the resources load rather than a constant, because the
+ * resources row is no longer static: its lede names the open module and its
+ * tone takes that module's arc (`resourcesHead`). The map row is still
+ * constant, and reads the same either way.
  */
-const DRAWERS: {
+interface DrawerSpec {
   id: DrawerId;
   /** The lowercase tracked-out line above the title — `where you can go`. */
   eyebrow: string;
@@ -52,46 +62,51 @@ const DRAWERS: {
    * rather than a read of the `--tone` that `Panes` publishes. A panel riding
    * over the work is not part of the work.
    *
-   * **It is one value today because both drawers are teal, and it must not stay
-   * one value.** When the resources panel follows the open module, its tone
-   * becomes that module's arc — and the rule and the eyebrow will then need
-   * DIFFERENT tokens, because a 3px rule is a surface and an eyebrow is 12px
-   * type. `--color-secondary-ink` happens to do both (4.91:1 light, 6.96:1
-   * dark), and `--color-status-yellow` would fail the second at 2.03:1. The
-   * eyebrow's colour comes from `TIER_INKS`, never from a tier's surface hue.
+   * **One value paints both the rule and the eyebrow, so it has to be a token
+   * that can carry TYPE.** The resources panel follows the open module now, and
+   * its tone is that module's arc — through `TIER_INKS`, the `-ink` sibling of
+   * each hue, never the raw one: a 3px rule is a surface and an eyebrow is 12px
+   * type, and `--color-status-yellow` would fail the second at 2.03:1 where its
+   * ink passes at 5.05:1. The map, and the resources panel with no module open,
+   * keep `--color-secondary-ink` (4.91:1 light, 6.96:1 dark).
    */
   tone: string;
   /** What the body renders. */
   body: React.ReactNode;
-}[] = [
-  {
-    id: 'map',
-    eyebrow: 'where you can go',
-    title: 'Your map',
-    lede: 'Sixteen modules. Work through them in sequence, or ask Lelañea which one fits what you are bringing.',
-    tone: 'var(--color-secondary-ink)',
-    body: <MapDrawerBody />,
-  },
-  {
-    id: 'resources',
-    eyebrow: 'in lelañea’s own words',
-    title: 'Resources',
-    lede: 'Films and reading, in her own words.',
-    // The prototype's fallback for a panel with no module open, which is every
-    // panel until phase 3 gives resources something to follow.
-    tone: 'var(--color-secondary-ink)',
-    body: <ResourcesDrawerBody />,
-  },
-];
+}
+
+function drawers(resources: ResourcesLoad): DrawerSpec[] {
+  const head = resourcesHead(resources);
+  return [
+    {
+      id: 'map',
+      eyebrow: 'where you can go',
+      title: 'Your map',
+      lede: 'Sixteen modules. Work through them in sequence, or ask Lelañea which one fits what you are bringing.',
+      tone: 'var(--color-secondary-ink)',
+      body: <MapDrawerBody />,
+    },
+    {
+      id: 'resources',
+      eyebrow: 'in lelañea’s own words',
+      title: 'Resources',
+      // "On Values. This follows whatever you have open in the workspace." once
+      // the selection has arrived; the general line until then.
+      lede: head.lede,
+      tone: head.tone,
+      body: <ResourcesDrawerBody load={resources} />,
+    },
+  ];
+}
 
 /**
  * The map and resources drawers: panels that ride over the PANES, and over
  * nothing else.
  *
  * §04 shipped both as stubs (D6); §05 t-14 fills the map from the published
- * graph (`map-drawer.tsx`), and the resources are the designed placeholder until
- * phase 3. What is shared here is the MECHANISM: the slide, the scrim, the focus
- * handling and the Escape rung.
+ * graph (`map-drawer.tsx`), and §14 t-75 fills the resources from the selection
+ * for whatever is open (`resources-drawer.tsx`). What is shared here is the
+ * MECHANISM: the slide, the scrim, the focus handling and the Escape rung.
  *
  * ## It is rendered inside `Panes`, and that is the whole geometry
  *
@@ -132,6 +147,8 @@ export function Drawers() {
   const { drawer, closeDrawer } = useShellLayout();
   const panelRef = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
+  // Fetched here rather than in the body, because the head needs it too.
+  const resources = useResourcesSelection();
 
   /**
    * Focus moves in, and comes back to the control that opened it.
@@ -175,7 +192,7 @@ export function Drawers() {
           drawer ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
       />
-      {DRAWERS.map(({ id, eyebrow, title, lede, tone, body }) => {
+      {drawers(resources).map(({ id, eyebrow, title, lede, tone, body }) => {
         const open = drawer === id;
         return (
           <div

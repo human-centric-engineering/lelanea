@@ -112,6 +112,15 @@ export interface ShellLayout {
   chatW: number;
   chatSlim: boolean;
   drawer: DrawerId | null;
+  /**
+   * A film the resources drawer was asked to put first — `openDrawer('resources',
+   * { film })` — and `null` for a plain open. The drawer sends it to the API as
+   * `?film=`; nothing else reads it. Cleared on close and on navigation, so
+   * the next open is a plain one and a pin never outlives the route it was
+   * made on. This is the whole of what a suggestion made in conversation
+   * needs from the shell (t-77): one field, not a resources-specific API.
+   */
+  drawerFilm: string | null;
   pane: Pane;
   /**
    * The module the workspace is showing, published UP from the page — see
@@ -185,7 +194,7 @@ export interface ShellLayout {
   /** `commit: false` while a drag is in flight — see the implementation. */
   setChatWidth: (px: number, commit?: boolean) => void;
   setChatSlim: (slim: boolean) => void;
-  openDrawer: (id: DrawerId) => void;
+  openDrawer: (id: DrawerId, options?: { film?: string }) => void;
   closeDrawer: () => void;
   setPane: (pane: Pane) => void;
 }
@@ -229,6 +238,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [width, setWidth] = useState<WidthClass>('large');
   const [navOpen, setNavOpenState] = useState(false);
   const [drawer, setDrawer] = useState<DrawerId | null>(null);
+  const [drawerFilm, setDrawerFilm] = useState<string | null>(null);
   const [pane, setPaneState] = useState<Pane>('chat');
   const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
   const [slotsWritten, setSlotsWritten] = useState(0);
@@ -416,6 +426,10 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    */
   useEffect(() => {
     setNavOpenState(false);
+    // A pinned film is for the place the suggestion was made. Carried across a
+    // navigation with the drawer open, it led the NEXT module's list with a
+    // film chosen for the last one (`/code-review` round 2).
+    setDrawerFilm(null);
   }, [pathname]);
   // `pathname` covers a navigation, and nothing else does: tapping the item for
   // the route already showing produces no change, so the drawer and its scrim
@@ -519,8 +533,14 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     setNavOpenState(false);
   }, [navOpen]);
 
-  const openDrawer = useCallback((id: DrawerId) => setDrawer(id), []);
-  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const openDrawer = useCallback((id: DrawerId, options?: { film?: string }) => {
+    setDrawer(id);
+    setDrawerFilm(id === 'resources' ? (options?.film ?? null) : null);
+  }, []);
+  const closeDrawer = useCallback(() => {
+    setDrawer(null);
+    setDrawerFilm(null);
+  }, []);
   const setPane = useCallback((p: Pane) => setPaneState(p), []);
   const setModulePlace = useCallback((place: ModulePlace | null) => setModulePlaceState(place), []);
 
@@ -594,13 +614,13 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (navOpen) return closeNav();
-      if (drawer) return setDrawer(null);
+      if (drawer) return closeDrawer();
       if (width === 'medium' && wsOpen && !chatSlim) return setChatSlim(true);
       if (chatSlim && width !== 'medium') return setChatSlim(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, setChatSlim]);
+  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, closeDrawer, setChatSlim]);
 
   const value = useMemo<ShellLayout>(
     () => ({
@@ -611,6 +631,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatW,
       chatSlim,
       drawer,
+      drawerFilm,
       pane,
       modulePlace,
       setModulePlace,
@@ -637,6 +658,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       chatW,
       chatSlim,
       drawer,
+      drawerFilm,
       pane,
       modulePlace,
       setModulePlace,

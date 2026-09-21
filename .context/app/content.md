@@ -210,6 +210,16 @@ block list becomes markup. One renderer is the point: the description forbids
 paraphrase and forbids reflowing her single-sentence cadence into prose, and two
 pages with two ideas of what a document looks like is how that erodes.
 
+The second consumer of her words is the resources drawer
+(`components/app/shell/resources-drawer.tsx`, §14 t-75), which renders a
+`words` passage — a quote and its paragraphs, not a block list — from
+`/resources/:key`. It is held to the same rule: every paragraph is its own
+element, every string reaches the DOM as a React child, and nothing is
+re-flowed. A reading that names a `documentId` links to the page the site
+renders that document on (`DOCUMENT_PAGES` in the drawer, pinned to the real
+collection by its test); the welcome has no page and renders as a row that goes
+nowhere.
+
 `<AuthoredDocument document={…} firstName={…} />` — a server component. It takes
 a `FoundationalDocumentDetail` straight from the loader and renders the category
 eyebrow, the title, the subtitle where there is one, and every block in authored

@@ -9,11 +9,13 @@ import { Button } from '@/components/app/ui/button';
  * The two actions under a module: the one that works, and the one that says
  * why it does not yet.
  *
- * "In Lelañea's own words" opens the resources drawer, which this phase shows
- * its honest note — the drawer is the real destination and the mechanism is
- * real, so the button is live. "Talk about this part" needs the conversation,
- * which arrives in a later phase; it is `disabled` with the same reason the
- * composer gives, so the two surfaces never disagree about why.
+ * "In Lelañea's own words" opens the resources drawer, which follows the open
+ * module on its own (`resources-drawer.tsx` reads the route), so the button
+ * passes nothing — a plain `openDrawer('resources')` lands on her words on
+ * this module, two films and three readings chosen for it. "Talk about this
+ * part" needs the conversation, which arrives in a later phase; it is
+ * `disabled` with the same reason the composer gives, so the two surfaces never
+ * disagree about why.
  */
 export function ModuleActions() {
   const { openDrawer } = useShellLayout();
