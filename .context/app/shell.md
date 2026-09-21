@@ -27,7 +27,7 @@ one that breaks something silently.
 | Piece        | File                                                  | What it is                                                             |
 | ------------ | ----------------------------------------------------- | ---------------------------------------------------------------------- |
 | Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame     |
-| Nav          | `components/app/shell/shell-nav.tsx`                  | Five destinations + the account menu; 234px, or 64px slim              |
+| Nav          | `components/app/shell/shell-nav.tsx`                  | Six destinations + the account menu; 234px, or 64px slim               |
 | Account menu | `components/app/shell/account-menu.tsx`               | The footer's popover: account, settings, usage, admin, theme, sign out |
 | Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; `recently`, and ≤900 the burger and the pane switch              |
 | Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone      |
@@ -255,9 +255,13 @@ muted suffix beside a link that is already correct, not the page's heading.
    `<View>`.
 2. **`metadata.title`** matching the nav item's own words, as a plain string — a
    `{ absolute }` or `{ template }` object defeats the layout's `%s`.
-3. **`<View eyebrow title lede? note?>`** from `components/app/views/view.tsx`.
+3. **`<View eyebrow title lede? note? column?>`** from `components/app/views/view.tsx`.
    It owns the `<main>` and the `<h1>`; the shell has neither, so a reader had no
    landmark to skip to and no heading naming the page until it existed.
+   **`column`** centres the whole `<main>` at 54rem — head included, so the page
+   keeps one axis. Opt-in and off by default: it is for a view whose content has
+   a measure of its own (`/app/notes` is the first), and wrong for a stack of
+   full-width panels like settings, which wants the width.
 4. **A `VIEW_TONES` row**, or the band stays transparent and it looks unstyled.
 5. **`<PlaceholderCard>`** for anything not built, rather than new markup — see
    D6 below.
@@ -268,6 +272,28 @@ muted suffix beside a link that is already correct, not the page's heading.
    fails it just as hard for having a row. §05's modules under
    `/app/modules/<slug>` are the first of that kind, so they belong in a test
    of their own rather than in this list — `tests/unit/app/module-page.test.tsx`.
+
+### The sixth destination, and when a view is NOT a person-thing
+
+`SHELL_NAV` carried the prototype's five until t-73 added **Lelañea's notes**
+(`/app/notes`). The 15 September ruling sends everything about the person into
+the account menu, and this looked like one of those — it is the most personal
+surface in the app. It is not, and the distinction is worth keeping:
+
+> The account menu is for things you **manage**. The nav is for places you
+> **work**.
+
+§3.3 makes the workspace the place where "the profile assembling" becomes
+visible and says the pairing should provoke curiosity about what has been
+recorded and why. A note appearing inside the turn that wrote it is the whole
+demonstration of that, and it is witnessed only by somebody sitting on the
+destination while they talk — which nobody does from inside a popover. Owner
+ruling, 21 September 2026. See [`slots.md`](./slots.md#her-notes--the-member-surface-t-73).
+
+Two counts move with it and are worth grepping when the next one lands:
+`shell-nav.test.tsx` asserts the number of links at 64px (derived from
+`SHELL_NAV`, not written out), and `shell-view-pages.test.tsx` asserts
+`MODULES`' keys equal `SHELL_NAV` plus the account-menu rows exactly.
 
 The view's eyebrow and title render **inside** the scroll body, not in the
 workspace's fixed header. The prototype's `wsHead()` writes above the scroll

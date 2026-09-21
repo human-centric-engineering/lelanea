@@ -60,6 +60,7 @@ import SituationsPage, { metadata as situationsMeta } from '@/app/(lelanea)/app/
 import UsagePage, { metadata as usageMeta } from '@/app/(lelanea)/app/usage/page';
 import WorkspacePage, { metadata as workspaceMeta } from '@/app/(lelanea)/app/workspace/page';
 import { metadata as accountMeta } from '@/app/(lelanea)/app/account/page';
+import { metadata as notesMeta } from '@/app/(lelanea)/app/notes/page';
 
 /**
  * Every destination the nav offers, other than the shell root, plus every row
@@ -90,6 +91,11 @@ const MODULES = {
   // `shell-account-page.test.tsx` where the session can be stood up. Its
   // metadata is still checked here, with everything else's.
   '/app/account': { Page: null, metadata: accountMeta, placeholder: false },
+  // Her notes is async and reads the session, for the same reason the account
+  // view does — and its body fetches, so rendering it here would need a shell
+  // provider and a `fetch` as well. `tests/unit/components/app/notes/` owns
+  // the panel; the metadata row is still checked here with everything else's.
+  '/app/notes': { Page: null, metadata: notesMeta, placeholder: false },
 } as const;
 
 describe('every destination the nav offers is a route', () => {

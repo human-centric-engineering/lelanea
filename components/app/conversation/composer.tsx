@@ -16,6 +16,19 @@ export interface ComposerProps {
   busy: boolean;
   /** Whether the microphone is offered — the route's answer; `null` until it has answered. */
   voiceInput?: VoiceInputState | null;
+  /**
+   * Words handed to the box from outside the conversation — "Ask her about
+   * this" on one of her notes (t-73). `null` when nothing is waiting.
+   *
+   * They go through the same `insertAtCaret` the microphone uses, and that is
+   * the point of the prop rather than a second path: three rounds of review
+   * went into where those words land, whether focus is taken, and what happens
+   * to a box that is already holding something. A note's question deserves the
+   * same answers, and a second implementation would get one of them wrong.
+   */
+  insert?: string | null;
+  /** The words are in the box. The sender clears them, so the same ones can come twice. */
+  onInserted?: () => void;
   /** Injectable for tests, passed to the microphone. */
   fetchImpl?: typeof fetch;
 }
@@ -54,7 +67,16 @@ export interface ComposerProps {
  * at the caret, replacing any selection, for them to read and edit; the box
  * is never sent for them. See `voice-note.tsx`.
  */
-export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl }: ComposerProps) {
+export function Composer({
+  value,
+  onChange,
+  onSend,
+  busy,
+  voiceInput,
+  insert,
+  onInserted,
+  fetchImpl,
+}: ComposerProps) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   /** Where the person last had the caret, or null since mount. */
   const lastCaret = React.useRef<{ start: number; end: number } | null>(null);
@@ -100,6 +122,31 @@ export function Composer({ value, onChange, onSend, busy, voiceInput, fetchImpl 
     },
     [value, onChange]
   );
+
+  /*
+   * Words from outside, taken once.
+   *
+   * `onInserted` is called in the same pass rather than left to the sender to
+   * clear, so the prop is a hand-over rather than a piece of state two
+   * components hold: nothing here re-reads `insert` after this, and a re-render
+   * with the value still set would otherwise insert it again.
+   */
+  const inserted = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!insert) {
+      // Cleared, so the SAME words offered again are a fresh hand-over.
+      inserted.current = null;
+      return;
+    }
+    // `insertAtCaret` closes over `value`, so its identity changes on every
+    // keystroke and this effect re-runs. Without the ref, a sender that does
+    // not clear — `onInserted` is optional — would insert the words again on
+    // the next character the person typed.
+    if (inserted.current === insert) return;
+    inserted.current = insert;
+    insertAtCaret(insert);
+    onInserted?.();
+  }, [insert, insertAtCaret, onInserted]);
 
   // The auto-grow runs on every value change, not only on `input`: a value
   // cleared by the hook fires no input event, and the box would keep the

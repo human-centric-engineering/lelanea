@@ -24,6 +24,7 @@ import {
 } from '@/lib/app/agent/endings';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
+import { SLOT_WRITE_CAPABILITY } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
 
@@ -149,6 +150,13 @@ export interface ConversationState {
 
 interface Options {
   seat?: string;
+  /**
+   * A turn ended having written to her notes (t-73). Called **once per turn**,
+   * whatever the turn wrote and however it ended — the panel re-reads the whole
+   * page, so three notes is still one refresh, and a turn that wrote and then
+   * failed has still written.
+   */
+  onSlotsWritten?: () => void;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
 }
@@ -156,6 +164,14 @@ interface Options {
 export function useConversation(options: Options = {}): ConversationState {
   const seat = options.seat ?? CONVERSATION_SEAT;
   const fetchImpl = options.fetchImpl;
+  const { onSlotsWritten } = options;
+  // Read through a ref so `send` does not have to be rebuilt when a parent
+  // passes a fresh closure — the whole callback list below is a dependency of
+  // the composer's `onSend`, and this one changes on every render of the pane.
+  const notifySlots = useRef(onSlotsWritten);
+  useEffect(() => {
+    notifySlots.current = onSlotsWritten;
+  }, [onSlotsWritten]);
 
   const [phase, setPhase] = useState<ConversationPhase>('loading');
   const [entries, setEntries] = useState<ConversationEntry[]>([]);
@@ -276,6 +292,27 @@ export function useConversation(options: Options = {}): ConversationState {
         const startedAt = new Date().toISOString();
         let replyText = '';
         let capabilities: string[] = [];
+        /**
+         * Tell the notes panel, if this turn wrote one, and tell it once.
+         *
+         * Read off `capabilities` rather than a flag of its own, because that
+         * list is already "the calls that ANSWERED" — a `fill_slot` the
+         * platform refused (`tool_not_advertised`), or one that threw, wrote
+         * nothing and must not cause a refresh that finds nothing new.
+         *
+         * A turn settles exactly once — `done` breaks the loop, an `error`
+         * frame settles through `end`, and both post-loop paths are guarded by
+         * `ended` — so `told` is a belt rather than the mechanism. It is here
+         * because "exactly one refresh per turn" is a property the panel
+         * depends on, and a future path through this function would not know it
+         * had to preserve it.
+         */
+        let told = false;
+        const settled = () => {
+          if (told || !capabilities.includes(SLOT_WRITE_CAPABILITY)) return;
+          told = true;
+          notifySlots.current?.();
+        };
         let resource: CrisisResource | undefined;
         let crisisText: string | undefined;
         let citations: Citation[] = [];
@@ -300,6 +337,12 @@ export function useConversation(options: Options = {}): ConversationState {
           if (boxed) setDraft(message);
           if (options.keepId) kept.current = { turnId, message };
           finish(boxed ? [ending] : [userEntry, ending]);
+          // A turn that captured and then ended without her has still written:
+          // the note is in the profile, and a panel left stale until the next
+          // turn would be showing the person less than the app holds. The
+          // retry writes nothing further — `app_turn_slot_write` suppresses a
+          // second write under the same turn id (`lib/app/slots/capture.ts`).
+          settled();
           refreshStatus();
         };
 
@@ -355,6 +398,10 @@ export function useConversation(options: Options = {}): ConversationState {
             case 'done':
               // A reply arrived: whatever the status read said, she is answering.
               setStatus('available');
+              // Before `finish`, so the panel is asked to re-read in the same
+              // batch that puts her reply in the transcript — §3.3's pairing is
+              // that the consequence appears beside the words, not after them.
+              settled();
               finish([
                 userEntry,
                 {

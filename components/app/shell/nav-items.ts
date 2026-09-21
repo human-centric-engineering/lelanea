@@ -1,7 +1,18 @@
-import { Columns2, Map, MessageCircle, Send, Waves, type LucideIcon } from 'lucide-react';
+import {
+  Columns2,
+  Map,
+  MessageCircle,
+  NotebookPen,
+  Send,
+  Waves,
+  type LucideIcon,
+} from 'lucide-react';
+
+import { NOTES_PAGE } from '@/lib/app/slots/notes-client';
 
 /**
- * The five destinations of the left nav, in the prototype's order.
+ * The six destinations of the left nav — the prototype's five, in its order,
+ * plus her notes.
  *
  * The prototype has seven: "Usage and billing" and "Settings" sat at the foot,
  * pinned down by a flexible spacer. Both moved into the account menu
@@ -18,6 +29,17 @@ import { Columns2, Map, MessageCircle, Send, Waves, type LucideIcon } from 'luci
  * one of them resolves to a page in t-11, and until then to the shell's own
  * placeholder. `The conversation` is `/app` itself: it is the way back to the
  * clean view rather than a destination beside the others.
+ *
+ * ## The sixth is not in the prototype, and is not a person-thing either
+ *
+ * `Lelañea's notes` (f-slots t-73). The 15 September ruling sent everything
+ * about the PERSON — account, settings, usage — into the account menu, and this
+ * looked like one of those. It is not: §3.3 makes the workspace the place where
+ * "the profile assembling" becomes visible, and says the pairing should provoke
+ * curiosity about what has been recorded and why. That needs somewhere a reader
+ * passes, and somewhere they can sit WHILE they talk — a note appearing inside
+ * the turn that wrote it is the whole demonstration, and nobody witnesses it
+ * from inside a popover. Owner ruling, 21 September 2026.
  */
 export interface ShellNavItem {
   href: string;
@@ -48,6 +70,12 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   },
   { kind: 'separator' },
   { href: '/app/journey', label: 'Your journey', hint: 'Where you have been', icon: Map },
+  {
+    href: NOTES_PAGE,
+    label: 'Lelañea’s notes',
+    hint: 'What is written down about you, and why',
+    icon: NotebookPen,
+  },
   {
     href: '/app/situations',
     label: 'Life situations',

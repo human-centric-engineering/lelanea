@@ -136,6 +136,42 @@ export interface ShellLayout {
    * the heading of the page.
    */
   setModulePlace: (place: ModulePlace | null) => void;
+  /**
+   * How many turns have finished having written to her notes, this session.
+   *
+   * A **counter, not a timestamp and not a boolean.** The panel refreshes on
+   * every change, so the value only has to differ from the last one it saw: a
+   * boolean has nowhere to go after the first turn, and a clock makes a refresh
+   * depend on two turns landing in different milliseconds. It starts at 0 and
+   * the panel's first read is its mount, so a mount is never a refresh.
+   *
+   * It lives here for the `modulePlace` reason: the conversation and the
+   * workspace are SIBLINGS, and a turn ends in the first while the notes are
+   * rendered in the second. See `noteSlotsWritten`.
+   */
+  slotsWritten: number;
+  /**
+   * A turn ended having written at least one note. Called once per turn by
+   * `useConversation`, never per `fill_slot` frame — a turn that writes three
+   * notes is still one refresh, and the read is the whole page either way.
+   */
+  noteSlotsWritten: () => void;
+  /**
+   * Words the composer should be holding, put there by something outside the
+   * conversation — today, "Ask her about this" on a note. `null` when there is
+   * nothing waiting, which is almost always.
+   *
+   * The conversation takes them by calling {@link takeAsk}, and the taking is
+   * what makes the same words handable twice: `null` in between means the next
+   * hand-over is a change even when the text is identical. Without it, asking
+   * about the same note a second time would set state to the value it already
+   * held and no effect would run.
+   */
+  ask: string | null;
+  /** Hand words to the composer. Replaces anything not yet taken. */
+  setAsk: (text: string) => void;
+  /** The composer has the words. Clears {@link ask}. */
+  takeAsk: () => void;
   toggleNavSlim: () => void;
   /**
    * Collapse the menu to the icon rail WITHOUT touching the stored preference —
@@ -195,6 +231,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [drawer, setDrawer] = useState<DrawerId | null>(null);
   const [pane, setPaneState] = useState<Pane>('chat');
   const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
+  const [slotsWritten, setSlotsWritten] = useState(0);
+  const [ask, setAskState] = useState<string | null>(null);
 
   /**
    * The stored preference and the live value are DIFFERENT THINGS, and keeping
@@ -487,6 +525,22 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const setModulePlace = useCallback((place: ModulePlace | null) => setModulePlaceState(place), []);
 
   /*
+   * Both of these are notifications between the two panes, not layout — which
+   * is the one thing this provider's docblock says does not belong here. They
+   * are here for `modulePlace`'s reason rather than in spite of it: the panes
+   * are siblings, context flows downward only, and this is their nearest common
+   * ancestor. A module-scoped context would be a second provider wrapping the
+   * same two children.
+   *
+   * `setSlotsWritten` takes the updater form so two turns finishing inside one
+   * React batch — a retry landing beside the turn it replaced — still count as
+   * two, and so the callback never has to depend on the count it increments.
+   */
+  const noteSlotsWritten = useCallback(() => setSlotsWritten((count) => count + 1), []);
+  const setAsk = useCallback((text: string) => setAskState(text), []);
+  const takeAsk = useCallback(() => setAskState(null), []);
+
+  /*
    * Only while the slug still matches the route.
    *
    * The page publishes from an effect, so between asking for a module and that
@@ -560,6 +614,11 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       pane,
       modulePlace,
       setModulePlace,
+      slotsWritten,
+      noteSlotsWritten,
+      ask,
+      setAsk,
+      takeAsk,
       toggleNavSlim,
       collapseNav,
       setNavOpen,
@@ -581,6 +640,11 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       pane,
       modulePlace,
       setModulePlace,
+      slotsWritten,
+      noteSlotsWritten,
+      ask,
+      setAsk,
+      takeAsk,
       toggleNavSlim,
       collapseNav,
       setNavOpen,

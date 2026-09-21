@@ -515,3 +515,108 @@ describe('useConversation', () => {
     expect(init.signal?.aborted).toBe(true);
   });
 });
+
+/**
+ * The signal the notes panel refreshes on (t-73).
+ *
+ * The panel re-reads the whole page, so the only thing that matters is that it
+ * is told **once per turn that wrote**, and not told at all otherwise. Each
+ * absence below is asserted on a turn that ran to `done` with frames in it, so
+ * "was not called" cannot pass against a turn that never happened.
+ */
+describe('a turn that writes a note tells the panel, once', () => {
+  const wrote = () =>
+    latest().push('capability_result', {
+      capabilitySlug: 'fill_slot',
+      result: { success: true, data: { slotSlug: 'life_work', version: 1, minted: false } },
+    });
+
+  async function turnWith(push: () => void, onSlotsWritten: () => void) {
+    const hook = renderHook(() => useConversation({ fetchImpl, onSlotsWritten }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.send('my work is going badly'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      push();
+      latest().push('content', { delta: 'I have noted that.' });
+      latest().push('done', {});
+      latest().close();
+    });
+    return hook;
+  }
+
+  it('tells it exactly once when the turn captured', async () => {
+    const onSlotsWritten = vi.fn();
+    await turnWith(wrote, onSlotsWritten);
+    expect(onSlotsWritten).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells it once, not per note, when the turn captured several', async () => {
+    const onSlotsWritten = vi.fn();
+    await turnWith(() => {
+      wrote();
+      wrote();
+      latest().push('capability_results', {
+        results: [{ capabilitySlug: 'fill_slot', result: { success: true } }],
+      });
+    }, onSlotsWritten);
+    expect(onSlotsWritten).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing when the turn called nothing', async () => {
+    const onSlotsWritten = vi.fn();
+    const hook = await turnWith(() => {}, onSlotsWritten);
+    // The turn ran and produced a reply — the population is not empty.
+    expect(hook.result.current.entries.some((entry) => entry.kind === 'reply')).toBe(true);
+    expect(onSlotsWritten).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the turn called something else', async () => {
+    const onSlotsWritten = vi.fn();
+    await turnWith(
+      () =>
+        latest().push('capability_result', {
+          capabilitySlug: 'search_knowledge_base',
+          result: { success: true, data: {} },
+        }),
+      onSlotsWritten
+    );
+    expect(onSlotsWritten).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the write was refused rather than made', async () => {
+    const onSlotsWritten = vi.fn();
+    await turnWith(
+      () =>
+        // The platform refusing a tool is a frame like any other, and nothing
+        // was written — a refresh here would find nothing new and teach the
+        // reader that the panel moves when it has not.
+        latest().push('capability_result', {
+          capabilitySlug: 'fill_slot',
+          result: { success: false, error: { code: 'tool_not_advertised' } },
+        }),
+      onSlotsWritten
+    );
+    expect(onSlotsWritten).not.toHaveBeenCalled();
+  });
+
+  it('still tells it when the turn captured and then ended without her', async () => {
+    const onSlotsWritten = vi.fn();
+    const hook = renderHook(() => useConversation({ fetchImpl, onSlotsWritten }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.send('my work is going badly'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      wrote();
+      latest().push('error', { code: 'unavailable', message: 'x' });
+      latest().close();
+    });
+
+    // The note is in the profile whatever happened to the reply, and a panel
+    // left stale until the next turn shows less than the app holds.
+    expect(onSlotsWritten).toHaveBeenCalledTimes(1);
+  });
+});

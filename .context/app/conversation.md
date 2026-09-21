@@ -156,10 +156,10 @@ the authored shape drops to `undefined` and the frame still arrives, because
 | `warning` `still_thinking` | the thinking row's label changes; no second frame                                                                                                                              |
 | `warning` `crisis` (soft)  | the authored `resource` laid out as an `alert` row ahead of her reply, live and once folded; its `message` — the whole resource as text — where the resource did not parse     |
 | `status`                   | the platform's operator strings — never shown                                                                                                                                  |
-| `capability_result(s)`     | slugs collected for the drawer (t-66)                                                                                                                                          |
+| `capability_result(s)`     | slugs collected for the drawer (t-66); an answering `fill_slot` also arms the notes refresh below (t-73)                                                                       |
 | `citations`                | carried on the reply (t-66)                                                                                                                                                    |
 | `content_reset`            | her words start over                                                                                                                                                           |
-| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame                                                                                            |
+| `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame; the notes panel is told, if the turn wrote (t-73)                                         |
 | `error`                    | an `ending` entry: the words back in the box, bound to the turn id, and her words where the reply would have been (below); a hard `crisis` frame lays the resource out instead |
 
 The account built live from `done` carries model, provider, tokens and
@@ -406,6 +406,32 @@ not — a person can draft their next thought while she answers.
 
 An unmount aborts the in-flight request. The turn carries on server-side and
 is recorded, so closing the tab loses nothing.
+
+### What a turn changes on the other side (t-73)
+
+The conversation and the workspace are **siblings**, and context flows downward
+only — so the two things that pass between them ride on `ShellLayoutProvider`,
+which is their nearest common ancestor. Same arrangement as `modulePlace`, and
+neither of them is layout; both say so at their declaration.
+
+- **`onSlotsWritten`** — an option on `useConversation`, wired by the pane to
+  the provider's `noteSlotsWritten()`. Called **once per turn that wrote a
+  note**, whatever it wrote and however it ended: the panel re-reads its whole
+  page, so three notes is one refresh, and a turn that captured and then ended
+  without her has still written. It is read off the `capabilities` list — the
+  calls that **answered** — so a `fill_slot` the platform refused arms nothing.
+  That makes a note appear beside the words that produced it, inside the same
+  turn, which is the whole of §3.3's pairing.
+- **`insert` / `onInserted`** — a prop on `Composer`, fed from the provider's
+  `ask`. "Ask her about this" on a note puts its question in the box, through
+  the **same `insertAtCaret` the microphone uses**: where those words land,
+  whether focus is taken, and what happens to a box already holding something
+  all cost review rounds to settle, and a second path would get one of them
+  wrong. The composer clears `ask` as it takes it, which is what lets the same
+  question be handed over twice.
+
+Both are in [`slots.md`](./slots.md#two-cross-pane-channels-both-on-shelllayoutprovider)
+from the notes side.
 
 ## The copy
 

@@ -68,3 +68,37 @@ describe('what it wraps', () => {
     expect(main.contains(screen.getByTestId('body'))).toBe(true);
   });
 });
+
+describe('the centred column (t-73)', () => {
+  it('is off unless a view asks for it', () => {
+    // The default is what every view before `/app/notes` renders as, and a
+    // change of default here would silently re-lay-out six pages.
+    render(<View eyebrow="a" title="b" />);
+    const main = screen.getByRole('main');
+    expect(main.className).not.toMatch(/mx-auto/);
+    expect(main.className).not.toMatch(/max-w-/);
+  });
+
+  it('moves the whole page, head included, rather than just the body', () => {
+    render(
+      <View column eyebrow="a" title="b" lede="c">
+        <div data-testid="body" />
+      </View>
+    );
+    const main = screen.getByRole('main');
+    // The cap is on `<main>`, so the title and the lede travel with the
+    // content. Centring the body alone puts the page on two axes, which is
+    // the thing this prop exists to avoid.
+    expect(main.className).toMatch(/mx-auto/);
+    expect(main.className).toMatch(/max-w-\[54rem\]/);
+    expect(main.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
+    expect(main.contains(screen.getByTestId('body'))).toBe(true);
+  });
+
+  it('keeps `w-full` beside the cap', () => {
+    // Without it a flex or grid parent sizes the column to its content and
+    // `mx-auto` then centres something narrower than the reader asked for.
+    render(<View column eyebrow="a" title="b" />);
+    expect(screen.getByRole('main').className).toMatch(/w-full/);
+  });
+});

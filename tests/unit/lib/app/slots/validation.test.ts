@@ -19,6 +19,8 @@ import { describe, it, expect } from 'vitest';
 
 import {
   MAX_DESCRIPTION_LENGTH,
+  MAX_MINTED_SLUG_LENGTH,
+  slotCorrectionSchema,
   slotDefinitionActiveSchema,
   slotDefinitionCreateSchema,
   slotDefinitionSaveSchema,
@@ -153,5 +155,49 @@ describe('client safety', () => {
 
     expect(source).not.toMatch(/from '@\/lib\/framework\/data-slots'/);
     expect(source).toMatch(/from '@\/lib\/framework\/data-slots\/vocabulary'/);
+  });
+});
+
+/**
+ * A correction names a slug a NOTE sits under, which is not the same set as the
+ * slugs an admin may write into the taxonomy (t-73, /security-review).
+ */
+describe('slotCorrectionSchema', () => {
+  it('accepts exactly the slugs the write path accepts, pinned to fill_slot itself', async () => {
+    // Read from the capability's advertised definition rather than restated:
+    // the schema it validates with is protected, and a second copy of "120"
+    // here is the drift this test exists to catch. If Daybreak widens or
+    // narrows its bound, this fails and says which way.
+    const { FillSlotCapability } =
+      await import('@/lib/framework/data-slots/capabilities/fill-slot');
+    const advertised = new FillSlotCapability().functionDefinition.parameters as {
+      properties: { slotSlug: { maxLength: number } };
+    };
+    expect(MAX_MINTED_SLUG_LENGTH).toBe(advertised.properties.slotSlug.maxLength);
+  });
+
+  it('accepts a slug Lelañea coined that the taxonomy rule would refuse', () => {
+    // Capitals and a hyphen: legal for `fill_slot`, illegal for an admin. A
+    // note under one of these offered "That's not right" and then refused every
+    // save until this schema stopped borrowing the taxonomy's rule.
+    expect(slotCorrectionSchema.safeParse({ slotSlug: 'Weekly-Rhythm', value: 'x' }).success).toBe(
+      true
+    );
+    expect(slotSlugSchema.safeParse('Weekly-Rhythm').success).toBe(false);
+  });
+
+  it('holds the bound at both ends', () => {
+    const at = 'a'.repeat(MAX_MINTED_SLUG_LENGTH);
+    expect(slotCorrectionSchema.safeParse({ slotSlug: at, value: 'x' }).success).toBe(true);
+    expect(slotCorrectionSchema.safeParse({ slotSlug: `${at}a`, value: 'x' }).success).toBe(false);
+    expect(slotCorrectionSchema.safeParse({ slotSlug: '', value: 'x' }).success).toBe(false);
+  });
+
+  it('still refuses a body that names anything else', () => {
+    // Strict: a `userId` is a 400 rather than a field quietly dropped.
+    expect(
+      slotCorrectionSchema.safeParse({ slotSlug: 'life_work', value: 'x', userId: 'someone' })
+        .success
+    ).toBe(false);
   });
 });

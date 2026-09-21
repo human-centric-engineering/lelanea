@@ -167,7 +167,7 @@ inherited — deliberately about the **work** of a turn and not about her voice,
 because who she is and how she sounds arrive from the profile. Capture is work,
 so it goes here.
 
-Three things in that clause are decisions rather than restatements, and each is
+Five things in that clause are decisions rather than restatements, and each is
 worth knowing before editing it:
 
 - **The confidence bands.** §3.12 says what they mean — stated plainly is high,
@@ -177,6 +177,22 @@ worth knowing before editing it:
   not said outright · **1–4** inferred. Three bands rather than two because the
   middle case was otherwise going to be written as high by a model with no band
   for it. The bands matter more than the numbers.
+- **The reading is written TO the person, in the second person** (t-73). A
+  reading and its reasoning note are both read back on `/app/notes` by the
+  person they are about, and nothing said so until that surface existed. What
+  she wrote meanwhile was third-person prose for a future reader of a file —
+  _"His brother has not spoken to him since their father died"_ — which, shown
+  to the person whose brother it is, reads as a dossier. Owner ruling, 21
+  September 2026, from a screenshot of the panel.
+- **The reasoning note is a paraphrase of what they did, with the act named** —
+  said, mentioned, noticed, remembered, suggested, wondered (t-73). Which act it
+  was is what makes a reading checkable by the person checking it: _"you
+  mentioned it in passing"_ invites a different answer from _"you said it
+  plainly"_. **Second person rather than their name**, though the ruling
+  illustrated it with one: nothing in her context carries the account's name,
+  and a name picked up mid-conversation is a reading like any other. **These two
+  clauses move the golden set's baseline**; the run after they land is one to
+  read rather than skim.
 - **`user_confirmed` is deliberately absent** from the `sourceType` values she is
   offered. It belongs to the correction path on the panel (t-73), where a person
   actually confirms something. Letting her write it would make a correction

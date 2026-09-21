@@ -2,10 +2,10 @@ import { ACCOUNT_LEDE } from '@/components/app/views/account-view';
 import { View } from '@/components/app/views/view';
 
 /**
- * Account is the only view under `/app` that waits on anything — it reads the
- * session, which makes the route dynamic — so it is the only one with a loading
- * boundary. The others render from constants and would show this for a frame
- * and then never again.
+ * Account waits on something — it reads the session, which makes the route
+ * dynamic — so it has a loading boundary. So does `/app/notes`, for the same
+ * reason, and those two are the only ones: the others render from constants and
+ * would show this for a frame and then never again.
  *
  * ## What is drawn as known, and what is not
  *
