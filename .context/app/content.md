@@ -86,17 +86,19 @@ explorations — is validated but not served, and lives in
 
 ## Endpoints
 
-| Route                                         | Auth       | Notes                       |
-| --------------------------------------------- | ---------- | --------------------------- |
-| `GET /api/v1/app/content/documents`           | public     | index, no prose             |
-| `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id   |
-| `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases      |
-| `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets |
+| Route                                         | Auth       | Notes                                                       |
+| --------------------------------------------- | ---------- | ----------------------------------------------------------- |
+| `GET /api/v1/app/content/documents`           | public     | index, no prose                                             |
+| `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id                                   |
+| `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases                                      |
+| `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets                                 |
+| `GET /api/v1/app/content/resources`           | `withAuth` | the library: films, reading, her words per key              |
+| `GET /api/v1/app/content/resources/[key]`     | `withAuth` | what the drawer shows for one open thing; `?film=` pins one |
 
-All four carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
-all four keep the platform's `private, no-cache` default.
+All six carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
+all six keep the platform's `private, no-cache` default.
 
-The `withAuth` route declares `ownership: { decidedBy: 'nothing' }` (Sunrise
+Each `withAuth` route declares `ownership: { decidedBy: 'nothing' }` (Sunrise
 0.12.0's authorization seam — `.context/auth/authorization.md`): it serves
 published content and has no per-user rows to narrow. The declaration is
 load-bearing, not decoration — without it the guard answers every non-admin
@@ -336,6 +338,65 @@ which otherwise fails far from its cause:
   phases the module actually has
 - `content.questionCount` matches the questions actually present, and they are
   numbered from one in order
+
+## Resources — her films and reading, and her words on whatever is open
+
+`content/lelanea_resources.json` · `lib/app/content/resources.ts` ·
+`app/api/v1/app/content/resources/` (f-resources t-74; product description
+§6.1, §9). The drawer's content: what the Curator agent surfaces and what is
+browsable directly.
+
+**Keyed like the structure file.** `films[]` and `readings[]` each carry what
+the piece is for (`subtitle`) and where it belongs (`relatesTo`: a module id
+such as `module_01_values`, or `journey`, `situations`, or `null` for a piece
+that belongs to everything). `words` is per key — a `quote` and a few short
+`paragraphs` — with `default` required, because it is what every key without
+words of its own reads. A film links out (`href`); a reading is a foundational
+document (`documentId`) or a link (`href`), never both, as a union. No
+thumbnails: nothing exists to show.
+
+**"In her own words" means verbatim, and a test proves it.** Every `words`
+entry cites its `source` — a foundational document id, or a step of the Values
+module (`values_module.json`, release-2 content that is validated but not
+otherwise served) — and `tests/unit/lib/app/content/resources.test.ts` asserts
+the quote and every paragraph occur character for character in that source. A
+tidied comma fails CI. Nothing in this file is drafted in her register: the
+voice fingerprint's drafted-with-provenance precedent describes her voice,
+whereas this is shown _as_ her words, so the two are held to different rules.
+Passages are chosen so that none carries a merge field — the drawer substitutes
+nothing.
+
+**It ships as a draft.** `collection.provenance` (`status`,
+`awaitingSignOffFrom`, `note`) is served, not withheld. Today: two passages the
+builder picked from her material (values, from the "Centered Living" lesson; the
+default, from the welcome statement) and **empty film and reading lists** — no
+film of hers exists yet and only she can say which pieces belong beside which
+module. Her list lands as a content-only change (t-76). The working `notes` are
+withheld, as every file's are.
+
+| Function                                 | Returns                                                                                                         |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `getResourcesLibrary()`                  | collection meta + provenance, every film, every reading, every `words` entry                                    |
+| `selectResourcesFor(key, { pin? })`      | her words on it, up to two films and three readings, the module's `title` and `tier`; `null` for an unknown key |
+| `selectResources(file, modules, key, …)` | the same as a pure function of a parsed file — what the tests use                                               |
+| `buildResourcesFileSchema(known)`        | the strict schema, parameterised on the module and document ids its referential checks need                     |
+
+**The selection is the prototype's `pickFor`.** What belongs to the open thing
+first, then what belongs to everything, capped at two films and three readings
+("the drawer is for one thing at a time"); a key with no words of its own reads
+`default`'s and says so (`wordsAreOwn: false`). `pin` puts one film first,
+which is how a suggestion made in conversation opens the drawer on it (t-77).
+
+**Slugs in, ids inside.** The shell asks by module slug (`values`), the file
+keys by id (`module_01_values`); `moduleSlugFromId()` is the one rule between
+them ([`journey.md`](./journey.md)). `/resources/:key` answers a 404 for a key
+that is neither a module on the published structure nor one of the three fixed
+keys — a typo and a module with nothing of its own must not look the same, so
+the latter is a 200 with the default words.
+
+Referential checks beyond the four above: every `relatesTo` and every `words`
+key is a module id or a fixed key; every `documentId`, and every source that is
+a document, resolves; ids are unique within each list.
 
 ## Storage
 
