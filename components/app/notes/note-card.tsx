@@ -1,11 +1,12 @@
 'use client';
 
-import { ChevronRight } from 'lucide-react';
-import { useId, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { Card } from '@/components/app/ui/card';
+import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { correctNote, NotesRefused } from '@/lib/app/slots/notes-client';
 import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
@@ -66,6 +67,18 @@ export interface NoteCardProps {
   onCorrected: () => void;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
+  /**
+   * The heading it is filed under, shown before the tag. Set when the page is
+   * sorted by recency, where there is no group section above the card to say so.
+   */
+  heading?: string;
+  /**
+   * Fold the card to its one-line row (t-79). Drawn as a chevron in the card's
+   * top corner — the same chevron, pointing the other way, is what opens a row.
+   */
+  onFold?: () => void;
+  /** Take focus on the chevron when drawn — set when the row was just opened. */
+  focusFold?: boolean;
 }
 
 /**
@@ -207,6 +220,18 @@ export function formatWhen(iso: string): string {
   }).format(at);
 }
 
+/**
+ * What a withheld note says instead of its sentinel. Exported because the list
+ * row says the same thing, and two copies of it would drift.
+ */
+export const WITHHELD_WORDS =
+  'Lelañea noticed something here and deliberately kept no record of what you said. Health, feeling and belief are left out of the written record.';
+
+/** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
+export function noteTag(note: Note): string {
+  return note.slotSlug.replace(/_/g, ' ');
+}
+
 /** Long enough to be recognisable in the composer, short enough not to fill the box. */
 const ASK_EXCERPT = 300;
 
@@ -299,17 +324,62 @@ function Aside({ note }: { note: Note }) {
  *
  * The marker is ours: `list-none` kills the native triangle, which sits on the
  * text baseline and cannot be positioned.
+ *
+ * ## "How Lelañea came to this" is plain text, not a panel (t-79)
+ *
+ * `plain` drops the lozenge: the summary is a line of muted text with its
+ * chevron, and opening it shows the detail beside a left rule and nothing
+ * else. The owner's note from the running page — a boxed control under every
+ * reading was more chrome than a line of provenance deserves, and it competed
+ * with the reading for weight.
  */
 function Disclosure({
   summary,
   tone,
+  plain,
   children,
 }: {
   summary: React.ReactNode;
   /** A left edge in the palette's reflective hue, for the history panel. */
   tone?: 'history';
+  /** Text and a chevron, no box; the open detail sits beside a left rule. */
+  plain?: boolean;
   children: React.ReactNode;
 }) {
+  if (plain) {
+    return (
+      <details className="group">
+        <summary
+          className={cn(
+            'text-muted-foreground inline-flex cursor-pointer list-none items-center gap-1.5',
+            'rounded-sm text-[12.5px] leading-[1.45] select-none',
+            'transition-colors duration-200 hover:text-[var(--color-heading)]',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-[var(--color-ring)]'
+          )}
+        >
+          <ChevronRight
+            size={13}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className={cn(
+              'flex-none transition-transform duration-200 ease-[var(--ease-brand)]',
+              'group-open:rotate-90 motion-reduce:transition-none'
+            )}
+          />
+          {summary}
+        </summary>
+        <div
+          className={cn(
+            'text-muted-foreground mt-2 ml-[6px] flex max-w-[27rem] flex-col gap-2',
+            'border-l-2 border-[var(--color-divider)] pl-3.5 text-[13px] leading-[1.6]'
+          )}
+        >
+          {children}
+        </div>
+      </details>
+    );
+  }
   return (
     <details
       className={cn(
@@ -359,7 +429,21 @@ function Disclosure({
   );
 }
 
-export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps) {
+export function NoteCard({
+  note,
+  onAsk,
+  onCorrected,
+  fetchImpl,
+  heading,
+  onFold,
+  focusFold,
+}: NoteCardProps) {
+  const foldRef = useRef<HTMLButtonElement>(null);
+  // A keyboard or screen-reader user who opened a row lands on the card they
+  // opened, at the control that closes it again, not on a row that is gone.
+  useEffect(() => {
+    if (focusFold) foldRef.current?.focus();
+  }, [focusFold]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.value);
   const [saving, setSaving] = useState(false);
@@ -405,7 +489,10 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
    * jarring, and its place is taken by the slug, which is short, neutral and
    * already the thing the note is filed under.
    */
-  const tag = note.slotSlug.replace(/_/g, ' ');
+  const tag = noteTag(note);
+  const eyebrow = [heading, tag, note.retired ? 'no longer asked about' : null]
+    .filter(Boolean)
+    .join(' · ');
 
   // No `aria-label` on the card. `Card` is a plain `<div>`, and an `aria-label`
   // on an element with no role is ignored by assistive technology — a label
@@ -430,10 +517,39 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
   const older = earlier - (note.previous ? 1 : 0);
 
   return (
-    <Card
-      className="@container p-[22px]"
-      eyebrow={note.retired ? `${tag} · no longer asked about` : tag}
-    >
+    <Card className="@container p-[22px]" eyebrow={onFold ? undefined : eyebrow}>
+      {onFold ? (
+        /*
+          The whole header is the fold control (owner ruling, t-79): the eyebrow
+          row, run out to the card's edges, with the chevron at its end. A real
+          button rather than a clickable div — `Card`'s own rule — so it takes
+          focus, answers Enter and Space, and says what it does. The negative
+          margins pull its hit area over the card's padding, so a click anywhere
+          along the top of the card folds it.
+        */
+        <button
+          ref={foldRef}
+          type="button"
+          aria-expanded={true}
+          aria-label={`Fold this note: ${eyebrow}`}
+          onClick={onFold}
+          className={cn(
+            'group/fold -mx-[22px] -mt-[22px] mb-1 flex w-[calc(100%+44px)] items-center gap-3',
+            'rounded-t-lg px-[22px] pt-[18px] pb-2 text-left',
+            'transition-colors duration-200 ease-[var(--ease-brand)] hover:bg-[var(--color-pill-hover)]',
+            'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
+            'focus-visible:outline-[var(--color-ring)]'
+          )}
+        >
+          <Eyebrow className="min-w-0 flex-1">{eyebrow}</Eyebrow>
+          <ChevronDown
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className="text-muted-foreground flex-none rotate-180 group-hover/fold:text-[var(--color-heading)]"
+          />
+        </button>
+      ) : null}
       {/*
         The container query is the point, and it is the repo's first.
         This card's width is set by the workspace pane — which a reader drags,
@@ -479,8 +595,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
                 'text-[var(--color-heading)]'
               )}
             >
-              Lelañea noticed something here and deliberately kept no record of what you said.
-              Health, feeling and belief are left out of the written record.
+              {WITHHELD_WORDS}
             </p>
           ) : (
             <p
@@ -532,7 +647,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
             </Disclosure>
           ) : null}
 
-          <Disclosure summary="How Lelañea came to this">
+          <Disclosure plain summary="How Lelañea came to this">
             <p>{note.reasoningNote}</p>
             {note.asking ? (
               /*

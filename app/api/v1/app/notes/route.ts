@@ -3,10 +3,11 @@
  * (f-slots t-73).
  *
  * - `GET /api/v1/app/notes` — every current reading about the signed-in person,
- *   grouped as the taxonomy groups it, each with its confidence, how it was
- *   known, when, the conversation it came from and the version before it.
- *   Hidden slots are absent (§12); slugs she invented are kept apart; a retired
- *   slot's notes are present and labelled.
+ *   each with its group, confidence, how it was known, when, the conversation
+ *   it came from and the version before it. Hidden slots are absent (§12); a
+ *   slug she invented has `group: null`; a retired slot's notes are present and
+ *   labelled. `?q=`, `?group=` and `?sort=grouped|recent` narrow and order it
+ *   (t-79) — over the list `getNotes()` has already cleaned, never around it.
  * - `POST /api/v1/app/notes` — `{ slotSlug, value }`: a new version at
  *   `sourceType: user_confirmed`, never an overwrite. Refused for a slug with no
  *   note of the caller's own, for a hidden one (the same 404, deliberately), for
@@ -34,9 +35,10 @@ import type { NextRequest } from 'next/server';
 
 import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
-import { validateRequestBody } from '@/lib/api/validation';
+import { validateQueryParams, validateRequestBody } from '@/lib/api/validation';
 import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
 import { correctNote, getNotes } from '@/lib/app/slots/notes';
+import { notesQuerySchema } from '@/lib/app/slots/notes-query';
 import { slotCorrectionSchema } from '@/lib/app/slots/validation';
 
 /**
@@ -59,17 +61,33 @@ const OWNERSHIP: WithAuthOptions = {
 };
 
 export const GET = withAuth(async (request: NextRequest, session) => {
-  const log = await getRouteLogger(request);
-  const view = await getNotes(session.user.id);
+  // The route logger carries `url: request.url` — query string and all — on
+  // every entry (`getRequestContext`), so without this override each search a
+  // person typed would land in the log beside their user id, however careful
+  // the fields below are. The path is what an operator needs; `/security-review`
+  // found the leak through the context, not the payload.
+  const log = (await getRouteLogger(request)).withContext({
+    url: `${request.nextUrl.origin}${request.nextUrl.pathname}`,
+  });
+  const query = validateQueryParams(request.nextUrl.searchParams, notesQuerySchema);
+  const view = await getNotes(session.user.id, query);
 
   // No slug and no value: a minted slug is model-authored free text that can
   // encode what the person said, and durable app logs are not erasure-covered.
   // The same reasoning `capture.ts` gives for its own log line.
+  //
+  // And never the search: it is the person's own words about themselves, typed
+  // to find something. Whether a search or a filter was on is what an operator
+  // needs; what was looked for is not theirs to read (t-79).
   log.info('Own notes read', {
     userId: session.user.id,
     notes: view.total,
+    matched: view.matched,
     groups: view.groups.length,
-    improvised: view.improvised.length,
+    own: view.own,
+    searched: query.q !== undefined,
+    filtered: query.group !== undefined,
+    sort: query.sort ?? 'grouped',
   });
 
   return successResponse(view, undefined, { headers: { 'Cache-Control': 'no-store' } });

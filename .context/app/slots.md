@@ -667,10 +667,12 @@ process that had already resolved her.
 ## Her notes — the member surface (t-73)
 
 **Locations:** `lib/app/slots/notes.ts` (the read and the correction) ·
+`lib/app/slots/notes-query.ts` (search, filter and sort — pure, t-79) ·
 `lib/app/slots/notes-view.ts` (the wire shape, and the one import-free module) ·
 `lib/app/slots/notes-client.ts` (the browser's side) ·
 `app/api/v1/app/notes/route.ts` · `app/(lelanea)/app/notes/page.tsx` ·
-`components/app/notes/notes-panel.tsx` + `note-card.tsx`
+`components/app/notes/notes-panel.tsx` + `note-card.tsx` + `note-row.tsx` +
+`notes-controls.tsx`
 
 This is the other half of §3.3's pairing, and the answer to `HB9`: until it
 landed, a value written where nobody could read it was indistinguishable from
@@ -685,10 +687,10 @@ demonstration and nobody witnesses that from inside a popover. And a note has
 
 ### The route
 
-| Route                    | Does                                                                 |
-| ------------------------ | -------------------------------------------------------------------- |
-| `GET /api/v1/app/notes`  | every current reading about the caller, grouped as the taxonomy does |
-| `POST /api/v1/app/notes` | `{ slotSlug, value }` — a new version at `user_confirmed`            |
+| Route                    | Does                                                              |
+| ------------------------ | ----------------------------------------------------------------- |
+| `GET /api/v1/app/notes`  | every current reading about the caller, flat, each with its group |
+| `POST /api/v1/app/notes` | `{ slotSlug, value }` — a new version at `user_confirmed`         |
 
 Both `withAuth` with `decidedBy: 'self'`, **never `'policy'`**: `subjectScope`
 widens to `{}` for a platform admin, and on this endpoint that would hand an
@@ -699,6 +701,9 @@ admin values browser, which masks by default and audits a reveal.
 `no-store`, because a note can land mid-turn and the point of the panel is that
 it shows that. No per-flow rate cap — the `/api/v1/**` section tier covers a
 small read and a single-row insert on the caller's own rows.
+
+`GET` takes `q`, `group` and `sort` — see
+[Finding your way around](#finding-your-way-around-t-79) below.
 
 ### Four guarantees, and where each one is enforced
 
@@ -787,6 +792,10 @@ now say to write the reading **to** them and to make the reasoning a paraphrase
 of what they did with the act named — said, mentioned, noticed, wondered. See
 [`voice.md`](./voice.md#the-instructions-are-where-when-to-note-something-lives-t-72).
 
+**"How Lelañea came to this" is a line of text, not a panel** (owner ruling, t-79):
+a chevron and muted words, and when opened the detail sits beside a plain left
+rule. "Before this" keeps its panel and its purple edge.
+
 ### Colour carries a fact, never decoration
 
 Ten notches under the certainty words, the first N filled, in **green / amber /
@@ -842,9 +851,11 @@ nothing about how a person wants to read their own record. Within a group the
 order is `getSlotHeads`' own, freshest first, which is what puts the note she has
 just written at the top of its group.
 
-**Slugs she invented are a separate list, not a group with a null key.** A mint
-has no definition and therefore no group; a magic key standing in for "none" is a
-value that eventually gets compared against a real one.
+**Slugs she invented have `group: null`, not a magic key.** A mint has no
+definition and therefore no group; a key standing in for "none" is a value that
+eventually gets compared against a real one. They sort after every taxonomy
+group, under "Lelañea's own headings". (The one place a stand-in exists is the
+_query_ value `group=_own` — see below — and it is never stored or returned.)
 
 #### A minted heading is permanent, and there is no suggestion step
 
@@ -865,6 +876,121 @@ The trap is the near miss. A definition added as `weekly_rhythms` leaves every
 duplicated. There is no fuzzy match, by design: the change rule above makes a
 slug the identity, and guessing at one would orphan answers rather than adopt
 them.
+
+### Finding your way around (t-79)
+
+A full profile is 50 open targeted slots across five groups plus her own
+headings — long enough that "where did Lelañea write down the thing about my
+brother" means scrolling. So the page gains a search, a group filter, a sort and
+a list view. One PR, owner ruling 21 September 2026.
+
+**The query surface.** `GET /api/v1/app/notes?q=&group=&sort=`, Zod-validated
+(`notesQuerySchema`):
+
+| Parameter | Accepts                                     | Notes                                                                     |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------------- |
+| `q`       | trimmed, ≤ 200 characters                   | every word must appear; case and accents folded ("lelanea" → "Lelañea")   |
+| `group`   | a group key, or `_own` for her own headings | `_own` cannot collide: a group key is a slug and starts with a letter     |
+| `sort`    | `grouped` (default) · `recent`              | `recent` is one list, freshest first, each note labelled with its heading |
+
+A malformed value is a 400. A well-formed `group` nobody has notes under —
+**hidden or nonexistent — gets the same empty answer, byte for byte**, since
+answering differently would disclose that a hidden group exists. Unknown
+parameters are dropped, so the page's own `view` can ride in the same link.
+
+**The response is flat.** `{ notes, groups, own, total, matched }`: each note
+carries its `group`, `groups` and `own` count the groups in use **before**
+filtering (so an option never vanishes as someone narrows), `total` is the whole
+record and `matched` what the query kept. It replaced the grouped shape outright
+— the panel was its only reader, `recent` has no groups to put notes in, and two
+shapes would have been two readers to keep in step. `notes` arrives in display
+order; the panel groups consecutive runs and never re-sorts.
+
+**It is an in-memory query, not SQL — and that is the guardrail.** `getNotes()`
+already loads every current note for the person and drops hidden slots before
+anything is shaped. `queryNotes()` is one pure function over what it returned, so
+hidden slots are still removed in **exactly one place** and no query path can
+reach one. `ILIKE` would have needed a new query repeating the both-tiers hidden
+check and the Art. 9 exclusion in SQL, joined across three tables — a second
+copy of the guardrail that can drift from the first. At 50–70 notes the list is
+a few kilobytes already in memory. **Revisit if one person passes a few hundred
+notes.** No pagination either: hiding half someone's record behind a control is
+a worse answer to §3.19 than a long page.
+
+**What a search matches.** The reading, how Lelañea came to it, what she was
+looking for, the tag and the heading. **An Art. 9 note matches on the slot's
+wording only — never the sentinel, never the reasoning.** Daybreak's `fill_slot`
+masks `value` and nothing else, so the reasoning note is stored as written
+(**t-80**, raised on Daybreak too); matching it would answer "is there a health
+note mentioning X?" about words the page says were never kept. The previous
+version is not searched: a match has to be visible in the row it produced.
+
+**The search text is never logged.** The route logs counts, whether a search
+and a filter were on, and the sort — never what was looked for. **And it
+overrides `url` on its logger**: `getRouteLogger` puts `url: request.url`,
+query string included, on every entry's context, so a clean payload alone still
+logged each search beside the user id. Found by `/security-review`; the GET
+logs the path instead. Any other route taking personal text in a query string
+has the same exposure — the platform-level fix is `getRequestContext` logging
+the path, which is Sunrise's to make.
+
+**The page.** Every control is in the URL with defaults left out, so a filtered
+view can be linked and a reload lands where the reader was. Typing **replaces**
+the history entry after a 300ms pause; a group, sort or view change **pushes**
+one, so Back steps through choices. `view=cards|list` is the page's alone — the
+same response drawn two ways, so switching re-reads nothing. When a turn writes,
+the panel re-reads with the current filters, and the stale-response guard still
+applies.
+
+**Every navigation is built from the URL last asked for, never the one on
+screen.** On this route `useSearchParams` moves only when a navigation commits,
+a server round trip later, and the reader goes on typing and clicking
+meanwhile. Three `/code-review` rounds found the same defect three ways, each a
+navigation built from the committed URL while a newer one was in flight: lost
+keystrokes, a group pick undone by a late search, and a filter Clear had removed
+coming back. So the panel keeps `target` (the last query string it asked for)
+and `sent` (those not yet seen commit, oldest first). A committed URL found in
+`sent` is its own echo and changes nothing; one not found — Back, a link — is
+the reader going elsewhere, and the box and `target` follow it. The test fake
+holds navigations back to prove each case.
+
+The controls are two lines at most — the search, then a group select, a sort
+select and a Cards/List pair — because on a narrow pane every row of chrome
+pushes the reading down. Selects rather than chip rows: five groups as chips
+wrap to three lines at 320px.
+
+**A list row (owner ruling)** is the full reading plus one line of details —
+heading (when sorted by recency), tag, certainty, date — and no buttons. The
+whole row is the control: it opens the full card in place, where correcting and
+"Ask Lelañea about this" work as ever.
+
+**Every note folds and opens by a chevron, in both views (owner ruling).** A row
+carries one pointing down; a card's whole header — the eyebrow row, run out to
+the card's edges, with a chevron pointing up at its end — is one `<button>`
+that folds it to its row, so a click anywhere along the top of a card closes
+it. The view only sets the default — all open in cards,
+all folded in a list — and a chevron overrides it for that note until the view
+changes. Focus follows the note into its new shape. The first cut had a "Back to
+the list" button on an opened card instead, which read as navigation and only
+existed in one view. Folds survive a re-read, so a card someone just corrected
+does not snap shut.
+
+**The page is drawn in the sort it was answered in**, not the one the URL has
+just moved to. Between choosing a new sort and its answer landing, the notes on
+screen are still the old response; grouping a `recent` list split each heading
+into several runs — the same heading twice, and duplicate React keys. Found by
+the owner looking at the page.
+
+**No matches is its own message** — _"Nothing in Lelañea's notes matches that"_
+with a clear — distinct from a new account's _"Lelañea has written nothing down
+yet"_, which gets no controls at all.
+
+**To look at it with a real record**, `npx tsx --env-file=.env.local
+scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
+fortnight's worth: every visible group, a corrected and a twice-revised note,
+two Art. 9 notes (sentinel value, unmasked reasoning — the case search must not
+match), two of her own headings and one hidden development note that must never
+appear. Dev only; nothing runs it.
 
 ### What a person is not shown
 
