@@ -88,6 +88,13 @@ const resourceIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
   message: 'a resource id is lowercase alphanumeric with hyphens',
 });
 
+/**
+ * A link a client will put in an `<a href>`. `z.url()` alone admits any scheme
+ * — `javascript:` included — and a content file is reviewed for its words, not
+ * its schemes, so the schema holds the line: http(s) only.
+ */
+const linkSchema = z.url({ protocol: /^https?$/ });
+
 const filmSchema = z.strictObject({
   id: resourceIdSchema,
   title: z.string().trim().min(1),
@@ -96,7 +103,7 @@ const filmSchema = z.strictObject({
   relatesTo: relatesToSchema,
   /** As shown: `6:12`. */
   duration: z.string().regex(/^\d{1,2}:\d{2}$/, { message: 'duration is m:ss' }),
-  href: z.url(),
+  href: linkSchema,
 });
 
 const readingBase = z.strictObject({
@@ -111,7 +118,7 @@ const readingBase = z.strictObject({
 /** A reading is a foundational document OR a link — the union makes "neither" and "both" unrepresentable. */
 const readingSchema = z.union([
   readingBase.extend({ documentId: z.string().min(1) }),
-  readingBase.extend({ href: z.url() }),
+  readingBase.extend({ href: linkSchema }),
 ]);
 
 /**

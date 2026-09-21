@@ -53,10 +53,10 @@ export const GET = withAuth<{ key: string }>(async (request, _session, { params 
 
   const selection = selectResourcesFor(key, { pin: film });
   if (!selection) {
-    // A validated slug, so bounded; logged so a client asking for a module
-    // that was renamed shows up rather than silently falling to the drawer's
-    // error state.
-    log.warn('Unknown resource key requested', { key });
+    // Truncated as the documents route does: the slug schema bounds the
+    // charset, not the length. Logged so a client asking for a module that was
+    // renamed shows up rather than silently falling to the drawer's error state.
+    log.warn('Unknown resource key requested', { key: key.slice(0, 64) });
     throw new NotFoundError('No resources for that key');
   }
 

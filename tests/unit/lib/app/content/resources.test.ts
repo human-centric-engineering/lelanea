@@ -312,6 +312,16 @@ describe('a malformed file fails, naming the fault', () => {
     expect(messages.join('\n')).toMatch(/duplicate films id "dup"/);
   });
 
+  it('rejects a film or reading whose link is not http(s)', () => {
+    const scheme = { ...film('x', null), href: 'javascript:alert(1)' };
+    const { ok, messages } = parse(fixture({ films: [scheme] }));
+    expect(ok).toBe(false);
+    expect(messages.join('\n')).toMatch(/protocol|URL/i);
+    expect(
+      parse(fixture({ films: [{ ...film('y', null), href: 'https://example.com/y' }] })).ok
+    ).toBe(true);
+  });
+
   it('rejects an unknown key rather than dropping it', () => {
     const { ok } = parse({ ...fixture(), thumbnails: [] });
     expect(ok).toBe(false);
