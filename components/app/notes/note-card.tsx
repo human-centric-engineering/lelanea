@@ -66,6 +66,16 @@ export interface NoteCardProps {
   onCorrected: () => void;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
+  /**
+   * The heading it is filed under, shown before the tag. Set when the page is
+   * sorted by recency, where there is no group section above the card to say so.
+   */
+  heading?: string;
+  /**
+   * Set when the card was opened from a list row (t-79): a third control that
+   * folds it back into the row it came from.
+   */
+  onFold?: () => void;
 }
 
 /**
@@ -205,6 +215,18 @@ export function formatWhen(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(at);
+}
+
+/**
+ * What a withheld note says instead of its sentinel. Exported because the list
+ * row says the same thing, and two copies of it would drift.
+ */
+export const WITHHELD_WORDS =
+  'Lelañea noticed something here and deliberately kept no record of what you said. Health, feeling and belief are left out of the written record.';
+
+/** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
+export function noteTag(note: Note): string {
+  return note.slotSlug.replace(/_/g, ' ');
 }
 
 /** Long enough to be recognisable in the composer, short enough not to fill the box. */
@@ -359,7 +381,7 @@ function Disclosure({
   );
 }
 
-export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps) {
+export function NoteCard({ note, onAsk, onCorrected, fetchImpl, heading, onFold }: NoteCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.value);
   const [saving, setSaving] = useState(false);
@@ -405,7 +427,10 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
    * jarring, and its place is taken by the slug, which is short, neutral and
    * already the thing the note is filed under.
    */
-  const tag = note.slotSlug.replace(/_/g, ' ');
+  const tag = noteTag(note);
+  const eyebrow = [heading, tag, note.retired ? 'no longer asked about' : null]
+    .filter(Boolean)
+    .join(' · ');
 
   // No `aria-label` on the card. `Card` is a plain `<div>`, and an `aria-label`
   // on an element with no role is ignored by assistive technology — a label
@@ -430,10 +455,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
   const older = earlier - (note.previous ? 1 : 0);
 
   return (
-    <Card
-      className="@container p-[22px]"
-      eyebrow={note.retired ? `${tag} · no longer asked about` : tag}
-    >
+    <Card className="@container p-[22px]" eyebrow={eyebrow}>
       {/*
         The container query is the point, and it is the repo's first.
         This card's width is set by the workspace pane — which a reader drags,
@@ -479,8 +501,7 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
                 'text-[var(--color-heading)]'
               )}
             >
-              Lelañea noticed something here and deliberately kept no record of what you said.
-              Health, feeling and belief are left out of the written record.
+              {WITHHELD_WORDS}
             </p>
           ) : (
             <p
@@ -632,6 +653,11 @@ export function NoteCard({ note, onAsk, onCorrected, fetchImpl }: NoteCardProps)
           <Button size="sm" variant="ghost" className={PILL} onClick={() => onAsk(askText(note))}>
             Ask Lelañea about this
           </Button>
+          {onFold ? (
+            <Button size="sm" variant="ghost" className={PILL} onClick={onFold}>
+              Back to the list
+            </Button>
+          ) : null}
         </div>
       )}
     </Card>

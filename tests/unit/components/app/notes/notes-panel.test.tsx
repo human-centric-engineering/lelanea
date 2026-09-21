@@ -28,10 +28,67 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { certaintyBand, confidenceWords } from '@/components/app/notes/note-card';
 import { NotesPanel } from '@/components/app/notes/notes-panel';
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
-import type { Note, NotesView } from '@/lib/app/slots/notes-view';
+import { notesQuerySchema, queryNotes } from '@/lib/app/slots/notes-query';
+import type { Note } from '@/lib/app/slots/notes-view';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/app/notes' }));
+/**
+ * `next/navigation`, as a history the test can read and step back through.
+ *
+ * `push` adds an entry and `replace` rewrites the current one — the one
+ * difference the panel's URL handling turns on — and `back()` steps the index,
+ * which re-renders every `useSearchParams` reader the way the real router
+ * does. Asserting against a spy's call list alone would prove the panel called
+ * `push`, not that Back then lands where a reader expects.
+ */
+const nav = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  const state = { entries: ['/app/notes'], index: 0 };
+  const emit = () => listeners.forEach((listener) => listener());
+  const router = {
+    push: (href: string) => {
+      state.entries = [...state.entries.slice(0, state.index + 1), href];
+      state.index += 1;
+      emit();
+    },
+    replace: (href: string) => {
+      state.entries[state.index] = href;
+      emit();
+    },
+    back: () => {
+      if (state.index > 0) state.index -= 1;
+      emit();
+    },
+    forward: () => {},
+    refresh: () => {},
+    prefetch: () => {},
+  };
+  return {
+    state,
+    router,
+    current: () => state.entries[state.index] ?? '/app/notes',
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    reset: (href = '/app/notes') => {
+      state.entries = [href];
+      state.index = 0;
+    },
+  };
+});
+
+vi.mock('next/navigation', async () => {
+  const { useSyncExternalStore } = await import('react');
+  return {
+    usePathname: () => '/app/notes',
+    useRouter: () => nav.router,
+    useSearchParams: () => {
+      const href = useSyncExternalStore(nav.subscribe, nav.current);
+      return new URLSearchParams(href.split('?')[1] ?? '');
+    },
+  };
+});
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => true }));
 vi.mock('@/lib/logging', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -53,16 +110,27 @@ function note(overrides: Partial<Note> = {}): Note {
     retired: false,
     correctable: true,
     previous: null,
+    group: 'life_areas',
     ...overrides,
   };
 }
 
-function view(notes: Note[], improvised: Note[] = []): NotesView {
-  return {
-    groups: notes.length ? [{ key: 'life_areas', title: 'Life areas', notes }] : [],
-    improvised,
-    total: notes.length + improvised.length,
-  };
+/**
+ * A person's whole record: `notes` under "Life areas", `own` under Lelañea's
+ * own headings. The fake server answers each read by running the REAL
+ * `queryNotes` over it with the query the panel sent, so a filter here behaves
+ * as the route's does.
+ */
+function view(notes: Note[], own: Note[] = []): Note[] {
+  return [...notes, ...own.map((mint) => ({ ...mint, group: null }))];
+}
+
+function answer(record: Note[], href: string): Response {
+  const params = new URLSearchParams(href.split('?')[1] ?? '');
+  const query = notesQuerySchema.parse(Object.fromEntries(params));
+  return new Response(JSON.stringify({ success: true, data: queryNotes(record, query) }), {
+    status: 200,
+  });
 }
 
 function sse(type: string, data: unknown): string {
@@ -88,9 +156,11 @@ function openTurn() {
 }
 
 const world = {
-  /** What `GET /api/v1/app/notes` answers next. Shift one off per read. */
-  reads: [] as NotesView[],
+  /** The record `GET /api/v1/app/notes` answers from next. Shift one off per read. */
+  reads: [] as Note[][],
   notesReads: 0,
+  /** Every notes GET's URL, in order. */
+  notesUrls: [] as string[],
   correctionRefusal: null as { status: number; message: string; reason: string } | null,
   /** How many of the next notes READS should fail — the conversation's own reads must not. */
   failNextReads: 0,
@@ -100,7 +170,7 @@ const world = {
    * When set, notes GETs are NOT answered: each parks a resolver here instead,
    * and the test releases them in whatever order it is proving something about.
    */
-  hold: null as null | ((view: NotesView) => void)[],
+  hold: null as null | ((record: Note[]) => void)[],
 };
 
 const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -130,20 +200,19 @@ const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) 
       );
     }
     world.notesReads += 1;
+    world.notesUrls.push(href);
     if (world.hold) {
       const parked = world.hold;
       return new Promise<Response>((resolve) => {
-        parked.push((view) =>
-          resolve(new Response(JSON.stringify({ success: true, data: view }), { status: 200 }))
-        );
+        parked.push((record) => resolve(answer(record, href)));
       });
     }
     if (world.failNextReads > 0) {
       world.failNextReads -= 1;
       return new Response('', { status: 500 });
     }
-    const next = world.reads.length > 1 ? world.reads.shift()! : world.reads[0];
-    return new Response(JSON.stringify({ success: true, data: next }), { status: 200 });
+    const next = world.reads.length > 1 ? world.reads.shift()! : (world.reads[0] ?? []);
+    return answer(next, href);
   }
 
   if (href.startsWith('/api/v1/app/conversation')) {
@@ -185,6 +254,8 @@ const composer = () => screen.getByRole('textbox', { name: /message lela/i });
 beforeEach(() => {
   world.reads = [view([note()])];
   world.notesReads = 0;
+  world.notesUrls = [];
+  nav.reset();
   world.correctionRefusal = null;
   world.failNextReads = 0;
   world.corrections = [];
@@ -653,5 +724,222 @@ describe('the reads are ordered', () => {
     // newest note, until the next write.
     expect(screen.getByText('The newest page.')).toBeTruthy();
     expect(screen.queryByText('A page from before.')).toBeNull();
+  });
+});
+
+/**
+ * Finding your way around (t-79): every control in the URL, Back through the
+ * choices, one fetch drawn two ways, and a list row that opens its card.
+ *
+ * The server here is the real `queryNotes` over a fixed record, so a filter
+ * narrows the way the route narrows — these cases are about what the PAGE does
+ * with that, not a second test of the query.
+ */
+describe('finding your way around', () => {
+  const record = () =>
+    view(
+      [
+        note({ slotSlug: 'life_work', capturedAt: '2026-09-21T09:00:00.000Z' }),
+        note({
+          slotSlug: 'life_money',
+          value: 'Money is tight this month.',
+          capturedAt: '2026-09-21T11:00:00.000Z',
+        }),
+        note({
+          slotSlug: 'the_person_disposition',
+          group: 'the_person',
+          value: 'Quick to laugh, slow to decide.',
+          capturedAt: '2026-09-21T10:00:00.000Z',
+        }),
+      ],
+      [
+        note({
+          slotSlug: 'family_communication',
+          asking: null,
+          value: 'Has not spoken to his brother since the summer.',
+          capturedAt: '2026-09-21T12:00:00.000Z',
+        }),
+      ]
+    );
+
+  /** The readings on screen, in the order they are drawn. */
+  const readings = () =>
+    screen
+      .queryAllByText(/^(Work is going|Money is tight|Quick to laugh|Has not spoken)/)
+      .map((element) => element.textContent);
+
+  const search = () => screen.getByRole('searchbox', { name: /search lela/i });
+  const groupPicker = () => screen.getByRole('combobox', { name: /show notes under/i });
+  const sortPicker = () => screen.getByRole('combobox', { name: /order/i });
+  const layoutChip = (name: 'Cards' | 'List') =>
+    within(screen.getByRole('group', { name: /show as/i })).getByRole('button', { name });
+
+  beforeEach(() => {
+    world.reads = [record()];
+  });
+
+  it('types into the URL after a pause without adding history, and asks the server', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    await userEvent.type(search(), 'brother');
+
+    await waitFor(() => expect(nav.current()).toBe('/app/notes?q=brother'));
+    // Replaced, not pushed: Back from here leaves the search, not one letter.
+    expect(nav.state.entries).toEqual(['/app/notes?q=brother']);
+    await waitFor(() =>
+      expect(readings()).toEqual(['Has not spoken to his brother since the summer.'])
+    );
+    expect(world.notesUrls.at(-1)).toBe('/api/v1/app/notes?q=brother');
+    // "of", while narrowing: a bare "1 note" would read as everything held.
+    expect(screen.getByText('1 of 4 notes')).toBeTruthy();
+  });
+
+  it('pushes a group, a sort and a view, so Back steps through each one', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    await userEvent.selectOptions(groupPicker(), 'life_areas');
+    await waitFor(() => expect(readings()).toHaveLength(2));
+    await userEvent.selectOptions(sortPicker(), 'recent');
+    await userEvent.click(layoutChip('List'));
+
+    expect(nav.state.entries).toEqual([
+      '/app/notes',
+      '/app/notes?group=life_areas',
+      '/app/notes?group=life_areas&sort=recent',
+      '/app/notes?group=life_areas&sort=recent&view=list',
+    ]);
+    expect(screen.getAllByRole('button', { expanded: false })).toHaveLength(2);
+
+    await act(async () => nav.router.back());
+    // Back to cards: the rows are gone and a card's own controls are back.
+    expect(screen.queryAllByRole('button', { expanded: false })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /ask lela.*about this/i })).toHaveLength(2);
+
+    await act(async () => nav.router.back());
+    expect((sortPicker() as HTMLSelectElement).value).toBe('grouped');
+
+    await act(async () => nav.router.back());
+    expect((groupPicker() as HTMLSelectElement).value).toBe('');
+    await waitFor(() => expect(readings()).toHaveLength(4));
+  });
+
+  it('opens a linked view as the link says', async () => {
+    nav.reset('/app/notes?q=tight&view=list');
+    renderBoth();
+
+    await screen.findByText('Money is tight this month.');
+    expect(world.notesUrls[0]).toBe('/api/v1/app/notes?q=tight');
+    expect((search() as HTMLInputElement).value).toBe('tight');
+    expect(layoutChip('List').getAttribute('aria-pressed')).toBe('true');
+    expect(readings()).toEqual(['Money is tight this month.']);
+  });
+
+  it('draws one fetch as cards and as a list: the same notes, in the same order', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+    const asCards = readings();
+    const reads = world.notesReads;
+
+    await userEvent.click(layoutChip('List'));
+
+    // In order, not just as a set: the list is the same page, drawn tighter.
+    expect(readings()).toEqual(asCards);
+    // A view switch is a drawing choice, not a question for the server.
+    expect(world.notesReads).toBe(reads);
+    expect(asCards).toHaveLength(4);
+  });
+
+  it('opens a list row as its full card, with both controls working, and folds back', async () => {
+    nav.reset('/app/notes?view=list');
+    renderBoth();
+    const row = (await screen.findByText('Money is tight this month.')).closest(
+      'button'
+    ) as HTMLElement;
+    // A row carries no buttons of its own.
+    expect(within(row).queryByRole('button')).toBeNull();
+
+    await userEvent.click(row);
+
+    const ask = await screen.findByRole('button', { name: /ask lela.*about this/i });
+    expect(screen.getByRole('button', { name: /not right/i })).toBeTruthy();
+    await userEvent.click(ask);
+    await waitFor(() =>
+      expect((composer() as HTMLTextAreaElement).value).toContain('Money is tight this month.')
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /not right/i }));
+    const box = screen.getByRole('textbox', { name: /your correction/i });
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Money is fine.');
+    await userEvent.click(screen.getByRole('button', { name: /save this instead/i }));
+    await waitFor(() =>
+      expect(world.corrections).toEqual([{ slotSlug: 'life_money', value: 'Money is fine.' }])
+    );
+
+    // Still open after the re-read the correction caused.
+    await userEvent.click(await screen.findByRole('button', { name: /back to the list/i }));
+    const folded = screen.getByText('Money is tight this month.').closest('button');
+    expect(folded?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(folded);
+  });
+
+  it('labels each note with its heading when sorted by recency, freshest first', async () => {
+    nav.reset('/app/notes?sort=recent');
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    expect(readings()).toEqual([
+      'Has not spoken to his brother since the summer.',
+      'Money is tight this month.',
+      'Quick to laugh, slow to decide.',
+      'Work is going badly and they are thinking about leaving.',
+    ]);
+    // No group sections: the heading rides on each card instead.
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    expect(screen.getByText('Lelañea’s own headings · family communication')).toBeTruthy();
+    expect(screen.getByText('The person · the person disposition')).toBeTruthy();
+  });
+
+  it('says nothing matched — not that nothing is held — and clears back to everything', async () => {
+    renderBoth();
+    await screen.findByText('Money is tight this month.');
+
+    await userEvent.type(search(), 'zebra');
+
+    expect(await screen.findByText(/Nothing in Lelañea’s notes matches that/)).toBeTruthy();
+    expect(screen.queryByText(/Lelañea has written nothing down yet/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /clear the search/i }));
+
+    await waitFor(() => expect(readings()).toHaveLength(4));
+    expect((search() as HTMLInputElement).value).toBe('');
+    expect(nav.current()).toBe('/app/notes');
+  });
+
+  it('re-reads with the filters on when a turn writes', async () => {
+    nav.reset('/app/notes?group=the_person');
+    renderBoth();
+    await screen.findByText('Quick to laugh, slow to decide.');
+
+    await userEvent.type(composer(), 'anything');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(world.turn).not.toBeNull());
+    await act(async () => {
+      world.turn!.push('start', { conversationId: 'c1' });
+      world.turn!.push('capability_result', {
+        capabilitySlug: 'fill_slot',
+        result: { success: true, data: { slotSlug: 'life_money', version: 1, minted: false } },
+      });
+      world.turn!.push('done', {});
+      world.turn!.close();
+    });
+
+    await waitFor(() => expect(world.notesReads).toBe(2));
+    expect(world.notesUrls).toEqual([
+      '/api/v1/app/notes?group=the_person',
+      '/api/v1/app/notes?group=the_person',
+    ]);
   });
 });

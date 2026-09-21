@@ -1,13 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
+import { NotesControls } from '@/components/app/notes/notes-controls';
+import { NoteRow } from '@/components/app/notes/note-row';
 import { NoteCard } from '@/components/app/notes/note-card';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Banner } from '@/components/app/ui/banner';
+import { Button } from '@/components/app/ui/button';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { fetchNotes } from '@/lib/app/slots/notes-client';
-import type { Note, NotesView } from '@/lib/app/slots/notes-view';
+import {
+  NOTES_DEFAULTS,
+  noteHeading,
+  notesSearch,
+  readNotesParams,
+  type NotesParams,
+} from '@/lib/app/slots/notes-query';
+import { NOTES_OWN_TITLE, type Note, type NotesView } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +60,19 @@ import { cn } from '@/lib/utils';
  * a full page of someone's record with an error. The loading skeleton belongs
  * to the FIRST read only, which is the one where there is nothing to keep.
  *
+ * ## Every control lives in the URL (t-79)
+ *
+ * The search, the group, the sort and the view are read from the query string
+ * and written back to it, with defaults left out — so a filtered page can be
+ * linked, and a reload lands where the reader was. **Typing replaces** the
+ * current entry after a short pause, because a history entry per keystroke
+ * would make Back useless; **picking a group, a sort or a view pushes** one, so
+ * Back steps through them.
+ *
+ * The search, the group and the sort are the server's (`notes-query.ts`); the
+ * view is only how this page draws the same response. Switching between cards
+ * and a list therefore re-reads nothing — one fetch, two renderings.
+ *
  * @see .context/app/slots.md — "Her notes"
  * @see .context/app/conversation.md — "What a turn changes on the other side"
  */
@@ -70,12 +94,25 @@ export const NOTES_LEDE =
 export const NOTES_NOTE =
   'These are Lelañea’s readings, not your words back. She can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation.';
 
-const EMPTY: NotesView = { groups: [], improvised: [], total: 0 };
+/** How long typing rests before the search is sent and the URL updated. */
+export const SEARCH_PAUSE_MS = 300;
 
 export function NotesPanel({ fetchImpl }: NotesPanelProps) {
   const { slotsWritten, setAsk, setPane, setChatSlim, width } = useShellLayout();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const {
+    q,
+    group,
+    sort,
+    view: layout,
+  } = readNotesParams(new URLSearchParams(searchParams.toString()));
+
   const [notes, setNotes] = useState<NotesView | null>(null);
   const [unreadable, setUnreadable] = useState(false);
+  /** The query the notes on screen answer — behind the URL while a read is out. */
+  const [answered, setAnswered] = useState<string | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -96,17 +133,23 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    * `/code-review`, round 1. A response now applies only if nothing started
    * after it did. Sequencing rather than aborting, because an abort would also
    * discard a read that failed for a real reason the reader should be told.
+   *
+   * t-79 leans on the same guard: a reader who types, pauses and types again
+   * starts two reads, and only the second may land.
    */
   const latest = useRef(0);
+  const asked = notesSearch({ q, group, sort });
 
   const read = useCallback(
     (signal?: AbortSignal) => {
       const mine = ++latest.current;
       const stale = () => signal?.aborted || !mounted.current || mine !== latest.current;
-      return fetchNotes({ signal, fetchImpl })
+      const query = { q, group: group ?? undefined, sort };
+      return fetchNotes({ signal, fetchImpl, query })
         .then((view) => {
           if (stale()) return;
           setNotes(view);
+          setAnswered(notesSearch(query));
           setUnreadable(false);
         })
         .catch((error: unknown) => {
@@ -117,10 +160,14 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           setUnreadable(true);
         });
     },
-    [fetchImpl]
+    // The setters are stable; they are listed because the React Compiler's
+    // inference asks for them here, and a mismatch makes it skip the component.
+    [fetchImpl, q, group, sort, setNotes, setAnswered, setUnreadable]
   );
 
-  // The first read, on mount.
+  // The first read, on mount — and again whenever the search, the group or the
+  // sort changes, since `read` is rebuilt with them. The view is not in `read`,
+  // which is what makes a cards/list switch cost nothing.
   useEffect(() => {
     const controller = new AbortController();
     void read(controller.signal);
@@ -138,7 +185,8 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    * mount makes a mount a mount (`/code-review`, round 1).
    *
    * Keyed on the counter alone: adding `read` would make a re-created
-   * `fetchImpl` a phantom turn.
+   * `fetchImpl` — or a changed filter — a phantom turn. It calls the CURRENT
+   * `read`, so a turn re-reads with whatever filters are on.
    */
   const seenWrites = useRef(slotsWritten);
   useEffect(() => {
@@ -147,6 +195,32 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
     void read();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [slotsWritten]);
+
+  /** Move the URL: `push` for a choice Back should undo, `replace` for typing. */
+  const navigate = useCallback(
+    (next: Partial<NotesParams>, how: 'push' | 'replace') => {
+      const target = `${pathname}${notesSearch({ q, group, sort, view: layout, ...next })}`;
+      router[how](target, { scroll: false });
+    },
+    [router, pathname, q, group, sort, layout]
+  );
+
+  /*
+   * The search box's own text, ahead of the URL by up to one pause.
+   *
+   * It follows the URL when the URL moves for another reason — Back, or
+   * "Clear" — and not otherwise, so a trailing space the reader is in the
+   * middle of typing is not trimmed out from under the caret.
+   */
+  const [draft, setDraft] = useState(q);
+  useEffect(() => {
+    setDraft((current) => (current.trim() === q ? current : q));
+  }, [q]);
+  useEffect(() => {
+    if (draft.trim() === q) return;
+    const timer = setTimeout(() => navigate({ q: draft }, 'replace'), SEARCH_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [draft, q, navigate]);
 
   /**
    * Bring the question to the composer, and bring the composer into view.
@@ -167,10 +241,60 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
     [setAsk, setPane, setChatSlim, width]
   );
 
-  const view = notes ?? EMPTY;
-  const improvised: Note[] = view.improvised;
+  /*
+   * Which list rows are open as cards. Kept here rather than in each row so it
+   * survives a re-read — a correction re-reads the page, and the card someone
+   * just corrected must not snap shut on them.
+   */
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  /** The row to hand focus back to when its card folds. */
+  const [refocus, setRefocus] = useState<string | null>(null);
+  const toggle = (slug: string, to: boolean) => {
+    setOpen((current) => {
+      const next = new Set(current);
+      if (to) next.add(slug);
+      else next.delete(slug);
+      return next;
+    });
+    setRefocus(to ? null : slug);
+  };
+
+  /** Search and group back to their defaults; the sort and the view are kept. */
+  const clear = () => navigate({ q: NOTES_DEFAULTS.q, group: NOTES_DEFAULTS.group }, 'push');
 
   if (notes === null && !unreadable) return <NotesSkeleton />;
+
+  const filtering = q !== '' || group !== null;
+  const busy = notes !== null && answered !== asked;
+
+  const item = (note: Note) => {
+    const heading = sort === 'recent' ? noteHeading(note) : undefined;
+    const card = (onFold?: () => void) => (
+      <NoteCard
+        note={note}
+        onAsk={ask}
+        onCorrected={() => void read()}
+        fetchImpl={fetchImpl}
+        heading={heading}
+        onFold={onFold}
+      />
+    );
+    if (layout === 'cards') return <li key={note.slotSlug}>{card()}</li>;
+    return (
+      <li key={note.slotSlug}>
+        {open.has(note.slotSlug) ? (
+          <OpenedCard>{card(() => toggle(note.slotSlug, false))}</OpenedCard>
+        ) : (
+          <NoteRow
+            note={note}
+            heading={heading}
+            onOpen={() => toggle(note.slotSlug, true)}
+            focusOnMount={refocus === note.slotSlug}
+          />
+        )}
+      </li>
+    );
+  };
 
   return (
     /*
@@ -190,11 +314,13 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
         </Banner>
       ) : null}
 
-      {notes !== null && view.total === 0 ? (
+      {notes !== null && notes.total === 0 ? (
         /*
           An empty page says what will fill it. "Nothing here" on the one
           surface whose promise is that it shows everything reads as a broken
           feature rather than as a new account.
+
+          And it gets no controls: there is nothing yet to find.
         */
         <p className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.7]">
           Lelañea has written nothing down yet. As you talk, anything worth remembering appears here
@@ -203,39 +329,133 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
         </p>
       ) : null}
 
-      {view.groups.map((group) => (
-        <Group key={group.key} title={group.title} count={group.notes.length}>
-          {group.notes.map((note) => (
-            <li key={note.slotSlug}>
-              <NoteCard
-                note={note}
-                onAsk={ask}
-                onCorrected={() => void read()}
-                fetchImpl={fetchImpl}
-              />
-            </li>
-          ))}
-        </Group>
-      ))}
+      {notes !== null && notes.total > 0 ? (
+        <>
+          <NotesControls
+            draft={draft}
+            onDraft={setDraft}
+            group={group}
+            onGroup={(next) => navigate({ group: next }, 'push')}
+            sort={sort}
+            onSort={(next) => navigate({ sort: next }, 'push')}
+            layout={layout}
+            onLayout={(next) => navigate({ view: next }, 'push')}
+            groups={notes.groups}
+            own={notes.own}
+            total={notes.total}
+            matched={notes.matched}
+            filtering={filtering}
+            onClear={clear}
+          />
 
-      {improvised.length > 0 ? (
-        <Group
-          title="Lelañea’s own headings"
-          count={improvised.length}
-          note="Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so she named them herself."
-        >
-          {improvised.map((note) => (
-            <li key={note.slotSlug}>
-              <NoteCard
-                note={note}
-                onAsk={ask}
-                onCorrected={() => void read()}
-                fetchImpl={fetchImpl}
-              />
-            </li>
-          ))}
-        </Group>
+          <div
+            aria-busy={busy}
+            className={cn(
+              'flex flex-col gap-6 transition-opacity duration-200',
+              busy && 'opacity-60'
+            )}
+          >
+            {notes.matched === 0 ? (
+              <NoMatches onClear={clear} />
+            ) : sort === 'recent' ? (
+              <ul className={LIST[layout]}>{notes.notes.map(item)}</ul>
+            ) : (
+              runsOf(notes.notes).map((run) => (
+                <Group
+                  key={reactKey(run.key)}
+                  title={run.title}
+                  count={run.notes.length}
+                  note={run.key === OWN_RUN ? OWN_NOTE : undefined}
+                  layout={layout}
+                >
+                  {run.notes.map(item)}
+                </Group>
+              ))
+            )}
+          </div>
+        </>
       ) : null}
+    </div>
+  );
+}
+
+/** A card has room around it; rows sit closer, because a list is read down. */
+const LIST = {
+  cards: 'flex list-none flex-col gap-2.5 p-0',
+  list: 'flex list-none flex-col gap-1.5 p-0',
+} as const;
+
+/**
+ * The run key for Lelañea's own headings. A symbol, so it cannot equal any
+ * real group key; `reactKey` turns it into a string only for React.
+ */
+const OWN_RUN = Symbol('own');
+
+function reactKey(key: string | typeof OWN_RUN): string {
+  return key === OWN_RUN ? 'own:' : `group:${key}`;
+}
+
+const OWN_NOTE =
+  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so she named them herself.';
+
+/**
+ * Consecutive notes under one heading. The server has already put them in
+ * heading order (`queryNotes`), so grouping is a single pass that never
+ * re-sorts — the order on screen is the server's.
+ */
+function runsOf(notes: Note[]): { key: string | typeof OWN_RUN; title: string; notes: Note[] }[] {
+  const runs: { key: string | typeof OWN_RUN; title: string; notes: Note[] }[] = [];
+  for (const note of notes) {
+    const key = note.group ?? OWN_RUN;
+    const last = runs.at(-1);
+    if (last && last.key === key) last.notes.push(note);
+    else
+      runs.push({
+        key,
+        title: note.group === null ? NOTES_OWN_TITLE : noteHeading(note),
+        notes: [note],
+      });
+  }
+  return runs;
+}
+
+/**
+ * A list row opened as its card. Focus moves to the card, so a keyboard or
+ * screen-reader user lands on what they opened rather than being left on a
+ * row that no longer exists.
+ */
+function OpenedCard({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <div ref={ref} tabIndex={-1} className="rounded-lg outline-none">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Nothing matched — which is not the same page as a new account, and does not
+ * say the same thing. Someone here has notes; the search found none of them,
+ * and the one useful next step is to undo it.
+ */
+function NoMatches({ onClear }: { onClear: () => void }) {
+  const id = useId();
+  return (
+    <div className="flex flex-col items-start gap-3" aria-labelledby={id}>
+      <p id={id} className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.7]">
+        Nothing in Lelañea’s notes matches that. Try fewer words, or look under every heading.
+      </p>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="border border-[var(--color-border)]"
+        onClick={onClear}
+      >
+        Clear the search
+      </Button>
     </div>
   );
 }
@@ -254,11 +474,13 @@ function Group({
   title,
   count,
   note,
+  layout,
   children,
 }: {
   title: string;
   count: number;
   note?: string;
+  layout: keyof typeof LIST;
   children: React.ReactNode;
 }) {
   return (
@@ -276,7 +498,7 @@ function Group({
           {note}
         </p>
       ) : null}
-      <ul className="flex list-none flex-col gap-2.5 p-0">{children}</ul>
+      <ul className={LIST[layout]}>{children}</ul>
     </section>
   );
 }
