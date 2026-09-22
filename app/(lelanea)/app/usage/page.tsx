@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { UsagePanel } from '@/components/app/usage/usage-panel';
+import { USAGE_LEDE, USAGE_NOTE, UsagePanel } from '@/components/app/usage/usage-panel';
 import { View } from '@/components/app/views/view';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
@@ -45,13 +45,7 @@ export default async function UsagePage() {
   if (!session) clearInvalidSession('/app/usage');
 
   return (
-    <View
-      column
-      eyebrow="usage"
-      title="What this month cost"
-      lede="Every reply costs something to produce. This is what yours have come to, and what is left before Lelañea pauses until next month."
-      note="Nothing is charged to you. The limit is ours, so the work stays sustainable while it is free."
-    >
+    <View column eyebrow="usage" title="What this month cost" lede={USAGE_LEDE} note={USAGE_NOTE}>
       <UsagePanel />
     </View>
   );

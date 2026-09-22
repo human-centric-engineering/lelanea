@@ -34,10 +34,20 @@ const clearInvalidSession = vi.hoisted(() =>
 
 vi.mock('@/lib/auth/utils', () => ({ getServerSession }));
 vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
-vi.mock('@/components/app/usage/usage-panel', () => ({
-  UsagePanel: () => <div data-testid="panel" />,
-}));
+vi.mock('@/components/app/usage/usage-panel', async (importOriginal) => {
+  // The copy constants are real — the page and its loading boundary both read
+  // them, and a stub that invented strings would let the two drift apart while
+  // this test went on passing.
+  const actual = await importOriginal<typeof import('@/components/app/usage/usage-panel')>();
+  return {
+    USAGE_LEDE: actual.USAGE_LEDE,
+    USAGE_NOTE: actual.USAGE_NOTE,
+    UsageSkeleton: actual.UsageSkeleton,
+    UsagePanel: () => <div data-testid="panel" />,
+  };
+});
 
+import UsageLoading from '@/app/(lelanea)/app/usage/loading';
 import UsagePage, { metadata } from '@/app/(lelanea)/app/usage/page';
 
 const SESSION = { user: { name: 'Maya Reyes', email: 'maya@example.com' } };
@@ -88,6 +98,16 @@ describe('with a session', () => {
     expect(page).not.toMatch(/not calling a model/);
     expect(page).not.toMatch(/budget you set/);
     expect(page).not.toMatch(/not built yet/);
+  });
+
+  it('shows the same head while the session is still being read', async () => {
+    // The route's boundary and the page draw one head from one pair of
+    // constants, so nothing moves under the reader when the page arrives.
+    render(<UsageLoading />);
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What this month cost');
+    expect(screen.getByText(/Nothing is charged to you/)).toBeTruthy();
+    expect(screen.getByRole('status')).toHaveTextContent('Reading what this month cost.');
   });
 
   it('carries the tab title the account menu promises', async () => {

@@ -47,6 +47,51 @@ import { cn } from '@/lib/utils';
  * @see .context/app/planning/design/lelanea.html — "usage and billing"
  */
 
+/** The lede, on the page and on its loading boundary — one source, no drift. */
+export const USAGE_LEDE =
+  'Every reply costs something to produce. This is what yours have come to, and what is left before Lelañea pauses until next month.';
+
+/** The honest caveat under it: the limit is ours, and nothing is billed. */
+export const USAGE_NOTE =
+  'Nothing is charged to you. The limit is ours, so the work stays sustainable while it is free.';
+
+/**
+ * What the page shows while the session is read, and again while the figures
+ * are fetched.
+ *
+ * A reader crosses two loading states back to back here — the route's, then
+ * this one — so both render this rather than two different shapes arriving
+ * where each other were (the reasoning `notes/loading.tsx` sets out).
+ */
+export function UsageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="sr-only" role="status">
+        Reading what this month cost.
+      </p>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
+        {[0, 1, 2].map((stat) => (
+          <div
+            key={stat}
+            aria-hidden="true"
+            className="bg-background h-[58px] rounded-[13px] border border-[var(--color-card-border)] opacity-60"
+          />
+        ))}
+      </div>
+      {[0, 1].map((panel) => (
+        <div
+          key={panel}
+          aria-hidden="true"
+          className={cn(
+            'bg-background h-[250px] rounded-lg border border-[var(--color-card-border)]',
+            'opacity-60 shadow-[var(--shadow-rest)]'
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 export interface UsagePanelProps {
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
@@ -128,13 +173,7 @@ export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
     );
   }
 
-  if (!reading) {
-    return (
-      <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
-        Reading what this month cost…
-      </p>
-    );
-  }
+  if (!reading) return <UsageSkeleton />;
 
   const at = now ?? new Date();
   const stats = usageStats(reading.summary);

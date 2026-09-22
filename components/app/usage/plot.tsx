@@ -48,9 +48,13 @@ interface TipState {
 function useBarTip(): [TipState | null, React.ComponentProps<'div'>] {
   const [tip, setTip] = useState<TipState | null>(null);
 
+  // `instanceof`, not `as HTMLElement`: a pointer event's target is typed
+  // `EventTarget`, and `closest` belongs to an Element rather than to all of
+  // them. The cast would compile and throw; the guard narrows, and it is also
+  // what makes "the pointer entered the plot but no bar" a quiet no-op.
   const onPointerOver = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    const bar = target.closest<HTMLElement>('[data-tip]');
+    if (!(event.target instanceof HTMLElement)) return;
+    const bar = event.target.closest<HTMLElement>('[data-tip]');
     if (!bar) return;
     setTip({
       text: bar.dataset.tip ?? '',
@@ -60,7 +64,7 @@ function useBarTip(): [TipState | null, React.ComponentProps<'div'>] {
   }, []);
 
   const onPointerOut = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('[data-tip]')) setTip(null);
+    if (event.target instanceof HTMLElement && event.target.closest('[data-tip]')) setTip(null);
   }, []);
 
   return [tip, { onPointerOver, onPointerOut }];
