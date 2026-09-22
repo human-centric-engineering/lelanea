@@ -92,6 +92,24 @@ which **keys on** this classification rather than being replaced by it. Do not
 promote every slot to `special_category` to be safe; that empties the
 distinction the masking reads.
 
+**No slot ships as `special_category`** (t-84, owner ruling 21 Sept 2026). The
+nine health slots — physical, emotional and spiritual, each with its strain and
+strength — are `sensitive`: what someone says about their health and feelings
+is what the app is for, and blanking it out before storage left those notes
+worthless. So the words are kept, shown to the person and correctable. Keeping
+them is GDPR Art. 9 health data, which needs a lawful basis (normally explicit
+consent); the owner accepted that, recorded in the f-slots journal. An operator
+can still mark any slot `special_category` in Admin → Data slots, and masking
+then applies to it exactly as before.
+
+Databases seeded before t-84 are moved by the migration
+`20260926100000_app_health_slots_sensitive`, not by the JSON (which reaches only
+an unseeded database — see [Seeding](#seeding--operator-owned-written-once-fp4)). It moves only
+slots still at `special_category`, writes a v2 revision for each
+(`origin = seed`, `changedFields = {sensitivity}`), and updates the
+`framework_slot_definition` projection masking reads. Notes blanked out before
+it stay blanked: the words were never stored.
+
 ## The change rule
 
 **A slug is immutable.** It is what a captured `framework_slot_value.slotSlug`
@@ -179,9 +197,17 @@ That matters most in the case you would reach for it. If
 say — re-seeding changes nothing. What repairs it is a **server boot**, whose
 `syncRegisteredSlotDefinitions()` runs the same global pass, or `db:reset`.
 
-**After merging a change to the taxonomy file, reseed each database** — and
-reseeding only helps a database that was never seeded. See
-[`sunrise.mcp-reseed`](../../CLAUDE.md) for the general shape of this trap.
+**A change to the taxonomy that existing databases need ships as a migration
+as well as a JSON edit.** The JSON reaches an unseeded database and nothing
+else, and reseeding does not help (above). A migration is the only thing that
+runs on every environment — `docker-compose.prod.yml` runs the migrator before
+every `web` start, while the seeder is opt-in. Write it the way an admin edit
+lands: bump `version`, insert the revision snapshot (`origin = 'seed'`), and
+update `framework_slot_definition` or leave it to the next boot's sync. Move
+only rows still at the old value, so a fresh database (empty when migrations
+run) and an admin's own edit are both left alone.
+`20260926100000_app_health_slots_sensitive` (t-84) is the worked example; the
+general rule is in [`database-changes.md`](./database-changes.md).
 
 ## Anti-patterns
 
@@ -598,15 +624,17 @@ that writes.
 **And it was a data-protection gap, not a wasted feature.** Sensitivity is read
 off the slot's _definition_, and masking fires only for `special_category`. A
 minted slug has no definition ⇒ always `standard` ⇒ never masked. Nine slots
-here are `special_category` — physical, emotional and spiritual health, i.e.
-GDPR Art. 9 — so the classification was a no-op on the capture path and raw
+here were then `special_category` — physical, emotional and spiritual health,
+i.e. GDPR Art. 9 — so the classification was a no-op on the capture path and raw
 health and belief prose was landing in `framework_slot_value.value`. Found by
 `/security-review`; the cause was worse than the finding.
 
 `lib/app/slots/vocabulary.ts` is the fix: the live taxonomy, one line per slot,
 spliced into her facilitation block per turn. The same message now fills
-`life_family_strain`, and an Art. 9 slug stores `<redacted: special_category>`.
-Both are asserted in the smoke.
+`life_family_strain`, and a `special_category` slug stores
+`<redacted: special_category>`. Both are asserted in the smoke — the second on a
+temporary `special_category` slot the smoke defines for the run, because since
+t-84 the taxonomy ships none.
 
 Four things about it worth knowing before you change it:
 
@@ -720,7 +748,13 @@ correctable.** Retirement deletes nothing at either tier, so the answers are
 still the person's; but filing a fresh reading against a question nobody will
 ask again is a write nothing will read.
 
-**An Art. 9 note cannot be corrected**, and this is the one worth reading twice.
+**A `special_category` note cannot be corrected**, and this is the one worth
+reading twice. None ships that way since t-84 (the health slots are
+`sensitive`, so their notes are correctable like any other), but an operator
+can mark a slot so. Notes blanked out before t-84 remain: `withheld` is keyed on
+the stored sentinel rather than today's classification, so they still read as
+withheld, and on a slot that is now `sensitive` they are correctable, with the
+box opening empty rather than on the sentinel.
 `special_category` means masking-before-storage already replaced the reading
 with a sentinel _at capture_. A correction runs through `appendSlotValue`, which is the raw
 engine and masks nothing — so "let them fix it" would put raw health and belief
