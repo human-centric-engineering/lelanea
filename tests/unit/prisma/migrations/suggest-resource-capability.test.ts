@@ -28,6 +28,15 @@
  * file contains no `UPDATE`, `DELETE` or `DROP` at all, which is the property
  * a reader would otherwise have to re-derive from the SQL every time.
  *
+ * ## Not on the always-run list, deliberately
+ *
+ * It reads a file off disk, which is usually the shape that earns a place in
+ * `leafAlwaysRunTests` — but the change this exists to catch is the DEFINITION
+ * moving, and this file imports it, so a scoped run selects it from the same
+ * module graph as every other reader. The other half of its inputs is an
+ * applied migration, which is frozen: a branch editing it has already gone
+ * wrong somewhere a reviewer can see.
+ *
  * @see prisma/migrations/20260927100000_app_suggest_resource_capability/migration.sql
  * @see prisma/seeds/app-lelanea/014-suggest-resource.ts
  */
