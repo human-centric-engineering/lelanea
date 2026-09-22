@@ -1371,3 +1371,142 @@ model AppResourceWordsRevision {
   @@index([editorId])
   @@map("app_resource_words_revision")
 }
+
+/// Whether she has signed a piece of the voice fingerprint off (t-88).
+///
+/// The same two states as `app_crisis_content_status` and deliberately a
+/// separate enum: the crisis copy and her register are different material,
+/// signed off by different people at different moments, and sharing one enum
+/// would couple a change to either.
+enum AppVoiceContentStatus {
+  draft
+  signed_off
+
+  @@map("app_voice_content_status")
+}
+
+/// The context-selected layer of the voice fingerprint as a whole (t-88): its
+/// identity, its provenance, and the two authored blocks that are not tied to
+/// any one situation. One row.
+///
+/// `exemplars` and `coreOnly` live here rather than on an overlay because
+/// neither belongs to a situation: `coreOnly` is the body used when no overlay
+/// matched, and `exemplars` is the copy that labels a retrieved passage as
+/// hers. Every string in both reaches a model, and `exemplars.originLabel` is
+/// the load-bearing one — it is what tells the model her writing from the
+/// person's.
+///
+/// `provenance` is the authored block (`status`, `awaitingSignOffFrom`,
+/// `note`), kept whole because it is shown to a reader as written. The
+/// `status` column beside it is the operator's sign-off and is what code
+/// branches on; the two answer different questions and neither is derived from
+/// the other.
+model AppVoiceOverlaySet {
+  /// Stable identity, as authored: `lelanea_voice_fingerprint_overlays`.
+  id          String                @id
+  title       String
+  version     String
+  locale      String
+  /// `{ status, awaitingSignOffFrom, note }`, as authored.
+  provenance  Json
+  /// `{ heading, originLabel, lines, noneFoundNote, unavailableNote }`.
+  exemplars   Json
+  /// `{ heading, lines }` — the body used when no overlay matched.
+  coreOnly    Json
+  status      AppVoiceContentStatus @default(draft)
+  signedOffAt DateTime?
+  revision    Int                   @default(1)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  overlays  AppVoiceOverlay[]
+  revisions AppVoiceOverlaySetRevision[]
+
+  @@map("app_voice_overlay_set")
+}
+
+/// One revision of the set's framing, whole (t-88).
+model AppVoiceOverlaySetRevision {
+  id            String                   @id @default(cuid())
+  setId         String
+  set           AppVoiceOverlaySet       @relation(fields: [setId], references: [id], onDelete: Cascade)
+  revision      Int
+  title         String
+  version       String
+  locale        String
+  provenance    Json
+  exemplars     Json
+  coreOnly      Json
+  status        AppVoiceContentStatus
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([setId, revision])
+  @@index([setId, changedAt])
+  @@index([editorId])
+  @@map("app_voice_overlay_set_revision")
+}
+
+/// One register overlay (t-88): the situation it answers to, and the beats it
+/// adds to the always-on core.
+///
+/// `situation` is the primary key because it is also the wire vocabulary — a
+/// chat request carries it as its `contextId` — so there is no second
+/// identifier to keep in step with it. Selection is an exact match on this
+/// column and nothing else.
+///
+/// `reviewerNote` is the file's `when`: a note to whoever reviews these, served
+/// to a reviewer and emitted to no prompt. It is named for what it is here
+/// because `when` is a reserved word in SQL.
+model AppVoiceOverlay {
+  /// The authored situation key, e.g. `first-meeting`.
+  situation     String                @id
+  setId         String
+  set           AppVoiceOverlaySet    @relation(fields: [setId], references: [id], onDelete: Cascade)
+  /// 1-based, and the order they were authored in.
+  position      Int
+  label         String
+  /// The file's `when`. Never reaches a prompt.
+  reviewerNote  String
+  heading       String
+  /// Each entry is a beat. Joined with a newline, never with a space.
+  lines         String[]
+  /// What her voice material is searched for in this moment. Authored.
+  exemplarQuery String
+  status        AppVoiceContentStatus @default(draft)
+  signedOffAt   DateTime?
+  revision      Int                   @default(1)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  revisions AppVoiceOverlayRevision[]
+
+  @@unique([setId, position])
+  @@map("app_voice_overlay")
+}
+
+/// One revision of one overlay, whole (t-88).
+model AppVoiceOverlayRevision {
+  id            String                   @id @default(cuid())
+  situation     String
+  overlay       AppVoiceOverlay          @relation(fields: [situation], references: [situation], onDelete: Cascade)
+  revision      Int
+  position      Int
+  label         String
+  reviewerNote  String
+  heading       String
+  lines         String[]
+  exemplarQuery String
+  status        AppVoiceContentStatus
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([situation, revision])
+  @@index([situation, changedAt])
+  @@index([editorId])
+  @@map("app_voice_overlay_revision")
+}

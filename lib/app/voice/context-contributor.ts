@@ -110,8 +110,9 @@
  * @see lib/orchestration/chat/context-builder.ts — the seam, the cache, the framing
  */
 
-import { getVoiceOverlays, type VoiceOverlay } from '@/lib/app/content';
-import { selectOverlay } from '@/lib/app/voice/overlays';
+import type { VoiceOverlay, VoiceOverlays } from '@/lib/app/content';
+import { getVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
+import { selectOverlayFrom } from '@/lib/app/voice/overlays';
 import { retrieveVoiceExemplarsSafely, type VoiceExemplar } from '@/lib/app/voice/exemplars';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
@@ -187,11 +188,10 @@ function labelled(exemplar: VoiceExemplar, originLabel: string): string {
  * searched, which is not the same fact as nothing matching.
  */
 export function composeVoiceContext(
+  content: VoiceOverlays,
   overlay: VoiceOverlay | null,
   exemplars: readonly VoiceExemplar[] | null
 ): string {
-  const content = getVoiceOverlays();
-
   // Core-only means core-only: the authored fallback body and NOTHING else.
   //
   // Never empty — a blank body reads to the model as a section that exists and
@@ -232,7 +232,11 @@ export function composeVoiceContext(
  * and unreviewable by the person whose material is being searched.
  */
 export async function loadVoiceContext(id: string): Promise<string> {
-  const overlay = selectOverlay(id);
+  // One read of the set per turn. `selectOverlayFrom` matches against what was
+  // read here, and `composeVoiceContext` takes the same object for `coreOnly`
+  // and `exemplars`, so the rows are not fetched twice to build one block.
+  const content = await getVoiceOverlays();
+  const overlay = selectOverlayFrom(content, id);
   const exemplars =
     overlay === null ? [] : await retrieveVoiceExemplarsSafely(overlay.exemplarQuery);
 
@@ -259,7 +263,7 @@ export async function loadVoiceContext(id: string): Promise<string> {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  return [composeVoiceContext(overlay, exemplars), vocabulary, offering]
+  return [composeVoiceContext(content, overlay, exemplars), vocabulary, offering]
     .filter(Boolean)
     .join('\n\n');
 }

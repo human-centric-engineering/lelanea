@@ -574,6 +574,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppUserBudget',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
+        'AppVoiceOverlay',
+        'AppVoiceOverlayRevision',
+        'AppVoiceOverlaySet',
+        'AppVoiceOverlaySetRevision',
         'AppWaitlistEntry',
       ]);
 
@@ -665,6 +669,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // rule above still holds and this row is the edge case that tests it:
         // it is ABOUT a slot value without BEING one. What was learned is the
         // `framework_slot_value`; the turn is this bundle's `turns` section.
+        // f-content-seeds t-88 — the context-selected layer of her voice.
+        // Guidance to the assistant about its own register, never anything
+        // about the person it speaks to.
+        'AppVoiceOverlaySet',
+        'AppVoiceOverlaySetRevision',
+        'AppVoiceOverlay',
+        'AppVoiceOverlayRevision',
         'AppTurnSlotWrite',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and
