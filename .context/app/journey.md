@@ -38,13 +38,16 @@ database, and a throw can never leave the framework sync reconciling a
 half-populated registry — then reads the rows and re-registers each module with
 her title (`registerModule` replaces by slug). If the rows cannot be read, the
 roster's registration stands, each named from its slug (`Curiosity of self`),
-and startup logs a warning. The agent's module context and the map-node
+and startup logs a warning; a later boot that can read the rows renames them in
+the registry. The agent's module context and the map-node
 embeddings read the registered name, so they say what the drawer says.
 
 **`framework_module.name` is Daybreak's, not hers.** The framework copies the
 definition's name into that column once, when the row is created, and after
 that an operator may override it in Daybreak's admin. It is the framework's
-display label and nothing of Lelañea's reads it. Whether her admin editor
+display label and nothing of Lelañea's reads it. One consequence: if a new
+environment's very first boot cannot read the rows, the slug-spelled names are
+what that column is created with, and they stay until an operator renames them. Whether her admin editor
 (t-91) writes it alongside a title edit is open on that task.
 
 Adding a module is an edit to the roster, a migration inserting its text row,

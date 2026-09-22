@@ -99,7 +99,12 @@ export function initLeafApp(): Promise<void> {
   // says. It is the same slugs again, so this replaces each definition in place.
   // Not awaited as a throw: a database that cannot be read at startup leaves
   // the roster's names, which are spelled from the slug, and says so. The sync
-  // still runs, and the next boot with a database renames them.
+  // still runs, and the next boot that can read the rows renames them in the
+  // registry. It does NOT rename `framework_module.name`: the framework writes
+  // that column only when it creates the row. So a first boot of a new
+  // environment that fails this read keeps the slug-spelled names there, as
+  // Daybreak's admin display label, until an operator renames them. Nothing of
+  // hers reads that column (see `.context/app/journey.md`, "Who owns what").
   return registerModuleTexts();
 }
 
