@@ -19,7 +19,47 @@ vi.mock('@/lib/logging', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/app/safety/context-check', () => ({ checkCrisisContext: mocks.check }));
-vi.mock('@/lib/db/client', () => ({ prisma: { appSafetyEvent: { create: mocks.create } } }));
+vi.mock('@/lib/db/client', async () => {
+  // Since t-88 there is no bundled floor under the crisis path: an unseeded
+  // database throws rather than serving the file. So the crisis tables are
+  // seeded here exactly as `010-crisis-resources.ts` seeds them, and these
+  // cases go on asserting against her authored words — now by way of a row.
+  // Built inside the factory because `vi.mock` is hoisted above any const.
+  const { getCrisisResources } = await import('@/lib/app/content/crisis-resources');
+  const file = getCrisisResources();
+  const crisisTables = {
+    appCrisisCopy: {
+      findUnique: vi.fn(() =>
+        Promise.resolve({
+          slug: 'global',
+          ...file.copy,
+          internationalName: file.international.name,
+          internationalContact: file.international.contact,
+          internationalUrl: file.international.url,
+          internationalHours: file.international.hours,
+          status: file.resources.provenance.status,
+          signedOffAt: null,
+          version: 1,
+        })
+      ),
+    },
+    appCrisisRegion: {
+      findMany: vi.fn(() =>
+        Promise.resolve(
+          file.regions.map((r) => ({
+            region: r.region,
+            emergencyNumber: r.emergencyNumber,
+            services: r.services.map((s) => ({ ...s })),
+            status: file.resources.provenance.status,
+            signedOffAt: null,
+            version: 1,
+          }))
+        )
+      ),
+    },
+  };
+  return { prisma: { appSafetyEvent: { create: mocks.create }, ...crisisTables } };
+});
 
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 

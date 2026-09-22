@@ -82,9 +82,9 @@ const client = {
 
 const { logger } = await import('@/lib/logging');
 const unit = (await import('@/prisma/seeds/app-lelanea/013-agent-slot-tools')).default;
-const { SLOT_CAPABILITY_SLUGS, SLOT_EXPOSURE_CONFIG } = await import('@/lib/app/agent/pins');
+const { SLOT_CAPABILITY_SLUGS } = await import('@/lib/app/agent/pins');
 const { VOICE_AGENT_SLUG } = await import('@/lib/app/voice/fingerprint');
-const { getSlotTaxonomy } = await import('@/lib/app/content/slot-taxonomy');
+const { getSlotTaxonomy, slotExposureConfig } = await import('@/lib/app/content/slot-taxonomy');
 
 async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
@@ -111,7 +111,7 @@ describe('what the seed grants', () => {
     expect(world.grants).toHaveLength(2);
     for (const grant of world.grants) {
       expect(grant.isEnabled).toBe(true);
-      expect(grant.customConfig).toEqual({ read: { groups: SLOT_EXPOSURE_CONFIG.read.groups } });
+      expect(grant.customConfig).toEqual(slotExposureConfig());
     }
     expect(world.grants.map((g) => g.capabilityId).sort()).toEqual([CAP_READ, CAP_WRITE].sort());
   });
@@ -128,8 +128,9 @@ describe('the allowlist it writes', () => {
     // owner's 20 Sept 2026 ruling that she may invent a slot cannot both hold.
     // If a `write` key ever appears here, minting has been switched off by
     // accident rather than by decision.
-    expect(SLOT_EXPOSURE_CONFIG).not.toHaveProperty('write');
-    expect(SLOT_EXPOSURE_CONFIG.read.groups.length).toBeGreaterThan(0);
+    const config = slotExposureConfig();
+    expect(config).not.toHaveProperty('write');
+    expect(config.read.groups.length).toBeGreaterThan(0);
   });
 
   it('withholds the hidden group from her reads, by deriving rather than listing', () => {
@@ -141,14 +142,15 @@ describe('the allowlist it writes', () => {
       file.slots.filter((s) => s.visibility === 'hidden').map((s) => s.group)
     );
     expect(hiddenGroups.size).toBeGreaterThan(0);
+    const config = slotExposureConfig();
     for (const group of hiddenGroups) {
-      expect(SLOT_EXPOSURE_CONFIG.read.groups).not.toContain(group);
+      expect(config.read.groups).not.toContain(group);
     }
     // ...and every group that is NOT hidden is offered, so this is a filter and
     // not an accidental near-empty list.
     for (const group of file.groups.map((g) => g.key)) {
       if (hiddenGroups.has(group)) continue;
-      expect(SLOT_EXPOSURE_CONFIG.read.groups).toContain(group);
+      expect(config.read.groups).toContain(group);
     }
   });
 
@@ -218,9 +220,7 @@ describe('a re-run', () => {
     // The pre-existing one untouched, the new one configured.
     expect(world.grants[0].customConfig).toBeNull();
     expect(world.grants[1].capabilityId).toBe(CAP_WRITE);
-    expect(world.grants[1].customConfig).toEqual({
-      read: { groups: SLOT_EXPOSURE_CONFIG.read.groups },
-    });
+    expect(world.grants[1].customConfig).toEqual(slotExposureConfig());
   });
 });
 

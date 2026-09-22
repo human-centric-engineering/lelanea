@@ -300,6 +300,15 @@ describe('reserved fork tiers', () => {
       'model AppResourceRevision {',
       'model AppResourceWords {',
       'model AppResourceWordsRevision {',
+      // f-content-seeds t-88 — the context-selected layer of her voice, and
+      // which golden set this install checks it against.
+      'enum AppVoiceContentStatus {',
+      'model AppVoiceOverlaySet {',
+      'model AppVoiceOverlaySetRevision {',
+      'model AppVoiceOverlay {',
+      'model AppVoiceOverlayRevision {',
+      'model AppVoiceGoldenSet {',
+      'model AppVoiceGoldenSetRevision {',
     ]);
   });
 

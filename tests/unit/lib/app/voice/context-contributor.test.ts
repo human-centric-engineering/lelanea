@@ -160,6 +160,10 @@ vi.mock('@/lib/app/resources/offering', () => ({
  * unrestricted search over the corpus is the failure mode that would put a
  * `sensitivity-client` document in front of the model.
  */
+vi.mock('@/lib/app/content/voice-overlay-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeVoiceOverlayStore()
+);
+
 vi.mock('@/lib/orchestration/knowledge/search', () => ({
   getPatternDetail: vi.fn(),
   searchKnowledge: vi.fn(
@@ -205,13 +209,17 @@ import {
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
-import { getVoiceOverlays } from '@/lib/app/content';
+import { readVoiceOverlaysFile } from '@/lib/app/content/voice-overlay-seed';
+import { fakeVoiceOverlayStore } from '@/tests/helpers/app/content-stores';
 import { searchKnowledge } from '@/lib/orchestration/knowledge/search';
 
 const searchKnowledgeMock = searchKnowledge as ReturnType<typeof vi.fn>;
 
 const HER_AGENT = 'agent-hers';
-const CONTENT = getVoiceOverlays();
+// The AUTHORED file, still the yardstick: it is what the rows are seeded from,
+// so asserting the emitted block against it proves the words survived the move
+// into the database rather than proving the fake agrees with itself (t-88).
+const CONTENT = readVoiceOverlaysFile();
 const KNOWN_SITUATION = CONTENT.overlays[0];
 const UNKNOWN_SITUATION = 'a-situation-nobody-authored';
 
@@ -282,6 +290,7 @@ beforeEach(() => {
   __resetContextContributorsForTests();
   invalidateAllAgentAccess();
   __resetAgentAccessContributorsForTests();
+  fakeVoiceOverlayStore().reset();
   seedWorld();
 });
 
@@ -298,6 +307,63 @@ describe('the voice context block', () => {
     // is what makes this case fail if the seam is emptied.
     expect(block).not.toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
     expect(bodyOf(block)).toContain(KNOWN_SITUATION.heading);
+  });
+
+  it('takes the register from the ROW, not the file it was seeded from', async () => {
+    // The t-88 done-when. Every other case here asserts the emitted block
+    // against the authored file, which passes identically whether the block
+    // came from the database or from a leftover file read. This one makes the
+    // two disagree: edit the row, and the prompt must follow the row.
+    const edited = 'Register for this moment — edited in the database.';
+    fakeVoiceOverlayStore().editOverlay(KNOWN_SITUATION.situation, {
+      heading: edited,
+      lines: ['Only this beat, and it exists in no file.'],
+    });
+
+    const body = bodyOf(await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation));
+
+    expect(body).toContain(edited);
+    expect(body).toContain('Only this beat, and it exists in no file.');
+    // The authored wording is gone from the prompt, which is what rules out a
+    // file read sitting behind or beside the row.
+    expect(body).not.toContain(KNOWN_SITUATION.heading);
+    for (const line of KNOWN_SITUATION.lines) expect(body).not.toContain(line);
+  });
+
+  it('takes the core-only body and the exemplar framing from the row too', async () => {
+    // The same proof for the two blocks that belong to no situation. They live
+    // on the set row, and a turn with no overlay is the only thing that shows
+    // `coreOnly` at all.
+    fakeVoiceOverlayStore().editSet({
+      coreOnly: { heading: 'Core only, from the row.', lines: ['One stored beat.'] },
+    });
+
+    const body = bodyOf(await buildContext(VOICE_CONTEXT_TYPE, UNKNOWN_SITUATION));
+
+    expect(body).toContain('Core only, from the row.');
+    expect(body).toContain('One stored beat.');
+    expect(body).not.toContain(CONTENT.coreOnly.heading);
+  });
+
+  it('serves no register at all, rather than the file, when the rows are gone', async () => {
+    fakeVoiceOverlayStore().empty();
+
+    const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation);
+    const body = bodyOf(block);
+
+    // What the platform does with a throwing contributor is NOT ours: Sunrise's
+    // `buildContext` degrades to a placeholder and leaves it uncached, so one
+    // bad read cannot fail a whole chat turn
+    // (`lib/orchestration/chat/context-builder.ts`). Worth pinning here anyway,
+    // because it decides what an unseeded install actually sounds like: she
+    // loses her register for the turn and falls back to the always-on core on
+    // the profile. That is the honest outcome, and the point of the case is the
+    // two assertions below it — none of her authored words reach the prompt
+    // from a file.
+    expect(body).toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
+    expect(body).not.toContain(KNOWN_SITUATION.heading);
+    for (const line of KNOWN_SITUATION.lines) expect(body).not.toContain(line);
+    expect(body).not.toContain(CONTENT.coreOnly.heading);
   });
 
   it('carries the authored register for the situation, beat by beat', async () => {

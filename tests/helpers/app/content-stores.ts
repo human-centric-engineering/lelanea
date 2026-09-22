@@ -1,6 +1,6 @@
 /**
- * In-memory stand-ins for the journey, question and resource stores, holding
- * exactly the rows the seeds write (f-content-seeds t-87).
+ * In-memory stand-ins for the journey, question, resource and voice-overlay
+ * stores, holding exactly the rows the seeds write (t-87; the overlays t-88).
  *
  * The same idea as `tests/helpers/app/foundational-documents.ts`. Each fake is
  * built from the REAL file through the REAL seed builder and the REAL row
@@ -49,6 +49,12 @@ import {
   type ResourceWordsRow,
 } from '@/lib/app/content/resource-view';
 import { selectResources } from '@/lib/app/content/resources';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import {
+  toVoiceOverlays,
+  type VoiceOverlayRow,
+  type VoiceOverlaySetRow,
+} from '@/lib/app/content/voice-overlay-view';
 
 // ============================================================================
 // The journey
@@ -330,4 +336,92 @@ export function readingRow(
     documentId: 'the_heart_behind_lelanea',
     ...overrides,
   };
+}
+
+// ============================================================================
+// The voice overlays
+// ============================================================================
+
+/** The rows seed 019 writes, at revision 1 and draft. */
+export function seededVoiceOverlayRows(): {
+  set: VoiceOverlaySetRow;
+  overlays: VoiceOverlayRow[];
+} {
+  const seed = buildVoiceOverlaySeed();
+  return {
+    set: { ...seed.set, status: 'draft', revision: 1 },
+    overlays: seed.overlays.map((overlay) => ({ ...overlay, status: 'draft', revision: 1 })),
+  };
+}
+
+/**
+ * A stand-in for `@/lib/app/content/voice-overlay-store`.
+ *
+ * Its keys are exactly that module's exports, so it can be handed straight to
+ * `vi.mock`. The reads go through the REAL `toVoiceOverlays` projection, so a
+ * test that edits a row sees what a turn would see — including the throws, on
+ * a status the projection does not know or a situation listed twice.
+ */
+export function createFakeVoiceOverlayStore() {
+  let state: { set: VoiceOverlaySetRow; overlays: VoiceOverlayRow[] } | null =
+    seededVoiceOverlayRows();
+
+  return {
+    VOICE_OVERLAY_SET_ID: 'lelanea_voice_fingerprint_overlays',
+    VOICE_OVERLAY_SET_SNAPSHOT_FIELDS: [] as const,
+    VOICE_OVERLAY_SNAPSHOT_FIELDS: [] as const,
+    seedVoiceOverlays: vi.fn(),
+
+    getVoiceOverlays: vi.fn(() => {
+      if (!state) {
+        return Promise.reject(
+          new ContentNotSeededError('No voice overlays in the database', '019-voice-overlays.ts')
+        );
+      }
+      return Promise.resolve(toVoiceOverlays(state.set, state.overlays));
+    }),
+
+    // ---- Not part of the real module: the test's controls ----
+
+    /** Back to exactly what the seed writes. Call from `beforeEach`. */
+    reset(): void {
+      state = seededVoiceOverlayRows();
+    },
+    /** An unseeded database: the read rejects with the real error. */
+    empty(): void {
+      state = null;
+    },
+    /** Change one overlay's row and bump its revision. */
+    editOverlay(situation: string, patch: Partial<Omit<VoiceOverlayRow, 'situation'>>): void {
+      if (!state) throw new Error('The fake voice overlay store is empty');
+      if (!state.overlays.some((row) => row.situation === situation)) {
+        throw new Error(`No seeded overlay "${situation}"`);
+      }
+      state = {
+        ...state,
+        overlays: state.overlays.map((row) =>
+          row.situation === situation ? { ...row, ...patch, revision: row.revision + 1 } : row
+        ),
+      };
+    },
+    /** Change the set's row (its framing blocks, version or status). */
+    editSet(patch: Partial<Omit<VoiceOverlaySetRow, 'id'>>): void {
+      if (!state) throw new Error('The fake voice overlay store is empty');
+      state = { ...state, set: { ...state.set, ...patch, revision: state.set.revision + 1 } };
+    },
+    /** Drop an overlay, so a situation that was authored no longer resolves. */
+    removeOverlay(situation: string): void {
+      if (!state) throw new Error('The fake voice overlay store is empty');
+      state = { ...state, overlays: state.overlays.filter((row) => row.situation !== situation) };
+    },
+  };
+}
+
+export type FakeVoiceOverlayStore = ReturnType<typeof createFakeVoiceOverlayStore>;
+let voiceOverlayInstance: FakeVoiceOverlayStore | null = null;
+
+/** The file's one fake voice overlay store. See the module docblock. */
+export function fakeVoiceOverlayStore(): FakeVoiceOverlayStore {
+  voiceOverlayInstance ??= createFakeVoiceOverlayStore();
+  return voiceOverlayInstance;
 }

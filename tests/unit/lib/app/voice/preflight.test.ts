@@ -22,6 +22,19 @@ const { resolveVoiceArms, estimateEvaluationRunCost, datasetFindUnique } = vi.ho
   datasetFindUnique: vi.fn(),
 }));
 
+vi.mock('@/lib/app/content/golden-set-store', async () => {
+  const { buildGoldenSetSeed } = await import('@/lib/app/content/golden-set-seed');
+  const seed = buildGoldenSetSeed();
+  return {
+    VOICE_GOLDEN_SET_ID: seed.id,
+    getGoldenSetPointer: vi.fn(() =>
+      Promise.resolve({ ...seed, status: 'draft' as const, revision: 1 })
+    ),
+    seedGoldenSetPointer: vi.fn(),
+    GOLDEN_SET_SNAPSHOT_FIELDS: [] as const,
+  };
+});
+
 vi.mock('@/lib/db/client', () => ({
   prisma: { aiDataset: { findUnique: datasetFindUnique } },
 }));

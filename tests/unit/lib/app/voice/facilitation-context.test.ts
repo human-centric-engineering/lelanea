@@ -24,13 +24,21 @@ const getFacilitationBindingByRole = vi.fn();
 const slotVocabulary = vi.fn();
 const retrieveVoiceExemplarsSafely = vi.fn();
 const selectOverlay = vi.fn();
+// `context-contributor` selects from an already-read set since t-88, so this
+// is the export it actually calls. `selectOverlay` stays mocked because other
+// callers use it and a partial mock would let the real one through.
+const selectOverlayFrom = vi.fn();
+
+vi.mock('@/lib/app/content/voice-overlay-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeVoiceOverlayStore()
+);
 
 vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
   getFacilitationBindingByRole,
 }));
 vi.mock('@/lib/app/slots/vocabulary', () => ({ slotVocabulary }));
 vi.mock('@/lib/app/voice/exemplars', () => ({ retrieveVoiceExemplarsSafely }));
-vi.mock('@/lib/app/voice/overlays', () => ({ selectOverlay }));
+vi.mock('@/lib/app/voice/overlays', () => ({ selectOverlay, selectOverlayFrom }));
 
 const { loadFacilitationVoiceContext, loadVoiceContext } =
   await import('@/lib/app/voice/context-contributor');
@@ -48,6 +56,7 @@ beforeEach(() => {
   getFacilitationBindingByRole.mockResolvedValue({ agent: { slug: VOICE_AGENT_SLUG } });
   slotVocabulary.mockResolvedValue(VOCABULARY);
   selectOverlay.mockReturnValue(OVERLAY);
+  selectOverlayFrom.mockReturnValue(OVERLAY);
   retrieveVoiceExemplarsSafely.mockResolvedValue([]);
 });
 

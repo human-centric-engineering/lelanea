@@ -80,12 +80,42 @@ interface FakeAgent {
   brandVoiceInstructions: string | null;
 }
 
+/** The `app_voice_golden_set` row — the pointer and its provenance (t-88). */
+interface FakeGoldenSetPointer {
+  id: string;
+  title: string;
+  version: string;
+  locale: string;
+  provenance: unknown;
+  status: string;
+  revision: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** One snapshot in `app_voice_golden_set_revision`. */
+interface FakeGoldenSetRevision {
+  setId: string;
+  revision: number;
+  title: string;
+  version: string;
+  locale: string;
+  provenance: unknown;
+  status: string;
+  changedFields: string[];
+  origin: string;
+  editorId: string | null;
+  changedAt: Date;
+}
+
 const world = {
   users: [{ id: 'service-account', accountType: 'SERVICE' }],
   datasets: [] as FakeDataset[],
   cases: [] as FakeCase[],
   agents: [] as FakeAgent[],
   runs: [] as { id: string; datasetId: string }[],
+  goldenSet: null as FakeGoldenSetPointer | null,
+  goldenSetRevisions: [] as FakeGoldenSetRevision[],
 };
 
 /** Every write the fake saw, so "a re-run writes nothing" is checkable. */
@@ -96,6 +126,8 @@ const writes = {
   caseCreateMany: 0,
   agentCreate: 0,
   agentUpdate: 0,
+  pointerCreate: 0,
+  pointerRevisionCreate: 0,
 };
 
 let nextId = 0;
@@ -210,6 +242,27 @@ const prisma = {
       }
     ),
   },
+  // The pointer row (t-88): which authored version is current, write-once. Its
+  // own two tables rather than a facet of `aiDataset`, because the platform's
+  // model has nowhere to hold "which version" or the provenance block.
+  appVoiceGoldenSet: {
+    findUnique: vi.fn(
+      async ({ where }: { where: { id: string } }) =>
+        (world.goldenSet && world.goldenSet.id === where.id ? world.goldenSet : null) ?? null
+    ),
+    create: vi.fn(async ({ data }: { data: FakeGoldenSetPointer }) => {
+      writes.pointerCreate += 1;
+      world.goldenSet = { ...data };
+      return world.goldenSet;
+    }),
+  },
+  appVoiceGoldenSetRevision: {
+    create: vi.fn(async ({ data }: { data: FakeGoldenSetRevision }) => {
+      writes.pointerRevisionCreate += 1;
+      world.goldenSetRevisions.push({ ...data });
+      return data;
+    }),
+  },
   // The seed's reconcile path batches its three writes. The fake runs them in
   // order, which is what the real client does too.
   $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
@@ -221,6 +274,7 @@ import unit, {
 } from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
 import { getVoiceGoldenSet } from '@/lib/app/content';
 import { VOICE_CONTROL_AGENT_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
+import { VOICE_GOLDEN_SET_ID } from '@/lib/app/content/golden-set-store';
 
 function ctx() {
   return { prisma: prisma as never, logger: logger as never };
@@ -239,6 +293,12 @@ function control(): FakeAgent {
   return agent;
 }
 
+/** The golden set pointer row the seed left behind, or a loud failure. */
+function pointer(): FakeGoldenSetPointer {
+  if (!world.goldenSet) throw new Error('The seed left no golden set pointer behind');
+  return world.goldenSet;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   nextId = 0;
@@ -246,6 +306,8 @@ beforeEach(() => {
   world.cases = [];
   world.agents = [];
   world.runs = [];
+  world.goldenSet = null;
+  world.goldenSetRevisions = [];
   for (const key of Object.keys(writes) as (keyof typeof writes)[]) writes[key] = 0;
 });
 
@@ -299,6 +361,27 @@ describe('a fresh install', () => {
     expect(control().provider).toBe('');
     expect(control().model).toBe('');
   });
+
+  it('writes the golden set pointer at revision 1, draft, with the authored version', async () => {
+    await runSeed();
+
+    expect(pointer()).toMatchObject({
+      id: VOICE_GOLDEN_SET_ID,
+      version: goldenSet.collection.version,
+      status: 'draft',
+      revision: 1,
+    });
+    // One revision recorded beside it, carrying the same authored version —
+    // t-92's editor reads this table, not just the pointer's current row.
+    expect(world.goldenSetRevisions).toHaveLength(1);
+    expect(world.goldenSetRevisions[0]).toMatchObject({
+      setId: VOICE_GOLDEN_SET_ID,
+      revision: 1,
+      version: goldenSet.collection.version,
+      status: 'draft',
+      origin: 'seed',
+    });
+  });
 });
 
 describe('a re-run', () => {
@@ -315,7 +398,30 @@ describe('a re-run', () => {
       caseCreateMany: 0,
       agentCreate: 0,
       agentUpdate: 0,
+      pointerCreate: 0,
+      pointerRevisionCreate: 0,
     });
+  });
+
+  it('leaves an edited golden set pointer alone on a second run', async () => {
+    // f-content-seeds t-88's done-when: a second seed run leaves an edited row
+    // alone. The pointer is write-once (unlike the dataset beside it) because
+    // it is about to become editable in t-92, and an operator who repoints the
+    // install at a different version must not have that undone on the next boot.
+    await runSeed();
+    expect(writes.pointerCreate).toBe(1);
+
+    pointer().version = '9.9';
+    pointer().status = 'signed_off';
+
+    await runSeed();
+
+    expect(pointer().version).toBe('9.9');
+    expect(pointer().status).toBe('signed_off');
+    // Not just "the fields survived" — nothing wrote a second time, and no
+    // second revision was minted behind the operator's back.
+    expect(writes.pointerCreate).toBe(1);
+    expect(world.goldenSetRevisions).toHaveLength(1);
   });
 
   it('puts the control back when somebody gave it her profile', async () => {
