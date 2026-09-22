@@ -326,6 +326,54 @@ describe('018-resources', () => {
   });
 });
 
+describe('seedResources refuses what could not be read back', () => {
+  beforeEach(async () => {
+    await run(journeyUnit);
+  });
+
+  it('a piece that relates to `default`, which is spelled null', async () => {
+    const seed = buildResourcesSeed();
+    seed.resources.push({
+      id: 'for-everything',
+      kind: 'film',
+      position: 0,
+      title: 'For everything',
+      subtitle: 'tagged the wrong way',
+      relatesTo: 'default',
+      duration: '1:00',
+      readingTime: null,
+      href: 'https://example.com/x',
+      documentId: null,
+    });
+
+    await expect(seedResources(seed, db.client)).rejects.toThrow(/unknown key "default"/);
+  });
+
+  it('a library with no words for `default`', async () => {
+    const seed = buildResourcesSeed();
+    seed.words = seed.words.filter((row) => row.key !== 'default');
+
+    await expect(seedResources(seed, db.client)).rejects.toThrow(/no words for "default"/);
+  });
+
+  it('a malformed provenance', async () => {
+    const seed = buildResourcesSeed();
+    seed.collection = { ...seed.collection, provenance: { status: 'maybe' } };
+
+    await expect(seedResources(seed, db.client)).rejects.toThrow(/provenance is malformed/);
+    expect(db.tables.appResourceCollection).toEqual([]);
+  });
+
+  it('words that are not well formed', async () => {
+    const seed = buildResourcesSeed();
+    seed.words = seed.words.map((row) => (row.key === 'default' ? { ...row, quote: '' } : row));
+
+    await expect(seedResources(seed, db.client)).rejects.toThrow(
+      /words for "default" failed validation/
+    );
+  });
+});
+
 describe('all three', () => {
   it('declare no hashInputs over their files, so an edit to one cannot imply it landed', () => {
     expect(journeyUnit.hashInputs).toBeUndefined();

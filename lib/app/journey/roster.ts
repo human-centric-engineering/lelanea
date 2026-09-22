@@ -71,8 +71,3 @@ export const JOURNEY_MODULES: readonly RosterModule[] = Object.freeze([
   { id: 'module_15_dogma_of_reality', number: 15, tier: 'integration_and_expansion' },
   { id: 'module_16_oneness', number: 16, tier: 'integration_and_expansion' },
 ]);
-
-/** The module ids in one tier, in numbered order. */
-export function rosterModuleIdsIn(tier: ModuleTier): string[] {
-  return JOURNEY_MODULES.filter((module) => module.tier === tier).map((module) => module.id);
-}
