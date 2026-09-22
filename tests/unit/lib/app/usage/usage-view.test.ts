@@ -211,18 +211,18 @@ describe('the month plot', () => {
   const days = [day('2026-03-01', 0.45), day('2026-03-15', 0.33), day('2026-03-21', 1.18)];
 
   it('runs from the window the server answered with to today', () => {
-    const plot = monthPlot(reading(days), NOW);
+    const plot = monthPlot(reading(days));
     expect(plot.bars).toHaveLength(21);
     expect(plot.bars[0].day).toBe('2026-03-01');
     expect(plot.bars.at(-1)?.day).toBe('2026-03-21');
   });
 
   it('sums the bars it drew, so the figure and the shape agree', () => {
-    expect(monthPlot(reading(days), NOW).total).toBe('$1.96');
+    expect(monthPlot(reading(days)).total).toBe('$1.96');
   });
 
   it('puts the average where the bars can be read against it', () => {
-    const plot = monthPlot(reading(days), NOW);
+    const plot = monthPlot(reading(days));
     // 1.96 over 21 days against a 1.18 peak.
     expect(plot.average?.percent).toBeCloseTo((1.96 / 21 / 1.18) * 100);
     expect(plot.average?.label).toBe('average $0.09 a day');
@@ -230,26 +230,26 @@ describe('the month plot', () => {
 
   it('draws no average line through a month that spent nothing', () => {
     // A line at zero sits on the axis pretending to be data.
-    const plot = monthPlot(reading([]), NOW);
+    const plot = monthPlot(reading([]));
     expect(plot.average).toBeNull();
     expect(plot.total).toBe('$0.00');
     expect(plot.description).toContain('Nothing spent yet this month');
   });
 
   it('describes itself for a reader who cannot see it', () => {
-    expect(monthPlot(reading(days), NOW).description).toBe(
+    expect(monthPlot(reading(days)).description).toBe(
       'Daily spend, 1 March to 21 March. $1.96 in total, highest day $1.18.'
     );
   });
 
   it('carries the floor through from the summary', () => {
-    expect(monthPlot(reading(days, { unpricedRows: 3 }), NOW).totalIsFloor).toBe(true);
+    expect(monthPlot(reading(days, { unpricedRows: 3 })).totalIsFloor).toBe(true);
   });
 });
 
 describe('the week plot', () => {
   it('is the last seven days ending today, each with its own figure', () => {
-    const plot = weekPlot(reading([day('2026-03-20', 0.9), day('2026-03-21', 1.18)]), NOW);
+    const plot = weekPlot(reading([day('2026-03-20', 0.9), day('2026-03-21', 1.18)]));
     expect(plot.bars).toHaveLength(7);
     expect(plot.bars[0].day).toBe('2026-03-15');
     expect(plot.bars.at(-1)?.day).toBe('2026-03-21');
@@ -258,9 +258,33 @@ describe('the week plot', () => {
   });
 
   it('marks a day that spent nothing rather than printing $0.00 over it', () => {
-    const plot = weekPlot(reading([]), NOW);
+    const plot = weekPlot(reading([]));
     expect(plot.bars.every((bar) => bar.figure === '—')).toBe(true);
     expect(plot.description).toBe('Daily spend over the last seven days. Nothing spent.');
+  });
+});
+
+describe('where a plot stops', () => {
+  it('is the instant the SERVER answered with, not the browser clock', () => {
+    // Both totals on the page are server-computed. Walking the bars to a local
+    // clock instead lets the two disagree: a browser a day slow would drop
+    // today's bar and its spend from the chart while the headline stat, taken
+    // straight from the summary, still counted it.
+    const slow = reading([day('2026-03-21', 1.18)]);
+    const plot = monthPlot(slow);
+
+    expect(plot.bars.at(-1)?.day).toBe('2026-03-21');
+    expect(plot.total).toBe('$1.18');
+  });
+
+  it('follows the server when its window ends on a different day', () => {
+    const stale = reading([day('2026-03-19', 0.5)]);
+    stale.days.window = { from: MONTH_START, to: '2026-03-19T23:00:00.000Z' };
+    const plot = monthPlot(stale);
+
+    // Nineteen bars, not twenty-one: the reading covers up to the 19th.
+    expect(plot.bars).toHaveLength(19);
+    expect(plot.bars.at(-1)?.day).toBe('2026-03-19');
   });
 });
 

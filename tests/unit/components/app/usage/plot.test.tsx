@@ -129,6 +129,23 @@ describe('the week plot', () => {
     expect(screen.getByRole('img').querySelectorAll('[data-tip]')).toHaveLength(0);
   });
 
+  it('gives the bar its own track, so the tallest days are not flattened', () => {
+    // The defect: as a direct flex child beside the figure, a bar at
+    // `height: 100%` resolved against the whole column — figure + gap + bar
+    // overflowed and flex shrank the bar to fit, so every day above roughly
+    // 86% of the peak drew at the same height and $9.00 looked like $10.00.
+    render(<WeekPlot bars={week} description="d" />);
+
+    const plot = screen.getByRole('img');
+    for (const column of plot.children) {
+      const track = column.lastElementChild;
+      // The percentage must be of a box that holds nothing else.
+      expect(track?.className).toContain('flex-1');
+      expect(track?.children).toHaveLength(1);
+      expect(track?.firstElementChild?.tagName).toBe('I');
+    }
+  });
+
   it('names the weekdays under the bars', () => {
     render(<WeekPlot bars={week} description="d" />);
     for (const day of ['Sun', 'Mon', 'Tue']) {

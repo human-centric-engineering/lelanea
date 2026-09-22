@@ -36,7 +36,17 @@ export const USAGE_ENDPOINT = '/api/v1/app/usage';
 /** The reader's own spend, grouped. */
 export const USAGE_BREAKDOWN_ENDPOINT = '/api/v1/app/usage/breakdown';
 
-/** Where a person reads it. The nav item and the page both name it here. */
+/**
+ * Where a person reads it.
+ *
+ * **Three other places still hardcode this path** — the account menu's link
+ * (`components/app/shell/account-menu.tsx`), the shell's tone map
+ * (`view-tone.ts`) and the nav roster. This constant is not yet the single
+ * source it ought to be, and saying otherwise would send the next reader
+ * looking for imports that do not exist (/code-review). The page below uses
+ * it, and t-95's topbar meter — which links here — is the change that can
+ * reasonably unify the rest.
+ */
 export const USAGE_PAGE = '/app/usage';
 
 /** The read failed, or answered something this cannot trust. */
@@ -50,7 +60,16 @@ export class UsageUnreadable extends Error {
   }
 }
 
-const windowSchema = z.object({ from: z.string(), to: z.string() });
+/**
+ * Both bounds are parsed as dates downstream, so "a string" is not enough.
+ *
+ * An unparseable bound used to produce a confident wrong answer rather than the
+ * banner this module promises: `new Date('nonsense')` is `Invalid Date`, the
+ * day loop's `at <= to` is `NaN <= n` → false, and the chart rendered zero bars
+ * under "Daily spend, Invalid Date to 21 March" with a total of `$0.00`
+ * (/code-review).
+ */
+const windowSchema = z.object({ from: z.iso.datetime(), to: z.iso.datetime() });
 
 const summarySchema = z.object({
   userId: z.string(),

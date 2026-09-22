@@ -127,7 +127,12 @@ export function MonthPlot({
       {average ? (
         <div
           aria-hidden
-          className="absolute right-0 left-0 z-[2] border-t border-dashed border-[var(--color-border)]"
+          // `pointer-events-none` for the reason `Tip` has it: the label is a
+          // real box sitting over the tallest bars at the right-hand end, and
+          // without this it swallows the pointer — `closest('[data-tip]')`
+          // finds nothing and those days, the ones a reader is most likely to
+          // probe on a busy month, raise no tip at all (/code-review).
+          className="pointer-events-none absolute right-0 left-0 z-[2] border-t border-dashed border-[var(--color-border)]"
           style={{ bottom: `${average.percent}%` }}
         >
           <span className="bg-background text-muted-foreground absolute top-[-17px] right-0 rounded-[5px] px-[5px] text-[10.5px] tabular-nums">
@@ -150,20 +155,29 @@ export function WeekPlot({ bars, description }: { bars: UsageWeekBar[]; descript
         className="flex h-[140px] items-end gap-2 border-b border-[var(--color-divider)]"
       >
         {bars.map((bar) => (
-          <div
-            key={bar.day}
-            className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
-          >
+          <div key={bar.day} className="flex h-full flex-1 flex-col items-center gap-1.5">
             <em className="text-muted-foreground text-[11.5px] not-italic tabular-nums">
               {bar.figure}
             </em>
-            <i
-              className={cn(
-                'block w-full rounded-t-[4px] transition-colors duration-150',
-                bar.idle ? 'bg-[var(--color-bar-idle)]' : 'bg-[var(--color-bar)]'
-              )}
-              style={{ height: bar.idle ? '3px' : `${bar.heightPercent}%` }}
-            />
+            {/*
+              The bar gets its OWN track, and the percentage is of that rather
+              than of the column. With the bar as a direct flex child beside
+              the figure, `height: 100%` resolved against the full column — so
+              figure + gap + bar overflowed, and flex silently shrank the bar
+              to fit. Every day above roughly 86% of the peak came out the same
+              height: $9.00 and $10.00 drew as one. The track is what is left
+              after the figure, so 100% fills it exactly and the scale is
+              linear again (/code-review).
+            */}
+            <div className="flex w-full flex-1 items-end">
+              <i
+                className={cn(
+                  'block w-full rounded-t-[4px] transition-colors duration-150',
+                  bar.idle ? 'bg-[var(--color-bar-idle)]' : 'bg-[var(--color-bar)]'
+                )}
+                style={{ height: bar.idle ? '3px' : `${bar.heightPercent}%` }}
+              />
+            </div>
           </div>
         ))}
       </div>

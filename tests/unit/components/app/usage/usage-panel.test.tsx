@@ -143,6 +143,16 @@ describe('a total that is known to be short', () => {
     expect(screen.getByText(/no price on file/)).toBeInTheDocument();
   });
 
+  it('qualifies the chart totals too, not just the headline', async () => {
+    // The By-day panel printed the same number bare, directly under a stat
+    // that had just called it approximate.
+    renderPanel({ unpricedRows: 4 });
+
+    await screen.findByText('used this month, at least');
+    expect(screen.getByText('at least $9.35')).toBeInTheDocument();
+    expect(screen.getByText('at least $8.90')).toBeInTheDocument();
+  });
+
   it('says nothing of the sort when every row was priced', async () => {
     renderPanel();
     expect(await screen.findByText('used this month')).toBeInTheDocument();

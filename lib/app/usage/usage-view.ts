@@ -263,11 +263,25 @@ export interface UsageAverage {
  * answers for a single day, and the average line gives the shape something to
  * be tall against.
  */
+/**
+ * The instant a reading covers up to — **the server's**, never the browser's.
+ *
+ * Both totals on this page are computed server-side over `[from, to)`. Walking
+ * the bars to a local `new Date()` instead lets the two disagree: a browser
+ * clock a day slow drops today's bar and its spend from the chart's total while
+ * the headline stat, taken straight from the summary, still includes it. The
+ * window the breakdown answered with is the authoritative end, and it is
+ * already parsed (/code-review).
+ */
+export function readingEnd(reading: UsageReading): Date {
+  return new Date(reading.days.window.to);
+}
+
 export function monthPlot(
-  reading: UsageReading,
-  now: Date
+  reading: UsageReading
 ): UsagePlot & { average: UsageAverage | null; axisStart: string; axisEnd: string } {
   const from = new Date(reading.summary.window.from);
+  const now = readingEnd(reading);
   const bars = daysBetween(from, now, reading.days.groups);
   const spent = bars.reduce((sum, bar) => sum + bar.costUsd, 0);
   const tallest = bars.reduce((top, bar) => Math.max(top, bar.costUsd), 0);
@@ -301,7 +315,8 @@ export interface UsageWeekBar extends UsageBar {
 }
 
 /** The last seven days ending today, each bar showing its own figure. */
-export function weekPlot(reading: UsageReading, now: Date): UsagePlot<UsageWeekBar> {
+export function weekPlot(reading: UsageReading): UsagePlot<UsageWeekBar> {
+  const now = readingEnd(reading);
   const from = new Date(utcDayStart(now).getTime() - 6 * DAY_MS);
   const bars = daysBetween(from, now, reading.days.groups).map((bar) => ({
     ...bar,
