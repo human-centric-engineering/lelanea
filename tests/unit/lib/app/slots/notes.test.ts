@@ -183,6 +183,23 @@ describe('what a person is shown', () => {
     expect(note?.correctable).toBe(false);
   });
 
+  it('still reads a note blanked out before its slot moved to sensitive as withheld, and lets them correct it', async () => {
+    // t-84 moved the nine health slots from special_category to sensitive. A
+    // note captured before that holds the sentinel; keyed on the slot's current
+    // sensitivity it would print `<redacted: special_category>` as the note.
+    world.projections.push(definition('life_physical_health', { sensitivity: 'sensitive' }));
+    world.ours.push({ slug: 'life_physical_health', visibility: 'open', sensitivity: 'sensitive' });
+    world.values.push(value(ME, 'life_physical_health', { value: '<redacted: special_category>' }));
+
+    const view = await getNotes(ME);
+    const note = view.notes.find((candidate) => candidate.slotSlug === 'life_physical_health');
+
+    expect(note?.sensitivity).toBe('sensitive');
+    expect(note?.withheld).toBe(true);
+    // Their words can be kept now, so they can say them again.
+    expect(note?.correctable).toBe(true);
+  });
+
   it('carries the provenance a person is promised (§3.19)', async () => {
     const view = await getNotes(ME);
     const note = view.notes[0];
