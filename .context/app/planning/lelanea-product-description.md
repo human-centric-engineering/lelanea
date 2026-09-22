@@ -463,7 +463,7 @@ The discipline this implies:
 - **Every capability the web client uses is reached through a versioned API.** No behavior exists only inside a page handler or a server-rendered route. If the web app can do it, a native client can do it with the same call.
 - **The web client is the first consumer of that API rather than a privileged one.** Treating it as one client among several from day one is what makes the second and third cheap.
 - **Auth is token-based and client-agnostic**, because native apps cannot ride on browser session cookies.
-- **Authored content is served through the API rather than compiled into the web build.** The six JSON files are the source; a mobile client must render the same copy without a parallel content pipeline, and a content correction must reach every client the same way.
+- **Authored content is served through the API rather than compiled into the web build.** The six JSON files are reference and seed data only: they seed the app's storage and inform its agents, and are never read by the app while it is running. The API serves content from storage; a mobile client must render the same copy without a parallel content pipeline, and a content correction must reach every client the same way.
 - **State is server-side and authoritative.** Someone who starts Values on a laptop and continues on a phone must not lose a color-code, a reflection answer, or their place in the thirty questions. Versioned, timestamped slots already give this; the requirement is that no client ever holds state the server does not.
 - **Chat streams over a transport both can use**, SSE or websockets, rather than anything browser-specific.
 - **Responsive web reduces later rework**, but a phone browser is not the mobile deliverable. Native is.
