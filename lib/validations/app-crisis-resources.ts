@@ -4,7 +4,9 @@
  *
  * The same shapes guard both directions. A write that fails is refused 400; a
  * stored row that fails on the read path (someone edited it by hand) sends the
- * whole resource to the bundled file, in `lib/app/safety/resources-store.ts`.
+ * whole resource to fail, in `lib/app/safety/resources-store.ts` — there is
+ * no bundled fallback beneath it since t-88, which is why these schemas are
+ * the same ones every write route validates against.
  *
  * The bounds are on typos, not policy: a person in danger reads every word of
  * this, so an intro is a few sentences and a service a line.

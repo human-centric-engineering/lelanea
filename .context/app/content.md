@@ -24,8 +24,12 @@ the file only seeds that table. See [Her foundational documents: the
 database](#her-foundational-documents-the-database). **So have the journey's
 text, the discovery questions and the resource library (t-87)**: see [The
 journey, the questions and the resources: the
-database](#the-journey-the-questions-and-the-resources-the-database). The voice
-files follow in t-88; until then their loaders below still import the files.
+database](#the-journey-the-questions-and-the-resources-the-database). **The
+context-selected voice overlays and the golden set's pointer followed in t-88**:
+see [The voice overlays and the golden set: the
+database](#the-voice-overlays-and-the-golden-set-the-database). What the loader
+below still reads from a file is the voice fingerprint's always-on core and the
+golden set's prompts, and neither is read on a request.
 
 **Locations:** `content/*.json` (her words) ·
 `seed-data/drafted/*.json` (drafted seed data) ·
@@ -185,17 +189,66 @@ is logged.
 to `seed-data/drafted/lelanea_resources.json`: once the library is written, the
 file reaches only a database that was never seeded.
 
+## The voice overlays and the golden set: the database
+
+Since t-88 the context-selected voice overlays live in `app_` tables on the same
+pattern, and the golden set gained a one-row pointer beside the platform dataset
+that already held its prompts. [`voice.md`](./voice.md) has the reasoning for
+both; what belongs here is where the seam is.
+
+| Collection     | Tables                                                                               | Service (`lib/app/content/`) | Seed unit                 |
+| -------------- | ------------------------------------------------------------------------------------ | ---------------------------- | ------------------------- |
+| Voice overlays | `app_voice_overlay_set`, `app_voice_overlay` (+ revisions)                           | `voice-overlay-store.ts`     | `019-voice-overlays.ts`   |
+| Golden set     | `app_voice_golden_set` (+ revisions) — the pointer only; the prompts are `AiDataset` | `golden-set-store.ts`        | `004-voice-golden-set.ts` |
+
+| Function                          | Returns                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `getVoiceOverlays()`              | the set, its overlays in authored order, the labelling copy, `coreOnly` |
+| `getGoldenSetPointer()`           | which golden set version is current, and its provenance                 |
+| `seedVoiceOverlays(seed, client)` | the set, the overlays, each revision 1 — **once**                       |
+| `seedGoldenSetPointer(seed, …)`   | the pointer and its revision 1 — **once**                               |
+
+Async, read per request with no cache, `ContentNotSeededError` when unseeded,
+no fallback to the file, a pure `*-view.ts` projection that validates the JSON
+columns on the way out, a `*-seed.ts` that is the one place the file is still
+imported, and a data migration per collection
+(`20260929100100_app_voice_overlays_data`,
+`20260929100400_app_voice_golden_set_data`) — all as t-86 and t-87 set it.
+**Every row is seeded `draft`**: these two files were drafted in her register
+rather than transcribed from her, and a seed cannot say she has signed them off.
+
+**The golden set's row is a pointer and nothing more, and that is `fp4`.** The
+prompts stay in `AiDatasetCase` and the control's instructions on the control
+agent, both written by seed 004. Copying either into a table of ours would give
+her prompts two writable homes. What the dataset could not hold is which version
+is current — it is keyed by the version — which is why that one field is a row.
+
+**Neither store is re-exported from `@/lib/app/content`** — only their types
+are — for the reason the documents' store is not: that module is imported by
+code that must stay free of the database, and a test walks its import closure.
+`getVoiceOverlays()` comes from `@/lib/app/content/voice-overlay-store`, and it
+is async.
+
+**Not every unseeded read is a 500.** The overlays are read by a chat context
+contributor, and Sunrise's `buildContext` catches a throwing contributor,
+degrades to a placeholder and leaves it uncached. A turn on an unseeded database
+loses her register, not the turn. See
+[`voice.md`](./voice.md#an-unseeded-overlay-database-does-not-fail-a-turn).
+
 ## The loader
 
-`lib/app/content/index.ts`, for the voice files, still read from files until
-t-88. Parses each file on first use and memoises for the life of the
-process; static JSON imports rather than `fs`, because `lib/app/**` may not touch
-Node built-ins.
+`lib/app/content/index.ts`. What is left in it after t-88 is the voice
+fingerprint's always-on core — projected onto the agent profile by seed 003,
+which reconciles it on every run because it has no editable surface yet — and
+the golden set, whose prompts reach the database through seed 004 as an
+`AiDataset`. Neither is read on a request. It parses each file on first use and
+memoises for the life of the process; static JSON imports rather than `fs`,
+because `lib/app/**` may not touch Node built-ins.
 
 | Function                      | Returns                                                           |
 | ----------------------------- | ----------------------------------------------------------------- |
 | `getVoiceFingerprint()`       | the always-on voice core, and its provenance                      |
-| `getVoiceOverlays()`          | the register overlays, their labelling copy                       |
+| `getVoiceGoldenSet()`         | the authored prompts, the control's prompt, the dataset copy      |
 | `findPlaceholders(text)`      | merge fields in a string, deduplicated                            |
 | `listDeclaredPlaceholders()`  | placeholders the file declares (`foundational-seed.ts`)           |
 | `listOccurringPlaceholders()` | placeholders present in the file's prose (`foundational-seed.ts`) |
@@ -571,6 +624,15 @@ deploy" — is the owner's 22 September 2026 ask that every seeded collection be
 manageable from the admin. The rule for every collection is the journal decision
 "Storage: relational is authoritative for every seeded collection; the vector
 store indexes only her prose". The journey, the questions and the resources
-followed in t-87, relational only and embedded nowhere; the voice files follow
-in t-88. The function names were kept as the seam, so callers changed only by
-becoming async and importing from the store.
+followed in t-87, relational only and embedded nowhere, and the voice overlays
+and the golden set's pointer in t-88. The function names were kept as the seam,
+so callers changed only by becoming async and importing from the store.
+
+**What is deliberately still a file, after t-88:** the voice fingerprint's
+always-on core, which is a pure code projection onto an agent profile with no
+editable surface yet (seed 003 reconciles it on every run), and the golden set's
+prompts, which are an `AiDataset` the platform already owns. Both are seed
+material read at seed time and never on a request. The seed-draft files
+themselves stay in `seed-data/drafted/` and stay labelled as proposals: moving
+words into a table does not sign them off, which is why every row t-88 writes is
+`draft`.

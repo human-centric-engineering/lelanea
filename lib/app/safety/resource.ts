@@ -31,13 +31,13 @@
  *
  * ## Where the words come from
  *
- * The admin-edited tables, or the bundled file when those cannot answer in
- * time (f-safety t-63). Since t-88 there is one source — the tables — and
- * `resources-store.ts` throws when they cannot answer, so this module does
- * too. The module docblock there says why that is the honest behaviour rather
- * than a regression.
+ * The admin-edited tables, and nothing else (f-safety t-63; the bundled
+ * fallback removed in f-content-seeds t-88). `resources-store.ts` throws when
+ * the tables cannot answer, so this module does too. Its docblock says why
+ * that is the honest behaviour rather than a regression, and why the two
+ * states that used to reach the fallback are now unreachable instead.
  *
- * @see lib/app/safety/resources-store.ts — the tables, the cache and the fallback
+ * @see lib/app/safety/resources-store.ts — the tables and the cache
  * @see .context/app/safety.md
  */
 

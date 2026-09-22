@@ -23,7 +23,7 @@ runRecordedTurn (lib/app/agent/turns.ts)
   └─ detectCrisis(text, locale, who)          lib/app/safety/assess.ts
        ├─ detectCrisisTier(text)               detect.ts — phrase list, no model
        ├─ checkCrisisContext(…) on a hard hit  context-check.ts — may only soften
-       └─ resolveCrisisResource(locale, tier)  resource.ts — admin-edited tables, bundled file as the floor
+       └─ resolveCrisisResource(locale, tier)  resource.ts — the admin-edited tables, and nothing else
   hard → recordCrisisShown, crisisFrame(resource), and nothing else: run() is never called
   soft → the turn as before; unless it was refused (409),
          recordCrisisShown, then crisisFrame(resource) ahead of its stream
@@ -103,40 +103,75 @@ deploy:
   number and the ordered services (`{ name, contact, hours }`).
 
 `seed-data/drafted/lelanea_crisis_resources.json` (loaded by
-`lib/app/content/crisis-resources.ts`) stays in the repo as **the floor**, and
-is what the seed copies from.
+`lib/app/content/crisis-resources.ts`) stays in the repo as **seed material**,
+and is what the seed and the data migration copy from. It is no longer a floor
+under the read path — see below.
 
-### The read path never depends on the database
+### The read path is the database, or the turn fails (t-88)
 
-`resolveCrisisResource(locale, tier)` keeps its arguments and now returns a
-promise; its one caller, `detectCrisis`, was already async. It reads through
-`lib/app/safety/resources-store.ts`, which **never throws and never waits more
-than 750 ms**. The bundled file is served when:
+`resolveCrisisResource(locale, tier)` keeps its arguments and returns a promise;
+its one caller, `detectCrisis`, was already async. It reads through
+`lib/app/safety/resources-store.ts`, which since t-88 has **no bundled fallback
+and no read deadline**: `loadCrisisContent()` throws when the tables cannot
+answer, and `resolveCrisisResource` throws with it.
 
-| The tables…                          | Why it can happen                    |
-| ------------------------------------ | ------------------------------------ |
-| are **unseeded** (no copy row)       | a database `db:seed` has not reached |
-| **throw** on read                    | connection lost, pool exhausted      |
-| hold a row that **fails validation** | someone edited it by hand            |
-| do not answer within **750 ms**      | a slow or locked database            |
+Owner ruling, 2026-09-22. The old behaviour reads as the safer one, so the
+argument is worth keeping:
+
+- **A second copy of a helpline is a second thing to keep signed off, and it is
+  the one nobody looks at.** It went stale silently and answered in place of the
+  rows an admin had just corrected.
+- **The two states that used to need it are now unreachable rather than
+  handled.** "Tables but no copy row" cannot happen, because the row is inserted
+  by a data migration in every environment
+  (`20260929100200_app_crisis_resources_data`). "A stored row that fails
+  validation" cannot be written, because every admin write validates through the
+  same schemas the read validates with (`lib/validations/app-crisis-resources.ts`:
+  `crisisCopySaveSchema` and `crisisRegionSaveSchema` extend exactly what
+  `contentFromRows` parses). Reaching either throw now means a row was changed
+  outside the admin.
+- **What is left is a database that cannot be read at all** — and then the app is
+  down, so a crisis turn has nothing to say that the rest of the app would not
+  already have failed to say.
+
+**The 750 ms read deadline went with the fallback.** Racing a timer only made
+sense while losing the race meant serving the file. With no file a timeout is a
+crisis turn failing faster, so the read waits: a slow helpline beats a prompt
+error with no helpline in it.
+
+**`CrisisContent.source` is gone**, and so is the branch it fed: the frame's
+version is always `c3` or `c3/GB.2` from the rows, never `0.1` from the file.
 
 A database answer is cached in the module for 60 s; a failure is not, so the
 next crisis turn tries again. An admin write drops the cache in the instance
-that served it; other instances show the edit within the minute. The
-fallback, not the cache, is the safety net. Every fallback is logged
-(`warn` for unseeded, `error` otherwise).
+that served it; other instances show the edit within the minute. A read that
+started before a write is not cached after it (a generation counter, found by
+/code-review), so pre-edit words cannot be served for another TTL.
 
 **Once seeded, the tables are the whole list.** A region an admin removed is
 unlisted — its people get the directory and the local emergency line — and the
 file's copy of it is not merged back in.
 
-### Seeding — once
+### Seeding — once, and a migration so every environment has it
 
 `prisma/seeds/app-lelanea/010-crisis-resources.ts` fills both tables from the
 file, in one transaction, **only while the copy row is absent** (`fp4`:
 operator-owned). The copy row is the marker rather than each region, so a re-run
 neither undoes an edit nor brings back a removed region. A region later added to
 the file does not reach a seeded database: add it on the admin page.
+
+**The seed is not what gets the rows into production.**
+`20260929100200_app_crisis_resources_data` writes the same rows, because
+production migrates before every start and runs the seeder only when someone
+asks ([`database-changes.md`](./database-changes.md)). Before t-88 an
+environment that had migrated `20260923100000_app_crisis_resources` — which
+creates the tables and inserts nothing — and had never been seeded served the
+bundled file on every crisis turn and nobody noticed. With the fallback gone it
+would serve **nothing** to a person in danger, with the app otherwise healthy.
+That is what makes this migration load-bearing in a way its siblings are not.
+Each insert runs only while its table is empty, and
+`tests/unit/lib/app/safety/crisis-data-migration.test.ts` parses the literal
+back out of the SQL and fails if it differs from what seed 010 would write.
 
 ### Sign-off
 
@@ -152,19 +187,23 @@ the wording **and a check that every number still answers.**
   signed off.
 - **The page says when the stored rows cannot be served at all** (`unservable`
   on `GET`): it runs the same check the turn does (`contentFromRows` in
-  `resources-store.ts`), so any row that sends everyone to the bundled file is
-  named there rather than edited unseen.
+  `resources-store.ts`), so any row that would fail a crisis turn is named there
+  rather than edited unseen. Since t-88 that is the whole stake — there is no
+  file behind it — and it is also why the write routes share those schemas.
 - **The frame's `status` is `signed_off` only when everything shown is**: the
   copy, and the region's services where a region was chosen.
-- **The frame's `version`** is `0.1` from the file, and `c3` or `c3/GB.2` from
-  the tables — the copy's version and, where one was chosen, the region's — so a
-  report of what someone saw can be matched to the audit log.
+- **The frame's `version`** is `c3` or `c3/GB.2` — the copy's version and, where
+  one was chosen, the region's — so a report of what someone saw can be matched
+  to the audit log.
 - **Every write and every sign-off is in the admin audit log** (`app_crisis_copy.*`,
   `app_crisis_region.*`, with the before and after). Who edited or signed off is
   kept there, not on the rows, which is why both tables are declared as
   holding nothing about anyone in `lib/app/leaf-data-export.ts`.
-- **No write is accepted before the seed has run** (409): a lone admin-created
-  row would make the tables the source with every other region missing.
+- **No write is accepted before the copy row exists** (409): a lone
+  admin-created row would make the tables the source with every other region
+  missing. Since t-88 the data migration puts that row in every environment, so
+  this refusal should be unreachable; it is kept because it is the cheaper of
+  the two ways to find out that it was not.
 
 | Route (admin, `withAdminAuth`)                                     | Does                               |
 | ------------------------------------------------------------------ | ---------------------------------- |
@@ -228,8 +267,8 @@ resource: {
   ([`agent.md`](./agent.md#the-endings--what-f-conversation-builds-against)): no
   model turn is written, and what the person typed stays in the box.
 - **The copy is neutral and authored.** f-conversation lays it out as it is
-  (`CrisisRow`, §10 t-65) — every string in `resource` comes from the tables or
-  the file, never from a model, and none is rewritten into her register.
+  (`CrisisRow`, §10 t-65) — every string in `resource` comes from the tables,
+  never from a model, and none is rewritten into her register.
 - **A platform frame never becomes `crisis`.** `toClientStream()` still maps an
   unknown platform code to `unavailable`; the crisis frame is added outside it.
 - **Soft, then paused or failed:** the crisis frame, then that ending. The
@@ -267,9 +306,16 @@ hit), the locale and the region shown.
   characters), the regional resolution and its fallbacks, each context-check
   failure, and the seam: a hard hit with the model call throwing and with
   generation paused calls no model; a soft hit's frame precedes her first words.
-- `tests/unit/lib/app/safety/resource.test.ts` "where the words come from" —
-  stored rows served once seeded; the bundled file when the tables are empty,
-  the read throws, a row is malformed, or the read passes its deadline.
+- `tests/unit/lib/app/safety/resource.test.ts` "where the words come from
+  (t-63 / t-88)" — stored rows served once seeded, and a **rejection** for each
+  of the three states that used to reach the file: no copy row, a read that
+  throws, a row that fails validation. Its default fixture is the database
+  seeded with the file's own content, which is what a freshly migrated
+  environment holds, so the blocks comparing served text against
+  `getCrisisResources()` are comparing database-served content that happens to
+  match the seed — not a fallback.
+- `tests/unit/lib/app/safety/crisis-data-migration.test.ts` — the migration
+  writes exactly what seed 010 does, and re-running it changes nothing.
 - `npm run smoke:app-crisis` — in-process against the dev database with **every
   `*_API_KEY` removed**: the real turn seam answers a hard hit with the UK
   resource, calls no model, records the event without the words, and the event

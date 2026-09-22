@@ -152,7 +152,8 @@ export function getSlotTaxonomy(): SlotTaxonomyFile {
  * hidden (f-slots t-72).
  *
  * This is the `read` half of her slot exposure allowlist
- * (`SLOT_EXPOSURE_CONFIG` in `lib/app/agent/pins.ts`), and it is **derived from
+ * (seed 013's stored `customConfig`, shaped by {@link slotExposureConfig}),
+ * and it is **derived from
  * the taxonomy rather than typed out** so that marking a slot hidden is the
  * whole act. Naming the five open groups by hand would mean a slot turned hidden
  * inside one of them kept being read back into her context — §12's "never a
