@@ -6,7 +6,7 @@ import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
-import { getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/home.module.css';
 
@@ -80,9 +80,8 @@ const WHAT_THIS_IS = [
  * ## The journey tiers are read, never written here
  *
  * The tier names and the modules inside them come from
- * `getJourneyStructure()` — the same authored content `GET
- * /api/v1/app/content/journey-structure` serves, which is literally what that
- * route calls. The task names the endpoint; a server component fetching its own
+ * `getJourneyStructure()` — the `app_journey_*` rows (t-87), through the same
+ * service `GET /api/v1/app/content/journey-structure` calls. The task names the endpoint; a server component fetching its own
  * HTTP route would need an absolute URL, cost a second round trip, and buy
  * nothing, so this reads the source the endpoint reads. What the task was
  * guarding against — the seventeen modules retyped into a page and drifting the
@@ -93,12 +92,13 @@ const WHAT_THIS_IS = [
  * ordinal — see the filter.
  */
 export default async function HomePage() {
-  const { collection: journey, tiers, modules } = getJourneyStructure();
-  const [philosophy, initiation, disclaimer] = await Promise.all([
-    requireDocument('the_heart_behind_lelanea'),
-    requireDocument('the_initiation'),
-    requireDocument('disclaimer'),
-  ]);
+  const [{ collection: journey, tiers, modules }, philosophy, initiation, disclaimer] =
+    await Promise.all([
+      getJourneyStructure(),
+      requireDocument('the_heart_behind_lelanea'),
+      requireDocument('the_initiation'),
+      requireDocument('disclaimer'),
+    ]);
   const documents = { the_initiation: initiation, disclaimer };
 
   // The hero and the quote band are her words from `the_heart_behind_lelanea`,

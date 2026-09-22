@@ -35,7 +35,7 @@
  */
 
 import { APIError } from '@/lib/api/errors';
-import { getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import type { ModuleTier } from '@/lib/app/content/schemas';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { getRegisteredModule } from '@/lib/framework/modules/registry';
@@ -89,7 +89,7 @@ export async function getJourneyMap(): Promise<JourneyMapView | null> {
   const published = await getPublishedMap(JOURNEY_MAP_SLUG);
   if (!published) return null;
 
-  const structure = getJourneyStructure();
+  const structure = await getJourneyStructure();
   const tiersById = new Map(structure.tiers.map((tier) => [tier.id as string, tier]));
   const modulesBySlug = new Map(structure.modules.map((m) => [moduleSlugFromId(m.id), m]));
 

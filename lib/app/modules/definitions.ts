@@ -9,40 +9,37 @@
  * schema, no data-slots, no agent seats, no capabilities. Those arrive one
  * module at a time, as each is written.
  *
- * **Derived, not authored.** The definitions are projected from the journey
- * structure file through `getJourneyStructure()` — the one way in to Lelañea's
- * authored content — so the registry can never disagree with the map drawer or
- * the module pages about how many modules there are, what they are called, or
- * which tier holds them. Adding a module is an edit to the structure file, and
- * this list follows.
+ * **Which modules exist is the roster's; what each is called is its row's**
+ * (t-87). The slugs come from `lib/app/journey/roster.ts`, so the registry is
+ * complete without a database. Each module's `name` and `description` come from
+ * its `app_journey_module` and `app_journey_tier` rows, which own her words:
+ * this module never holds a title of its own. Startup registers twice
+ * (`lib/app/leaf-bootstrap.ts`): once from the roster alone, synchronously, then
+ * again with the rows' text once they are read. `registerModule` is idempotent
+ * by slug, so the second replaces the first. If the rows cannot be read, the
+ * first registration stands, with a name spelled from the slug
+ * ({@link fallbackModuleName}), and startup logs it.
  *
- * **Slugs.** The structure file's ids are `module_NN_words_like_this`; the
- * framework's slug rule is lowercase alphanumeric with hyphens (`slugSchema`
- * in `lib/validations/common.ts`, enforced on every `[slug]` route param), so
- * the projection strips the numbered prefix and swaps `_` for `-`:
+ * **Slugs.** The roster's ids are `module_NN_words_like_this`; the framework's
+ * slug rule is lowercase alphanumeric with hyphens (`slugSchema` in
+ * `lib/validations/common.ts`, enforced on every `[slug]` route param), so the
+ * projection strips the numbered prefix and swaps `_` for `-`:
  * `module_11_curiosity_of_self` → `curiosity-of-self`. The number is dropped
- * because a slug is an identity, not a position — the recommended spine is the
- * published map's business, and the drawer takes the number from the content
- * API. `moduleSlugFromId()` is the single place that rule lives; the map seed
- * and the journey API use it to keep node keys equal to module slugs.
+ * because a slug is an identity, not a position. `moduleSlugFromId()` is the
+ * single place that rule lives; the map definition and the journey API use it to
+ * keep node keys equal to module slugs.
  *
- * Registered from `initLeafApp()` (`lib/app/leaf-bootstrap.ts`), which must
- * stay a pure, synchronous registration: this module reads a bundled JSON
- * through a memoised Zod parse and touches nothing else.
- *
- * @see lib/app/content/index.ts — `getJourneyStructure()`, the source
+ * @see lib/app/journey/roster.ts — which modules exist
+ * @see lib/app/content/journey-store.ts — `getJourneyStructure()`, their words
  * @see lib/framework/modules/definition.ts — the shape being filled
  */
 
 import { z } from 'zod';
 import type { ModuleDefinition } from '@/lib/framework/modules/definition';
-import {
-  getJourneyStructure,
-  type JourneyModuleView,
-  type JourneyTierView,
-} from '@/lib/app/content';
+import type { JourneyStructure } from '@/lib/app/content/journey-view';
+import { JOURNEY_MODULES, type RosterModule } from '@/lib/app/journey/roster';
 
-/** How many modules the journey has. Pinned by tests against the structure file. */
+/** How many modules the journey has. Pinned by tests against the roster. */
 export const LELANEA_MODULE_COUNT = 17;
 
 /**
@@ -62,21 +59,34 @@ export function moduleSlugFromId(id: string): string {
 }
 
 /**
+ * A name spelled from the slug, for a module whose row could not be read:
+ * `curiosity-of-self` → `Curiosity of self`. Honest about where it came from —
+ * it is the identity, readable, not a guess at her title.
+ */
+export function fallbackModuleName(slug: string): string {
+  const words = slug.replaceAll('-', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
  * The one-line description the admin sees: the module's subtitle where the
  * author gave one, then the tier and what the tier is for. A module with no
  * subtitle (fifteen of them, today) is described by its tier alone — that is
  * honest about how much is written, and it is still a sentence.
  */
-function describe(module: JourneyModuleView, tier: JourneyTierView): string {
+function describe(
+  module: JourneyStructure['modules'][number],
+  tier: JourneyStructure['tiers'][number]
+): string {
   const tierLine = `${tier.label}: ${tier.intent}`;
   return module.subtitle ? `${module.subtitle}. ${tierLine}` : tierLine;
 }
 
-function toDefinition(module: JourneyModuleView, tier: JourneyTierView): ModuleDefinition {
+function toDefinition(slug: string, name: string, description: string): ModuleDefinition {
   return {
-    slug: moduleSlugFromId(module.id),
-    name: module.title,
-    description: describe(module, tier),
+    slug,
+    name,
+    description,
     // An empty interior, deliberately: the admin config form renders no fields
     // and the API accepts `{}` and nothing else. Strict, like every authored
     // schema in `lib/app/content/schemas.ts`: a plain `z.object({})` would
@@ -86,28 +96,33 @@ function toDefinition(module: JourneyModuleView, tier: JourneyTierView): ModuleD
   };
 }
 
-let definitions: readonly ModuleDefinition[] | null = null;
+function fromRoster(module: RosterModule): ModuleDefinition {
+  const slug = moduleSlugFromId(module.id);
+  return toDefinition(slug, fallbackModuleName(slug), `Module ${module.number} of the journey.`);
+}
 
 /**
  * The seventeen module definitions, in the journey's numbered order — which is
  * the order they are registered, and so the order `getRegisteredModules()`
  * returns them.
  *
- * Built once per process; the structure it reads is itself memoised and frozen.
+ * With no `structure`, from the roster alone: every slug, each named from its
+ * slug. With the journey read from the database, each named and described by
+ * its rows. The slugs and their order are the roster's either way, so the two
+ * registrations cover exactly the same modules.
  */
-export function getModuleDefinitions(): readonly ModuleDefinition[] {
-  if (definitions) return definitions;
+export function getModuleDefinitions(structure?: JourneyStructure): readonly ModuleDefinition[] {
+  if (!structure) return JOURNEY_MODULES.map(fromRoster);
 
-  const structure = getJourneyStructure();
   const tiersById = new Map(structure.tiers.map((tier) => [tier.id, tier]));
-
-  definitions = [...structure.modules]
-    .sort((a, b) => a.number - b.number)
-    .map((module) => {
-      // Non-null: the structure schema's referential check guarantees every
-      // module's tier is one of the declared tiers.
-      const tier = tiersById.get(module.tier)!;
-      return toDefinition(module, tier);
-    });
-  return definitions;
+  const modulesById = new Map(structure.modules.map((module) => [module.id, module]));
+  return JOURNEY_MODULES.map((rosterModule) => {
+    const entry = modulesById.get(rosterModule.id);
+    const tier = tiersById.get(rosterModule.tier);
+    // `toJourneyStructure` builds both lists from the roster and throws on a
+    // missing row, so these are present; the fallback is for a caller that
+    // hands in a structure built some other way.
+    if (!entry || !tier) return fromRoster(rosterModule);
+    return toDefinition(moduleSlugFromId(entry.id), entry.title, describe(entry, tier));
+  });
 }

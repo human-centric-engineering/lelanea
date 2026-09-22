@@ -13,15 +13,16 @@
  * ## The row this writes, and who owns it (fp4)
  *
  * **A pure code projection, for now.** The published version is rebuilt from
- * `content/lelanea_module_structure.json` through `buildJourneyMapDefinition()`
- * every time this unit runs, and the unit re-runs whenever the structure file,
- * the loader that projects it, the builder, or the slug rule changes
- * (`hashInputs`). Nobody has edited this
- * map in Daybreak's map editor; the day Lelañea does, that edit is what this
- * seed would overwrite on its next run. **That first edit is the trigger to
- * reclassify the row as operator-owned**: at that point this seed should
- * create the map only when absent and never publish over an existing version,
- * and the structure file stops being the source of the graph's shape.
+ * the code roster (`lib/app/journey/roster.ts`) through
+ * `buildJourneyMapDefinition()` every time this unit runs, and the unit re-runs
+ * whenever the roster, the builder, or the slug rule changes (`hashInputs`).
+ * The map carries no titles, so an edit to her words (`app_journey_*`, t-87)
+ * never re-publishes it. Nobody has edited this map in Daybreak's map editor;
+ * the day Lelañea does, that edit is what this seed would overwrite on its next
+ * run. **That first edit is the trigger to reclassify the row as
+ * operator-owned**: at that point this seed should create the map only when
+ * absent and never publish over an existing version, and the roster stops
+ * being the source of the graph's shape.
  *
  * ## Idempotent, safe on empty, no timestamp churn
  *
@@ -53,7 +54,7 @@ import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
 import { syncFrameworkForSeed } from '@/lib/framework/seed';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
-import { getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { JOURNEY_MAP_SLUG, buildJourneyMapDefinition } from '@/lib/app/journey/map-definition';
 import {
   createGraph,
@@ -64,15 +65,12 @@ import { graphExists } from '@/lib/framework/facilitation/map/queries';
 
 const unit: SeedUnit = {
   name: 'app-lelanea/001-journey-map',
-  // Every input the published shape is derived from: the structure file, the
-  // loader and schema that project it (a projection change can rename a tier
-  // id, and with it every region key), the builder, and the slug rule. The
-  // seed's own source is always hashed; these are the files it delegates to.
-  // Relative to this file, as the runner requires.
+  // Every input the published shape is derived from: the roster, the builder,
+  // and the slug rule. The seed's own source is always hashed; these are the
+  // files it delegates to. Relative to this file, as the runner requires. Not
+  // the journey's text: the map carries none of it (t-87).
   hashInputs: [
-    '../../../content/lelanea_module_structure.json',
-    '../../../lib/app/content/index.ts',
-    '../../../lib/app/content/schemas.ts',
+    '../../../lib/app/journey/roster.ts',
     '../../../lib/app/journey/map-definition.ts',
     '../../../lib/app/modules/definitions.ts',
   ],
@@ -89,9 +87,7 @@ const unit: SeedUnit = {
     }
 
     const definition = buildJourneyMapDefinition();
-    const structure = getJourneyStructure();
-    const name = structure.collection.title;
-    const changeSummary = `Seeded from content/lelanea_module_structure.json v${structure.collection.version}`;
+    const changeSummary = 'Seeded from the journey roster (lib/app/journey/roster.ts)';
 
     const published = await getPublishedMap(JOURNEY_MAP_SLUG);
 
@@ -101,10 +97,13 @@ const unit: SeedUnit = {
     }
 
     if (!published && !(await graphExists(JOURNEY_MAP_SLUG))) {
+      // The map's name and description are the journey's, read from its row.
+      // Migrations run before the seed, so the row is there (t-87).
+      const { collection } = await getJourneyStructure();
       const graph = await createGraph({
         slug: JOURNEY_MAP_SLUG,
-        name,
-        description: structure.collection.subtitle,
+        name: collection.title,
+        description: collection.subtitle,
         definition,
         userId: admin.id,
       });

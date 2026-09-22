@@ -27,8 +27,11 @@
  * `app_foundational_document` (t-86), through `@/lib/app/content/document-store`
  * under the same names, now async. Only their types are re-exported here (see
  * below). The file seeds the table and is imported only by
- * `foundational-seed.ts`. The journey, the questions and the
- * voice files follow in t-87 and t-88.
+ * `foundational-seed.ts`. The journey's text, the discovery questions and the
+ * resource library followed in t-87 (`journey-store.ts`, `question-store.ts`,
+ * `resource-store.ts`, each seeded from its file by a `*-seed.ts` beside it).
+ * What this module still loads from files is the voice material, which moves
+ * in t-88.
  *
  * **Parsed once, on demand.** Each accessor validates its file the first time it
  * is called and memoises the result for the life of the process. A malformed
@@ -50,22 +53,11 @@
  * @see app/api/v1/app/content — the HTTP surface over these accessors
  */
 
-import rawJourneyStructure from '@/content/lelanea_module_structure.json';
-import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
 import rawVoiceFingerprint from '@/seed-data/drafted/lelanea_voice_fingerprint.json';
 import rawVoiceOverlays from '@/seed-data/drafted/lelanea_voice_overlays.json';
 import rawVoiceGoldenSet from '@/seed-data/drafted/lelanea_voice_golden_set.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
-  journeyStructureFileSchema,
-  discoveryQuestionsFileSchema,
-  type DiscoveryQuestion,
-  type JourneyModule,
-  type JourneyStructureFile,
-  type ModuleTier,
-  type PhaseTier,
-  type Produces,
-  type DiscoveryQuestionsFile,
   voiceFingerprintFileSchema,
   type VoiceFingerprintFile,
   voiceOverlaysFileSchema,
@@ -75,6 +67,7 @@ import {
   type VoiceGoldenSetFile,
 } from '@/lib/app/content/schemas';
 import type { ContentCollectionMeta } from '@/lib/app/content/document-view';
+import type { DeepReadonly } from '@/lib/app/content/journey-view';
 
 // Her foundational documents are served from the database (t-86). Their shapes
 // are re-exported here, but their READS are not: they live in
@@ -90,100 +83,23 @@ export {
   type FoundationalDocumentSummary,
 } from '@/lib/app/content/document-view';
 export { PLACEHOLDER_PATTERN, findPlaceholders } from '@/lib/app/content/placeholders';
+// The journey and the discovery questions are served from the database too
+// (t-87): their reads are in `@/lib/app/content/journey-store` and
+// `@/lib/app/content/question-store`, and only their shapes are re-exported
+// here, for the same reason as the documents'.
+export type {
+  DeepReadonly,
+  JourneyModuleView,
+  JourneyPhase,
+  JourneyPhaseTier,
+  JourneyStructure,
+  JourneyTierView,
+} from '@/lib/app/content/journey-view';
+export type { DiscoveryQuestionSet, DiscoveryQuestionView } from '@/lib/app/content/question-view';
 
 // ============================================================================
 // Served shapes
 // ============================================================================
-
-/**
- * Immutable all the way down, not just at the outermost array.
- *
- * `readonly Block[]` stops `blocks.sort()` but not `blocks[0].text = …`, and the
- * second is the one that matters here: in-place placeholder substitution is the
- * motivating scenario, it writes to an element, and with a shallow `readonly` it
- * compiles clean and throws `TypeError` at request time on a public endpoint.
- * Caught on the third review pass, by probing the exact line the docblock below
- * warns about. The type has to mirror the freeze, or it is decoration.
- */
-export type DeepReadonly<T> = T extends (infer U)[]
-  ? readonly DeepReadonly<U>[]
-  : T extends object
-    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-    : T;
-
-/** One tier of the journey, as served. */
-export interface JourneyTierView {
-  id: ModuleTier;
-  label: string;
-  order: number;
-  /** Module ids in this tier, in order. */
-  modules: readonly string[];
-  /** Authored prose: what this tier is for. */
-  intent: string;
-}
-
-/** A module's internal phase grouping, as served. */
-export interface JourneyPhaseTier {
-  id: PhaseTier;
-  label: string;
-  order: number;
-  /** Phase numbers in this grouping. */
-  phases: readonly number[];
-}
-
-/**
- * One phase of a module, as served.
- *
- * `contentRef` survives the projection because it is a *link* — it names the
- * foundational document this phase shows, which a client turns straight into a
- * `/documents/:id` request. `proposed` survives because dropping it would be
- * the dishonest choice: a public reader would see a phase that is only a
- * proposal rendered exactly like one that is built.
- */
-export interface JourneyPhase {
-  number: number;
-  displayNumber: string;
-  title: string;
-  description: string;
-  /** The document or question set this phase shows, where there is one. */
-  contentRef: string | null;
-  /** `true` where the phase is a proposal rather than authored material. */
-  proposed: boolean;
-  phaseTier: PhaseTier | null;
-  questionCount: number | null;
-  personalized: boolean;
-  requiresAcknowledgement: boolean;
-  produces: DeepReadonly<Produces> | null;
-}
-
-/** One module of the journey, as served. */
-export interface JourneyModuleView {
-  id: string;
-  number: number;
-  displayNumber: string;
-  title: string;
-  subtitle: string | null;
-  chartTitle: string | null;
-  tier: ModuleTier;
-  phases: readonly JourneyPhase[];
-  phaseTiers: readonly JourneyPhaseTier[] | null;
-  produces: DeepReadonly<Produces> | null;
-}
-
-/** The seventeen-module journey: its tiers, its modules, and their phases. */
-export interface JourneyStructure {
-  collection: ContentCollectionMeta & { subtitle: string };
-  tiers: readonly JourneyTierView[];
-  modules: readonly JourneyModuleView[];
-}
-
-/** The onboarding module's thirty discovery questions, with pacing guidance. */
-export interface DiscoveryQuestionSet {
-  collection: ContentCollectionMeta & { chartTitle: string; module: string; phase: number };
-  preamble: DeepReadonly<DiscoveryQuestionsFile['preamble']>;
-  pacing: DeepReadonly<DiscoveryQuestionsFile['pacing']>;
-  questions: readonly DeepReadonly<DiscoveryQuestion>[];
-}
 
 /** One named block of the voice core: a heading and its beats, in authored order. */
 export interface VoiceCoreSection {
@@ -292,29 +208,13 @@ export interface VoiceOverlays {
 
 // Projected views, memoised alongside the parse. Frozen because they are now
 // shared across requests rather than rebuilt per call.
-let journeyStructureView: JourneyStructure | null = null;
-let discoveryQuestionSetView: DiscoveryQuestionSet | null = null;
 let voiceFingerprintView: VoiceFingerprintCore | null = null;
 let voiceOverlaysView: VoiceOverlays | null = null;
 let voiceGoldenSetView: VoiceGoldenSet | null = null;
 
-let journeyStructureCache: JourneyStructureFile | null = null;
-let discoveryQuestionsCache: DiscoveryQuestionsFile | null = null;
 let voiceFingerprintCache: VoiceFingerprintFile | null = null;
 let voiceOverlaysCache: VoiceOverlaysFile | null = null;
 let voiceGoldenSetCache: VoiceGoldenSetFile | null = null;
-
-function journeyStructureFile(): JourneyStructureFile {
-  journeyStructureCache ??= deepFreezeParsed(journeyStructureFileSchema.parse(rawJourneyStructure));
-  return journeyStructureCache;
-}
-
-function discoveryQuestionsFile(): DiscoveryQuestionsFile {
-  discoveryQuestionsCache ??= deepFreezeParsed(
-    discoveryQuestionsFileSchema.parse(rawDiscoveryQuestions)
-  );
-  return discoveryQuestionsCache;
-}
 
 function voiceFingerprintFile(): VoiceFingerprintFile {
   voiceFingerprintCache ??= deepFreezeParsed(voiceFingerprintFileSchema.parse(rawVoiceFingerprint));
@@ -329,131 +229,6 @@ function voiceOverlaysFile(): VoiceOverlaysFile {
 function voiceGoldenSetFile(): VoiceGoldenSetFile {
   voiceGoldenSetCache ??= deepFreezeParsed(voiceGoldenSetFileSchema.parse(rawVoiceGoldenSet));
   return voiceGoldenSetCache;
-}
-
-// ============================================================================
-// Journey structure and discovery questions
-// ============================================================================
-
-function toQuestionView(question: DiscoveryQuestion): DeepReadonly<DiscoveryQuestion> {
-  return {
-    id: question.id,
-    number: question.number,
-    text: question.text,
-    inputType: question.inputType,
-    ...(question.hint !== undefined && { hint: question.hint }),
-    ...(question.conditionalFollowUp !== undefined && {
-      conditionalFollowUp: {
-        ifYes: question.conditionalFollowUp.ifYes,
-        ifNo: question.conditionalFollowUp.ifNo,
-      },
-    }),
-  };
-}
-
-function toTierView(tier: JourneyStructureFile['tiers'][number]): JourneyTierView {
-  return {
-    id: tier.id,
-    label: tier.label,
-    order: tier.order,
-    modules: tier.modules,
-    intent: tier.intent,
-  };
-}
-
-function toModuleView(entry: JourneyModule): JourneyModuleView {
-  return {
-    id: entry.id,
-    number: entry.number,
-    displayNumber: entry.displayNumber,
-    title: entry.title,
-    subtitle: entry.subtitle ?? null,
-    chartTitle: entry.chartTitle ?? null,
-    tier: entry.tier,
-    phases: (entry.phases ?? []).map((phase) => ({
-      number: phase.number,
-      displayNumber: phase.displayNumber,
-      title: phase.title,
-      description: phase.description,
-      contentRef: phase.contentRef ?? null,
-      proposed: phase.proposed ?? false,
-      phaseTier: phase.phaseTier ?? null,
-      questionCount: phase.questionCount ?? null,
-      personalized: phase.personalized ?? false,
-      requiresAcknowledgement: phase.requiresAcknowledgement ?? false,
-      produces: phase.produces ?? null,
-    })),
-    phaseTiers:
-      entry.phaseTiers?.map((tier) => ({
-        id: tier.id,
-        label: tier.label,
-        order: tier.order,
-        phases: tier.phases,
-      })) ?? null,
-    produces: entry.produces ?? null,
-  };
-}
-
-/**
- * The journey: five tiers over seventeen modules, each with its phases.
- *
- * Public, because the structure of the work is part of what the product tells
- * you before you sign up. The authored copy *inside* a module is not here.
- *
- * Every level is projected field-by-field — tiers, modules, phases and phase
- * tiers. An earlier draft returned `file.modules` wholesale and shipped the
- * maintainers' working notes to anonymous callers — `notes`, `contentNote`,
- * `appBehavior`, and the names of the content files on disk — while the module
- * header claimed working notes are never served. Both reviews caught it, and a
- * second pass caught that `tiers` was still passing through: safe today, but
- * the one place where a future authored annotation would be published by
- * default instead of withheld by default, which is the whole failure mode.
- * Listing served fields explicitly at every level is what makes the claim true.
- */
-export function getJourneyStructure(): JourneyStructure {
-  if (journeyStructureView) return journeyStructureView;
-
-  const file = journeyStructureFile();
-  journeyStructureView = deepFreezeParsed({
-    collection: {
-      id: file.app.name,
-      title: file.app.journeyTitle,
-      subtitle: file.app.journeySubtitle,
-      version: file.app.version,
-      locale: file.app.locale,
-    },
-    tiers: file.tiers.map(toTierView),
-    modules: file.modules.map(toModuleView),
-  });
-  return journeyStructureView;
-}
-
-/**
- * The thirty discovery questions of the onboarding module's discovery phase,
- * with the preamble and the pacing guidance that belong with them.
- *
- * Behind auth: these are the questions a member is asked, and the pacing note
- * ("this is not a form to rush") only makes sense to someone in the journey.
- */
-export function getDiscoveryQuestions(): DiscoveryQuestionSet {
-  if (discoveryQuestionSetView) return discoveryQuestionSetView;
-
-  const file = discoveryQuestionsFile();
-  discoveryQuestionSetView = deepFreezeParsed({
-    collection: {
-      id: file.content.id,
-      title: file.content.title,
-      chartTitle: file.content.chartTitle,
-      module: file.content.module,
-      phase: file.content.phase,
-      version: file.content.version,
-      locale: file.content.locale,
-    },
-    preamble: file.preamble,
-    pacing: file.pacing,
-    questions: file.questions.map(toQuestionView),
-  });
-  return discoveryQuestionSetView;
 }
 
 // ============================================================================

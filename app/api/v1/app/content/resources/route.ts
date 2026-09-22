@@ -18,6 +18,11 @@
  * content route. None marks a payload `public` — see the documents index route
  * for the two reasons why.
  *
+ * Source (t-87): `app_resource_collection`, `app_resource` and
+ * `app_resource_words`, through `lib/app/content/resource-store.ts` — the same
+ * service the drawer's selection, the offering in the voice block and
+ * `suggest_resource` read.
+ *
  * `collection.provenance` is served, not withheld: the file ships as a draft
  * awaiting her sign-off, and a surface that shows the resource can say so.
  */
@@ -26,12 +31,12 @@ import { withAuth } from '@/lib/auth/guards';
 import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
-import { getResourcesLibrary } from '@/lib/app/content/resources';
+import { getResourcesLibrary } from '@/lib/app/content/resource-store';
 
 export const GET = withAuth(
   async (request) => {
     const log = await getRouteLogger(request);
-    const library = getResourcesLibrary();
+    const library = await getResourcesLibrary();
 
     const etag = computeETag(library);
     const notModified = checkConditional(request, etag);
@@ -51,7 +56,7 @@ export const GET = withAuth(
     ownership: {
       decidedBy: 'nothing',
       because:
-        'Serves the published resource library, which is authored content compiled into the build. There are no per-user rows: every member is offered the same films and reading, and narrowing would have nothing to narrow.',
+        'Serves the published resource library, which is authored content every member shares. There are no per-user rows: every member is offered the same films and reading, and narrowing would have nothing to narrow.',
     },
   }
 );

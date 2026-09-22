@@ -4,8 +4,9 @@ import { cache } from 'react';
 
 import { RememberModule } from '@/components/app/views/remember-module';
 import { ModuleView, UNWRITTEN_PARTS, type ModulePart } from '@/components/app/views/module-view';
-import { getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { getJourneyMap } from '@/lib/app/journey/map';
+import type { JourneyStructure } from '@/lib/app/content';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
 interface Params {
@@ -23,6 +24,7 @@ interface Params {
  * it matters and nowhere a test can reach.
  */
 const loadMap = cache(getJourneyMap);
+const loadStructure = cache(getJourneyStructure);
 
 /**
  * The page for one module — every module, since all seventeen have the same
@@ -35,7 +37,8 @@ const loadMap = cache(getJourneyMap);
  * disagree about what is a place.
  *
  * Reads the authored phase tiers for the one module that has them (Values);
- * every other module gets the unnamed pair.
+ * every other module gets the unnamed pair. Both reads are the journey's rows
+ * (t-87): the map's titles and these phase tiers come from the same service.
  *
  * No `loading.tsx` in this segment or any above it — see `shell.md`, "No
  * Suspense boundary above `/app`": a fallback here would turn the shell's 404
@@ -70,7 +73,7 @@ export default async function ModulePage({ params }: Params) {
         title={place.title}
         tierLabel={tier.label}
         tierIntent={tier.intent}
-        parts={partsFor(place.slug)}
+        parts={partsFor(await loadStructure(), place.slug)}
       />
     </>
   );
@@ -81,8 +84,8 @@ export default async function ModulePage({ params }: Params) {
  * Discernment, Integration — each still a placeholder. Everything else gets
  * the unnamed pair, because naming them would be inventing the module.
  */
-function partsFor(slug: string): readonly ModulePart[] {
-  const authored = getJourneyStructure().modules.find((m) => moduleSlugFromId(m.id) === slug);
+function partsFor(structure: JourneyStructure, slug: string): readonly ModulePart[] {
+  const authored = structure.modules.find((m) => moduleSlugFromId(m.id) === slug);
   const phaseTiers = authored?.phaseTiers;
   if (!phaseTiers || phaseTiers.length === 0) return UNWRITTEN_PARTS;
   return [...phaseTiers]

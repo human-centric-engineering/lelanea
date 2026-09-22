@@ -208,6 +208,79 @@ export function initLeafSubjectSources(): void {
           'Every past version of those documents, as they stood on a given date, which is how the Terms you agreed to can be read back as they were. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
       },
       {
+        // f-content-seeds t-87. The journey's text, the discovery questions and
+        // the resource library, and their history. Words, not people: a
+        // nothing here records who read or answered what. The six revision tables keep an editing admin's id, and say so.
+        model: 'AppJourney',
+        reason:
+          'The name, version and language of the Lelañea journey. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppJourneyTier',
+        reason:
+          'The name of each stage of the journey and what it is for. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppJourneyTierRevision',
+        reason:
+          'Every past version of those stage names and descriptions. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppJourneyModule',
+        reason:
+          'The title of each module of the journey and the steps inside it. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppJourneyModuleRevision',
+        reason:
+          'Every past version of those module titles and steps. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppQuestionSet',
+        reason:
+          'The introduction to the discovery questions, and the note on taking them at your own pace. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppQuestionSetRevision',
+        reason:
+          'Every past version of that introduction. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppDiscoveryQuestion',
+        reason:
+          'The discovery questions themselves, as asked. They are the same for everyone and hold no information about any person.',
+      },
+      {
+        model: 'AppDiscoveryQuestionRevision',
+        reason:
+          'Every past version of those questions, which is how an answer you gave can be read back against the words you were asked. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppResourceCollection',
+        reason:
+          'The name and version of Lelañea\u2019s library of films and reading, and whether she has signed it off. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppResource',
+        reason:
+          'The films and pieces of reading in that library. They are the same for everyone and hold no information about any person.',
+      },
+      {
+        model: 'AppResourceRevision',
+        reason:
+          'Every past version of those films and pieces of reading. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppResourceWords',
+        reason:
+          'Short passages of Lelañea\u2019s own words shown beside each part of the journey. They are the same for everyone and hold no information about any person.',
+      },
+      {
+        model: 'AppResourceWordsRevision',
+        reason:
+          'Every past version of those passages. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
         // f-slots t-72. A ledger of writes, not the writes themselves — it
         // exists so a retried turn cannot record one thing twice, and it holds
         // a slug, a version number and a timestamp. What was actually learned

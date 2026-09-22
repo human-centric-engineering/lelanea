@@ -31,7 +31,7 @@ import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { validatePathParam, validateQueryParams } from '@/lib/api/validation';
 import { slugSchema } from '@/lib/validations/common';
-import { selectResourcesFor } from '@/lib/app/content/resources';
+import { selectResourcesFor } from '@/lib/app/content/resource-store';
 
 /** `?pin=` is a resource id, which has the slug's shape. Absent is fine. */
 const querySchema = z.object({ pin: slugSchema.optional() });
@@ -41,7 +41,7 @@ const OWNERSHIP: WithAuthOptions<{ key: string }> = {
   ownership: {
     decidedBy: 'nothing',
     because:
-      'Serves a selection of the published resource library keyed by what is open, which is authored content compiled into the build. There are no per-user rows: every member opening Values is offered the same two films.',
+      'Serves a selection of the published resource library keyed by what is open, which is authored content every member shares. There are no per-user rows: every member opening Values is offered the same two films.',
   },
 };
 
@@ -51,7 +51,7 @@ export const GET = withAuth<{ key: string }>(async (request, _session, { params 
   const key = validatePathParam(raw, slugSchema, { label: 'resource key', field: 'key' });
   const { pin } = validateQueryParams(request.nextUrl.searchParams, querySchema);
 
-  const selection = selectResourcesFor(key, { pin });
+  const selection = await selectResourcesFor(key, { pin });
   if (!selection) {
     // Truncated as the documents route does: the slug schema bounds the
     // charset, not the length. Logged so a client asking for a module that was

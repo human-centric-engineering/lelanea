@@ -9,7 +9,7 @@
  * library — title, what it is for, its length — or a refusal. The model never
  * supplies a title or a description: it names an id it was shown in its
  * context block (`offering.ts`), the id is looked up here, and everything the
- * person sees is the file's words. An unknown id is refused with a structured
+ * person sees is the library's words (`app_resource`, t-87). An unknown id is refused with a structured
  * error rather than thrown, so a model that invents one gets told and can
  * carry on; the refusal reaches neither the chip nor the account
  * (`capability-answers.ts`: only a call that answered counts).
@@ -23,6 +23,15 @@
  * the trace persists `{ id }` and a preview of the record, which is what the
  * transcript read and the replay rebuild the chip from ({@link
  * suggestionsFromProvenance}).
+ *
+ * ## Reads (t-87)
+ *
+ * The library is in the database. The tool looks its one id up per call
+ * ({@link findResource}). A reload or a replay resolves every suggestion in a
+ * conversation against ONE read of the library, which the caller makes with
+ * {@link loadLibraryForChips} and hands to {@link suggestionsByCall} or
+ * {@link suggestionsFromProvenance}. Those stay synchronous, so resolving a
+ * transcript is one query however many chips it has.
  *
  * ## The row, and the seed
  *
@@ -40,7 +49,9 @@
 import { z } from 'zod';
 
 import { answeredCalls, type AnsweredCall } from '@/lib/app/agent/capability-answers';
-import { getResourcesLibrary } from '@/lib/app/content/resources';
+import { getResource, getResourcesLibrary } from '@/lib/app/content/resource-store';
+import type { ResourcesLibrary } from '@/lib/app/content/resources';
+import { logger } from '@/lib/logging';
 import {
   SUGGEST_RESOURCE_SLUG,
   uniqueSuggestions,
@@ -91,30 +102,65 @@ const argsSchema = z.object({
 });
 type SuggestArgs = z.infer<typeof argsSchema>;
 
-/** A resource by id, as a suggestion — or `null` when the library has no such id. */
-export function findResource(id: string): ResourceSuggestion | null {
-  const library = getResourcesLibrary();
-  const film = library.films.find((f) => f.id === id);
-  if (film) {
-    return {
-      id: film.id,
-      kind: 'film',
-      title: film.title,
-      subtitle: film.subtitle,
-      length: film.duration,
-    };
+type LibraryItem = ResourcesLibrary['films'][number] | ResourcesLibrary['readings'][number];
+
+/** A film or a reading, as the chip shows it. */
+function toSuggestion(item: LibraryItem): ResourceSuggestion {
+  return 'duration' in item
+    ? {
+        id: item.id,
+        kind: 'film',
+        title: item.title,
+        subtitle: item.subtitle,
+        length: item.duration,
+      }
+    : {
+        id: item.id,
+        kind: 'reading',
+        title: item.title,
+        subtitle: item.subtitle,
+        length: item.readingTime,
+      };
+}
+
+/** A resource by id, as a suggestion — or `null` when the library has no such id. One read. */
+export async function findResource(id: string): Promise<ResourceSuggestion | null> {
+  const item = await getResource(id);
+  return item ? toSuggestion(item) : null;
+}
+
+/** The same lookup against a library already read. */
+function findIn(library: ResourcesLibrary, id: string): ResourceSuggestion | null {
+  const item: LibraryItem | undefined =
+    library.films.find((f) => f.id === id) ?? library.readings.find((r) => r.id === id);
+  return item ? toSuggestion(item) : null;
+}
+
+/**
+ * The library, read once, for resolving the suggestions the given stored
+ * turns made — or `null` when none of them suggested anything (no read at
+ * all), or it cannot be read.
+ *
+ * A chip is not worth failing a transcript for: with no library the replies
+ * are shown without their chips, and the warning says why. What it cannot do
+ * is show a chip for something it could not look up.
+ */
+export async function loadLibraryForChips(
+  provenances: readonly unknown[]
+): Promise<ResourcesLibrary | null> {
+  // Most conversations suggested nothing. They read nothing.
+  const suggested = provenances.some((provenance) =>
+    answeredCalls(provenance).some((call) => call.slug === SUGGEST_RESOURCE_SLUG)
+  );
+  if (!suggested) return null;
+  try {
+    return await getResourcesLibrary();
+  } catch (err) {
+    logger.warn('Resource library could not be read; suggestions are shown without chips', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
   }
-  const reading = library.readings.find((r) => r.id === id);
-  if (reading) {
-    return {
-      id: reading.id,
-      kind: 'reading',
-      title: reading.title,
-      subtitle: reading.subtitle,
-      length: reading.readingTime,
-    };
-  }
-  return null;
 }
 
 export class SuggestResourceCapability extends BaseCapability<SuggestArgs, ResourceSuggestion> {
@@ -124,22 +170,19 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
   /** An id in, a library record out: nothing personal passes through. */
   readonly processesPii = false;
 
-  // Synchronous work behind the async contract: the library is parsed once
-  // and memoised, so there is nothing to await.
-  execute(
+  // One indexed read of the one id asked for.
+  async execute(
     args: SuggestArgs,
     _context: CapabilityContext
   ): Promise<CapabilityResult<ResourceSuggestion>> {
-    const suggestion = findResource(args.id);
+    const suggestion = await findResource(args.id);
     if (!suggestion) {
-      return Promise.resolve(
-        this.error(
-          `No resource with id "${args.id}". Use an id from the list of resources in your context, or suggest nothing.`,
-          'unknown_resource'
-        )
+      return this.error(
+        `No resource with id "${args.id}". Use an id from the list of resources in your context, or suggest nothing.`,
+        'unknown_resource'
       );
     }
-    return Promise.resolve(this.success(suggestion));
+    return this.success(suggestion);
   }
 }
 
@@ -151,8 +194,11 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
  * nothing to redact).
  *
  * Only a call that answered counts (`capability-answers.ts`), and only an id
- * the library still has: a resource removed from the file after the turn is
+ * the library still has: a resource removed from the library after the turn is
  * not shown as a chip to nowhere. Order is the traces' order.
+ *
+ * Each takes the library the caller read once ({@link loadLibraryForChips});
+ * `null` resolves nothing.
  */
 // Trimmed as the capability's own schema trims: the trace persists the model's
 // RAW argument, so an id that answered live with padding must resolve the same
@@ -163,10 +209,13 @@ const suggestionArgsSchema = z.object({ id: z.string().trim() });
  * The suggestion one answered call made, or `null` — for a call of another
  * capability, or an id the library no longer has.
  */
-export function suggestionForCall(call: AnsweredCall): ResourceSuggestion | null {
-  if (call.slug !== SUGGEST_RESOURCE_SLUG) return null;
+export function suggestionForCall(
+  call: AnsweredCall,
+  library: ResourcesLibrary | null
+): ResourceSuggestion | null {
+  if (call.slug !== SUGGEST_RESOURCE_SLUG || library === null) return null;
   const args = suggestionArgsSchema.safeParse(call.arguments);
-  return args.success ? findResource(args.data.id) : null;
+  return args.success ? findIn(library, args.data.id) : null;
 }
 
 /**
@@ -175,12 +224,18 @@ export function suggestionForCall(call: AnsweredCall): ResourceSuggestion | null
  * the data lands on the right slug's frame; the transcript read keeps the
  * non-null ones.
  */
-export function suggestionsByCall(provenance: unknown): (ResourceSuggestion | null)[] {
-  return answeredCalls(provenance).map(suggestionForCall);
+export function suggestionsByCall(
+  provenance: unknown,
+  library: ResourcesLibrary | null
+): (ResourceSuggestion | null)[] {
+  return answeredCalls(provenance).map((call) => suggestionForCall(call, library));
 }
 
-export function suggestionsFromProvenance(provenance: unknown): ResourceSuggestion[] {
+export function suggestionsFromProvenance(
+  provenance: unknown,
+  library: ResourcesLibrary | null
+): ResourceSuggestion[] {
   return uniqueSuggestions(
-    suggestionsByCall(provenance).filter((s): s is ResourceSuggestion => s !== null)
+    suggestionsByCall(provenance, library).filter((s): s is ResourceSuggestion => s !== null)
   );
 }

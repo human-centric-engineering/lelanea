@@ -33,7 +33,7 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 import { z } from 'zod';
 
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
-import { suggestionsByCall } from '@/lib/app/resources/suggest';
+import { loadLibraryForChips, suggestionsByCall } from '@/lib/app/resources/suggest';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 
 import { prisma } from '@/lib/db/client';
@@ -442,7 +442,10 @@ export async function readTurnReply(
     text: passes.map((pass) => pass.content).join(''),
     citations: parsed.success ? parsed.data.citations : [],
     capabilities: answeredCapabilities(terminal.provenance),
-    suggestions: suggestionsByCall(terminal.provenance),
+    suggestions: suggestionsByCall(
+      terminal.provenance,
+      await loadLibraryForChips([terminal.provenance])
+    ),
   };
 }
 

@@ -164,4 +164,25 @@ export function registerLeafDriftProbes(): void {
       'ON DELETE SET NULL'
     ),
   });
+
+  // f-content-seeds t-87. The same reasoning again, for the six revision tables
+  // of the journey's text, the discovery questions and the resource library:
+  // `SET NULL` keeps the record of what the words said when the admin who edited
+  // them is erased, and anything else either deletes that record or makes
+  // `eraseUser()` fail for every admin who ever edited one.
+  for (const table of [
+    'app_journey_tier_revision',
+    'app_journey_module_revision',
+    'app_question_set_revision',
+    'app_discovery_question_revision',
+    'app_resource_revision',
+    'app_resource_words_revision',
+  ]) {
+    registerAppDriftProbe({
+      name: `${table}_editorId_fkey (hand-written FK → user)`,
+      kind: 'FK constraint',
+      table,
+      probe: constraintExists(`${table}_editorId_fkey`, 'ON DELETE SET NULL'),
+    });
+  }
 }

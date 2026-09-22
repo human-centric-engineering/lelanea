@@ -2,18 +2,16 @@
  * The resources: her films and reading, and her words on whatever is open
  * (f-resources t-74; product description §6.1, §9 Resources).
  *
- * Authored content, served the way the rest of `content/` is: validated once,
- * frozen, reached only through here. Its own module rather than a member of
- * `./index` — but NOT for the bundle-size reason `crisis-resources.ts` gives:
- * this module imports the structure and the documents from `./index` for its
- * referential checks, so a route that wants it carries the index anyway. The
- * separation here is about direction: `./index` is the loader the other
- * content modules build on, and folding a consumer of two of its accessors
- * back into it would make it depend on its own dependents' shape.
+ * **The shapes and the selection, pure.** Since t-87 the library is stored in
+ * `app_resource_collection`, `app_resource` and `app_resource_words`, and read
+ * through `@/lib/app/content/resource-store`. What is left here imports no
+ * database and no file: the schemas every write and read is checked against,
+ * the served shapes, and the prototype's selection rule as a pure function. The
+ * seed reads the drafted file through `@/lib/app/content/resources-seed`.
  *
  * ## The shape
  *
- * Three lists, keyed the way the structure file keys its modules (`module_01_values`)
+ * Three lists, keyed the way the journey keys its modules (`module_01_values`)
  * plus three fixed keys — `journey`, `situations` and `default`:
  *
  * - `films` and `readings`: what each is for, in her words, and which key it
@@ -24,41 +22,37 @@
  * - `words`: per key, a quote and a few short paragraphs — **verbatim excerpts
  *   of a source this repository already holds**, each citing that source.
  *   Nothing here is drafted in her register. The drawer's eyebrow says these are
- *   her words, so they are, and `resources.test.ts` proves each passage occurs
- *   character for character in what it cites. The voice fingerprint's
- *   drafted-with-provenance precedent does not transfer: that file *describes*
- *   her voice; this one is shown *as* it.
+ *   her words, so they are, and `resources.test.ts` proves each passage in the
+ *   seed occurs character for character in what it cites. The voice
+ *   fingerprint's drafted-with-provenance precedent does not transfer: that file
+ *   *describes* her voice; this one is shown *as* it.
  *
  * ## The selection is the prototype's
  *
- * `selectResourcesFor` implements `lelanea.html`'s `pickFor` and `resourceKey`:
- * what belongs to the open thing first, then what belongs to everything, capped
- * at two films and three readings — "the drawer is for one thing at a time".
- * A key with no words of its own reads `default`'s. A film or a reading may be
- * pinned to the front of its list, which is how a suggestion made in
- * conversation opens the drawer on the thing suggested (t-77).
+ * {@link selectResources} implements `lelanea.html`'s `pickFor` and
+ * `resourceKey`: what belongs to the open thing first, then what belongs to
+ * everything, capped at two films and three readings — "the drawer is for one
+ * thing at a time". A key with no words of its own reads `default`'s. A film or
+ * a reading may be pinned to the front of its list, which is how a suggestion
+ * made in conversation opens the drawer on the thing suggested (t-77).
  *
  * The shell asks by **slug** (`values`), which is what its routes carry; the
- * file keys by **id** (`module_01_values`), which is what every other content
- * file keys by. `moduleSlugFromId` is the one rule between them, and it is used
- * here rather than re-derived.
+ * library keys by **id** (`module_01_values`), which is what every other
+ * collection keys by. `moduleSlugFromId` is the one rule between them, and it is
+ * used here rather than re-derived.
  *
  * **It ships as a draft.** The two passages are the builder's pick of her
  * material and both lists are empty; `provenance` says so and is served rather
- * than withheld. Her list lands as a content-only change (t-76).
+ * than withheld. Her list lands in t-76.
  *
- * @see lib/app/content/index.ts — the journey structure and the documents this
- *   file's references are checked against
+ * @see lib/app/content/resource-store.ts — the reads and writes
  * @see app/api/v1/app/content/resources — the HTTP surface
  * @see .context/app/content.md
  */
 
 import { z } from 'zod';
 
-import rawResources from '@/seed-data/drafted/lelanea_resources.json';
-import { getJourneyStructure, type DeepReadonly } from '@/lib/app/content';
-import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
-import { readFoundationalDocumentsFile } from '@/lib/app/content/foundational-seed';
+import type { DeepReadonly } from '@/lib/app/content/journey-view';
 import type { ModuleTier } from '@/lib/app/content/schemas';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
@@ -76,7 +70,7 @@ export const READINGS_SHOWN = 3;
 
 /** A module id as the structure file writes it, or one of the fixed keys. */
 const moduleIdPattern = /^module_\d{2}_[a-z0-9_]+$/;
-const resourceKeySchema = z
+export const resourceKeySchema = z
   .string()
   .refine((key) => moduleIdPattern.test(key) || FIXED_RESOURCE_KEYS.some((k) => k === key), {
     message: 'a resource key is a module id (module_NN_words) or journey | situations | default',
@@ -93,7 +87,7 @@ const resourceKeySchema = z
  * key. Refused here rather than left to be discovered as a missing film
  * (`/code-review` round 1).
  */
-const relatesToSchema = z
+export const relatesToSchema = z
   .string()
   .refine((key) => moduleIdPattern.test(key) || key === 'journey' || key === 'situations', {
     message:
@@ -104,7 +98,7 @@ const relatesToSchema = z
 // Bounded to what the suggestion tool accepts (`suggest.ts`, 80): an id the
 // offering lists but the tool refuses would be offered and then rejected at
 // validation, with nothing on the panel saying why (`/code-review` round 2).
-const resourceIdSchema = z
+export const resourceIdSchema = z
   .string()
   .max(80, { message: 'a resource id is at most 80 characters — the suggestion tool’s bound' })
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
@@ -118,7 +112,7 @@ const resourceIdSchema = z
  */
 const linkSchema = z.url({ protocol: /^https?$/ });
 
-const filmSchema = z.strictObject({
+export const filmSchema = z.strictObject({
   id: resourceIdSchema,
   title: z.string().trim().min(1),
   /** What it is for, in her words — the line under the title. */
@@ -139,7 +133,7 @@ const readingBase = z.strictObject({
 });
 
 /** A reading is a foundational document OR a link — the union makes "neither" and "both" unrepresentable. */
-const readingSchema = z.union([
+export const readingSchema = z.union([
   readingBase.extend({ documentId: z.string().min(1) }),
   readingBase.extend({ href: linkSchema }),
 ]);
@@ -155,11 +149,19 @@ const wordsSourceSchema = z.strictObject({
   id: z.string().min(1),
 });
 
-const wordsSchema = z.strictObject({
+export const wordsSchema = z.strictObject({
   quote: z.string().trim().min(1),
   paragraphs: z.array(z.string().trim().min(1)).min(1),
   source: wordsSourceSchema,
 });
+
+/** Whether she has signed off what is in the library. */
+export const provenanceSchema = z.strictObject({
+  status: z.enum(['draft', 'signed_off']),
+  awaitingSignOffFrom: z.string().min(1),
+  note: z.string().min(1),
+});
+export type ResourcesProvenance = z.infer<typeof provenanceSchema>;
 
 const resourcesFileBase = z.strictObject({
   resources: z.strictObject({
@@ -167,11 +169,7 @@ const resourcesFileBase = z.strictObject({
     title: z.string().min(1),
     version: z.string().regex(/^\d+\.\d+$/),
     locale: z.string().min(1),
-    provenance: z.strictObject({
-      status: z.enum(['draft', 'signed_off']),
-      awaitingSignOffFrom: z.string().min(1),
-      note: z.string().min(1),
-    }),
+    provenance: provenanceSchema,
     notes: z.array(z.string().min(1)),
   }),
   films: z.array(filmSchema),
@@ -270,26 +268,6 @@ export type ResourceReading = ResourcesFile['readings'][number];
 export type ResourceWords = ResourcesFile['words'][string];
 
 // ============================================================================
-// The loader
-// ============================================================================
-
-let parsed: DeepReadonly<ResourcesFile> | null = null;
-
-/** The whole file, validated against the real structure and documents, and frozen. */
-function getResourcesFile(): DeepReadonly<ResourcesFile> {
-  if (parsed === null) {
-    const schema = buildResourcesFileSchema({
-      moduleIds: new Set(getJourneyStructure().modules.map((m) => m.id)),
-      // The seed file, not the table: this checks one bundled file against
-      // another, and t-87 moves both halves of it into the seed.
-      documentIds: new Set(readFoundationalDocumentsFile().documents.map((d) => d.id)),
-    });
-    parsed = deepFreezeParsed(schema.parse(rawResources));
-  }
-  return parsed;
-}
-
-// ============================================================================
 // Served shapes
 // ============================================================================
 
@@ -299,15 +277,23 @@ export interface ResourcesCollectionMeta {
   title: string;
   version: string;
   locale: string;
-  provenance: DeepReadonly<ResourcesFile['resources']['provenance']>;
+  provenance: DeepReadonly<ResourcesProvenance>;
 }
+
+/** A film as served: the authored shape, and how many times it has been written. */
+export type ResourceFilmView = ResourceFilm & { revision: number };
+/** A reading as served. */
+export type ResourceReadingView = ResourceReading & { revision: number };
+/** One key's words as served. */
+export type ResourceWordsView = ResourceWords & { revision: number };
 
 /** The library: everything, for browsing directly (§9 "browsable directly"). */
 export interface ResourcesLibrary {
   collection: ResourcesCollectionMeta;
-  films: readonly DeepReadonly<ResourceFilm>[];
-  readings: readonly DeepReadonly<ResourceReading>[];
-  words: DeepReadonly<ResourcesFile['words']>;
+  /** In their authored order. */
+  films: readonly DeepReadonly<ResourceFilmView>[];
+  readings: readonly DeepReadonly<ResourceReadingView>[];
+  words: DeepReadonly<Record<string, ResourceWordsView>>;
 }
 
 /** What the drawer shows for one open thing. */
@@ -320,40 +306,11 @@ export interface ResourcesSelection {
   /** The module's arc, for the drawer's tone; `null` for a fixed key. */
   tier: ModuleTier | null;
   /** Her words on it — or `default`'s, when it has none of its own. */
-  words: DeepReadonly<ResourceWords>;
+  words: DeepReadonly<ResourceWordsView>;
   /** Whether `words` are this key's own or the fallback. */
   wordsAreOwn: boolean;
-  films: readonly DeepReadonly<ResourceFilm>[];
-  readings: readonly DeepReadonly<ResourceReading>[];
-}
-
-let library: ResourcesLibrary | null = null;
-
-/**
- * The library, projected field by field (`resources.notes` are working notes
- * about the words and stay behind, as every other file's do).
- */
-export function getResourcesLibrary(): ResourcesLibrary {
-  if (library === null) {
-    const file = getResourcesFile();
-    library = deepFreezeParsed({
-      collection: collectionMeta(file),
-      films: file.films,
-      readings: file.readings,
-      words: file.words,
-    });
-  }
-  return library;
-}
-
-function collectionMeta(file: DeepReadonly<ResourcesFile>): ResourcesCollectionMeta {
-  return {
-    id: file.resources.id,
-    title: file.resources.title,
-    version: file.resources.version,
-    locale: file.resources.locale,
-    provenance: file.resources.provenance,
-  };
+  films: readonly DeepReadonly<ResourceFilmView>[];
+  readings: readonly DeepReadonly<ResourceReadingView>[];
 }
 
 /** The fixed keys' titles — the prototype's `renderResources` names them so. */
@@ -394,11 +351,17 @@ export interface ResourceModuleRef {
 }
 
 /**
- * The selection, as a pure function of a parsed file and the module list, so
- * a test can hand it fixtures the way the schema tests do.
+ * The selection, as a pure function of the library and the module list, so a
+ * test can hand it fixtures.
+ *
+ * `key` is what the shell has: a module **slug**, or `journey` / `situations` /
+ * `default`. Returns `null` for anything else, so the route owns the 404 — a
+ * typo is not a module with nothing to show, and the two must not look the
+ * same. `pin` names a film or a reading to put first in its list (a suggestion
+ * made in conversation, t-77).
  */
 export function selectResources(
-  file: DeepReadonly<ResourcesFile>,
+  library: ResourcesLibrary,
   modules: readonly ResourceModuleRef[],
   key: string,
   options: { pin?: string } = {}
@@ -418,36 +381,20 @@ export function selectResources(
     tier = found.tier;
   }
 
-  const own = file.words[fileKey];
-  // `default` is required by the schema, so the fallback always resolves; the
+  const own = library.words[fileKey];
+  // `default` is required on every write, so the fallback always resolves; the
   // `??` is there because a record index is typed as possibly absent.
-  const words = own ?? file.words.default;
-  if (!words) throw new Error('lelanea_resources.json has no words.default');
+  const words = own ?? library.words.default;
+  if (!words) throw new Error('The resource library has no words for "default"');
 
   return {
-    collection: collectionMeta(file),
+    collection: library.collection,
     key,
     title,
     tier,
     words,
     wordsAreOwn: own !== undefined,
-    films: pickFor(file.films, fileKey, FILMS_SHOWN, options.pin),
-    readings: pickFor(file.readings, fileKey, READINGS_SHOWN, options.pin),
+    films: pickFor(library.films, fileKey, FILMS_SHOWN, options.pin),
+    readings: pickFor(library.readings, fileKey, READINGS_SHOWN, options.pin),
   };
-}
-
-/**
- * Her words, two films and three readings for whatever is open.
- *
- * `key` is what the shell has: a module **slug**, or `journey` / `situations` /
- * `default`. Returns `null` for anything else, so the route owns the 404 —
- * a typo is not a module with nothing to show, and the two must not look the
- * same. `pin` names a film or a reading to put first in its list (a suggestion
- * made in conversation, t-77).
- */
-export function selectResourcesFor(
-  key: string,
-  options: { pin?: string } = {}
-): ResourcesSelection | null {
-  return selectResources(getResourcesFile(), getJourneyStructure().modules, key, options);
 }

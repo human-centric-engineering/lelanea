@@ -9,6 +9,10 @@
  * questions a member is actually asked; the pacing note ("this is not a form to
  * rush") is guidance to someone already in the journey, not marketing copy.
  *
+ * Source (t-87): `app_question_set` and `app_discovery_question`, through
+ * `lib/app/content/question-store.ts`. The set and every question carry their
+ * `revision`, and the ETag covers the whole payload.
+ *
  * Rate limiting: inherited from the `/api/v1/**` section cap in
  * `lib/security/rate-limit-policy.ts`.
  *
@@ -21,12 +25,12 @@ import { withAuth } from '@/lib/auth/guards';
 import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
-import { getDiscoveryQuestions } from '@/lib/app/content';
+import { getDiscoveryQuestions } from '@/lib/app/content/question-store';
 
 export const GET = withAuth(
   async (request) => {
     const log = await getRouteLogger(request);
-    const questions = getDiscoveryQuestions();
+    const questions = await getDiscoveryQuestions();
 
     const etag = computeETag(questions);
     const notModified = checkConditional(request, etag);
@@ -44,7 +48,7 @@ export const GET = withAuth(
     ownership: {
       decidedBy: 'nothing',
       because:
-        'Serves the published question collection, which is authored content compiled into the build. There are no per-user rows: every member reads the same thirty questions, and narrowing would have nothing to narrow.',
+        'Serves the published question collection, which is authored content every member shares. There are no per-user rows: every member reads the same thirty questions, and narrowing would have nothing to narrow.',
     },
   }
 );

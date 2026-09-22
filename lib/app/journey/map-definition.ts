@@ -5,9 +5,9 @@
  * is the sequence Lelañea recommends — but it is a spine, not a track: jumping
  * anywhere is a first-class action and nothing locks. Daybreak holds that
  * shape as a published `FacilitationGraph` version, authored in the database.
- * This module builds the definition that seed publishes, from the same
- * structure file the module registry and the content API read, so the three
- * cannot disagree.
+ * This module builds the definition that seed publishes, from the code roster
+ * (`lib/app/journey/roster.ts`) the module registry is built from, so the two
+ * cannot disagree about which modules exist or where they sit (t-87).
  *
  * **Shape (decision A6).** Five `region` nodes, one per tier, onboarding
  * included. Seventeen `module` nodes whose keys ARE their module slugs, each
@@ -22,9 +22,10 @@
  * the node key and the journey API addresses modules by slug.
  *
  * **What the graph carries, and what it does not.** Only structure: keys,
- * types, containment, order. Titles, intents and display numbers stay in the
- * content API — a copy here would be a second source for the drawer to read,
- * and the one it read would be the one that drifted. Order is the node order
+ * types, containment, order. Titles, intents and display numbers are owned by
+ * the `app_journey_*` rows and served by the content API — a copy here would be
+ * a second source for the drawer to read, and the one it read would be the one
+ * that drifted. Order is the node order
  * itself, which is what the reader (`map.ts`) uses; the `meta` bags (`order`
  * on a region, `number` on a module) record the authored position for anyone
  * reading the stored definition by eye or in the map editor.
@@ -36,7 +37,7 @@
  * @see lib/app/modules/definitions.ts — the slug rule the node keys follow
  */
 
-import { getJourneyStructure } from '@/lib/app/content';
+import { JOURNEY_MODULES, JOURNEY_TIERS } from '@/lib/app/journey/roster';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import {
   mapDefinitionSchema,
@@ -73,14 +74,13 @@ let definition: MapDefinition | null = null;
  * defaults it materialises (`completionMode: 'once'`) are present — which is
  * what makes a deep-equal against the stored published version meaningful.
  *
- * Built once per process; the structure it reads is memoised and frozen.
+ * Built once per process from the roster, which is code.
  */
 export function buildJourneyMapDefinition(): MapDefinition {
   if (definition) return definition;
 
-  const structure = getJourneyStructure();
-  const tiers = [...structure.tiers].sort((a, b) => a.order - b.order);
-  const modules = [...structure.modules].sort((a, b) => a.number - b.number);
+  const tiers = [...JOURNEY_TIERS].sort((a, b) => a.order - b.order);
+  const modules = [...JOURNEY_MODULES].sort((a, b) => a.number - b.number);
 
   const regions: MapNode[] = tiers.map((tier) => ({
     key: regionKeyForTier(tier.id),

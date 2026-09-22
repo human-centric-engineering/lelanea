@@ -939,6 +939,8 @@ model AppFoundationalDocument {
   updatedAt               DateTime              @updatedAt
 
   revisions AppFoundationalDocumentRevision[]
+  /// Resources that are this document, read in the app (t-87).
+  resources AppResource[]
 
   @@unique([collectionId, position])
   @@map("app_foundational_document")
@@ -994,4 +996,378 @@ model AppFoundationalDocumentRevision {
   @@index([documentId, changedAt])
   @@index([editorId])
   @@map("app_foundational_document_revision")
+}
+
+// ============================================================================
+// The journey's text, the discovery questions and the resource library
+// (f-content-seeds t-87)
+// ============================================================================
+//
+// The same pattern as her foundational documents above: one row per thing a
+// surface shows, a full snapshot per revision from the first write, and every
+// write through one service in `lib/app/content/`. Operator-owned (`fp4`): the
+// seed writes each collection once and never again, so an admin edit (t-91)
+// survives every later seed. None of these tables holds anything about a person;
+// each is an EXCLUSION in `lib/app/leaf-data-export.ts`.
+
+/// The journey as a whole: its title, subtitle, version and locale (t-87). One
+/// row.
+///
+/// **What this and the two tables below own, and what they do not.** They own
+/// the journey's TEXT: tier labels and intents, and module titles, subtitles and
+/// phases. They do not own its STRUCTURE — which modules exist, their number and
+/// the tier each sits in. That is the code roster in `lib/app/journey/roster.ts`,
+/// from which the published map and the registered module definitions are built.
+/// A module's title is therefore written in exactly one place, a row here, and
+/// the registered `ModuleDefinition.name` is derived from it at startup. See
+/// `lib/app/content/journey-store.ts`.
+model AppJourney {
+  /// Stable identity, as authored: the app's name.
+  id        String   @id
+  title     String
+  subtitle  String
+  /// The authored version label, e.g. `1.0`.
+  version   String
+  /// BCP 47, as authored.
+  locale    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tiers   AppJourneyTier[]
+  modules AppJourneyModule[]
+
+  @@map("app_journey")
+}
+
+/// One tier's text: its label and what it is for (t-87). Which modules sit in
+/// it, and its order, are the roster's.
+model AppJourneyTier {
+  /// The tier id, e.g. `inner_authority`. Immutable: the roster keys on it.
+  id        String     @id
+  journeyId String
+  journey   AppJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  label     String
+  intent    String
+  /// Bumped on every write that changes something. 1 is the seed.
+  revision  Int        @default(1)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  revisions AppJourneyTierRevision[]
+
+  @@map("app_journey_tier")
+}
+
+/// One revision of one tier's text, whole (t-87). Same shape and reasoning as
+/// `AppFoundationalDocumentRevision`, including the hand-written
+/// `editorId → user ON DELETE SET NULL` foreign key and its drift probe.
+model AppJourneyTierRevision {
+  id            String                   @id @default(cuid())
+  tierId        String
+  tier          AppJourneyTier           @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  revision      Int
+  label         String
+  intent        String
+  /// Which snapshot fields differ from the previous revision. All of them at 1.
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  /// Null for the seed, and null once that admin's account is erased.
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([tierId, revision])
+  @@index([tierId, changedAt])
+  @@index([editorId])
+  @@map("app_journey_tier_revision")
+}
+
+/// One module's text (t-87): her title for it, its subtitle, and its phases.
+///
+/// **The one owner of a module's title.** The registered
+/// `ModuleDefinition.name` is derived from this row at startup
+/// (`lib/app/leaf-bootstrap.ts`), and the drawer, the module pages, the home
+/// page and the content APIs read it here. Its number and tier are the
+/// roster's; `displayNumber` is here because it is a label she wrote, not a
+/// position.
+///
+/// `phases`, `phaseTiers` and `produces` are JSON validated on every write and
+/// read (`lib/app/content/journey-view.ts`): every read takes a module whole,
+/// and a snapshot of one row is then a snapshot of the module.
+model AppJourneyModule {
+  /// The authored id, e.g. `module_01_values`. Immutable: the roster, the
+  /// resource keys and the question set all name a module by it.
+  id            String     @id
+  journeyId     String
+  journey       AppJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  displayNumber String
+  title         String
+  subtitle      String?
+  chartTitle    String?
+  phases        Json
+  phaseTiers    Json?
+  produces      Json?
+  revision      Int        @default(1)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  revisions    AppJourneyModuleRevision[]
+  questionSets AppQuestionSet[]
+
+  @@map("app_journey_module")
+}
+
+/// One revision of one module's text, whole (t-87).
+model AppJourneyModuleRevision {
+  id            String                   @id @default(cuid())
+  moduleId      String
+  module        AppJourneyModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  revision      Int
+  displayNumber String
+  title         String
+  subtitle      String?
+  chartTitle    String?
+  phases        Json
+  phaseTiers    Json?
+  produces      Json?
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([moduleId, revision])
+  @@index([moduleId, changedAt])
+  @@index([editorId])
+  @@map("app_journey_module_revision")
+}
+
+/// A set of discovery questions and the words that frame it (t-87). There is
+/// one, the onboarding module's thirty.
+///
+/// `preamble` (her note that these are not to be rushed) and `pacing` are JSON,
+/// validated on every write and read.
+model AppQuestionSet {
+  /// Stable identity, as authored: `onboarding_discovery_questions`.
+  id         String           @id
+  title      String
+  chartTitle String
+  /// The module the set belongs to.
+  moduleId   String
+  module     AppJourneyModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  /// The phase of that module it is asked in.
+  phase      Int
+  preamble   Json
+  pacing     Json
+  version    String
+  locale     String
+  revision   Int              @default(1)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  questions AppDiscoveryQuestion[]
+  revisions AppQuestionSetRevision[]
+
+  @@map("app_question_set")
+}
+
+/// One revision of a question set's framing, whole (t-87).
+model AppQuestionSetRevision {
+  id            String                   @id @default(cuid())
+  setId         String
+  set           AppQuestionSet           @relation(fields: [setId], references: [id], onDelete: Cascade)
+  revision      Int
+  title         String
+  chartTitle    String
+  phase         Int
+  preamble      Json
+  pacing        Json
+  version       String
+  locale        String
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([setId, revision])
+  @@index([setId, changedAt])
+  @@index([editorId])
+  @@map("app_question_set_revision")
+}
+
+/// One discovery question (t-87), recalled by its number within the set.
+model AppDiscoveryQuestion {
+  /// The authored id, e.g. `q01`.
+  id                  String         @id
+  setId               String
+  set                 AppQuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  /// 1-based, and the order they are asked in.
+  number              Int
+  text                String
+  /// `long_text`. Validated on write and read.
+  inputType           String
+  hint                String?
+  /// `{ ifYes, ifNo }` where the question branches.
+  conditionalFollowUp Json?
+  revision            Int            @default(1)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  revisions AppDiscoveryQuestionRevision[]
+
+  @@unique([setId, number])
+  @@map("app_discovery_question")
+}
+
+/// One revision of one discovery question, whole (t-87).
+model AppDiscoveryQuestionRevision {
+  id                  String                   @id @default(cuid())
+  questionId          String
+  question            AppDiscoveryQuestion     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  revision            Int
+  number              Int
+  text                String
+  inputType           String
+  hint                String?
+  conditionalFollowUp Json?
+  changedFields       String[]
+  origin              AppContentRevisionOrigin
+  editorId            String?
+  changedAt           DateTime                 @default(now())
+
+  @@unique([questionId, revision])
+  @@index([questionId, changedAt])
+  @@index([editorId])
+  @@map("app_discovery_question_revision")
+}
+
+/// The resource library as a whole (t-87): its identity, and its provenance —
+/// whether she has signed off what is in it. One row.
+model AppResourceCollection {
+  /// Stable identity, as authored: `lelanea_resources`.
+  id         String   @id
+  title      String
+  version    String
+  locale     String
+  /// `{ status, awaitingSignOffFrom, note }`, validated on write and read.
+  /// Served, never withheld: a surface showing a resource can say it is a draft.
+  provenance Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  resources AppResource[]
+  words     AppResourceWords[]
+
+  @@map("app_resource_collection")
+}
+
+/// One film or one piece of reading (t-87). One table because they are one
+/// namespace: an id is what the suggestion tool and the drawer's pin resolve
+/// by, and a film and a reading sharing one would always resolve to the film.
+///
+/// A film has `duration` and `href`. A reading has `readingTime` and exactly
+/// one of `href` and `documentId`. Both rules are checked on every write and
+/// read (`lib/app/content/resource-view.ts`).
+model AppResource {
+  /// Lowercase with hyphens, at most 80 characters. Immutable: a suggestion
+  /// already made in a conversation names it.
+  id           String                   @id
+  collectionId String
+  collection   AppResourceCollection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  /// `film` | `reading`.
+  kind         String
+  /// Order within its kind, which is the order the drawer offers them in.
+  position     Int
+  title        String
+  /// What it is for, in her words.
+  subtitle     String
+  /// A module id, `journey`, `situations`, or null for a piece that belongs to
+  /// everything.
+  relatesTo    String?
+  /// A film's length, as shown: `6:12`.
+  duration     String?
+  /// A reading's length, as shown: `8 min`.
+  readingTime  String?
+  /// http(s) only.
+  href         String?
+  /// A reading that is one of her foundational documents.
+  documentId   String?
+  document     AppFoundationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  revision     Int                      @default(1)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  revisions AppResourceRevision[]
+
+  @@unique([collectionId, kind, position])
+  @@map("app_resource")
+}
+
+/// One revision of one resource, whole (t-87).
+model AppResourceRevision {
+  id            String                   @id @default(cuid())
+  resourceId    String
+  resource      AppResource              @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  revision      Int
+  kind          String
+  position      Int
+  title         String
+  subtitle      String
+  relatesTo     String?
+  duration      String?
+  readingTime   String?
+  href          String?
+  documentId    String?
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([resourceId, revision])
+  @@index([resourceId, changedAt])
+  @@index([editorId])
+  @@map("app_resource_revision")
+}
+
+/// Her words on one key (t-87): a quote and a few short paragraphs, each a
+/// verbatim excerpt of a source this repository holds, citing it.
+///
+/// Keyed by a module id or `journey`, `situations`, `default`. A key with no
+/// words of its own reads `default`'s, so `default` must exist.
+model AppResourceWords {
+  key              String                @id
+  collectionId     String
+  collection       AppResourceCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  quote            String
+  paragraphs       String[]
+  /// `foundational_documents` | `values_module`.
+  sourceCollection String
+  /// The document id or values step id the passage is taken from.
+  sourceId         String
+  revision         Int                   @default(1)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  revisions AppResourceWordsRevision[]
+
+  @@map("app_resource_words")
+}
+
+/// One revision of one key's words, whole (t-87).
+model AppResourceWordsRevision {
+  id               String                   @id @default(cuid())
+  wordsKey         String
+  words            AppResourceWords         @relation(fields: [wordsKey], references: [key], onDelete: Cascade)
+  revision         Int
+  quote            String
+  paragraphs       String[]
+  sourceCollection String
+  sourceId         String
+  changedFields    String[]
+  origin           AppContentRevisionOrigin
+  editorId         String?
+  changedAt        DateTime                 @default(now())
+
+  @@unique([wordsKey, revision])
+  @@index([wordsKey, changedAt])
+  @@index([editorId])
+  @@map("app_resource_words_revision")
 }
