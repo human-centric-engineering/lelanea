@@ -116,6 +116,19 @@ describe('GET /api/v1/app/content/documents/:id', () => {
     expect(body.error.code).toBe('NOT_FOUND');
   });
 
+  it('answers 404, without querying, for an id Postgres would reject', async () => {
+    // A NUL byte is "invalid byte sequence for encoding UTF8" in Postgres, so
+    // reaching the query would turn a bad URL into a 500 and an error log.
+    const { request, context } = createRequest('foo\u0000bar');
+
+    const response = await GET(request, context);
+    const body = (await response.json()) as ErrorBody;
+
+    expect(response.status).toBe(404);
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(store.getFoundationalDocument).not.toHaveBeenCalled();
+  });
+
   it('returns every block with its section key, and the keys in order', async () => {
     const { request, context } = createRequest('disclaimer');
 

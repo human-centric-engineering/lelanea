@@ -21,9 +21,13 @@
  * The ETag is computed over the whole payload, including `revision`, so any
  * edit to the row changes it.
  *
- * The id is not validated against a pattern before lookup. It is a primary-key
- * lookup through Prisma's parameterised query, so an unknown id is a plain 404
- * and there is nothing to inject into.
+ * The id is checked against `DOCUMENT_ID` before the lookup. The query is
+ * parameterised, so this is not about injection: Postgres rejects some strings
+ * outright (a NUL byte is "invalid byte sequence for encoding UTF8"), and before
+ * the documents moved into the database that request was a 404. Without the
+ * check it is a 500 and an error log any anonymous caller can produce. The
+ * pattern is looser than today's ids (lowercase snake_case, at most 24
+ * characters) so that a new document is never a 404 because of its name.
  */
 
 import type { NextRequest } from 'next/server';
@@ -36,6 +40,9 @@ import {
   getFoundationalDocument,
 } from '@/lib/app/content/document-store';
 
+/** Any id a document could plausibly have; anything else cannot be one. */
+const DOCUMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -46,7 +53,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const document = await getFoundationalDocument(id);
+    const document = DOCUMENT_ID.test(id) ? await getFoundationalDocument(id) : null;
     if (!document) {
       // Truncated: the id is an unvalidated path segment and any anonymous
       // caller can push an arbitrary-length string through here at the section

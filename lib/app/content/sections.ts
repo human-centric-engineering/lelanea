@@ -158,12 +158,27 @@ export function selectSectionHeading(document: FoundationalDocumentDetail, key: 
  * into their items, so a section authored either way yields the same strings.
  * Headings are skipped: a section title is not one of its items.
  *
- * @throws MissingSectionError when no block carries the key.
+ * A section that yields no text throws too, so a surface never has to check.
+ * The key can survive on a heading alone (or, once admins edit blocks, on
+ * non-text blocks), and a caller that takes `[0]` would otherwise render
+ * `undefined` at the top of the home page with nothing reporting it.
+ *
+ * @throws MissingSectionError when no block carries the key, and a plain `Error`
+ * when the blocks that do carry it hold no text.
  */
 export function selectSectionText(document: FoundationalDocumentDetail, key: string): string[] {
-  return selectSection(document, key).flatMap((block) => {
+  const text = selectSection(document, key).flatMap((block) => {
     if (block.type === 'paragraph') return [block.text];
     if (block.type === 'list') return [...block.items];
     return [];
   });
+
+  if (text.length === 0) {
+    throw new Error(
+      `Section "${key}" of foundational document "${document.id}" has no paragraph or ` +
+        `list text, and a surface renders its text.`
+    );
+  }
+
+  return text;
 }

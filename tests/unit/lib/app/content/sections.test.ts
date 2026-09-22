@@ -158,6 +158,23 @@ describe('selectSectionText', () => {
 
     expect(lines).toContain('thoughts of suicide;');
   });
+
+  it('throws, rather than returning nothing, when the key is left only on a heading', async () => {
+    // The home page takes `[0]` of its sections; an empty array would put
+    // `undefined` in its h1 with nothing reporting it.
+    const document = await disclaimer();
+    const headingOnly = {
+      ...document,
+      blocks: document.blocks.filter(
+        (block) => block.section !== 'crisis' || block.type === 'heading'
+      ),
+    };
+    expect(headingOnly.blocks.some((block) => block.section === 'crisis')).toBe(true);
+
+    expect(() => selectSectionText(headingOnly, 'crisis')).toThrow(
+      /Section "crisis" of foundational document "disclaimer" has no paragraph or list text/
+    );
+  });
 });
 
 /**

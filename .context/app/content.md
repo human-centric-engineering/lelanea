@@ -375,7 +375,7 @@ client's decision.
 | -------------------------------- | ------------------------------------------------------ |
 | `requireDocument(id)`            | a document, throwing rather than returning `null`      |
 | `selectSection(doc, key, opts?)` | the key's blocks; a heading only with `includeHeading` |
-| `selectSectionText(doc, key)`    | the key's paragraphs and list items as strings         |
+| `selectSectionText(doc, key)`    | the key's paragraphs and list items; never empty       |
 | `selectSectionHeading(doc, key)` | the key's heading, for a surface that sets it aside    |
 
 **Everything here throws rather than degrading, and that is the design.** An
