@@ -96,6 +96,48 @@ describe('reading the two', () => {
   });
 });
 
+describe('the default path, which no other test takes', () => {
+  it('calls the global fetch bound to the global, not as a method', async () => {
+    // The defect this exists for: `options.fetchImpl(url)` makes `this` the
+    // options object, and a browser answers "Illegal invocation". Every other
+    // case here injects a `fetchImpl`, so the default was the one path nothing
+    // exercised — it survived a green suite and was found by opening the page.
+    const original = globalThis.fetch;
+    const seen: unknown[] = [];
+    globalThis.fetch = function (this: unknown, url: string) {
+      seen.push(this);
+      return Promise.resolve(
+        json({ success: true, data: url.startsWith(USAGE_BREAKDOWN_ENDPOINT) ? DAYS : SUMMARY })
+      );
+    } as unknown as typeof fetch;
+
+    try {
+      await fetchUsage({ now: NOW });
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    expect(seen).toHaveLength(2);
+    for (const bound of seen) expect(bound).toBe(globalThis);
+  });
+
+  it('reads this month when no clock is handed in', async () => {
+    const fetchImpl = fetcher({});
+    await fetchUsage({ fetchImpl });
+
+    const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
+      (c) => c[0]
+    );
+    const breakdown = decodeURIComponent(urls.find((u) => u.startsWith(USAGE_BREAKDOWN_ENDPOINT))!);
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const weekStart = new Date(now.getTime() - 6 * 86_400_000);
+    // Whichever is earlier — the same rule, against the real clock.
+    const expected = weekStart < monthStart ? weekStart : monthStart;
+    expect(breakdown).toContain(expected.toISOString().slice(0, 10));
+  });
+});
+
 describe('when it cannot be read', () => {
   it('turns a refusal into a sentence meant to be shown', async () => {
     const failing = fetcher({ usage: json({ success: false }, 500) });
