@@ -71,7 +71,7 @@ function fetcherFor(fixture: Fixture = {}) {
 }
 
 function renderPanel(fixture: Fixture = {}) {
-  return render(<UsagePanel fetchImpl={fetcherFor(fixture)} now={NOW} />);
+  return render(<UsagePanel fetchImpl={fetcherFor(fixture)} />);
 }
 
 describe('a month with spend', () => {
@@ -186,7 +186,7 @@ describe('when the read fails', () => {
     const failing = vi.fn(
       async () => ({ ok: false, status: 500 }) as Response
     ) as unknown as typeof fetch;
-    render(<UsagePanel fetchImpl={failing} now={NOW} />);
+    render(<UsagePanel fetchImpl={failing} />);
 
     expect(await screen.findByText('This could not be read.')).toBeInTheDocument();
     expect(screen.getByText(/Nothing has been charged/)).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe('when the read fails', () => {
           release = resolve;
         })
     ) as unknown as typeof fetch;
-    render(<UsagePanel fetchImpl={slow} now={NOW} />);
+    render(<UsagePanel fetchImpl={slow} />);
 
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent(/Reading what this month cost/);

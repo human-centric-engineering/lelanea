@@ -6,6 +6,7 @@ import { MonthPlot, WeekPlot } from '@/components/app/usage/plot';
 import { Banner } from '@/components/app/ui/banner';
 import { fetchUsage, UsageUnreadable } from '@/lib/app/usage/usage-client';
 import {
+  floorLabel,
   meterFill,
   monthPlot,
   usageStats,
@@ -95,8 +96,6 @@ export function UsageSkeleton() {
 export interface UsagePanelProps {
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
-  /** Injectable for tests, so a fixture's month is not today's. */
-  now?: Date;
 }
 
 function Panel({
@@ -142,13 +141,13 @@ function Stat({ figure, label }: { figure: string; label: string }) {
   );
 }
 
-export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
+export function UsagePanel({ fetchImpl }: UsagePanelProps) {
   const [reading, setReading] = useState<UsageReading | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchUsage({ fetchImpl, now, signal: controller.signal })
+    fetchUsage({ fetchImpl, signal: controller.signal })
       .then((next) => {
         // The same guard the catch has, and the one `notes-panel.tsx` puts on
         // both: benign today with one fetch per mount, but t-95 adds a refresh
@@ -167,7 +166,7 @@ export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
         logger.warn('Usage read failed', { error: String(error) });
       });
     return () => controller.abort();
-  }, [fetchImpl, now]);
+  }, [fetchImpl]);
 
   if (failed) {
     return (
@@ -183,11 +182,6 @@ export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
   const month = monthPlot(reading);
   const week = weekPlot(reading);
   const fill = meterFill(reading.summary);
-  // `usage-view.ts` says `spendFloor` "asks the question once and every caller
-  // has to answer it" — and both plots answer it. Printing the totals bare left
-  // the By-day panel stating as exact the very figure the stat above it had
-  // just qualified (/code-review).
-  const floor = (total: string, isFloor: boolean) => (isFloor ? `at least ${total}` : total);
 
   return (
     <div className="flex flex-col gap-4">
@@ -238,7 +232,7 @@ export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
         <div className="flex flex-col gap-[9px]">
           <div className="flex flex-wrap items-baseline gap-2.5">
             <b className="text-[22px] font-medium text-[var(--color-heading)] tabular-nums">
-              {floor(month.total, month.totalIsFloor)}
+              {floorLabel(month.total, month.totalIsFloor)}
             </b>
             <span className="text-muted-foreground text-[12.5px]">
               this month so far · {stats.ceiling} limit
@@ -259,7 +253,7 @@ export function UsagePanel({ fetchImpl, now }: UsagePanelProps) {
         <div className="flex flex-col gap-[9px]">
           <div className="flex flex-wrap items-baseline gap-2.5">
             <b className="text-[22px] font-medium text-[var(--color-heading)] tabular-nums">
-              {floor(week.total, week.totalIsFloor)}
+              {floorLabel(week.total, week.totalIsFloor)}
             </b>
             <span className="text-muted-foreground text-[12.5px]">the last seven days</span>
           </div>

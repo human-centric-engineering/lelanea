@@ -115,6 +115,21 @@ export function spendFloor(totals: { unpricedRows: number }): boolean {
   return totals.unpricedRows > 0;
 }
 
+/**
+ * A total, qualified when it is a floor — but only where that reads as English.
+ *
+ * `moneyWords` already answers in words under a cent, and prefixing those gave
+ * **"at least less than a cent"**: reachable on a new account whose priced
+ * turns came to under half a cent while one ran unpriced (/code-review). The
+ * qualifier belongs to a numeral; where the figure is already words, the
+ * sentence under the stats is what explains the shortfall, and it says more
+ * than a prefix could.
+ */
+export function floorLabel(total: string, isFloor: boolean): string {
+  if (!isFloor || !total.startsWith('$')) return total;
+  return `at least ${total}`;
+}
+
 /** The three figures across the top, and whether each is a floor. */
 export interface UsageStats {
   spent: string;
@@ -256,14 +271,6 @@ export interface UsageAverage {
 }
 
 /**
- * The month so far, one bar a day.
- *
- * No per-bar figures: at twenty-eight to thirty-one bars the month is read as a
- * shape, and a number over each one would be unreadable at that width. The tip
- * answers for a single day, and the average line gives the shape something to
- * be tall against.
- */
-/**
  * The instant a reading covers up to — **the server's**, never the browser's.
  *
  * Both totals on this page are computed server-side over `[from, to)`. Walking
@@ -277,6 +284,14 @@ export function readingEnd(reading: UsageReading): Date {
   return new Date(reading.days.window.to);
 }
 
+/**
+ * The month so far, one bar a day.
+ *
+ * No per-bar figures: at twenty-eight to thirty-one bars the month is read as a
+ * shape, and a number over each one would be unreadable at that width. The tip
+ * answers for a single day, and the average line gives the shape something to
+ * be tall against.
+ */
 export function monthPlot(
   reading: UsageReading
 ): UsagePlot & { average: UsageAverage | null; axisStart: string; axisEnd: string } {
@@ -339,16 +354,23 @@ export function weekPlot(reading: UsageReading): UsagePlot<UsageWeekBar> {
 }
 
 /**
- * The earliest instant both charts need, so one read serves both.
+ * The earliest instant both charts need, so one breakdown serves both.
  *
  * The month chart wants this UTC month; the week chart wants the last seven
- * days, which on the 3rd of a month reaches back into the last one. Asking for
- * whichever is earlier is one request covering at most about thirty-seven days
- * — well inside the API's 366-day bound and its 100-group default, so neither
- * chart can be silently truncated.
+ * days, which on the 3rd of a month reaches back into the last one. Whichever
+ * is earlier covers both in at most about thirty-seven days — well inside the
+ * API's 366-day bound and its 100-group default, so neither chart can be
+ * silently truncated.
+ *
+ * **Both arguments are the SERVER's, never a browser clock.** Deriving the
+ * start locally let the two halves of the page disagree across a day boundary:
+ * with a device an hour fast at the turn of a month, a locally-computed start
+ * asked for six days while `monthPlot` still drew thirty-one, so twenty-five
+ * days that had spend rendered as idle zeros under a headline that counted them
+ * (/code-review). The summary answers with both instants, so nothing here has
+ * to guess.
  */
-export function readingWindowFrom(now: Date): Date {
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const weekStart = new Date(utcDayStart(now).getTime() - 6 * DAY_MS);
+export function readingWindowFrom(serverNow: Date, monthStart: Date): Date {
+  const weekStart = new Date(utcDayStart(serverNow).getTime() - 6 * DAY_MS);
   return weekStart.getTime() < monthStart.getTime() ? weekStart : monthStart;
 }

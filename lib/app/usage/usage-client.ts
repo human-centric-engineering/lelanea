@@ -5,14 +5,22 @@
  * `notes-client.ts` gives: the wire *shape* stays importable by the server and
  * by a test without dragging a `fetch` wrapper along with it.
  *
- * ## Why one breakdown call serves two charts
+ * ## Why one breakdown call serves two charts, and why it goes second
  *
  * The month chart wants this UTC month and the week chart wants the last seven
  * days, which early in a month reaches back into the previous one. Asking for
  * whichever is earlier ({@link readingWindowFrom}) covers both in about
  * thirty-seven days at most — inside the API's 366-day bound and well inside
- * its 100-group default, so neither chart can be quietly truncated. Two calls
- * would also let the two charts answer from different instants.
+ * its 100-group default, so neither chart can be quietly truncated.
+ *
+ * The two reads used to go out together. They no longer can: the breakdown's
+ * start has to come from **the server's** month, not the device's. A clock an
+ * hour fast at the turn of a month asked for six days while the month chart
+ * still drew thirty-one, so twenty-five days of real spend rendered as idle
+ * zeros beneath a headline that counted them (/code-review). The summary
+ * carries both instants, so it goes first and the breakdown is asked for the
+ * window it names. That costs one round trip and buys the two halves of the
+ * page agreeing about what month it is.
  *
  * ## The envelope is parsed, never cast
  *
@@ -155,27 +163,32 @@ export interface UsageFetchOptions {
   signal?: AbortSignal;
   /** Injectable for tests; defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
-  /** Injectable for tests, so a fixture's month is not today's. */
-  now?: Date;
 }
 
 /**
- * Both readings, together.
+ * Both readings — the summary first, because it says which window to ask for.
  *
- * `Promise.all` rather than in sequence: neither depends on the other, and the
- * headline appearing a round trip before the charts would draw the page twice.
+ * Nothing is drawn until both have landed (the panel shows one skeleton for the
+ * pair), so the extra round trip costs latency rather than a second render.
  */
 export async function fetchUsage(
   options: UsageFetchOptions = {}
 ): Promise<{ summary: UsageSummary; days: UsageBreakdown }> {
   const fetchImpl = boundFetch(options.fetchImpl);
-  const now = options.now ?? new Date();
-  const from = readingWindowFrom(now).toISOString();
-  const breakdown = `${USAGE_BREAKDOWN_ENDPOINT}?by=day&from=${encodeURIComponent(from)}`;
+  const summary = await read(USAGE_ENDPOINT, summarySchema, {
+    signal: options.signal,
+    fetchImpl,
+  });
 
-  const [summary, days] = await Promise.all([
-    read(USAGE_ENDPOINT, summarySchema, { signal: options.signal, fetchImpl }),
-    read(breakdown, breakdownSchema, { signal: options.signal, fetchImpl }),
-  ]);
+  const from = readingWindowFrom(
+    new Date(summary.window.to),
+    new Date(summary.window.from)
+  ).toISOString();
+  const days = await read(
+    `${USAGE_BREAKDOWN_ENDPOINT}?by=day&from=${encodeURIComponent(from)}`,
+    breakdownSchema,
+    { signal: options.signal, fetchImpl }
+  );
+
   return { summary, days };
 }

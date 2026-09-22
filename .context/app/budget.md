@@ -45,15 +45,25 @@ week is seven bars, so each one shows its own."_
 arithmetic is ours to worry about, not yours."_ Tokens appear once in the whole
 app — in the account row under a reply, where a person opened the detail.
 
-### One read serves both charts
+### One breakdown serves both charts, and it goes second
 
-`fetchUsage()` asks for `GET /api/v1/app/usage` and one
+`fetchUsage()` asks for `GET /api/v1/app/usage`, then one
 `GET /api/v1/app/usage/breakdown?by=day&from=…`, where `from` is **whichever is
-earlier** of this month's first instant and seven days ago. Early in a month the
-week chart reaches back into the previous one, so a month-only window would
-leave it short; asking once covers both in about thirty-seven days at most —
-inside the API's 366-day bound and its 100-group default, so neither chart can
-be silently truncated, and both answer from the same instant.
+earlier** of the month's first instant and seven days before the summary's end.
+Early in a month the week chart reaches back into the previous one, so a
+month-only window would leave it short; one request covers both in about
+thirty-seven days at most — inside the API's 366-day bound and its 100-group
+default, so neither chart can be silently truncated.
+
+**The order is deliberate, and it costs a round trip.** Both instants come from
+the summary, which is the server's. Deriving the start from the device's clock
+let the two halves of the page disagree across a day boundary: a device an hour
+fast at the turn of a month asked for six days while `monthPlot` still drew
+thirty-one, so twenty-five days of real spend rendered as idle zeros beneath a
+headline that counted them. Nothing is drawn until both have landed — the panel
+shows one skeleton for the pair — so the extra trip costs latency, not a second
+render. For the same reason `readingEnd()` takes the chart's END from the
+breakdown's window rather than from `new Date()`.
 
 ### The gap-filling is the point
 
@@ -65,14 +75,15 @@ zero. A day that spent anything always draws at least a 4%-of-peak bar, because
 a bar of no height says nothing happened; a day that spent nothing draws a 3px
 sliver, so the axis reads as a run of days rather than as holes.
 
-### Four states that are not errors
+### Five states that are not errors
 
-| State                      | What is shown                                                                                         |
-| -------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Nothing spent              | `$0.00`, no average line (a line at zero pretends to be data), plots that say so in words             |
-| A total with unpriced rows | "used this month, **at least**", and a sentence naming why                                            |
-| A $0 limit                 | No meter — nothing divides by zero. A sentence: nothing may be spent, everything readable still works |
-| Past the limit             | A sentence with the reset, in place of the meter                                                      |
+| State                         | What is shown                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Nothing spent                 | `$0.00`, no average line (a line at zero pretends to be data), plots that say so in words                           |
+| A total with unpriced rows    | "used this month, **at least**", and a sentence naming why                                                          |
+| A $0 limit                    | No meter — nothing divides by zero. A sentence: nothing may be spent, everything readable still works               |
+| Past the limit                | A sentence with the reset, in place of the meter                                                                    |
+| Spend under a cent, and short | `less than a cent` — the floor qualifier is **not** prefixed, because "at least less than a cent" is not a sentence |
 
 The last one matters most. `fractionUsed` goes **above 1** when a person is over
 — reachable by design, because the turn that crosses the line completes (t-59's

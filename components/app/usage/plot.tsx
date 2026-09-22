@@ -181,7 +181,13 @@ export function WeekPlot({ bars, description }: { bars: UsageWeekBar[]; descript
           </div>
         ))}
       </div>
-      <div className="text-muted-foreground flex text-[11px] tabular-nums">
+      {/*
+        `gap-2` matches the bar row above. Without it the two rows lay out on
+        different tracks — seven equal columns against seven columns plus six
+        8px gaps — so the outer labels sat a few pixels off their own bars, and
+        at phone width that is about a tenth of a column (/code-review).
+      */}
+      <div className="text-muted-foreground flex gap-2 text-[11px] tabular-nums">
         {bars.map((bar) => (
           <span key={bar.day} className="flex-1 text-center">
             {bar.weekday}

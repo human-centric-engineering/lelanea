@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   daysBetween,
+  floorLabel,
   meterFill,
   money,
   moneyWords,
@@ -91,6 +92,23 @@ describe('a total that contains unpriced rows', () => {
   it('is carried on the stats so the view cannot state it as exact', () => {
     expect(usageStats(summary({ unpricedRows: 2 })).spentIsFloor).toBe(true);
     expect(usageStats(summary()).spentIsFloor).toBe(false);
+  });
+});
+
+describe('qualifying a total that is a floor', () => {
+  it('prefixes a numeral', () => {
+    expect(floorLabel('$9.35', true)).toBe('at least $9.35');
+  });
+
+  it('leaves a figure alone when nothing is missing from it', () => {
+    expect(floorLabel('$9.35', false)).toBe('$9.35');
+  });
+
+  it('never says "at least less than a cent"', () => {
+    // Reachable on a new account whose priced turns came to under half a cent
+    // while one ran on an unpriced model. The qualifier belongs to a numeral;
+    // the sentence under the stats is what explains the shortfall.
+    expect(floorLabel(moneyWords(0.002), true)).toBe('less than a cent');
   });
 });
 
@@ -289,19 +307,32 @@ describe('where a plot stops', () => {
 });
 
 describe('the window both charts are read from', () => {
+  const monthStart = (at: string) =>
+    new Date(Date.UTC(new Date(at).getUTCFullYear(), new Date(at).getUTCMonth(), 1));
+
   it('is the start of the month when the month is already a week old', () => {
-    expect(utcDayKey(readingWindowFrom(NOW))).toBe('2026-03-01');
+    expect(utcDayKey(readingWindowFrom(NOW, monthStart(NOW.toISOString())))).toBe('2026-03-01');
   });
 
   it('reaches back into last month early in a new one, so the week chart is whole', () => {
     // On the 3rd, the last seven days start on the 25th of the month before —
     // a month-only window would leave the week chart five days short.
-    expect(utcDayKey(readingWindowFrom(new Date('2026-03-03T10:00:00Z')))).toBe('2026-02-25');
+    const at = new Date('2026-03-03T10:00:00Z');
+    expect(utcDayKey(readingWindowFrom(at, monthStart(at.toISOString())))).toBe('2026-02-25');
+  });
+
+  it('takes the month from the argument, not from the instant beside it', () => {
+    // The whole point of the second parameter: the server says which month it
+    // is. A device an hour fast at the turn of a month would otherwise ask for
+    // the wrong one while the chart drew the right one.
+    const serverNow = new Date('2026-03-31T23:00:00Z');
+    const from = readingWindowFrom(serverNow, new Date('2026-03-01T00:00:00Z'));
+    expect(utcDayKey(from)).toBe('2026-03-01');
   });
 
   it('never asks for more than the two charts need', () => {
-    const from = readingWindowFrom(new Date('2026-12-31T23:59:00Z'));
-    const days = (Date.parse('2026-12-31T23:59:00Z') - from.getTime()) / 86_400_000;
-    expect(days).toBeLessThan(38);
+    const at = new Date('2026-12-31T23:59:00Z');
+    const from = readingWindowFrom(at, monthStart(at.toISOString()));
+    expect((at.getTime() - from.getTime()) / 86_400_000).toBeLessThan(38);
   });
 });

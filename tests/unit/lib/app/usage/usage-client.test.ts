@@ -59,7 +59,7 @@ function fetcher(routes: { usage?: Response; breakdown?: Response }) {
 describe('reading the two', () => {
   it('asks for the day breakdown from the month start once the month is a week old', async () => {
     const fetchImpl = fetcher({});
-    await fetchUsage({ fetchImpl, now: NOW });
+    await fetchUsage({ fetchImpl });
 
     const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
       (c) => c[0]
@@ -71,8 +71,12 @@ describe('reading the two', () => {
   });
 
   it('reaches back into last month early in a new one, so the week chart is whole', async () => {
-    const fetchImpl = fetcher({});
-    await fetchUsage({ fetchImpl, now: new Date('2026-03-03T10:00:00Z') });
+    const early = {
+      ...SUMMARY,
+      window: { from: '2026-03-01T00:00:00.000Z', to: '2026-03-03T10:00:00.000Z' },
+    };
+    const fetchImpl = fetcher({ usage: json({ success: true, data: early }) });
+    await fetchUsage({ fetchImpl });
 
     const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
       (c) => c[0]
@@ -81,15 +85,34 @@ describe('reading the two', () => {
     expect(breakdown).toContain('2026-02-25T00:00:00.000Z');
   });
 
+  it('asks for the window the SERVER named, never one off the device clock', async () => {
+    // A device an hour fast at the turn of a month used to ask for six days
+    // while `monthPlot` drew thirty-one, so twenty-five days of real spend
+    // rendered as idle zeros under a headline that counted them.
+    const endOfMonth = {
+      ...SUMMARY,
+      window: { from: '2026-03-01T00:00:00.000Z', to: '2026-03-31T23:00:00.000Z' },
+    };
+    const fetchImpl = fetcher({ usage: json({ success: true, data: endOfMonth }) });
+    await fetchUsage({ fetchImpl });
+
+    const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
+      (c) => c[0]
+    );
+    // The summary goes first, because it is what names the window.
+    expect(urls[0]).toBe(USAGE_ENDPOINT);
+    expect(decodeURIComponent(urls[1])).toContain('2026-03-01T00:00:00.000Z');
+  });
+
   it('returns both readings', async () => {
-    const reading = await fetchUsage({ fetchImpl: fetcher({}), now: NOW });
+    const reading = await fetchUsage({ fetchImpl: fetcher({}) });
     expect(reading.summary.costUsd).toBe(9.35);
     expect(reading.days.groups).toHaveLength(1);
   });
 
   it('sends the session cookie, because every row read is keyed on it', async () => {
     const fetchImpl = fetcher({});
-    await fetchUsage({ fetchImpl, now: NOW });
+    await fetchUsage({ fetchImpl });
     const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
       .calls[0][1];
     expect(init.credentials).toBe('include');
@@ -112,7 +135,7 @@ describe('the default path, which no other test takes', () => {
     } as unknown as typeof fetch;
 
     try {
-      await fetchUsage({ now: NOW });
+      await fetchUsage({});
     } finally {
       globalThis.fetch = original;
     }
@@ -120,31 +143,13 @@ describe('the default path, which no other test takes', () => {
     expect(seen).toHaveLength(2);
     for (const bound of seen) expect(bound).toBe(globalThis);
   });
-
-  it('reads this month when no clock is handed in', async () => {
-    const fetchImpl = fetcher({});
-    await fetchUsage({ fetchImpl });
-
-    const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
-      (c) => c[0]
-    );
-    const breakdown = decodeURIComponent(urls.find((u) => u.startsWith(USAGE_BREAKDOWN_ENDPOINT))!);
-    const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const weekStart = new Date(now.getTime() - 6 * 86_400_000);
-    // Whichever is earlier — the same rule, against the real clock.
-    const expected = weekStart < monthStart ? weekStart : monthStart;
-    expect(breakdown).toContain(expected.toISOString().slice(0, 10));
-  });
 });
 
 describe('when it cannot be read', () => {
   it('turns a refusal into a sentence meant to be shown', async () => {
     const failing = fetcher({ usage: json({ success: false }, 500) });
-    await expect(fetchUsage({ fetchImpl: failing, now: NOW })).rejects.toBeInstanceOf(
-      UsageUnreadable
-    );
-    await expect(fetchUsage({ fetchImpl: failing, now: NOW })).rejects.toThrow(
+    await expect(fetchUsage({ fetchImpl: failing })).rejects.toBeInstanceOf(UsageUnreadable);
+    await expect(fetchUsage({ fetchImpl: failing })).rejects.toThrow(
       'What you have spent could not be read.'
     );
   });
@@ -154,9 +159,7 @@ describe('when it cannot be read', () => {
     const drifted = fetcher({
       usage: json({ success: true, data: { ...SUMMARY, costUsd: 'nine thirty-five' } }),
     });
-    await expect(fetchUsage({ fetchImpl: drifted, now: NOW })).rejects.toBeInstanceOf(
-      UsageUnreadable
-    );
+    await expect(fetchUsage({ fetchImpl: drifted })).rejects.toBeInstanceOf(UsageUnreadable);
   });
 
   it('refuses a body that is not JSON at all', async () => {
@@ -169,8 +172,6 @@ describe('when it cannot be read', () => {
         },
       } as unknown as Response,
     });
-    await expect(fetchUsage({ fetchImpl: notJson, now: NOW })).rejects.toBeInstanceOf(
-      UsageUnreadable
-    );
+    await expect(fetchUsage({ fetchImpl: notJson })).rejects.toBeInstanceOf(UsageUnreadable);
   });
 });
