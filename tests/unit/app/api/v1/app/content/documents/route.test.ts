@@ -10,15 +10,31 @@
  * @see app/api/v1/app/content/documents/route.ts
  */
 
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v1/app/content/documents/route';
+import { fakeDocumentStore } from '@/tests/helpers/app/foundational-documents';
+
+const store = fakeDocumentStore();
+beforeEach(() => store.reset());
 
 interface IndexBody {
   success: true;
   data: {
     collection: { id: string; title: string; version: string; locale: string };
-    documents: { id: string; requiresAcknowledgement: boolean; blockCount: number }[];
+    documents: {
+      id: string;
+      requiresAcknowledgement: boolean;
+      blockCount: number;
+      version: string;
+      sections: string[];
+    }[];
   };
 }
 
@@ -99,5 +115,23 @@ describe('GET /api/v1/app/content/documents', () => {
     expect(body.data).not.toHaveProperty('reviewNotes');
     expect(body.data.documents[0]).not.toHaveProperty('blocks');
     expect(body.data.documents[0]).not.toHaveProperty('sourceFile');
+  });
+
+  it("lists each document's version and section keys, so a client can choose without the prose", async () => {
+    const body = (await (await GET(createRequest())).json()) as IndexBody;
+    const initiation = body.data.documents.find((document) => document.id === 'the_initiation');
+
+    expect(initiation?.version).toBe('1.1');
+    expect(initiation?.sections).toEqual(['welcome', 'invitation', 'guide']);
+  });
+
+  it('answers a 500 envelope, not an empty list, when the database is unseeded', async () => {
+    store.empty();
+
+    const response = await GET(createRequest());
+    const body = (await response.json()) as { success: boolean };
+
+    expect(response.status).toBe(500);
+    expect(body.success).toBe(false);
   });
 });

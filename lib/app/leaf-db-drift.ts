@@ -149,4 +149,19 @@ export function registerLeafDriftProbes(): void {
     // with `P2003` for every admin who ever edited a definition.
     probe: constraintExists('app_slot_definition_revision_editorId_fkey', 'ON DELETE SET NULL'),
   });
+
+  registerAppDriftProbe({
+    name: 'app_foundational_document_revision_editorId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_foundational_document_revision',
+    // f-content-seeds t-86. The same reasoning as the slot revision probe above.
+    // `SET NULL` keeps the record of what her documents said on a given day,
+    // including the Terms a person agreed to, when the admin who edited them is
+    // erased. `CASCADE` would delete that record with the admin, and `NO ACTION`
+    // would make `eraseUser()` fail for every admin who ever edited a document.
+    probe: constraintExists(
+      'app_foundational_document_revision_editorId_fkey',
+      'ON DELETE SET NULL'
+    ),
+  });
 }

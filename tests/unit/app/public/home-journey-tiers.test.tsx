@@ -44,16 +44,22 @@
  * content is renumbered — lives precisely in the real content.
  */
 
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import { render, screen } from '@testing-library/react';
 
 import HomePage from '@/app/(public)/page';
 import { getJourneyStructure } from '@/lib/app/content';
 
 describe('the journey tiers on the home page', () => {
-  it('publishes every tier except onboarding', () => {
+  it('publishes every tier except onboarding', async () => {
     const { tiers } = getJourneyStructure();
-    render(<HomePage />);
+    render(await HomePage());
 
     const published = tiers.filter((t) => t.id !== 'onboarding');
 
@@ -66,13 +72,13 @@ describe('the journey tiers on the home page', () => {
     }
   });
 
-  it('does not publish the onboarding tier', () => {
+  it('does not publish the onboarding tier', async () => {
     const { tiers } = getJourneyStructure();
     const onboarding = tiers.find((t) => t.id === 'onboarding');
 
     expect(onboarding, 'the content file no longer has an onboarding tier').toBeDefined();
 
-    render(<HomePage />);
+    render(await HomePage());
 
     // "Onboarding" is how you get in, not part of the path being described.
     expect(screen.queryByText(onboarding!.label)).toBeNull();
@@ -90,9 +96,9 @@ describe('the journey tiers on the home page', () => {
     expect(onboarding.order).toBeGreaterThanOrEqual(0);
   });
 
-  it('lists each tier in authored order', () => {
+  it('lists each tier in authored order', async () => {
     const { tiers } = getJourneyStructure();
-    render(<HomePage />);
+    render(await HomePage());
 
     const expected = tiers
       .filter((t) => t.id !== 'onboarding')
@@ -104,10 +110,10 @@ describe('the journey tiers on the home page', () => {
     expect(rendered).toEqual(expected);
   });
 
-  it('names each tier’s modules from the authored content, never retyped', () => {
+  it('names each tier’s modules from the authored content, never retyped', async () => {
     const { tiers, modules } = getJourneyStructure();
     const byId = new Map(modules.map((m) => [m.id, m.title]));
-    render(<HomePage />);
+    render(await HomePage());
 
     const first = tiers.find((t) => t.id !== 'onboarding')!;
     const definition = screen.getAllByRole('definition')[0];
@@ -116,5 +122,14 @@ describe('the journey tiers on the home page', () => {
     for (const id of first.modules) {
       expect(definition.textContent).toContain(byId.get(id));
     }
+  });
+
+  it("sets the journey's subtitle from the authored structure rather than a retyped line", async () => {
+    // t-86: the line under "the journey" was a hardcoded copy of
+    // `journeySubtitle`. It is read now, so this pins the read.
+    const { collection } = getJourneyStructure();
+    render(await HomePage());
+
+    expect(screen.getByRole('heading', { level: 2, name: collection.subtitle })).toBeTruthy();
   });
 });

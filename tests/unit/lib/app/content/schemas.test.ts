@@ -30,18 +30,24 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  listFoundationalDocuments,
-  getFoundationalDocument,
-  getJourneyStructure,
-  getDiscoveryQuestions,
-} from '@/lib/app/content';
+import { getJourneyStructure, getDiscoveryQuestions } from '@/lib/app/content';
 import {
   foundationalDocumentsFileSchema,
   journeyStructureFileSchema,
   discoveryQuestionsFileSchema,
   type ModuleTier,
 } from '@/lib/app/content/schemas';
+import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
+
+/**
+ * Her documents as the seed builds them from the file (t-86). These cases check
+ * the FILE, which the running app no longer reads, so they read what the seed
+ * would write rather than a database.
+ */
+const seeded = buildFoundationalSeed();
+const listFoundationalDocuments = () => seeded;
+const getFoundationalDocument = (id: string) =>
+  seeded.documents.find((document) => document.id === id) ?? null;
 
 describe('authored content schemas', () => {
   // ---------------------------------------------------------------------------

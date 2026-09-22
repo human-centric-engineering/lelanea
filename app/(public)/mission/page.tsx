@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/mission' },
 };
 
+/** Read at request time: her words are in the database (t-86). See the home page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * `/mission` — the mission statement, as she wrote it.
  *
@@ -46,8 +49,8 @@ export const metadata: Metadata = {
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-mission`
  */
-export default function MissionPage() {
-  const mission = requireDocument('the_mission');
+export default async function MissionPage() {
+  const mission = await requireDocument('the_mission');
 
   return (
     <div className={styles.page}>

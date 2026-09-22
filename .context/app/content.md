@@ -18,9 +18,12 @@ schemas and served through the versioned API. **Never paraphrased in the build.*
   her words. See [`voice.md`](./voice.md).
 
 Both folders are seed and reference input (§22, owner ruling 2026-09-21). They
-are not what the running app is meant to read. Moving every runtime read to the
-database is §22's remaining work; until it lands, the loaders below still import
-both folders.
+are not what the running app is meant to read. **Her foundational documents have
+moved (t-86):** every surface reads them from `app_foundational_document`, and
+the file only seeds that table. See [Her foundational documents: the
+database](#her-foundational-documents-the-database). The journey, the questions
+and the voice files follow in t-87 and t-88. Until then their loaders below still
+import the files.
 
 **Locations:** `content/*.json` (her words) ·
 `seed-data/drafted/*.json` (drafted seed data) ·
@@ -39,9 +42,17 @@ import gets unvalidated data, skips the referential and placeholder checks, and
 forks the pipeline this seam exists to prevent. Go through the loader.
 
 **Do not retype the copy into a component.** If a page needs the mission
-statement, it fetches `/api/v1/app/content/documents/the_mission` or calls
-`getFoundationalDocument('the_mission')`. The moment a string is pasted into JSX
-it stops tracking the source.
+statement, it calls `requireDocument('the_mission')` from
+`@/lib/app/content/sections` (or `getFoundationalDocument` from
+`@/lib/app/content/document-store`), and a native client fetches
+`/api/v1/app/content/documents/the_mission`. The moment a string is pasted into
+JSX it stops tracking the source.
+
+**Do not select a passage by position, heading text or pattern.** Name its
+section key (see [Selecting part of a document](#selecting-part-of-a-document)).
+Paragraph indexes shift silently when an admin inserts a block. Heading text
+changes when a heading is reworded. A regex over her prose is composition logic
+a native client would have to copy. All three were in the tree before t-86.
 
 **Do not merge the welcome statement's paragraphs into flowing prose.**
 `the_initiation` carries `renderStyle: 'cadence'` and a `renderNote` saying so.
@@ -53,27 +64,80 @@ transcription.
 an obstacle. If authored content genuinely gained a field, add it to the schema
 deliberately.
 
+## Her foundational documents: the database
+
+Since t-86 the seven documents live in three `app_` tables, and the file is only
+what seeds them.
+
+| Table                                | Holds                                                                                    |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `app_document_collection`            | one row: the collection's id, title, version and locale                                  |
+| `app_foundational_document`          | each document as served: metadata, `blocks` (JSONB), `version`, `locale`, `revision`     |
+| `app_foundational_document_revision` | a full snapshot per revision, `origin: seed \| admin`, `editorId` (`ON DELETE SET NULL`) |
+
+**One service writes and reads them:** `lib/app/content/document-store.ts`. Pages,
+the gate, both emails, the waitlist's locale fallback and the API all call it.
+The knowledge-base mirror (t-90) and the admin editor (t-91) attach to it, not to
+the tables.
+
+| Function (`document-store.ts`)    | Returns                                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| `listFoundationalDocuments()`     | the index in reading order, no blocks                                                     |
+| `getFoundationalDocument(id)`     | one document with its keyed blocks, or `null` for an unknown id (the caller owns the 404) |
+| `getFoundationalCollectionMeta()` | collection id, title, version, locale                                                     |
+| `seedFoundationalDocuments(seed)` | writes collection, documents and each v1 revision — **once**                              |
+
+All async. Reads go straight to the database on every request, with no cache, so
+an admin edit reaches every client on its next request. An unseeded database
+throws `ContentNotSeededError` rather than answering an empty list, and there is
+**no fallback to the file**. The pages that read them export
+`dynamic = 'force-dynamic'`, so a build never freezes the words or needs a
+database.
+
+**They are not re-exported from `@/lib/app/content`**, only their types are.
+That module is imported by code that must stay free of the database, such as the
+voice fingerprint, whose test walks its import closure.
+
+**Validated on the way out.** `document-view.ts` projects a row into the served
+shape and parses `blocks` against `storedDocumentBlocksSchema` on every read. A
+row that fails throws. The same schema guards every write.
+
+**Two versions per document.** `version` is the label a person acknowledges,
+and the gate requires it (see [`gateway.md`](./gateway.md)). `revision` counts
+writes. The seed gives every document the collection's `1.1`, so the move
+re-gated nobody.
+
+**Every environment gets the rows from a migration**,
+`20260927100100_app_foundational_documents_data`, because production migrates on
+every start and seeds only when asked ([`database-changes.md`](./database-changes.md)).
+Its JSON is `buildFoundationalSeed()`, and `foundational-seed.test.ts` fails if the
+two drift. The seed unit (`prisma/seeds/app-lelanea/015-foundational-documents.ts`,
+`fp4`) writes the same rows once, only while no collection row exists, so after
+the migration it skips, and a re-seed never undoes an admin edit. A change to the
+file does not reach an existing database; one that must, ships as a new `app_`
+migration, and an edit goes through the admin (t-91).
+
+`lib/app/content/foundational-seed.ts` is the one module that still imports
+`lelanea_foundational_documents.json`. It builds the seed, holds the section-key
+map, and provides the file-level placeholder checks. Nothing a request reaches
+should import it (t-89 makes that a rule).
+
 ## The loader
 
-`lib/app/content/index.ts`. Parses each file on first use and memoises for the
-life of the process; static JSON imports rather than `fs`, because `lib/app/**`
-may not touch Node built-ins.
+`lib/app/content/index.ts`, for the collections still read from files until
+t-87 and t-88. Parses each file on first use and memoises for the life of the
+process; static JSON imports rather than `fs`, because `lib/app/**` may not touch
+Node built-ins.
 
-| Function                          | Returns                                            |
-| --------------------------------- | -------------------------------------------------- |
-| `listFoundationalDocuments()`     | index in the collection's authored reading order   |
-| `getFoundationalDocument(id)`     | one document with blocks, or `null` for unknown id |
-| `getJourneyStructure()`           | five tiers, seventeen modules, their phases        |
-| `getDiscoveryQuestions()`         | the thirty onboarding questions + pacing           |
-| `getFoundationalCollectionMeta()` | collection id, title, version, locale              |
-| `getVoiceFingerprint()`           | the always-on voice core, and its provenance       |
-| `getVoiceOverlays()`              | the register overlays, their labelling copy        |
-| `findPlaceholders(text)`          | merge fields in a string, deduplicated             |
-| `listDeclaredPlaceholders()`      | placeholders the documents declare                 |
-| `listOccurringPlaceholders()`     | placeholders actually present in the prose         |
-
-`getFoundationalDocument` returns `null` rather than throwing, so the caller owns
-the 404 / `notFound()` decision.
+| Function                      | Returns                                                           |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `getJourneyStructure()`       | five tiers, seventeen modules, their phases                       |
+| `getDiscoveryQuestions()`     | the thirty onboarding questions + pacing                          |
+| `getVoiceFingerprint()`       | the always-on voice core, and its provenance                      |
+| `getVoiceOverlays()`          | the register overlays, their labelling copy                       |
+| `findPlaceholders(text)`      | merge fields in a string, deduplicated                            |
+| `listDeclaredPlaceholders()`  | placeholders the file declares (`foundational-seed.ts`)           |
+| `listOccurringPlaceholders()` | placeholders present in the file's prose (`foundational-seed.ts`) |
 
 **Everything the loader returns is memoised and deeply frozen.** Each accessor
 projects once and hands out that same object on every later call — the served
@@ -275,56 +339,70 @@ mounts this, and so does setting the surface.
 
 ## Selecting part of a document
 
-`lib/app/content/sections.ts`. A **designed page** shows one part of a document
-inside the site's own chrome — `/data` lifts the disclaimer's "what it is",
-"what it is not", crisis guidance and coaching-versus-therapy sections into
-columns, cards and a red box, and links to `/disclaimer` for the whole thing.
+`lib/app/content/sections.ts`. A **designed surface** shows one part of a
+document inside the site's own chrome. `/data` lifts the disclaimer's "what it
+is", "what it is not", crisis guidance and coaching-versus-therapy sections into
+columns, cards and a red box. The home page's hero, quote band and cards, and
+both emails, quote passages too.
 
-The alternative was retyping those into a `const` beside the layout, which is the
-drift this whole pipeline exists to stop — and worst on the page a visitor
-looking for therapy reads before deciding.
+**Passages are named by section key (t-86).** Every stored block carries a
+`section` key or `null`. The owner named the keys (journal: "Section keys for her
+documents (t-86)"), and the seed puts them on the blocks from the map in
+`foundational-seed.ts`, pinning each range by its first and last words:
 
-| Function                             | Returns                                              |
-| ------------------------------------ | ---------------------------------------------------- |
-| `requireDocument(id)`                | a document, throwing rather than returning `null`    |
-| `selectSection(doc, heading, opts?)` | the blocks under a heading; `includeHeading` adds it |
-| `selectSectionText(doc, heading)`    | that section's paragraphs and list items as strings  |
-| `paragraphAt(doc, n)`                | one paragraph; negative counts from the end          |
-| `paragraphRange(doc, from, to)`      | a half-open run of paragraphs                        |
-| `listSectionHeadings(doc)`           | every heading, in authored order                     |
+| Document                   | Key              | Shown on                             |
+| -------------------------- | ---------------- | ------------------------------------ |
+| `the_initiation`           | `welcome`        | the welcome email                    |
+|                            | `invitation`     | home card 1, the waitlist email      |
+|                            | `guide`          | home card 2                          |
+| `the_heart_behind_lelanea` | `invitation`     | home `h1`                            |
+|                            | `purpose`        | home lede, home meta description     |
+|                            | `remembrance`    | home quote band                      |
+| `disclaimer`               | `purpose`        | `/data`, "it is designed to support" |
+|                            | `purpose_limits` | `/data`, beneath both columns        |
+|                            | `is_not`         | `/data`, "it is not"                 |
+|                            | `is_not_context` | `/data`, the note under that column  |
+|                            | `coaching`       | `/data`, coaching and therapy        |
+|                            | `crisis`         | `/data`, the crisis box              |
+|                            | `commitment`     | home card 3                          |
+
+A key's blocks must be contiguous; `storedDocumentBlocksSchema` rejects a key
+that resumes after another block. Keys are in the API response (`sections` on
+the document, `section` on each block). Which sections a surface shows is that
+client's decision.
+
+| Function                         | Returns                                                |
+| -------------------------------- | ------------------------------------------------------ |
+| `requireDocument(id)`            | a document, throwing rather than returning `null`      |
+| `selectSection(doc, key, opts?)` | the key's blocks; a heading only with `includeHeading` |
+| `selectSectionText(doc, key)`    | the key's paragraphs and list items; never empty       |
+| `selectSectionHeading(doc, key)` | the key's heading, for a surface that sets it aside    |
 
 **Everything here throws rather than degrading, and that is the design.** An
 empty result is a page that renders its "it is not" column as a blank box under
 a green tick and says nothing at all — silently, on the most legally sensitive
 surface in the site. A 500 on a content-integrity failure is loud and correct.
 
-Nothing reaches production either way: `tests/unit/lib/app/content/sections.test.ts`
-pins **every handle a page selects by** — the four disclaimer headings, the three
-paragraph ranges the home page's cards use, the four positions its hero and quote
-band read. A renamed heading or a beat inserted upstream of a range fails there,
-naming it.
+`tests/unit/lib/app/content/sections.test.ts` pins the opening and closing words
+of every key a surface uses, and proves a block inserted above a key moves
+nothing. `foundational-seed.test.ts` proves a range whose pins no longer match
+fails the seed rather than keying the wrong passage.
 
-**Prefer a heading to a position.** `selectSection` is stable under editing;
-`paragraphRange` is not, and exists for `the_initiation`, which has seventy beats
-and no headings at all. Where a position is unavoidable, pin both ends of it.
-
-**A selector string may be a literal; a rendered string may not.** `/data` holds
-`'What Lelañea Is Not'` in its source as the argument to `selectSection` — that
-is fine, because a drifted heading throws. Rendering that same constant as the
-visible heading is not: pass `includeHeading` and let the words come from the
-document. The distinction is enforced by
-`tests/unit/app/public/authored-provenance.test.ts`, which scans paragraph and
-list text only, for exactly this reason.
+**A heading reaches the screen by being read, never typed.** Pass
+`includeHeading` or call `selectSectionHeading` and let the words come from the
+row.
 
 ## No authored sentence is typed into the public site
 
 The owner's t-6 ruling: **the authored documents win outright.** The prototype
 supplies layout, section labels, eyebrows and rules; every sentence a visitor
-reads is rendered from the JSON at run time. Where the two disagree — and they
+reads is rendered from the database at request time (the rows are seeded from the
+JSON). Where the two disagree — and they
 do, often — the document is right.
 
 `tests/unit/app/public/authored-provenance.test.ts` enforces it across
-`app/(public)/**` and `components/app/site/**`. Every run of six consecutive
+`app/(public)/**`, `components/app/site/**` and, since t-86,
+`components/app/emails/**`. Every run of six consecutive
 words in every authored paragraph is a sentinel, and none may appear in source
 with comments stripped and punctuation normalised. Six words catches a **re-cut**
 — a sentence with a clause trimmed off the front, which is the failure that
@@ -422,7 +500,11 @@ a document, resolves; ids are unique within each list.
 
 ## Storage
 
-Repository JSON this phase, by decision A2. DB-backed authoring is deferred with
-an explicit trigger: **the first time content must change without a deploy.** The
-loader's function signatures are the seam — moving behind a database should not
-change a caller.
+Her foundational documents are in the database since t-86 (above). The trigger
+decision A2 named for that move — "the first time content must change without a
+deploy" — is the owner's 22 September 2026 ask that every seeded collection be
+manageable from the admin. The rule for every collection is the journal decision
+"Storage: relational is authoritative for every seeded collection; the vector
+store indexes only her prose". The journey, the questions and the resources
+follow in t-87, the voice files in t-88. The function names were kept as the
+seam, so callers changed only by becoming async.

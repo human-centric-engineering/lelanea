@@ -19,6 +19,12 @@ import { render, screen } from '@testing-library/react';
 import { cloneElement, isValidElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
+
 const { env, findMany, redirect, clearInvalidSession, getServerSession } = vi.hoisted(() => ({
   env: { REQUIRE_EMAIL_VERIFICATION: false, NODE_ENV: 'test' },
   findMany: vi.fn(),
@@ -50,9 +56,23 @@ vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
 import BeginPage, { metadata } from '@/app/(gate)/app/begin/page';
 import { STEP_COPY } from '@/components/app/views/begin-view';
 import { AGE_18_VERSION } from '@/lib/app/gateway/acknowledgements';
-import { getFoundationalCollectionMeta, getFoundationalDocument } from '@/lib/app/content';
+import {
+  fakeDocumentStore,
+  rewriteSection,
+  seededCollection,
+  seededDocumentRows,
+} from '@/tests/helpers/app/foundational-documents';
 
-const VERSION = getFoundationalCollectionMeta().version;
+const store = fakeDocumentStore();
+
+/** A document as the seed stores it — read synchronously for building expectations. */
+function seeded(id: string) {
+  const row = seededDocumentRows().find((candidate) => candidate.id === id);
+  if (!row) throw new Error(`no seeded document ${id}`);
+  return row;
+}
+
+const VERSION = seededCollection().version;
 const SESSION = {
   user: { id: 'u1', name: 'Maya Reyes', email: 'maya@example.com', emailVerified: true },
 };
@@ -80,21 +100,21 @@ async function renderPage() {
 }
 
 /**
- * A paragraph of an authored document — a sentence only the file has. The
+ * A paragraph of an authored document — a sentence only her document has. The
  * first one WITHOUT a placeholder: outside production the renderer wraps an
  * unresolved `[Support Email]` in its own element, which splits the text.
  */
 function firstParagraph(id: string): string {
-  const doc = getFoundationalDocument(id)!;
-  const block = doc.blocks.find(
-    (candidate) => candidate.type === 'paragraph' && !/[[{]/.test(candidate.text)
+  const block = (seeded(id).blocks as { type: string; text?: string }[]).find(
+    (candidate) => candidate.type === 'paragraph' && !/[[{]/.test(candidate.text ?? '')
   );
-  if (!block || block.type !== 'paragraph') throw new Error(`no plain paragraph in ${id}`);
+  if (!block?.text) throw new Error(`no plain paragraph in ${id}`);
   return block.text.replace(/\*\*/g, '').slice(0, 40);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  store.reset();
   env.REQUIRE_EMAIL_VERIFICATION = false;
   findMany.mockResolvedValue([]);
   getServerSession.mockResolvedValue(SESSION);
@@ -119,7 +139,20 @@ describe('/app/begin', () => {
     await expect(BeginPage()).rejects.toThrow('redirected:/verify-email?email=maya%40example.com');
   });
 
-  it('opens on the disclaimer, in full and from the content file, with its control', async () => {
+  it('renders the disclaimer the DATABASE holds, not the file', async () => {
+    // t-86: a stored row that differs from the file is what a person agrees to.
+    store.editBlocks('disclaimer', (blocks) =>
+      rewriteSection(blocks, 'crisis', () => 'An edit that exists only in the database row.')
+    );
+
+    await renderPage();
+
+    expect(
+      screen.getAllByText('An edit that exists only in the database row.').length
+    ).toBeGreaterThan(0);
+  });
+
+  it('opens on the disclaimer, in full and from the stored document, with its control', async () => {
     await renderPage();
 
     expect(screen.getByText(firstParagraph('disclaimer'), { exact: false })).toBeTruthy();
@@ -128,7 +161,7 @@ describe('/app/begin', () => {
     // One h1 — the step's — and the document's own title one level down.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
-      screen.getByRole('heading', { level: 2, name: getFoundationalDocument('disclaimer')!.title })
+      screen.getByRole('heading', { level: 2, name: seeded('disclaimer').title })
     ).toBeTruthy();
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: STEP_COPY.disclaimer.action })).toBeTruthy();

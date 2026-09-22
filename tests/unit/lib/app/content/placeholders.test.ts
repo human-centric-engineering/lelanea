@@ -24,17 +24,26 @@
  * substitutes, and no others" is what stops a literal `[Support Email]` reaching
  * a reader, and it is worth having in any fork.
  *
- * @see lib/app/content/index.ts — `PLACEHOLDER_PATTERN`, `findPlaceholders`
+ * @see lib/app/content/placeholders.ts — `PLACEHOLDER_PATTERN`, `findPlaceholders`
  */
 
 import { describe, it, expect } from 'vitest';
+import { findPlaceholders } from '@/lib/app/content';
 import {
-  findPlaceholders,
-  getFoundationalDocument,
+  buildFoundationalSeed,
   listDeclaredPlaceholders,
-  listFoundationalDocuments,
   listOccurringPlaceholders,
-} from '@/lib/app/content';
+} from '@/lib/app/content/foundational-seed';
+
+/**
+ * Her documents as the seed builds them from the file (t-86). These cases check
+ * the FILE, which the running app no longer reads, so they read what the seed
+ * would write rather than a database.
+ */
+const seeded = buildFoundationalSeed();
+const listFoundationalDocuments = () => seeded;
+const getFoundationalDocument = (id: string) =>
+  seeded.documents.find((document) => document.id === id) ?? null;
 
 /** Every merge field the app knows how to deal with. Grow this deliberately. */
 const KNOWN_PLACEHOLDERS = ['[Month Day, Year]', '[Support Email]', '{{first_name}}'];

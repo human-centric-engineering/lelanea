@@ -56,12 +56,9 @@
 import { z } from 'zod';
 
 import rawResources from '@/seed-data/drafted/lelanea_resources.json';
-import {
-  getJourneyStructure,
-  listFoundationalDocuments,
-  type DeepReadonly,
-} from '@/lib/app/content';
+import { getJourneyStructure, type DeepReadonly } from '@/lib/app/content';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
+import { readFoundationalDocumentsFile } from '@/lib/app/content/foundational-seed';
 import type { ModuleTier } from '@/lib/app/content/schemas';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
@@ -283,7 +280,9 @@ function getResourcesFile(): DeepReadonly<ResourcesFile> {
   if (parsed === null) {
     const schema = buildResourcesFileSchema({
       moduleIds: new Set(getJourneyStructure().modules.map((m) => m.id)),
-      documentIds: new Set(listFoundationalDocuments().documents.map((d) => d.id)),
+      // The seed file, not the table: this checks one bundled file against
+      // another, and t-87 moves both halves of it into the seed.
+      documentIds: new Set(readFoundationalDocumentsFile().documents.map((d) => d.id)),
     });
     parsed = deepFreezeParsed(schema.parse(rawResources));
   }

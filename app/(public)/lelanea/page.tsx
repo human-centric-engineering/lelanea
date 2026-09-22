@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/lelanea' },
 };
 
+/** Read at request time: her words are in the database (t-86). See the home page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * `/lelanea` — the philosophy, the creator, and the lineage.
  *
@@ -63,10 +66,12 @@ export const metadata: Metadata = {
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-lelanea`
  */
-export default function LelaneaPage() {
-  const philosophy = requireDocument('the_heart_behind_lelanea');
-  const creator = requireDocument('about_the_creator');
-  const lineage = requireDocument('the_lineage_of_lelanea');
+export default async function LelaneaPage() {
+  const [philosophy, creator, lineage] = await Promise.all([
+    requireDocument('the_heart_behind_lelanea'),
+    requireDocument('about_the_creator'),
+    requireDocument('the_lineage_of_lelanea'),
+  ]);
 
   return (
     <div className={styles.page}>

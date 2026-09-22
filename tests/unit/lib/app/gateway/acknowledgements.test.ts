@@ -2,22 +2,28 @@
  * The acknowledgement ledger: what is required, what one person has satisfied,
  * and how a repeat is answered.
  *
- * The content loader is REAL — the required versions come from the authored
- * collection on disk, so a version bump in the file changes what these cases
- * see. Prisma is a stub: the cases assert the queries the module issues and
- * how it reads what comes back, not what Postgres would do with them (the
- * unique index that makes a repeat idempotent is pinned by the migration and
- * exercised at the route level as a P2002).
+ * Her documents come from the fake store in
+ * `tests/helpers/app/foundational-documents.ts`, which holds exactly the rows the
+ * real seed writes, so the required versions are the seeded ones: a version bump
+ * in the file changes what these cases see. Since t-86 each document carries its
+ * own version, and the cases that edit one row prove the gate reads that row.
+ * Prisma is a stub for the ledger itself: the cases assert the queries the
+ * module issues and how it reads what comes back, not what Postgres would do
+ * with them (the unique index that makes a repeat idempotent is pinned by the
+ * migration and exercised at the route level as a P2002).
  *
- * FORK NOTE — this reads `lib/app/content` for real, not through a mock. The
- * required versions ARE the authored collection's version, so mocking the
- * loader would turn the re-gate cases into assertions about a constant this
- * file wrote. A fork with its own content file should expect `COLLECTION_VERSION`
- * to read theirs, and the mapping case to demand a kind for every document
- * they mark `requiresAcknowledgement`.
+ * FORK NOTE — a fork with its own content file should expect `COLLECTION_VERSION`
+ * to read theirs, and the mapping case to demand a kind for every document they
+ * mark `requiresAcknowledgement`.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -43,10 +49,12 @@ import {
   listAcknowledgementRequiredDocumentIds,
   recordAcknowledgement,
 } from '@/lib/app/gateway/acknowledgements';
-import { getFoundationalCollectionMeta, listFoundationalDocuments } from '@/lib/app/content';
+import { listFoundationalDocuments } from '@/lib/app/content/document-store';
+import { fakeDocumentStore, seededCollection } from '@/tests/helpers/app/foundational-documents';
 
-/** The version the two documents currently require — read, not written down. */
-const COLLECTION_VERSION = getFoundationalCollectionMeta().version;
+/** The version the seed gives both documents — read, not written down. */
+const COLLECTION_VERSION = seededCollection().version;
+const store = fakeDocumentStore();
 
 const AT = new Date('2026-09-14T10:00:00.000Z');
 
@@ -56,12 +64,13 @@ function row(kind: string, documentVersion: string, acknowledgedAt = AT) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  store.reset();
   findMany.mockResolvedValue([]);
 });
 
 describe('what is required', () => {
-  it('requires the collection version for both documents and the age constant', () => {
-    expect(getRequiredVersions()).toEqual({
+  it('requires the seeded version for both documents and the age constant', async () => {
+    expect(await getRequiredVersions()).toEqual({
       disclaimer: COLLECTION_VERSION,
       terms: COLLECTION_VERSION,
       age_18: AGE_18_VERSION,
@@ -70,17 +79,38 @@ describe('what is required', () => {
     expect(COLLECTION_VERSION).toMatch(/\S/);
   });
 
-  it('has a kind for EVERY document the authored file says must be acknowledged', () => {
+  it("requires each legal document's OWN version, read from its row", async () => {
+    // t-86: the version is per document. A new version of the Terms re-gates
+    // the Terms and nothing else; a change to the mission re-gates nobody.
+    store.editRow('terms_of_use', { version: '2.0' });
+    store.editRow('the_mission', { version: '9.9' });
+
+    expect(await getRequiredVersions()).toEqual({
+      disclaimer: COLLECTION_VERSION,
+      terms: '2.0',
+      age_18: AGE_18_VERSION,
+    });
+  });
+
+  it('throws when a legal document is missing, rather than requiring nothing', async () => {
+    store.empty();
+
+    await expect(getRequiredVersions()).rejects.toThrow(/db:seed/);
+  });
+
+  it('has a kind for EVERY document the stored rows say must be acknowledged', async () => {
     // The mapping is explicit (the kind is a database enum); this is the other
     // direction. An author adding `requiresAcknowledgement: true` to a third
     // document would otherwise ship a document nobody is ever asked to agree to.
-    const required = listAcknowledgementRequiredDocumentIds().sort();
+    const required = (await listAcknowledgementRequiredDocumentIds()).sort();
     expect(required.length).toBeGreaterThan(0);
     expect(required).toEqual(Object.values(DOCUMENT_FOR_KIND).sort());
   });
 
-  it('maps each document kind to a document that exists', () => {
-    const ids = new Set(listFoundationalDocuments().documents.map((document) => document.id));
+  it('maps each document kind to a document that exists', async () => {
+    const ids = new Set(
+      (await listFoundationalDocuments()).documents.map((document) => document.id)
+    );
     for (const documentId of Object.values(DOCUMENT_FOR_KIND)) {
       expect(ids.has(documentId), `${documentId} is not in the collection`).toBe(true);
     }

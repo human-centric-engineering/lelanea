@@ -10,15 +10,22 @@
  * the pass-through case asserts only that no redirect was thrown — what the
  * frame then contains is `tests/unit/components/app/shell/shell-layout.test.tsx`.
  *
- * FORK NOTE — this reads `lib/app/gateway/*` and `lib/app/content` for real,
- * because the re-gate case depends on the ledger matching rows against the
- * version the content file actually carries. A fork with its own gate should
+ * FORK NOTE — this reads `lib/app/gateway/*` for real, and her documents as
+ * the seed stores them (`tests/helpers/app/foundational-documents.ts`), because
+ * the re-gate case depends on the ledger matching rows against the version the
+ * seeded documents actually carry. A fork with its own gate should
  * expect to replace this file rather than pin ours.
  *
  * @see app/(lelanea)/app/layout.tsx · lib/app/gateway/gate.ts
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 
 const { env, findMany, redirect, clearInvalidSession } = vi.hoisted(() => ({
   env: { REQUIRE_EMAIL_VERIFICATION: false, NODE_ENV: 'test' },
@@ -54,9 +61,9 @@ vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
 
 import ShellLayout from '@/app/(lelanea)/app/layout';
 import { AGE_18_VERSION } from '@/lib/app/gateway/acknowledgements';
-import { getFoundationalCollectionMeta } from '@/lib/app/content';
+import { seededCollection } from '@/tests/helpers/app/foundational-documents';
 
-const VERSION = getFoundationalCollectionMeta().version;
+const VERSION = seededCollection().version;
 const AT = new Date('2026-09-01T00:00:00.000Z');
 
 function row(kind: string, documentVersion: string) {

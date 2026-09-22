@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/terms' },
 };
 
+/** Read at request time: her words are in the database (t-86). See the home page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * `/terms` — the Terms of Use, as written.
  *
@@ -40,8 +43,8 @@ export const metadata: Metadata = {
  * @see .context/app/divergences.md — row 9
  * @see .context/app/content.md — the pipeline
  */
-export default function TermsOfUsePage() {
-  const terms = requireDocument('terms_of_use');
+export default async function TermsOfUsePage() {
+  const terms = await requireDocument('terms_of_use');
 
   return (
     <div className={styles.page}>

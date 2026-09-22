@@ -26,6 +26,12 @@ import userEvent from '@testing-library/user-event';
 import { cloneElement, isValidElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
+
 const flag = vi.hoisted(() => ({ enabled: false }));
 /** `name` is nullable and `current` is too — both are cases these tests drive. */
 const session = vi.hoisted(() => ({
@@ -53,7 +59,7 @@ vi.mock('@/lib/db/client', () => ({
     appAcknowledgement: {
       findMany: vi.fn(async () => {
         const { getRequiredVersions } = await import('@/lib/app/gateway/acknowledgements');
-        return Object.entries(getRequiredVersions()).map(([kind, documentVersion]) => ({
+        return Object.entries(await getRequiredVersions()).map(([kind, documentVersion]) => ({
           kind,
           documentVersion,
           acknowledgedAt: new Date('2026-09-01T00:00:00.000Z'),

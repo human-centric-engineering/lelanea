@@ -3,8 +3,8 @@
  *
  * The owner's t-6 ruling is that the authored documents win outright: the
  * prototype supplies layout, eyebrows and rules, and every sentence a visitor
- * reads is rendered from `content/lelanea_foundational_documents.json` at run
- * time. This is the test that makes that a property of the tree rather than an
+ * reads is rendered from `app_foundational_document` at request time (t-86; the
+ * rows are seeded from `content/lelanea_foundational_documents.json`). This is the test that makes that a property of the tree rather than an
  * intention, and it is the done-when line the task asks for.
  *
  * ## Why a rule needs a test at all
@@ -36,12 +36,12 @@
  *
  * ## What is deliberately NOT scanned
  *
- * **Headings.** `/data` selects three sections of the disclaimer by their
- * authored headings, so `'What Lelañea Is Not'` is necessarily a literal in
- * that file — as a SELECTOR. Heading drift is guarded a different way and
- * better: `selectSection` throws when a heading is not found, so a renamed
- * heading fails loudly at render and in `sections.test.ts` rather than
- * rendering stale words. Only paragraph and list-item text goes into the pool.
+ * **Headings.** Only paragraph and list-item text goes into the pool. Before
+ * t-86 `/data` selected disclaimer sections by their heading text, so headings
+ * were necessarily literals in that file. Since t-86 surfaces select by section
+ * key, and a heading reaches the screen only by being read from the row
+ * (`selectSectionHeading`, `includeHeading`). Headings are short title-case
+ * labels, and six-word windows over them would mostly be noise.
  *
  * **Everything outside the public site.** The scan is the public surface, which
  * is where her documents are published. A future authoring or admin surface
@@ -50,16 +50,17 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE
  * ---------------------------------------------------------------------------
- * This reads the REAL `@/lib/app/content` seam, deliberately and unavoidably:
- * the whole assertion is "this tree's source does not contain this tree's
- * authored prose", and a mocked document would compare two things that were
- * never at risk of being the same.
+ * This reads her REAL words — the documents as the seed builds them from
+ * `content/`, which is exactly what a fresh database serves — deliberately and
+ * unavoidably: the whole assertion is "this tree's source does not contain this
+ * tree's authored prose", and a mocked document would compare two things that
+ * were never at risk of being the same.
  *
  * A fork arriving here has one of two shapes. If it kept `content/*.json` and
  * the pages, this passes as written and is worth keeping — it is what stops
  * the fork's own edits from reintroducing an inlined sentence. If the fork
  * replaced the content with its own, this still works unchanged: the pool is
- * derived from whatever `listFoundationalDocuments()` returns, so it guards the
+ * derived from whatever `buildFoundationalSeed()` returns, so it guards the
  * new copy on arrival with nothing to update.
  *
  * A fork that removed the authored-content pipeline entirely should DELETE this
@@ -68,7 +69,7 @@
  * fork with a smaller corpus should lower them rather than remove them, since
  * a pool that has quietly emptied is the failure they exist to catch.
  *
- * What NOT to do is add a `vi.mock` of the loader. It would turn a real
+ * What NOT to do is replace the seed with a fixture. It would turn a real
  * invariant into a tautology while leaving the file looking like a guard.
  */
 
@@ -77,7 +78,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { listFoundationalDocuments, getFoundationalDocument } from '@/lib/app/content';
+import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
 
 /** Consecutive words per sentinel. See the header for why six. */
 const WINDOW = 6;
@@ -89,9 +90,11 @@ const REPO_ROOT = path.resolve(__dirname, '../../../..');
  *
  * `app/(public)` is the pages; `components/app/site` is the header, footer and
  * waitlist card, which are just as capable of carrying a retyped sentence and
- * would carry it on every page at once.
+ * would carry it on every page at once. `components/app/emails` joined in t-86:
+ * the welcome and waitlist emails quote her too, and an inbox is as public as a
+ * page.
  */
-const SCANNED_DIRS = ['app/(public)', 'components/app/site'];
+const SCANNED_DIRS = ['app/(public)', 'components/app/site', 'components/app/emails'];
 
 function sourceFilesIn(dir: string): string[] {
   const absolute = path.join(REPO_ROOT, dir);
@@ -146,10 +149,7 @@ function sentinels(text: string): string[] {
 
 /** Every authored paragraph and list item, across every document. */
 function authoredProse(): { documentId: string; text: string }[] {
-  return listFoundationalDocuments().documents.flatMap((summary) => {
-    const document = getFoundationalDocument(summary.id);
-    if (!document) throw new Error(`Document "${summary.id}" is indexed but does not resolve.`);
-
+  return buildFoundationalSeed().documents.flatMap((document) => {
     return document.blocks.flatMap((block) => {
       if (block.type === 'paragraph') return [{ documentId: document.id, text: block.text }];
       if (block.type === 'list') {
@@ -177,6 +177,8 @@ describe('authored provenance on the public site', () => {
     expect(relative).toContain('app/(public)/disclaimer/page.tsx');
     expect(relative).toContain('app/(public)/terms/page.tsx');
     expect(relative).toContain('components/app/site/site-footer.tsx');
+    expect(relative).toContain('components/app/emails/welcome.tsx');
+    expect(relative).toContain('components/app/emails/waitlist-confirmation.tsx');
   });
 
   it('has sentinels to look for', () => {

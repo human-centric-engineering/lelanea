@@ -34,8 +34,14 @@ import {
   type ResourcesFile,
   type ResourceModuleRef,
 } from '@/lib/app/content/resources';
-import { getFoundationalDocument, getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content';
+import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
 import { getValuesModule } from '@/lib/app/content/values';
+
+/** Her documents as the seed builds them from the file (t-86). */
+const seeded = buildFoundationalSeed();
+const getFoundationalDocument = (id: string) =>
+  seeded.documents.find((document) => document.id === id) ?? null;
 
 // ============================================================================
 // 1. The real file

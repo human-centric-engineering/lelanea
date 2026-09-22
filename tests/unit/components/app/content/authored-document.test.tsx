@@ -3,18 +3,19 @@
 /**
  * AuthoredDocument — the one renderer for Lelañea Fulton's foundational documents.
  *
- * These cases are written against the REAL content, loaded through
- * `lib/app/content`, because the property under test is "what she wrote is what
- * a reader sees". A fixture would prove the renderer consistent with a fixture.
+ * These cases are written against the REAL content, as the seed stores it and
+ * the store serves it (`tests/helpers/app/foundational-documents.ts`), because
+ * the property under test is "what she wrote is what a reader sees". A fixture
+ * would prove the renderer consistent with a fixture.
  *
  * The expectations are derived from the authored blocks rather than pasted, so
  * the suite cannot rot as copy is corrected — but the set of documents it walks
  * is pinned, so a content change that removed one could not quietly shrink the
  * test to nothing.
  *
- * FORK NOTE — this reads the real `lib/app/content` seam (no `vi.mock`), so a
- * fork that has not filled `content/` has nothing for these cases to render.
- * The seam here is the LOADER, not the renderer: `AuthoredDocument` takes a
+ * FORK NOTE — this reads the seeded content, so a fork that has not filled
+ * `content/` has nothing for these cases to render. The seam here is the
+ * SEED, not the renderer: `AuthoredDocument` takes a
  * plain `FoundationalDocumentDetail`, so a fork keeps the component as-is and
  * repoints the fixtures. Pin your own document ids in `DOCUMENT_IDS` and your
  * own merge-field sites in the D7 block; every other case builds its input with
@@ -39,11 +40,10 @@ import {
   applyFirstName,
   tokenizeInline,
 } from '@/components/app/content/authored-document';
-import {
-  getFoundationalDocument,
-  listFoundationalDocuments,
-  type FoundationalDocumentDetail,
-} from '@/lib/app/content';
+import type { FoundationalDocumentDetail } from '@/lib/app/content';
+import { toDocumentDetail } from '@/lib/app/content/document-view';
+import type { DocumentBlock } from '@/lib/app/content/schemas';
+import { seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
 
 vi.mock('@/lib/env', () => ({ env: { NODE_ENV: 'test' } }));
 
@@ -58,10 +58,17 @@ const DOCUMENT_IDS = [
   'terms_of_use',
 ] as const;
 
+/**
+ * Her documents as the store serves them: the rows the seed writes, through the
+ * real projection (t-86). The renderer takes a plain document, so no query is
+ * needed to test it.
+ */
+const seeded = seededDocumentRows();
+
 function load(id: string): FoundationalDocumentDetail {
-  const doc = getFoundationalDocument(id);
-  if (doc === null) throw new Error(`authored document '${id}' is missing`);
-  return doc;
+  const row = seeded.find((candidate) => candidate.id === id);
+  if (!row) throw new Error(`authored document '${id}' is missing`);
+  return toDocumentDetail(row);
 }
 
 /**
@@ -95,7 +102,14 @@ function renderedBlocks(container: HTMLElement): Element[] {
   return Array.from(container.querySelectorAll('article > :not(header)'));
 }
 
-function synthetic(overrides: Partial<FoundationalDocumentDetail>): FoundationalDocumentDetail {
+/**
+ * A document built for one case. Its blocks are written as the file writes
+ * them, and get the `section: null` a stored block carries.
+ */
+function synthetic(
+  overrides: Partial<Omit<FoundationalDocumentDetail, 'blocks'>> & { blocks?: DocumentBlock[] }
+): FoundationalDocumentDetail {
+  const { blocks = [], ...rest } = overrides;
   return {
     id: 'synthetic',
     title: 'Synthetic',
@@ -106,16 +120,19 @@ function synthetic(overrides: Partial<FoundationalDocumentDetail>): Foundational
     placeholders: [],
     renderStyle: null,
     renderNote: null,
-    blockCount: 0,
-    blocks: [],
-    ...overrides,
+    version: '1',
+    locale: 'en-US',
+    revision: 1,
+    sections: [],
+    blockCount: blocks.length,
+    ...rest,
+    blocks: blocks.map((block) => ({ ...block, section: null })),
   };
 }
 
 describe('the seven documents render block for block', () => {
   it('walks exactly the seven documents the collection declares', () => {
-    const index = listFoundationalDocuments();
-    expect(index.documents.map((doc) => doc.id)).toEqual([...DOCUMENT_IDS]);
+    expect(seeded.map((doc) => doc.id)).toEqual([...DOCUMENT_IDS]);
   });
 
   it.each(DOCUMENT_IDS)('%s renders every block, in order, at the right level', (id) => {
@@ -344,11 +361,18 @@ describe('{{first_name}} (decision D7)', () => {
     expect(applyFirstName('And that matters.', null)).toBe('And that matters.');
   });
 
-  it('never writes the substitution back into the memoised document', () => {
-    render(<AuthoredDocument document={initiation()} firstName="Maya" />);
+  it('never writes the substitution back into the document it was given', () => {
+    // Since t-86 a document is read per request rather than memoised, but the
+    // caller may still hold and reuse the object, so the renderer must not
+    // write to it.
+    const document = initiation();
+    render(<AuthoredDocument document={document} firstName="Maya" />);
 
-    const reloaded = load('the_initiation');
-    expect(reloaded.blocks[0]).toEqual({ type: 'paragraph', text: 'Welcome, {{first_name}}.' });
+    expect(document.blocks[0]).toEqual({
+      type: 'paragraph',
+      text: 'Welcome, {{first_name}}.',
+      section: 'welcome',
+    });
   });
 });
 

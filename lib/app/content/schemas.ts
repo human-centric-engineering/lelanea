@@ -78,6 +78,59 @@ export const documentBlockSchema = z.discriminatedUnion('type', [
   listBlockSchema,
 ]);
 
+/**
+ * A section key: lower snake case, such as `purpose_limits`.
+ *
+ * Keys are how a surface names the passage it shows (t-86). They are named by the
+ * owner, and they go out on the API, where a native client may depend on them. So
+ * the shape is kept narrow enough to read as a name in a URL, a log line or a map
+ * key.
+ */
+export const sectionKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
+
+/**
+ * A block as the database stores and serves it: the authored block, plus the
+ * section it belongs to, or `null` where no surface names it.
+ *
+ * The section is a field on the block rather than a range elsewhere, so an edit
+ * that inserts a block cannot silently shift which blocks a key covers.
+ */
+export const storedDocumentBlockSchema = z.discriminatedUnion('type', [
+  headingBlockSchema.extend({ section: sectionKeySchema.nullable() }),
+  paragraphBlockSchema.extend({ section: sectionKeySchema.nullable() }),
+  listBlockSchema.extend({ section: sectionKeySchema.nullable() }),
+]);
+
+/**
+ * A stored document's blocks, validated on every write and every read of
+ * `app_foundational_document.blocks`.
+ *
+ * A key's blocks must be contiguous. `selectSection` returns a key's blocks as
+ * one run, so a key that reappeared after an unrelated block would splice two
+ * passages together on the page. The seed cannot produce that, but an admin edit
+ * could, so it is rejected here, where both writes pass.
+ */
+export const storedDocumentBlocksSchema = z
+  .array(storedDocumentBlockSchema)
+  .min(1)
+  .superRefine((blocks, ctx) => {
+    const closed = new Set<string>();
+    let open: string | null = null;
+    blocks.forEach((block, index) => {
+      if (block.section !== open) {
+        if (open !== null) closed.add(open);
+        open = block.section;
+        if (open !== null && closed.has(open)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index, 'section'],
+            message: `Section "${open}" resumes after another block; a section's blocks must be contiguous`,
+          });
+        }
+      }
+    });
+  });
+
 export const foundationalDocumentSchema = z.strictObject({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -1093,6 +1146,7 @@ export type DocumentBlock = z.infer<typeof documentBlockSchema>;
 export type HeadingBlock = z.infer<typeof headingBlockSchema>;
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>;
 export type ListBlock = z.infer<typeof listBlockSchema>;
+export type StoredDocumentBlock = z.infer<typeof storedDocumentBlockSchema>;
 export type FoundationalDocument = z.infer<typeof foundationalDocumentSchema>;
 export type FoundationalDocumentsFile = z.infer<typeof foundationalDocumentsFileSchema>;
 export type JourneyModule = z.infer<typeof journeyModuleSchema>;

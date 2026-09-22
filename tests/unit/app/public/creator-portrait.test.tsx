@@ -19,6 +19,12 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@/lib/site/config', async (importOriginal) => ({
@@ -32,7 +38,7 @@ vi.mock('@/lib/site/config', async (importOriginal) => ({
 describe('/lelanea with a portrait', () => {
   it('renders the photograph instead of the stand-in', async () => {
     const { default: LelaneaPage } = await import('@/app/(public)/lelanea/page');
-    render(<LelaneaPage />);
+    render(await LelaneaPage());
 
     const portrait = screen.getByRole('img', { name: 'Lelañea Fulton' });
 
@@ -55,7 +61,7 @@ describe('/lelanea with a portrait', () => {
     // of a photograph — the image IS her, on the page about her, so what the
     // reader needs is an identification, not "portrait of a woman smiling".
     const { default: LelaneaPage } = await import('@/app/(public)/lelanea/page');
-    render(<LelaneaPage />);
+    render(await LelaneaPage());
 
     expect(screen.getByRole('img', { name: 'Lelañea Fulton' })).toBeTruthy();
     expect(screen.queryByRole('img', { name: /photo|portrait of a/i })).toBeNull();

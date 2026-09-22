@@ -11,21 +11,20 @@
  * ## A kind is satisfied by a version, not by ever having been acknowledged
  *
  * Each row carries the version it was given against. For `disclaimer` and
- * `terms` that is the foundational collection's own `version` — the two
- * documents are versioned together, in the file, by their author. For `age_18`
- * it is `AGE_18_VERSION`, a constant naming the threshold. A kind counts as
- * satisfied only when a row exists for the version required NOW, so bumping the
- * collection re-gates both documents by construction and nothing here has to
- * notice that it happened. The old rows stay: they are the record of what was
- * agreed before, and the Art. 15 export returns all of them.
+ * `terms` that is the document's own `version` in `app_foundational_document`
+ * (t-86). For `age_18` it is `AGE_18_VERSION`, a constant naming the threshold.
+ * A kind counts as satisfied only when a row exists for the version required
+ * NOW, so changing a document's version re-gates that document by construction
+ * and nothing here has to notice that it happened. The old rows stay: they are
+ * the record of what was agreed before, and the Art. 15 export returns all of
+ * them.
  *
- * That version is COLLECTION-wide — the content schema has no per-document
- * version, and the same string covers the five non-legal documents too. So the
- * authoring rule, recorded in `.context/app/gateway.md`: any edit to the
- * Disclaimer or the Terms text MUST bump `collection.version`, and a bump for
- * any other reason re-gates everyone. A per-document version is the change to
- * make if either side of that becomes a problem; it is a content-schema change
- * first and a one-line change here second.
+ * The version is PER DOCUMENT. Before t-86 it was the collection's, so any
+ * content change re-gated both legal documents. The seed gives every document
+ * the collection's version, so the move changed nobody's standing. A document
+ * row also has a `revision` that every write bumps. Whether an edit also changes
+ * `version`, and so asks everyone to agree again, is the editor's decision
+ * (t-91). `.context/app/gateway.md` records the rule.
  *
  * ## Storage-agnostic on purpose
  *
@@ -42,7 +41,10 @@ import type { AppAcknowledgement } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
-import { getFoundationalCollectionMeta, listFoundationalDocuments } from '@/lib/app/content';
+import {
+  getFoundationalDocument,
+  listFoundationalDocuments,
+} from '@/lib/app/content/document-store';
 import {
   ACKNOWLEDGEMENT_KINDS,
   type AcknowledgementKind,
@@ -79,22 +81,40 @@ export const DOCUMENT_FOR_KIND = {
 export type RequiredVersions = Record<AcknowledgementKind, string>;
 
 /**
- * What every kind currently requires — read from the content loader on each
- * call so a version bump is live without a restart of anything but the loader.
+ * What every kind currently requires, read from the database on each call.
+ *
+ * Each document-backed kind requires ITS OWN document's version (t-86). Before
+ * t-86 both read the collection's version, so re-wording the mission would have
+ * re-gated everyone on the Terms. The seed gives every document the
+ * collection's version (`1.1`), so nobody who agreed before this change is asked
+ * again.
+ *
+ * @throws when either legal document is missing from the database. A gate with
+ * no version to require would satisfy nobody, or everybody.
  */
-export function getRequiredVersions(): RequiredVersions {
-  const { version } = getFoundationalCollectionMeta();
-  return { disclaimer: version, terms: version, age_18: AGE_18_VERSION };
+export async function getRequiredVersions(): Promise<RequiredVersions> {
+  const [disclaimer, terms] = await Promise.all([
+    getFoundationalDocument(DOCUMENT_FOR_KIND.disclaimer),
+    getFoundationalDocument(DOCUMENT_FOR_KIND.terms),
+  ]);
+  if (!disclaimer || !terms) {
+    throw new Error(
+      'The acknowledgement gate cannot find the disclaimer or the terms in the database. ' +
+        'Run `npm run db:seed` (prisma/seeds/app-lelanea/015-foundational-documents.ts).'
+    );
+  }
+  return { disclaimer: disclaimer.version, terms: terms.version, age_18: AGE_18_VERSION };
 }
 
 /**
  * The ids of every foundational document that requires acknowledgement, as the
- * authored file declares them. Exposed for the mapping test; the gate itself
- * reads `DOCUMENT_FOR_KIND`.
+ * database holds them. Exposed for the mapping test; the gate itself reads
+ * `DOCUMENT_FOR_KIND`.
  */
-export function listAcknowledgementRequiredDocumentIds(): string[] {
-  return listFoundationalDocuments()
-    .documents.filter((document) => document.requiresAcknowledgement)
+export async function listAcknowledgementRequiredDocumentIds(): Promise<string[]> {
+  const { documents } = await listFoundationalDocuments();
+  return documents
+    .filter((document) => document.requiresAcknowledgement)
     .map((document) => document.id);
 }
 
@@ -132,12 +152,13 @@ export interface GateStatus {
  * being asked for.
  */
 export async function getGateStatus(userId: string): Promise<GateStatus> {
-  const required = getRequiredVersions();
-  const rows = await prisma.appAcknowledgement.findMany({
-    where: { userId },
-    select: { kind: true, documentVersion: true, acknowledgedAt: true },
-  });
-
+  const [required, rows] = await Promise.all([
+    getRequiredVersions(),
+    prisma.appAcknowledgement.findMany({
+      where: { userId },
+      select: { kind: true, documentVersion: true, acknowledgedAt: true },
+    }),
+  ]);
   const kinds = ACKNOWLEDGEMENT_KINDS.map((kind): KindStatus => {
     const requiredVersion = required[kind];
     const match = rows.find((row) => row.kind === kind && row.documentVersion === requiredVersion);
@@ -204,7 +225,7 @@ export async function recordAcknowledgement(
   userId: string,
   kind: AcknowledgementKind
 ): Promise<RecordAcknowledgementResult> {
-  const documentVersion = getRequiredVersions()[kind];
+  const documentVersion = (await getRequiredVersions())[kind];
   const select = { id: true, kind: true, documentVersion: true, acknowledgedAt: true } as const;
 
   try {

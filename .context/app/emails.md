@@ -57,13 +57,14 @@ ground, the reason-for-receipt and the legal line. Templates put words in
 ## The welcome is the Initiation, verbatim
 
 Her words are never paraphrased in the build ([`content.md`](./content.md)). So
-the greeting is `the_initiation`'s opening run — beats `[0, 7)`, "Welcome,
-{{first_name}}." through "Welcome to Lelañea." — read through the loader by
-position (`paragraphRange`), exactly as the landing page reads its excerpts,
-and rendered one beat per `<Text>` because the document's `renderStyle:
-'cadence'` says so. `WELCOME_BEATS` is pinned by first and last beat in
-`welcome.test.tsx`; a beat inserted upstream fails the suite rather than
-shifting the email to end mid-thought.
+the greeting is `the_initiation`'s `welcome` section, "Welcome,
+{{first_name}}." through "Welcome to Lelañea.", read from the database by
+section key, exactly as the landing page reads its excerpts. It is rendered one
+beat per `<Text>` because the document's `renderStyle: 'cadence'` says so. The
+key is stored on the blocks, so a beat inserted above it cannot shift the email
+to end mid-thought. The read is an async child component, which
+`@react-email/render` waits for, so a content failure still lands inside
+`sendEmail`'s own `try`.
 
 What follows her beats — "Your account is ready…" — is the build's, in the
 shell's plain register, about the mechanics only. It is visually a different
