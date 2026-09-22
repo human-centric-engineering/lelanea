@@ -168,6 +168,12 @@ export function getSlotTaxonomy(): SlotTaxonomyFile {
  * Read from the BUNDLED file, which is what a fresh database is seeded from and
  * what the grant's stored config is written from — once, at seed, after which
  * the config is operator-owned like the grant itself.
+ *
+ * **Seed-time only.** Until t-88 this was invoked at module scope by
+ * `lib/app/agent/pins.ts`, which made importing a constant of capability slugs
+ * parse a 60KB taxonomy file. Its one production caller is now seed 013, where
+ * reading seed material is what a seed is for; {@link slotExposureConfig}
+ * wraps it in the shape the grant stores.
  */
 export function readableSlotGroups(): string[] {
   const file = getSlotTaxonomy();
@@ -175,4 +181,16 @@ export function readableSlotGroups(): string[] {
     file.slots.filter((slot) => slot.visibility === 'hidden').map((slot) => slot.group)
   );
   return file.groups.map((group) => group.key).filter((key) => !hidden.has(key));
+}
+
+/**
+ * The exposure allowlist as seed 013 stores it on both slot grants.
+ *
+ * Shaped here rather than at the call site so the seed, the smoke script and
+ * their tests cannot drift into three spellings of the same config. See
+ * `lib/app/agent/pins.ts` for why there is a `read` facet and deliberately no
+ * `write` one.
+ */
+export function slotExposureConfig(): { read: { groups: string[] } } {
+  return { read: { groups: readableSlotGroups() } };
 }

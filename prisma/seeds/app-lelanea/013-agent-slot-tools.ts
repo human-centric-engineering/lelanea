@@ -53,13 +53,15 @@
  * A changed tool grant is dark until each database is reseeded and each client
  * reconnects (`sunrise.mcp-reseed`). Nothing here can do either.
  *
- * @see lib/app/agent/pins.ts — `SLOT_CAPABILITY_SLUGS`, `SLOT_EXPOSURE_CONFIG`
+ * @see lib/app/agent/pins.ts — `SLOT_CAPABILITY_SLUGS`
+ * @see lib/app/content/slot-taxonomy.ts — `slotExposureConfig`
  * @see lib/app/slots/capture.ts — the retry guard on the write
  * @see .context/app/slots.md — "Capture"
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { SLOT_CAPABILITY_SLUGS, SLOT_EXPOSURE_CONFIG } from '@/lib/app/agent/pins';
+import { SLOT_CAPABILITY_SLUGS } from '@/lib/app/agent/pins';
+import { slotExposureConfig } from '@/lib/app/content/slot-taxonomy';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 
 const unit: SeedUnit = {
@@ -107,7 +109,11 @@ const unit: SeedUnit = {
     //
     // Rebuilt rather than passed through: the constant is `as const`, and
     // Prisma's JSON input wants a mutable value. No `as`.
-    const customConfig = { read: { groups: [...SLOT_EXPOSURE_CONFIG.read.groups] } };
+    // Derived here, at seed time, from the bundled taxonomy. It used to be a
+    // module-scope constant in `pins.ts`, which made importing a list of
+    // capability slugs parse the taxonomy file (t-88).
+    const exposure = slotExposureConfig();
+    const customConfig = { read: { groups: [...exposure.read.groups] } };
 
     let created = 0;
     for (const capability of capabilities) {
@@ -139,7 +145,7 @@ const unit: SeedUnit = {
     logger.info(
       created === 0
         ? '🔒 Her slot grants already existed — their allowlists are left as configured'
-        : `🔒 She may read back: ${SLOT_EXPOSURE_CONFIG.read.groups.join(', ')} — and writes anywhere, bounded by her instructions`
+        : `🔒 She may read back: ${exposure.read.groups.join(', ')} — and writes anywhere, bounded by her instructions`
     );
   },
 };
