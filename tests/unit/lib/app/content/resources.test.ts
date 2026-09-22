@@ -4,39 +4,63 @@
  *
  * Three jobs, and the middle one is the load-bearing one:
  *
- * 1. The real file parses, ships as a draft, and says so.
+ * 1. The real file parses, ships as a draft, and says so — as the rows the seed
+ *    writes, read back through the real projection (t-87).
  * 2. **Every passage is verbatim.** The drawer's eyebrow says these are her
  *    words, so each `words` entry cites a source this repository holds and the
  *    text must occur in it character for character. A one-character edit —
  *    a tidied comma, a straightened quote — fails here. Established on a
  *    non-empty set first, so the assertion cannot pass on nothing (fp6).
  * 3. The schema's referential checks, and the selection rule, on fixtures.
+ * 4. The data migration embeds exactly what the seed writes (t-87).
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads the real `lib/app/content` seam
+ * FORK NOTE — this reads the real resources seed
  * ---------------------------------------------------------------------------
  * The keys and passages in section 1 are Lelañea's content. A fork replacing
  * `content/` should rewrite them against its own file, not delete them; the
  * verbatim check in section 2 is content-independent and should be kept.
  *
  * @see lib/app/content/resources.ts
+ * @see lib/app/content/resources-seed.ts
+ * @see lib/app/content/resource-view.ts
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 import {
-  getResourcesLibrary,
-  selectResourcesFor,
   selectResources,
   buildResourcesFileSchema,
   FILMS_SHOWN,
   READINGS_SHOWN,
   type ResourcesFile,
+  type ResourcesLibrary,
   type ResourceModuleRef,
 } from '@/lib/app/content/resources';
-import { getJourneyStructure } from '@/lib/app/content';
+import { toJourneyStructure } from '@/lib/app/content/journey-view';
+import { toResourcesLibrary } from '@/lib/app/content/resource-view';
+import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
 import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
 import { getValuesModule } from '@/lib/app/content/values';
+import { seededJourneyRows, seededResourceRows } from '@/tests/helpers/app/content-stores';
+
+/** A file's library, as the seed would write it and the store would serve it. */
+function libraryOf(file: ResourcesFile): ResourcesLibrary {
+  const seed = buildResourcesSeed(file);
+  return toResourcesLibrary(
+    seed.collection,
+    seed.resources.map((row) => ({ ...row, revision: 1 })),
+    seed.words.map((row) => ({ ...row, revision: 1 }))
+  );
+}
+
+/** The real library: the rows the seed writes from the shipped file. */
+function getResourcesLibrary(): ResourcesLibrary {
+  const rows = seededResourceRows();
+  return toResourcesLibrary(rows.collection, rows.resources, rows.words);
+}
 
 /** Her documents as the seed builds them from the file (t-86). */
 const seeded = buildFoundationalSeed();
@@ -48,14 +72,11 @@ const getFoundationalDocument = (id: string) =>
 // ============================================================================
 
 describe('the bundled resources', () => {
-  it('parses, and is frozen and memoised like the rest of the content', () => {
+  it('parses, and serves the collection it names', () => {
     const library = getResourcesLibrary();
 
     expect(library.collection.id).toBe('lelanea_resources');
     expect(library.collection.locale).toBe('en-US');
-    expect(Object.isFrozen(library)).toBe(true);
-    expect(Object.isFrozen(library.words)).toBe(true);
-    expect(getResourcesLibrary()).toBe(library);
   });
 
   it('ships as a draft awaiting her, and serves that rather than hiding it', () => {
@@ -359,7 +380,7 @@ describe('a malformed file fails, naming the fault', () => {
 });
 
 describe('the selection', () => {
-  const file = fixture();
+  const file = libraryOf(fixture());
 
   it('names the module, its tier, and its own words', () => {
     const selection = selectResources(file, MODULES, 'values');
@@ -435,15 +456,103 @@ describe('the selection', () => {
     expect(selection?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
   });
 
-  it('is what the real loader serves for values', () => {
-    const real = selectResourcesFor('values');
-    const structure = getJourneyStructure().modules.find((m) => m.id === 'module_01_values');
+  it('is what the real rows give for values', () => {
+    const rows = seededJourneyRows();
+    const journey = toJourneyStructure(rows.journey, rows.tiers, rows.modules);
+    const real = selectResources(getResourcesLibrary(), journey.modules, 'values');
+    const structure = journey.modules.find((m) => m.id === 'module_01_values');
 
     expect(real?.title).toBe(structure?.title);
     expect(real?.tier).toBe('foundations');
     expect(real?.wordsAreOwn).toBe(true);
     expect(real?.words.source.id).toBe('lesson_centered_living');
     expect(real?.films).toEqual([]);
-    expect(selectResourcesFor('nope')).toBeNull();
+    expect(selectResources(getResourcesLibrary(), journey.modules, 'nope')).toBeNull();
+  });
+});
+
+// ============================================================================
+// 4. The rows, and the data migration (t-87)
+// ============================================================================
+
+describe('a stored row is held to the file’s rules on the way out', () => {
+  const base = libraryOf(fixture());
+
+  it('round-trips the fixture: what the seed writes is what the store serves', () => {
+    const file = fixture();
+    expect(base.films.map(({ revision: _r, ...film }) => film)).toEqual(file.films);
+    expect(base.readings.map(({ revision: _r, ...reading }) => reading)).toEqual(file.readings);
+  });
+
+  it('refuses a reading that is both a link and a document', () => {
+    const seed = buildResourcesSeed(fixture());
+    const both = seed.resources.map((row) =>
+      row.id === 'read-doc'
+        ? { ...row, href: 'https://example.com/x', revision: 1 }
+        : { ...row, revision: 1 }
+    );
+
+    expect(() =>
+      toResourcesLibrary(
+        seed.collection,
+        both,
+        seed.words.map((w) => ({ ...w, revision: 1 }))
+      )
+    ).toThrow(/"read-doc" is not a well-formed reading/);
+  });
+
+  it('refuses a film whose link is not http(s), as the file schema did', () => {
+    const seed = buildResourcesSeed(fixture());
+    const bad = seed.resources.map((row) =>
+      row.id === 'values-a'
+        ? { ...row, href: 'javascript:alert(1)', revision: 1 }
+        : { ...row, revision: 1 }
+    );
+
+    expect(() =>
+      toResourcesLibrary(
+        seed.collection,
+        bad,
+        seed.words.map((w) => ({ ...w, revision: 1 }))
+      )
+    ).toThrow(/"values-a" failed validation as a film/);
+  });
+
+  it('refuses a library with no default words, which every key falls back to', () => {
+    const seed = buildResourcesSeed(fixture());
+
+    expect(() =>
+      toResourcesLibrary(
+        seed.collection,
+        [],
+        seed.words.filter((w) => w.key !== 'default').map((w) => ({ ...w, revision: 1 }))
+      )
+    ).toThrow(/no words for "default"/);
+  });
+});
+
+describe('the data migration', () => {
+  const MIGRATION = path.join(
+    process.cwd(),
+    'prisma/migrations/20260928100100_app_journey_questions_resources_data/migration.sql'
+  );
+
+  it('writes exactly what the seed builds today', () => {
+    const match = /\$t87resources\$([\s\S]*?)\$t87resources\$/.exec(
+      readFileSync(MIGRATION, 'utf8')
+    );
+
+    expect(match, 'the migration no longer embeds the resources seed JSON').not.toBeNull();
+    expect(JSON.parse(match![1])).toEqual(buildResourcesSeed());
+  });
+
+  it('records the same changed fields the service records', async () => {
+    const { RESOURCE_SNAPSHOT_FIELDS, WORDS_SNAPSHOT_FIELDS } =
+      await import('@/lib/app/content/resource-store');
+    const sql = readFileSync(MIGRATION, 'utf8');
+
+    for (const fields of [RESOURCE_SNAPSHOT_FIELDS, WORDS_SNAPSHOT_FIELDS]) {
+      expect(sql).toContain(`ARRAY[${fields.map((f) => `'${f}'`).join(', ')}]`);
+    }
   });
 });

@@ -283,6 +283,23 @@ describe('reserved fork tiers', () => {
       'model AppDocumentCollection {',
       'model AppFoundationalDocument {',
       'model AppFoundationalDocumentRevision {',
+      // f-content-seeds t-87 — the journey's text, the discovery questions, the
+      // resource library, and their revision history (EXCLUSIONS: words, not
+      // people).
+      'model AppJourney {',
+      'model AppJourneyTier {',
+      'model AppJourneyTierRevision {',
+      'model AppJourneyModule {',
+      'model AppJourneyModuleRevision {',
+      'model AppQuestionSet {',
+      'model AppQuestionSetRevision {',
+      'model AppDiscoveryQuestion {',
+      'model AppDiscoveryQuestionRevision {',
+      'model AppResourceCollection {',
+      'model AppResource {',
+      'model AppResourceRevision {',
+      'model AppResourceWords {',
+      'model AppResourceWordsRevision {',
     ]);
   });
 

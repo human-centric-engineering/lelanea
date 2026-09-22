@@ -27,6 +27,10 @@ vi.mock('@/lib/framework/facilitation/map/version-service', () => ({
   getPublishedMap,
 }));
 vi.mock('@/lib/framework/facilitation/map/queries', () => ({ graphExists }));
+// The map's name on create is the journey's, read from its row (t-87).
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
 
 const unit = (await import('@/prisma/seeds/app-lelanea/001-journey-map')).default;
 const { buildJourneyMapDefinition, JOURNEY_MAP_SLUG } =
@@ -68,10 +72,10 @@ describe('journey map seed unit', () => {
   it('is a well-formed SeedUnit that re-runs when its inputs change', () => {
     expect(unit.name).toBe('app-lelanea/001-journey-map');
     expect(typeof unit.run).toBe('function');
+    // The roster, not the structure file: the map carries no text, so an edit
+    // to her words must not re-publish it (t-87).
     expect(unit.hashInputs).toEqual([
-      '../../../content/lelanea_module_structure.json',
-      '../../../lib/app/content/index.ts',
-      '../../../lib/app/content/schemas.ts',
+      '../../../lib/app/journey/roster.ts',
       '../../../lib/app/journey/map-definition.ts',
       '../../../lib/app/modules/definitions.ts',
     ]);
@@ -105,8 +109,9 @@ describe('journey map seed unit', () => {
     expect(createGraph).toHaveBeenCalledOnce();
     expect(createGraph).toHaveBeenCalledWith({
       slug: JOURNEY_MAP_SLUG,
-      name: expect.any(String),
-      description: expect.any(String),
+      // The journey's own title and subtitle, from its row.
+      name: 'The Lelañea App Journey',
+      description: 'A guided path from inner foundations to expanded consciousness',
       definition,
       userId: ADMIN.id,
     });

@@ -4,13 +4,14 @@
  * `/app/modules/[slug]`: a page for every module on the published map, a 404
  * for anything else, and the Values page shows its authored parts.
  *
- * `getJourneyMap` is mocked with the real projection shape; the content loader
- * is real, so the Values parts come from the structure file. Deliberately NOT a
+ * `getJourneyMap` is mocked with the real projection shape; the journey store
+ * serves the rows the seed writes from the real structure file (t-87), so the
+ * Values parts are hers. Deliberately NOT a
  * row in `shell-view-pages.test.tsx` — that list is the nav's destinations, and
  * `shell.md` says modules belong in a test of their own.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * FORK NOTE — this reads the real journey seed, not a hand-written fixture
  * ---------------------------------------------------------------------------
  * The slugs, titles and parts asserted below are Lelañea's journey, read from
  * the real structure file so the page and the content cannot drift apart. A
@@ -19,11 +20,12 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
-import { getJourneyStructure } from '@/lib/app/content';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
+import { fakeJourneyStore } from '@/tests/helpers/app/content-stores';
 
 const { getJourneyMap, notFound } = vi.hoisted(() => ({
   getJourneyMap: vi.fn(),
@@ -32,6 +34,9 @@ const { getJourneyMap, notFound } = vi.hoisted(() => ({
   }),
 }));
 vi.mock('@/lib/app/journey/map', () => ({ getJourneyMap }));
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
 vi.mock('next/navigation', () => ({ notFound, usePathname: () => '/app/modules/values' }));
 vi.mock('@/lib/hooks/use-local-storage', () => ({
   useLocalStorage: () => [null, vi.fn(), vi.fn()],
@@ -39,8 +44,11 @@ vi.mock('@/lib/hooks/use-local-storage', () => ({
 
 import ModulePage, { generateMetadata } from '@/app/(lelanea)/app/modules/[slug]/page';
 
-function realMap() {
-  const structure = getJourneyStructure();
+const store = fakeJourneyStore();
+beforeEach(() => store.reset());
+
+async function realMap() {
+  const structure = await getJourneyStructure();
   return {
     slug: 'lelanea-journey',
     version: 1,
@@ -65,7 +73,7 @@ const params = (slug: string) => ({ params: Promise.resolve({ slug }) });
 
 describe('/app/modules/[slug]', () => {
   it('renders the Values page with its three authored parts', async () => {
-    getJourneyMap.mockResolvedValue(realMap());
+    getJourneyMap.mockResolvedValue(await realMap());
     const ui = await ModulePage(params('values'));
     render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
 
@@ -77,7 +85,7 @@ describe('/app/modules/[slug]', () => {
   });
 
   it('renders any other module with the unnamed pair and its tier’s intent', async () => {
-    getJourneyMap.mockResolvedValue(realMap());
+    getJourneyMap.mockResolvedValue(await realMap());
     const ui = await ModulePage(params('oneness'));
     render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
 
@@ -88,7 +96,7 @@ describe('/app/modules/[slug]', () => {
   });
 
   it('404s a slug that is not on the published map', async () => {
-    getJourneyMap.mockResolvedValue(realMap());
+    getJourneyMap.mockResolvedValue(await realMap());
     await expect(ModulePage(params('typo'))).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalled();
   });
@@ -99,8 +107,22 @@ describe('/app/modules/[slug]', () => {
   });
 
   it('titles the tab with the module’s own name, as a plain string', async () => {
-    getJourneyMap.mockResolvedValue(realMap());
+    getJourneyMap.mockResolvedValue(await realMap());
     await expect(generateMetadata(params('boundaries'))).resolves.toEqual({ title: 'Boundaries' });
     await expect(generateMetadata(params('typo'))).resolves.toEqual({ title: 'Module' });
+  });
+
+  it('names the Values parts from the module row, not the file (t-87)', async () => {
+    const values = (await getJourneyStructure()).modules[1];
+    store.editModule('module_01_values', {
+      phaseTiers: values.phaseTiers!.map((tier) =>
+        tier.id === 'discernment' ? { ...tier, label: 'Discernment, edited' } : tier
+      ),
+    });
+    getJourneyMap.mockResolvedValue(await realMap());
+
+    render(<ShellLayoutProvider>{await ModulePage(params('values'))}</ShellLayoutProvider>);
+
+    expect(screen.getByText('Discernment, edited')).toBeInTheDocument();
   });
 });

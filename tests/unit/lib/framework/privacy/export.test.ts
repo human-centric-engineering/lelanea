@@ -139,6 +139,22 @@ const LEAF_EXCLUDED_MODELS = [
   'AppDocumentCollection',
   'AppFoundationalDocument',
   'AppFoundationalDocumentRevision',
+  // f-content-seeds t-87 — the journey's text, the questions, the resource
+  // library, and their history.
+  'AppJourney',
+  'AppJourneyTier',
+  'AppJourneyTierRevision',
+  'AppJourneyModule',
+  'AppJourneyModuleRevision',
+  'AppQuestionSet',
+  'AppQuestionSetRevision',
+  'AppDiscoveryQuestion',
+  'AppDiscoveryQuestionRevision',
+  'AppResourceCollection',
+  'AppResource',
+  'AppResourceRevision',
+  'AppResourceWords',
+  'AppResourceWordsRevision',
   // f-slots t-72 — the retry guard's ledger: that a write happened, not what was
   // written. The reading itself is the `framework_slot_value` above.
   'AppTurnSlotWrite',

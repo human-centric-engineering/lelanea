@@ -30,7 +30,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getJourneyStructure, getDiscoveryQuestions } from '@/lib/app/content';
+import { readJourneyStructureFile } from '@/lib/app/content/journey-seed';
+import { readDiscoveryQuestionsFile } from '@/lib/app/content/question-seed';
 import {
   foundationalDocumentsFileSchema,
   journeyStructureFileSchema,
@@ -72,18 +73,18 @@ describe('authored content schemas', () => {
     });
 
     it('parses the journey structure — five tiers over seventeen modules', () => {
-      const structure = getJourneyStructure();
+      const structure = readJourneyStructureFile();
 
       expect(structure.tiers).toHaveLength(5);
       expect(structure.modules).toHaveLength(17);
     });
 
     it('parses the thirty discovery questions', () => {
-      const questions = getDiscoveryQuestions();
+      const questions = readDiscoveryQuestionsFile();
 
       expect(questions.questions).toHaveLength(30);
-      expect(questions.collection.module).toBe('module_00_onboarding');
-      expect(questions.collection.phase).toBe(8);
+      expect(questions.content.module).toBe('module_00_onboarding');
+      expect(questions.content.phase).toBe(8);
     });
   });
 

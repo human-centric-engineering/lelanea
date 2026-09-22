@@ -6,10 +6,10 @@
  * key or a pin that is not even a slug, the `?pin=` pin, and the private
  * cache directive that keeps a shared cache out of a session-gated payload.
  *
- * The real file is read (as the sibling content route tests do), so the
- * selection assertions are on what ships: her words on values, and no films
- * yet. The selection rule itself is covered on fixtures in
- * `tests/unit/lib/app/content/resources.test.ts`.
+ * The library is rows since t-87. The stores are faked with exactly the rows
+ * the seeds write from the real files, so the selection assertions are on what
+ * ships: her words on values, and no films yet. The selection rule itself is
+ * covered on fixtures in `tests/unit/lib/app/content/resources.test.ts`.
  *
  * @see app/api/v1/app/content/resources/route.ts
  * @see app/api/v1/app/content/resources/[key]/route.ts
@@ -22,10 +22,20 @@ import { mockAuthenticatedUser } from '@/tests/helpers/auth';
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
+vi.mock('@/lib/app/content/resource-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeResourceStore()
+);
 
 import { auth } from '@/lib/auth/config';
 import { GET as getLibrary } from '@/app/api/v1/app/content/resources/route';
 import { GET as getSelection } from '@/app/api/v1/app/content/resources/[key]/route';
+import { fakeJourneyStore, fakeResourceStore, filmRow } from '@/tests/helpers/app/content-stores';
+
+const journey = fakeJourneyStore();
+const resources = fakeResourceStore();
 
 interface Collection {
   id: string;
@@ -77,6 +87,8 @@ function selectionRequest(key: string, query = '', headers: Record<string, strin
 
 beforeEach(() => {
   vi.clearAllMocks();
+  journey.reset();
+  resources.reset();
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
 });
 
@@ -252,5 +264,33 @@ describe('GET /api/v1/app/content/resources/:key', () => {
     const response = await getSelection(request, context);
 
     expect(response.headers.get('Cache-Control')).toBe('private, no-cache');
+  });
+});
+
+describe('the rows are what is served (t-87)', () => {
+  it('serves a film an admin added, from the row', async () => {
+    resources.addResource(filmRow('the-quiet', { relatesTo: 'module_01_values' }));
+
+    const library = (await (await getLibrary(libraryRequest())).json()) as LibraryBody;
+    const { request, context } = selectionRequest('values');
+    const selection = (await (await getSelection(request, context)).json()) as SelectionBody;
+
+    expect(library.data.films.map((film) => film.id)).toEqual(['the-quiet']);
+    expect(selection.data.films.map((film) => film.id)).toEqual(['the-quiet']);
+  });
+
+  it('names the drawer from the module row, so an edited title reaches it', async () => {
+    journey.editModule('module_01_values', { title: 'Values, edited' });
+    const { request, context } = selectionRequest('values');
+
+    const body = (await (await getSelection(request, context)).json()) as SelectionBody;
+
+    expect(body.data.title).toBe('Values, edited');
+  });
+
+  it('answers 500 when the library was never seeded', async () => {
+    resources.empty();
+
+    expect((await getLibrary(libraryRequest())).status).toBe(500);
   });
 });
