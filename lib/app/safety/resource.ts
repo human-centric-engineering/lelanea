@@ -32,9 +32,10 @@
  * ## Where the words come from
  *
  * The admin-edited tables, or the bundled file when those cannot answer in
- * time (f-safety t-63). `resources-store.ts` decides which and never throws, so
- * this module never withholds a resource either. The frame's shape does not
- * depend on the source.
+ * time (f-safety t-63). Since t-88 there is one source — the tables — and
+ * `resources-store.ts` throws when they cannot answer, so this module does
+ * too. The module docblock there says why that is the honest behaviour rather
+ * than a regression.
  *
  * @see lib/app/safety/resources-store.ts — the tables, the cache and the fallback
  * @see .context/app/safety.md
@@ -104,13 +105,11 @@ function statusOf(content: CrisisContent, entry: CrisisContent['regions'][number
 }
 
 /**
- * Which versions were shown. The bundled file has one version for everything
- * (`0.1`); a stored resource names the copy's and, where one was chosen, the
+ * Which versions were shown: the copy's and, where one was chosen, the
  * region's — `c3` or `c3/GB.2` — so a report of what someone saw can be matched
  * to the audit log's edits.
  */
 function versionOf(content: CrisisContent, entry: CrisisContent['regions'][number] | undefined) {
-  if (content.source === 'bundled') return String(content.copyVersion);
   const copy = `c${content.copyVersion}`;
   return entry ? `${copy}/${entry.region}.${entry.version}` : copy;
 }
