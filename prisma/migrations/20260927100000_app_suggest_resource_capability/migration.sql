@@ -28,12 +28,17 @@
 -- run.
 --
 -- SO DO NOT EDIT SEED 014's `create:` BRANCH ALONE. Its five operator-owned
--- literals (`name`, `description`, `category`, `rateLimit`, `isActive`) are
--- dead on a fresh database now — the row already exists by the time it runs —
--- and dead on an existing one, which took them from here. A change to any of
--- them belongs in BOTH, and a new migration for the databases already holding
--- the old value. `suggest-resource-capability.test.ts` pins the five equal, so
+-- literals (`name`, `description`, `category`, `rateLimit`, `isActive`) no
+-- longer write the row on a fresh database — this statement got there first —
+-- nor on an existing one, which took them from here. A change to any of them
+-- belongs in BOTH, and a new migration for the databases already holding the
+-- old value. `suggest-resource-capability.test.ts` pins the five equal, so
 -- editing one alone fails rather than silently doing nothing.
+--
+-- The branch is NOT dead, though, so do not delete it: an admin who deletes the
+-- capability row (`DELETE /api/v1/admin/orchestration/capabilities/[id]`, which
+-- cascades the binding) leaves it absent for good, and seed 014's `create` is
+-- then the only thing that can put it back.
 --
 -- WHAT IT WRITES — exactly what the seed's `create` branch writes, and only
 -- where the row is absent:
@@ -42,8 +47,20 @@
 --      capability, carrying the same `functionDefinition` literal the seed and
 --      the class both carry. `tests/unit/prisma/migrations/suggest-resource-capability.test.ts`
 --      pins the JSON below to `SUGGEST_RESOURCE_DEFINITION`, so the three
---      copies cannot drift apart. `id` is a random UUID rather than a cuid —
---      the column is TEXT and nothing parses it (as `20260926100000`).
+--      copies cannot drift apart.
+--
+--      `id` IS CUID-SHAPED, AND HAS TO BE. The column is TEXT and Postgres
+--      parses nothing, but `ai_capability.id` is a PATH PARAMETER on the admin
+--      API, and every route that names a capability by id validates it with
+--      `cuidSchema` (`z.cuid()`, `/^[cC][0-9a-z]{6,}$/`) before touching the
+--      database. A bare `gen_random_uuid()::text` fails that on both counts —
+--      leading char and hyphens — so the row would exist and be UNMANAGEABLE:
+--      400 on open, rename, rate-limit, quarantine, delete, on switching the
+--      grant off and on granting it to another agent. `'c' || the uuid without
+--      its hyphens` satisfies the schema and stays unique. The precedent at
+--      `20260926100000` writes bare UUIDs and is right to: those ids go into
+--      `app_slot_definition_revision`, which is never a path param. The
+--      difference is the table, not the column type.
 --   2. `ai_agent_capability` — the binding to the agent with slug
 --      `lelanea-guide`, switched on, no `customConfig`: an id in, a library
 --      record out, nothing to allow or deny.
@@ -77,6 +94,16 @@
 -- unseeded database without blocking every deploy, so it declines quietly and
 -- the seed remains the thing that insists.
 --
+-- WHICH LEAVES ONE WINDOW, NAMED RATHER THAN CLOSED. The grant is one-shot and
+-- conditional, and migrations never re-run. If a deploy's migrate step lands
+-- while `lelanea-guide` is soft-deleted or has been re-slugged, the capability
+-- row is written and the binding is not — and the guide silently never
+-- advertises the tool, which is the exact failure this migration exists to end.
+-- Nothing here retries or reports it. The remedy is the seed (`npm run db:seed`
+-- re-runs unit 014, which throws if the agent is still missing and grants if it
+-- is back), so a deploy made while the guide is deleted needs a reseed after it
+-- returns. Worth a check if the guide ever becomes something we delete.
+--
 -- No schema change, so nothing for `prisma migrate diff` to generate and no
 -- unmodelled object for `db:drift-check` to miss.
 
@@ -89,7 +116,7 @@ INSERT INTO "ai_capability" (
   "rateLimit", "isActive", "isSystem"
 )
 SELECT
-  gen_random_uuid()::text,
+  'c' || replace(gen_random_uuid()::text, '-', ''),
   'suggest_resource',
   'Suggest a resource',
   'Hands the person one of Lelañea Fulton’s films or pieces of writing, by id, when it fits what they are working through. Read-only: the library answers with its own words.',
@@ -123,7 +150,7 @@ WHERE NOT EXISTS (
 -- The grant. Reads the capability id back rather than assuming this migration
 -- wrote it, so a database that already had the row still gets the binding.
 INSERT INTO "ai_agent_capability" ("id", "agentId", "capabilityId", "isEnabled")
-SELECT gen_random_uuid()::text, a."id", c."id", true
+SELECT 'c' || replace(gen_random_uuid()::text, '-', ''), a."id", c."id", true
 FROM "ai_agent" AS a
 CROSS JOIN "ai_capability" AS c
 WHERE a."slug" = 'lelanea-guide'

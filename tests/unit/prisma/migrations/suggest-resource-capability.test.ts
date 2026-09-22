@@ -15,10 +15,15 @@
  * makes the drift fail the build instead: it reads the migration off disk and
  * compares the JSON it inserts to the constant.
  *
- * If the definition legitimately changes, this test is expected to fail. The
- * answer is a NEW migration (and the seed's `update` branch, which re-applies
- * the code-owned fields on every run), not an edit to the applied one — see
- * `.context/app/database-changes.md`.
+ * If the definition legitimately changes, the answer is a NEW migration (and
+ * the seed's `update` branch, which re-applies the code-owned fields on every
+ * run), never an edit to the applied one — see
+ * `.context/app/database-changes.md`. So this file does not name a migration:
+ * it finds the MOST RECENT one that establishes this row and pins that. Adding
+ * the new migration is what makes it pass again, which is the point — pinning
+ * the frozen file by name would have left a test that a new migration could not
+ * satisfy, and the only ways out of that are deleting the test or editing an
+ * applied migration and breaking its checksum on every database that has it.
  *
  * ## And why it reads the guards
  *
@@ -41,7 +46,7 @@
  * @see prisma/seeds/app-lelanea/014-suggest-resource.ts
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
@@ -51,14 +56,32 @@ import { SUGGEST_RESOURCE_SLUG } from '@/lib/app/resources/suggestion';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { SUGGEST_RESOURCE_IMPL } from '@/prisma/seeds/app-lelanea/014-suggest-resource';
 
-const MIGRATION = join(
-  process.cwd(),
-  'prisma/migrations/20260927100000_app_suggest_resource_capability/migration.sql'
-);
-
+const MIGRATIONS = join(process.cwd(), 'prisma/migrations');
 const SEED = join(process.cwd(), 'prisma/seeds/app-lelanea/014-suggest-resource.ts');
 
-const sql = readFileSync(MIGRATION, 'utf8');
+/**
+ * The newest migration that inserts this capability row. Directory names are
+ * timestamp-prefixed, so sorting them is chronological; a later migration that
+ * revises the definition becomes the pinned one by existing.
+ */
+function newestEstablishingMigration(): { name: string; sql: string } {
+  const found = readdirSync(MIGRATIONS)
+    .sort()
+    .map((name) => ({ name, path: join(MIGRATIONS, name, 'migration.sql') }))
+    .filter((entry) => existsSync(entry.path))
+    .map((entry) => ({ name: entry.name, sql: readFileSync(entry.path, 'utf8') }))
+    .filter(
+      (entry) => entry.sql.includes('INSERT INTO "ai_capability"') && entry.sql.includes('$json$')
+    );
+  const newest = found.at(-1);
+  if (!newest) {
+    throw new Error('No migration inserts the suggest_resource capability row');
+  }
+  return newest;
+}
+
+const migration = newestEstablishingMigration();
+const sql = migration.sql;
 const seedSource = readFileSync(SEED, 'utf8');
 
 /** The comment header, which carries the reasoning, is not SQL. */
@@ -81,6 +104,13 @@ function insertedDefinition(): unknown {
   return JSON.parse(statements.slice(opened + '$json$'.length, closed));
 }
 
+/** The statements with the dollar-quoted definition cut out of them. */
+function sqlOutsideTheLiteral(): string {
+  const opened = statements.indexOf('$json$');
+  const closed = statements.indexOf('$json$', opened + '$json$'.length);
+  return statements.slice(0, opened) + statements.slice(closed + '$json$'.length);
+}
+
 describe('the definition it inserts', () => {
   it('is the one the class advertises, and the one the seed writes', () => {
     expect(insertedDefinition()).toEqual(SUGGEST_RESOURCE_DEFINITION);
@@ -97,6 +127,18 @@ describe('the row it inserts', () => {
     expect(statements).toContain(`'${SUGGEST_RESOURCE_SLUG}'`);
     expect(statements).toContain(`'${SUGGEST_RESOURCE_IMPL.executionHandler}'`);
     expect(statements).toContain(`'${SUGGEST_RESOURCE_IMPL.executionType}'`);
+  });
+
+  it('gets a cuid-shaped id, because the admin API validates one', () => {
+    // `ai_capability.id` is a path parameter, checked with `z.cuid()`
+    // (`/^[cC][0-9a-z]{6,}$/`) before the route touches the database. A bare
+    // `gen_random_uuid()::text` fails it, and the row would exist and be
+    // unmanageable — 400 on rename, rate-limit, quarantine, delete and on
+    // every change to the grant.
+    expect(statements).not.toMatch(/^\s*gen_random_uuid\(\)::text,?$/m);
+    expect(
+      statements.match(/'c' \|\| replace\(gen_random_uuid\(\)::text, '-', ''\)/g)
+    ).toHaveLength(2);
   });
 
   it('is written into the two tables the seed writes, and no others', () => {
@@ -119,10 +161,17 @@ describe('the operator-owned half the seed no longer reaches', () => {
   it.each([
     ['name', "'Suggest a resource'"],
     ['category', "'app'"],
-    ['rateLimit', '30'],
   ])('says the same %s as the seed', (_field, literal) => {
     expect(statements).toContain(literal);
     expect(seedSource).toContain(literal);
+  });
+
+  it('says the same rateLimit as the seed', () => {
+    // Anchored, not `toContain('30')`: an unquoted number has no delimiters of
+    // its own, so a bare substring is still satisfied by 300 or 130 and the two
+    // literals would drift apart under a passing test.
+    expect(statements).toMatch(/\n\s*30,\n/);
+    expect(seedSource).toMatch(/rateLimit:\s*30,/);
   });
 
   it('says the same description as the seed, character for character', () => {
@@ -162,6 +211,10 @@ describe('what it leaves alone', () => {
     // The population is non-empty — it inserts twice — so an empty match means
     // something (`fp6`).
     expect(statements.match(/INSERT INTO/g)).toHaveLength(2);
-    expect(statements).not.toMatch(/\b(UPDATE|DELETE|DROP|TRUNCATE|ALTER)\b/i);
+    // Outside the `$json$` literal only. The prose inside it is the tool
+    // description the model reads, and a future wording of it ("never delete
+    // anything") would fail this case for a reason that has nothing to do with
+    // what the migration writes.
+    expect(sqlOutsideTheLiteral()).not.toMatch(/\b(UPDATE|DELETE|DROP|TRUNCATE|ALTER)\b/i);
   });
 });

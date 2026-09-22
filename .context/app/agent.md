@@ -310,10 +310,12 @@ first even on a fresh database and 014 finds it already there. What 014 still
 owns is the `update` branch — re-applying the code-owned fields whenever the
 definition changes, which a new migration then has to carry to the databases
 already holding the old one — and the grant on a fresh database, where the guide
-does not exist yet when migrations run. **Its `create:` branch is now
-unreachable**, so the five operator-owned literals in it (`name`,
-`description`, `category`, `rateLimit`, `isActive`) have to change in the
-migration too; a test pins them equal
+does not exist yet when migrations run. **Its `create:` branch is no longer
+what writes the row on a fresh database**, so the five operator-owned literals
+in it (`name`, `description`, `category`, `rateLimit`, `isActive`) have to
+change in the migration too; a test pins them equal. Do not delete the branch:
+an admin who deletes the capability row leaves it absent for good, and `create`
+is then the only thing that can put it back
 ([`database-changes.md`](./database-changes.md)).
 
 `suggest_resource` is read-only — an id in, the library's record out
