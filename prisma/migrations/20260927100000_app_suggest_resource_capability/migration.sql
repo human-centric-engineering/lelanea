@@ -36,13 +36,25 @@
 --      record out, nothing to allow or deny.
 --
 -- WHAT IT LEAVES ALONE (`fp4`). Both statements insert only where nothing is
--- there. A capability row an admin renamed, rate-limited or switched off is
--- theirs; a binding an operator switched off is theirs; neither is touched, and
--- re-running this would write nothing (Prisma never will). On a fresh database
--- the tables are empty when migrations run and the guide does not exist yet, so
--- the first statement writes the row and the second writes nothing — then the
--- seed creates the guide and unit 014 makes the grant. Either order ends in the
--- same two rows.
+-- there. A capability row an admin renamed, rate-limited, quarantined or
+-- switched off is theirs; a binding an operator switched off (`isEnabled =
+-- false`) is theirs; neither is touched, and re-running this would write
+-- nothing (Prisma never will). On a fresh database the tables are empty when
+-- migrations run and the guide does not exist yet, so the first statement
+-- writes the row and the second writes nothing — then the seed creates the
+-- guide and unit 014 makes the grant. Either order ends in the same two rows.
+--
+-- ONE REVOCATION IT CANNOT SEE. The admin surface also revokes by DELETING the
+-- binding (`DELETE /api/v1/admin/orchestration/agents/[id]/capabilities/
+-- [capId]`), and a deleted row is indistinguishable from one that was never
+-- created — so an operator who revoked that way is re-granted here, silently.
+-- Nothing in SQL can tell the two apart; recording the revocation would need a
+-- tombstone the schema does not have. Stated rather than solved because the
+-- blast radius is small and known: no deployed database has ever held this row
+-- (that is why this migration exists), so there is nowhere it could already
+-- have been revoked, and seed unit 014 has behaved identically since #89 —
+-- this migration adds no asymmetry, it inherits one. If a tombstone is ever
+-- wanted, it belongs on the seed and the migration together.
 --
 -- WHERE THE GUIDE IS ABSENT, NOTHING IS GRANTED. A database that has the
 -- platform but never seeded this app gets the capability row and no binding,
