@@ -21,9 +21,11 @@ Both folders are seed and reference input (§22, owner ruling 2026-09-21). They
 are not what the running app is meant to read. **Her foundational documents have
 moved (t-86):** every surface reads them from `app_foundational_document`, and
 the file only seeds that table. See [Her foundational documents: the
-database](#her-foundational-documents-the-database). The journey, the questions
-and the voice files follow in t-87 and t-88. Until then their loaders below still
-import the files.
+database](#her-foundational-documents-the-database). **So have the journey's
+text, the discovery questions and the resource library (t-87)**: see [The
+journey, the questions and the resources: the
+database](#the-journey-the-questions-and-the-resources-the-database). The voice
+files follow in t-88; until then their loaders below still import the files.
 
 **Locations:** `content/*.json` (her words) ·
 `seed-data/drafted/*.json` (drafted seed data) ·
@@ -122,17 +124,76 @@ migration, and an edit goes through the admin (t-91).
 map, and provides the file-level placeholder checks. Nothing a request reaches
 should import it (t-89 makes that a rule).
 
+## The journey, the questions and the resources: the database
+
+Since t-87 three more collections live in `app_` tables, on the pattern the
+documents set: one row per thing a surface shows, a full snapshot per revision
+from the first write (`origin: seed | admin`, `editorId` → `user`
+`ON DELETE SET NULL`), write-once seeding, and a data migration
+(`20260928100100_app_journey_questions_resources_data`) so every environment has
+the rows the moment it migrates. The files only seed them.
+
+| Collection  | Tables                                                                        | Service (`lib/app/content/`) | Seed unit                    |
+| ----------- | ----------------------------------------------------------------------------- | ---------------------------- | ---------------------------- |
+| The journey | `app_journey`, `app_journey_tier`, `app_journey_module` (+ revisions)         | `journey-store.ts`           | `016-journey-structure.ts`   |
+| Questions   | `app_question_set`, `app_discovery_question` (+ revisions)                    | `question-store.ts`          | `017-discovery-questions.ts` |
+| Resources   | `app_resource_collection`, `app_resource`, `app_resource_words` (+ revisions) | `resource-store.ts`          | `018-resources.ts`           |
+
+| Function                                                            | Returns                                                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster |
+| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                  |
+| `getResourcesLibrary()`                                             | collection + provenance, every film and reading, every key's words            |
+| `getResource(id)`                                                   | one film or reading, or `null` — the suggestion tool's per-call lookup        |
+| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key        |
+| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                              |
+
+All async, read per request with no cache, and an unseeded database throws
+`ContentNotSeededError`, as the documents' do. Each has a pure `*-view.ts` that
+projects a row into the served shape and validates its JSON on the way out, and
+a `*-seed.ts` that is the one place its file is still imported.
+
+**The journey's structure is not in these tables.** Which modules exist, their
+number and their tier are the code roster, `lib/app/journey/roster.ts`; the
+rows own the words, including every module's title. See
+[`journey.md`](./journey.md#who-owns-what-t-87) for why, and how the registered
+module names are derived from the rows at startup.
+
+**Films and readings share `app_resource`**, because they share one id
+namespace (the suggestion tool and the drawer's pin resolve by id). A film has a
+duration and a link; a reading has a reading time and exactly one of a link and
+a document (`documentId` is a foreign key to `app_foundational_document`). Every
+row is run through the same `filmSchema` / `readingSchema` the file was, on
+write and on read. The resources seed also refuses a key that names no module
+in the database, so it runs after the journey's.
+
+**Every served item carries its `revision`**, and every route's ETag covers the
+whole payload, so an edit to any row changes the ETag. A parity test per
+collection (`tests/unit/app/api/v1/app/content/*-parity.test.ts`) proves the
+route returns exactly the record the pages — or, for the resources, the voice
+block and the chips — are served.
+
+**In conversation the library is read once per turn.** The voice block's
+offering (`lib/app/resources/offering.ts`, `loadResourceOffering`) reads it once
+and the journey only when there is something to offer. `suggest_resource`
+looks up its one id per call. A reload or a replay reads the library once for
+every chip it resolves (`loadLibraryForChips`), and not at all when nothing was
+suggested; if the read fails, the replies are shown without chips and a warning
+is logged.
+
+**Her list of films and reading (t-76) is therefore a migration**, not an edit
+to `seed-data/drafted/lelanea_resources.json`: once the library is written, the
+file reaches only a database that was never seeded.
+
 ## The loader
 
-`lib/app/content/index.ts`, for the collections still read from files until
-t-87 and t-88. Parses each file on first use and memoises for the life of the
+`lib/app/content/index.ts`, for the voice files, still read from files until
+t-88. Parses each file on first use and memoises for the life of the
 process; static JSON imports rather than `fs`, because `lib/app/**` may not touch
 Node built-ins.
 
 | Function                      | Returns                                                           |
 | ----------------------------- | ----------------------------------------------------------------- |
-| `getJourneyStructure()`       | five tiers, seventeen modules, their phases                       |
-| `getDiscoveryQuestions()`     | the thirty onboarding questions + pacing                          |
 | `getVoiceFingerprint()`       | the always-on voice core, and its provenance                      |
 | `getVoiceOverlays()`          | the register overlays, their labelling copy                       |
 | `findPlaceholders(text)`      | merge fields in a string, deduplicated                            |
@@ -206,8 +267,9 @@ journey structure, module `notes`, `appBehavior`, `contentNote`, `contentFile`
 and module-level `contentRef` (which names files on disk). They are notes _about_
 the words, not the words.
 
-Every accessor projects field-by-field for this reason, at **every** level —
-tiers, modules, phases, phase tiers. `getJourneyStructure`
+Every projection is field-by-field for this reason, at **every** level —
+tiers, modules, phases, phase tiers. Since t-87 the journey's runs at the seed
+(`journey-seed.ts`), so a note never reaches a row either. `getJourneyStructure`
 originally returned `file.modules` wholesale and published all of the above to
 anonymous callers; both the security review and `/code-review` caught it. Listing
 served fields explicitly is what makes a new authored annotation withheld by
@@ -439,12 +501,13 @@ which otherwise fails far from its cause:
 
 ## Resources — her films and reading, and her words on whatever is open
 
-`seed-data/drafted/lelanea_resources.json` · `lib/app/content/resources.ts` ·
-`app/api/v1/app/content/resources/` (f-resources t-74; product description
-§6.1, §9). The drawer's content: what the Curator agent surfaces and what is
-browsable directly.
+`seed-data/drafted/lelanea_resources.json` (seed) · `app_resource*` (served,
+since t-87) · `lib/app/content/resources.ts` (schemas + selection) ·
+`lib/app/content/resource-store.ts` (reads) · `app/api/v1/app/content/resources/`
+(f-resources t-74; product description §6.1, §9). The drawer's content: what the
+Curator agent surfaces and what is browsable directly.
 
-**Keyed like the structure file.** `films[]` and `readings[]` each carry what
+**Keyed like the journey.** `films[]` and `readings[]` each carry what
 the piece is for (`subtitle`) and where it belongs (`relatesTo`: a module id
 such as `module_01_values`, or `journey`, `situations`, or `null` for a piece
 that belongs to everything — never `default`, which the schema refuses on a
@@ -459,7 +522,9 @@ thumbnails: nothing exists to show.
 entry cites its `source` — a foundational document id, or a step of the Values
 module (`values_module.json`, release-2 content that is validated but not
 otherwise served) — and `tests/unit/lib/app/content/resources.test.ts` asserts
-the quote and every paragraph occur character for character in that source. A
+the quote and every paragraph the seed writes occur character for character in
+that source. An admin edit (t-91) is not held to that test, and t-91 decides how
+it keeps the claim true. A
 tidied comma fails CI. Nothing in this file is drafted in her register: the
 voice fingerprint's drafted-with-provenance precedent describes her voice,
 whereas this is shown _as_ her words, so the two are held to different rules.
@@ -471,15 +536,15 @@ nothing.
 builder picked from her material (values, from the "Centered Living" lesson; the
 default, from the welcome statement) and **empty film and reading lists** — no
 film of hers exists yet and only she can say which pieces belong beside which
-module. Her list lands as a content-only change (t-76). The working `notes` are
-withheld, as every file's are.
+module. Her list lands in t-76, as a migration (see above). The working `notes`
+are withheld, as every file's are.
 
-| Function                                 | Returns                                                                                                         |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `getResourcesLibrary()`                  | collection meta + provenance, every film, every reading, every `words` entry                                    |
-| `selectResourcesFor(key, { pin? })`      | her words on it, up to two films and three readings, the module's `title` and `tier`; `null` for an unknown key |
-| `selectResources(file, modules, key, …)` | the same as a pure function of a parsed file — what the tests use                                               |
-| `buildResourcesFileSchema(known)`        | the strict schema, parameterised on the module and document ids its referential checks need                     |
+| Function                                    | Returns                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `getResourcesLibrary()` (store)             | collection meta + provenance, every film, every reading, every `words` entry                                    |
+| `selectResourcesFor(key, { pin? })` (store) | her words on it, up to two films and three readings, the module's `title` and `tier`; `null` for an unknown key |
+| `selectResources(library, modules, key, …)` | the same as a pure function of a library — what the store and the tests use                                     |
+| `buildResourcesFileSchema(known)`           | the file's strict schema, parameterised on the module and document ids its referential checks need              |
 
 **The selection is the prototype's `pickFor`.** What belongs to the open thing
 first, then what belongs to everything, capped at two films and three readings
@@ -487,7 +552,7 @@ first, then what belongs to everything, capped at two films and three readings
 `default`'s and says so (`wordsAreOwn: false`). `pin` puts one film or reading first in its list,
 which is how a suggestion made in conversation opens the drawer on it (t-77).
 
-**Slugs in, ids inside.** The shell asks by module slug (`values`), the file
+**Slugs in, ids inside.** The shell asks by module slug (`values`), the library
 keys by id (`module_01_values`); `moduleSlugFromId()` is the one rule between
 them ([`journey.md`](./journey.md)). `/resources/:key` answers a 404 for a key
 that is neither a module on the published structure nor one of the three fixed
@@ -506,5 +571,6 @@ deploy" — is the owner's 22 September 2026 ask that every seeded collection be
 manageable from the admin. The rule for every collection is the journal decision
 "Storage: relational is authoritative for every seeded collection; the vector
 store indexes only her prose". The journey, the questions and the resources
-follow in t-87, the voice files in t-88. The function names were kept as the
-seam, so callers changed only by becoming async.
+followed in t-87, relational only and embedded nowhere; the voice files follow
+in t-88. The function names were kept as the seam, so callers changed only by
+becoming async and importing from the store.
