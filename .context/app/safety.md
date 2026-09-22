@@ -102,7 +102,7 @@ deploy:
 - `app_crisis_region` (`AppCrisisRegion`, one row per region) — the emergency
   number and the ordered services (`{ name, contact, hours }`).
 
-`content/lelanea_crisis_resources.json` (loaded by
+`seed-data/drafted/lelanea_crisis_resources.json` (loaded by
 `lib/app/content/crisis-resources.ts`) stays in the repo as **the floor**, and
 is what the seed copies from.
 

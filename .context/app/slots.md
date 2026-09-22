@@ -5,7 +5,7 @@ is a **slot definition**. This document covers both: where the taxonomy lives
 and how it changes, how she fills it, and — since t-73 — how the person it is
 about reads it back, corrects it, or argues with it ("Her notes", below).
 
-**Locations:** `content/lelanea_slot_taxonomy.json` (the v1 draft) ·
+**Locations:** `seed-data/drafted/lelanea_slot_taxonomy.json` (the v1 draft) ·
 `lib/app/content/slot-taxonomy.ts` (schema + loader) ·
 `lib/app/slots/taxonomy-store.ts` (the store, and the provider) ·
 `prisma/seeds/app-lelanea/011-slot-taxonomy.ts` (the one-time load) ·
