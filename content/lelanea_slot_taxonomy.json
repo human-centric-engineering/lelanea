@@ -58,7 +58,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 70
     },
     {
@@ -68,7 +68,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
@@ -78,7 +78,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
@@ -88,7 +88,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 70
     },
     {
@@ -98,7 +98,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
@@ -108,7 +108,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
@@ -238,7 +238,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 70
     },
     {
@@ -248,7 +248,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
@@ -258,7 +258,7 @@
       "visibility": "open",
       "mode": "targeted",
       "dataType": "text",
-      "sensitivity": "special_category",
+      "sensitivity": "sensitive",
       "priorityWeight": 50
     },
     {
