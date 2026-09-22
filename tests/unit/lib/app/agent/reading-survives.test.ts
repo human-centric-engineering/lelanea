@@ -31,6 +31,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('@/lib/app/content/document-store', async () =>
   (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
 );
+// And the journey, the questions and the resources since t-87.
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
+vi.mock('@/lib/app/content/question-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeQuestionStore()
+);
+vi.mock('@/lib/app/content/resource-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeResourceStore()
+);
 import { NextRequest } from 'next/server';
 
 const world = vi.hoisted(() => ({ paused: false }));

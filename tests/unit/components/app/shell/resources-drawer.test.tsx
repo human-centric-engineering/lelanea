@@ -72,6 +72,7 @@ const WORDS_ON_VALUES = {
     'You are no longer a sponge soaking up the expectations of the world. You become an anchor.',
   ],
   source: { collection: 'values_module' as const, id: 'lesson_centered_living' },
+  revision: 1,
 };
 
 function film(id: string, title: string, duration: string) {
@@ -82,6 +83,7 @@ function film(id: string, title: string, duration: string) {
     relatesTo: 'module_01_values',
     duration,
     href: `https://films.example/${id}`,
+    revision: 1,
   };
 }
 
@@ -106,6 +108,7 @@ function fullSelection(): ResourcesSelection {
         relatesTo: 'module_01_values',
         readingTime: '8 min',
         href: 'https://reads.example/inheritance-test',
+        revision: 1,
       },
       {
         id: 'the-mission',
@@ -114,6 +117,7 @@ function fullSelection(): ResourcesSelection {
         relatesTo: null,
         readingTime: '4 min',
         documentId: 'the_mission',
+        revision: 1,
       },
       {
         id: 'the-welcome',
@@ -122,6 +126,7 @@ function fullSelection(): ResourcesSelection {
         relatesTo: null,
         readingTime: '3 min',
         documentId: 'the_initiation',
+        revision: 1,
       },
     ],
   };
@@ -146,6 +151,7 @@ function fallbackSelection(): ResourcesSelection {
       quote: 'Whatever it is that brought you here, you listened.',
       paragraphs: ['This is not simply an app.', 'It is an invitation.'],
       source: { collection: 'foundational_documents', id: 'the_initiation' },
+      revision: 1,
     },
     wordsAreOwn: false,
   });
@@ -442,6 +448,7 @@ describe('to watch and to read', () => {
           quote: 'A different quote.',
           paragraphs: ['A different line.'],
           source: WORDS_ON_VALUES.source,
+          revision: 2,
         },
       }),
     });

@@ -8,7 +8,7 @@
  * three sources agree, not that a fixture agrees with itself.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads the real `lib/app/content` and `leaf-bootstrap` seams
+ * FORK NOTE — this reads the real journey seed and `leaf-bootstrap` seams
  * ---------------------------------------------------------------------------
  * The counts are Lelañea's. A fork with a different journey pins its own.
  *
@@ -22,6 +22,10 @@ vi.mock('@/lib/framework/facilitation/map/version-service', () => ({ getPublishe
 vi.mock('@/lib/db/client', () => ({
   prisma: { appWaitlistEntry: { findMany: vi.fn(async () => []) } },
 }));
+// The journey's words are rows since t-87: the rows the seed writes, in memory.
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
 
 import { APIError } from '@/lib/api/errors';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
@@ -30,6 +34,9 @@ import { JOURNEY_MAP_SLUG, buildJourneyMapDefinition } from '@/lib/app/journey/m
 import { LELANEA_MODULE_COUNT } from '@/lib/app/modules/definitions';
 import { __resetModuleRegistryForTests } from '@/lib/framework/modules/registry';
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
+import { fakeJourneyStore } from '@/tests/helpers/app/content-stores';
+
+const store = fakeJourneyStore();
 
 const definition = buildJourneyMapDefinition();
 
@@ -39,6 +46,7 @@ function published(overrides: Partial<typeof definition> = {}) {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  store.reset();
   __resetModuleRegistryForTests();
   __resetErasureCleanupHooksForTests();
   await initLeafApp();
@@ -77,6 +85,20 @@ describe('getJourneyMap', () => {
       tier: 'embodied_relationship',
       state: 'open',
     });
+  });
+
+  it('names each module and tier from its row, not the file (t-87)', async () => {
+    store.editModule('module_11_curiosity_of_self', {
+      title: 'Curiosity, edited',
+      displayNumber: 'XI',
+    });
+    store.editTier('embodied_relationship', { label: 'Embodied, edited' });
+    getPublishedMap.mockResolvedValue(published());
+
+    const map = await getJourneyMap();
+
+    expect(map?.modules[11]).toMatchObject({ title: 'Curiosity, edited', displayNumber: 'XI' });
+    expect(map?.tiers[3]).toMatchObject({ id: 'embodied_relationship', label: 'Embodied, edited' });
   });
 
   it('reports a module the code does not register, rather than dropping it', async () => {

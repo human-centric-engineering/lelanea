@@ -117,7 +117,7 @@ import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
 import { logger } from '@/lib/logging';
 import { slotVocabulary } from '@/lib/app/slots/vocabulary';
-import { resourceOffering } from '@/lib/app/resources/offering';
+import { loadResourceOffering } from '@/lib/app/resources/offering';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -249,11 +249,11 @@ export async function loadVoiceContext(id: string): Promise<string> {
   // /code-review.
   const vocabulary = await slotVocabulary();
   // The offering rides on both paths for the vocabulary's reason: the admin
-  // chat's agent holds the same tool. A synchronous read of a memoised file,
+  // chat's agent holds the same tool. One read of the library per turn (t-87),
   // guarded because a throw from a contributor blanks the WHOLE block.
   let offering = '';
   try {
-    offering = resourceOffering();
+    offering = await loadResourceOffering();
   } catch (err) {
     logger.warn('resourceOffering: could not read the library; nothing will be offered', {
       error: err instanceof Error ? err.message : String(err),

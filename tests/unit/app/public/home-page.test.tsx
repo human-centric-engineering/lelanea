@@ -22,6 +22,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/app/content/document-store', async () =>
   (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
 );
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
 
 import { render, screen } from '@testing-library/react';
 

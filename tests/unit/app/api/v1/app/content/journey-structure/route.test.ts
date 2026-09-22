@@ -2,20 +2,32 @@
  * Unit Tests: GET /api/v1/app/content/journey-structure
  *
  * The public shape of the work: five tiers, seventeen modules, their phases.
+ * Served from the journey's rows (t-87), faked here by the rows the seed
+ * writes; `journey-structure-parity.test.ts` proves the route and the pages
+ * agree.
  *
  * @see app/api/v1/app/content/journey-structure/route.ts
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+
+vi.mock('@/lib/app/content/journey-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
+);
+
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v1/app/content/journey-structure/route';
+import { fakeJourneyStore } from '@/tests/helpers/app/content-stores';
+
+const store = fakeJourneyStore();
+beforeEach(() => store.reset());
 
 interface StructureBody {
   success: true;
   data: {
     collection: { title: string; subtitle: string; version: string };
     tiers: { id: string; modules: string[] }[];
-    modules: { id: string; tier: string }[];
+    modules: { id: string; tier: string; title: string; revision: number }[];
   };
 }
 
@@ -73,5 +85,22 @@ describe('GET /api/v1/app/content/journey-structure', () => {
     };
 
     expect(body.data).not.toHaveProperty('reviewNotes');
+  });
+
+  it('serves the row, not the file: an edited title is what the route returns', async () => {
+    store.editModule('module_11_curiosity_of_self', { title: 'Curiosity, edited' });
+
+    const body = (await (await GET(createRequest())).json()) as StructureBody;
+    const edited = body.data.modules.find((entry) => entry.id === 'module_11_curiosity_of_self');
+
+    expect(edited).toMatchObject({ title: 'Curiosity, edited', revision: 2 });
+  });
+
+  it('answers 500, not an empty journey, when the database was never seeded', async () => {
+    store.empty();
+
+    const response = await GET(createRequest());
+
+    expect(response.status).toBe(500);
   });
 });

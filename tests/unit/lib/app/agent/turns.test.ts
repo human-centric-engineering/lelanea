@@ -86,23 +86,21 @@ const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 
 // One film in the library, so a replay can carry a suggestion on its call's
 // frame (t-77). The shipped file holds none until her list lands.
-vi.mock('@/lib/app/content/resources', () => ({
-  getResourcesLibrary: () => ({
-    collection: {},
-    films: [
-      {
-        id: 'on-stalling',
-        title: 'On stalling',
-        subtitle: 'why the words you avoid are the work',
-        relatesTo: null,
-        duration: '5:04',
-        href: 'https://example.com/on-stalling',
-      },
-    ],
-    readings: [],
-    words: {},
-  }),
-}));
+// The library is rows since t-87: the seed's, plus one film a replay's chip
+// resolves to.
+vi.mock('@/lib/app/content/resource-store', async () => {
+  const { fakeResourceStore, filmRow } = await import('@/tests/helpers/app/content-stores');
+  const store = fakeResourceStore();
+  store.addResource(
+    filmRow('on-stalling', {
+      title: 'On stalling',
+      subtitle: 'why the words you avoid are the work',
+      duration: '5:04',
+      href: 'https://example.com/on-stalling',
+    })
+  );
+  return store;
+});
 
 vi.mock('@/lib/logging', () => ({
   logger: { warn, error, info: vi.fn(), debug: vi.fn() },

@@ -81,11 +81,15 @@ export interface FoundationalDocumentIndex {
  * more quietly than this.
  */
 export class ContentNotSeededError extends Error {
-  constructor() {
-    super(
-      'No foundational documents in the database. Run `npm run db:seed` ' +
-        '(prisma/seeds/app-lelanea/015-foundational-documents.ts).'
-    );
+  /**
+   * The journey, the questions and the resources (t-87) throw this too, naming
+   * what is missing and the seed unit that writes it.
+   */
+  constructor(
+    what = 'No foundational documents in the database',
+    seedUnit = '015-foundational-documents.ts'
+  ) {
+    super(`${what}. Run \`npm run db:seed\` (prisma/seeds/app-lelanea/${seedUnit}).`);
     this.name = 'ContentNotSeededError';
   }
 }

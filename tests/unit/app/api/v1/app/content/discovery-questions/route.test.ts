@@ -16,8 +16,16 @@ vi.mock('@/lib/auth/config', () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
+// The questions are rows since t-87: the rows the seed writes, in memory.
+vi.mock('@/lib/app/content/question-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeQuestionStore()
+);
+
 import { GET } from '@/app/api/v1/app/content/discovery-questions/route';
 import { auth } from '@/lib/auth/config';
+import { fakeQuestionStore } from '@/tests/helpers/app/content-stores';
+
+const store = fakeQuestionStore();
 
 interface QuestionsBody {
   success: true;
@@ -67,6 +75,7 @@ function createSession() {
 describe('GET /api/v1/app/content/discovery-questions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    store.reset();
     vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
   });
 
@@ -130,5 +139,19 @@ describe('GET /api/v1/app/content/discovery-questions', () => {
     };
 
     expect(body.data).not.toHaveProperty('reviewNotes');
+  });
+
+  it('serves the row, not the file: an edited question is what the route returns', async () => {
+    store.editQuestion('q01', { text: 'An edited first question.' });
+
+    const body = (await (await GET(createRequest())).json()) as QuestionsBody;
+
+    expect(body.data.questions[0]).toMatchObject({ id: 'q01', text: 'An edited first question.' });
+  });
+
+  it('answers 500 when the database was never seeded', async () => {
+    store.empty();
+
+    expect((await GET(createRequest())).status).toBe(500);
   });
 });

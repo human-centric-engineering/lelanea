@@ -31,23 +31,10 @@ vi.mock('@/lib/framework/facilitation/agents/surface', () => ({
   FACILITATION_SURFACE_CONTEXT_TYPE: 'facilitation',
 }));
 // One film in the library, so a suggestion can be resolved from a trace (t-77).
-vi.mock('@/lib/app/content/resources', () => ({
-  getResourcesLibrary: () => ({
-    collection: {},
-    films: [
-      {
-        id: 'on-stalling',
-        title: 'On stalling',
-        subtitle: 'why the words you avoid are the work',
-        relatesTo: null,
-        duration: '5:04',
-        href: 'https://example.com/on-stalling',
-      },
-    ],
-    readings: [],
-    words: {},
-  }),
-}));
+// The library is rows since t-87: the seed's, plus this film.
+vi.mock('@/lib/app/content/resource-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeResourceStore()
+);
 
 import {
   assembleTranscript,
@@ -55,6 +42,27 @@ import {
   readTranscript,
 } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
+import { toResourcesLibrary } from '@/lib/app/content/resource-view';
+import { fakeResourceStore, filmRow, seededResourceRows } from '@/tests/helpers/app/content-stores';
+
+const ON_STALLING = filmRow('on-stalling', {
+  title: 'On stalling',
+  subtitle: 'why the words you avoid are the work',
+  duration: '5:04',
+  href: 'https://example.com/on-stalling',
+});
+fakeResourceStore().addResource(ON_STALLING);
+
+/** The library the pure assembly resolves chips against: the seed's, plus the film. */
+const seededLibrary = seededResourceRows();
+const LIBRARY = toResourcesLibrary(
+  seededLibrary.collection,
+  [...seededLibrary.resources, { ...ON_STALLING, position: 0, revision: 1 }],
+  seededLibrary.words
+);
+const assemble = (
+  ...args: [Parameters<typeof assembleTranscript>[0], Parameters<typeof assembleTranscript>[1]]
+) => assembleTranscript(...args, LIBRARY);
 
 /**
  * Enough of an `AuthenticatedSession` for the read: a member, whose policy
@@ -143,7 +151,7 @@ function turn(
 
 describe('assembleTranscript', () => {
   it('pairs a reply with the turn row that names it, carrying the account', () => {
-    const entries = assembleTranscript(
+    const entries = assemble(
       [user('u1', 'Hello', 1, 't1'), assistant('a1', 'Welcome.', 3)],
       [turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' })]
     );
@@ -181,7 +189,7 @@ describe('assembleTranscript', () => {
     // The population: two user rows for the one turn, present in the fixture.
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
 
-    const entries = assembleTranscript(messages, [
+    const entries = assemble(messages, [
       turn('t1', { attempts: 2, userMessageId: 'u2', assistantMessageId: 'a2' }),
     ]);
 
@@ -206,7 +214,7 @@ describe('assembleTranscript', () => {
     ];
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
 
-    const entries = assembleTranscript(messages, [
+    const entries = assemble(messages, [
       turn('t1', { attempts: 2, userMessageId: 'u2', assistantMessageId: 'final' }),
     ]);
 
@@ -230,7 +238,7 @@ describe('assembleTranscript', () => {
     ];
     expect(messages.some((m) => m.id === 'pass1')).toBe(true);
 
-    const entries = assembleTranscript(messages, [
+    const entries = assemble(messages, [
       turn('t1', {
         status: 'failed',
         errorCode: 'timed_out',
@@ -247,13 +255,13 @@ describe('assembleTranscript', () => {
     // Her final row is written a moment before the turn row links it; a reload
     // in that window must not lose the reply. And `reply_not_linked` means she
     // answered on the stream — the words are in the conversation.
-    const running = assembleTranscript(
+    const running = assemble(
       [user('u1', 'q', 1, 't1'), assistant('a1', 'partial…', 2)],
       [turn('t1', { status: 'running', userMessageId: 'u1', assistantMessageId: null })]
     );
     expect(running.map((e) => e.kind)).toEqual(['user', 'reply']);
 
-    const unlinked = assembleTranscript(
+    const unlinked = assemble(
       [user('u1', 'q', 1, 't1'), assistant('a1', 'the whole answer', 2)],
       [
         turn('t1', {
@@ -270,7 +278,7 @@ describe('assembleTranscript', () => {
 
   it('keeps two messages with the same words apart when they are different turns', () => {
     // Saying the same thing twice on purpose is two turns, and both stay.
-    const entries = assembleTranscript(
+    const entries = assemble(
       [
         user('u1', 'Hello?', 1, 't1'),
         assistant('a1', 'Hello.', 2),
@@ -295,7 +303,7 @@ describe('assembleTranscript', () => {
     // The population: the marker is in the fixture.
     expect(messages.some((m) => m.content.startsWith('[An error'))).toBe(true);
 
-    const entries = assembleTranscript(messages, [
+    const entries = assemble(messages, [
       turn('t1', { status: 'failed', errorCode: 'timed_out', userMessageId: 'u1' }),
     ]);
 
@@ -305,7 +313,7 @@ describe('assembleTranscript', () => {
   });
 
   it('joins a tool-using turn’s passes into one reply, keyed on the terminal row, naming what it called', () => {
-    const entries = assembleTranscript(
+    const entries = assemble(
       [
         user('u1', 'What does she say about boundaries?', 1, 't1'),
         assistant('pass1', 'Let me look. ', 2),
@@ -337,7 +345,7 @@ describe('assembleTranscript', () => {
   });
 
   it('rebuilds what the turn offered from its traces, by id, and nothing for an id the library lost', () => {
-    const entries = assembleTranscript(
+    const entries = assemble(
       [
         user('u1', 'I keep putting it off.', 1, 't1'),
         assistant('a1', 'There is a piece on exactly this.', 2, {
@@ -384,7 +392,7 @@ describe('assembleTranscript', () => {
   });
 
   it('a turn that called nothing says so, and a failed turn’s tool row never leaks into the next reply', () => {
-    const entries = assembleTranscript(
+    const entries = assemble(
       [
         user('u1', 'first', 1, 't1'),
         // A failed mid-loop turn: a call answered, then no reply — the
@@ -405,7 +413,7 @@ describe('assembleTranscript', () => {
   });
 
   it('carries a reply written before the seam existed, with no account', () => {
-    const entries = assembleTranscript([user('u0', 'old', 1), assistant('a0', 'older', 2)], []);
+    const entries = assemble([user('u0', 'old', 1), assistant('a0', 'older', 2)], []);
     expect(entries[0]).toMatchObject({ kind: 'user', turnId: null });
     expect(entries[1]).toMatchObject({ kind: 'reply', turnId: null, turn: null });
   });
@@ -424,7 +432,7 @@ describe('assembleTranscript', () => {
       excerpt: 'A boundary is…',
       similarity: 0.8,
     };
-    const entries = assembleTranscript(
+    const entries = assemble(
       [
         user('u1', 'q', 1, 't1'),
         assistant('a1', 'r', 2, { provenance: { citations: [citation] } }),
@@ -482,5 +490,43 @@ describe('readTranscript', () => {
     });
     expect(transcript.conversationId).toBe(CONVERSATION);
     expect(transcript.entries).toHaveLength(2);
+  });
+
+  it('resolves a chip from the library row as it stands, reading the library once (t-87)', async () => {
+    const store = fakeResourceStore();
+    store.editResource('on-stalling', { title: 'On stalling, edited' });
+    store.getResourcesLibrary.mockClear();
+    resolveSurface.mockResolvedValue({
+      agentId: 'a',
+      agentSlug: 's',
+      conversationId: CONVERSATION,
+    });
+    const offered = {
+      provenance: {
+        citations: [],
+        capabilityCalls: [
+          {
+            slug: 'suggest_resource',
+            arguments: { id: 'on-stalling' },
+            latencyMs: 1,
+            success: true,
+          },
+        ],
+      },
+    };
+    findMessages.mockResolvedValue([
+      user('u1', 'one', 1, 't1'),
+      assistant('a1', 'a piece on this', 2, offered),
+      user('u2', 'two', 3, 't2'),
+      assistant('a2', 'and again', 4, offered),
+    ]);
+    findTurns.mockResolvedValue([]);
+
+    const transcript = await readTranscript(SESSION, CONVERSATION_SEAT);
+
+    expect(store.getResourcesLibrary).toHaveBeenCalledTimes(1);
+    expect(transcript.entries[1]).toMatchObject({
+      suggestions: [{ id: 'on-stalling', title: 'On stalling, edited' }],
+    });
   });
 });

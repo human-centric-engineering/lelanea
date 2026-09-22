@@ -143,10 +143,11 @@ vi.mock('@/lib/logging', () => ({
  */
 const offering = vi.hoisted(() => ({ text: '', fail: false }));
 vi.mock('@/lib/app/resources/offering', () => ({
-  resourceOffering: () => {
+  // Async since t-87: one read of the library per turn.
+  loadResourceOffering: vi.fn(async () => {
     if (offering.fail) throw new Error('library unreadable');
     return offering.text;
-  },
+  }),
 }));
 
 /**

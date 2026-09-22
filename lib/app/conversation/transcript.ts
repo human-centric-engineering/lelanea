@@ -53,7 +53,8 @@ import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
-import { suggestionsFromProvenance } from '@/lib/app/resources/suggest';
+import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
+import type { ResourcesLibrary } from '@/lib/app/content/resources';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
@@ -201,8 +202,15 @@ function accountOf(turn: TurnRow): TurnAccount {
  * consecutive assistant rows between two of the person's rows become one
  * reply whose id is the last row's — the terminal one the turn row names and
  * the one carrying the citations.
+ *
+ * `library` resolves each reply's suggestion chips (t-87): the caller reads it
+ * once for the whole conversation. `null` shows no chips.
  */
-export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): TranscriptEntry[] {
+export function assembleTranscript(
+  messages: MessageRow[],
+  turns: TurnRow[],
+  library: ResourcesLibrary | null
+): TranscriptEntry[] {
   const byUserMessage = new Map<string, TurnRow>();
   const byAssistantMessage = new Map<string, TurnRow>();
   for (const turn of turns) {
@@ -246,7 +254,7 @@ export function assembleTranscript(messages: MessageRow[], turns: TurnRow[]): Tr
       turnId: turn?.turnId ?? null,
       citations: citationsOf(terminal.provenance),
       capabilities: answeredCapabilities(terminal.provenance),
-      suggestions: suggestionsFromProvenance(terminal.provenance),
+      suggestions: suggestionsFromProvenance(terminal.provenance, library),
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;
@@ -359,5 +367,10 @@ export async function readTranscript(
     }),
   ]);
 
-  return { seat, conversationId, entries: assembleTranscript(messages, turns) };
+  // One read of the library for every chip in the conversation, and none when
+  // nothing was suggested (t-87).
+  const library = await loadLibraryForChips(
+    messages.filter((row) => row.role === 'assistant').map((row) => row.provenance)
+  );
+  return { seat, conversationId, entries: assembleTranscript(messages, turns, library) };
 }

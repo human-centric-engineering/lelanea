@@ -19,15 +19,17 @@
  *
  * **A throw here skips the framework module sync**, deliberately — see the
  * comment on the `await initLeafApp()` call in `bootstrap.ts`. Everything
- * registered from this function must therefore be a pure, synchronous
- * registration: no I/O, no database, no network. The one step that CAN throw
- * — deriving the module definitions parses the bundled structure file — goes
- * last, so a content mistake can never leave the Art. 17 hook unregistered.
- * CI parses the real file first anyway (`tests/unit/lib/app/content/schemas.test.ts`).
+ * registered from this function is therefore a pure, synchronous registration:
+ * no I/O, no database, no network. **One step reads the database, and it cannot
+ * throw** (t-87): the modules are registered from the code roster first, then
+ * renamed from their `app_journey_module` rows, and a failed read is logged and
+ * leaves the roster's registration standing. See the module loop below.
  */
 
+import { logger } from '@/lib/logging';
 import { registerModule } from '@/lib/framework/modules/registry';
 import { getModuleDefinitions } from '@/lib/app/modules/definitions';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
 import { registerFacilitationTurnHook } from '@/lib/framework/facilitation/agents/turn-hook';
 import { runRecordedTurn } from '@/lib/app/agent/turns';
@@ -83,9 +85,38 @@ export function initLeafApp(): Promise<void> {
   // second boot in the same process replaces rather than duplicates; the
   // framework's boot sync then upserts a `framework_module` row per slug and
   // leaves the operator columns alone. See `lib/app/modules/definitions.ts`.
+  //
+  // First from the roster alone, synchronously, so every slug is registered
+  // whatever happens next: the sync after this function must never see a
+  // half-populated registry, or it would flag the missing modules as removed.
   for (const definition of getModuleDefinitions()) {
     registerModule(definition);
   }
 
-  return Promise.resolve();
+  // Then with her words (t-87). A module's title is owned by its
+  // `app_journey_module` row, and the definition's name is derived from it, so
+  // the agent's module context and the map-node embeddings say what the drawer
+  // says. It is the same slugs again, so this replaces each definition in place.
+  // Not awaited as a throw: a database that cannot be read at startup leaves
+  // the roster's names, which are spelled from the slug, and says so. The sync
+  // still runs, and the next boot that can read the rows renames them in the
+  // registry. It does NOT rename `framework_module.name`: the framework writes
+  // that column only when it creates the row. So a first boot of a new
+  // environment that fails this read keeps the slug-spelled names there, as
+  // Daybreak's admin display label, until an operator renames them. Nothing of
+  // hers reads that column (see `.context/app/journey.md`, "Who owns what").
+  return registerModuleTexts();
+}
+
+async function registerModuleTexts(): Promise<void> {
+  try {
+    const structure = await getJourneyStructure();
+    for (const definition of getModuleDefinitions(structure)) {
+      registerModule(definition);
+    }
+  } catch (err) {
+    logger.warn('initLeafApp: module names could not be read; registered from the roster', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

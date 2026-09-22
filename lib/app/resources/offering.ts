@@ -17,14 +17,15 @@
  * The same reason as the vocabulary's: an `enum` of ids on the schema would be
  * the right place, but the advertised schema is the `ai_capability` row, which
  * our seed re-applies on every run — so the ids would go stale between the
- * file changing and the next reseed. Read here per turn, the list is the file's
- * as deployed, and an empty file offers nothing rather than a stale something.
+ * library changing and the next reseed. Read here per turn, the list is the
+ * library as it stands (`app_resource`, t-87), and an empty library offers
+ * nothing rather than a stale something.
  *
  * ## One line per resource, flattened
  *
  * `buildContext` frames the block with a fence at column 0, and a title or a
  * subtitle is authored text. Every field is collapsed to one line so nothing
- * from the file can reach column 0 except the `- ` this writes — the
+ * from the library can reach column 0 except the `- ` this writes — the
  * vocabulary block's rule, for the vocabulary block's reason.
  *
  * ## Empty when there is nothing to offer, and that is deliberate
@@ -38,8 +39,10 @@
  * @see lib/app/resources/suggest.ts — the tool the ids are for
  */
 
-import { getJourneyStructure } from '@/lib/app/content';
-import { getResourcesLibrary } from '@/lib/app/content/resources';
+import { getJourneyStructure } from '@/lib/app/content/journey-store';
+import { getResourcesLibrary } from '@/lib/app/content/resource-store';
+import type { JourneyStructure } from '@/lib/app/content/journey-view';
+import type { ResourcesLibrary } from '@/lib/app/content/resources';
 
 /**
  * The heading, and the rule that travels with the list — here rather than only
@@ -69,19 +72,29 @@ function belongs(relatesTo: string | null, titles: ReadonlyMap<string, string>):
 }
 
 /**
- * The offering block, or `''` when the library holds nothing to offer.
+ * The offering block for this turn, or `''` when the library holds nothing to
+ * offer.
  *
- * Synchronous: the library and the structure are parsed once and memoised.
- * Wrapped in the same degrade-to-nothing the vocabulary uses, because a throw
- * from a contributor blanks the WHOLE block, voice and all.
+ * **One read of the library per turn** (t-87): the voice block is built on
+ * every turn, and this is its one call. The journey is read only when there is
+ * something to offer, for the module titles the list names. The caller wraps
+ * it in the same degrade-to-nothing the vocabulary uses, because a throw from a
+ * contributor blanks the WHOLE block, voice and all.
  */
-export function resourceOffering(): string {
-  const library = getResourcesLibrary();
+export async function loadResourceOffering(): Promise<string> {
+  const library = await getResourcesLibrary();
+  if (library.films.length === 0 && library.readings.length === 0) return '';
+  return resourceOffering(library, await getJourneyStructure());
+}
+
+/**
+ * The offering block for a library and a journey already read, or `''` when
+ * the library holds nothing to offer. Pure, so a test can hand it rows.
+ */
+export function resourceOffering(library: ResourcesLibrary, journey: JourneyStructure): string {
   if (library.films.length === 0 && library.readings.length === 0) return '';
 
-  const titles = new Map<string, string>(
-    getJourneyStructure().modules.map((m) => [m.id, m.title] as const)
-  );
+  const titles = new Map<string, string>(journey.modules.map((m) => [m.id, m.title] as const));
   titles.set('journey', 'the journey');
   titles.set('situations', 'life situations');
 

@@ -1,14 +1,15 @@
 /**
- * The journey map definition, derived from the real structure file.
+ * The journey map definition, derived from the code roster (t-87).
  *
  * No mocks: what matters is that the graph the seed publishes agrees with the
- * module registry and the content API, and only the real file proves that. The
+ * module registry and the content API, so it is checked against the journey as
+ * the store serves it from the rows the real seed writes. The
  * framework's own validation chain is run over the result — Zod shape, static
  * referential integrity, graph invariants — because "publishable" is the
  * property the seed depends on, and a green Zod parse alone does not prove it.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * FORK NOTE — this reads the real roster and journey seed, not a fixture
  * ---------------------------------------------------------------------------
  * The counts and keys below are Lelañea's five tiers and seventeen modules. A
  * fork with a different journey pins its own; a fork with no `content/` has no
@@ -18,7 +19,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getJourneyStructure } from '@/lib/app/content';
+import { toJourneyStructure } from '@/lib/app/content/journey-view';
+import { seededJourneyRows } from '@/tests/helpers/app/content-stores';
 import { getModuleDefinitions, LELANEA_MODULE_COUNT } from '@/lib/app/modules/definitions';
 import {
   JOURNEY_MAP_SLUG,
@@ -31,7 +33,8 @@ import { validateGraphInvariants } from '@/lib/framework/facilitation/engine/inv
 import { validatePublishableMap } from '@/lib/framework/facilitation/map/version-service';
 
 const definition = buildJourneyMapDefinition();
-const structure = getJourneyStructure();
+const rows = seededJourneyRows();
+const structure = toJourneyStructure(rows.journey, rows.tiers, rows.modules);
 const regions = definition.nodes.filter((n) => n.type === 'region');
 const places = definition.nodes.filter((n) => n.type === 'module');
 

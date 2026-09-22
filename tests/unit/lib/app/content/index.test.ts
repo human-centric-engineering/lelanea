@@ -1,148 +1,62 @@
 /**
  * Unit Tests: lib/app/content/index.ts — the authored-content loader
  *
- * Covers the file-backed accessors that remain until t-87 — the journey and
- * the discovery questions — and their parse-once memoisation. The foundational
- * documents are read from the database since t-86; see `document-store.test.ts`.
+ * Since t-87 this module loads only the voice material from files (the
+ * fingerprint, the overlays and the golden set, covered by their own test
+ * files). Her documents (t-86), the journey's text, the discovery questions and
+ * the resource library (t-87) are read from the database through their stores,
+ * and only their shapes are re-exported here.
+ *
+ * What is pinned here is that boundary: this module must not load the journey
+ * or the questions from their files any more, and must stay free of the
+ * database, because the voice fingerprint's import closure is walked for it
+ * (`tests/unit/lib/app/voice/fingerprint.test.ts`). The projection cases that
+ * used to live here moved with the projection, to `journey-seed.test.ts` and
+ * `question-seed.test.ts`.
+ *
+ * Named for the module it mirrors, not for what it covers. `check:missing-tests`
+ * enforces the mirror convention, and a module reported as untested on every
+ * `/pre-pr` run teaches people to skim past the check.
  *
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The document ids (`the_initiation`, `the_mission`) are Lelañea's own copy. A
- * fork that replaces `content/` should repoint these at its own document ids and
- * keep the cases: what is being asserted — reading order, normalisation, the
- * `null`-not-throw contract, memoisation — is the loader's behaviour, and holds
- * for any content. Do not mock the seam here; a mocked loader would assert
- * nothing but the mock.
- *
- * Named for the module it mirrors, not for what it covers. `loader.test.ts`
- * read better but sat outside the mirror convention `check:missing-tests`
- * enforces, so every `/pre-pr` run reported this module as untested — an
- * advisory that is wrong, recurring, and the kind that teaches people to skim
- * past the check.
+ * It has to: what is pinned is what this module imports and exports. A fork
+ * that still loads a collection here from a file should drop that file's name
+ * from the first case, not the case.
  *
  * @see lib/app/content/index.ts
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { getDiscoveryQuestions, getJourneyStructure } from '@/lib/app/content';
+
+import * as content from '@/lib/app/content';
+
+const source = readFileSync(path.join(process.cwd(), 'lib/app/content/index.ts'), 'utf8');
 
 describe('authored content loader', () => {
-  // Her foundational documents moved to the database in t-86. Their reads are
-  // covered against a mocked client in `document-store.test.ts`; this file keeps
-  // the collections that are still read from files until t-87.
-  describe('memoisation', () => {
-    it('returns the very same view on repeat calls (projected once, memoised)', () => {
-      expect(getJourneyStructure()).toBe(getJourneyStructure());
-      expect(getDiscoveryQuestions()).toBe(getDiscoveryQuestions());
-    });
+  it('no longer reads the journey, the questions or the resources from their files', () => {
+    expect(source).not.toContain('lelanea_module_structure.json');
+    expect(source).not.toContain('onboarding_discovery_questions.json');
+    expect(source).not.toContain('lelanea_resources.json');
   });
 
-  describe('getJourneyStructure', () => {
-    it('carries the journey title and subtitle as authored', () => {
-      const { collection } = getJourneyStructure();
-
-      expect(collection.title).toBeTruthy();
-      expect(collection.subtitle).toBeTruthy();
-    });
-
-    it('lists every module under exactly one tier', () => {
-      const structure = getJourneyStructure();
-      const listed = structure.tiers.flatMap((tier) => tier.modules);
-
-      expect(listed).toHaveLength(structure.modules.length);
-      expect(new Set(listed).size).toBe(structure.modules.length);
-    });
-
-    it('withholds the editorial review notes', () => {
-      expect(getJourneyStructure()).not.toHaveProperty('reviewNotes');
-    });
-
-    it('withholds the maintainers’ working notes from every module and phase', () => {
-      // These reach an UNAUTHENTICATED endpoint. An earlier draft returned
-      // `file.modules` wholesale and published "No authored screen yet. Needs a
-      // short module opener.", the names of the content files on disk, and the
-      // rest of the build's internal annotations. The projection is what stops
-      // that, and this is what stops the projection quietly regressing.
-      for (const entry of getJourneyStructure().modules) {
-        expect(entry).not.toHaveProperty('notes');
-        expect(entry).not.toHaveProperty('appBehavior');
-        expect(entry).not.toHaveProperty('contentRef');
-        for (const phase of entry.phases) {
-          expect(phase).not.toHaveProperty('contentNote');
-          expect(phase).not.toHaveProperty('contentFile');
-          expect(phase).not.toHaveProperty('contentSteps');
-          expect(phase).not.toHaveProperty('contentQuestions');
-        }
-      }
-    });
-
-    it('projects tiers too, not just modules and phases', () => {
-      // The one level that was still passing through wholesale after the first
-      // round of fixes. Safe at the time — but it was the single place where a
-      // new authored annotation would have been published by default, which is
-      // the failure mode the projection exists to remove.
-      for (const tier of getJourneyStructure().tiers) {
-        expect(Object.keys(tier).sort()).toEqual(['id', 'intent', 'label', 'modules', 'order']);
-      }
-    });
-
-    it('keeps the two fields a public client genuinely needs', () => {
-      const phases = getJourneyStructure().modules.flatMap((entry) => entry.phases);
-
-      // `contentRef` is a link: a client turns it into a /documents/:id request.
-      expect(phases.some((phase) => phase.contentRef === 'the_initiation')).toBe(true);
-      // `proposed` keeps the public view honest about what is not built yet.
-      expect(phases.some((phase) => phase.proposed)).toBe(true);
-    });
-
-    it('normalises every projected optional, so no field is undefined', () => {
-      for (const entry of getJourneyStructure().modules) {
-        expect(entry.subtitle).not.toBeUndefined();
-        expect(entry.chartTitle).not.toBeUndefined();
-        expect(entry.produces).not.toBeUndefined();
-        for (const phase of entry.phases) {
-          expect(phase.contentRef).not.toBeUndefined();
-          expect(phase.proposed).not.toBeUndefined();
-          expect(phase.questionCount).not.toBeUndefined();
-        }
-      }
-    });
+  it('exposes no read of a database-backed collection, only the shapes', () => {
+    // A read re-exported here would pull the database client into everything
+    // that imports this module, including the voice fingerprint.
+    expect(content).not.toHaveProperty('getJourneyStructure');
+    expect(content).not.toHaveProperty('getDiscoveryQuestions');
+    expect(content).not.toHaveProperty('getFoundationalDocument');
+    expect(source).not.toMatch(
+      /from '@\/lib\/app\/content\/(journey|question|resource|document)-store'/
+    );
   });
 
-  describe('getDiscoveryQuestions', () => {
-    it('numbers the questions from one, in order', () => {
-      const { questions } = getDiscoveryQuestions();
-
-      expect(questions.map((question) => question.number)).toEqual(
-        questions.map((_, index) => index + 1)
-      );
-    });
-
-    it('keeps the preamble and the pacing guidance with the questions', () => {
-      const { preamble, pacing } = getDiscoveryQuestions();
-
-      expect(preamble.text).toBeTruthy();
-      expect(pacing.rushDiscouraged).toBe(true);
-    });
-
-    it('withholds the editorial review notes and the source-file provenance', () => {
-      const set = getDiscoveryQuestions();
-
-      expect(set).not.toHaveProperty('reviewNotes');
-      expect(set.collection).not.toHaveProperty('sourceFile');
-      expect(set.collection).not.toHaveProperty('notes');
-    });
-
-    it('projects each question, so a future authored annotation is withheld', () => {
-      // The last accessor that returned its payload wholesale. Auth-gated, so
-      // lower stakes than the journey leak — but the same publish-by-default
-      // shape, and the doc claims every accessor projects.
-      const allowed = ['id', 'number', 'text', 'inputType', 'hint', 'conditionalFollowUp'];
-
-      for (const question of getDiscoveryQuestions().questions) {
-        expect(Object.keys(question).every((key) => allowed.includes(key))).toBe(true);
-      }
-    });
+  it('still serves the voice material, projected once and memoised', () => {
+    expect(content.getVoiceFingerprint()).toBe(content.getVoiceFingerprint());
+    expect(content.getVoiceOverlays()).toBe(content.getVoiceOverlays());
+    expect(content.getVoiceGoldenSet()).toBe(content.getVoiceGoldenSet());
   });
 });

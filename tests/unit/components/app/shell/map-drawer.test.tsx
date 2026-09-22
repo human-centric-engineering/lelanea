@@ -5,14 +5,15 @@
  * opening a row routes and closes the drawer, and `aria-current` follows the
  * open module.
  *
- * The API client is mocked with a projection of the REAL structure — built
- * from `getJourneyStructure()` rather than typed — so a module added to the
- * content shows up in these counts rather than in a stale fixture. The drawer
+ * The API client is mocked with a projection of the REAL structure — the rows
+ * the journey seed writes, through the real projection (t-87), rather than
+ * typed — so a module added to the journey shows up in these counts rather than
+ * in a stale fixture. The drawer
  * mechanism (slide, scrim, focus) is `drawer.test.tsx`'s; this file is about
  * what is in it.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads the real `lib/app/content` seam, not a mock
+ * FORK NOTE — this reads the real journey seed, not a hand-written fixture
  * ---------------------------------------------------------------------------
  * The five tier labels and seventeen rows are Lelañea's. A fork with a
  * different journey pins its own counts and names; a fork with no `content/`
@@ -29,10 +30,11 @@ import { JOURNEY_MAP_ENDPOINT, TIER_INKS } from '@/components/app/shell/map-draw
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
-import { getJourneyStructure } from '@/lib/app/content';
+import { toJourneyStructure } from '@/lib/app/content/journey-view';
 import type { JourneyMapView } from '@/lib/app/journey/map';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
+import { seededJourneyRows } from '@/tests/helpers/app/content-stores';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
@@ -45,7 +47,8 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
 
 /** The real journey, projected the way the route projects it. */
 function realMap(): JourneyMapView {
-  const structure = getJourneyStructure();
+  const rows = seededJourneyRows();
+  const structure = toJourneyStructure(rows.journey, rows.tiers, rows.modules);
   return {
     slug: 'lelanea-journey',
     version: 1,
