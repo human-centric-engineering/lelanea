@@ -14,29 +14,33 @@
 import { render } from '@react-email/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
+
 import WaitlistConfirmationEmail, {
-  CONFIRMATION_BEATS,
+  CONFIRMATION_SECTION,
   firstNameOf,
 } from '@/components/app/emails/waitlist-confirmation';
 import * as sections from '@/lib/app/content/sections';
-import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
+import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
+import { fakeDocumentStore, rewriteSection } from '@/tests/helpers/app/foundational-documents';
 import { BRAND } from '@/lib/brand';
 
 vi.mock('@/lib/app/content/sections', { spy: true });
 
 beforeEach(() => {
   vi.mocked(sections.requireDocument).mockClear();
+  fakeDocumentStore().reset();
 });
 
 const PROPS = { name: 'Ada Lovelace', email: 'ada@example.com', baseUrl: 'https://example.com' };
 
 describe('WaitlistConfirmationEmail — what they have joined, in her words', () => {
-  it('pins the range to its first and last beat', () => {
-    const beats = paragraphRange(
-      requireDocument('the_initiation'),
-      CONFIRMATION_BEATS.from,
-      CONFIRMATION_BEATS.to
-    );
+  it('quotes the section whose first and last beat are the invitation', async () => {
+    const beats = selectSectionText(await requireDocument('the_initiation'), CONFIRMATION_SECTION);
     expect(beats[0]).toBe('This is not simply an app.');
     expect(beats[1]).toBe('It is an invitation.');
     expect(beats[beats.length - 1]).toMatch(/^An invitation to explore/);
@@ -51,6 +55,19 @@ describe('WaitlistConfirmationEmail — what they have joined, in her words', ()
     // The line before the range greets someone who has arrived. A joiner has not.
     expect(html).not.toContain('Welcome to Lelañea.');
     expect(html).not.toContain('{{first_name}}');
+  });
+
+  it('quotes the DATABASE row, not the file', async () => {
+    // t-86: a stored row that differs from the file is what the email sends.
+    fakeDocumentStore().editBlocks('the_initiation', (blocks) =>
+      rewriteSection(blocks, CONFIRMATION_SECTION, (index) => `Edited beat ${index}.`)
+    );
+
+    const html = await render(<WaitlistConfirmationEmail {...PROPS} />);
+
+    expect(html).toContain('Edited beat 0.');
+    expect(html).toContain('Edited beat 2.');
+    expect(html).not.toContain('This is not simply an app.');
   });
 
   it('reads the document during render, not when called as a function', async () => {

@@ -3,7 +3,8 @@
 /**
  * AuthoredDocument in production: an unresolved placeholder is her copy, plain.
  *
- * FORK NOTE — this reads the real `lib/app/content` seam (no `vi.mock`). It
+ * FORK NOTE — this renders her real documents as the seed stores them (through
+ * `tests/helpers/app/foundational-documents.ts`), not a fixture. It
  * asserts one property of the renderer — an unresolved placeholder is plain in
  * production — using `terms_of_use` because that is where this app's unfilled
  * placeholders are. A fork swaps in a document of its own that still carries
@@ -20,14 +21,17 @@ import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AuthoredDocument } from '@/components/app/content/authored-document';
-import { getFoundationalDocument, type FoundationalDocumentDetail } from '@/lib/app/content';
+import type { FoundationalDocumentDetail } from '@/lib/app/content';
+import { toDocumentDetail } from '@/lib/app/content/document-view';
+import { seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
 
 vi.mock('@/lib/env', () => ({ env: { NODE_ENV: 'production' } }));
 
+/** Her documents as the store serves them: seeded rows, real projection (t-86). */
 function load(id: string): FoundationalDocumentDetail {
-  const doc = getFoundationalDocument(id);
-  if (doc === null) throw new Error(`authored document '${id}' is missing`);
-  return doc;
+  const row = seededDocumentRows().find((candidate) => candidate.id === id);
+  if (!row) throw new Error(`authored document '${id}' is missing`);
+  return toDocumentDetail(row);
 }
 
 describe('placeholder marking in production', () => {

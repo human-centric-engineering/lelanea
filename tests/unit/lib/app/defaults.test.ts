@@ -548,6 +548,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppAgentSettings',
         'AppCrisisCopy',
         'AppCrisisRegion',
+        'AppDocumentCollection',
+        'AppFoundationalDocument',
+        'AppFoundationalDocumentRevision',
         'AppKnowledgeDesignation',
         'AppSafetyEvent',
         'AppSlotDefinition',
@@ -619,6 +622,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // above, not here.
         'AppSlotDefinition',
         'AppSlotDefinitionRevision',
+        // f-content-seeds t-86 — her foundational documents and their history.
+        // Words, not people; who agreed to which version is `AppAcknowledgement`,
+        // a source above. The revision keeps an editing admin's id, and its
+        // reason says so.
+        'AppDocumentCollection',
+        'AppFoundationalDocument',
+        'AppFoundationalDocumentRevision',
         // f-slots t-72 — the retry guard's ledger. A slug, a version number and
         // a timestamp, kept so a re-run turn cannot record one thing twice. The
         // rule above still holds and this row is the edge case that tests it:

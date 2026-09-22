@@ -1,269 +1,240 @@
 /**
- * Selecting parts of an authored document, and the handles the pages select by.
+ * Selecting parts of a stored document by section key, and the keys the
+ * surfaces select by.
  *
  * Two jobs, and the second is the one that matters more.
  *
- * The first is ordinary: `selectSection`, `paragraphAt` and `paragraphRange`
- * behave as documented, including at the edges.
+ * The first is ordinary: `requireDocument`, `selectSection`,
+ * `selectSectionHeading` and `selectSectionText` behave as documented,
+ * including at the edges.
  *
- * The second is that **every handle a public page selects by still resolves**.
- * `/data` names four disclaimer headings, the home page names three paragraph
- * ranges, and both are the kind of coupling that breaks silently when somebody
- * edits the authored JSON — a renamed heading, a beat inserted near the top.
- * `sections.ts` is built to fail loudly at that, and these cases are what turn
- * "loudly at render" into "loudly in CI, naming the range".
+ * The second is that **every key a surface selects by resolves to the passage
+ * it showed before t-86**. The home page, `/data` and both emails used to cut
+ * her text by paragraph index, heading text and a regex. The seed now puts the
+ * owner's keys on the blocks, and these cases pin the opening and closing words
+ * of each key's passage. A key that drifted would render valid prose in the
+ * wrong place, and nothing else would notice.
  *
- * ## Pinned to the CONTENT, not to a fixture
+ * ## Pinned to the SEEDED content, not to a fixture
  *
- * These read `content/lelanea_foundational_documents.json` through the real
- * loader rather than a synthetic document. A fixture would test the functions
- * and prove nothing about the coupling — which is the entire point of the
- * second half of this file.
+ * The document store is replaced by the fake in
+ * `tests/helpers/app/foundational-documents.ts`, which holds exactly the rows the
+ * real seed builds from `content/lelanea_foundational_documents.json`, through
+ * the real row projection. Only the query is faked.
  *
- * ---------------------------------------------------------------------------
- * FORK NOTE
- * ---------------------------------------------------------------------------
- * This reads the REAL `@/lib/app/content` seam and cannot usefully be mocked.
- * Half of it exists to assert facts about the content itself — that the
- * disclaimer still has a section headed "Crisis Situations", that
- * `the_initiation`'s beat 51 is still where the home page thinks it is — and a
- * fixture would assert those about a document nobody ships.
- *
- * A fork with its own authored content should expect the second `describe`
- * block ("the handles the public pages select by") to fail wholesale, and that
- * is the file working: those cases are the fork's own page-to-content
- * couplings, and they need rewriting to name the fork's headings and ranges,
- * not deleting. The first half — `selectSection`, `paragraphAt`,
- * `paragraphRange` behaviour — is generic apart from the strings it happens to
- * assert on, and is worth keeping with those swapped.
- *
- * A fork that dropped the authored-content pipeline should delete this file
- * along with `lib/app/content/sections.ts`, which has no other consumer.
+ * FORK NOTE: a fork with its own authored content should expect the last
+ * `describe` block to fail wholesale. Those are its own page-to-content
+ * couplings, and they need rewriting to name its own keys, not deleting.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getFoundationalDocument, type FoundationalDocumentDetail } from '@/lib/app/content';
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
+
 import {
   MissingSectionError,
-  listSectionHeadings,
-  paragraphAt,
-  paragraphRange,
   requireDocument,
   selectSection,
+  selectSectionHeading,
   selectSectionText,
 } from '@/lib/app/content/sections';
+import { fakeDocumentStore } from '@/tests/helpers/app/foundational-documents';
 
-const disclaimer = (): FoundationalDocumentDetail => requireDocument('disclaimer');
+const store = fakeDocumentStore();
+const disclaimer = () => requireDocument('disclaimer');
+
+beforeEach(() => store.reset());
 
 describe('requireDocument', () => {
-  it('returns the document the loader returns', () => {
-    expect(requireDocument('disclaimer')).toBe(getFoundationalDocument('disclaimer'));
+  it('returns the stored document', async () => {
+    const document = await requireDocument('disclaimer');
+
+    expect(document.id).toBe('disclaimer');
+    expect(document.blocks.length).toBe(document.blockCount);
   });
 
-  it('throws on an id the collection does not have, naming it', () => {
-    expect(() => requireDocument('the_missing_one')).toThrow(/the_missing_one/);
+  it('throws on an id the database does not have, naming it', async () => {
+    await expect(requireDocument('the_missing_one')).rejects.toThrow(/the_missing_one/);
+  });
+
+  it('throws on an unseeded database, pointing at the seed', async () => {
+    store.empty();
+
+    await expect(requireDocument('disclaimer')).rejects.toThrow(/db:seed/);
   });
 });
 
 describe('selectSection', () => {
-  it('returns the blocks under a heading, without the heading', () => {
-    const blocks = selectSection(disclaimer(), 'Crisis Situations');
+  it('returns a keyed section without its heading by default', async () => {
+    const blocks = selectSection(await disclaimer(), 'crisis');
 
     expect(blocks.length).toBeGreaterThan(0);
     expect(blocks.some((block) => block.type === 'heading')).toBe(false);
-    expect(blocks[0]).toMatchObject({ type: 'paragraph' });
+    expect(blocks[0]).toMatchObject({ type: 'paragraph', section: 'crisis' });
   });
 
-  it('includes the heading when asked, as the first block', () => {
-    const blocks = selectSection(disclaimer(), 'Crisis Situations', { includeHeading: true });
+  it('includes the heading when asked, as the first block', async () => {
+    const blocks = selectSection(await disclaimer(), 'crisis', { includeHeading: true });
 
     expect(blocks[0]).toMatchObject({ type: 'heading', text: 'Crisis Situations' });
     expect(blocks.slice(1).some((block) => block.type === 'heading')).toBe(false);
   });
 
-  it('stops at the next heading rather than running to the end', () => {
-    const crisis = selectSection(disclaimer(), 'Crisis Situations');
-    const all = disclaimer().blocks;
+  it('returns only the blocks carrying the key, not the rest of the document', async () => {
+    const document = await disclaimer();
+    const crisis = selectSection(document, 'crisis');
 
-    expect(crisis.length).toBeLessThan(all.length);
-    // The section that FOLLOWS crisis is Spiritual Perspectives; none of its
-    // text may leak in. Written as a content assertion rather than a length
-    // one, because a length is satisfied by stopping anywhere.
+    expect(crisis.length).toBeLessThan(document.blocks.length);
+    // The section after crisis is Spiritual Perspectives; none of its text may
+    // leak in. A content assertion, because a length is satisfied by stopping
+    // anywhere.
     const text = crisis.map((block) => (block.type === 'paragraph' ? block.text : '')).join(' ');
     expect(text).not.toContain('Advaita Vedanta');
   });
 
-  it('carries the crisis list, which is the reason the crisis box has one', () => {
-    // A `list` block inside a selected section reaches the caller intact. If
-    // this regressed, `/data`'s crisis box would render the surrounding
-    // sentences and silently drop the ten conditions between them.
-    const blocks = selectSection(disclaimer(), 'Crisis Situations');
-    const list = blocks.find((block) => block.type === 'list');
+  it('carries the crisis list, which is the reason the crisis box has one', async () => {
+    const list = selectSection(await disclaimer(), 'crisis').find((block) => block.type === 'list');
 
-    expect(list).toBeDefined();
     expect(list?.type === 'list' && list.items).toContain('thoughts of suicide;');
   });
 
-  it('throws a MissingSectionError naming the headings it does have', () => {
+  it('throws a MissingSectionError naming the keys the document does have', async () => {
+    const document = await disclaimer();
     let thrown: unknown;
     try {
-      selectSection(disclaimer(), 'Crisis Situation');
+      selectSection(document, 'crises');
     } catch (error) {
       thrown = error;
     }
 
     expect(thrown).toBeInstanceOf(MissingSectionError);
-    expect((thrown as Error).message).toContain('Crisis Situation');
-    // The "did you mean" half — without it the error says what is wrong and
-    // nothing about what to write instead.
-    expect((thrown as Error).message).toContain('Crisis Situations');
+    expect((thrown as Error).message).toContain('"crises"');
+    // The "did you mean" half.
+    expect((thrown as Error).message).toContain('"crisis"');
   });
 
-  it('matches exactly, so a heading that drifts by case does not silently pass', () => {
-    expect(() => selectSection(disclaimer(), 'crisis situations')).toThrow(MissingSectionError);
+  it('follows the key rather than a position, so a block inserted above moves nothing', async () => {
+    // What keys buy over the paragraph indexes they replaced. An admin inserting
+    // a paragraph at the top of the disclaimer shifted every index the old /data
+    // and home page used. It must not shift a key.
+    const before = selectSectionText(await disclaimer(), 'commitment');
+    store.editBlocks('disclaimer', (blocks) => [
+      { type: 'paragraph', text: 'Inserted above everything.', section: null },
+      ...blocks,
+    ]);
+
+    expect(selectSectionText(await disclaimer(), 'commitment')).toEqual(before);
+  });
+});
+
+describe('selectSectionHeading', () => {
+  it("returns the section's heading as stored", async () => {
+    expect(selectSectionHeading(await disclaimer(), 'coaching')).toBe(
+      'Coaching Is Different from Therapy'
+    );
+  });
+
+  it('throws when the section has no heading', async () => {
+    const document = await disclaimer();
+
+    expect(() => selectSectionHeading(document, 'commitment')).toThrow(/no heading/);
   });
 });
 
 describe('selectSectionText', () => {
-  it('flattens paragraphs and list items into strings, in order', () => {
-    const lines = selectSectionText(disclaimer(), 'What Lelañea Is Not');
+  it('flattens paragraphs into strings, in order, keeping the bold markers', async () => {
+    const lines = selectSectionText(await disclaimer(), 'is_not');
 
     expect(lines[0]).toBe('Lelañea is **not** a medical application.');
-    expect(lines).toContain(
-      'Lelañea is **not** a substitute for professional medical or mental healthcare.'
-    );
-  });
-
-  it('keeps the bold markers rather than stripping them', () => {
-    // `/data` renders these through `InlineText`, which is what turns `**not**`
-    // into a `<strong>`. Stripping here would silently flatten the emphasis the
-    // author put on the one word the page exists for.
-    const lines = selectSectionText(disclaimer(), 'What Lelañea Is Not');
-
+    // `/data` renders these through `InlineText`, which turns `**not**` into a
+    // `<strong>`. Stripping here would flatten the one word the page exists for.
     expect(lines[0]).toContain('**not**');
   });
 
-  it('splits into seven items and one qualifying note, as /data renders them', () => {
-    // The section is EIGHT paragraphs: seven "Lelañea is **not** a…" lines and
-    // a closing qualifier about concepts the app references without endorsing.
-    // `/data` puts the seven in the crossed column and the qualifier beneath
-    // it; the first version rendered all eight as rows, which read as an eighth
-    // thing Lelañea is not.
-    //
-    // Both counts are pinned. Seven catches an item being lost; one catches an
-    // item being added and silently landing in the note instead of the column.
-    const isNotItem = /^Lelañea is \*\*not\*\* /;
-    const lines = selectSectionText(disclaimer(), 'What Lelañea Is Not');
+  it('flattens a list into its items', async () => {
+    const lines = selectSectionText(await disclaimer(), 'crisis');
 
-    expect(lines.filter((line) => isNotItem.test(line))).toHaveLength(7);
-    expect(lines.filter((line) => !isNotItem.test(line))).toHaveLength(1);
-  });
-});
-
-describe('paragraphAt', () => {
-  const philosophy = (): FoundationalDocumentDetail => requireDocument('the_heart_behind_lelanea');
-
-  it('counts from the start', () => {
-    expect(paragraphAt(philosophy(), 0)).toBe(
-      'Lelañea was created as an invitation into conscious living.'
-    );
-  });
-
-  it('counts from the end when negative', () => {
-    expect(paragraphAt(philosophy(), -1)).toBe(
-      'It is the continual remembrance of who we have always been.'
-    );
-  });
-
-  it('throws past either end, naming the length', () => {
-    expect(() => paragraphAt(philosophy(), 999)).toThrow(/999/);
-    expect(() => paragraphAt(philosophy(), -999)).toThrow(/-999/);
-  });
-});
-
-describe('paragraphRange', () => {
-  it('returns a half-open range', () => {
-    const beats = paragraphRange(requireDocument('the_initiation'), 7, 10);
-
-    expect(beats).toEqual(['This is not simply an app.', 'It is an invitation.', beats[2]]);
-    expect(beats).toHaveLength(3);
-  });
-
-  it('throws on an inverted or out-of-bounds range', () => {
-    const doc = requireDocument('the_initiation');
-
-    expect(() => paragraphRange(doc, 10, 7)).toThrow();
-    expect(() => paragraphRange(doc, 0, 9999)).toThrow();
-    expect(() => paragraphRange(doc, -1, 3)).toThrow();
+    expect(lines).toContain('thoughts of suicide;');
   });
 });
 
 /**
- * The couplings between a page and the authored file.
+ * The couplings between a surface and the seeded keys.
  *
- * Everything above tests the functions. This tests the CONTENT still fits the
- * pages, which is the part that breaks when nobody has touched any code.
+ * Everything above tests the functions. This tests that the keys still mark the
+ * passages each surface showed before t-86, which is what breaks when nobody has
+ * touched any code.
  */
-describe('the handles the public pages select by', () => {
-  it('/data finds all four disclaimer sections it renders', () => {
-    const doc = disclaimer();
+describe('the keys the surfaces select by', () => {
+  it("/data's 'it is not' column is exactly the seven items, and the qualifier is apart", async () => {
+    // The section is eight paragraphs under its heading: seven "Lelañea is
+    // **not** a…" lines and a qualifier. Rendering all eight as rows read as an
+    // eighth thing Lelañea is not. Both counts are pinned.
+    const document = await disclaimer();
+    const items = selectSectionText(document, 'is_not');
+    const context = selectSectionText(document, 'is_not_context');
 
-    for (const heading of [
-      'The Purpose of Lelañea',
-      'What Lelañea Is Not',
-      'Crisis Situations',
-      'Coaching Is Different from Therapy',
-    ]) {
-      expect(listSectionHeadings(doc), `"${heading}" is gone from the disclaimer`).toContain(
-        heading
-      );
-      expect(selectSection(doc, heading).length).toBeGreaterThan(0);
-    }
+    expect(items).toHaveLength(7);
+    expect(items.every((line) => line.startsWith('Lelañea is **not** '))).toBe(true);
+    expect(context).toHaveLength(1);
+    expect(context[0]).toMatch(/^Although some concepts/);
   });
 
-  it("the home page's three card ranges still start and end where it thinks", () => {
-    // The fragility `paragraphRange` documents, made loud. A beat inserted
-    // anywhere above index 7 in `the_initiation` shifts all three ranges, and
-    // the cards would render her prose starting mid-thought — valid text, wrong
-    // text, and nothing else would notice.
-    const initiation = requireDocument('the_initiation');
-    const disclosures = disclaimer();
+  it("/data's purpose column holds no negation, and the negation is its own key", async () => {
+    // Under a green tick reading "it is designed to support", a negation says
+    // the opposite of its label.
+    const document = await disclaimer();
+    const purpose = selectSectionText(document, 'purpose');
 
-    const invitation = paragraphRange(initiation, 7, 10);
+    expect(purpose).toHaveLength(3);
+    expect(purpose.every((line) => !line.startsWith('Lelañea is not'))).toBe(true);
+    expect(selectSectionText(document, 'purpose_limits')).toEqual([
+      'Lelañea is not intended to provide healthcare, mental healthcare, psychotherapy, or crisis intervention.',
+    ]);
+  });
+
+  it("the home page's three cards start and end where they did", async () => {
+    const initiation = await requireDocument('the_initiation');
+
+    const invitation = selectSectionText(initiation, 'invitation');
     expect(invitation[0]).toBe('This is not simply an app.');
     expect(invitation.at(-1)).toContain('magnificent intelligence');
+    expect(invitation).toHaveLength(3);
 
-    const guide = paragraphRange(initiation, 51, 60);
+    const guide = selectSectionText(initiation, 'guide');
     expect(guide[0]).toBe('My role is not to tell you who you are.');
     expect(guide.at(-1)).toBe('There is nothing you are required to believe.');
+    expect(guide).toHaveLength(9);
 
-    const healthcare = paragraphRange(disclosures, 72, 74);
-    expect(healthcare[0]).toBe(
-      'Lelañea was created with deep respect for both contemplative wisdom and modern healthcare.'
-    );
-    expect(healthcare.at(-1)).toContain('not to replace licensed professionals');
+    const commitment = selectSectionText(await disclaimer(), 'commitment');
+    expect(commitment).toEqual([
+      'Lelañea was created with deep respect for both contemplative wisdom and modern healthcare.',
+      expect.stringContaining('not to replace licensed professionals'),
+    ]);
   });
 
-  it('the purpose section still ends on the negation /data moves out of the column', () => {
-    // `/data` renders all but the last paragraph under a green tick reading
-    // "it is designed to support", and the last one beneath both columns. If a
-    // paragraph were appended to this section, the negation would silently move
-    // back INTO the tick column and the new one would take its place below.
-    const purpose = selectSectionText(disclaimer(), 'The Purpose of Lelañea');
+  it("the home page's hero and band are the philosophy document's two ends", async () => {
+    const philosophy = await requireDocument('the_heart_behind_lelanea');
 
-    expect(purpose.at(-1)).toBe(
-      'Lelañea is not intended to provide healthcare, mental healthcare, psychotherapy, or crisis intervention.'
+    expect(selectSectionText(philosophy, 'invitation')).toEqual([
+      'Lelañea was created as an invitation into conscious living.',
+    ]);
+    expect(selectSectionText(philosophy, 'purpose')[0]).toContain(
+      'remembering who they are beneath conditioning'
     );
-    expect(purpose.slice(0, -1).every((line) => !line.startsWith('Lelañea is not'))).toBe(true);
+    expect(selectSectionText(philosophy, 'remembrance')).toEqual([
+      'Transformation is not viewed as becoming someone new.',
+      'It is the continual remembrance of who we have always been.',
+    ]);
   });
 
-  it("the home page's hero and band still bracket the philosophy document", () => {
-    const philosophy = requireDocument('the_heart_behind_lelanea');
+  it('the welcome email is the seven beats ending on the product name', async () => {
+    const welcome = selectSectionText(await requireDocument('the_initiation'), 'welcome');
 
-    expect(paragraphAt(philosophy, 0)).toContain('invitation into conscious living');
-    expect(paragraphAt(philosophy, 1)).toContain('remembering who they are beneath conditioning');
-    expect(paragraphAt(philosophy, -2)).toContain('not viewed as becoming someone new');
-    expect(paragraphAt(philosophy, -1)).toContain('continual remembrance');
+    expect(welcome).toHaveLength(7);
+    expect(welcome[0]).toBe('Welcome, {{first_name}}.');
+    expect(welcome.at(-1)).toBe('Welcome to Lelañea.');
   });
 });

@@ -1,10 +1,9 @@
 /**
  * Unit Tests: lib/app/content/index.ts — the authored-content loader
  *
- * Covers the four accessors the API and the renderers use: reading order,
- * the normalisation that gives every client one predictable shape, the
- * `null`-not-throw contract on an unknown id, what is deliberately withheld,
- * and the parse-once memoisation.
+ * Covers the file-backed accessors that remain until t-87 — the journey and
+ * the discovery questions — and their parse-once memoisation. The foundational
+ * documents are read from the database since t-86; see `document-store.test.ts`.
  *
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
@@ -26,117 +25,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  getDiscoveryQuestions,
-  getFoundationalCollectionMeta,
-  getFoundationalDocument,
-  getJourneyStructure,
-  listFoundationalDocuments,
-} from '@/lib/app/content';
+import { getDiscoveryQuestions, getJourneyStructure } from '@/lib/app/content';
 
 describe('authored content loader', () => {
-  describe('listFoundationalDocuments', () => {
-    it('returns documents in the collection’s authored reading order', () => {
-      const { documents } = listFoundationalDocuments();
-
-      expect(documents[0].id).toBe('the_initiation');
-      expect(documents.at(-1)?.id).toBe('terms_of_use');
-    });
-
-    it('normalises the optional members so clients never see undefined', () => {
-      const mission = listFoundationalDocuments().documents.find(
-        (document) => document.id === 'the_mission'
-      );
-
-      expect(mission).toMatchObject({
-        requiresAcknowledgement: false,
-        placeholders: [],
-        renderStyle: null,
-        renderNote: null,
-      });
-    });
-
-    it('reports a block count instead of the prose', () => {
-      const summary = listFoundationalDocuments().documents.find(
-        (document) => document.id === 'the_initiation'
-      );
-
-      expect(summary?.blockCount).toBeGreaterThan(0);
-      expect(summary).not.toHaveProperty('blocks');
-    });
-
-    it('withholds the editorial review notes and source-file provenance', () => {
-      const index = listFoundationalDocuments();
-
-      expect(index).not.toHaveProperty('reviewNotes');
-      expect(index.documents[0]).not.toHaveProperty('sourceFile');
-    });
-  });
-
-  describe('getFoundationalDocument', () => {
-    it('returns the document with its blocks in authored order', () => {
-      const mission = getFoundationalDocument('the_mission');
-
-      expect(mission?.title).toBeTruthy();
-      expect(mission?.blocks).toHaveLength(mission!.blockCount);
-      expect(mission?.blocks[0]).toHaveProperty('type');
-    });
-
-    it('returns null for an unknown id, leaving the 404 to the caller', () => {
-      expect(getFoundationalDocument('the_manifesto')).toBeNull();
-    });
-
-    it('returns null rather than matching on a prefix', () => {
-      expect(getFoundationalDocument('the_mission_statement')).toBeNull();
-    });
-
+  // Her foundational documents moved to the database in t-86. Their reads are
+  // covered against a mocked client in `document-store.test.ts`; this file keeps
+  // the collections that are still read from files until t-87.
+  describe('memoisation', () => {
     it('returns the very same view on repeat calls (projected once, memoised)', () => {
-      // Stronger than "the same blocks": the whole projected object is shared,
-      // so the 17-module journey view and the seven document views are built
-      // once per process rather than per request.
-      const first = getFoundationalDocument('the_mission');
-      const second = getFoundationalDocument('the_mission');
-
-      expect(first).toBe(second);
       expect(getJourneyStructure()).toBe(getJourneyStructure());
       expect(getDiscoveryQuestions()).toBe(getDiscoveryQuestions());
-      expect(listFoundationalDocuments()).toBe(listFoundationalDocuments());
-    });
-
-    it('freezes the collection meta too, leaving the claim no exception', () => {
-      const meta = getFoundationalCollectionMeta();
-
-      expect(meta).toBe(getFoundationalCollectionMeta());
-      expect(Object.isFrozen(meta)).toBe(true);
-    });
-
-    it('caches nothing for an unknown id, so guessing cannot grow the map', () => {
-      expect(getFoundationalDocument('nope_1')).toBeNull();
-      expect(getFoundationalDocument('nope_2')).toBeNull();
-      expect(getFoundationalDocument('the_mission')).not.toBeNull();
-    });
-
-    it('refuses to be mutated, because every caller shares that array', () => {
-      // The memoised parse is handed out by reference — deliberately, since
-      // cloning an 84-block document per request to guard a caller who probably
-      // will not mutate it is the wrong trade. Freezing is what makes "probably"
-      // safe: in-place placeholder substitution (the obvious next step) would
-      // otherwise rewrite the authored copy for every later request in the
-      // process.
-      //
-      // There are two lines of defence and this asserts the second. The first
-      // is the type: `blocks` is `readonly`, so the casts below are what it
-      // takes to get past the compiler at all — a caller writing the natural
-      // `blocks.sort(...)` or `blocks.push(...)` does not reach runtime. The
-      // freeze catches whoever casts anyway, or reaches it through `any`.
-      const document = getFoundationalDocument('the_initiation')!;
-
-      expect(() => {
-        (document.blocks as unknown as { type: string }[]).push({ type: 'paragraph' });
-      }).toThrow(TypeError);
-      expect(() => {
-        Object.assign(document.blocks[0], { text: 'rewritten' });
-      }).toThrow(TypeError);
     });
   });
 
