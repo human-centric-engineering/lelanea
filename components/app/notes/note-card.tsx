@@ -698,6 +698,9 @@ export function NoteCard({
           <textarea
             id={correctionId}
             value={draft}
+            // Seen on a blanked-out note, whose box opens empty (t-84), and on
+            // any note someone has cleared to start again.
+            placeholder="In your own words, how would you put this?"
             rows={3}
             onChange={(event) => setDraft(event.currentTarget.value)}
             className={cn(

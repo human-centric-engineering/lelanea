@@ -661,6 +661,8 @@ describe('answering back', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /not right/i })[0]);
     const box = screen.getByRole('textbox', { name: /your correction/i });
     expect((box as HTMLTextAreaElement).value).toBe('');
+    // An empty box says what to write rather than leaving the person to guess.
+    expect(box.getAttribute('placeholder')).toMatch(/in your own words/i);
   });
 
   it('shows a refusal in the words the route chose, because they name the remedy', async () => {
