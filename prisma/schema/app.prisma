@@ -245,7 +245,7 @@ model AppKnowledgeDesignation {
 /// `lib/app/leaf-data-export.ts`.
 model AppVoiceComparison {
   id                 String   @id @default(cuid())
-  /// The golden set's own version at queue time — `content/lelanea_voice_golden_set.json`.
+  /// The golden set's own version at queue time — `seed-data/drafted/lelanea_voice_golden_set.json`.
   ///
   /// Separate from any arm's `fingerprintVersion`, and the pair is what makes a
   /// result readable a month later: her voice and the questions it was heard
@@ -651,7 +651,7 @@ enum AppCrisisContentStatus {
 /// (f-safety t-63; product description §12). One row, `slug = 'global'`.
 ///
 /// **This row is what makes the database the source.** While it is absent, the
-/// resolver serves the bundled `content/lelanea_crisis_resources.json`; once it
+/// resolver serves the bundled `seed-data/drafted/lelanea_crisis_resources.json`; once it
 /// exists, the regions below are the whole list — including none, if an admin
 /// removed them all. The seed writes it together with the regions, once, and
 /// never again (`fp4`), so an admin's removal is not undone by a re-seed.
@@ -710,7 +710,7 @@ model AppCrisisRegion {
 
 /// Who made one revision of a slot definition (f-slots t-70).
 ///
-/// `seed` is the one-time load of `content/lelanea_slot_taxonomy.json`; `admin`
+/// `seed` is the one-time load of `seed-data/drafted/lelanea_slot_taxonomy.json`; `admin`
 /// is a person editing in the taxonomy editor (t-71). The distinction is why
 /// this enum exists rather than reading it off a null `editorId`: that column
 /// is also null for an admin whose account was later erased, and "the operator
