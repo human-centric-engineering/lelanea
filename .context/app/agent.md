@@ -293,12 +293,30 @@ is permissive in between; 014 creates the capability's own row as well as the
 grant, because `suggest_resource` is the app's tool rather than Daybreak's or
 Sunrise's, and a row with no grant is a tool nobody holds.
 
-| Tool                    | Seed | Does                                                                 |
-| ----------------------- | ---- | -------------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is           |
-| `get_state`             | 013  | reads back what is already understood about this person              |
-| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn               |
-| `suggest_resource`      | 014  | hands the person one of her films or pieces of writing, by id (t-77) |
+| Tool                    | Seed | Does                                                                              |
+| ----------------------- | ---- | --------------------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is                        |
+| `get_state`             | 013  | reads back what is already understood about this person                           |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                            |
+| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's films or pieces of writing, by id (t-77) |
+
+**014 reaches a fresh database; a migration reaches every existing one.** The
+seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)
+while the migrator runs before every `web` start, so the row and the grant also
+ship as `prisma/migrations/20260927100000_app_suggest_resource_capability`
+(t-93), which inserts each only where it is absent. Migrations run before the
+seed, including on `db:reset`, so the migration now writes the capability row
+first even on a fresh database and 014 finds it already there. What 014 still
+owns is the `update` branch — re-applying the code-owned fields whenever the
+definition changes, which a new migration then has to carry to the databases
+already holding the old one — and the grant on a fresh database, where the guide
+does not exist yet when migrations run. **Its `create:` branch is no longer
+what writes the row on a fresh database**, so the five operator-owned literals
+in it (`name`, `description`, `category`, `rateLimit`, `isActive`) have to
+change in the migration too; a test pins them equal. Do not delete the branch:
+an admin who deletes the capability row leaves it absent for good, and `create`
+is then the only thing that can put it back
+([`database-changes.md`](./database-changes.md)).
 
 `suggest_resource` is read-only — an id in, the library's record out
 (`lib/app/resources/suggest.ts`) — and sits on `READ_ONLY_CAPABILITY_SLUGS`.
