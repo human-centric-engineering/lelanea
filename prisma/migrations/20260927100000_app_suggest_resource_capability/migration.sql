@@ -16,11 +16,24 @@
 -- t-77's description carried "reseed after the merge"; that was the wrong
 -- remedy and this is the right one.
 --
--- THE SEED UNIT STAYS. It is how a fresh database gets the row, and it is the
--- half that re-applies the CODE-OWNED fields (`functionDefinition`,
+-- THE SEED UNIT STAYS, BUT THIS TAKES OVER THE CREATE. Migrations run before
+-- the seed — on `db:reset` as well as on a deploy — so from here on it is THIS
+-- statement that first writes the capability row, and seed 014's `upsert` finds
+-- it and takes its `update` branch. What the seed still owns is the half that
+-- matters most: re-applying the CODE-OWNED fields (`functionDefinition`,
 -- `executionType`, `executionHandler`) on every run — #545, so an existing row
 -- never keeps advertising a schema the code has moved on from. This migration
--- does not do that job and must not: see below.
+-- does not do that job and must not: see below. The seed also still owns the
+-- GRANT on a fresh database, where the guide does not exist yet when migrations
+-- run.
+--
+-- SO DO NOT EDIT SEED 014's `create:` BRANCH ALONE. Its five operator-owned
+-- literals (`name`, `description`, `category`, `rateLimit`, `isActive`) are
+-- dead on a fresh database now — the row already exists by the time it runs —
+-- and dead on an existing one, which took them from here. A change to any of
+-- them belongs in BOTH, and a new migration for the databases already holding
+-- the old value. `suggest-resource-capability.test.ts` pins the five equal, so
+-- editing one alone fails rather than silently doing nothing.
 --
 -- WHAT IT WRITES — exactly what the seed's `create` branch writes, and only
 -- where the row is absent:

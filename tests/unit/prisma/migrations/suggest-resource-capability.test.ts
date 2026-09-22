@@ -56,7 +56,10 @@ const MIGRATION = join(
   'prisma/migrations/20260927100000_app_suggest_resource_capability/migration.sql'
 );
 
+const SEED = join(process.cwd(), 'prisma/seeds/app-lelanea/014-suggest-resource.ts');
+
 const sql = readFileSync(MIGRATION, 'utf8');
+const seedSource = readFileSync(SEED, 'utf8');
 
 /** The comment header, which carries the reasoning, is not SQL. */
 const statements = sql
@@ -101,6 +104,38 @@ describe('the row it inserts', () => {
       'INSERT INTO "ai_capability"',
       'INSERT INTO "ai_agent_capability"',
     ]);
+  });
+});
+
+/**
+ * The five OPERATOR-OWNED literals — the ones the seed writes once and never
+ * re-applies. On a fresh database this migration now writes them FIRST
+ * (`prisma migrate reset` runs migrations before the seed), so seed 014's
+ * `upsert` takes its `update` branch, which carries only the code-owned half.
+ * Its `create` branch is therefore dead on a fresh database, and editing it
+ * alone would change nothing anywhere — the trap this block exists to spring.
+ */
+describe('the operator-owned half the seed no longer reaches', () => {
+  it.each([
+    ['name', "'Suggest a resource'"],
+    ['category', "'app'"],
+    ['rateLimit', '30'],
+  ])('says the same %s as the seed', (_field, literal) => {
+    expect(statements).toContain(literal);
+    expect(seedSource).toContain(literal);
+  });
+
+  it('says the same description as the seed, character for character', () => {
+    // Pulled out of the SQL rather than restated here: a copy in this file
+    // would be a fourth place to drift.
+    const match = /^\s*'(Hands the person[^']*)',$/m.exec(statements);
+    if (!match) throw new Error('The migration no longer inserts a description literal');
+    expect(seedSource).toContain(match[1]);
+  });
+
+  it('is active, as the seed creates it', () => {
+    expect(statements).toMatch(/\n\s*true,\n\s*true\n/);
+    expect(seedSource).toContain('isActive: true');
   });
 });
 
