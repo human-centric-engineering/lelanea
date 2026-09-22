@@ -11,6 +11,9 @@
  * @see lib/app/content/foundational-seed.ts
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -93,5 +96,26 @@ describe('buildFoundationalSeed', () => {
     expect(seed.documents.every((document) => document.version === seed.collection.version)).toBe(
       true
     );
+  });
+});
+
+describe('the data migration', () => {
+  // Production migrates on every start and seeds only on request, so the rows
+  // every environment gets come from the migration, not the seed. It embeds the
+  // seed as JSON. This keeps the two from disagreeing: edit the key map or the
+  // file, and this fails until the migration is regenerated (or, once shipped,
+  // a follow-up migration moves the rows that need it).
+  it('writes exactly what the seed builds today', () => {
+    const sql = readFileSync(
+      path.join(
+        process.cwd(),
+        'prisma/migrations/20260927100100_app_foundational_documents_data/migration.sql'
+      ),
+      'utf8'
+    );
+    const match = /\$t86\$([\s\S]*?)\$t86\$/.exec(sql);
+
+    expect(match, 'the migration no longer embeds the seed JSON').not.toBeNull();
+    expect(JSON.parse(match![1])).toEqual(buildFoundationalSeed());
   });
 });

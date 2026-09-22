@@ -16,11 +16,19 @@
  * (`seedFoundationalDocuments` in `lib/app/content/document-store.ts`), not here,
  * so every writer is held to it. This is the shape `011-slot-taxonomy` uses.
  *
- * A change to the file therefore does not reach a seeded database. Once seeded,
- * the tables are the documents; an edit goes through the admin editor, and a
- * re-import through its upload (t-91). **Data that an existing environment must
- * pick up without a reset ships as an `app_` migration**
- * (`.context/app/database-changes.md`), not as an edit to the file.
+ * **In practice this writes nothing.** The data migration
+ * `20260927100100_app_foundational_documents_data` inserts the same rows (the
+ * JSON in it IS `buildFoundationalSeed()`, pinned by
+ * `foundational-seed.test.ts`), because production migrates on every start and
+ * seeds only when asked. On `db:reset` migrations run first, so this unit finds
+ * the rows and skips. It stays as the write-once contract every writer is held
+ * to, and as the path for a database built without that migration.
+ *
+ * A change to the file therefore does not reach an existing database. Once
+ * written, the tables are the documents; an edit goes through the admin editor,
+ * and a re-import through its upload (t-91). **Data that an existing environment
+ * must pick up ships as an `app_` migration** (`.context/app/database-changes.md`),
+ * not as an edit to the file.
  *
  * **Safe on empty.** It only adds rows; there is no removal pass.
  *

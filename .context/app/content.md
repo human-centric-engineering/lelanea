@@ -107,12 +107,15 @@ and the gate requires it (see [`gateway.md`](./gateway.md)). `revision` counts
 writes. The seed gives every document the collection's `1.1`, so the move
 re-gated nobody.
 
-**The seed writes once** (`prisma/seeds/app-lelanea/015-foundational-documents.ts`,
-`fp4`): if a collection row exists it writes nothing, so a re-seed never undoes an
-admin edit. It declares no `hashInputs`. A change to the file therefore does not
-reach a seeded database. Data an existing environment needs ships as an `app_`
-migration ([`database-changes.md`](./database-changes.md)); an edit goes through
-the admin (t-91).
+**Every environment gets the rows from a migration**,
+`20260927100100_app_foundational_documents_data`, because production migrates on
+every start and seeds only when asked ([`database-changes.md`](./database-changes.md)).
+Its JSON is `buildFoundationalSeed()`, and `foundational-seed.test.ts` fails if the
+two drift. The seed unit (`prisma/seeds/app-lelanea/015-foundational-documents.ts`,
+`fp4`) writes the same rows once, only while no collection row exists, so after
+the migration it skips, and a re-seed never undoes an admin edit. A change to the
+file does not reach an existing database; one that must, ships as a new `app_`
+migration, and an edit goes through the admin (t-91).
 
 `lib/app/content/foundational-seed.ts` is the one module that still imports
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key

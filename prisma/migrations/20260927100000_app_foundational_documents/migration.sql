@@ -9,10 +9,12 @@
 -- `prisma/schema/app.prisma` give the reasoning, and `.context/app/content.md`
 -- describes the pipeline.
 --
--- These tables are EMPTY after this migration. `prisma/seeds/app-lelanea/015-
--- foundational-documents.ts` fills them once. Until it has run, the pages that
--- read them fail loudly instead of rendering nothing, which is the same contract
--- the file loader had.
+-- These tables are EMPTY after this migration. The next one,
+-- `20260927100100_app_foundational_documents_data`, fills them in every
+-- environment, because production does not run the seeder on deploy. The seed
+-- unit `prisma/seeds/app-lelanea/015-foundational-documents.ts` writes the same
+-- rows and finds them already there. A read against empty tables fails loudly
+-- instead of rendering nothing, which is the same contract the file loader had.
 --
 -- ERASURE DISPOSITION (GDPR Art. 17). `app_foundational_document_revision.editorId`
 -- is a plain scalar with no Prisma `@relation`, because a fork table must not add
