@@ -147,6 +147,24 @@ describe('getVoicePreflight', () => {
     expect(preflight.arms.map((entry) => entry.boundModel)).toEqual([null, null]);
   });
 
+  it('reports an arm’s bound model when the pin has reached it', async () => {
+    // The other side of the branch above. Only the empty binding was covered,
+    // so nothing proved a real binding is reported rather than nulled too —
+    // and a null here reads as "on the install default", which is the one
+    // state `assertArmsComparable` exists to catch.
+    resolveVoiceArms.mockResolvedValue([
+      arm('fingerprint', 'lelanea-guide', 'claude-sonnet-5'),
+      arm('bare', 'voice-control-bare', 'claude-sonnet-5'),
+    ]);
+
+    const preflight = await getVoicePreflight(ADMIN);
+
+    expect(preflight.arms.map((entry) => entry.boundModel)).toEqual([
+      'claude-sonnet-5',
+      'claude-sonnet-5',
+    ]);
+  });
+
   it('flags an unpriced model instead of letting $0 read as cheap', async () => {
     estimateEvaluationRunCost.mockResolvedValue(
       estimate({
@@ -169,6 +187,22 @@ describe('getVoicePreflight', () => {
     const preflight = await getVoicePreflight(ADMIN);
 
     expect(preflight.cost?.pricingKnown).toBe(false);
+  });
+
+  it('reports no model and no notes rather than inventing either', async () => {
+    // An estimate whose mix names no subject, and carries no note. Both
+    // fall back, and both fallbacks were unexercised: a stray model id or a
+    // stale note on this surface would read as a fact about the run that is
+    // about to be spent.
+    estimateEvaluationRunCost.mockResolvedValue(estimate({ modelMix: [], notes: undefined }));
+
+    const preflight = await getVoicePreflight(ADMIN);
+
+    expect(preflight.modelId).toBeNull();
+    expect(preflight.cost?.notes).toBe('');
+    // An empty mix means nothing contradicted "priced", which is the honest
+    // reading of no evidence either way.
+    expect(preflight.cost?.pricingKnown).toBe(true);
   });
 
   it('takes the weaker of the two bases rather than the first', async () => {
@@ -210,5 +244,17 @@ describe('getVoicePreflight', () => {
 
     expect(preflight.arms).toEqual([]);
     expect(preflight.cost).toBeNull();
+  });
+
+  it('reports no case count, and does not throw, when the dataset read fails', async () => {
+    // The sibling of the two above, and the last unguarded branch here. The
+    // page is the comparisons; a dataset lookup that fails should cost the
+    // reader the count, not the page.
+    datasetFindUnique.mockRejectedValue(new Error('connection lost'));
+
+    const preflight = await getVoicePreflight(ADMIN);
+
+    expect(preflight.caseCount).toBeNull();
+    expect(preflight.arms.length).toBeGreaterThan(0);
   });
 });
