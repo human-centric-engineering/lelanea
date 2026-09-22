@@ -23,25 +23,26 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 
 ## Our docs
 
-| Doc                                            | Covers                                                                                                 |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`syncing.md`](./syncing.md)                   | Pulling a Daybreak release, and the three traps around it                                              |
-| [`local-dev.md`](./local-dev.md)               | Running locally alongside a Daybreak checkout                                                          |
-| [`divergences.md`](./divergences.md)           | Every edit we carry to a Daybreak- or Sunrise-owned file, and why                                      |
-| [`brand-theme.md`](./brand-theme.md)           | The palette, the three typefaces, and how a surface gets branded                                       |
-| [`content.md`](./content.md)                   | Lelañea's authored words: the files, the loader, the API, the renderer                                 |
-| [`waitlist.md`](./waitlist.md)                 | The public waitlist: the model, the routes, the admin list, Art. 15 / Art. 17                          |
-| [`shell.md`](./shell.md)                       | The four-column app shell at `/app`: panes, state, and adding a view                                   |
-| [`journey.md`](./journey.md)                   | The seventeen modules in the registry, the published map, and the seed                                 |
-| [`gateway.md`](./gateway.md)                   | The gate: the ledger, its API, the redirect, `/app/begin`, and the two data rights                     |
-| [`emails.md`](./emails.md)                     | Which auth emails are ours, the chrome they share, and why the welcome is verbatim                     |
-| [`voice.md`](./voice.md)                       | Voice: the three layers, what each document may be quoted for, and the golden set it is heard through  |
-| [`agent.md`](./agent.md)                       | The one agent: the model she is pinned to, where an admin changes it, no fallback, and her two seats   |
-| [`safety.md`](./safety.md)                     | The crisis path: the two tiers, the context check, the regional resource, the client frame, the record |
-| [`incident-runbook.md`](./incident-runbook.md) | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock   |
-| [`conversation.md`](./conversation.md)         | The conversation pane: the transcript read back, the event schema, the stream client, the pacing       |
-| [`slots.md`](./slots.md)                       | The slot taxonomy: the six groups, the immutable slug, the version chain, and reading an answer back   |
-| [`database-changes.md`](./database-changes.md) | A change existing databases need ships as a migration, not a seed edit, and how to write one           |
+| Doc                                            | Covers                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`syncing.md`](./syncing.md)                   | Pulling a Daybreak release, and the three traps around it                                               |
+| [`local-dev.md`](./local-dev.md)               | Running locally alongside a Daybreak checkout                                                           |
+| [`divergences.md`](./divergences.md)           | Every edit we carry to a Daybreak- or Sunrise-owned file, and why                                       |
+| [`brand-theme.md`](./brand-theme.md)           | The palette, the three typefaces, and how a surface gets branded                                        |
+| [`content.md`](./content.md)                   | Lelañea's authored words: the files, the loader, the API, the renderer                                  |
+| [`waitlist.md`](./waitlist.md)                 | The public waitlist: the model, the routes, the admin list, Art. 15 / Art. 17                           |
+| [`shell.md`](./shell.md)                       | The four-column app shell at `/app`: panes, state, and adding a view                                    |
+| [`journey.md`](./journey.md)                   | The seventeen modules in the registry, the published map, and the seed                                  |
+| [`gateway.md`](./gateway.md)                   | The gate: the ledger, its API, the redirect, `/app/begin`, and the two data rights                      |
+| [`emails.md`](./emails.md)                     | Which auth emails are ours, the chrome they share, and why the welcome is verbatim                      |
+| [`voice.md`](./voice.md)                       | Voice: the three layers, what each document may be quoted for, and the golden set it is heard through   |
+| [`agent.md`](./agent.md)                       | The one agent: the model she is pinned to, where an admin changes it, no fallback, and her two seats    |
+| [`safety.md`](./safety.md)                     | The crisis path: the two tiers, the context check, the regional resource, the client frame, the record  |
+| [`incident-runbook.md`](./incident-runbook.md) | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock    |
+| [`conversation.md`](./conversation.md)         | The conversation pane: the transcript read back, the event schema, the stream client, the pacing        |
+| [`slots.md`](./slots.md)                       | The slot taxonomy: the six groups, the immutable slug, the version chain, and reading an answer back    |
+| [`database-changes.md`](./database-changes.md) | A change existing databases need ships as a migration, not a seed edit, and how to write one            |
+| [`budget.md`](./budget.md)                     | Usage and cost: where the figures come from, the member's view, and the four states that are not errors |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 

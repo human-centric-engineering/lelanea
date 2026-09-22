@@ -569,8 +569,10 @@ a colour that file cannot see is a colour nobody is checking.
 Do **not** "finish" these; they are stubs on purpose, and inventing data for them
 is the specific failure D6 names.
 
-- **Journey, life situations, share, usage** — the placeholder card, one honest
-  line, and a test asserting no placeholder view renders a digit.
+- **Journey, life situations, share** — the placeholder card, one honest line,
+  and a test asserting no placeholder view renders a digit. ~~Usage~~ left this
+  list at §13 t-94: it reads the meter f-agent t-56 built and shows what the
+  month actually cost. See [`budget.md`](./budget.md).
 - **Workspace** — the landing for "no module open yet". From §05 t-14 the nav
   item resolves to the last module visited (`lelanea.workspace.lastModule` in
   `localStorage`, written by `RememberModule` on a module page) and falls back
@@ -588,7 +590,9 @@ is the specific failure D6 names.
   the system rather than about the reader, and putting it in the column made all
   seventeen rows say the same non-word about themselves. `STATE_ROW` in
   `map-drawer.tsx` is the seam that widens.
-- **The budget meter** — omitted from the topbar rather than faked.
+- **The budget meter** — omitted from the topbar rather than faked. Still
+  absent, but no longer for want of a number: §13 t-94 put the figures on
+  `/app/usage`, and t-95 is the meter itself.
 - ~~**The composer** — present, inert.~~ Live from §10 t-64; see
   [`conversation.md`](./conversation.md). What the pane still leaves out —
   the account row, the endings in her words, the mic — is listed there.
