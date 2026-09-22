@@ -200,6 +200,15 @@
 > `daybreak#237` → already open as `sunrise#702` (Daybreak had diverged, but the
 > defect was in Sunrise's copy too).
 >
+> ### A change existing databases need ships as a migration
+>
+> Editing seed content (`content/*.json`, a seed unit) reaches only a database
+> that was never seeded: our operator-owned units write once, and production
+> runs the seeder only when someone asks it to. Migrations run before every
+> deploy starts the app. So data that dev, preview or production must pick up
+> without a reset goes in an `app_…` migration too, never a manual post-deploy
+> step. How to write one: [`.context/app/database-changes.md`](./.context/app/database-changes.md).
+>
 > ### Two tests that are adjusted here on purpose
 >
 > Both assert a property a leaf is _supposed_ to violate. They are already

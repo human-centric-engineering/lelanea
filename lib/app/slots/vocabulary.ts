@@ -22,15 +22,19 @@
  * is read off the slot's DEFINITION (`fill-slot.ts`:
  * `definition?.sensitivity ?? standard`), and masking fires only for
  * `special_category` (`masking.ts`). A minted slug has no definition, so it is
- * always `standard`, so it is never masked. Nine slots in this taxonomy are
- * `special_category` — physical, emotional and spiritual health, i.e. GDPR
- * Art. 9 categories — and every one of them was unreachable on the capture
+ * always `standard`, so it is never masked. Nine slots in this taxonomy were
+ * then `special_category` — physical, emotional and spiritual health, i.e.
+ * GDPR Art. 9 categories — and every one of them was unreachable on the capture
  * path. Someone's words about their health or their faith landed as raw prose
  * in the profile store, where the classification existed precisely to stop
  * that.
  *
- * So this block is what makes the `special_category` classification mean
- * something at runtime, which is why it is not merely a prompt improvement.
+ * So this block is what makes a definition's sensitivity mean anything at
+ * runtime, which is why it is not merely a prompt improvement. The nine are
+ * `sensitive` since t-84 (owner ruling, 21 Sept 2026: the words are kept, shown
+ * and correctable), and the taxonomy ships no `special_category` slot — but an
+ * operator can still mark one in Admin → Data slots, and only a slug routed to
+ * its definition is masked.
  *
  * ## Why it is not in the tool schema, where it belongs
  *

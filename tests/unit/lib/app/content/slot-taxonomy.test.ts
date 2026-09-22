@@ -95,6 +95,23 @@ describe('the bundled taxonomy', () => {
     }
   });
 
+  it('blanks out nothing by default: the health slots are sensitive, none special_category', () => {
+    // Owner ruling of 21 Sept 2026 (t-84, journal on f-slots): feelings are what
+    // the app is for, so what someone says about their health is kept, shown
+    // and correctable (`sensitive`) rather than masked before storage
+    // (`special_category`). An operator can still mark a slot special_category
+    // in Admin → Data slots; the file just never ships one.
+    const file = getSlotTaxonomy();
+    const health = file.slots.filter((s) =>
+      /^life_(physical|emotional|spiritual)_health/.test(s.slug)
+    );
+    expect(health).toHaveLength(9);
+    expect(health.every((s) => s.sensitivity === SLOT_SENSITIVITY.sensitive)).toBe(true);
+    expect(file.slots.filter((s) => s.sensitivity === SLOT_SENSITIVITY.special_category)).toEqual(
+      []
+    );
+  });
+
   it('hides the whole development group, and hides nothing else by accident', () => {
     // §12: where someone sits in examining their own conditioning is a tuning
     // signal for pace and register, and must never be ranked, scored or shown

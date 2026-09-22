@@ -31,14 +31,18 @@
  * no longer asking, and letting someone file a fresh reading against a question
  * nobody will ask again is a write nothing will ever read.
  *
- * ## Why a withheld note cannot be corrected
+ * ## Why a special-category note cannot be corrected
  *
- * Nine slots in the taxonomy are `special_category` — physical, emotional and
- * spiritual health, GDPR Art. 9. For those, masking-before-storage replaces the
- * reading with a sentinel *at capture*
- * (`lib/framework/data-slots/capabilities/masking.ts`). That is the point of the
- * classification, and it is why the panel shows a sentence rather than
- * `<redacted: special_category>`.
+ * A slot marked `special_category` has its reading replaced with a sentinel
+ * *at capture* (`lib/framework/data-slots/capabilities/masking.ts`). That is the
+ * point of the classification, and it is why the panel shows a sentence rather
+ * than `<redacted: special_category>`. The taxonomy ships no such slot — the
+ * nine health slots are `sensitive` since t-84, so what someone says about
+ * their health is kept, shown and correctable — but an operator can mark any
+ * slot `special_category` in Admin → Data slots, and notes blanked out before
+ * t-84 stay blanked: the words were never stored. Those are still `withheld`
+ * (it is keyed on the stored sentinel, not on today's classification), and now
+ * correctable — the slot keeps words, so the person can say them again.
  *
  * **The reading, and only the reading.** Masking covers `value` and nothing
  * else: the reasoning note is stored as she wrote it, a paraphrase of what the
@@ -255,7 +259,11 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
       ? SLOT_SENSITIVITY.special_category
       : (definition?.sensitivity ?? SLOT_SENSITIVITY.standard);
     const retired = definition ? !definition.isActive : false;
-    const withheld = sensitivity === SLOT_SENSITIVITY.special_category && head.value === WITHHELD;
+    // Keyed on the stored value alone, as the previous version already is: a
+    // note blanked out while its slot was special-category stays a sentinel
+    // after the slot moves (t-84 moved the nine health slots to `sensitive`),
+    // and printing it raw would show someone `<redacted: …>` as their own note.
+    const withheld = head.value === WITHHELD;
 
     return {
       slotSlug: head.slotSlug,

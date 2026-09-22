@@ -21,20 +21,20 @@
  * Flow:
  *   1. Sign up a throwaway member, verify it in the database, sign in.
  *   2. Tell her something the taxonomy covers, in plain words, with a turn id.
- *   3. Assert: a `framework_slot_value` for that person, carrying the
+ *   2b. Assert: a `framework_slot_value` for that person, carrying the
  *      conversation it came from, a confidence and a `sourceType`; the stream
  *      carried a `capability_result` for `fill_slot`; the account line says she
  *      added something.
- *   4. Write one slot TWICE under one turn id, through the real dispatcher
+ *   3. Write one slot TWICE under one turn id, through the real dispatcher
  *      against the real database. Assert one version, not two — the guard, on a
  *      real unique index rather than a fake one — and that a different turn id
  *      writing the same slug still appends, so the guard is keyed on the turn.
- *   4b. Assert a `special_category` slot masks its prose at rest — the control
- *      that only works while she fills AUTHORED slots.
- *   5. Assert what she may NOT read back: `get_state` returns no `development`
+ *   3b. Assert a `special_category` slot masks its prose at rest. The taxonomy
+ *      ships none (t-84), so the smoke defines its own for the run.
+ *   4. Assert what she may NOT read back: `get_state` returns no `development`
  *      slot even with one written, because §12 says that is never a grade.
- *   6. Remove the member (which cascades the turns, the guard rows and the slot
- *      values), and the cost rows.
+ *   5. Remove the member (which cascades the turns, the guard rows and the slot
+ *      values), the cost rows, and the smoke's own slot definition.
  *
  * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — she
  * must be public, seated, and hold both slot tools from
@@ -47,8 +47,8 @@
  * provider or the pause switch, so it is safe to run while somebody is using the
  * app.
  *
- * Safety: every row is scoped by the `smoke-test-slots` prefix or by this run's
- * turn ids, and removed on every path, including a sweep at startup for anything
+ * Safety: every row is scoped by the `smoke-test-slots` prefix (the temporary
+ * slot definition as `smoke_test_slots_art9`) or by this run's turn ids, and removed on every path, including a sweep at startup for anything
  * an interrupted run stranded. Never touches seed data, never deletes unscoped.
  *
  * **What it cannot prove, and what does:** that the MODEL chooses to capture the
@@ -85,6 +85,13 @@ const SEAT = 'onboarding';
 const RUN = Date.now();
 const TURN_CAPTURE = `${PREFIX}-capture-${RUN}`;
 const TURN_RETRY = `${PREFIX}-retry-${RUN}`;
+/**
+ * The smoke's own `special_category` slot (step 3b). Scope `facilitation`
+ * because no sync reconciles that partition: a global row would be deactivated
+ * by the leaf's provider pass on any boot during the run, a module one by the
+ * module pass.
+ */
+const ART9_SLUG = 'smoke_test_slots_art9';
 
 /**
  * Something the taxonomy covers, said plainly and unprompted, with no
@@ -211,6 +218,7 @@ async function removeMember(): Promise<void> {
 /** Anything an interrupted run left behind. */
 async function sweep(): Promise<void> {
   await removeMember();
+  await prisma.slotDefinition.deleteMany({ where: { slug: ART9_SLUG } });
 }
 
 async function main(): Promise<void> {
@@ -511,23 +519,27 @@ async function main(): Promise<void> {
 
     // ---- 3b. Special-category prose is masked at rest ----------------------
     //
-    // The control this branch nearly shipped as a no-op. Sensitivity is read off
-    // the slot DEFINITION, so it only means anything while she fills authored
-    // slots — which is what 1 and 3 above assert she now does. This asserts the
-    // other half: that reaching an Art. 9 slot actually redacts the prose.
-    // Dispatched directly, because making the model volunteer a health
-    // disclosure to order is neither reliable nor a thing to write into a test.
-    console.log('\n3b. Health and belief prose does not land as prose');
-    const art9 = await prisma.slotDefinition.findFirst({
-      where: { isActive: true, sensitivity: 'special_category' },
+    // Sensitivity is read off the slot DEFINITION, and masking fires only for
+    // `special_category`. The taxonomy ships none — the health slots are
+    // `sensitive` since t-84 — but an operator can still mark any slot so in
+    // Admin → Data slots, and this is the only live proof that doing so masks.
+    // So the smoke defines its own for the run instead of relying on the
+    // taxonomy having one. Dispatched directly, because making the model
+    // volunteer a health disclosure to order is neither reliable nor a thing to
+    // write into a test.
+    console.log('\n3b. A special-category slot does not store prose');
+    const art9 = await prisma.slotDefinition.upsert({
+      where: { slug: ART9_SLUG },
+      create: {
+        slug: ART9_SLUG,
+        group: PREFIX,
+        description: 'Temporary special-category slot written by npm run smoke:app-slot-capture.',
+        scope: 'facilitation',
+        sensitivity: 'special_category',
+      },
+      update: { isActive: true, sensitivity: 'special_category', scope: 'facilitation' },
       select: { slug: true },
-      orderBy: { slug: 'asc' },
     });
-    if (!art9) {
-      throw new Error(
-        'no active special_category slot — the taxonomy classifies 9 of them, so this means the projection is wrong, not that the check is unnecessary'
-      );
-    }
     const secret = 'A specific diagnosis, written by the capture smoke.';
     const art9Write = await capabilityDispatcher.dispatch(
       'fill_slot',
@@ -614,7 +626,7 @@ async function main(): Promise<void> {
 
     console.log('\nall good.\n');
   } finally {
-    await removeMember();
+    await sweep();
     await prisma.$disconnect();
   }
 }

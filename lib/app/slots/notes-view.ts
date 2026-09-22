@@ -107,9 +107,11 @@ export interface Note {
   /** The plain-language reading. A sentinel when `withheld`. */
   value: string;
   /**
-   * The reading was never stored. True for a `special_category` slot, where
-   * masking-before-storage replaces it with a sentinel at capture
-   * (`lib/framework/data-slots/capabilities/masking.ts`). The panel says that in
+   * The reading was never stored: the value is the sentinel
+   * masking-before-storage writes for a `special_category` slot at capture
+   * (`lib/framework/data-slots/capabilities/masking.ts`). Keyed on the value,
+   * not the slot's current sensitivity, so a note blanked out before its slot
+   * moved to `sensitive` (t-84) still reads as withheld. The panel says that in
    * a sentence rather than showing `<redacted: special_category>`.
    *
    * It is not "nothing was kept": masking covers the value only, so the

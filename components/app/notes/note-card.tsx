@@ -698,6 +698,9 @@ export function NoteCard({
           <textarea
             id={correctionId}
             value={draft}
+            // Seen on a blanked-out note, whose box opens empty (t-84), and on
+            // any note someone has cleared to start again.
+            placeholder="In your own words, how would you put this?"
             rows={3}
             onChange={(event) => setDraft(event.currentTarget.value)}
             className={cn(
@@ -731,7 +734,10 @@ export function NoteCard({
               onClick={() => {
                 setEditing(false);
                 setRefusal(null);
-                setDraft(note.value);
+                // A withheld note is correctable once its slot is no longer
+                // special-category (t-84), and its value is the sentinel: the
+                // person starts from nothing rather than from `<redacted: …>`.
+                setDraft(note.withheld ? '' : note.value);
               }}
             >
               Leave it
@@ -750,7 +756,10 @@ export function NoteCard({
                 // held when it mounted. A correction re-reads the page, so the
                 // prop changes underneath while this state does not — without
                 // this, a second edit would open on the superseded value.
-                setDraft(note.value);
+                // A withheld note is correctable once its slot is no longer
+                // special-category (t-84), and its value is the sentinel: the
+                // person starts from nothing rather than from `<redacted: …>`.
+                setDraft(note.withheld ? '' : note.value);
                 setEditing(true);
               }}
             >

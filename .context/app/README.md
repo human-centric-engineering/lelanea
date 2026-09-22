@@ -41,6 +41,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`incident-runbook.md`](./incident-runbook.md) | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock   |
 | [`conversation.md`](./conversation.md)         | The conversation pane: the transcript read back, the event schema, the stream client, the pacing       |
 | [`slots.md`](./slots.md)                       | The slot taxonomy: the six groups, the immutable slug, the version chain, and reading an answer back   |
+| [`database-changes.md`](./database-changes.md) | A change existing databases need ships as a migration, not a seed edit, and how to write one           |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 
@@ -50,6 +51,9 @@ Add a `.context/app/<feature>.md` per feature as they land, and list it here.
   append-only-guarded) or `.context/framework/CHANGELOG.md` (Daybreak's).
 - **Our planning goes here**, not on the board in
   `.context/framework/planning/` — that tracks Daybreak's own features.
+- **A change existing databases need ships as a migration**, not as an edit to
+  seed content or a step to run after deploy. See
+  [`database-changes.md`](./database-changes.md).
 - **Our tables are `app_*`.** `framework_*` is Daybreak's and `ai_*` / core
   tables are Sunrise's; the boundary CI keys on those prefixes.
 

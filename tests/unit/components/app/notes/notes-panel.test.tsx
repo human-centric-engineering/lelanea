@@ -641,6 +641,30 @@ describe('answering back', () => {
     ).toBeTruthy();
   });
 
+  it('opens a correction to a blanked-out note empty, never on the sentinel', async () => {
+    // t-84: a note blanked out while its slot was special-category is
+    // correctable once the slot is sensitive, and its stored value is the
+    // sentinel. Seeding the box with it would hand the person `<redacted: …>`.
+    world.reads = [
+      view([
+        note({
+          value: '<redacted: special_category>',
+          withheld: true,
+          sensitivity: 'sensitive',
+          correctable: true,
+        }),
+      ]),
+    ];
+    renderBoth();
+    await screen.findAllByRole('button', { name: /not right/i });
+
+    await userEvent.click(screen.getAllByRole('button', { name: /not right/i })[0]);
+    const box = screen.getByRole('textbox', { name: /your correction/i });
+    expect((box as HTMLTextAreaElement).value).toBe('');
+    // An empty box says what to write rather than leaving the person to guess.
+    expect(box.getAttribute('placeholder')).toMatch(/in your own words/i);
+  });
+
   it('shows a refusal in the words the route chose, because they name the remedy', async () => {
     world.correctionRefusal = {
       status: 409,
