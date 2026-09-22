@@ -85,8 +85,10 @@ export function regionOfLocale(locale: string | null): string | null {
 }
 
 /**
- * The resource for a locale and tier, from whichever source is answering.
- * Never throws: see `resources-store.ts`.
+ * The resource for a locale and tier.
+ *
+ * **Throws when the tables cannot answer** (t-88 removed the bundled floor) —
+ * see `resources-store.ts` for why that is the honest behaviour.
  */
 export async function resolveCrisisResource(
   locale: string | null,

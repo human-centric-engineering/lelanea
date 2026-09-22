@@ -16,12 +16,18 @@
  * conversation calls the same three, unchanged, with a `null` user — the
  * feature's standing rule.
  *
- * **Nothing in here can withhold the resource.** Detection is pure. The context
- * check can only soften a hard hit to soft, and never throws. Resolving the
- * resource never throws either: an unreadable or slow table serves the bundled
- * file (`resources-store.ts`). A failed record
- * write is logged, not raised: the person is owed the resource whether or not
- * the row was kept.
+ * **Nothing in here withholds the resource by choice.** Detection is pure. The
+ * context check can only soften a hard hit to soft, and never throws. A failed
+ * record write is logged, not raised: the person is owed the resource whether
+ * or not the row was kept.
+ *
+ * **Resolving the resource CAN throw, since t-88.** It used to serve a bundled
+ * file when the tables could not answer; there is no file any more, so an
+ * unreadable database raises here and the turn fails rather than answering a
+ * person in danger with nothing. `resources-store.ts` says why the two states
+ * that used to reach the fallback are now unreachable instead, which is what
+ * makes that acceptable: what is left is a database that cannot be read, and
+ * then the app is down anyway.
  *
  * @see lib/app/agent/turns.ts — where a turn calls it, and what it does next
  * @see .context/app/safety.md
@@ -54,8 +60,12 @@ export interface CrisisSubject {
 }
 
 /**
- * Assess a message. Never throws: detection is pure and the context check turns
- * every failure into an outcome.
+ * Assess a message.
+ *
+ * Detection is pure and the context check turns every failure into an outcome,
+ * so the tiering cannot throw — but `resolveCrisisResource` can (t-88), and
+ * this does not catch it. A crisis turn with an unreadable database fails
+ * rather than answering without a helpline.
  */
 export async function detectCrisis(
   text: string,
