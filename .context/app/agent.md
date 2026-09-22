@@ -293,12 +293,22 @@ is permissive in between; 014 creates the capability's own row as well as the
 grant, because `suggest_resource` is the app's tool rather than Daybreak's or
 Sunrise's, and a row with no grant is a tool nobody holds.
 
-| Tool                    | Seed | Does                                                                 |
-| ----------------------- | ---- | -------------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is           |
-| `get_state`             | 013  | reads back what is already understood about this person              |
-| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn               |
-| `suggest_resource`      | 014  | hands the person one of her films or pieces of writing, by id (t-77) |
+| Tool                    | Seed | Does                                                                              |
+| ----------------------- | ---- | --------------------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is                        |
+| `get_state`             | 013  | reads back what is already understood about this person                           |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                            |
+| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's films or pieces of writing, by id (t-77) |
+
+**014 reaches a fresh database; a migration reaches every existing one.** The
+seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)
+while the migrator runs before every `web` start, so the row and the grant also
+ship as `prisma/migrations/20260927100000_app_suggest_resource_capability`
+(t-93), which inserts each only where it is absent. The seed unit stays: it is
+what a fresh database runs, and its `update` branch is what re-applies the
+code-owned fields when the definition changes — which a new migration then has
+to carry to the databases that already hold the old one
+([`database-changes.md`](./database-changes.md)).
 
 `suggest_resource` is read-only — an id in, the library's record out
 (`lib/app/resources/suggest.ts`) — and sits on `READ_ONLY_CAPABILITY_SLUGS`.

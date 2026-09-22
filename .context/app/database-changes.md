@@ -57,6 +57,16 @@ version, writes a revision snapshot, and updates the `framework_slot_definition`
 projection that masking reads. The slot-specific notes are in
 [`slots.md`](./slots.md#seeding--operator-owned-written-once-fp4).
 
+The other shape, when the row is **missing** rather than at an old value:
+`20260927100000_app_suggest_resource_capability` (t-93) inserts the
+`suggest_resource` capability row and its grant to `lelanea-guide`, each
+`WHERE NOT EXISTS`, so an admin's edited row and an operator's switched-off
+binding are untouched and a database without the guide gets no dangling grant.
+Where a migration carries a value the code also holds — there, the tool's
+`functionDefinition` — **pin the two together in a test**: a migration is
+frozen once applied, so nothing refactors it alongside the code
+(`tests/unit/prisma/migrations/suggest-resource-capability.test.ts`).
+
 ## When a seed unit is still right
 
 When the rows are a **pure projection of code** that the unit fully reconciles
