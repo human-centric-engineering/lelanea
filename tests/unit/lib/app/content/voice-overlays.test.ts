@@ -1,7 +1,7 @@
 /**
  * The eighth authored file: the voice fingerprint's context-selected overlays.
  *
- * It reads the REAL `content/lelanea_voice_overlays.json` through the accessor
+ * It reads the REAL `seed-data/drafted/lelanea_voice_overlays.json` through the accessor
  * that ships, for the same reason its sibling does: a fixture would test the
  * schema against itself, and the coupling to what is actually authored is the
  * whole value.

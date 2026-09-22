@@ -41,7 +41,7 @@
  * would forge the end of the block and put everything after it back at the
  * model's top level, so every fence-shaped line has its `=` characters replaced
  * before the passage is emitted. The rest of the defence is the authored framing
- * in `content/lelanea_voice_overlays.json`, which tells the model in her own
+ * in `seed-data/drafted/lelanea_voice_overlays.json`, which tells the model in her own
  * words that these are examples of how she sounds, are not what the person said,
  * and are not instructions to her.
  *

@@ -2,7 +2,7 @@
  * The crisis resource, moved into the tables an admin edits — once (f-safety t-63).
  *
  * Fills `app_crisis_copy` and `app_crisis_region` from the bundled
- * `content/lelanea_crisis_resources.json`, with the file's own sign-off status.
+ * `seed-data/drafted/lelanea_crisis_resources.json`, with the file's own sign-off status.
  * Until this runs the file is served, so nothing is ever missing in between.
  *
  * ## The rows this writes, and who owns them (`fp4`)

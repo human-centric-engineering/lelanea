@@ -23,7 +23,7 @@
 
 import { z } from 'zod';
 
-import rawCrisisResources from '@/content/lelanea_crisis_resources.json';
+import rawCrisisResources from '@/seed-data/drafted/lelanea_crisis_resources.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 
 const serviceSchema = z.strictObject({

@@ -37,6 +37,7 @@ const DYNAMIC_IMPORT = `export const load = () => import('@/content/values_modul
 const VIA_LOADER = `import { getJourneyStructure } from '@/lib/app/content';\nexport const journey = getJourneyStructure();\n`;
 const NAMED_REEXPORT = `export { default as documents } from '@/content/lelanea_foundational_documents.json';\n`;
 const STAR_REEXPORT = `export * from '@/content/lelanea_module_structure.json';\n`;
+const DRAFTED_IMPORT = `import overlays from '@/seed-data/drafted/lelanea_voice_overlays.json';\nexport const all = overlays;\n`;
 
 /** ESLint carrying only the boundary block, plus a parser that reads TypeScript. */
 function boundaryLinter(): ESLint {
@@ -84,6 +85,22 @@ describe('content/*.json import boundary', () => {
       expect(result.errorCount).toBe(1);
     });
 
+    it('fails an import of the drafted seed data, which left content/ but not the boundary', async () => {
+      const result = await lint(DRAFTED_IMPORT, 'lib/app/voice/overlays.ts');
+
+      expect(result.errorCount).toBe(1);
+      expect(result.messages[0].ruleId).toBe('no-restricted-syntax');
+    });
+
+    it('leaves other seed data alone', async () => {
+      const result = await lint(
+        `import chunks from '@/prisma/seeds/data/chunks/chunks.json';\nexport const all = chunks;\n`,
+        'lib/orchestration/chunks.ts'
+      );
+
+      expect(result.errorCount).toBe(0);
+    });
+
     it('allows the loader itself to import the files', async () => {
       const result = await lint(STATIC_IMPORT, 'lib/app/content/index.ts');
 
@@ -117,10 +134,10 @@ describe('content/*.json import boundary', () => {
       // `calculateConfigForFile` normalises severity to its numeric form.
       expect(severity).toBe(2);
       expect(selectors.map((entry) => entry.selector)).toEqual([
-        'ImportDeclaration[source.value=/^@\\/content\\//]',
-        'ImportExpression[source.value=/^@\\/content\\//]',
-        'ExportNamedDeclaration[source.value=/^@\\/content\\//]',
-        'ExportAllDeclaration[source.value=/^@\\/content\\//]',
+        'ImportDeclaration[source.value=/^@\\/(content|seed-data\\/drafted)\\//]',
+        'ImportExpression[source.value=/^@\\/(content|seed-data\\/drafted)\\//]',
+        'ExportNamedDeclaration[source.value=/^@\\/(content|seed-data\\/drafted)\\//]',
+        'ExportAllDeclaration[source.value=/^@\\/(content|seed-data\\/drafted)\\//]',
       ]);
     });
 

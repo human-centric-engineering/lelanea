@@ -28,7 +28,7 @@
 
 import { z } from 'zod';
 
-import rawSlotTaxonomy from '@/content/lelanea_slot_taxonomy.json';
+import rawSlotTaxonomy from '@/seed-data/drafted/lelanea_slot_taxonomy.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   SLOT_VISIBILITY,

@@ -1,7 +1,7 @@
 /**
  * The seventh authored file: the always-on core of the voice fingerprint.
  *
- * It reads the REAL `content/lelanea_voice_fingerprint.json` through the
+ * It reads the REAL `seed-data/drafted/lelanea_voice_fingerprint.json` through the
  * accessor that ships, for the same reason `schemas.test.ts` does: a fixture
  * would test the schema against itself, and the coupling to what is actually
  * authored is the whole value.

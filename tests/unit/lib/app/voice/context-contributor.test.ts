@@ -43,7 +43,7 @@
  * on a real turn, and a mock would make that unprovable.
  *
  * **What a fork should expect.** Upstream the context-contributor seam is empty
- * and there is no `content/lelanea_voice_overlays.json`, so this file fails at
+ * and there is no `seed-data/drafted/lelanea_voice_overlays.json`, so this file fails at
  * import. That is the seam being unfilled, not a defect.
  *
  * **What to do.** Rewrite it against YOUR contributor rather than deleting it,

@@ -25,7 +25,7 @@
  * Running only the assembled path tells you an output exists, not that the
  * fingerprint did anything. The control is a second agent with no profile, whose
  * entire system prompt is the authored `control.systemInstructions` from
- * `content/lelanea_voice_golden_set.json` — readable, and hers to change,
+ * `seed-data/drafted/lelanea_voice_golden_set.json` — readable, and hers to change,
  * exactly like the core it is being compared against.
  *
  * ## The guard, and why it is the load-bearing thing in this file (`fp6`)

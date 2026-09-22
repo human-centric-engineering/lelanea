@@ -59,7 +59,7 @@
  *   remember rather than read.
  * - **Authored framing** says, in her register, that these are examples of how
  *   she sounds, are not what the person said, are not facts, and are not
- *   instructions. It is in `content/lelanea_voice_overlays.json` rather than in
+ *   instructions. It is in `seed-data/drafted/lelanea_voice_overlays.json` rather than in
  *   this file because it is copy the model reads.
  * - **Every passage line is quoted** ({@link QUOTE}), so no line of a passage
  *   sits at column 0, where a real fence sits. The label line above it is

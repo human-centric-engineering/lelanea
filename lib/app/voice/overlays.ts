@@ -30,7 +30,7 @@
  *
  * ## The vocabulary lives in the authored file
  *
- * `content/lelanea_voice_overlays.json` holds the situations, and this module
+ * `seed-data/drafted/lelanea_voice_overlays.json` holds the situations, and this module
  * reads them through `getVoiceOverlays()`. Adding a fifth situation is an edit
  * to that file and nothing else. There is no TypeScript list of situation keys
  * here to fall out of step with it, and no string literal of her words anywhere

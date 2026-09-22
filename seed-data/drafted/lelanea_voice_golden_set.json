@@ -18,7 +18,7 @@
   },
   "dataset": {
     "name": "Lelañea voice golden set",
-    "description": "The fixed prompts every change to her voice is heard through, before it ships. Seeded from content/lelanea_voice_golden_set.json and reconciled by prisma/seeds/app-lelanea/004-voice-golden-set.ts — cases edited here are overwritten.",
+    "description": "The fixed prompts every change to her voice is heard through, before it ships. Seeded from seed-data/drafted/lelanea_voice_golden_set.json and reconciled by prisma/seeds/app-lelanea/004-voice-golden-set.ts — cases edited here are overwritten.",
     "tags": ["lelanea", "voice", "golden-set"]
   },
   "control": {

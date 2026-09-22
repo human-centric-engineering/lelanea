@@ -1,28 +1,38 @@
 # Authored Content — `content/`, `lib/app/content`, `/api/v1/app/content`
 
-Lelañea Fulton's words: eight JSON files, validated against Zod schemas, served
-through the versioned API. **Never paraphrased in the build.**
+Lelañea Fulton's words, and the data drafted from them, validated against Zod
+schemas and served through the versioned API. **Never paraphrased in the build.**
 
-**Six are transcriptions; two are not.** `lelanea_voice_fingerprint.json` holds
-the always-on core of the voice fingerprint and
-`lelanea_voice_overlays.json` the register overlays that shade it for a
-particular moment — both drafted _from_ the other six and from the product
-description rather than transcribed from a document she wrote. Each carries a
-`provenance` block saying so and naming who has yet to sign it off, and that
-block is **served** rather than withheld — a drafted file sitting silently beside
-six transcribed ones is the one way this seam could start lying about whose words
-it holds. See [`voice.md`](./voice.md).
+**Two folders, and the difference is whose words they are.**
 
-**Locations:** `content/*.json` (the words) · `lib/app/content/` (schemas +
-loader) · `app/api/v1/app/content/` (the HTTP surface) ·
-`components/app/content/` (the renderer)
+- **`content/`** holds her six transcribed files and nothing else: the
+  foundational documents, the module structure, the discovery questions, the
+  Values module, the value exploration framework and the value explorations.
+  They are unchanged since their first commit (`2953c053`), and the build never
+  edits them. Their `reviewNotes` are for her to rule on.
+- **`seed-data/drafted/`** holds the six files drafted _for_ her
+  and not by her: the voice fingerprint core, the voice overlays, the golden
+  set, the crisis resources, the slot taxonomy and the resources library. Each
+  carries a `provenance` block saying so and naming who has yet to sign it off.
+  That block is **served**, not withheld, so a drafted file can never pass as
+  her words. See [`voice.md`](./voice.md).
+
+Both folders are seed and reference input (§22, owner ruling 2026-09-21). They
+are not what the running app is meant to read. Moving every runtime read to the
+database is §22's remaining work; until it lands, the loaders below still import
+both folders.
+
+**Locations:** `content/*.json` (her words) ·
+`seed-data/drafted/*.json` (drafted seed data) ·
+`lib/app/content/` (schemas + loader) · `app/api/v1/app/content/` (the HTTP
+surface) · `components/app/content/` (the renderer)
 
 ## Anti-patterns
 
 **Do not import `content/*.json`.** An ESLint rule
 (`contentJsonImportBoundary` in `lib/app/eslint.config.mjs`) fails any static
-import, dynamic `import()`, or re-export of `@/content/*.json` from outside
-`lib/app/content/`. A re-export is the worst of the three — it hands the
+import, dynamic `import()`, or re-export of `@/content/*.json` or
+`@/seed-data/drafted/*.json` from outside `lib/app/content/`. A re-export is the worst of the three — it hands the
 unvalidated JSON to every consumer of the re-exporting module, not just one
 file. A direct
 import gets unvalidated data, skips the referential and placeholder checks, and
@@ -351,7 +361,7 @@ which otherwise fails far from its cause:
 
 ## Resources — her films and reading, and her words on whatever is open
 
-`content/lelanea_resources.json` · `lib/app/content/resources.ts` ·
+`seed-data/drafted/lelanea_resources.json` · `lib/app/content/resources.ts` ·
 `app/api/v1/app/content/resources/` (f-resources t-74; product description
 §6.1, §9). The drawer's content: what the Curator agent surfaces and what is
 browsable directly.

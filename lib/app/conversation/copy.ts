@@ -14,7 +14,7 @@ import type { TurnEnding } from '@/lib/app/agent/endings';
  * `endings` replaces the neutral copy the ending frame carries
  * (`lib/app/agent/endings.ts`, the contract: what the person can do, and that
  * thing exists — `HB10`). The register is the voice core's
- * (`content/lelanea_voice_fingerprint.json` → cadence): short sentences, one
+ * (`seed-data/drafted/lelanea_voice_fingerprint.json` → cadence): short sentences, one
  * thought to a line — each `\n` is a beat and is rendered as its own line —
  * plain about large things, no stacked apology, and it hands the next move
  * back to the person. `stillWorking` is the one refusal a person can meet from

@@ -30,23 +30,25 @@ also the first turns a new person reads.
 So the core is present on every single turn regardless of what else happens:
 identity, cadence, how she grounds a claim, and what she declines.
 
-## Where it lives, and why it is a content file
+## Where it lives, and why it is a file and not code
 
-`content/lelanea_voice_fingerprint.json`, the seventh file under `content/`,
-with a Zod schema in `lib/app/content/schemas.ts` and
-`getVoiceFingerprint()` in `lib/app/content/index.ts`.
+`seed-data/drafted/lelanea_voice_fingerprint.json`, with a Zod
+schema in `lib/app/content/schemas.ts` and `getVoiceFingerprint()` in
+`lib/app/content/index.ts`.
 
-It is her authored words, and this repo already has one rule for those:
-`.context/app/planning/README.md` says the content files govern _"anything
-authored by Lelanea, which is never paraphrased in the build"_, and
-`lib/app/eslint.config.mjs` fails any import of `content/*.json` from outside
-`lib/app/content/**`. A loose TypeScript constant in a new directory would be a
-second authoring path for her voice — which is the thing that rule exists to
-prevent.
+It is drafted in her register, so it is held the way her words are: as data
+behind one loader, never as a TypeScript constant. `lib/app/eslint.config.mjs`
+fails any import of `content/*.json` or of the drafted seed data from outside
+`lib/app/content/**`. A loose constant in a new directory would be a second
+authoring path for her voice, which is the thing that rule exists to prevent.
 
-### It is the one content file that is a DRAFT
+It sits in the drafted folder, not beside her six files in `content/`, because
+it is not hers until she signs it off (§22, owner ruling 2026-09-21; see
+[`content.md`](./content.md)).
 
-The six files beside it are transcriptions of documents she wrote, corrected for
+### It is a DRAFT
+
+Her six files in `content/` are transcriptions of documents she wrote, corrected for
 typography and nothing else. This one was **drafted from** them, in her register.
 No volume of corpus produces this text; a model can draft it, and that draft is a
 good use of the material, but the draft is an input to her reading it rather than
@@ -454,8 +456,8 @@ minute.
 
 ## The overlays are her words too, and are a DRAFT
 
-`content/lelanea_voice_overlays.json` — the **eighth** authored file, and the
-second one that was drafted from the corpus rather than transcribed. Same
+`seed-data/drafted/lelanea_voice_overlays.json` — the second
+file drafted from the corpus rather than transcribed. Same
 discipline as the core: every heading, label, beat and note the model reads is
 authored there, the origin label included, and `fingerprint.provenance` says the
 file is awaiting her sign-off. A case in
@@ -474,13 +476,13 @@ Anything true of every turn belongs in the core file.
 
 ## The files
 
-| File                                   | What it is                                              |
-| -------------------------------------- | ------------------------------------------------------- |
-| `content/lelanea_voice_overlays.json`  | The authored overlays, the labelling copy, the fallback |
-| `lib/app/voice/overlays.ts`            | Selection — an exact-match lookup, and nothing more     |
-| `lib/app/voice/exemplars.ts`           | Retrieval, the passage pipeline, the label guard        |
-| `lib/app/voice/context-contributor.ts` | Composition, and the origin labels                      |
-| `lib/app/context-contributors.ts`      | The seam registration — one contributor, type `voice`   |
+| File                                            | What it is                                              |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| `seed-data/drafted/lelanea_voice_overlays.json` | The authored overlays, the labelling copy, the fallback |
+| `lib/app/voice/overlays.ts`                     | Selection — an exact-match lookup, and nothing more     |
+| `lib/app/voice/exemplars.ts`                    | Retrieval, the passage pipeline, the label guard        |
+| `lib/app/voice/context-contributor.ts`          | Composition, and the origin labels                      |
+| `lib/app/context-contributors.ts`               | The seam registration — one contributor, type `voice`   |
 
 | Test                                                   | Proves                                               |
 | ------------------------------------------------------ | ---------------------------------------------------- |
@@ -575,11 +577,11 @@ Reading the file answers "which version is authored"; reading the prompt answers
 "which version is this agent about to be told", and only the second is something
 an output can honestly be attributed to.
 
-## The golden set is a ninth content file, and a versioned dataset
+## The golden set is drafted seed data, and a versioned dataset
 
-`content/lelanea_voice_golden_set.json`. It is the odd one out of the nine: the
-prompts are what a PERSON says to her, not her words. It is authored in the
-content seam anyway, because the set decides which moments she is ever heard in —
+`seed-data/drafted/lelanea_voice_golden_set.json`. It is the odd
+one out: the prompts are what a PERSON says to her, not her words. It goes
+through the content loader anyway, because the set decides which moments she is ever heard in —
 and a probe set an engineer can silently retune is the same failure this feature
 exists to prevent, one level out.
 
@@ -760,7 +762,7 @@ admin's id.
 
 | File                                               | What it is                                                   |
 | -------------------------------------------------- | ------------------------------------------------------------ |
-| `content/lelanea_voice_golden_set.json`            | The authored prompts, the control's prompt, the dataset copy |
+| `seed-data/drafted/lelanea_voice_golden_set.json`  | The authored prompts, the control's prompt, the dataset copy |
 | `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases       |
 | `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                               |
 | `lib/app/voice/comparison-admin.ts`                | The list and the join-by-key read                            |
@@ -961,7 +963,7 @@ touch.
 
 | File                                                    | What it is                                                              |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `content/lelanea_voice_fingerprint.json`                | The authored core — her identity, cadence, grounding and hard nos       |
+| `seed-data/drafted/lelanea_voice_fingerprint.json`      | The authored core — her identity, cadence, grounding and hard nos       |
 | `lib/app/voice/fingerprint.ts`                          | The projection onto the three profile columns, and the version marker   |
 | `prisma/seeds/app-lelanea/003-voice-fingerprint.ts`     | The profile and the first `lelanea-` agent                              |
 | `lib/app/voice/designation.ts`                          | The vocabulary, the slugs, the agent prefix, and the rule as a function |
@@ -1211,7 +1213,7 @@ written once and then belong to whoever edits them. (`isActive` belongs to
 nobody here: it is protected, so a system agent cannot be deactivated through
 the admin at all.)
 
-It re-runs when either `content/lelanea_voice_fingerprint.json` or
+It re-runs when either `seed-data/drafted/lelanea_voice_fingerprint.json` or
 `lib/app/voice/fingerprint.ts` changes (`hashInputs`), so a new line in her
 identity or a change to which block lands in which column reaches the database
 rather than leaving it a version behind. On a database already carrying the

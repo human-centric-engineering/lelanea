@@ -8,7 +8,7 @@
  *
  * The vocabulary itself is read back out of the authored file rather than typed
  * here, so adding a fifth situation is an edit to
- * `content/lelanea_voice_overlays.json` and nothing else — a hardcoded list in a
+ * `seed-data/drafted/lelanea_voice_overlays.json` and nothing else — a hardcoded list in a
  * test is the second authoring path the content seam exists to prevent, and it
  * would go stale silently.
  *
@@ -19,7 +19,7 @@
  * is what stops this file asserting a list it wrote itself.
  *
  * **What a fork should expect.** Upstream there is no
- * `content/lelanea_voice_overlays.json` and no `getVoiceOverlays()`, so the file
+ * `seed-data/drafted/lelanea_voice_overlays.json` and no `getVoiceOverlays()`, so the file
  * fails at import. That is the seam being unfilled, not a defect. Rewrite it
  * against your own overlays, or delete it together with the selector and the
  * schema — a test left behind asserting an absent seam is worse than neither.

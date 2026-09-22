@@ -5,7 +5,7 @@
  * ## The rule this module exists for
  *
  * **A crisis turn never depends on a database read succeeding.** The tables are
- * the source once seeded; `content/lelanea_crisis_resources.json` is the floor.
+ * the source once seeded; `seed-data/drafted/lelanea_crisis_resources.json` is the floor.
  * The bundled file is served when:
  *
  * - the tables are **unseeded** — no `app_crisis_copy` row (the seed writes it
