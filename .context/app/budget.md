@@ -18,7 +18,12 @@ to before changing anything here:
 - **There is no second table of dollars**, and there must not be. A copy is a
   second answer, and the two drift.
 - **A total containing `unpricedRows` is a floor**, never an exact figure. `$0`
-  is not "free" — it is a model the price registry has no rate for.
+  is not "free" — it is a model the price registry has no rate for. Everything
+  derived from such a total inherits the doubt in the direction that flatters:
+  spend reads "at least", what is left reads "at most", and `overCeiling` can
+  read false when real spend is past the limit. Nothing can close that last one
+  — the price is missing, not wrong — so the panel says plainly that some
+  replies had no price on file.
 - **The month-to-date aggregate has no `(userId, createdAt)` index**, on
   purpose. `agent.md` records the trigger for revisiting (the query appearing in
   slow-query logs) and the remedy (an upstream request to Sunrise, never a leaf
@@ -75,15 +80,16 @@ zero. A day that spent anything always draws at least a 4%-of-peak bar, because
 a bar of no height says nothing happened; a day that spent nothing draws a 3px
 sliver, so the axis reads as a run of days rather than as holes.
 
-### Five states that are not errors
+### Six states that are not errors
 
-| State                         | What is shown                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Nothing spent                 | `$0.00`, no average line (a line at zero pretends to be data), plots that say so in words                           |
-| A total with unpriced rows    | "used this month, **at least**", and a sentence naming why                                                          |
-| A $0 limit                    | No meter — nothing divides by zero. A sentence: nothing may be spent, everything readable still works               |
-| Past the limit                | A sentence with the reset, in place of the meter                                                                    |
-| Spend under a cent, and short | `less than a cent` — the floor qualifier is **not** prefixed, because "at least less than a cent" is not a sentence |
+| State                                | What is shown                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Nothing spent                        | `$0.00`, no average line (a line at zero pretends to be data), plots that say so in words                           |
+| A total with unpriced rows           | "used this month, **at least**", and a sentence naming why                                                          |
+| A $0 limit                           | No meter — nothing divides by zero. A sentence: nothing may be spent, everything readable still works               |
+| Past the limit                       | A sentence with the reset, in place of the meter                                                                    |
+| Spend under a cent, and short        | `less than a cent` — the floor qualifier is **not** prefixed, because "at least less than a cent" is not a sentence |
+| Spend under a cent, on a chart label | `<$0.01` — prose four words wide wraps in a 38px column, and a wrapped label shortens its own bar's track           |
 
 The last one matters most. `fractionUsed` goes **above 1** when a person is over
 — reachable by design, because the turn that crosses the line completes (t-59's

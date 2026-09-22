@@ -110,6 +110,21 @@ export function moneyWords(amount: number): string {
   return money(amount);
 }
 
+/**
+ * The same refusal, in the width a chart label has.
+ *
+ * `moneyWords` is prose and belongs in a sentence. Printed over a week bar it
+ * is four words in a column about 38px wide on a phone, so it wrapped to three
+ * lines — and because the figure and the bar's track share a column, a wrapped
+ * label shortened that track and the bar was drawn against a different scale
+ * from its neighbours. A day that spent MORE could render shorter than one that
+ * spent less, which is the defect the track fixed once already (/code-review).
+ */
+export function moneyTight(amount: number): string {
+  if (amount > 0 && amount < 0.005) return '<$0.01';
+  return money(amount);
+}
+
 /** True when a total is known to be short, so it must not be stated as exact. */
 export function spendFloor(totals: { unpricedRows: number }): boolean {
   return totals.unpricedRows > 0;
@@ -128,6 +143,20 @@ export function spendFloor(totals: { unpricedRows: number }): boolean {
 export function floorLabel(total: string, isFloor: boolean): string {
   if (!isFloor || !total.startsWith('$')) return total;
   return `at least ${total}`;
+}
+
+/**
+ * What is left, which is a CEILING when spend is a floor.
+ *
+ * The server computes `remainingUsd` as `max(0, ceiling − costUsd)`, so an
+ * under-counted spend leaves an over-stated remainder — and it errs in the
+ * generous direction, which is the wrong way for a figure a person plans
+ * against. `spendFloor` is documented as a question every caller has to answer;
+ * the spend stat and both chart totals answer it, and this one has to as well
+ * (/code-review).
+ */
+export function remainingLabel(remaining: string, isFloor: boolean): string {
+  return isFloor ? `at most ${remaining}` : remaining;
 }
 
 /** The three figures across the top, and whether each is a floor. */
@@ -153,6 +182,10 @@ export function usageStats(summary: UsageSummary): UsageStats {
     ceiling: money(summary.ceiling.ceilingUsd),
     spentIsFloor: spendFloor(summary),
     nothingAllowed,
+    // With unpriced rows real spend can be past the ceiling while `costUsd` is
+    // not, so this can read false when it should be true. Nothing here can know
+    // — the price is missing, not wrong — and the panel's "no price on file"
+    // sentence is what tells a person the figures are short (/code-review).
     overCeiling: !nothingAllowed && summary.costUsd > summary.ceiling.ceilingUsd,
     ownLimit: summary.ceiling.source === 'override',
   };
@@ -185,6 +218,19 @@ export interface UsageBar {
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * The shortest a bar that spent anything may be drawn.
+ *
+ * The average line is held to it too. Without that the two scales disagree: on
+ * a month where one day carries nearly all the spend, the true mean can fall
+ * below this floor while every cent-day is lifted up to it — so a dozen days
+ * that were a fifth of a percent of the peak would draw ABOVE the dashed line
+ * and the chart would say they beat the average (/code-review). Held to the
+ * same floor they coincide with it, which reads as "about average" and is the
+ * least wrong thing a floored scale can say.
+ */
+const MIN_BAR_PERCENT = 4;
 
 /** `YYYY-MM-DD` for an instant, in UTC — the key the breakdown groups by. */
 export function utcDayKey(at: Date): string {
@@ -248,7 +294,8 @@ export function daysBetween(from: Date, to: Date, groups: UsageDay[]): UsageBar[
     ...bar,
     // A day that spent always draws something: a 0.4%-of-peak day rounding to a
     // bar of no height would say nothing happened, which is a different fact.
-    heightPercent: bar.costUsd === 0 ? 0 : Math.max(4, Math.round((bar.costUsd / tallest) * 100)),
+    heightPercent:
+      bar.costUsd === 0 ? 0 : Math.max(MIN_BAR_PERCENT, Math.round((bar.costUsd / tallest) * 100)),
   }));
 }
 
@@ -316,7 +363,10 @@ export function monthPlot(
     // would sit on the axis pretending to be data.
     average:
       tallest > 0
-        ? { percent: (mean / tallest) * 100, label: `average ${moneyWords(mean)} a day` }
+        ? {
+            percent: Math.max(MIN_BAR_PERCENT, (mean / tallest) * 100),
+            label: `average ${moneyWords(mean)} a day`,
+          }
         : null,
   };
 }
@@ -336,7 +386,7 @@ export function weekPlot(reading: UsageReading): UsagePlot<UsageWeekBar> {
   const bars = daysBetween(from, now, reading.days.groups).map((bar) => ({
     ...bar,
     weekday: weekdayLabel.format(new Date(`${bar.day}T00:00:00Z`)),
-    figure: bar.costUsd === 0 ? '—' : moneyWords(bar.costUsd),
+    figure: bar.costUsd === 0 ? '—' : moneyTight(bar.costUsd),
   }));
   const spent = bars.reduce((sum, bar) => sum + bar.costUsd, 0);
 

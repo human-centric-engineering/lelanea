@@ -156,7 +156,15 @@ export function WeekPlot({ bars, description }: { bars: UsageWeekBar[]; descript
       >
         {bars.map((bar) => (
           <div key={bar.day} className="flex h-full flex-1 flex-col items-center gap-1.5">
-            <em className="text-muted-foreground text-[11.5px] not-italic tabular-nums">
+            {/*
+              Fixed height and one line: the figure and the bar's track share
+              this column, so a label that wrapped would shorten THIS track and
+              draw its bar against a different scale from the six beside it —
+              a day that spent more rendering shorter than one that spent less.
+              `moneyTight` keeps the text short; this keeps a future one from
+              mattering (/code-review).
+            */}
+            <em className="text-muted-foreground h-[14px] overflow-hidden text-[11.5px] leading-[14px] whitespace-nowrap not-italic tabular-nums">
               {bar.figure}
             </em>
             {/*

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { USAGE_LEDE, USAGE_NOTE, UsagePanel } from '@/components/app/usage/usage-panel';
+import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
 import { View } from '@/components/app/views/view';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
@@ -42,7 +43,7 @@ export const metadata: Metadata = { title: 'Usage and billing' };
  */
 export default async function UsagePage() {
   const session = await getServerSession();
-  if (!session) clearInvalidSession('/app/usage');
+  if (!session) clearInvalidSession(USAGE_PAGE);
 
   return (
     <View column eyebrow="usage" title="What this month cost" lede={USAGE_LEDE} note={USAGE_NOTE}>

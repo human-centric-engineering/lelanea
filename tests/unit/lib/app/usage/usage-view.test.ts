@@ -17,9 +17,11 @@ import {
   floorLabel,
   meterFill,
   money,
+  moneyTight,
   moneyWords,
   monthPlot,
   readingWindowFrom,
+  remainingLabel,
   spendFloor,
   usageStats,
   utcDayKey,
@@ -109,6 +111,34 @@ describe('qualifying a total that is a floor', () => {
     // while one ran on an unpriced model. The qualifier belongs to a numeral;
     // the sentence under the stats is what explains the shortfall.
     expect(floorLabel(moneyWords(0.002), true)).toBe('less than a cent');
+  });
+});
+
+describe('a figure narrow enough for a chart label', () => {
+  it('says under a cent as a numeral, not as four words', () => {
+    // Over a week bar, "less than a cent" wrapped to three lines in a ~38px
+    // column — and because the figure shares that column with the bar's track,
+    // a wrapped label drew its bar against a shorter scale than its neighbours.
+    expect(moneyTight(0.002)).toBe('<$0.01');
+    expect(moneyWords(0.002)).toBe('less than a cent');
+  });
+
+  it('is an ordinary figure everywhere else', () => {
+    expect(moneyTight(9.35)).toBe('$9.35');
+    expect(moneyTight(0)).toBe('$0.00');
+  });
+});
+
+describe('what is left', () => {
+  it('is a ceiling when spend is a floor, and says so', () => {
+    // `remainingUsd` is `max(0, ceiling − costUsd)`; an under-counted spend
+    // leaves an over-stated remainder, and it errs generously — the wrong way
+    // for a figure a person plans against.
+    expect(remainingLabel('$10.65', true)).toBe('at most $10.65');
+  });
+
+  it('is exact when every row was priced', () => {
+    expect(remainingLabel('$10.65', false)).toBe('$10.65');
   });
 });
 
@@ -244,6 +274,31 @@ describe('the month plot', () => {
     // 1.96 over 21 days against a 1.18 peak.
     expect(plot.average?.percent).toBeCloseTo((1.96 / 21 / 1.18) * 100);
     expect(plot.average?.label).toBe('average $0.09 a day');
+  });
+
+  it('never draws the average below the floor the bars are held to', () => {
+    // One day carrying nearly the whole month puts the true mean under the 4%
+    // bar floor. Unclamped, every cent-day would draw ABOVE the dashed line and
+    // the chart would say a dozen days beat the average when each was a fifth
+    // of a percent of the peak.
+    // It takes a long month for the mean to fall under the floor at all: the
+    // mean over N days of a single spike is 1/N of the peak, so the clamp only
+    // bites past about twenty-five days. A full March is 31.
+    const lopsided = reading([
+      day('2026-03-01', 100),
+      day('2026-03-02', 0.01),
+      day('2026-03-03', 0.01),
+    ]);
+    lopsided.days.window = { from: MONTH_START, to: '2026-03-31T23:00:00.000Z' };
+    const plot = monthPlot(lopsided);
+
+    expect(plot.bars).toHaveLength(31);
+
+    expect(plot.average!.percent).toBeGreaterThanOrEqual(4);
+    const centDay = plot.bars.find((bar) => bar.day === '2026-03-02')!;
+    expect(centDay.heightPercent).toBe(4);
+    // The two coincide rather than contradicting each other.
+    expect(plot.average!.percent).toBeLessThanOrEqual(centDay.heightPercent);
   });
 
   it('draws no average line through a month that spent nothing', () => {

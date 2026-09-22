@@ -146,6 +146,28 @@ describe('the week plot', () => {
     }
   });
 
+  it('keeps every figure on one fixed-height line, so no label moves a track', () => {
+    // The figure shares its column with the bar's track, so a label that wrapped
+    // would shorten THAT track and draw its bar against a different scale from
+    // the six beside it.
+    render(<WeekPlot bars={week} description="d" />);
+
+    for (const column of screen.getByRole('img').children) {
+      const figure = column.querySelector('em')!;
+      expect(figure.className).toContain('whitespace-nowrap');
+      expect(figure.className).toContain('h-[14px]');
+    }
+  });
+
+  it('lays the weekday axis on the same track as the bars', () => {
+    const { container } = render(<WeekPlot bars={week} description="d" />);
+    const [bars, axis] = Array.from(container.children) as HTMLElement[];
+    // Different gaps would be different column widths, and the outer labels
+    // would sit off their own bars.
+    expect(axis.className).toContain('gap-2');
+    expect(bars.className).toContain('gap-2');
+  });
+
   it('names the weekdays under the bars', () => {
     render(<WeekPlot bars={week} description="d" />);
     for (const day of ['Sun', 'Mon', 'Tue']) {
