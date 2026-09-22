@@ -37,38 +37,37 @@ One row is one acknowledgement: `userId`, `kind`, `documentVersion`,
 
 | Kind         | Stands for                          | `documentVersion` is                              |
 | ------------ | ----------------------------------- | ------------------------------------------------- |
-| `disclaimer` | the `disclaimer` document           | the foundational collection's `version` (`1.1`)   |
-| `terms`      | the `terms_of_use` document         | the same collection version                       |
+| `disclaimer` | the `disclaimer` document           | that document's `version` (`1.1` at seed)         |
+| `terms`      | the `terms_of_use` document         | that document's `version` (`1.1` at seed)         |
 | `age_18`     | the eighteen-plus confirmation (A7) | `AGE_18_VERSION`, a constant naming the threshold |
 
 **A kind is satisfied by a row at the version required _now_, not by ever
-having been acknowledged.** `getRequiredVersions()` reads the collection version
-from the content loader on every call, and `getGateStatus(userId)` matches rows
-against it. So bumping `collection.version` in
-`content/lelanea_foundational_documents.json` re-gates both documents for
-everyone by construction — nothing in this module has to notice — while the
-age confirmation stands, because its constant did not move. The superseded rows
-stay: they are the record of what was agreed before, and the export returns
-them.
+having been acknowledged.** `getRequiredVersions()` reads each legal document's
+`version` from `app_foundational_document` on every call, and
+`getGateStatus(userId)` matches rows against it. So changing a document's
+version re-gates that document for everyone by construction, and nothing in this
+module has to notice. The age confirmation stands, because its constant did not
+move. The superseded rows stay: they are the record of what was agreed before,
+and the export returns them.
 
-The two documents share one version because they are versioned together, by
-their author, in one file — and **that version is collection-wide**: the content
-schema has no per-document version, so the same `collection.version` also
-covers the five non-legal documents and the `app` / `creator` metadata. Two
-authoring rules follow, and the code cannot enforce either:
+**The version is per document (t-86).** Until t-86 both kinds read the
+collection's `version` in `content/lelanea_foundational_documents.json`, so a
+typo fix to `about_the_creator` with a version bump would have re-gated everyone
+on unchanged legal text. The documents now live in the database, each with two
+counters:
 
-- **Any edit to the Disclaimer or the Terms text must bump `collection.version`.**
-  Without the bump nobody is re-gated, and people are bound by text they never
-  saw.
-- **A bump for any other reason re-gates everyone.** Fixing a typo in
-  `about_the_creator` and bumping `1.1 → 1.2` sends every user back to the gate
-  to re-agree to unchanged legal text. Prefer not bumping for non-legal edits.
+- `version`: the label a person agrees to, and what the gate requires. The seed
+  sets it to the collection's `1.1` for every document, so the move re-gated
+  nobody.
+- `revision`: bumped by every write, with a full snapshot in
+  `app_foundational_document_revision`.
 
-If either side of that becomes a problem, the fix is a per-legal-document
-version: a change to the content schema first, and a one-line change to
-`getRequiredVersions()` second. Deliberately not built in t-15 — the authored
-file versions the collection as one thing, and inventing a second version the
-author does not maintain would be the dishonest affordance (B31).
+One authoring rule follows, and the code cannot enforce it: **an edit to the
+Disclaimer or the Terms that people must agree to again has to change that
+document's `version`.** A typo fix need not. Without the change nobody is
+re-gated, and people are bound by text they never saw. The admin editor (t-91)
+is where the choice is made, and the revision history is how to see what was
+in force on a given day.
 
 **Insert-only.** No `updatedAt`; nothing updates or deletes a row except
 erasure. `@@unique([userId, kind, documentVersion])` is what makes a repeat
