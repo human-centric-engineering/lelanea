@@ -2,7 +2,7 @@
  * The slot taxonomy, moved into the tables an admin edits — once (f-slots t-70).
  *
  * Fills `app_slot_definition` and its v1 history from the bundled
- * `content/lelanea_slot_taxonomy.json`, then asks Daybreak's global slot sync
+ * `seed-data/drafted/lelanea_slot_taxonomy.json`, then asks Daybreak's global slot sync
  * to project the result into `framework_slot_definition` as `scope = global`.
  *
  * ## The rows this writes, and who owns them (`fp4`)

@@ -12,7 +12,7 @@
       "note": "Drafted from her corpus in her register, exactly as the always-on core was. Each overlay shades the core for one moment; none of them may contradict it. Until she has signed these off, every line here is a proposal in her voice — not her words."
     },
     "sourceFiles": [
-      "content/lelanea_voice_fingerprint.json",
+      "seed-data/drafted/lelanea_voice_fingerprint.json",
       "content/onboarding_discovery_questions.json",
       "content/lelanea_foundational_documents.json",
       ".context/app/planning/lelanea-product-description.md"

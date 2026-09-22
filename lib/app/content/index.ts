@@ -46,9 +46,9 @@
 import rawFoundationalDocuments from '@/content/lelanea_foundational_documents.json';
 import rawJourneyStructure from '@/content/lelanea_module_structure.json';
 import rawDiscoveryQuestions from '@/content/onboarding_discovery_questions.json';
-import rawVoiceFingerprint from '@/content/lelanea_voice_fingerprint.json';
-import rawVoiceOverlays from '@/content/lelanea_voice_overlays.json';
-import rawVoiceGoldenSet from '@/content/lelanea_voice_golden_set.json';
+import rawVoiceFingerprint from '@/seed-data/drafted/lelanea_voice_fingerprint.json';
+import rawVoiceOverlays from '@/seed-data/drafted/lelanea_voice_overlays.json';
+import rawVoiceGoldenSet from '@/seed-data/drafted/lelanea_voice_golden_set.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import {
   foundationalDocumentsFileSchema,

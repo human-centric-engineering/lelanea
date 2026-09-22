@@ -66,7 +66,7 @@ const unit: SeedUnit = {
   name: 'app-lelanea/013-agent-slot-tools',
   hashInputs: [
     '../../../lib/app/agent/pins.ts',
-    '../../../content/lelanea_slot_taxonomy.json',
+    '../../../seed-data/drafted/lelanea_slot_taxonomy.json',
     '../../../lib/app/content/slot-taxonomy.ts',
   ],
   async run({ prisma, logger }) {

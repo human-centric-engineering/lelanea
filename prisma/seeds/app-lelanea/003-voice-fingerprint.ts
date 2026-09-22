@@ -12,7 +12,7 @@
  * ## The row this writes, and who owns it (`fp4`)
  *
  * **The profile is a pure code projection.** Its three text columns are
- * reconciled on every run: they come from `content/lelanea_voice_fingerprint.json`
+ * reconciled on every run: they come from `seed-data/drafted/lelanea_voice_fingerprint.json`
  * by way of `composeFingerprintProfileSections()`, and no operator is meant to
  * hand-edit her voice in the admin UI. That is the opposite call from the
  * designation tags next door, whose names and descriptions ARE operator-owned —
@@ -139,7 +139,7 @@ const unit: SeedUnit = {
   // anywhere. Both omissions were caught by /code-review, the second of them
   // introduced by the fix for the first.
   hashInputs: [
-    '../../../content/lelanea_voice_fingerprint.json',
+    '../../../seed-data/drafted/lelanea_voice_fingerprint.json',
     '../../../lib/app/content/index.ts',
     '../../../lib/app/content/schemas.ts',
     '../../../lib/app/voice/designation.ts',
@@ -197,7 +197,7 @@ const unit: SeedUnit = {
     // seed. Caught by /code-review.
     const profileProjection = {
       name: core.collection.title,
-      description: `The always-on core of the voice fingerprint, v${core.collection.version}. Authored in content/lelanea_voice_fingerprint.json and reconciled by this seed — edits made here are overwritten.`,
+      description: `The always-on core of the voice fingerprint, v${core.collection.version}. Authored in seed-data/drafted/lelanea_voice_fingerprint.json and reconciled by this seed — edits made here are overwritten.`,
       ...sections,
     };
 

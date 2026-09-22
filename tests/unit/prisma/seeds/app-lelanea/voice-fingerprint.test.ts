@@ -489,7 +489,7 @@ describe('what a change to the tree has to re-run', () => {
     // then stops widening her restricted agent, and her designated material
     // drops out of its document set silently.
     expect(unit.hashInputs).toEqual([
-      '../../../content/lelanea_voice_fingerprint.json',
+      '../../../seed-data/drafted/lelanea_voice_fingerprint.json',
       '../../../lib/app/content/index.ts',
       '../../../lib/app/content/schemas.ts',
       '../../../lib/app/voice/designation.ts',

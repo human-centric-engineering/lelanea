@@ -55,7 +55,7 @@
 
 import { z } from 'zod';
 
-import rawResources from '@/content/lelanea_resources.json';
+import rawResources from '@/seed-data/drafted/lelanea_resources.json';
 import {
   getJourneyStructure,
   listFoundationalDocuments,

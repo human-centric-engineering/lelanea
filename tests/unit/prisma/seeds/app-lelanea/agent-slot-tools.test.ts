@@ -254,7 +254,7 @@ describe('the unit itself', () => {
     // input to this unit even though it writes no definition.
     expect(unit.hashInputs).toEqual([
       '../../../lib/app/agent/pins.ts',
-      '../../../content/lelanea_slot_taxonomy.json',
+      '../../../seed-data/drafted/lelanea_slot_taxonomy.json',
       '../../../lib/app/content/slot-taxonomy.ts',
     ]);
   });

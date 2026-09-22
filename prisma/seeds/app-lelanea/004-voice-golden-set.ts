@@ -10,7 +10,7 @@
  *
  * ## Both rows are pure code projections (`fp4`) — with one exception that matters
  *
- * The prompts come from `content/lelanea_voice_golden_set.json` and no operator
+ * The prompts come from `seed-data/drafted/lelanea_voice_golden_set.json` and no operator
  * is meant to edit them in the admin UI. But a dataset case cannot simply be
  * reconciled once it has been used: `AiEvaluationCaseResult.datasetCase` declares
  * no `onDelete`, so Prisma's default `Restrict` applies and deleting a scored
@@ -122,7 +122,7 @@ const unit: SeedUnit = {
   // owns the dataset id and the control's slug: change either and this unit must
   // re-run, or the install keeps a dataset under an id nothing looks for.
   hashInputs: [
-    '../../../content/lelanea_voice_golden_set.json',
+    '../../../seed-data/drafted/lelanea_voice_golden_set.json',
     '../../../lib/app/content/index.ts',
     '../../../lib/app/content/schemas.ts',
     '../../../lib/app/voice/golden-set.ts',
@@ -241,7 +241,7 @@ const unit: SeedUnit = {
         datasetId,
       });
       throw new Error(
-        `The prompts in content/lelanea_voice_golden_set.json have changed, but v${goldenSet.collection.version} has already been run — its answers are only readable beside the questions that produced them. Bump \`goldenSet.version\` in that file: a new version mints a new dataset beside this one and leaves the old comparisons intact.`
+        `The prompts in seed-data/drafted/lelanea_voice_golden_set.json have changed, but v${goldenSet.collection.version} has already been run — its answers are only readable beside the questions that produced them. Bump \`goldenSet.version\` in that file: a new version mints a new dataset beside this one and leaves the old comparisons intact.`
       );
     } else {
       // Nothing has been asked of this version yet, so there is no history to

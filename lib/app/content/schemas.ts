@@ -556,7 +556,7 @@ const voiceSituationSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
 });
 
 /**
- * The context-selected overlays — content/lelanea_voice_overlays.json
+ * The context-selected overlays — seed-data/drafted/lelanea_voice_overlays.json
  *
  * The fingerprint's second layer. Same authored-file discipline as the core
  * beside it: every heading, label and line the model reads is authored here,
@@ -683,7 +683,7 @@ export const GOLDEN_SET_REQUIRED_KINDS = [
 export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];
 
 /**
- * The golden set — content/lelanea_voice_golden_set.json
+ * The golden set — seed-data/drafted/lelanea_voice_golden_set.json
  *
  * The fixed prompts every change to her voice is heard through before it ships.
  *

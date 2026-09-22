@@ -1,7 +1,7 @@
 /**
  * The ninth authored file: the golden set she is heard through.
  *
- * It reads the REAL `content/lelanea_voice_golden_set.json` through the accessor
+ * It reads the REAL `seed-data/drafted/lelanea_voice_golden_set.json` through the accessor
  * that ships, for the same reason its two siblings do: a fixture would test the
  * schema against itself, and the coupling to what is actually authored is the
  * whole value.

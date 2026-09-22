@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog';
 
 /** The authored file the set is seeded from, named on screen so it can be found. */
-const SOURCE_FILE = 'content/lelanea_voice_golden_set.json';
+const SOURCE_FILE = 'seed-data/drafted/lelanea_voice_golden_set.json';
 
 export interface GoldenSetView {
   version: string;
