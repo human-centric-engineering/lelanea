@@ -40,8 +40,8 @@ is how every **existing** one does. A change usually needs both.
 - **Write what the app's own write path writes.** If the table has a history
   (a version column, a revision table) or a projection another tier reads,
   update those too. Otherwise the record says one thing and the behaviour
-  another. A data-modifying CTE (`WITH moved AS (UPDATE … RETURNING *) INSERT …
-SELECT … FROM moved`) writes the history only for rows that actually moved.
+  another. Writing the history from an `UPDATE … RETURNING` in a CTE records
+  it only for the rows that actually moved.
 - **Say who changed it.** Where the history has an origin or editor column,
   use the operator value (for example `origin = 'seed'`, `editorId` null), not
   a person.
