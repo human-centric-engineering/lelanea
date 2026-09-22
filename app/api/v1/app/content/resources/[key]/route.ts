@@ -4,9 +4,9 @@
  * GET /api/v1/app/content/resources/:key — her words on the open thing, two
  * films and three readings chosen for it: what belongs to it first, then what
  * belongs to everything. `:key` is what the shell has — a module slug
- * (`values`), or `journey`, `situations` or `default`. `?film=<id>` puts one
- * film first, which is how a suggestion made in conversation opens the drawer
- * on the thing suggested (t-77).
+ * (`values`), or `journey`, `situations` or `default`. `?pin=<id>` puts one
+ * film or reading first in its list, which is how a suggestion made in
+ * conversation opens the drawer on the thing suggested (t-77).
  *
  * The response carries the module's `title` and `tier`, so the drawer can name
  * itself ("On Values.") and take the arc's colour without a second request.
@@ -33,8 +33,8 @@ import { validatePathParam, validateQueryParams } from '@/lib/api/validation';
 import { slugSchema } from '@/lib/validations/common';
 import { selectResourcesFor } from '@/lib/app/content/resources';
 
-/** `?film=` is a resource id, which has the slug's shape. Absent is fine. */
-const querySchema = z.object({ film: slugSchema.optional() });
+/** `?pin=` is a resource id, which has the slug's shape. Absent is fine. */
+const querySchema = z.object({ pin: slugSchema.optional() });
 
 const OWNERSHIP: WithAuthOptions<{ key: string }> = {
   // Ownership: none to decide — see RouteOwnership in lib/auth/guards.ts.
@@ -49,9 +49,9 @@ export const GET = withAuth<{ key: string }>(async (request, _session, { params 
   const log = await getRouteLogger(request);
   const { key: raw } = await params;
   const key = validatePathParam(raw, slugSchema, { label: 'resource key', field: 'key' });
-  const { film } = validateQueryParams(request.nextUrl.searchParams, querySchema);
+  const { pin } = validateQueryParams(request.nextUrl.searchParams, querySchema);
 
-  const selection = selectResourcesFor(key, { pin: film });
+  const selection = selectResourcesFor(key, { pin });
   if (!selection) {
     // Truncated as the documents route does: the slug schema bounds the
     // charset, not the length. Logged so a client asking for a module that was
@@ -69,7 +69,7 @@ export const GET = withAuth<{ key: string }>(async (request, _session, { params 
     wordsAreOwn: selection.wordsAreOwn,
     films: selection.films.length,
     readings: selection.readings.length,
-    pinned: film ?? null,
+    pinned: pin ?? null,
   });
 
   return successResponse(selection, undefined, { headers: { ETag: etag } });

@@ -24,6 +24,11 @@ import {
 } from '@/lib/app/agent/endings';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
+import {
+  suggestionFromResult,
+  uniqueSuggestions,
+  type ResourceSuggestion,
+} from '@/lib/app/resources/suggestion';
 import { SLOT_WRITE_CAPABILITY } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import type { Citation } from '@/types/orchestration';
@@ -121,6 +126,8 @@ export interface LiveTurn {
   stillThinking: boolean;
   /** Capability slugs the turn called, for the account row. */
   capabilities: string[];
+  /** What the turn offered — a film or a piece of writing, by id (t-77). */
+  suggestions: ResourceSuggestion[];
   /** A soft crisis frame shown ahead of her turn. */
   resource?: CrisisResource;
   /** The same frame's `message` — the whole resource as text — shown when `resource` did not parse. */
@@ -278,7 +285,14 @@ export function useConversation(options: Options = {}): ConversationState {
           )
         );
       }
-      setLive({ turnId, userText: message, replyText: '', stillThinking: false, capabilities: [] });
+      setLive({
+        turnId,
+        userText: message,
+        replyText: '',
+        stillThinking: false,
+        capabilities: [],
+        suggestions: [],
+      });
 
       const finish = (outcome: ConversationEntry[]) => {
         setEntries((previous) => [...previous, ...outcome]);
@@ -292,6 +306,7 @@ export function useConversation(options: Options = {}): ConversationState {
         const startedAt = new Date().toISOString();
         let replyText = '';
         let capabilities: string[] = [];
+        let suggestions: ResourceSuggestion[] = [];
         /**
          * Tell the notes panel, if this turn wrote one, and tell it once.
          *
@@ -377,18 +392,24 @@ export function useConversation(options: Options = {}): ConversationState {
               // Only a call that answered is something the turn did.
               if (capabilityAnswered(event.result)) {
                 capabilities = [...capabilities, event.capabilitySlug];
-                setLive((current) => current && { ...current, capabilities });
+                const suggestion = suggestionFromResult(event.result);
+                if (suggestion) suggestions = uniqueSuggestions([...suggestions, suggestion]);
+                setLive((current) => current && { ...current, capabilities, suggestions });
               }
               return;
-            case 'capability_results':
-              capabilities = [
-                ...capabilities,
-                ...event.results
-                  .filter((r) => capabilityAnswered(r.result))
-                  .map((r) => r.capabilitySlug),
-              ];
-              setLive((current) => current && { ...current, capabilities });
+            case 'capability_results': {
+              const answered = event.results.filter((r) => capabilityAnswered(r.result));
+              capabilities = [...capabilities, ...answered.map((r) => r.capabilitySlug)];
+              suggestions = uniqueSuggestions([
+                ...suggestions,
+                ...answered.flatMap((r) => {
+                  const suggestion = suggestionFromResult(r.result);
+                  return suggestion ? [suggestion] : [];
+                }),
+              ]);
+              setLive((current) => current && { ...current, capabilities, suggestions });
               return;
+            }
             case 'citations':
               citations = event.citations;
               return;
@@ -413,6 +434,7 @@ export function useConversation(options: Options = {}): ConversationState {
                   turnId,
                   citations,
                   capabilities,
+                  suggestions,
                   ...(resource ? { resource } : {}),
                   ...(crisisText ? { crisisText } : {}),
                   turn: {

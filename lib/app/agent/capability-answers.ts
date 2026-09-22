@@ -31,8 +31,22 @@ export function capabilityAnswered(result: unknown): boolean {
   return answeredSchema.safeParse(result).success;
 }
 
-/** One call's trace, read as far as this needs: the slug and whether it answered. */
-const callSchema = z.object({ slug: z.string(), success: z.boolean() });
+/**
+ * One call's trace, read as far as this needs: the slug, whether it answered,
+ * and the redacted arguments — which a capability that resolves a suggestion
+ * from its own `{ id }` reads back (`lib/app/resources/suggest.ts`).
+ */
+const callSchema = z.object({
+  slug: z.string(),
+  success: z.boolean(),
+  arguments: z.unknown().optional(),
+});
+
+/** An answered call: its slug and whatever the trace kept of its arguments. */
+export interface AnsweredCall {
+  slug: string;
+  arguments: unknown;
+}
 const provenanceSchema = z.object({
   // Each entry on its own, so one trace this cannot read costs that trace, not the list.
   capabilityCalls: z.array(z.unknown()),
@@ -44,10 +58,21 @@ const provenanceSchema = z.object({
  * row from before the platform recorded traces.
  */
 export function answeredCapabilities(provenance: unknown): string[] {
+  return answeredCalls(provenance).map((call) => call.slug);
+}
+
+/**
+ * The same calls, with their arguments — for a reader that needs to know WHAT
+ * a call did, not only that it did (t-77's suggestions). Same rule: only a
+ * call that answered, and a trace this cannot read costs that trace alone.
+ */
+export function answeredCalls(provenance: unknown): AnsweredCall[] {
   const parsed = provenanceSchema.safeParse(provenance);
   if (!parsed.success) return [];
   return parsed.data.capabilityCalls.flatMap((raw) => {
     const call = callSchema.safeParse(raw);
-    return call.success && call.data.success ? [call.data.slug] : [];
+    return call.success && call.data.success
+      ? [{ slug: call.data.slug, arguments: call.data.arguments }]
+      : [];
   });
 }

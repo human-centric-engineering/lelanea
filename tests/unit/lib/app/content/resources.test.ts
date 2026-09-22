@@ -315,10 +315,25 @@ describe('a malformed file fails, naming the fault', () => {
     expect(messages.join('\n')).toMatch(/words.default is required/);
   });
 
-  it('rejects a duplicate id within a list', () => {
+  it('rejects an id longer than the suggestion tool accepts', () => {
+    const { ok, messages } = parse(fixture({ films: [film('x'.repeat(81), null)] }));
+    expect(ok).toBe(false);
+    expect(messages.join('\n')).toMatch(/at most 80/);
+    expect(parse(fixture({ films: [film('x'.repeat(80), null)] })).ok).toBe(true);
+  });
+
+  it('rejects a duplicate id within a list, and across the two lists', () => {
     const { ok, messages } = parse(fixture({ films: [film('dup', null), film('dup', null)] }));
     expect(ok).toBe(false);
-    expect(messages.join('\n')).toMatch(/duplicate films id "dup"/);
+    expect(messages.join('\n')).toMatch(/duplicate resource id "dup"/);
+
+    // An id is what the suggestion tool resolves by: a film and a reading
+    // sharing one would always resolve to the film.
+    const across = parse(
+      fixture({ films: [film('same', null)], readings: [reading('same', null)] })
+    );
+    expect(across.ok).toBe(false);
+    expect(across.messages.join('\n')).toMatch(/one namespace/);
   });
 
   it('rejects a film or reading whose link is not http(s)', () => {
@@ -397,6 +412,16 @@ describe('the selection', () => {
 
     const foreign = selectResources(file, MODULES, 'values', { pin: 'boundaries-a' });
     expect(foreign?.films.map((f) => f.id)).toEqual(['boundaries-a', 'values-a']);
+  });
+
+  it('pins a reading too, in its own list, and leaves the films alone', () => {
+    const pinned = selectResources(file, MODULES, 'values', { pin: 'read-general-c' });
+    expect(pinned?.readings.map((r) => r.id)).toEqual([
+      'read-general-c',
+      'read-values',
+      'read-general-a',
+    ]);
+    expect(pinned?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
   });
 
   it('ignores a pin that names nothing', () => {

@@ -34,6 +34,7 @@ import {
   GUARD_MODES,
   HER_CAPABILITY_SLUGS,
   READ_ONLY_CAPABILITY_SLUGS,
+  RESOURCE_CAPABILITY_SLUGS,
   SELF_WRITE_CAPABILITY_SLUGS,
   SLOT_CAPABILITY_SLUGS,
   SEATED_ROLES,
@@ -89,10 +90,10 @@ const WRITE_CAPABILITY_SLUGS = [
 const SANCTIONED_SELF_WRITES = ['fill_slot'];
 
 describe('her tools', () => {
-  it('are exactly what the two seeds grant, and nothing else', () => {
-    expect([...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS].sort()).toEqual(
-      [...HER_CAPABILITY_SLUGS].sort()
-    );
+  it('are exactly what the three seeds grant, and nothing else', () => {
+    expect(
+      [...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS, ...RESOURCE_CAPABILITY_SLUGS].sort()
+    ).toEqual([...HER_CAPABILITY_SLUGS].sort());
   });
 
   it('never include anything that writes, bar the one sanctioned self-write', () => {
@@ -100,7 +101,11 @@ describe('her tools', () => {
     expect(HER_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
     expect(WRITE_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
     const allowed: readonly string[] = HER_CAPABILITY_SLUGS;
-    const granted: readonly string[] = [...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS];
+    const granted: readonly string[] = [
+      ...GRANTED_CAPABILITY_SLUGS,
+      ...SLOT_CAPABILITY_SLUGS,
+      ...RESOURCE_CAPABILITY_SLUGS,
+    ];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
       if (SANCTIONED_SELF_WRITES.includes(slug)) continue;
       expect(allowed, `${slug} writes — it cannot be on her allowlist`).not.toContain(slug);

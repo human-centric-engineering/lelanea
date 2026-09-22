@@ -35,6 +35,7 @@
  */
 
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
+import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
 
 /** What a source reads: the reply's own data, live or read back. */
@@ -44,6 +45,8 @@ export interface AccountInput {
   /** Capability slugs the turn called, in order. */
   capabilities: string[];
   citations: Citation[];
+  /** What the turn offered the person — a film or a piece of writing (t-77). */
+  suggestions: ResourceSuggestion[];
   /** The turn row, or null for a reply written before the seam. */
   turn: TurnAccount | null;
 }
@@ -63,9 +66,15 @@ export type AccountSource = (input: AccountInput) => AccountPart | null;
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
+const OFFERED_A_RESOURCE = 'suggest_resource';
 
 /** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
-const NAMED_CAPABILITIES = new Set([SEARCH_HER_MATERIAL, READ_THE_PROFILE, WRITE_THE_PROFILE]);
+const NAMED_CAPABILITIES = new Set([
+  SEARCH_HER_MATERIAL,
+  READ_THE_PROFILE,
+  WRITE_THE_PROFILE,
+  OFFERED_A_RESOURCE,
+]);
 
 /** Looked something up in her material — and how many passages it drew on. */
 const lookedUp: AccountSource = (input) => {
@@ -132,6 +141,65 @@ const wroteToProfile: AccountSource = (input) => {
 };
 
 /**
+ * Pointed the person to one of Lelañea Fulton's films or pieces of writing
+ * (f-resources t-77).
+ *
+ * Named, because the chip beside the reply already shows it and the account
+ * is what the person reads to know what the turn DID. The title is the
+ * library's, resolved server-side from the id the model named — never the
+ * model's words. A suggestion whose resource has since left the library is
+ * still a thing the turn did, so a call with nothing to show is said as such
+ * rather than falling silent.
+ *
+ * **Only when NOTHING resolved, and that is a limit rather than an oversight.**
+ * Two offers of which one has since left the library read as one offer here.
+ * The source could count answered `suggest_resource` calls against the
+ * suggestions, but the suggestions are deduped (one offer per resource) and
+ * the calls are not, so "two calls, one suggestion" is a duplicate offer as
+ * often as a lost one — and a clause built on that count would claim a loss
+ * that never happened. Saying it needs the trace's ids, which this input
+ * does not carry; the case needs a resource removed from the file AFTER it
+ * was offered. Accepted (`/code-review` round 2); revisit if the library
+ * starts losing entries.
+ */
+const pointedTo: AccountSource = (input) => {
+  const called = input.capabilities.includes(OFFERED_A_RESOURCE);
+  if (!called && input.suggestions.length === 0) return null;
+  if (input.suggestions.length === 0) {
+    return {
+      key: 'pointed_to',
+      line: 'Offered something that is no longer in her library',
+      detail: 'Offered something that is no longer in her library.',
+    };
+  }
+  const titles = input.suggestions.map((s) => `“${s.title}”`);
+  const list =
+    titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(', ')} and ${titles.at(-1)}`;
+  const films = input.suggestions.filter((s) => s.kind === 'film').length;
+  const readings = input.suggestions.length - films;
+  // Plural where there is more than one of a kind: "two films" reads as two
+  // films, and "a film" over two of them read as one (`/code-review`).
+  const what =
+    films > 0 && readings > 0
+      ? `${count(films, 'film', 'films')} and ${count(readings, 'piece of writing', 'pieces of writing')}`
+      : films > 0
+        ? count(films, 'film', 'films')
+        : count(readings, 'piece of writing', 'pieces of writing');
+  return {
+    key: 'pointed_to',
+    line: `Pointed you to ${list}`,
+    detail: `Pointed you to ${list} — ${what} of hers you can open beside this reply.`,
+  };
+};
+
+/** "a film", "two films", "three pieces of writing" — small counts as words. */
+function count(n: number, one: string, many: string): string {
+  const words = ['', 'a', 'two', 'three', 'four', 'five'];
+  const number = words[n] ?? String(n);
+  return n === 1 ? `${number} ${one}` : `${number} ${many}`;
+}
+
+/**
  * A capability this account has no words for. Every slug her seat may call has
  * one above (`pins-misuse.test.ts` pins the list against
  * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
@@ -149,14 +217,15 @@ const otherCapability: AccountSource = (input) => {
 };
 
 /**
- * Every source, in the order their sentences read: what she consulted, then
- * what she wrote. §13 adds modules instructed. Exported so a test can see the
- * seam.
+ * Every source, in the order their sentences read: what was consulted, then
+ * what was written, then what was offered. §13 adds modules instructed.
+ * Exported so a test can see the seam.
  */
 export const ACCOUNT_SOURCES: readonly AccountSource[] = [
   lookedUp,
   readTheProfile,
   wroteToProfile,
+  pointedTo,
   otherCapability,
 ];
 

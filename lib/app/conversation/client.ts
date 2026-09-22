@@ -32,6 +32,7 @@ import { z } from 'zod';
 import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conversation/events';
 import type { Transcript, TranscriptEntry } from '@/lib/app/conversation/transcript';
 import { citationSchema } from '@/lib/validations/orchestration';
+import { resourceSuggestionSchema } from '@/lib/app/resources/suggestion';
 
 /** The seam's request shape on Daybreak's role route. */
 export function streamRouteFor(seat: string): string {
@@ -300,6 +301,17 @@ const entrySchema = z.discriminatedUnion('kind', [
     // Absent on a body from before t-66 (a mixed-version window): the reply
     // is kept and says it called nothing, rather than being dropped.
     capabilities: z.array(z.string()).default([]),
+    // Likewise absent before t-77; each suggestion validated on its own so a
+    // shape the client cannot read drops that suggestion, not the reply.
+    suggestions: z
+      .array(z.unknown())
+      .default([])
+      .transform((raw) =>
+        raw.flatMap((item) => {
+          const parsed = resourceSuggestionSchema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+      ),
     turn: accountSchema.nullable(),
   }),
 ]);

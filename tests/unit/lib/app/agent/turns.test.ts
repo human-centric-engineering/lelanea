@@ -84,6 +84,26 @@ const db = vi.hoisted(() => ({
 
 const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 
+// One film in the library, so a replay can carry a suggestion on its call's
+// frame (t-77). The shipped file holds none until her list lands.
+vi.mock('@/lib/app/content/resources', () => ({
+  getResourcesLibrary: () => ({
+    collection: {},
+    films: [
+      {
+        id: 'on-stalling',
+        title: 'On stalling',
+        subtitle: 'why the words you avoid are the work',
+        relatesTo: null,
+        duration: '5:04',
+        href: 'https://example.com/on-stalling',
+      },
+    ],
+    readings: [],
+    words: {},
+  }),
+}));
+
 vi.mock('@/lib/logging', () => ({
   logger: { warn, error, info: vi.fn(), debug: vi.fn() },
 }));
@@ -969,6 +989,86 @@ describe('a replay of a turn that used a tool', () => {
       results: [{ capabilitySlug: 'search_knowledge_base', result: { success: true } }],
     });
     expect(JSON.stringify(replayed)).not.toContain('delete_everything');
+  });
+
+  it('puts what the turn offered on its own call’s frame, aligned, so a replay’s chip matches a reload’s', async () => {
+    const turn = turnFor();
+    const offered = (): AsyncIterable<ChatEvent> =>
+      (async function* () {
+        db.conversationOwners.set('conv-user-1', 'user-1');
+        const at = Date.now();
+        db.messages.push({
+          id: 'u1',
+          conversationId: 'conv-user-1',
+          role: 'user',
+          content: turn.message,
+          metadata: null,
+          createdAt: new Date(at),
+        });
+        yield { type: 'start', conversationId: 'conv-user-1', messageId: 'u1' };
+        yield { type: 'content', delta: 'There is a piece on this.' };
+        db.messages.push({
+          id: 'a1',
+          conversationId: 'conv-user-1',
+          role: 'assistant',
+          content: 'There is a piece on this.',
+          metadata: null,
+          provenance: {
+            citations: [],
+            // A search, a suggestion the library still has, and one it has lost
+            // — the data must land on the RIGHT frame, not the first suggest.
+            capabilityCalls: [
+              { slug: 'search_knowledge_base', arguments: {}, latencyMs: 1, success: true },
+              {
+                slug: 'suggest_resource',
+                arguments: { id: 'gone-since' },
+                latencyMs: 1,
+                success: true,
+              },
+              {
+                slug: 'suggest_resource',
+                arguments: { id: 'on-stalling' },
+                latencyMs: 1,
+                success: true,
+              },
+            ],
+          },
+          createdAt: new Date(at + 1),
+        });
+        yield {
+          type: 'done',
+          tokenUsage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+          costUsd: 0.0001,
+          model: PINNED_MODEL,
+          provider: 'openai',
+        };
+      })();
+    const live = await runRecordedTurn(turn, offered);
+    if ('refused' in live) throw new Error('refused');
+    for await (const _event of live);
+
+    const replayed = await take(turn);
+
+    expect(replayed.find((e) => e.type === 'capability_results')).toEqual({
+      type: 'capability_results',
+      results: [
+        { capabilitySlug: 'search_knowledge_base', result: { success: true } },
+        { capabilitySlug: 'suggest_resource', result: { success: true } },
+        {
+          capabilitySlug: 'suggest_resource',
+          result: {
+            success: true,
+            data: {
+              id: 'on-stalling',
+              kind: 'film',
+              title: 'On stalling',
+              subtitle: 'why the words you avoid are the work',
+              length: '5:04',
+            },
+          },
+        },
+      ],
+    });
   });
 });
 

@@ -51,6 +51,8 @@ import { RunWorkflowCapability } from '@/lib/orchestration/capabilities/built-in
 import { SearchKnowledgeCapability } from '@/lib/orchestration/capabilities/built-in/search-knowledge';
 import { SendMessageToChannelCapability } from '@/lib/orchestration/capabilities/built-in/send-message-to-channel';
 import { UploadToStorageCapability } from '@/lib/orchestration/capabilities/built-in/upload-to-storage';
+// DIVERGENCE (Lelañea, .context/app/divergences.md Row 23): the app's own seeded capabilities.
+import { APP_CAPABILITY_PAIRS } from '@/tests/helpers/app/capability-parity';
 
 /** A seeded definition, whatever shape the seed file happens to hold it in. */
 type SeededDefinition = { functionDefinition: unknown };
@@ -112,6 +114,7 @@ const PAIRS: {
     seeded: SEND_MESSAGE_IMPL,
     instance: new SendMessageToChannelCapability(),
   },
+  ...APP_CAPABILITY_PAIRS, // DIVERGENCE — see the import above
 ];
 
 describe('built-in capabilities — seed definition matches the class (#545)', () => {

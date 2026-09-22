@@ -33,6 +33,8 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 import { z } from 'zod';
 
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { suggestionsByCall } from '@/lib/app/resources/suggest';
+import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 
 import { prisma } from '@/lib/db/client';
 import { citationSchema } from '@/lib/validations/orchestration';
@@ -389,6 +391,12 @@ export interface TurnReply {
   citations: Citation[];
   /** The capabilities that answered, in order (§10 t-66) — so a replay's account matches a reload's. */
   capabilities: string[];
+  /**
+   * Aligned with `capabilities`, one per answered call: the resource that call
+   * offered, or `null` (t-77). The replay puts it on that call's frame, so a
+   * replayed reply's chip says what a reload's does.
+   */
+  suggestions: (ResourceSuggestion | null)[];
 }
 
 /**
@@ -434,6 +442,7 @@ export async function readTurnReply(
     text: passes.map((pass) => pass.content).join(''),
     citations: parsed.success ? parsed.data.citations : [],
     capabilities: answeredCapabilities(terminal.provenance),
+    suggestions: suggestionsByCall(terminal.provenance),
   };
 }
 

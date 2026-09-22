@@ -78,7 +78,7 @@ export type ResourcesLoad =
  * The map drawer fetches once a session, because the map does not change under
  * a reader. This panel FOLLOWS the reader: open it on Values, close it, walk to
  * Boundaries and open it again, and it must say Boundaries. So the request is
- * keyed on `key` and the pinned film, and a change while open re-fetches; the
+ * keyed on `key` and the pin, and a change while open re-fetches; the
  * ETag on the route makes the repeat cheap. While it loads the panel says so
  * rather than showing the previous key's words under the new key's route.
  *
@@ -91,7 +91,7 @@ export type ResourcesLoad =
  * that `drawer.tsx` owns.
  */
 export function useResourcesSelection(): ResourcesLoad {
-  const { drawer, drawerFilm } = useShellLayout();
+  const { drawer, drawerPin } = useShellLayout();
   const pathname = usePathname();
   const open = drawer === 'resources';
   const key = resourceKeyFor(pathname);
@@ -101,14 +101,14 @@ export function useResourcesSelection(): ResourcesLoad {
   // same key is a no-op, and coming back to it after a detour restores the
   // panel without a round trip.
   const answered = useRef<{ request: string; selection: ResourcesSelection } | null>(null);
-  // The pin and the key it was made on. A film pinned on Values is for
+  // The pin and the key it was made on. A resource pinned on Values is for
   // Values: the shell clears the pin on navigation, but a child's effect runs
   // before its provider's, so without this the first request after a
   // navigation still carried the old pin (`/code-review` round 2). Keyed on
-  // the film, and settled BEFORE the open guard below, so a pin never inherits
-  // a previous pin's key: a close arrives with the film cleared, and a new pin
-  // is a new film (`/code-review` round 3, proved by a probe).
-  const pin = useRef<{ film: string; key: string } | null>(null);
+  // the resource id, and settled BEFORE the open guard below, so a pin never
+  // inherits a previous pin's key: a close arrives with the pin cleared, and a
+  // new id is a new pin (`/code-review` round 3, proved by a probe).
+  const pin = useRef<{ id: string; key: string } | null>(null);
   // The request in flight, by IDENTITY rather than by its string: a late
   // answer to an earlier request for the SAME key must be dropped too, or a
   // failure that arrives after the reader has come back to that key shadows
@@ -128,11 +128,11 @@ export function useResourcesSelection(): ResourcesLoad {
   }, []);
 
   useEffect(() => {
-    if (drawerFilm === null) pin.current = null;
-    else if (pin.current?.film !== drawerFilm) pin.current = { film: drawerFilm, key };
+    if (drawerPin === null) pin.current = null;
+    else if (pin.current?.id !== drawerPin) pin.current = { id: drawerPin, key };
     if (!open) return;
-    const film = pin.current?.key === key ? pin.current.film : null;
-    const request = film ? `${key}?film=${encodeURIComponent(film)}` : key;
+    const pinned = pin.current?.key === key ? pin.current.id : null;
+    const request = pinned ? `${key}?pin=${encodeURIComponent(pinned)}` : key;
     if (inFlight.current?.request === request) return;
     if (answered.current?.request === request) {
       // Back on the key already answered — and anything still in flight is
@@ -170,7 +170,7 @@ export function useResourcesSelection(): ResourcesLoad {
         answered.current = null;
         setLoad({ status: 'failed' });
       });
-  }, [open, key, drawerFilm]);
+  }, [open, key, drawerPin]);
 
   return load;
 }

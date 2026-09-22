@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, FileText, Play } from 'lucide-react';
 
+import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { useTypedText } from '@/components/app/conversation/use-typed-text';
@@ -19,6 +20,7 @@ import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import type { CrisisResource } from '@/lib/app/conversation/events';
 import type { GenerationStatus } from '@/lib/app/conversation/client';
 import { TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import { cn } from '@/lib/utils';
 
 /**
@@ -127,6 +129,60 @@ export function ReplyTurn({
         {done ? children : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * What the turn offered: a film or a piece of Lelañea Fulton's, as a chip
+ * under the reply that opens the resources drawer on it (f-resources t-77).
+ *
+ * The title, what it is for and the length are the library's — resolved
+ * server-side from the id the model named, live and on reload alike
+ * (`suggestion.ts`) — so nothing the model wrote reaches this row. A button,
+ * not a link: the destination is the drawer, pinned to this resource, where
+ * the person also sees her words on what they have open.
+ */
+export function SuggestionChips({ suggestions }: { suggestions: readonly ResourceSuggestion[] }) {
+  const { openDrawer } = useShellLayout();
+  return (
+    <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Offered with this reply">
+      {suggestions.map((suggestion) => {
+        const Icon = suggestion.kind === 'film' ? Play : FileText;
+        const verb = suggestion.kind === 'film' ? 'Watch' : 'Read';
+        return (
+          <li key={suggestion.id}>
+            <button
+              type="button"
+              onClick={() => openDrawer('resources', { pin: suggestion.id })}
+              title={`${verb}: ${suggestion.title} — ${suggestion.subtitle}`}
+              className={cn(
+                'flex items-center gap-2 rounded-[14px] border border-[var(--color-card-border)]',
+                'bg-[var(--color-card)] py-2 pr-3 pl-2.5 text-left',
+                'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+                'hover:bg-[var(--color-pill-hover)] motion-reduce:transition-none',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                'focus-visible:outline-[var(--color-ring)]'
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[var(--color-pill)] text-[var(--color-secondary-ink)]"
+              >
+                <Icon size={13} strokeWidth={1.6} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] leading-[1.35] font-medium text-[var(--color-heading)]">
+                  {suggestion.title}
+                </span>
+                <span className="text-muted-foreground block text-[11.5px] leading-[1.45]">
+                  {verb} · {suggestion.length}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

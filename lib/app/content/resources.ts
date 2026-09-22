@@ -34,9 +34,9 @@
  * `selectResourcesFor` implements `lelanea.html`'s `pickFor` and `resourceKey`:
  * what belongs to the open thing first, then what belongs to everything, capped
  * at two films and three readings — "the drawer is for one thing at a time".
- * A key with no words of its own reads `default`'s. A film may be pinned to the
- * front, which is how a suggestion made in conversation opens the drawer on the
- * thing suggested (t-77).
+ * A key with no words of its own reads `default`'s. A film or a reading may be
+ * pinned to the front of its list, which is how a suggestion made in
+ * conversation opens the drawer on the thing suggested (t-77).
  *
  * The shell asks by **slug** (`values`), which is what its routes carry; the
  * file keys by **id** (`module_01_values`), which is what every other content
@@ -104,9 +104,15 @@ const relatesToSchema = z
   })
   .nullable();
 
-const resourceIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-  message: 'a resource id is lowercase alphanumeric with hyphens',
-});
+// Bounded to what the suggestion tool accepts (`suggest.ts`, 80): an id the
+// offering lists but the tool refuses would be offered and then rejected at
+// validation, with nothing on the panel saying why (`/code-review` round 2).
+const resourceIdSchema = z
+  .string()
+  .max(80, { message: 'a resource id is at most 80 characters — the suggestion tool’s bound' })
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+    message: 'a resource id is lowercase alphanumeric with hyphens',
+  });
 
 /**
  * A link a client will put in an `<a href>`. `z.url()` alone admits any scheme
@@ -239,17 +245,20 @@ export function buildResourcesFileSchema(known: {
         });
       }
     }
+    // One namespace across BOTH lists, not one per list: an id is what the
+    // suggestion tool and the drawer's pin resolve by, and a film and a
+    // reading sharing one would always resolve to the film (`/code-review`).
+    const seen = new Set<string>();
     for (const [list, items] of [
       ['films', file.films],
       ['readings', file.readings],
     ] as const) {
-      const seen = new Set<string>();
       for (const [index, item] of items.entries()) {
         if (seen.has(item.id)) {
           ctx.addIssue({
             code: 'custom',
             path: [list, index, 'id'],
-            message: `duplicate ${list} id "${item.id}"`,
+            message: `duplicate resource id "${item.id}" — ids are one namespace across films and readings`,
           });
         }
         seen.add(item.id);
@@ -424,7 +433,7 @@ export function selectResources(
     words,
     wordsAreOwn: own !== undefined,
     films: pickFor(file.films, fileKey, FILMS_SHOWN, options.pin),
-    readings: pickFor(file.readings, fileKey, READINGS_SHOWN),
+    readings: pickFor(file.readings, fileKey, READINGS_SHOWN, options.pin),
   };
 }
 
@@ -434,7 +443,8 @@ export function selectResources(
  * `key` is what the shell has: a module **slug**, or `journey` / `situations` /
  * `default`. Returns `null` for anything else, so the route owns the 404 —
  * a typo is not a module with nothing to show, and the two must not look the
- * same. `pin` names a film to put first (a suggestion made in conversation).
+ * same. `pin` names a film or a reading to put first in its list (a suggestion
+ * made in conversation, t-77).
  */
 export function selectResourcesFor(
   key: string,

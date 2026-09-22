@@ -15,9 +15,10 @@
  *
  * ## What Lelañea registers
  *
- * Two capabilities, each mounted OVER an upstream one rather than beside it —
- * same slug, same schema, same function definition. A new slug would lose what
- * is keyed on the old one, and would advertise a second tool for the same job.
+ * Two capabilities mounted OVER an upstream one rather than beside it — same
+ * slug, same schema, same function definition, because a new slug would lose
+ * what is keyed on the old one and would advertise a second tool for the same
+ * job — and one of the app's own.
  *
  * - **`search_knowledge_base`** — her search, with each result labelled by whose
  *   material it is (f-safety t-60). The subclass runs the platform's search
@@ -29,6 +30,11 @@
  *   exposure allowlist, masking, the typed-value extraction, the audit
  *   redaction — is inherited untouched.
  *
+ * - **`suggest_resource`** — the agent hands a person one of Lelañea Fulton's
+ *   films or pieces of writing, by id, when it fits (f-resources t-77). The
+ *   app's own tool, not an override: its `ai_capability` row and the grant to
+ *   the guide are `prisma/seeds/app-lelanea/014-suggest-resource.ts`.
+ *
  * `get_state` is granted but NOT mounted here: it is read-only, and nothing
  * about it needs a leaf's turn.
  *
@@ -38,10 +44,12 @@
  * the row).
  */
 import { registerAppCapability } from '@/lib/orchestration/capabilities/registry';
+import { SuggestResourceCapability } from '@/lib/app/resources/suggest';
 import { LabelledSearchKnowledgeCapability } from '@/lib/app/safety/labelled-search';
 import { GuardedFillSlotCapability } from '@/lib/app/slots/capture';
 
 export function initAppCapabilities(): void {
   registerAppCapability(new LabelledSearchKnowledgeCapability());
   registerAppCapability(new GuardedFillSlotCapability());
+  registerAppCapability(new SuggestResourceCapability());
 }

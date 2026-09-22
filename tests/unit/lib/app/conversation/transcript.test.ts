@@ -30,6 +30,24 @@ vi.mock('@/lib/framework/facilitation/agents/surface', () => ({
   resolveFacilitationSurface: resolveSurface,
   FACILITATION_SURFACE_CONTEXT_TYPE: 'facilitation',
 }));
+// One film in the library, so a suggestion can be resolved from a trace (t-77).
+vi.mock('@/lib/app/content/resources', () => ({
+  getResourcesLibrary: () => ({
+    collection: {},
+    films: [
+      {
+        id: 'on-stalling',
+        title: 'On stalling',
+        subtitle: 'why the words you avoid are the work',
+        relatesTo: null,
+        duration: '5:04',
+        href: 'https://example.com/on-stalling',
+      },
+    ],
+    readings: [],
+    words: {},
+  }),
+}));
 
 import {
   assembleTranscript,
@@ -316,6 +334,53 @@ describe('assembleTranscript', () => {
     });
     expect(JSON.stringify(entries)).not.toContain('a whole chunk');
     expect(JSON.stringify(entries)).not.toContain('delete_everything');
+  });
+
+  it('rebuilds what the turn offered from its traces, by id, and nothing for an id the library lost', () => {
+    const entries = assembleTranscript(
+      [
+        user('u1', 'I keep putting it off.', 1, 't1'),
+        assistant('a1', 'There is a piece on exactly this.', 2, {
+          provenance: {
+            citations: [],
+            capabilityCalls: [
+              {
+                slug: 'suggest_resource',
+                arguments: { id: 'on-stalling' },
+                latencyMs: 1,
+                success: true,
+              },
+              {
+                slug: 'suggest_resource',
+                arguments: { id: 'gone-since' },
+                latencyMs: 1,
+                success: true,
+              },
+              {
+                slug: 'suggest_resource',
+                arguments: { id: 'on-stalling' },
+                latencyMs: 1,
+                success: false,
+              },
+            ],
+          },
+        }),
+      ],
+      [turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' })]
+    );
+    expect(entries[1]).toMatchObject({
+      kind: 'reply',
+      capabilities: ['suggest_resource', 'suggest_resource'],
+      suggestions: [
+        {
+          id: 'on-stalling',
+          kind: 'film',
+          title: 'On stalling',
+          subtitle: 'why the words you avoid are the work',
+          length: '5:04',
+        },
+      ],
+    });
   });
 
   it('a turn that called nothing says so, and a failed turn’s tool row never leaks into the next reply', () => {

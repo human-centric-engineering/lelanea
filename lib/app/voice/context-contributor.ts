@@ -19,10 +19,14 @@
  * 3. **What she is looking for** — the live slot taxonomy
  *    (`lib/app/slots/vocabulary.ts`), so a capture can name an authored slot
  *    instead of inventing one (f-slots t-72).
+ * 4. **What may be offered** — Lelañea Fulton's films and writing
+ *    (`lib/app/resources/offering.ts`), so a suggestion names a real id
+ *    (f-resources t-77). Empty until her list lands, and then nothing is
+ *    offered, which is the truth.
  *
- * The third is here rather than in its own contributor because **a request
- * carries one context tuple**, so registering a second loader for either type
- * would replace this block rather than add to it.
+ * The third and fourth are here rather than in their own contributors because
+ * **a request carries one context tuple**, so registering a second loader for
+ * either type would replace this block rather than add to it.
  *
  * It is on **both** registered types, and the first cut got that wrong: it was
  * facilitation-only, on the grounds that a 2,000-token block would change what
@@ -111,7 +115,9 @@ import { selectOverlay } from '@/lib/app/voice/overlays';
 import { retrieveVoiceExemplarsSafely, type VoiceExemplar } from '@/lib/app/voice/exemplars';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
+import { logger } from '@/lib/logging';
 import { slotVocabulary } from '@/lib/app/slots/vocabulary';
+import { resourceOffering } from '@/lib/app/resources/offering';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -242,7 +248,20 @@ export async function loadVoiceContext(id: string): Promise<string> {
   // So it minted there, and a mint is never masked (`vocabulary.ts`). Found by
   // /code-review.
   const vocabulary = await slotVocabulary();
-  return [composeVoiceContext(overlay, exemplars), vocabulary].filter(Boolean).join('\n\n');
+  // The offering rides on both paths for the vocabulary's reason: the admin
+  // chat's agent holds the same tool. A synchronous read of a memoised file,
+  // guarded because a throw from a contributor blanks the WHOLE block.
+  let offering = '';
+  try {
+    offering = resourceOffering();
+  } catch (err) {
+    logger.warn('resourceOffering: could not read the library; nothing will be offered', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return [composeVoiceContext(overlay, exemplars), vocabulary, offering]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /**

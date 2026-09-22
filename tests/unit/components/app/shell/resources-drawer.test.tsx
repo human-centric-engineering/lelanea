@@ -229,12 +229,12 @@ describe('what the drawer asks the API', () => {
     expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/default`);
   });
 
-  it('sends a pinned film as ?film=', async () => {
-    serve({ 'values?film=four-marks': fullSelection() });
+  it('sends a pin as ?pin=', async () => {
+    serve({ 'values?pin=four-marks': fullSelection() });
     function Opener() {
       const { openDrawer } = useShellLayout();
       return (
-        <button type="button" onClick={() => openDrawer('resources', { film: 'four-marks' })}>
+        <button type="button" onClick={() => openDrawer('resources', { pin: 'four-marks' })}>
           pin
         </button>
       );
@@ -247,7 +247,7 @@ describe('what the drawer asks the API', () => {
       </>
     );
     await userEvent.click(screen.getByRole('button', { name: 'pin' }));
-    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/values?film=four-marks`);
+    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/values?pin=four-marks`);
   });
 
   it('follows the reader: re-asks when the route changes under an open drawer', async () => {
@@ -647,11 +647,11 @@ describe('a fresh open on a different key', () => {
 
 describe('a pinned film', () => {
   it('does not outlive the route it was suggested on', async () => {
-    serve({ 'values?film=four-marks': fullSelection(), boundaries: fallbackSelection() });
+    serve({ 'values?pin=four-marks': fullSelection(), boundaries: fallbackSelection() });
     function Opener() {
       const { openDrawer } = useShellLayout();
       return (
-        <button type="button" onClick={() => openDrawer('resources', { film: 'four-marks' })}>
+        <button type="button" onClick={() => openDrawer('resources', { pin: 'four-marks' })}>
           pin
         </button>
       );
@@ -688,13 +688,13 @@ describe('a pinned film', () => {
     // inherited Values' key and went out unpinned (review round 3, proved by
     // a probe).
     serve({
-      'values?film=four-marks': fullSelection(),
-      'boundaries?film=a-line': fallbackSelection(),
+      'values?pin=four-marks': fullSelection(),
+      'boundaries?pin=a-line': fallbackSelection(),
     });
     function Opener({ film }: { film: string }) {
       const { openDrawer } = useShellLayout();
       return (
-        <button type="button" onClick={() => openDrawer('resources', { film })}>
+        <button type="button" onClick={() => openDrawer('resources', { pin: film })}>
           pin {film}
         </button>
       );
@@ -722,7 +722,7 @@ describe('a pinned film', () => {
     await userEvent.click(screen.getByRole('button', { name: 'pin a-line' }));
     await within(panel()).findByText(/It is an invitation\./);
 
-    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries?film=a-line`);
+    expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries?pin=a-line`);
   });
 });
 
