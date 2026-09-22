@@ -276,6 +276,13 @@ describe('reserved fork tiers', () => {
       'enum AppSlotRevisionOrigin {',
       'model AppSlotDefinition {',
       'model AppSlotDefinitionRevision {',
+      // f-content-seeds t-86 — her foundational documents and their revision
+      // history (EXCLUSIONS: words, not people; who agreed to which version is
+      // `AppAcknowledgement`).
+      'enum AppContentRevisionOrigin {',
+      'model AppDocumentCollection {',
+      'model AppFoundationalDocument {',
+      'model AppFoundationalDocumentRevision {',
     ]);
   });
 

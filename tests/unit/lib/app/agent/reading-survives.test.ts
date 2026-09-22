@@ -25,6 +25,12 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import { NextRequest } from 'next/server';
 
 const world = vi.hoisted(() => ({ paused: false }));

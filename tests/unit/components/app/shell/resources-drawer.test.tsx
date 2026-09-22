@@ -40,7 +40,7 @@ import {
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
-import { listFoundationalDocuments } from '@/lib/app/content';
+import { seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -771,7 +771,8 @@ describe('the status line is one live region, not a line that mounts with the st
 
 describe('DOCUMENT_PAGES', () => {
   it('names only documents the collection has', () => {
-    const ids = new Set(listFoundationalDocuments().documents.map((d) => d.id));
+    // The ids the seed writes: the document ids every environment holds.
+    const ids = new Set(seededDocumentRows().map((d) => d.id));
     for (const id of Object.keys(DOCUMENT_PAGES)) expect(ids.has(id), id).toBe(true);
   });
 

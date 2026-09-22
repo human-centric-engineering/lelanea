@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/data' },
 };
 
+/** Read at request time: her words are in the database (t-86). See the home page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * The three data-rights cards.
  *
@@ -96,28 +99,22 @@ const GDPR_RIGHTS = [
 ] as const;
 
 /**
- * The disclaimer sections this page renders, by their authored headings.
+ * The disclaimer sections this page renders, by their section keys (t-86).
  *
- * Named constants rather than string literals at four call sites, so a renamed
- * heading is one edit and `sections.test.ts` has something to pin. A miss
- * throws — see `lib/app/content/sections.ts` for why an empty "it is not"
- * column is the one failure mode this page must not have.
+ * Before t-86 they were found by heading text, and the "it is not" items were
+ * split from their qualifier by a regex over her prose. Both were composition
+ * logic in a page. The keys are the owner's names for these passages and are
+ * stored on the blocks. A miss throws: see `lib/app/content/sections.ts` for why
+ * an empty "it is not" column is the one failure mode this page must not have.
  */
-const PURPOSE = 'The Purpose of Lelañea';
-const IS_NOT = 'What Lelañea Is Not';
-const CRISIS = 'Crisis Situations';
-const COACHING = 'Coaching Is Different from Therapy';
-
-/**
- * The shape of an "it is not" item, as authored: "Lelañea is **not** a …".
- *
- * A pattern rather than a count, because a count silently takes the wrong seven
- * if an eighth is added — and this section's tail is already a paragraph that
- * is not an item. What it must NOT be is a loose "contains not", which would
- * swallow the qualifier below the list ("…are presented for educational
- * purposes and are **not** offered as…").
- */
-const IS_NOT_ITEM = /^Lelañea is \*\*not\*\* /;
+const SECTION = {
+  purpose: 'purpose',
+  purposeLimits: 'purpose_limits',
+  isNot: 'is_not',
+  isNotContext: 'is_not_context',
+  crisis: 'crisis',
+  coaching: 'coaching',
+} as const;
 
 /**
  * The cross beside each "it is not" line.
@@ -183,45 +180,31 @@ function CrossIcon() {
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-data`
  */
-export default function DataPage() {
-  const disclaimer = requireDocument('disclaimer');
+export default async function DataPage() {
+  const disclaimer = await requireDocument('disclaimer');
 
   // "The Purpose of Lelañea" closes on a NEGATION — "Lelañea is not intended to
   // provide healthcare, mental healthcare, psychotherapy, or crisis
-  // intervention." Rendered whole in the left column, that sentence sat under a
-  // green tick and the words "it is designed to support", which is the opposite
-  // of what it says.
-  //
-  // She wrote it as the section's turn towards what follows, so it is rendered
-  // where it turns: beneath both columns, leading into the crossed list and the
-  // crisis box. The split is positional and `sections.test.ts` pins which
-  // sentence is last, so a re-authored section fails there rather than quietly
-  // putting a negation back under the tick.
-  const purposeSection = selectSection(disclaimer, PURPOSE);
-  const purpose = purposeSection.slice(0, -1);
-  const purposeTurn = purposeSection.slice(-1);
+  // intervention." Rendered in the left column, that sentence sat under a green
+  // tick and the words "it is designed to support", which is the opposite of
+  // what it says. She wrote it as the section's turn towards what follows, so it
+  // has its own key and is rendered where it turns: beneath both columns,
+  // leading into the crossed list and the crisis box.
+  const purpose = selectSection(disclaimer, SECTION.purpose);
+  const purposeTurn = selectSection(disclaimer, SECTION.purposeLimits);
 
-  const crisis = selectSection(disclaimer, CRISIS, { includeHeading: true });
-  const coaching = selectSection(disclaimer, COACHING);
-  // Read back from the document rather than rendering `COACHING`. The constant
-  // is the selector; displaying it would be the second copy this module exists
-  // to prevent, which this file already says about the crisis box below.
-  // `selectSectionHeading` is how a heading reaches a column that sits BESIDE
-  // the prose rather than above it.
-  const coachingHeading = selectSectionHeading(disclaimer, COACHING);
+  const crisis = selectSection(disclaimer, SECTION.crisis, { includeHeading: true });
+  const coaching = selectSection(disclaimer, SECTION.coaching);
+  // Read back from the document rather than written here. `selectSectionHeading`
+  // is how a heading reaches a column that sits BESIDE the prose rather than
+  // above it.
+  const coachingHeading = selectSectionHeading(disclaimer, SECTION.coaching);
 
-  // The "What Lelañea Is Not" section is EIGHT paragraphs, not seven: the seven
-  // "Lelañea is **not** a…" lines, then a qualifying paragraph about concepts
-  // the app references without endorsing. Rendering the whole section as list
-  // rows — which was the first version — put that qualifier in the column with
-  // a red cross beside it, reading as an eighth thing Lelañea is not.
-  //
-  // So the shape is the split, and `sections.test.ts` pins both halves at 7 and
-  // 1. The prototype's own array has exactly the seven, which is the agreement
-  // that says this split is the authored intent and not a convenience.
-  const isNotSection = selectSectionText(disclaimer, IS_NOT);
-  const isNot = isNotSection.filter((line) => IS_NOT_ITEM.test(line));
-  const isNotNote = isNotSection.filter((line) => !IS_NOT_ITEM.test(line));
+  // The seven "Lelañea is **not** a…" lines, and separately the paragraph that
+  // qualifies them. Rendering the qualifier as a list row put it beside a red
+  // cross, reading as an eighth thing Lelañea is not, so it has its own key.
+  const isNot = selectSectionText(disclaimer, SECTION.isNot);
+  const isNotNote = selectSectionText(disclaimer, SECTION.isNotContext);
 
   return (
     <div className={styles.page}>
@@ -317,9 +300,8 @@ export default function DataPage() {
 
         {/*
           The crisis disclosure, rendered WITH its authored heading rather than
-          with `{CRISIS}` — the constant above is the selector, and displaying
-          it would put the words on screen from this file instead of from the
-          document (see `selectSection`).
+          a heading typed here, so the words on screen come from the document
+          and not from this file (see `selectSection`).
 
           Not the `Banner` component, though it is the house shape for exactly
           this palette. `Banner` gives `error` `role="alert"`, which is right

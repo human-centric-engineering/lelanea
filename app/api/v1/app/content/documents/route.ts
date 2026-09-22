@@ -9,9 +9,14 @@
  * decide to sign up; putting them behind auth would make the app impossible to
  * evaluate honestly.
  *
+ * Source: `app_foundational_document`, through the same service the pages call
+ * (`lib/app/content/document-store.ts`). Each summary carries its `version`,
+ * `revision` and the section keys its blocks carry. Which sections a client
+ * shows is that client's decision.
+ *
  * Rate limiting: inherited from the `/api/v1/**` section cap applied by
- * `proxy.ts` (see `lib/security/rate-limit-policy.ts`). No handler limiter —
- * this reads a parsed, memoised constant.
+ * `proxy.ts` (see `lib/security/rate-limit-policy.ts`). No handler limiter:
+ * this is two indexed reads of eight small rows.
  *
  * Caching: an ETag and the platform default (`private, no-cache`), so a repeat
  * caller gets a 304 with an empty body. The payload IS identical for every
@@ -28,22 +33,29 @@ import type { NextRequest } from 'next/server';
 import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
-import { listFoundationalDocuments } from '@/lib/app/content';
+import { handleAPIError } from '@/lib/api/errors';
+import { listFoundationalDocuments } from '@/lib/app/content/document-store';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const log = await getRouteLogger(request);
-  const index = listFoundationalDocuments();
+  try {
+    const index = await listFoundationalDocuments();
 
-  const etag = computeETag(index);
-  const notModified = checkConditional(request, etag);
-  if (notModified) return notModified;
+    const etag = computeETag(index);
+    const notModified = checkConditional(request, etag);
+    if (notModified) return notModified;
 
-  log.info('Foundational document index served', {
-    version: index.collection.version,
-    documentCount: index.documents.length,
-  });
+    log.info('Foundational document index served', {
+      version: index.collection.version,
+      documentCount: index.documents.length,
+    });
 
-  return successResponse(index, undefined, {
-    headers: { ETag: etag },
-  });
+    return successResponse(index, undefined, {
+      headers: { ETag: etag },
+    });
+  } catch (error) {
+    // An unseeded database or a row that fails validation. Both are ours, not
+    // the caller's, so the envelope says 500 without the detail.
+    return handleAPIError(error);
+  }
 }

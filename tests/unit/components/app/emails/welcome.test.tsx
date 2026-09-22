@@ -16,10 +16,17 @@
 import { render } from '@react-email/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
+
 import { applyFirstName } from '@/components/app/content/authored-document';
-import WelcomeEmail, { firstNameFrom, WELCOME_BEATS } from '@/components/app/emails/welcome';
+import WelcomeEmail, { firstNameFrom, WELCOME_SECTION } from '@/components/app/emails/welcome';
 import * as sections from '@/lib/app/content/sections';
-import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
+import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
+import { fakeDocumentStore, rewriteSection } from '@/tests/helpers/app/foundational-documents';
 import { BRAND } from '@/lib/brand';
 
 // Real module, spied: the failure-domain case below needs to know WHEN the
@@ -28,6 +35,7 @@ vi.mock('@/lib/app/content/sections', { spy: true });
 
 beforeEach(() => {
   vi.mocked(sections.requireDocument).mockClear();
+  fakeDocumentStore().reset();
 });
 
 const PROPS = {
@@ -37,16 +45,11 @@ const PROPS = {
 };
 
 describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
-  it('pins the range to its first and last beat, so an inserted beat fails here', () => {
-    // The same protection `sections.test.ts` gives the landing page's excerpts:
-    // `the_initiation` has no headings, so a run of it can only be named by
-    // index, and an index is silently wrong the moment a beat is inserted
-    // upstream. Pin both ends.
-    const beats = paragraphRange(
-      requireDocument('the_initiation'),
-      WELCOME_BEATS.from,
-      WELCOME_BEATS.to
-    );
+  it('quotes the section from the greeting to the product name', async () => {
+    // Since t-86 the greeting is a section key stored on the blocks, so a beat
+    // inserted above it cannot shift it. What is pinned is that the key still
+    // marks the passage the email was written around.
+    const beats = selectSectionText(await requireDocument('the_initiation'), WELCOME_SECTION);
     expect(beats[0]).toBe('Welcome, {{first_name}}.');
     expect(beats[beats.length - 1]).toBe('Welcome to Lelañea.');
     expect(beats).toHaveLength(7);
@@ -54,11 +57,7 @@ describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
 
   it('renders every beat of the range, each as its own paragraph, and nothing past it', async () => {
     const html = await render(<WelcomeEmail {...PROPS} />);
-    const beats = paragraphRange(
-      requireDocument('the_initiation'),
-      WELCOME_BEATS.from,
-      WELCOME_BEATS.to
-    );
+    const beats = selectSectionText(await requireDocument('the_initiation'), WELCOME_SECTION);
 
     for (const beat of beats) {
       expect(html).toContain(escapeForHtml(applyFirstName(beat, 'Maya')));
@@ -68,7 +67,8 @@ describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
     const paragraphs = html.match(/<p[^>]*>/g) ?? [];
     expect(paragraphs.length).toBeGreaterThanOrEqual(beats.length);
     // The eighth beat is where the run stops.
-    const eighth = paragraphRange(requireDocument('the_initiation'), 7, 8)[0];
+    // The first beat of the next section.
+    const [eighth] = selectSectionText(await requireDocument('the_initiation'), 'invitation');
     expect(html).not.toContain(escapeForHtml(eighth));
   });
 
@@ -90,6 +90,18 @@ describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
 });
 
 describe('WelcomeEmail — where a loader failure would land', () => {
+  it('greets from the DATABASE row, not the file', async () => {
+    // t-86: a stored row that differs from the file is what the email sends.
+    fakeDocumentStore().editBlocks('the_initiation', (blocks) =>
+      rewriteSection(blocks, WELCOME_SECTION, (index) => `Edited greeting ${index}.`)
+    );
+
+    const html = await render(<WelcomeEmail {...PROPS} />);
+
+    expect(html).toContain('Edited greeting 0.');
+    expect(html).not.toContain('I am so incredibly grateful');
+  });
+
   it('reads the document during render, not when the template is called as a function', async () => {
     // `resolveEmailTemplate` invokes the template as a plain function while the
     // argument to `sendEmail()` is still being built — before the `.catch()`

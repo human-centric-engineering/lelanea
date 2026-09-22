@@ -129,7 +129,7 @@ to be true whether or not one went out, because the response cannot say.
 `lib/app/waitlist/confirmation.ts` sends
 `components/app/emails/waitlist-confirmation.tsx` — Lelañea's chrome
 ([`emails.md`](./emails.md)), "you are on the list", the three beats the landing
-page's "An invitation" card excerpts (`the_initiation` `[7, 10)`, by position),
+page's "An invitation" card shows (`the_initiation`'s `invitation` section, by key),
 and the build's plain lines: we will write when we open, there is no date, this
 is the only email until then.
 

@@ -5,70 +5,69 @@
  *
  * `/data` is a designed page, not a rendering of a whole document. It shows the
  * disclaimer's "what it is / what it is not" columns, its crisis guidance and
- * its coaching-versus-therapy explanation as three separate pieces of the page,
- * with the site's own chrome around each. The full document is at `/disclaimer`.
+ * its coaching-versus-therapy explanation as separate pieces of the page, with
+ * the site's own chrome around each. The home page and both emails likewise show
+ * passages rather than whole documents. The full documents are at their own URLs.
  *
- * The obvious way to build that page is to retype the seven "Lelañea is not…"
- * lines into a `const` beside the layout. That is precisely the drift
- * `.context/app/content.md` exists to prevent: the moment a string is pasted
- * into JSX it stops tracking the source, and the copy on the most
- * legally-sensitive page in the site is the copy that must never drift.
+ * The obvious way to build those surfaces is to retype her lines into a `const`
+ * beside the layout. That is precisely the drift `.context/app/content.md` exists
+ * to prevent: the moment a string is pasted into JSX it stops tracking the
+ * source.
  *
- * So a page names the section it wants and gets the authored blocks back.
+ * So a surface names the section it wants and gets the stored blocks back.
  *
- * ## Sections are found by their heading, and a miss is fatal
+ * ## Sections are found by KEY (t-86)
  *
- * `selectSection` throws when the heading is not there. That is deliberate and
- * it is the whole design of this module.
+ * Each stored block carries a `section` key or `null`. The owner named the keys,
+ * and the seed puts them on the blocks (`lib/app/content/foundational-seed.ts`).
+ * Before t-86 these pages cut her text by paragraph index, by heading text and,
+ * on `/data`, by a regex over the prose. That was composition logic living in a
+ * page, which a native client would have had to re-implement and which broke
+ * silently when a block moved. A key travels with its blocks when an admin edits
+ * around them, and it is in the API response, so every client selects the same
+ * passage the same way.
  *
- * The alternative — return an empty array — fails silently, and consider what
- * silently means here: `/data` renders its "it is not" column as an empty box
- * under a green tick, and the page that exists so somebody looking for therapy
- * works out before they sign up that this is not it says nothing at all. A 500
- * on a content-integrity failure is loud, correct, and impossible to miss.
+ * ## A miss is fatal
  *
- * It cannot reach production either way: `sections.test.ts` pins every heading
- * these pages depend on, so renaming one in the authored JSON fails the suite
- * rather than the page.
+ * `selectSection` throws when the key is not in the document. The alternative —
+ * return an empty array — fails silently, and consider what silently means here:
+ * `/data` renders its "it is not" column as an empty box under a green tick, and
+ * the page that exists so somebody looking for therapy works out before they
+ * sign up that this is not it says nothing at all. A 500 on a content-integrity
+ * failure is loud, correct, and impossible to miss.
  *
- * ## The section ends at the next heading of the same or higher rank
- *
- * Not "the next heading of any kind" — a subsection nested under the one asked
- * for belongs to it, and stopping at the first `h3` would silently truncate.
- * Nothing in the authored files nests today (every heading is level 2); the
- * rule is written for the outline the schema permits rather than the one the
- * current copy happens to have.
- *
- * @see lib/app/content/index.ts — the loader whose frozen documents these are
+ * @see lib/app/content/document-store.ts — the reads these select from
  * @see .context/app/content.md — the pipeline this is part of
  */
 
-import { getFoundationalDocument, type FoundationalDocumentDetail } from '@/lib/app/content';
+import {
+  getFoundationalDocument,
+  type FoundationalDocumentDetail,
+} from '@/lib/app/content/document-store';
 
-/** The blocks of one document, as the loader hands them out. */
+/** The blocks of one document, as the store hands them out. */
 type Blocks = FoundationalDocumentDetail['blocks'];
 
 /**
- * A document a page cannot render without.
+ * A document a surface cannot render without.
  *
- * `getFoundationalDocument` returns `null` for an unknown id, which is right
- * for the API route — a caller can ask for anything, and the answer is a 404.
- * A page is not that: it names a constant id that the collection's own
- * referential check already guarantees resolves, so `null` here means the
- * authored file lost a document rather than that somebody typed a bad URL.
+ * `getFoundationalDocument` returns `null` for an unknown id, which is right for
+ * the API route: a caller can ask for anything, and the answer is a 404. A page
+ * is not that. It names a constant id, so `null` here means the database lost a
+ * document (or was never seeded), not that somebody typed a bad URL.
  *
- * `notFound()` would be the wrong response to that. It tells a reader the page
- * does not exist, when what has actually happened is that the site's own
- * content is broken — and it does it quietly, on the legal pages, where the
- * quiet version is worst. This throws for the same reason `selectSection` does.
+ * `notFound()` would be the wrong response. It would tell a reader the page does
+ * not exist when the site's own content is broken, and it would do it quietly on
+ * the legal pages, where the quiet version is worst. This throws for the same
+ * reason `selectSection` does.
  */
-export function requireDocument(id: string): FoundationalDocumentDetail {
-  const document = getFoundationalDocument(id);
+export async function requireDocument(id: string): Promise<FoundationalDocumentDetail> {
+  const document = await getFoundationalDocument(id);
 
   if (!document) {
     throw new Error(
-      `Authored document "${id}" is missing from content/lelanea_foundational_documents.json. ` +
-        `A public page renders it by id; either the document was removed or the id was changed.`
+      `Foundational document "${id}" is not in the database. A surface renders it by id; ` +
+        `either the seed has not run (npm run db:seed) or the document was removed.`
     );
   }
 
@@ -76,210 +75,110 @@ export function requireDocument(id: string): FoundationalDocumentDetail {
 }
 
 /**
- * Thrown when a section a page asked for is not in the document.
+ * Thrown when a section a surface asked for is not in the document.
  *
- * A named class rather than a bare `Error` so a caller that genuinely wants to
- * degrade — nothing does today — can tell a missing section from a bug in the
- * loader, and so the message is one thing rather than assembled at each site.
+ * A named class so a caller that genuinely wants to degrade (nothing does today)
+ * can tell a missing section from a bug in the store.
  */
 export class MissingSectionError extends Error {
   constructor(
     readonly documentId: string,
-    readonly heading: string,
+    readonly key: string,
     available: readonly string[]
   ) {
     super(
-      `Authored document "${documentId}" has no section headed "${heading}". ` +
-        `Its headings are: ${available.map((text) => `"${text}"`).join(', ')}. ` +
-        `A page depends on this section; either the heading was renamed in ` +
-        `content/lelanea_foundational_documents.json or the page is asking for the wrong one.`
+      `Foundational document "${documentId}" has no section "${key}". ` +
+        `Its sections are: ${available.map((name) => `"${name}"`).join(', ') || '(none)'}. ` +
+        `A surface depends on this section; either its key was removed from the ` +
+        `document's blocks or the surface is asking for the wrong one.`
     );
+    this.name = 'MissingSectionError';
   }
-}
-
-/** Every heading in a document, in authored order — the error's "did you mean". */
-export function listSectionHeadings(document: FoundationalDocumentDetail): string[] {
-  return document.blocks.filter((block) => block.type === 'heading').map((block) => block.text);
 }
 
 /**
- * The blocks of one section.
+ * The blocks of one section, in order.
  *
- * ## The heading is excluded by default, and `includeHeading` is not a
- * convenience
+ * ## A heading in the section is excluded by default
  *
- * `/data` labels its two columns with its own chrome ("it is designed to
- * support", in the palette's green ink), so rendering the document's own `h2`
- * there as well would print a second title in a second size. That is the
- * default.
+ * Where a key covers a headed section (`crisis`, `coaching`, `is_not`), the
+ * heading block is part of it, because the key names the section and not just
+ * its body. Most surfaces label the passage with their own chrome, so they get
+ * the body by default. `includeHeading` returns the authored heading as a block,
+ * so a surface that shows it (the crisis box) displays her words rather than a
+ * literal from a page file. `selectSectionHeading` is the other way, for a
+ * heading set beside the prose rather than above it.
  *
- * Where the page DOES want the authored heading on screen — the crisis box
- * shows "Crisis Situations" as its title — `includeHeading` returns it as a
- * block, so the words come from the document rather than from a literal in a
- * page file. The distinction matters more than it looks: the heading string is
- * already in the page as the SELECTOR, and rendering that constant instead is
- * how an authored heading quietly becomes a second copy of itself. Selecting by
- * a string and displaying a string are different acts, and only the first one
- * may take a literal. Where the heading is wanted on screen but not inside the
- * block flow, `selectSectionHeading` is the other way to satisfy that.
- *
- * Matching is exact and case-sensitive. A looser match would let a heading
- * drift by a word and keep passing, which is the failure this module is here
- * to make impossible.
- *
- * @throws MissingSectionError when no heading matches.
+ * @throws MissingSectionError when no block carries the key.
  */
 export function selectSection(
   document: FoundationalDocumentDetail,
-  heading: string,
+  key: string,
   options: { includeHeading?: boolean } = {}
 ): Blocks {
-  const start = document.blocks.findIndex(
-    (block) => block.type === 'heading' && block.text === heading
-  );
+  const blocks = document.blocks.filter((block) => block.section === key);
 
-  if (start === -1) {
-    throw new MissingSectionError(document.id, heading, listSectionHeadings(document));
+  if (blocks.length === 0) {
+    throw new MissingSectionError(document.id, key, document.sections);
   }
 
-  // `start` came from `findIndex` on this array with a predicate that already
-  // required a heading, so this block IS one — but the index access does not
-  // carry that through, hence the `type` re-check rather than a cast. The `2`
-  // branch is unreachable; it is the shallowest authored level, so if the
-  // narrowing ever did fail the section would end at the next `h2` rather than
-  // swallowing the rest of the document.
-  const startBlock = document.blocks[start];
-  const level = startBlock.type === 'heading' ? startBlock.level : 2;
-
-  const rest = document.blocks.slice(start + 1);
-  const end = rest.findIndex((block) => block.type === 'heading' && block.level <= level);
-  const body = end === -1 ? rest : rest.slice(0, end);
-
-  return options.includeHeading ? [startBlock, ...body] : body;
+  return options.includeHeading ? blocks : blocks.filter((block) => block.type !== 'heading');
 }
 
-/** Every paragraph and list item in a document, as plain strings, in order. */
-function paragraphs(document: FoundationalDocumentDetail): string[] {
-  return document.blocks.flatMap((block) => {
+/**
+ * One section's heading, as the document stores it.
+ *
+ * For a surface that sets the heading BESIDE the prose rather than above it —
+ * `/data` puts the coaching heading in its own column.
+ *
+ * @throws MissingSectionError when no block carries the key, and a plain `Error`
+ * when the section has no heading, since a surface that asks for one depends on it.
+ */
+export function selectSectionHeading(document: FoundationalDocumentDetail, key: string): string {
+  const heading = selectSection(document, key, { includeHeading: true }).find(
+    (block) => block.type === 'heading'
+  );
+
+  if (heading === undefined || heading.type !== 'heading') {
+    throw new Error(
+      `Section "${key}" of foundational document "${document.id}" has no heading, ` +
+        `and a surface sets one beside it.`
+    );
+  }
+
+  return heading.text;
+}
+
+/**
+ * The text of a section, as plain strings — one per paragraph or list item.
+ *
+ * `/data`'s "it is not" column is a row per item with an icon beside it, and the
+ * emails set one beat per line. Both are shapes the block renderer does not
+ * produce, so they need the text rather than the markup. List blocks flatten
+ * into their items, so a section authored either way yields the same strings.
+ * Headings are skipped: a section title is not one of its items.
+ *
+ * A section that yields no text throws too, so a surface never has to check.
+ * The key can survive on a heading alone (or, once admins edit blocks, on
+ * non-text blocks), and a caller that takes `[0]` would otherwise render
+ * `undefined` at the top of the home page with nothing reporting it.
+ *
+ * @throws MissingSectionError when no block carries the key, and a plain `Error`
+ * when the blocks that do carry it hold no text.
+ */
+export function selectSectionText(document: FoundationalDocumentDetail, key: string): string[] {
+  const text = selectSection(document, key).flatMap((block) => {
     if (block.type === 'paragraph') return [block.text];
     if (block.type === 'list') return [...block.items];
     return [];
   });
-}
 
-/**
- * One paragraph by position — from the start, or from the end when negative.
- *
- * The home page's hero is the first two paragraphs of
- * `the_heart_behind_lelanea` and its quote band is the last two. There are no
- * headings in that document to select by, so position is the only handle; the
- * two ends are the stable part of a document that gains and loses material in
- * the middle, which is why this counts from an end rather than taking a slice
- * out of the interior.
- *
- * It THROWS rather than returning `undefined` for the same reason everything
- * else here does. `beats[7]` on a shortened document renders the string
- * "undefined" into an `h1` in the brand display face, at the top of the site's
- * front page, and nothing anywhere reports it.
- */
-export function paragraphAt(document: FoundationalDocumentDetail, index: number): string {
-  const all = paragraphs(document);
-  const resolved = index < 0 ? all.length + index : index;
-  const text = all[resolved];
-
-  if (text === undefined) {
+  if (text.length === 0) {
     throw new Error(
-      `Authored document "${document.id}" has ${all.length} paragraphs; a page asked for ` +
-        `index ${index}. Either the document was shortened or the page is reading the wrong one.`
+      `Section "${key}" of foundational document "${document.id}" has no paragraph or ` +
+        `list text, and a surface renders its text.`
     );
   }
 
   return text;
-}
-
-/**
- * A contiguous run of paragraphs, `from` up to but not including `to`.
- *
- * ## Selecting by index is fragile, and the remedy is a pinned assertion
- *
- * `the_initiation` has seventy beats and not one heading, so a run of it can
- * only be named by position. Insert a beat near the top and every later index
- * shifts by one — silently, because the result is still a valid run of her
- * prose, just the wrong one.
- *
- * That is a real cost and it is paid the same way `selectSection` pays for
- * heading drift: loudly. `sections.test.ts` pins the opening and closing beat
- * of every range a page uses, so a shifted document fails the suite naming the
- * range rather than shipping a card that quietly starts mid-thought.
- *
- * Prefer `selectSection` wherever a document HAS headings. This is for the one
- * that does not.
- *
- * @throws when the range runs past the end of the document.
- */
-export function paragraphRange(
-  document: FoundationalDocumentDetail,
-  from: number,
-  to: number
-): string[] {
-  const all = paragraphs(document);
-
-  if (from < 0 || to > all.length || from >= to) {
-    throw new Error(
-      `Authored document "${document.id}" has ${all.length} paragraphs; a page asked for ` +
-        `[${from}, ${to}). Either the document changed length or the page is reading the wrong one.`
-    );
-  }
-
-  return all.slice(from, to);
-}
-
-/**
- * One section's heading, as the document authored it.
- *
- * Exists so a page that wants the heading on screen but NOT inside the block
- * flow — `/data` sets the coaching heading in its own column, beside the prose
- * rather than above it — still takes the words from the document. The
- * alternative is rendering the selector constant, which is the one thing
- * `selectSection` says a page may not do.
- *
- * It returns the same string that was passed in, and that is the point rather
- * than an objection: the value is identical, but the PROVENANCE is not. Reading
- * it back from the document means the page displays what it selected, so the
- * rule holds without depending on a reader noticing that the two happen to
- * agree.
- *
- * @throws MissingSectionError when no heading matches.
- */
-export function selectSectionHeading(
-  document: FoundationalDocumentDetail,
-  heading: string
-): string {
-  const [block] = selectSection(document, heading, { includeHeading: true });
-
-  // Unreachable: `selectSection` with `includeHeading` puts the matched heading
-  // first or throws. Narrowed rather than cast, so the invariant is checked
-  // rather than asserted.
-  if (block === undefined || block.type !== 'heading') {
-    throw new MissingSectionError(document.id, heading, listSectionHeadings(document));
-  }
-
-  return block.text;
-}
-
-/**
- * The paragraphs of a section, as plain strings.
- *
- * `/data`'s two columns are a row per item with an icon beside it, which is a
- * shape the block renderer does not produce — so that page needs the text
- * rather than the markup. The seven "Lelañea is **not** a medical application."
- * lines are authored as seven separate paragraphs, not as a list block, which
- * is the reconciliation finding behind this function existing at all.
- *
- * List blocks are flattened into their items so a section authored either way
- * yields the same strings; a heading inside the section is skipped, since a
- * subsection title is not one of the items.
- */
-export function selectSectionText(document: FoundationalDocumentDetail, heading: string): string[] {
-  return paragraphs({ ...document, blocks: selectSection(document, heading) });
 }

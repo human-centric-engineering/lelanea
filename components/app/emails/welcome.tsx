@@ -3,7 +3,7 @@ import { Button, Section, Text } from '@react-email/components';
 
 import { applyFirstName } from '@/components/app/content/authored-document';
 import { CardLink, LelaneaEmail, styles } from '@/components/app/emails/lelanea-email';
-import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
+import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import { appAuthLandingRoute } from '@/lib/app/auth-landing';
 import { BRAND } from '@/lib/brand';
 
@@ -19,15 +19,14 @@ import { BRAND } from '@/lib/brand';
  * `the_initiation` is the authored welcome statement (`surface:
  * first_run_welcome`), and the product's rule is that her words are never
  * reworded in the build. So the greeting here is its opening run — the beats
- * from "Welcome, {{first_name}}." to "Welcome to Lelañea." — read through the
- * loader by position, exactly as the landing page reads its own excerpts, and
- * rendered one beat per line because the document's `renderStyle: 'cadence'`
- * says so. Seventy beats would make an email nobody finishes; seven is the
- * authored unit that ends on the product's name.
+ * from "Welcome, {{first_name}}." to "Welcome to Lelañea." — the document's
+ * `welcome` section, read from the database by key exactly as the landing page
+ * reads its own excerpts, and rendered one beat per line because the document's
+ * `renderStyle: 'cadence'` says so. Seventy beats would make an email nobody
+ * finishes; seven is the authored unit that ends on the product's name.
  *
- * `WELCOME_BEATS` is pinned by its first and last beat in the test, so a beat
- * inserted upstream fails the suite rather than shifting the email to end
- * mid-thought — the same protection `sections.test.ts` gives the landing page.
+ * The key is stored on the blocks (t-86), so an edit that inserts a beat above
+ * the greeting cannot shift the email to end mid-thought.
  *
  * ## What follows the greeting is the product's register, and is labelled so
  *
@@ -45,8 +44,9 @@ import { BRAND } from '@/lib/brand';
  * gone) would therefore abort account creation rather than log a failed
  * email. `WelcomeBeats` moves the reads into `render()`, which runs inside
  * `sendEmail`'s own `try`, so the failure domain is the one the platform
- * designed for. The range pin in the test is what makes that throw unlikely;
- * this is what makes it survivable.
+ * designed for. It is an async component: `@react-email/render` waits for
+ * every suspended component before it serialises (`stream.allReady`), so the
+ * database read completes inside that same `try`.
  *
  * ## The first name
  *
@@ -59,8 +59,8 @@ import { BRAND } from '@/lib/brand';
  * noted in the PR rather than patched here.
  */
 
-/** `[from, to)` into `the_initiation` — "Welcome, …" through "Welcome to Lelañea." */
-export const WELCOME_BEATS = { from: 0, to: 7 } as const;
+/** The section of `the_initiation` the greeting is: "Welcome, …" through "Welcome to Lelañea." */
+export const WELCOME_SECTION = 'welcome';
 
 /** The platform's stand-in for a missing name (`user.name || 'User'`). */
 const PLATFORM_NAME_FALLBACK = 'User';
@@ -80,12 +80,14 @@ export interface WelcomeEmailProps {
 }
 
 /** Her opening beats, one per line, read at render time (see the docblock). */
-function WelcomeBeats({ firstName }: { firstName: string | null }): React.ReactElement {
-  const beats = paragraphRange(
-    requireDocument('the_initiation'),
-    WELCOME_BEATS.from,
-    WELCOME_BEATS.to
-  ).map((beat) => applyFirstName(beat, firstName));
+async function WelcomeBeats({
+  firstName,
+}: {
+  firstName: string | null;
+}): Promise<React.ReactElement> {
+  const beats = selectSectionText(await requireDocument('the_initiation'), WELCOME_SECTION).map(
+    (beat) => applyFirstName(beat, firstName)
+  );
 
   return (
     <>

@@ -21,14 +21,51 @@
  * a visitor most needs actually reach the DOM.
  */
 
-import { describe, expect, it } from 'vitest';
+import { vi, beforeEach, describe, expect, it } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import { render, screen, within } from '@testing-library/react';
 
-import LelaneaPage, { metadata as lelaneaMeta } from '@/app/(public)/lelanea/page';
-import MissionPage, { metadata as missionMeta } from '@/app/(public)/mission/page';
-import DataPage, { metadata as dataMeta } from '@/app/(public)/data/page';
-import DisclaimerPage, { metadata as disclaimerMeta } from '@/app/(public)/disclaimer/page';
-import TermsPage, { metadata as termsMeta } from '@/app/(public)/terms/page';
+import LelaneaPage, {
+  dynamic as lelaneaDynamic,
+  metadata as lelaneaMeta,
+} from '@/app/(public)/lelanea/page';
+import MissionPage, {
+  dynamic as missionDynamic,
+  metadata as missionMeta,
+} from '@/app/(public)/mission/page';
+import DataPage, {
+  dynamic as dataDynamic,
+  metadata as dataMeta,
+} from '@/app/(public)/data/page';
+import DisclaimerPage, {
+  dynamic as disclaimerDynamic,
+  metadata as disclaimerMeta,
+} from '@/app/(public)/disclaimer/page';
+import TermsPage, {
+  dynamic as termsDynamic,
+  metadata as termsMeta,
+} from '@/app/(public)/terms/page';
+import { fakeDocumentStore } from '@/tests/helpers/app/foundational-documents';
+import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
+
+const store = fakeDocumentStore();
+beforeEach(() => store.reset());
+
+/** Replace the first paragraph of a stored document. */
+function editFirstParagraph(id: string, text: string): void {
+  store.editBlocks(id, (blocks) => {
+    const index = blocks.findIndex((block) => block.type === 'paragraph');
+    return blocks.map(
+      (block, i): StoredDocumentBlock =>
+        i === index && block.type === 'paragraph' ? { ...block, text } : block
+    );
+  });
+}
 
 const PAGES = [
   ['/lelanea', LelaneaPage, lelaneaMeta] as const,
@@ -39,8 +76,8 @@ const PAGES = [
 ];
 
 describe('the authored public pages', () => {
-  it.each(PAGES)('%s renders exactly one h1', (_route, Page) => {
-    render(<Page />);
+  it.each(PAGES)('%s renders exactly one h1', async (_route, Page) => {
+    render(await Page());
 
     // One, not "at least one". Three of these pages host several documents or
     // document sections, and the mistake each invites is a second `h1` from a
@@ -48,8 +85,8 @@ describe('the authored public pages', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
-  it.each(PAGES)('%s has a heading outline with no skipped level', (_route, Page) => {
-    const { container } = render(<Page />);
+  it.each(PAGES)('%s has a heading outline with no skipped level', async (_route, Page) => {
+    const { container } = render(await Page());
 
     const levels = Array.from(container.querySelectorAll('h1,h2,h3,h4,h5,h6')).map((el) =>
       Number(el.tagName[1])
@@ -78,13 +115,13 @@ describe('the authored public pages', () => {
     expect(meta.robots).toBeUndefined();
   });
 
-  it('gives each page a distinct heading and canonical', () => {
-    const headings = PAGES.map(([, Page]) => {
-      const { unmount } = render(<Page />);
-      const text = screen.getByRole('heading', { level: 1 }).textContent?.trim();
+  it('gives each page a distinct heading and canonical', async () => {
+    const headings: (string | undefined)[] = [];
+    for (const [, Page] of PAGES) {
+      const { unmount } = render(await Page());
+      headings.push(screen.getByRole('heading', { level: 1 }).textContent?.trim());
       unmount();
-      return text;
-    });
+    }
 
     expect(new Set(headings).size).toBe(PAGES.length);
     expect(new Set(PAGES.map(([, , meta]) => meta.alternates?.canonical)).size).toBe(PAGES.length);
@@ -111,23 +148,64 @@ describe('the authored public pages', () => {
   });
 });
 
+describe('the database is what is read (t-86)', () => {
+  // Each page renders a stored row that differs from the file. A page still
+  // reading `content/` could not show these words.
+  it.each([
+    ['/lelanea', LelaneaPage, 'about_the_creator'],
+    ['/mission', MissionPage, 'the_mission'],
+    ['/disclaimer', DisclaimerPage, 'disclaimer'],
+    ['/terms', TermsPage, 'terms_of_use'],
+  ] as const)('%s renders the edited row of %s', async (_route, Page, id) => {
+    editFirstParagraph(id, `Stored edit to ${id}.`);
+
+    const { container } = render(await Page());
+
+    expect(container.textContent).toContain(`Stored edit to ${id}.`);
+  });
+
+  it('/data renders the edited crisis section of the stored disclaimer', async () => {
+    store.editBlocks('disclaimer', (blocks) =>
+      blocks.map((block) =>
+        block.section === 'crisis' && block.type === 'paragraph'
+          ? { ...block, text: 'Stored edit to the crisis guidance.' }
+          : block
+      )
+    );
+
+    render(await DataPage());
+
+    expect(screen.getAllByText('Stored edit to the crisis guidance.').length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['/lelanea', lelaneaDynamic],
+    ['/mission', missionDynamic],
+    ['/data', dataDynamic],
+    ['/disclaimer', disclaimerDynamic],
+    ['/terms', termsDynamic],
+  ] as const)('%s renders at request time, so an edit is not frozen into a build', (_route, dynamic) => {
+    expect(dynamic).toBe('force-dynamic');
+  });
+});
+
 describe('/lelanea', () => {
-  it('renders all three documents, each as its own section', () => {
-    render(<LelaneaPage />);
+  it('renders all three documents, each as its own section', async () => {
+    render(await LelaneaPage());
 
     expect(screen.getByRole('heading', { level: 1, name: 'The Heart Behind Lelañea' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'About the Creator' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelañea' })).toBeTruthy();
   });
 
-  it("names the teachers she credits, which a chip row could not have carried", () => {
+  it("names the teachers she credits, which a chip row could not have carried", async () => {
     // The prototype ends this page with twenty name chips. Four of them are
     // attested nowhere in the authored document, and the rest exist only inside
     // sentences — so the document is rendered whole instead. This is the case
     // that says the substitution actually delivered the attributions: if the
     // lineage section were dropped or truncated, the page would still render
     // and still pass every structural check above.
-    const { container } = render(<LelaneaPage />);
+    const { container } = render(await LelaneaPage());
     const text = container.textContent ?? '';
 
     for (const name of ['Carl Jung', 'Stephen Porges', 'Advaita Vedanta', 'Feroshia Knight']) {
@@ -135,8 +213,8 @@ describe('/lelanea', () => {
     }
   });
 
-  it('shows a deliberate stand-in while there is no portrait', () => {
-    render(<LelaneaPage />);
+  it('shows a deliberate stand-in while there is no portrait', async () => {
+    render(await LelaneaPage());
 
     // `CREATOR_PORTRAIT` is null (D3's shape). What must not happen is an
     // `<img>` with an empty or placeholder `src`, which renders as a broken
@@ -147,8 +225,8 @@ describe('/lelanea', () => {
 });
 
 describe('/data', () => {
-  it('lists the seven things Lelañea is not, with the emphasis intact', () => {
-    render(<DataPage />);
+  it('lists the seven things Lelañea is not, with the emphasis intact', async () => {
+    render(await DataPage());
 
     const items = screen.getAllByRole('listitem');
     const isNot = items.filter((item) => item.textContent?.startsWith('Lelañea is not'));
@@ -163,8 +241,8 @@ describe('/data', () => {
     expect(document.body.textContent).not.toContain('**');
   });
 
-  it('carries the crisis guidance in full, not a summary of it', () => {
-    render(<DataPage />);
+  it('carries the crisis guidance in full, not a summary of it', async () => {
+    render(await DataPage());
     const text = document.body.textContent ?? '';
 
     // The three instructions the footer's old one-liner had trimmed to one.
@@ -175,8 +253,8 @@ describe('/data', () => {
     expect(text).toContain('thoughts of suicide');
   });
 
-  it('keeps the qualifying paragraph out of the crossed column', () => {
-    render(<DataPage />);
+  it('keeps the qualifying paragraph out of the crossed column', async () => {
+    render(await DataPage());
 
     const items = screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
 
@@ -185,8 +263,8 @@ describe('/data', () => {
     expect(items.some((item) => item.startsWith('Although some concepts'))).toBe(false);
   });
 
-  it('shows the GDPR rights as a footing to the cards, not as a fourth card', () => {
-    render(<DataPage />);
+  it('shows the GDPR rights as a footing to the cards, not as a fourth card', async () => {
+    render(await DataPage());
 
     // Three cards, not four. The prototype's fourth ("GDPR rights") is a legal
     // standing rather than a thing you can do, and as a peer it both read as a
@@ -211,18 +289,18 @@ describe('/data', () => {
     }
   });
 
-  it('separates the rights visually without putting the separator in the text', () => {
+  it('separates the rights visually without putting the separator in the text', async () => {
     // The middots are `::after` content, so the list semantics carry the
     // separation for a screen reader. A middot typed between the items would be
     // announced — "Access middot Rectification" — and would also break the
     // by-name assertions above.
-    render(<DataPage />);
+    render(await DataPage());
 
     expect(document.body.textContent).not.toContain('·');
   });
 
-  it('links to the full disclosures rather than claiming to be them', () => {
-    render(<DataPage />);
+  it('links to the full disclosures rather than claiming to be them', async () => {
+    render(await DataPage());
 
     const link = screen.getByRole('link', { name: /full disclosures/i });
     expect(link.getAttribute('href')).toBe('/disclaimer');
@@ -230,8 +308,8 @@ describe('/data', () => {
 });
 
 describe('/terms and /disclaimer', () => {
-  it('/terms renders the Terms of Use, not the starter placeholder', () => {
-    render(<TermsPage />);
+  it('/terms renders the Terms of Use, not the starter placeholder', async () => {
+    render(await TermsPage());
     const text = document.body.textContent ?? '';
 
     expect(text).not.toContain('placeholder');
@@ -239,12 +317,12 @@ describe('/terms and /disclaimer', () => {
     expect(text).toContain('Eligibility');
   });
 
-  it('/terms marks its unfilled placeholders outside production', () => {
+  it('/terms marks its unfilled placeholders outside production', async () => {
     // D8. `[Month Day, Year]` and `[Support Email]` are launch blockers, and the
     // renderer highlights them everywhere except production. Vitest is not
     // production, so they must be marked here — and the attribute is what the
     // build-time reader is meant to see.
-    const { container } = render(<TermsPage />);
+    const { container } = render(await TermsPage());
 
     const marked = Array.from(container.querySelectorAll('[data-unresolved-placeholder]')).map(
       (el) => el.getAttribute('data-unresolved-placeholder')
@@ -254,8 +332,8 @@ describe('/terms and /disclaimer', () => {
     expect(marked).toContain('[Support Email]');
   });
 
-  it('/disclaimer renders the whole document, including what /data leaves out', () => {
-    render(<DisclaimerPage />);
+  it('/disclaimer renders the whole document, including what /data leaves out', async () => {
+    render(await DisclaimerPage());
     const text = document.body.textContent ?? '';
 
     // `/data` lifts four sections. These three are the ones it does not, and

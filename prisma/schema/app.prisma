@@ -840,3 +840,158 @@ model AppSlotDefinitionRevision {
   @@index([editorId])
   @@map("app_slot_definition_revision")
 }
+
+/// Who made one revision of an authored content row (f-content-seeds t-86).
+///
+/// `seed` is the one-time load from `content/`; `admin` is a person editing in
+/// the admin (t-91). Named for content in general rather than for documents,
+/// because the journey text, questions and resources (t-87) keep the same
+/// history. It is a separate enum from `AppSlotRevisionOrigin` for the same
+/// reason: that one belongs to the slot taxonomy. Like that one, it exists so
+/// the seed can be told apart from an erased admin, since both leave
+/// `editorId` null.
+enum AppContentRevisionOrigin {
+  seed
+  admin
+
+  @@map("app_content_revision_origin")
+}
+
+/// The collection her foundational documents belong to (f-content-seeds t-86).
+/// There is one row, `lelanea_app_foundational_documents`.
+///
+/// It holds the identity, version and locale the content API reports as
+/// `collection`, and the locale the waitlist falls back to. **The acknowledgement
+/// gate does not read `version` here.** It reads each document's own version (see
+/// `AppFoundationalDocument.version`), so a change to the mission cannot re-gate
+/// anyone.
+///
+/// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
+model AppDocumentCollection {
+  /// Stable identity, as authored in `content/lelanea_foundational_documents.json`.
+  id        String   @id
+  title     String
+  /// The collection's authored version label, e.g. `1.1`.
+  version   String
+  /// BCP 47, as authored — `en-US`.
+  locale    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents AppFoundationalDocument[]
+
+  @@map("app_document_collection")
+}
+
+/// One of her seven foundational documents, as the app currently serves it
+/// (f-content-seeds t-86).
+///
+/// **This row is what every surface reads**: the public pages, the
+/// acknowledgement gate, the welcome and waitlist emails, and
+/// `/api/v1/app/content/documents*`. The file in `content/` only seeds it. Every
+/// write goes through `lib/app/content/document-store.ts`, which is also where
+/// the knowledge-base mirror (t-90) and the admin editor (t-91) attach.
+///
+/// **Operator-owned** (`fp4`). The seed writes it once and never again, so an
+/// admin edit survives every later seed.
+///
+/// `blocks` is an ordered JSON array of heading, paragraph and list blocks, each
+/// with a nullable `section` key. It is validated on every write and every read
+/// against `storedDocumentBlocksSchema` in `lib/app/content/schemas.ts`. It is
+/// JSON rather than a block table because every read and every revision takes the
+/// document whole, and a snapshot of one column is a snapshot of the document.
+///
+/// **Two versions, for different jobs.** `version` is the label a person
+/// acknowledges: the gate requires an `app_acknowledgement` row carrying exactly
+/// this string. `revision` counts every write. A typo fix bumps `revision`
+/// without re-gating anyone; a change people must agree to again also changes
+/// `version`. That is a decision for whoever edits (t-91), not something inferred.
+///
+/// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
+model AppFoundationalDocument {
+  /// Stable identity, e.g. `terms_of_use`. Immutable: it is the API path segment
+  /// and the key `DOCUMENT_FOR_KIND` maps an acknowledgement kind to.
+  id                      String                @id
+  collectionId            String
+  collection              AppDocumentCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  /// Reading order within the collection — the authored `suggestedOrder`.
+  position                Int
+  title                   String
+  subtitle                String?
+  /// `onboarding` | `about` | `legal`. Validated on write and read.
+  category                String
+  /// Which app surface shows this document, e.g. `first_run_welcome`.
+  surface                 String
+  requiresAcknowledgement Boolean               @default(false)
+  /// Merge fields present in the copy, e.g. `{{first_name}}`.
+  placeholders            String[]
+  /// `cadence` on the welcome statement: render each beat on its own line.
+  renderStyle             String?
+  renderNote              String?
+  blocks                  Json
+  /// The label an acknowledgement is recorded against. See the docblock.
+  version                 String
+  /// BCP 47, as authored.
+  locale                  String
+  /// Bumped on every write that changes something. 1 is the seed.
+  revision                Int                   @default(1)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  revisions AppFoundationalDocumentRevision[]
+
+  @@unique([collectionId, position])
+  @@map("app_foundational_document")
+}
+
+/// One revision of one foundational document: the whole document as it stood,
+/// not a diff (f-content-seeds t-86).
+///
+/// Written from the first write, including the seed's, so the admin editor
+/// (t-91) never has to reconstruct history. Same shape and reasoning as
+/// `AppSlotDefinitionRevision`: a full snapshot makes "what did the Terms say on
+/// the day this person agreed?" one read at a timestamp, rather than a replay.
+///
+/// **`editorId` is a plain scalar with no Prisma `@relation`**, because a fork
+/// table must not add a reverse field to the Sunrise-owned `User` model. The
+/// foreign key is written by hand in the migration, `ON DELETE SET NULL`, and
+/// pinned by a drift probe in `lib/app/leaf-db-drift.ts`. `SET NULL` because the
+/// history is about the document, not about the editor: erasing an admin removes
+/// who made the edit, not the fact that the words changed.
+///
+/// An EXCLUSION in `lib/app/leaf-data-export.ts`. The reason given there says
+/// that it keeps an administrator's account id and nothing else about them.
+model AppFoundationalDocumentRevision {
+  id                      String                   @id @default(cuid())
+  documentId              String
+  document                AppFoundationalDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// The revision this produced. 1 is the seed.
+  revision                Int
+  /// The document as it stood at this revision.
+  position                Int
+  title                   String
+  subtitle                String?
+  category                String
+  surface                 String
+  requiresAcknowledgement Boolean
+  placeholders            String[]
+  renderStyle             String?
+  renderNote              String?
+  blocks                  Json
+  version                 String
+  locale                  String
+  /// Which snapshot fields differ from the previous revision. At revision 1 that
+  /// is every field. Never empty: a write that changes nothing makes no revision.
+  changedFields           String[]
+  origin                  AppContentRevisionOrigin
+  /// The admin who made the edit. Null for the seed, and null once that admin's
+  /// account is erased. Read `origin` to tell the two apart.
+  editorId                String?
+  changedAt               DateTime                 @default(now())
+
+  @@unique([documentId, revision])
+  /// The "document as it stood at time T" read.
+  @@index([documentId, changedAt])
+  @@index([editorId])
+  @@map("app_foundational_document_revision")
+}

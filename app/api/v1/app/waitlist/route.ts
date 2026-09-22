@@ -107,7 +107,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       name: body.name,
       heardFrom: body.heardFrom,
       intent: body.intent,
-      locale: resolveJoinLocale(request.headers.get('accept-language')),
+      locale: await resolveJoinLocale(request.headers.get('accept-language')),
     });
 
     // `created` and `removed` are logged and NOT returned. They are the useful

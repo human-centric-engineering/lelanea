@@ -7,12 +7,19 @@
  * would fail here. The content loader is real too: the versions asserted are
  * read from the authored collection.
  *
- * FORK NOTE — `lib/app/content` is read for real so the versions in the
+ * FORK NOTE — her documents are served as the seed stores them
+ * (`tests/helpers/app/foundational-documents.ts`), so the versions in the
  * response are the ones the gate would actually require; a fork with its own
  * collection sees its own version here and nothing else changes.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
@@ -30,9 +37,9 @@ import { GET, POST } from '@/app/api/v1/app/acknowledgements/route';
 import { auth } from '@/lib/auth/config';
 import { API_KEY_SESSION_ID_PREFIX } from '@/lib/auth/api-keys';
 import { AGE_18_VERSION } from '@/lib/app/gateway/acknowledgements';
-import { getFoundationalCollectionMeta } from '@/lib/app/content';
+import { seededCollection } from '@/tests/helpers/app/foundational-documents';
 
-const COLLECTION_VERSION = getFoundationalCollectionMeta().version;
+const COLLECTION_VERSION = seededCollection().version;
 const AT = new Date('2026-09-14T10:00:00.000Z');
 
 interface StatusBody {

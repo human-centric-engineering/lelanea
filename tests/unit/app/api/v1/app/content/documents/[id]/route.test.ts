@@ -8,9 +8,19 @@
  * @see app/api/v1/app/content/documents/[id]/route.ts
  */
 
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// Her documents are read from the database since t-86. This serves exactly the
+// rows the seed writes, through the real projection.
+vi.mock('@/lib/app/content/document-store', async () =>
+  (await import('@/tests/helpers/app/foundational-documents')).fakeDocumentStore()
+);
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v1/app/content/documents/[id]/route';
+import { fakeDocumentStore, rewriteSection } from '@/tests/helpers/app/foundational-documents';
+
+const store = fakeDocumentStore();
+beforeEach(() => store.reset());
 
 interface DocumentBody {
   success: true;
@@ -22,7 +32,10 @@ interface DocumentBody {
       renderNote: string | null;
       placeholders: string[];
       requiresAcknowledgement: boolean;
-      blocks: { type: string }[];
+      version: string;
+      revision: number;
+      sections: string[];
+      blocks: { type: string; section: string | null }[];
     };
   };
 }
@@ -101,5 +114,65 @@ describe('GET /api/v1/app/content/documents/:id', () => {
 
     expect(response.status).toBe(404);
     expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('answers 404, without querying, for an id Postgres would reject', async () => {
+    // A NUL byte is "invalid byte sequence for encoding UTF8" in Postgres, so
+    // reaching the query would turn a bad URL into a 500 and an error log.
+    const { request, context } = createRequest('foo\u0000bar');
+
+    const response = await GET(request, context);
+    const body = (await response.json()) as ErrorBody;
+
+    expect(response.status).toBe(404);
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(store.getFoundationalDocument).not.toHaveBeenCalled();
+  });
+
+  it('returns every block with its section key, and the keys in order', async () => {
+    const { request, context } = createRequest('disclaimer');
+
+    const body = (await (await GET(request, context)).json()) as DocumentBody;
+
+    expect(body.data.document.sections).toEqual([
+      'purpose',
+      'purpose_limits',
+      'is_not',
+      'is_not_context',
+      'coaching',
+      'crisis',
+      'commitment',
+    ]);
+    expect(body.data.document.blocks.every((block) => 'section' in block)).toBe(true);
+    expect(body.data.document.version).toBe('1.1');
+    expect(body.data.document.revision).toBe(1);
+  });
+
+  it('changes the ETag when the row changes, so a client holding the old one gets the edit', async () => {
+    const before = createRequest('disclaimer');
+    const etag = (await GET(before.request, before.context)).headers.get('ETag')!;
+
+    store.editBlocks('disclaimer', (blocks) =>
+      rewriteSection(blocks, 'crisis', () => 'An edited crisis paragraph.')
+    );
+
+    const after = createRequest('disclaimer', { 'If-None-Match': etag });
+    const response = await GET(after.request, after.context);
+    const body = (await response.json()) as DocumentBody;
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('ETag')).not.toBe(etag);
+    expect(body.data.document.revision).toBe(2);
+  });
+
+  it('answers a 500 envelope, not a partial document, when the collection cannot be read', async () => {
+    store.getFoundationalCollectionMeta.mockRejectedValueOnce(new store.ContentNotSeededError());
+    const { request, context } = createRequest('disclaimer');
+
+    const response = await GET(request, context);
+    const body = (await response.json()) as ErrorBody;
+
+    expect(response.status).toBe(500);
+    expect(body.success).toBe(false);
   });
 });
