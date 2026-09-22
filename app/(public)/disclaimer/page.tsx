@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/disclaimer' },
 };
 
+/** Read at request time: her words are in the database (t-86). See the home page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * `/disclaimer` — the disclosure document, whole.
  *
@@ -33,8 +36,8 @@ export const metadata: Metadata = {
  *
  * @see .context/app/content.md — the pipeline
  */
-export default function DisclaimerPage() {
-  const disclaimer = requireDocument('disclaimer');
+export default async function DisclaimerPage() {
+  const disclaimer = await requireDocument('disclaimer');
 
   return (
     <div className={styles.page}>

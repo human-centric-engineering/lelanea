@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Text } from '@react-email/components';
 
 import { LelaneaEmail, styles } from '@/components/app/emails/lelanea-email';
-import { paragraphRange, requireDocument } from '@/lib/app/content/sections';
+import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import { BRAND } from '@/lib/brand';
 
 /**
@@ -16,11 +16,10 @@ import { BRAND } from '@/lib/brand';
  *
  * ## What they have joined, in her words
  *
- * The three beats the landing page's "An invitation" card already excerpts —
- * `the_initiation` `[7, 10)`: "This is not simply an app." / "It is an
- * invitation." / "An invitation to explore…" — read by position through the
- * loader, one per line per the document's cadence note, and pinned by first and
- * last beat in the test. Chosen because they say what this is without greeting
+ * The three beats the landing page's "An invitation" card already shows —
+ * `the_initiation`'s `invitation` section: "This is not simply an app." / "It
+ * is an invitation." / "An invitation to explore…" — read from the database by
+ * key, one per line per the document's cadence note. Chosen because they say what this is without greeting
  * someone who has not arrived: the Initiation's opening line is for the person
  * who has, and that is the welcome email's.
  *
@@ -46,13 +45,13 @@ import { BRAND } from '@/lib/brand';
  *
  * ## Read at render time
  *
- * The loader reads live in a child component for the reason `welcome.tsx`
- * gives: a content failure lands inside `render()`, inside `sendEmail`'s own
- * `try`, and is logged — never thrown at the caller.
+ * The database read lives in an async child component for the reason
+ * `welcome.tsx` gives: a content failure lands inside `render()`, inside
+ * `sendEmail`'s own `try`, and is logged — never thrown at the caller.
  */
 
-/** `[from, to)` into `the_initiation` — "This is not simply an app." through the invitation. */
-export const CONFIRMATION_BEATS = { from: 7, to: 10 } as const;
+/** The section of `the_initiation` this email quotes: "This is not simply an app." through the invitation. */
+export const CONFIRMATION_SECTION = 'invitation';
 
 export interface WaitlistConfirmationEmailProps {
   /** The name they gave, or nothing. First name only is used. */
@@ -84,12 +83,8 @@ export function firstNameOf(name: string | null | undefined): string | null {
   return first && FIRST_NAME.test(first) ? first : null;
 }
 
-function InvitationBeats(): React.ReactElement {
-  const beats = paragraphRange(
-    requireDocument('the_initiation'),
-    CONFIRMATION_BEATS.from,
-    CONFIRMATION_BEATS.to
-  );
+async function InvitationBeats(): Promise<React.ReactElement> {
+  const beats = selectSectionText(await requireDocument('the_initiation'), CONFIRMATION_SECTION);
   return (
     <>
       {beats.map((beat, i) => (

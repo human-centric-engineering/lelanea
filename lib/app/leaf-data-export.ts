@@ -189,6 +189,25 @@ export function initLeafSubjectSources(): void {
           'Every past version of that list — the wording as it stood on a given date, which is how an answer you gave is read back against the words you were actually asked under. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
       },
       {
+        // f-content-seeds t-86. Her documents as the app serves them. Who agreed
+        // to which version is `AppAcknowledgement`, a source above, not this.
+        model: 'AppDocumentCollection',
+        reason:
+          'The name, version and language of Lelañea\u2019s foundational documents. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppFoundationalDocument',
+        reason:
+          'Lelañea\u2019s foundational documents as the app currently shows them: the welcome, the pieces about Lelañea, the Disclaimer and the Terms of Use. They are the same for everyone and hold no information about any person. Which versions you agreed to is returned separately in this bundle.',
+      },
+      {
+        // Retains `editorId`, so the reason says so, for the same reason as
+        // `AppSlotDefinitionRevision` above.
+        model: 'AppFoundationalDocumentRevision',
+        reason:
+          'Every past version of those documents, as they stood on a given date, which is how the Terms you agreed to can be read back as they were. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
         // f-slots t-72. A ledger of writes, not the writes themselves — it
         // exists so a retried turn cannot record one thing twice, and it holds
         // a slug, a version number and a timestamp. What was actually learned

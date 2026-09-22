@@ -36,7 +36,7 @@
  * see `MAX_ENTRIES` for what truncating a header manufactures.
  */
 
-import { getFoundationalCollectionMeta } from '@/lib/app/content';
+import { getFoundationalCollectionMeta } from '@/lib/app/content/document-store';
 
 /**
  * A conservative BCP-47 shape: a 2–3 letter primary tag, then up to two
@@ -69,8 +69,10 @@ const MAX_ENTRY_LENGTH = 64;
  * The locale to record for a request: the client's highest-weighted well-formed
  * tag, or the authored collection's locale when there is none.
  */
-export function resolveJoinLocale(acceptLanguage: string | null): string {
-  return preferredLanguageTag(acceptLanguage) ?? getFoundationalCollectionMeta().locale;
+export async function resolveJoinLocale(acceptLanguage: string | null): Promise<string> {
+  // The collection's locale is read only when the header offers nothing, so a
+  // well-formed header costs no query.
+  return preferredLanguageTag(acceptLanguage) ?? (await getFoundationalCollectionMeta()).locale;
 }
 
 /**

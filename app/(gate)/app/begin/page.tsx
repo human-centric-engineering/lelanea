@@ -62,7 +62,7 @@ function GateDocument({ document: doc }: { document: FoundationalDocumentDetail 
  *
  * ## The two documents are rendered here, not in the view
  *
- * `AuthoredBlocks` is a server component and the prose is memoised content;
+ * `AuthoredBlocks` is a server component and the prose is read from the database;
  * rendering it here and handing the nodes to the client view means the words
  * are never serialised as props and never re-rendered on a click. The view
  * shows one at a time — see `BeginView` for why it is steps and not a page.
@@ -76,7 +76,11 @@ export default async function BeginPage() {
   const verify = verificationRedirectFor(session.user);
   if (verify) redirect(verify);
 
-  const status = await getGateStatus(session.user.id);
+  const [status, disclaimer, terms] = await Promise.all([
+    getGateStatus(session.user.id),
+    requireDocument(DOCUMENT_FOR_KIND.disclaimer),
+    requireDocument(DOCUMENT_FOR_KIND.terms),
+  ]);
 
   return (
     <MaintenanceWrapperWithAdminNotice>
@@ -95,8 +99,8 @@ export default async function BeginPage() {
         <BeginView
           initialStatus={toGateStatusJson(status)}
           documents={{
-            disclaimer: <GateDocument document={requireDocument(DOCUMENT_FOR_KIND.disclaimer)} />,
-            terms: <GateDocument document={requireDocument(DOCUMENT_FOR_KIND.terms)} />,
+            disclaimer: <GateDocument document={disclaimer} />,
+            terms: <GateDocument document={terms} />,
           }}
         />
       </main>
