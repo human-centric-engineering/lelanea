@@ -23,13 +23,11 @@
  * the card shows about it: the reading, how Lelañea came to it, what she was
  * looking for, and the heading it is filed under.
  *
- * **An Art. 9 note matches on the slot's wording only — never the reading and
- * never the reasoning.** The reading is a sentinel, so matching it would find
- * every special-category note for a search on "redacted". The reasoning is
- * worse: Daybreak's `fill_slot` masks `value` and nothing else, so the
- * reasoning note is stored as written (**t-80**, raised on Daybreak too). A
- * search that matched it would answer "is there a health note that mentions
- * X?" with a yes, about words the page tells the person were never kept.
+ * **A withheld note never matches on its reading**, which is a sentinel:
+ * matching it would find every special-category note for a search on
+ * "redacted". Its reasoning note is searched like any other since **t-80**,
+ * because the card now shows it as the summary that was kept — excluding it
+ * was right only while the page claimed those words were never kept.
  *
  * The version before the current one is not searched. A match has to be
  * visible in the row it produced, and a list row shows the current reading.
@@ -42,7 +40,6 @@
 
 import { z } from 'zod';
 
-import { SLOT_SENSITIVITY } from '@/lib/framework/data-slots/vocabulary';
 import { MAX_SLUG_LENGTH, slotSlugSchema } from '@/lib/app/slots/validation';
 import {
   NOTES_LAYOUTS,
@@ -107,8 +104,8 @@ export function noteHeading(note: Note): string {
  */
 function searchableText(note: Note): string {
   const wording = [note.slotSlug.replace(/_/g, ' '), note.asking ?? '', noteHeading(note)];
-  if (note.sensitivity === SLOT_SENSITIVITY.special_category) return fold(wording.join('\n'));
-  return fold([note.value, note.reasoningNote, ...wording].join('\n'));
+  const reading = note.withheld ? [] : [note.value];
+  return fold([...reading, note.reasoningNote, ...wording].join('\n'));
 }
 
 function matchesSearch(note: Note, terms: string[]): boolean {

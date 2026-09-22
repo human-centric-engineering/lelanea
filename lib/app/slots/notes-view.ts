@@ -107,18 +107,26 @@ export interface Note {
   /** The plain-language reading. A sentinel when `withheld`. */
   value: string;
   /**
-   * The words were never stored. True for a `special_category` slot, where
-   * masking-before-storage replaces the prose with a sentinel at capture
-   * (`lib/framework/data-slots/capabilities/masking.ts`) — so what the app holds
-   * really is only the fact that something was noted. The panel says that in a
-   * sentence rather than showing `<redacted: special_category>`.
+   * The reading was never stored. True for a `special_category` slot, where
+   * masking-before-storage replaces it with a sentinel at capture
+   * (`lib/framework/data-slots/capabilities/masking.ts`). The panel says that in
+   * a sentence rather than showing `<redacted: special_category>`.
+   *
+   * It is not "nothing was kept": masking covers the value only, so the
+   * reasoning note — a paraphrase of what was said — is stored and shown. See
+   * {@link Note.reasoningNote}.
    */
   withheld: boolean;
   /** 1–10, as she judged it. */
   confidence: number;
   /** The stored classifier; {@link noteSourceWords} turns it into a sentence. */
   sourceType: string;
-  /** Her one line on how the reading was made. */
+  /**
+   * Her one line on how the reading was made — a paraphrase of what was said.
+   * On a `withheld` note it is the only trace of the words, and is shown as the
+   * summary that was kept (owner ruling, t-80): masking at capture covers the
+   * value and not this line.
+   */
   reasoningNote: string;
   version: number;
   capturedAt: string;

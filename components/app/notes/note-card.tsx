@@ -33,9 +33,9 @@ import { cn } from '@/lib/utils';
  * ## Correcting, and the one note that cannot be corrected
  *
  * `correctable` is the server's answer and this component does not second-guess
- * it — a retired slot (she is no longer asking) and an Art. 9 slot (the words
- * were never stored, so there is nothing to correct and a correction would put
- * them at rest) both come back false, with the route refusing the same two
+ * it — a retired slot (she is no longer asking) and an Art. 9 slot (the reading
+ * was never stored, so there is nothing to correct and a correction would put
+ * it at rest) both come back false, with the route refusing the same two
  * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
  * card**, including those, because it is the door that still works: `HB10` —
  * the guard ships with its remedy.
@@ -223,9 +223,22 @@ export function formatWhen(iso: string): string {
 /**
  * What a withheld note says instead of its sentinel. Exported because the list
  * row says the same thing, and two copies of it would drift.
+ *
+ * ## A summary was kept, and it says so (t-80)
+ *
+ * It used to say Lelañea "kept no record of what you said", which was untrue:
+ * masking at capture covers the reading only, and the reasoning note is stored
+ * as written — a paraphrase of what was said. The owner's ruling was to show
+ * that paraphrase rather than hide it, so this line points at it instead of
+ * denying it exists.
  */
-export const WITHHELD_WORDS =
-  'Lelañea noticed something here and deliberately kept no record of what you said. Health, feeling and belief are left out of the written record.';
+export const WITHHELD_WORDS = 'Lelañea kept a summary of this rather than your exact words.';
+
+/**
+ * Where that summary is — the card only. The list row shows {@link WITHHELD_WORDS}
+ * alone, because the fold this names exists only once the card is open.
+ */
+export const WITHHELD_POINTER = 'It is under “How Lelañea came to this”.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -250,7 +263,7 @@ function excerpt(text: string): string {
  */
 export function askText(note: Note): string {
   if (note.withheld) {
-    return 'There is something you noted about me but kept no record of. Can we talk about that?';
+    return 'There is something you noted about me without keeping my exact words. Can we talk about that?';
   }
   return `You wrote down: “${excerpt(note.value)}”. Can we talk about that?`;
 }
@@ -595,7 +608,7 @@ export function NoteCard({
                 'text-[var(--color-heading)]'
               )}
             >
-              {WITHHELD_WORDS}
+              {WITHHELD_WORDS} {WITHHELD_POINTER}
             </p>
           ) : (
             <p
@@ -635,7 +648,7 @@ export function NoteCard({
             >
               <p className="whitespace-pre-line text-[var(--color-heading)]">
                 {note.previous.withheld
-                  ? 'Something Lelañea kept no record of.'
+                  ? 'Something Lelañea noted without keeping your exact words.'
                   : note.previous.value}
               </p>
               <p>

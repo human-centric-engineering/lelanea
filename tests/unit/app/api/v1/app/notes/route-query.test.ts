@@ -138,11 +138,11 @@ describe('a group filter never reaches a hidden group', () => {
   });
 });
 
-describe('a search never matches words an Art. 9 note says were not kept', () => {
-  it('does not match its reasoning, while a standard note with the same word is found', async () => {
+describe('a search on a blanked-out note matches what its card shows', () => {
+  it('matches its summary, which the card shows since t-80, beside a standard note', async () => {
     const { body } = await read('?q=migraines');
 
-    expect(slugs(body)).toEqual(['life_work']);
+    expect(slugs(body).sort()).toEqual(['life_physical_health', 'life_work']);
   });
 
   it('does not match its stored sentinel', async () => {

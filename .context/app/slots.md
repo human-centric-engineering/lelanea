@@ -721,9 +721,8 @@ still the person's; but filing a fresh reading against a question nobody will
 ask again is a write nothing will read.
 
 **An Art. 9 note cannot be corrected**, and this is the one worth reading twice.
-`special_category` means masking-before-storage already replaced the prose with
-a sentinel _at capture_, so what the app holds is that something was noted and
-nothing else. A correction runs through `appendSlotValue`, which is the raw
+`special_category` means masking-before-storage already replaced the reading
+with a sentinel _at capture_. A correction runs through `appendSlotValue`, which is the raw
 engine and masks nothing — so "let them fix it" would put raw health and belief
 prose at rest through the one door built to keep it out, and masking the
 correction instead would tell someone their words were kept when they were
@@ -731,6 +730,18 @@ discarded. Refused, with the remedy shipped beside it (`HB10`): _ask her about
 it_, which routes the words back through the capture path where the masking
 applies. The panel says what happened in a sentence rather than printing
 `<redacted: special_category>`.
+
+**A blanked-out note shows its summary** (t-80, owner ruling 21 Sept 2026).
+Masking covers `value` and nothing else — Daybreak's `fill_slot` passes the
+reasoning note straight to `appendSlotValue` — and her instructions ask for that
+line as a paraphrase of what the person said ([`voice.md`](./voice.md)). The card
+used to say nothing was kept, then print the gist under "How Lelañea came to
+this". The ruling was to keep the gist rather than hide it — the exact words are
+gone, the summary is not, and a note with neither is worth nothing — so the card
+now says exactly that: _a summary rather than your exact words_, and where to find
+it. Nothing on the page may say the words were never kept. Whether the reasoning
+should be masked at capture too is Daybreak's question,
+[`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269).
 
 **A correction cannot mint.** The route refuses any slug with no head of the
 caller's own — and refuses a hidden slug **with the same 404**, because
@@ -918,11 +929,10 @@ notes.** No pagination either: hiding half someone's record behind a control is
 a worse answer to §3.19 than a long page.
 
 **What a search matches.** The reading, how Lelañea came to it, what she was
-looking for, the tag and the heading. **An Art. 9 note matches on the slot's
-wording only — never the sentinel, never the reasoning.** Daybreak's `fill_slot`
-masks `value` and nothing else, so the reasoning note is stored as written
-(**t-80**, raised on Daybreak too); matching it would answer "is there a health
-note mentioning X?" about words the page says were never kept. The previous
+looking for, the tag and the heading. **A blanked-out note never matches on its
+reading**, which is a sentinel — a search for "redacted" would find all of them.
+Its summary is searched like any other since t-80, because the card shows it;
+excluding it was right only while the page claimed those words were never kept. The previous
 version is not searched: a match has to be visible in the row it produced.
 
 **The search text is never logged.** The route logs counts, whether a search
@@ -988,8 +998,7 @@ yet"_, which gets no controls at all.
 **To look at it with a real record**, `npx tsx --env-file=.env.local
 scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
 fortnight's worth: every visible group, a corrected and a twice-revised note,
-two Art. 9 notes (sentinel value, unmasked reasoning — the case search must not
-match), two of her own headings and one hidden development note that must never
+two blanked-out notes (sentinel value, the summary shown beside it), two of her own headings and one hidden development note that must never
 appear. Dev only; nothing runs it.
 
 ### What a person is not shown

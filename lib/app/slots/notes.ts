@@ -35,11 +35,18 @@
  *
  * Nine slots in the taxonomy are `special_category` — physical, emotional and
  * spiritual health, GDPR Art. 9. For those, masking-before-storage replaces the
- * prose with a sentinel *at capture*
- * (`lib/framework/data-slots/capabilities/masking.ts`), so what the app holds is
- * the fact that something was noted and nothing else. That is the point of the
+ * reading with a sentinel *at capture*
+ * (`lib/framework/data-slots/capabilities/masking.ts`). That is the point of the
  * classification, and it is why the panel shows a sentence rather than
  * `<redacted: special_category>`.
+ *
+ * **The reading, and only the reading.** Masking covers `value` and nothing
+ * else: the reasoning note is stored as she wrote it, a paraphrase of what the
+ * person said (`voice.md`). So what the app keeps is a summary, not "nothing",
+ * and it is shown — owner ruling, t-80: the gist is the compromise that keeps
+ * the note worth having. Nothing here may say the words were never kept.
+ * Whether to mask the reasoning at capture as well is Daybreak's question
+ * ([`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269)).
  *
  * A correction would run through {@link appendSlotValue}, which is the raw
  * engine and masks nothing. So the obvious "let them fix it" puts raw health and
@@ -348,7 +355,10 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     // Printed verbatim by the panel, so it follows the panel's register:
     // Lelañea by name, never "she" or "her" (`.context/app/slots.md`).
     throw new ConflictError(
-      'Lelañea deliberately keeps no record of what you said here, so there is nothing to correct. Ask Lelañea about it instead, in your own words.',
+      // Says nothing about what is stored: this refusal is by classification,
+      // so it also reaches a note captured before its slot was marked, whose
+      // words were kept (`/code-review`, t-80).
+      'Notes on this subject can’t be corrected here. Ask Lelañea about it instead, in your own words.',
       { reason: 'kept_out_of_the_record' }
     );
   }
