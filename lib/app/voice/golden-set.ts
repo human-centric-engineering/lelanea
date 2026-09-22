@@ -12,7 +12,7 @@
  * @see .context/app/voice.md
  */
 
-import { getVoiceGoldenSet, type VoiceGoldenPrompt } from '@/lib/app/content';
+import type { VoiceGoldenPrompt, VoiceGoldenSet } from '@/lib/app/content';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 
 /**
@@ -119,11 +119,12 @@ export interface GoldenDatasetCase {
 /**
  * Project the authored prompts onto dataset cases.
  *
- * Takes the set as an argument — defaulting to the authored one — for the same
- * reason `composeFingerprintProfileSections()` does: the seed's guards depend on
- * a degenerate set being *reachable*, and a function that could only ever be
- * handed the real file would make them untestable and therefore decorative
- * (`fp6`).
+ * Takes the set as an argument, with no default. It used to default to the
+ * authored file, which made this module — under `lib/app/voice` — a file
+ * reader at runtime (t-88). Its one production caller is seed 004, where
+ * reading seed material is the point, so the default bought nothing and cost
+ * the done-when. The argument also keeps the seed's guards testable: they
+ * depend on a degenerate set being *reachable* (`fp6`).
  *
  * **No `expectedOutput`.** Whether an answer reads as her is her judgement on a
  * deployed build, not a string comparison — so every reference-required grader
@@ -131,7 +132,7 @@ export interface GoldenDatasetCase {
  * gap. Sunrise's run-create preflight refuses one against a dataset like this,
  * and a comparison attaches only the brand-voice judge, which needs no reference.
  */
-export function projectGoldenSetCases(goldenSet = getVoiceGoldenSet()): GoldenDatasetCase[] {
+export function projectGoldenSetCases(goldenSet: VoiceGoldenSet): GoldenDatasetCase[] {
   return goldenSet.prompts.map((prompt, index) => ({
     position: index,
     input: prompt.prompt,

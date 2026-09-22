@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
 import { VoiceComparisonBoard } from '@/components/app/admin/voice-comparison';
 import { GoldenSetDialog } from '@/components/app/admin/golden-set-dialog';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getGoldenSetAdminView } from '@/lib/app/voice/golden-set-admin';
 import { VOICE_COMPARISON_ENDPOINT, VOICE_PREFLIGHT_ENDPOINT } from '@/lib/app/voice/endpoint';
 import type { VoicePreflight } from '@/lib/app/voice/preflight';
 import type { VoiceComparisonSummary } from '@/lib/app/voice/comparison-admin';
@@ -62,29 +62,6 @@ async function getPreflight(): Promise<VoicePreflight | null> {
 }
 
 /**
- * The authored test set, narrowed to what the dialog renders.
- *
- * Mapped here rather than passed whole: `getVoiceGoldenSet()` returns the parsed
- * file including the dataset metadata and collection ids, none of which a reader
- * needs, and a client component's props are a surface worth keeping small.
- */
-function goldenSetView() {
-  const set = getVoiceGoldenSet();
-  return {
-    version: set.collection.version,
-    provenanceNote: set.provenance.note,
-    awaitingSignOffFrom: set.provenance.awaitingSignOffFrom ?? null,
-    prompts: set.prompts.map((entry) => ({
-      key: entry.key,
-      kind: entry.kind,
-      prompt: entry.prompt,
-      probe: entry.probe,
-    })),
-    controlInstructions: set.control.systemInstructions,
-  };
-}
-
-/**
  * No change to the voice ships without being read against the previous one (§05 t-28).
  *
  * A voice fingerprint is tuned by editing prose, and prose edits have no
@@ -125,7 +102,7 @@ export default async function VoiceComparisonPage() {
           </p>
         </div>
         <div className="shrink-0">
-          <GoldenSetDialog goldenSet={goldenSetView()} />
+          <GoldenSetDialog goldenSet={await getGoldenSetAdminView()} />
         </div>
       </header>
 

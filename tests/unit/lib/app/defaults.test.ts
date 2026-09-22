@@ -574,6 +574,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppUserBudget',
         'AppVoiceComparison',
         'AppVoiceComparisonArm',
+        'AppVoiceGoldenSet',
+        'AppVoiceGoldenSetRevision',
         'AppVoiceOverlay',
         'AppVoiceOverlayRevision',
         'AppVoiceOverlaySet',
@@ -676,6 +678,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppVoiceOverlaySetRevision',
         'AppVoiceOverlay',
         'AppVoiceOverlayRevision',
+        'AppVoiceGoldenSet',
+        'AppVoiceGoldenSetRevision',
         'AppTurnSlotWrite',
       ]);
       // The reason is shown to the data subject VERBATIM in `meta.excluded`, and

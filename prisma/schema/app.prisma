@@ -1510,3 +1510,63 @@ model AppVoiceOverlayRevision {
   @@index([editorId])
   @@map("app_voice_overlay_revision")
 }
+
+/// Which golden set is the current one, and whether she has signed it off
+/// (t-88). One row.
+///
+/// **It holds only what the dataset does not** (`fp4`, one owner per field).
+/// The prompts themselves live in the platform's `AiDataset` / `AiDatasetCase`,
+/// written by `prisma/seeds/app-lelanea/004-voice-golden-set.ts`, and the
+/// control's system instructions live on the control agent, reconciled by the
+/// same seed. Copying either here would be the two-writable-copies failure
+/// t-87 named; what was genuinely missing is the two things below.
+///
+/// `version` is the POINTER: a dataset's id is `lelanea-voice-golden-set-v` +
+/// this value, so this row is what decides which set a comparison runs and
+/// which one the admin page shows. Before t-88 the authored file decided it,
+/// which is why nothing in the database could answer the question.
+///
+/// `provenance` is the authored block, shown to whoever reads the set. The
+/// `status` column beside it is the operator's sign-off; the two answer
+/// different questions, exactly as on `app_voice_overlay_set`.
+model AppVoiceGoldenSet {
+  /// Stable identity, as authored: `lelanea_voice_golden_set`.
+  id          String                @id
+  title       String
+  /// The authored version, and the suffix of the dataset id it points at.
+  version     String
+  locale      String
+  /// `{ status, awaitingSignOffFrom, note }`, as authored.
+  provenance  Json
+  status      AppVoiceContentStatus @default(draft)
+  signedOffAt DateTime?
+  revision    Int                   @default(1)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  revisions AppVoiceGoldenSetRevision[]
+
+  @@map("app_voice_golden_set")
+}
+
+/// One revision of the golden set's pointer and provenance, whole (t-88).
+model AppVoiceGoldenSetRevision {
+  id            String                   @id @default(cuid())
+  setId         String
+  set           AppVoiceGoldenSet        @relation(fields: [setId], references: [id], onDelete: Cascade)
+  revision      Int
+  title         String
+  version       String
+  locale        String
+  provenance    Json
+  status        AppVoiceContentStatus
+  changedFields String[]
+  origin        AppContentRevisionOrigin
+  editorId      String?
+  changedAt     DateTime                 @default(now())
+
+  @@unique([setId, revision])
+  @@index([setId, changedAt])
+  @@index([editorId])
+  @@map("app_voice_golden_set_revision")
+}

@@ -181,6 +181,7 @@ export function registerLeafDriftProbes(): void {
     // exactly the same reason.
     'app_voice_overlay_set_revision',
     'app_voice_overlay_revision',
+    'app_voice_golden_set_revision',
   ]) {
     registerAppDriftProbe({
       name: `${table}_editorId_fkey (hand-written FK → user)`,

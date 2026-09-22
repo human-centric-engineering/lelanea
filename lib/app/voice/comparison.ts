@@ -76,7 +76,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { ValidationError } from '@/lib/api/errors';
 import { logger } from '@/lib/logging';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
 import {
   BRAND_VOICE_JUDGE_SLUG,
@@ -354,7 +354,7 @@ export interface QueuedComparison {
  * back.
  */
 export async function queueVoiceComparison(queuedByUserId: string): Promise<QueuedComparison> {
-  const goldenSet = getVoiceGoldenSet();
+  const pointer = await getGoldenSetPointer();
 
   const arms = await resolveVoiceArms();
   assertArmsComparable(arms);
@@ -364,14 +364,14 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
   // first. A version bump that has not been seeded yet lands here as a missing
   // dataset, which is the honest failure — the alternative is silently running
   // the previous version's questions and filing the answers under the new one.
-  const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+  const datasetId = goldenSetDatasetId(pointer.version);
   const dataset = await prisma.aiDataset.findUnique({
     where: { id: datasetId },
-    select: { id: true, contentHash: true, caseCount: true },
+    select: { id: true, name: true, contentHash: true, caseCount: true },
   });
   if (!dataset || dataset.caseCount === 0) {
     throw new ValidationError(
-      `The golden set v${goldenSet.collection.version} is not in this install (dataset "${datasetId}"${
+      `The golden set v${pointer.version} is not in this install (dataset "${datasetId}"${
         dataset ? ' exists but holds no cases' : ''
       }), so there is nothing to ask either arm. ${RESEED_REMEDY}`
     );
@@ -408,7 +408,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
   const result = await prisma.$transaction(async (tx) => {
     const comparison = await tx.appVoiceComparison.create({
       data: {
-        goldenSetVersion: goldenSet.collection.version,
+        goldenSetVersion: pointer.version,
         datasetContentHash: dataset.contentHash,
       },
       select: { id: true },
@@ -419,7 +419,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
       const run = await tx.aiEvaluationRun.create({
         data: {
           userId: queuedByUserId,
-          name: `${goldenSet.dataset.name} · ${VOICE_ARM_LABELS[arm.arm]}`,
+          name: `${dataset.name} · ${VOICE_ARM_LABELS[arm.arm]}`,
           description:
             arm.fingerprintVersion === null
               ? 'The control arm of a voice comparison: the same questions, a bare model, no fingerprint.'
@@ -456,7 +456,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
 
     return {
       comparisonId: comparison.id,
-      goldenSetVersion: goldenSet.collection.version,
+      goldenSetVersion: pointer.version,
       caseCount: dataset.caseCount,
       arms: queued,
     };
