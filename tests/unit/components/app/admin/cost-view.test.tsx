@@ -234,7 +234,7 @@ describe('ConversationTurnsView', () => {
         reading={{ conversationId: 'c', window: WINDOW, truncated: false, turns: [] }}
       />
     );
-    expect(screen.getByText(/No turns in this conversation started in/)).toBeTruthy();
+    expect(screen.getByText(/No turns in this conversation had any cost in/)).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 });
@@ -499,5 +499,54 @@ describe('CostOverview — round 1 of review (t-97)', () => {
       />
     );
     expect(screen.getByText('past limit by <$0.01')).toBeTruthy();
+  });
+});
+
+describe('round 3 of review (t-97)', () => {
+  it('holds the people half at zero against float noise from the subtraction', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>('user', [], {
+            totals: totals(0.1 + 0.2, 0.30000000000000004 + 1e-17),
+          }),
+        })}
+      />
+    );
+    expect(figureOf('people')).toBe('$0.00');
+  });
+
+  it('keys turn rows by person and id, so two people\u2019s same id are two rows', () => {
+    const turn = {
+      turnId: 'turn-1',
+      seat: 'conversation',
+      status: 'completed',
+      attempts: 1,
+      errorCode: null,
+      model: null,
+      startedAt: '2026-09-22T10:00:00.000Z',
+      completedAt: null,
+      costUsd: 0.1,
+      costRows: 1,
+      unpricedRows: 0,
+    };
+    render(
+      <ConversationTurnsView
+        reading={{
+          conversationId: 'c',
+          window: WINDOW,
+          truncated: false,
+          turns: [
+            { ...turn, userId: ADA },
+            { ...turn, userId: 'cmu000000000000000000bea' },
+          ],
+        }}
+      />
+    );
+    const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(links).toEqual([
+      `/admin/app/cost/turns/${ADA}/turn-1`,
+      '/admin/app/cost/turns/cmu000000000000000000bea/turn-1',
+    ]);
   });
 });

@@ -140,7 +140,9 @@ function Headline({ breakdown }: { breakdown: CostBreakdown }) {
         <p className="text-muted-foreground text-xs">Incurred by people</p>
         <p className="text-xl font-semibold tabular-nums" data-figure="people">
           {figure({
-            costUsd: totals.costUsd - totals.platformCostUsd,
+            // Two float sums over different rows, subtracted: held at zero so
+            // noise never reads as "<$0.01" or "-$0.00" (/code-review round 3).
+            costUsd: Math.max(0, totals.costUsd - totals.platformCostUsd),
             // Each half carries only its own unpriced rows, so one side's
             // missing price never casts doubt on the other's figure.
             unpricedRows: totals.unpricedRows - totals.platformUnpricedRows,
@@ -408,15 +410,17 @@ export function ConversationTurnsView({ reading }: { reading: ConversationTurnsR
   if (reading.turns.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        No turns in this conversation started in {windowLabel(reading.window)}.
+        No turns in this conversation had any cost in {windowLabel(reading.window)}.
       </p>
     );
   }
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-sm">
-        Turns that started in {windowLabel(reading.window)}, costliest first. Each figure is the
-        turn&rsquo;s whole cost — its reply and everything it caused on the side.
+        Turns with cost in this conversation in {windowLabel(reading.window)}, costliest first. Each
+        figure is the turn&rsquo;s whole cost — its reply and everything it caused on the side,
+        every attempt. Costs in the conversation tied to no turn are counted in its figure on the
+        cost page but are not listed here.
       </p>
       <Table>
         <TableHeader>
@@ -430,7 +434,7 @@ export function ConversationTurnsView({ reading }: { reading: ConversationTurnsR
         </TableHeader>
         <TableBody>
           {reading.turns.map((turn) => (
-            <TableRow key={turn.turnId} data-turn={turn.turnId}>
+            <TableRow key={`${turn.userId}:${turn.turnId}`} data-turn={turn.turnId}>
               <TableCell>
                 <Link
                   href={costTurnPage(turn.userId, turn.turnId)}

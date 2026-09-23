@@ -47,7 +47,9 @@ async function breakdown<G extends CostGroup>(
  */
 export default async function CostAdminPage() {
   const [byUser, byConversation, bySeat, byModel, byDay] = await Promise.all([
-    breakdown<PersonGroup>('user'),
+    // At the API's maximum too: a person is flagged only if they are listed, and
+    // the 101st costliest can be at their limit (/code-review round 3).
+    breakdown<PersonGroup>('user', MAX_METER_GROUPS),
     // As many as the API gives: the runaway flag measures against the median of
     // the conversations LISTED, and a list cut to the costliest 100 would make
     // the costliest typical (/code-review round 2).

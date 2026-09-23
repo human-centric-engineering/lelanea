@@ -160,6 +160,12 @@ cannot say which person is running away.
 | Every judgement: floors, limits, runaways              | `lib/app/agent/cost-view.ts`                                                                                   |
 | The reads they use, and the enrichment that feeds them | `lib/app/agent/metering.ts`; routes in [`agent.md`](./agent.md#api--what-f-budget-and-f-conversation-build-on) |
 
+**What the conversation page lists, and what it does not.** The turns with cost
+in that conversation in the window — including one whose attempt started just
+before the 1st, or that was retried — each at its whole cost. Rows in the
+conversation tied to no turn are counted in its figure on the month page but
+not listed, and the page says so.
+
 **This UTC month, three levels.** The page shows the total, then who (each
 person against their limit), then which conversations, then seat, model and
 day. A conversation opens to its turns, costliest first. A turn opens to every
@@ -175,9 +181,10 @@ attempt's rows with no time bound, read in batches of 200 turns one after
 another. A runaway of thousands of turns is a queue of small reads, never one
 statement near Postgres's parameter limit.
 
-The month page makes five list reads, one per dimension, all at once —
-conversations at the API's maximum of 500, because the runaway flag's
-"typical" is the median of the conversations listed. The API enriches each
+The month page makes five list reads, one per dimension, all at once — people
+and conversations at the API's maximum of 500, because a person is flagged
+only if listed and the runaway flag's "typical" is the median of the
+conversations listed. The API enriches each
 list in the same request (a person's name and limit, a conversation's title and
 owner), which is what the enrichment exists for. The drill-down pages make one read each. Each read fails on its own
 and says so where its table would be.

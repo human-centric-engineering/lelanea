@@ -16,6 +16,13 @@ vi.mock('@/lib/api/server-fetch', () => ({
   parseApiResponse: vi.fn(),
 }));
 
+const notFound = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  })
+);
+vi.mock('next/navigation', () => ({ notFound }));
+
 vi.mock('@/components/app/admin/cost-view', () => ({
   ConversationTurnsView: (props: { reading: { conversationId: string } }) => (
     <div data-testid="turns" data-conversation={props.reading.conversationId} />
@@ -35,7 +42,7 @@ beforeEach(() => {
 
 describe('CostConversationPage', () => {
   it("reads that conversation's turns in one request, and hands them down", async () => {
-    vi.mocked(serverFetch).mockResolvedValue({ ok: true } as Response);
+    vi.mocked(serverFetch).mockResolvedValue({ ok: true, status: 200 } as Response);
     vi.mocked(parseApiResponse).mockResolvedValue({
       success: true,
       data: { conversationId: CONVERSATION, turns: [], truncated: false },
@@ -54,11 +61,14 @@ describe('CostConversationPage', () => {
   });
 
   it.each([
-    ['a refused read', () => vi.mocked(serverFetch).mockResolvedValue({ ok: false } as Response)],
+    [
+      'a refused read',
+      () => vi.mocked(serverFetch).mockResolvedValue({ ok: false, status: 500 } as Response),
+    ],
     [
       'an envelope that is not a success',
       () => {
-        vi.mocked(serverFetch).mockResolvedValue({ ok: true } as Response);
+        vi.mocked(serverFetch).mockResolvedValue({ ok: true, status: 200 } as Response);
         vi.mocked(parseApiResponse).mockResolvedValue({ success: false } as never);
       },
     ],
@@ -68,5 +78,11 @@ describe('CostConversationPage', () => {
     render(await page());
     expect(screen.getByRole('alert').textContent).toContain('did not load');
     expect(screen.queryByTestId('turns')).toBeNull();
+  });
+
+  it.each([400, 404])('is a 404 for an id the route refuses with %s', async (status) => {
+    vi.mocked(serverFetch).mockResolvedValue({ ok: false, status } as Response);
+    await expect(page()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(notFound).toHaveBeenCalledTimes(1);
   });
 });
