@@ -538,14 +538,15 @@ globally.
 
 ### API — what f-budget and f-conversation build on
 
-| Route                                                        | Who    | Returns                                                               |
-| ------------------------------------------------------------ | ------ | --------------------------------------------------------------------- |
-| `GET /api/v1/app/usage`                                      | member | own month to date: totals, `ceiling`, `remainingUsd`, `fractionUsed`  |
-| `GET /api/v1/app/usage/breakdown?by=&from=&to=&limit=`       | member | own breakdown by `conversation` · `seat` · `model` · `day`            |
-| `GET /api/v1/app/usage/turns/:turnId`                        | member | own turn's record; 404 for any id they did not take                   |
-| `GET /api/v1/admin/app/metering?by=&userId=&from=&to=`       | admin  | anyone's or everyone's breakdown, adding `by=user`; `platformCostUsd` |
-| `GET /api/v1/admin/app/metering/users/:userId`               | admin  | that person's month to date; 404 for nobody                           |
-| `GET /api/v1/admin/app/metering/users/:userId/turns/:turnId` | admin  | that person's turn's record                                           |
+| Route                                                                           | Who    | Returns                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/app/usage`                                                         | member | own month to date: totals, `ceiling`, `remainingUsd`, `fractionUsed`                                                                                                                                   |
+| `GET /api/v1/app/usage/breakdown?by=&from=&to=&limit=`                          | member | own breakdown by `conversation` · `seat` · `model` · `day`                                                                                                                                             |
+| `GET /api/v1/app/usage/turns/:turnId`                                           | member | own turn's record; 404 for any id they did not take                                                                                                                                                    |
+| `GET /api/v1/admin/app/metering?by=&userId=&from=&to=`                          | admin  | anyone's or everyone's breakdown, adding `by=user`; `platformCostUsd`. By user, each group carries `user` and its effective `ceiling`; by conversation, `conversation: { title, userId, user }` (t-97) |
+| `GET /api/v1/admin/app/metering/users/:userId`                                  | admin  | that person's month to date; 404 for nobody                                                                                                                                                            |
+| `GET /api/v1/admin/app/metering/users/:userId/turns/:turnId`                    | admin  | that person's turn's record                                                                                                                                                                            |
+| `GET /api/v1/admin/app/metering/conversations/:conversationId?from=&to=&limit=` | admin  | the turns that started in the window, each with its whole cost and its person's id, costliest first (t-97)                                                                                             |
 
 Member routes key every read on the session's id — `ownership: 'self'`, not
 `'policy'`, because the policy widens to everyone for an admin. An admin reads
@@ -556,6 +557,20 @@ above 1 when over it.
 The conversation join is an **ownerless-surface exception, by design**
 (`lib/app/leaf-ci.ts`): it reads only `contextType` / `contextId` of a conversation
 a cost row already points at, and which rows are read is decided on the cost log.
+The admin by-conversation breakdown's enrichment (t-97) is the same shape: it
+reads the `title` and `userId` of exactly the conversations the breakdown
+returned, for an admin, behind `withAdminAuth`.
+
+**The admin reads are enriched so the cost view never fetches per row.** A
+by-user breakdown names each person and gives their effective ceiling from one
+read of the overrides for the listed ids (`getEffectiveMonthlyCeilings`); a
+by-conversation one gives each title and owner in two reads. A conversation's
+turns (`getConversationTurns`) are found by the `app_turn.conversationId` index,
+and each turn's cost is **the same rows `getTurnMeter` finds** — tagged with the
+turn id for that person, plus its reply's embedding, every attempt's — so the
+drill-down and the turn page cannot disagree. That is a turn's whole cost, not
+its cost inside the window: a conversation whose turns straddle the 1st can list
+a little more than its month's group. See [`budget.md`](./budget.md).
 
 ### Watch item: no `(userId, createdAt)` index
 

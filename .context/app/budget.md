@@ -145,9 +145,62 @@ the thing that stays on screen. The rules
 live in [`shell.md`](./shell.md#the-spend-meter-reads-when-a-person-could-have-spent);
 the judgement is `meterReading()` beside the page's own in `usage-view.ts`.
 
-## Still to come on this feature
+## The admin cost view (t-97)
 
-- **t-96** — the `ceiling_reached` ending in her register. Today that frame
-  keeps the platform's contract words, which is what `turns.tsx` says it does
-  for a code it does not know.
-- **t-97** — the first admin cost view, per person and per conversation.
+`/admin/app/cost`, in the Lelañea admin nav as **Cost** — its own page beside
+"Deadlines & budgets" rather than a tab on it (owner, 22 Sept 2026): that page is
+settings you write; this is a reading you interrogate. Sunrise's
+`/admin/orchestration/costs` is per agent and per model, and with one agent it
+cannot say which person is running away.
+
+| Piece                                                  | Where                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| The three pages — month, conversation, turn            | `app/admin/app/cost/**`                                                                                        |
+| The tables (server components, platform chrome)        | `components/app/admin/cost-view.tsx`                                                                           |
+| Every judgement: floors, limits, runaways              | `lib/app/agent/cost-view.ts`                                                                                   |
+| The reads they use, and the enrichment that feeds them | `lib/app/agent/metering.ts`; routes in [`agent.md`](./agent.md#api--what-f-budget-and-f-conversation-build-on) |
+
+**This UTC month, three levels.** The page shows the total, then who (each
+person against their limit), then which conversations, then seat, model and
+day. A conversation opens to its turns, costliest first. A turn opens to every
+row it cost, with her reply and its side costs apart: a search's embedding, a
+summary, tool calls, an earlier attempt. That last page is the first reader the
+admin turn route has had since #66.
+
+**No per-row fetch.** The month page makes five list reads, one per dimension,
+all at once. The API enriches each list in the same request (a person's name
+and limit, a conversation's title and owner), which is what the enrichment
+exists for. The drill-down pages make one read each. Each read fails on its own
+and says so where its table would be.
+
+**Three things it must not get wrong:**
+
+- **Platform cost is named, never attributed and never dropped.** Rows with no
+  person are knowledge ingestion, scheduled work, and an erased account's rows
+  (`SET NULL`). They are `platformCostUsd`, shown as their own figure and never
+  listed as a person (`people()` leaves the null group out).
+- **A figure with unpriced rows is a floor**, and says "at least" (ruling 4).
+  Every amount goes through `figure()`, so no row can forget it.
+- **The headline is the API's total, never a re-sum of the rows listed.** Those
+  totals are computed apart so they cover every row even when the list is cut,
+  and a cut list says it is cut and that the totals are not.
+
+**What is flagged, from the data already returned.** No new alerting, email or
+job.
+
+- **A person at or past their limit**, on the gate's own test: at it, the next
+  turn is refused. Past it is reachable, because the crossing turn completes, so
+  the badge says by how much.
+- **A conversation at 3× the median** of those listed (`RUNAWAY_MULTIPLE`). The
+  median rather than the mean, because a runaway drags the mean up towards
+  itself and hides. No fixed dollar figure, because what is normal moves with
+  the model and the prices. It needs at least four conversations to have a
+  typical one, and otherwise flags nothing rather than everything. Revisit when
+  real months give a shape.
+
+## The monthly-limit ending (t-96)
+
+The conversation's side of the limit — what a person reads when a turn ends on
+`ceiling_reached` — is in her register with the figures and the reset date. It
+is recorded beside the other four endings in
+[`conversation.md`](./conversation.md).
