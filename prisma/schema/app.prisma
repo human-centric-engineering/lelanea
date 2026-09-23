@@ -638,8 +638,8 @@ model AppSafetyEvent {
 }
 
 /// Whether crisis content has been signed off (f-safety t-63). The same two
-/// words the bundled file's `provenance.status` uses, so a resource read from
-/// either place carries one vocabulary.
+/// words the authored seed file's `provenance.status` uses, so a status that
+/// arrives by seed and one an admin sets carry one vocabulary.
 enum AppCrisisContentStatus {
   draft
   signed_off
@@ -650,11 +650,13 @@ enum AppCrisisContentStatus {
 /// The words every crisis resource shares, and the international directory
 /// (f-safety t-63; product description §12). One row, `slug = 'global'`.
 ///
-/// **This row is what makes the database the source.** While it is absent, the
-/// resolver serves the bundled `seed-data/drafted/lelanea_crisis_resources.json`; once it
-/// exists, the regions below are the whole list — including none, if an admin
-/// removed them all. The seed writes it together with the regions, once, and
-/// never again (`fp4`), so an admin's removal is not undone by a re-seed.
+/// **This row is the only source there is.** While it is absent a crisis turn
+/// FAILS — t-88 removed the bundled fallback, so nothing is served in its
+/// place; `20260929100200_app_crisis_resources_data` writes it in every
+/// environment for that reason. Once it exists, the regions below are the
+/// whole list — including none, if an admin removed them all. The seed writes
+/// it together with the regions, once, and never again (`fp4`), so an admin's
+/// removal is not undone by a re-seed.
 ///
 /// **Any edit returns it to `draft`**, and only a sign-off moves it to
 /// `signed_off`. Who edited and who signed off is in the admin audit log, not
@@ -690,8 +692,9 @@ model AppCrisisCopy {
 /// subtag of a person's language preference. `services` is an ordered JSON
 /// array of `{ name, contact, hours }`, validated on every write and every
 /// read (`lib/validations/app-crisis-resources.ts`); a row that fails the read
-/// check sends the whole resource to the bundled file rather than show a
-/// half-formed list.
+/// check THROWS, failing every crisis turn rather than show a half-formed
+/// list — there is no bundled file left to fall back to, and the admin page
+/// says so while any row is malformed.
 ///
 /// Draft/sign-off and version exactly as on `AppCrisisCopy`. Holds nothing about
 /// anyone; an EXCLUSION in `lib/app/leaf-data-export.ts`.

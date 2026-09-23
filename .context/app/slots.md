@@ -211,10 +211,12 @@ general rule is in [`database-changes.md`](./database-changes.md).
 
 ## Anti-patterns
 
-**Do not fall back to the bundled file at read time.** The crisis resource does
-(`lib/app/safety/resources-store.ts`) because a crisis turn must never depend on
-a database read succeeding. A slot definition is not that, and a fallback would
-be actively wrong in the case that matters: on a database where an admin has
+**Do not fall back to the bundled file at read time.** Nothing in the app does
+any more — t-88 removed the last one, from the crisis resource
+(`lib/app/safety/resources-store.ts`), for the reason this module never had one:
+a second source that answers when the first cannot is a second thing to keep
+signed off, and it is the one nobody looks at. Here a fallback would also be
+actively wrong in the case that matters: on a database where an admin has
 retired a slot, a boot that failed to read the table would re-supply the retired
 slug and the sync would dutifully reactivate its projection.
 

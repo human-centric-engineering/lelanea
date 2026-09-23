@@ -14,10 +14,12 @@
  * `scope = global` on what it returns, and reconciles that into
  * `framework_slot_definition` (`lib/framework/data-slots/sync.ts`).
  *
- * **There is deliberately no fallback to the bundled file.** The crisis
- * resource has one because a crisis turn must never depend on a database read
- * succeeding (`lib/app/safety/resources-store.ts`); a slot definition is not
- * that. Falling back here would be actively wrong in the case that matters: on
+ * **There is deliberately no fallback to the bundled file.** Nothing in the
+ * app has one any more — t-88 removed the last of them, from the crisis
+ * resource (`lib/app/safety/resources-store.ts`), for the same reason this
+ * module never had one: a second copy of authored content is the copy nobody
+ * signs off, and it answers in place of the rows an admin just corrected.
+ * Falling back here would be actively wrong in the case that matters: on
  * a database where an admin has RETIRED a slot, a boot that failed to read the
  * table would re-supply the retired slug from the file and the sync would
  * dutifully reactivate its projection. An unseeded database therefore has no

@@ -3,9 +3,11 @@
  *
  * GET /api/v1/admin/app/safety/resources
  *
- * `{ seeded, copy, regions }`. `seeded: false` means the tables are empty and
- * every crisis turn is served the bundled file; the page says so, and every
- * write refuses 409 until `npm run db:seed` has run.
+ * `{ seeded, unservable, copy, regions }`. `seeded: false` means the tables
+ * are empty and every crisis turn FAILS — t-88 removed the bundled fallback,
+ * so nothing is served in its place. A non-null `unservable` means the stored
+ * rows cannot be read and turns are failing for that reason instead. The page
+ * says so in both cases, and every write refuses 409 until the rows exist.
  *
  * Authentication: admin. Rate limiting: the `admin` section tier from `proxy.ts`.
  *

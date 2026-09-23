@@ -81,13 +81,25 @@ beforeEach(() => {
 });
 
 describe('before the seed', () => {
-  it('says the built-in version is served and offers nothing to edit', () => {
+  it('says nobody can be answered at all, and offers nothing to edit', () => {
     render(
       <CrisisResourcesPanel
         initialView={{ seeded: false, unservable: null, copy: null, regions: [] }}
       />
     );
-    expect(screen.getByRole('alert')).toHaveTextContent(/npm run db:seed/);
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(/npm run db:seed/);
+    expect(alert).toHaveTextContent(/nobody in crisis can be answered at all/);
+
+    // The claim this banner must never make again. Until t-88 it said the
+    // built-in version was being served and was "safe" — so an operator
+    // restoring a database without these rows read it as a nicety and
+    // deprioritised it while every crisis turn was failing. There is no
+    // built-in version left to serve.
+    expect(alert).not.toHaveTextContent(/built into the code/);
+    expect(alert).not.toHaveTextContent(/safe/);
+
     expect(screen.queryByRole('button')).toBeNull();
   });
 });
@@ -247,15 +259,31 @@ describe('a country', () => {
     );
     expect(screen.getAllByText(/malformed/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Sign off v3' })).toBeNull();
+
+    // `contentFromRows` maps over EVERY region and throws on the first bad
+    // one, so a single malformed row fails every crisis turn rather than only
+    // that region's. The banner has to say that, and must not claim a
+    // fallback is covering it.
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/every crisis turn is failing right now/);
+    expect(alert).not.toHaveTextContent(/built into the code/);
   });
 
-  it('says so when the stored rows cannot be served at all', () => {
+  it('says turns are failing, not that a fallback is being served, when the rows cannot be read', () => {
     render(
       <CrisisResourcesPanel
         initialView={{ ...VIEW, unservable: 'internationalUrl: must be an https:// address' }}
       />
     );
-    expect(screen.getByRole('alert')).toHaveTextContent(/built into the code/);
-    expect(screen.getByRole('alert')).toHaveTextContent(/internationalUrl/);
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(/every crisis turn is failing right now/);
+    expect(alert).toHaveTextContent(/internationalUrl/);
+
+    // The same stale claim as the unseeded banner, and the same reason it is
+    // pinned negatively: this is read during an incident, and "everyone is
+    // being shown the version built into the code" would describe it as
+    // handled.
+    expect(alert).not.toHaveTextContent(/built into the code/);
   });
 });
