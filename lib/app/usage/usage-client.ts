@@ -47,13 +47,12 @@ export const USAGE_BREAKDOWN_ENDPOINT = '/api/v1/app/usage/breakdown';
 /**
  * Where a person reads it.
  *
- * **Three other places still hardcode this path** — the account menu's link
- * (`components/app/shell/account-menu.tsx`), the shell's tone map
- * (`view-tone.ts`) and the nav roster. This constant is not yet the single
- * source it ought to be, and saying otherwise would send the next reader
- * looking for imports that do not exist (/code-review). The page below uses
- * it, and t-95's topbar meter — which links here — is the change that can
- * reasonably unify the rest.
+ * **Other places still hardcode this path** — the account menu's link
+ * (`components/app/shell/account-menu.tsx`) and the shell's tone map
+ * (`view-tone.ts`). This constant is not yet the single source it ought to
+ * be, and saying otherwise would send the next reader looking for imports that
+ * do not exist (/code-review). The page and the topbar's spend meter
+ * (`spend-meter.tsx`, t-95) use it.
  */
 export const USAGE_PAGE = '/app/usage';
 
