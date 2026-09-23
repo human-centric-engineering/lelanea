@@ -1,4 +1,6 @@
 import type { TurnEnding } from '@/lib/app/agent/endings';
+import type { CeilingFigures } from '@/lib/app/conversation/events';
+import { money } from '@/lib/app/usage/usage-view';
 
 /**
  * Every word the conversation pane says of its own (§10 t-64, t-65).
@@ -19,7 +21,8 @@ import type { TurnEnding } from '@/lib/app/agent/endings';
  * plain about large things, no stacked apology, and it hands the next move
  * back to the person. `stillWorking` is the one refusal a person can meet from
  * this client (`TURN_IN_FLIGHT`: the earlier request is still being answered).
- * The `ceiling_reached` frame keeps its own words: it carries the figures.
+ * The `ceiling_reached` ending is {@link ceilingEnding}, beside them rather than
+ * among them: it carries figures, so it is a function and not a constant.
  *
  * These are proposals in her register, not her words, until she has read them
  * — the same standing the voice core has (`provenance.status`).
@@ -97,3 +100,72 @@ export const CONVERSATION_COPY = {
   /** Accessible name of the crisis resource row. Its words are authored (safety.md). */
   crisisLabel: 'Somewhere to turn',
 } as const;
+
+const resetDay = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+});
+
+/** A figure the frame could state: finite and not negative. */
+function amount(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** The reset as a day and month, or null for a date that does not parse. */
+function resetWords(resetsAt: string | undefined): string | null {
+  if (typeof resetsAt !== 'string') return null;
+  const at = new Date(resetsAt);
+  return Number.isNaN(at.getTime()) ? null : resetDay.format(at);
+}
+
+/** Said on every form of the ending, because it is the part a person will not assume. */
+const STILL_WORKS =
+  'What you wrote is still in the box, and everything you can read and write here still works.';
+
+/**
+ * The monthly-limit ending, in her register (f-budget t-96).
+ *
+ * The frame (`ceilingReachedFrame`, f-safety t-59) carries what was spent, the
+ * limit, and when the month resets — the first instant of the next UTC month.
+ * Three beats, as the other endings have: what happened, with the figures;
+ * when she can answer again; and that nothing else has stopped.
+ *
+ * **Explain and wait.** No "ask for more", no invitation to reply: there is no
+ * mechanism behind either (owner, 22 Sept 2026; `B31`; `agent.md`, "The
+ * monthly limit"). The words say what is true and hand nothing back that
+ * reaches no one.
+ *
+ * **A limit of nothing is not a month used up.** A $0 ceiling ends the turn on
+ * the same frame, and its `resetsAt` is next month like any other — but the
+ * limit is a setting, not a month's spend, and it will still be nothing on the
+ * 1st. So it gets no date: "I can reply again from 1 October" would be a
+ * promise the next month does not keep.
+ *
+ * **Every figure is optional here.** The client parses the figures leniently
+ * (`events.ts`, `ceilingField`), so they can be absent, and a figure that is
+ * present can still be one no sentence should state. Each missing piece drops
+ * its own clause rather than printing `$undefined` or `Invalid Date`, and with
+ * nothing usable the ending still says what happened and when, in general
+ * terms.
+ *
+ * A proposal in her register until she has read it, like everything above.
+ */
+export function ceilingEnding(figures: Partial<CeilingFigures> | undefined): string {
+  const spent = amount(figures?.spentUsd);
+  const limit = amount(figures?.ceilingUsd);
+  const resets = resetWords(figures?.resetsAt);
+
+  if (limit === 0) {
+    return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
+  }
+
+  const used =
+    spent !== null && limit !== null
+      ? `That's this month's conversations used up — ${money(spent)} of your ${money(limit)} limit.`
+      : "That's this month's conversations used up.";
+  const back = resets
+    ? `I can reply again from ${resets}.`
+    : 'I can reply again from the start of next month.';
+  return `${used}\n${back}\n${STILL_WORKS}`;
+}

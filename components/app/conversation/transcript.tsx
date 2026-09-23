@@ -87,6 +87,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
           code={entry.code}
           message={entry.message}
           resource={entry.resource}
+          ceiling={entry.ceiling}
         />
       );
     }

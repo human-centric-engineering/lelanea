@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { ENDING_MESSAGES } from '@/lib/app/agent/endings';
+import { ceilingReachedFrame, ENDING_MESSAGES } from '@/lib/app/agent/endings';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -291,13 +291,13 @@ describe('sending', () => {
 describe('when she can\u2019t answer (t-65)', () => {
   const endingRow = () => screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel });
 
-  async function endOn(code: string, message: string) {
+  async function endOn(code: string, message: string, extra: Record<string, unknown> = {}) {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'a hard week{Enter}');
     await act(async () => {
       latestTurn().push('start', { conversationId: 'c1' });
-      latestTurn().push('error', { code, message });
+      latestTurn().push('error', { code, message, ...extra });
       latestTurn().close();
     });
     await waitFor(() => expect(endingRow()).toBeTruthy());
@@ -341,9 +341,44 @@ describe('when she can\u2019t answer (t-65)', () => {
     expect(box()).toHaveValue('a hard week');
   });
 
-  it('keeps the ceiling frame\u2019s own words — they carry the figures', async () => {
-    await endOn('ceiling_reached', 'You have used this month\u2019s budget ($4.00 of $4.00).');
-    expect(endingRow().textContent).toContain('$4.00 of $4.00');
+  /**
+   * The monthly limit (t-96). Built with the seam's own `ceilingReachedFrame`,
+   * so a change to the frame's shape fails here rather than in someone's pane.
+   */
+  describe('the monthly limit', () => {
+    const frame = ceilingReachedFrame({
+      spentUsd: 4.07,
+      ceilingUsd: 4,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+
+    it('says it in her words, with the figures and the date, never the frame\u2019s', async () => {
+      await endOn(frame.code, frame.message, { ceiling: frame.ceiling });
+      const words = endingRow().textContent ?? '';
+
+      expect(words).toContain('$4.07 of your $4.00 limit');
+      expect(words).toContain('I can reply again from 1 October.');
+      expect(words).toContain('everything you can read and write here still works');
+      expect(screen.queryByText(frame.message)).toBeNull();
+      expect(box()).toHaveValue('a hard week');
+    });
+
+    it('draws no control beside it — there is nothing to ask for', async () => {
+      await endOn(frame.code, frame.message, { ceiling: frame.ceiling });
+      expect(within(endingRow()).queryAllByRole('button')).toHaveLength(0);
+      expect(within(endingRow()).queryAllByRole('link')).toHaveLength(0);
+    });
+
+    it('still says what happened when the figures did not parse', async () => {
+      // `ceilingField` drops a malformed object to undefined; the row must not
+      // fall back to the frame's words or print a hole.
+      await endOn(frame.code, frame.message, { ceiling: { spentUsd: 'lots' } });
+      const words = endingRow().textContent ?? '';
+
+      expect(words).toContain("That's this month's conversations used up.");
+      expect(words).toContain('from the start of next month');
+      expect(words).not.toMatch(/undefined|NaN|Invalid Date|\$/);
+    });
   });
 
   const resource = (tier: 'hard' | 'soft') => ({

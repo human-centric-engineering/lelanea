@@ -714,8 +714,13 @@ no model call, no cost row.
   logs a warning. A database that cannot be read fails the turn by itself.
 - **The default copy says why and what is left**: everything readable and
   writable still works, and replies return on the reset date (`HB10`). It offers
-  no "ask for more" — there is no mechanism behind one (`B31`). f-budget and
-  f-conversation render it in her register.
+  no "ask for more" — there is no mechanism behind one (`B31`). The pane renders
+  it in her register from the figures (`ceilingEnding` in
+  `lib/app/conversation/copy.ts`, f-budget t-96; see
+  [`conversation.md`](./conversation.md)), so these neutral words are only the
+  fallback. One difference is deliberate: on a **$0 limit** the neutral copy
+  still names the reset date, and her words do not, because the limit will
+  still be nothing after it.
 - **One interface, so billing can replace it.** "May this person start a
   generated turn; if not, why" is all the seam knows; `TurnAllowance` has room
   for another reason.

@@ -16,9 +16,10 @@ import {
   accountTime,
   type AccountInput,
 } from '@/lib/app/conversation/account';
-import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
-import type { CrisisResource } from '@/lib/app/conversation/events';
+import { ceilingEnding, CONVERSATION_COPY } from '@/lib/app/conversation/copy';
+import type { CeilingFigures, CrisisResource } from '@/lib/app/conversation/events';
 import type { GenerationStatus } from '@/lib/app/conversation/client';
+import { ENDING_CEILING_REACHED } from '@/lib/app/agent/endings';
 import { TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import { cn } from '@/lib/utils';
@@ -345,9 +346,11 @@ export function CrisisRow({ resource, text }: { resource?: CrisisResource; text:
  * How a turn ended without her, in her words (t-65).
  *
  * The frame carries the neutral contract copy; where the code is one this
- * pane knows — the four endings, and the one refusal a person can meet from
- * here — her words replace it (`CONVERSATION_COPY.endings`). A code it does
- * not know (the ceiling frame, with its figures) keeps the frame's own words.
+ * pane knows — the four endings, the monthly limit, and the one refusal a
+ * person can meet from here — her words replace it (`CONVERSATION_COPY.endings`,
+ * and `ceilingEnding` for the limit, which carries figures and so is a function).
+ * A code it does not know keeps the frame's own words, which are always true
+ * (`HB10`).
  * Each `\n` in the copy is a beat and gets its own line.
  *
  * A hard crisis frame is not words of hers at all: the authored resource is
@@ -357,13 +360,15 @@ export function EndingRow({
   code,
   message,
   resource,
+  ceiling,
 }: {
   code: string;
   message: string;
   resource?: CrisisResource;
+  ceiling?: CeilingFigures;
 }) {
   if (resource) return <CrisisRow resource={resource} text={message} />;
-  const words = endingWords(code) ?? message;
+  const words = endingWords(code, ceiling) ?? message;
   return (
     <article aria-label={CONVERSATION_COPY.endingLabel} className="flex gap-3">
       <HerMark />
@@ -374,8 +379,10 @@ export function EndingRow({
   );
 }
 
-function endingWords(code: string): string | null {
+function endingWords(code: string, ceiling: CeilingFigures | undefined): string | null {
   if (code === TURN_IN_FLIGHT) return CONVERSATION_COPY.stillWorking;
+  // No button beside it: there is nothing to ask for (`B31`).
+  if (code === ENDING_CEILING_REACHED) return ceilingEnding(ceiling);
   return Object.hasOwn(CONVERSATION_COPY.endings, code)
     ? CONVERSATION_COPY.endings[code as keyof typeof CONVERSATION_COPY.endings]
     : null;

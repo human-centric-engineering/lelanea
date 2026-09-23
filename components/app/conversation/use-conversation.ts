@@ -12,7 +12,11 @@ import {
   TurnRefused,
   type VoiceInputState,
 } from '@/lib/app/conversation/client';
-import type { ConversationEvent, CrisisResource } from '@/lib/app/conversation/events';
+import type {
+  CeilingFigures,
+  ConversationEvent,
+  CrisisResource,
+} from '@/lib/app/conversation/events';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import type { TranscriptEntry } from '@/lib/app/conversation/transcript';
 import {
@@ -102,6 +106,12 @@ export interface EndingEntry {
   message: string;
   /** A hard crisis frame's resource, laid out in place of any words of hers. */
   resource?: CrisisResource;
+  /**
+   * What a `ceiling_reached` frame carried — spent, limit, reset — for her
+   * words about it (`ceilingEnding`, t-96). Absent when the frame's figures did
+   * not parse; the row still says what happened.
+   */
+  ceiling?: CeilingFigures;
 }
 
 /**
@@ -481,6 +491,7 @@ export function useConversation(options: Options = {}): ConversationState {
                   code: event.code,
                   message: event.message,
                   ...(event.resource ? { resource: event.resource } : {}),
+                  ...(event.ceiling ? { ceiling: event.ceiling } : {}),
                 },
                 // A refused message meets the same refusal again; everything
                 // else — a failure, a pause, the ceiling, a hard crisis frame —

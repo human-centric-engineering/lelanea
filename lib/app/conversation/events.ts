@@ -61,6 +61,8 @@ export const ceilingFiguresSchema = z.object({
 });
 const ceilingField = ceilingFiguresSchema.optional().catch(undefined);
 
+export type CeilingFigures = z.infer<typeof ceilingFiguresSchema>;
+
 const tokenUsageSchema = z.object({
   inputTokens: z.number(),
   outputTokens: z.number(),
