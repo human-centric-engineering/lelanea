@@ -34,6 +34,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultClient } from '@/lib/db/client';
+import { logger } from '@/lib/logging';
 import { storedDocumentBlocksSchema } from '@/lib/app/content/schemas';
 import {
   ContentNotSeededError,
@@ -195,5 +196,37 @@ export async function seedFoundationalDocuments(
     }),
   ]);
 
+  await mirrorAfterWrite();
   return { status: 'seeded', documents: seed.documents.length };
+}
+
+/**
+ * Bring the knowledge-base mirror into step after a write (t-90). **Every write
+ * this service makes calls it**, including t-91's editor writes, so no edit can
+ * leave the agent recalling the old words.
+ *
+ * Best-effort: the rows are already committed and are what every surface reads.
+ * A failed mirror is logged and retried by the next reconcile (the seed unit or
+ * the cron route), so it must not turn a successful write into an error.
+ *
+ * Imported dynamically so the pages that read this service do not load the
+ * ingestion pipeline to render a document.
+ */
+async function mirrorAfterWrite(): Promise<void> {
+  try {
+    const { reconcileKnowledgeMirror } = await import('@/lib/app/content/knowledge-mirror');
+    const result = await reconcileKnowledgeMirror();
+    if (result.failed.length > 0) {
+      logger.warn(
+        'Knowledge mirror incomplete after a documents write; the next reconcile retries',
+        {
+          failed: result.failed.map((failure) => failure.sourceKey),
+        }
+      );
+    }
+  } catch (error) {
+    logger.warn('Knowledge mirror failed after a documents write; the next reconcile retries', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
