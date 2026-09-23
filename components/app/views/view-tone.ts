@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
+import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
 
 /**
  * The hue each destination carries, keyed by its route.
@@ -51,7 +52,7 @@ export const VIEW_TONES: Readonly<Record<string, string>> = {
   '/app/notes': 'var(--color-status-blue)',
   '/app/situations': 'var(--color-status-yellow)',
   '/app/share': 'var(--color-accent-ink)',
-  '/app/usage': 'var(--color-secondary-ink)',
+  [USAGE_PAGE]: 'var(--color-secondary-ink)',
   '/app/settings': 'var(--color-status-purple)',
   '/app/account': 'var(--color-secondary-ink)',
   '/app/workspace': 'var(--color-secondary-ink)',

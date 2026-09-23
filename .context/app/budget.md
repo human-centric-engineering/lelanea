@@ -133,9 +133,11 @@ survived a green suite and was found by opening the page. `boundFetch()` in
 ## The topbar meter (t-95)
 
 Every page in the shell carries a glanceable version of the same reading: a bar
-and what is left, linking here. It reads the summary only, on mount and once per
-finished turn, and draws a bar only when a bar is honest — a $0 ceiling, a month
-past the ceiling, a read in flight and a failed read are each words. The rules
+and what is left, linking here. It reads the summary only, on mount, once per
+finished turn and once at the month's turn, and draws a bar only when a bar is
+honest — a $0 ceiling, a month past the ceiling, the first read and a failed
+read are each words. This page re-reads on the same per-turn signal, so the two
+never disagree about one month. The rules
 live in [`shell.md`](./shell.md#the-spend-meter-reads-when-a-person-could-have-spent);
 the judgement is `meterReading()` beside the page's own in `usage-view.ts`.
 

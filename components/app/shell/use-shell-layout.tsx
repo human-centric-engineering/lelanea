@@ -167,19 +167,28 @@ export interface ShellLayout {
    */
   noteSlotsWritten: () => void;
   /**
-   * How many turns have finished, this session, whatever they did.
+   * How many turns have finished, this session, and had time for their cost to
+   * be written.
    *
    * `slotsWritten`'s shape and its reason for living here: a counter the
-   * topbar's spend meter compares against the value it saw last, because the
-   * conversation that spends and the bar that shows it are siblings (t-95).
-   * Kept apart from `slotsWritten` because that one counts only turns that
-   * wrote a note, and a turn that wrote nothing still cost something.
+   * topbar's spend meter and the usage page compare against the value they saw
+   * last, because the conversation that spends and the figures that show it
+   * are siblings (t-95). Kept apart from `slotsWritten` because that one counts
+   * only turns that wrote a note, and a turn that wrote nothing still cost
+   * something.
+   *
+   * **It moves {@link COST_SETTLE_MS} after the turn, not at it.** The platform
+   * writes a turn's cost row fire-and-forget (`void logCost(...)` in Sunrise's
+   * streaming handler) before it yields `done`, so a read taken the instant the
+   * turn ends can sum the month without it — and the reader would then show the
+   * pre-turn figure until the next turn (/code-review). The wait belongs here,
+   * once, rather than in each reader.
    */
   turnsSettled: number;
   /**
    * A turn is over — answered, ended, or refused. Called once per turn by
-   * `useConversation`, never per streamed frame, so what reads it re-reads at
-   * most as often as a person sends.
+   * `useConversation`, never per streamed frame, so what reads `turnsSettled`
+   * re-reads at most as often as a person sends.
    */
   noteTurnSettled: () => void;
   /**
@@ -223,6 +232,17 @@ export function useShellLayout(): ShellLayout {
   if (!value) throw new Error('useShellLayout must be used within <ShellLayoutProvider>');
   return value;
 }
+
+/**
+ * How long after a turn ends its cost is assumed written.
+ *
+ * The write is one insert issued before the `done` frame is even sent, so it
+ * has normally landed long before this; the margin is for a slow database, not
+ * for a slow model. A turn whose connection dropped is still being answered
+ * server-side and is not covered by any fixed wait — its cost reaches the
+ * figures on the next read: the retry that replays it, or the next turn.
+ */
+export const COST_SETTLE_MS = 1500;
 
 function classify(w: number): WidthClass {
   if (w <= 900) return 'small';
@@ -575,7 +595,18 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * two, and so the callback never has to depend on the count it increments.
    */
   const noteSlotsWritten = useCallback(() => setSlotsWritten((count) => count + 1), []);
-  const noteTurnSettled = useCallback(() => setTurnsSettled((count) => count + 1), []);
+  const settleTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const noteTurnSettled = useCallback(() => {
+    const timer = setTimeout(() => {
+      settleTimers.current.delete(timer);
+      setTurnsSettled((count) => count + 1);
+    }, COST_SETTLE_MS);
+    settleTimers.current.add(timer);
+  }, []);
+  useEffect(() => {
+    const timers = settleTimers.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
   const setAsk = useCallback((text: string) => setAskState(text), []);
   const takeAsk = useCallback(() => setAskState(null), []);
 

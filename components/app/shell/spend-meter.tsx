@@ -6,7 +6,12 @@ import { useEffect, useState } from 'react';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { fetchUsageSummary, USAGE_PAGE } from '@/lib/app/usage/usage-client';
-import { METER_NAME, meterReading, type MeterReading } from '@/lib/app/usage/usage-view';
+import {
+  METER_NAME,
+  meterReading,
+  msUntilNextMonth,
+  type MeterReading,
+} from '@/lib/app/usage/usage-view';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
@@ -28,32 +33,43 @@ import { cn } from '@/lib/utils';
  * "open in new tab" all expect of that. Keyboard reach, the pill and the name
  * are the prototype's.
  *
- * ## When it reads — on mount, and once after each finished turn
+ * ## When it reads — on mount, after each finished turn, and at the month's turn
  *
  * One `GET /api/v1/app/usage`, summary only (`fetchUsageSummary`); the by-day
  * breakdown is the page's, not the bar's. The topbar lives in the app layout,
  * which is not re-rendered between pages, so **moving between pages does not
- * re-read**. After that it re-reads when `turnsSettled` on the shell provider
- * moves — bumped once per turn by `useConversation`'s `finish`, however the turn
- * ended, and never per streamed frame. That is the whole schedule: no timer, no
- * focus listener, nothing that can call the month-to-date aggregate more often
- * than a person can spend (f-budget ruling 5 — that aggregate is the watch item
- * in `agent.md`, and it gets no index and no cache here).
+ * re-read**. After that it re-reads:
  *
- * A turn that lands while a read is in flight aborts it and asks again, so the
- * answer on screen is the one taken after the latest turn.
+ * - **When `turnsSettled` on the shell provider moves** — once per turn,
+ *   however it ended, never per streamed frame, and `COST_SETTLE_MS` after the
+ *   turn rather than at it, because the platform writes the turn's cost without
+ *   waiting and a read at `done` can miss it.
+ * - **Once, when the month turns** (`msUntilNextMonth`, on the server's clock).
+ *   A tab left open showing "past your limit" on the 30th would otherwise say
+ *   so all through the 1st, and a person believing it would not send.
+ *
+ * That is the whole schedule: no polling, no focus listener. The month-to-date
+ * aggregate it calls is the watch item in `agent.md` (f-budget ruling 5), and
+ * gets no index and no cache here. A ceiling an admin changes shows at the
+ * next turn — including the turn a person tries past a limit the pill still
+ * shows, since that attempt settles too.
+ *
+ * A read that is overtaken aborts, so the answer on screen is the latest one.
+ * While a re-read is in flight the previous figure stays up, as the notes panel
+ * keeps its notes: "still reading" below is the FIRST read, when there is none.
  *
  * Not rendered at ≤900px, where the prototype drops it too — "a desk-side
  * reassurance, not a phone one", one tap away in the account menu — so a phone
- * does not re-read after every turn for a bar it cannot show. The provider's
- * first pass is `large` until its layout effect measures, so a phone's first
- * mount may start one read that is aborted on the next render.
+ * does not re-read after every turn for a bar it cannot show. The cost of that
+ * is a remount, and so a read, each time the window crosses 900px; and the
+ * provider's first pass is `large` until its layout effect measures, so a
+ * phone's first mount may start one read that is aborted on the next render.
  *
  * ## No state draws a bar it cannot stand behind
  *
  * `meterReading()` decides, from the summary, whether a bar is honest at all:
  * a $0 ceiling and a month past the ceiling are phrases, not bars. The two
- * states it never sees are this file's — still reading, and could not read —
+ * states it never sees are this file's — the first read, and could not read —
  * and both are a word with no bar, because an empty track reads as "all of it
  * left" and a bar left over from an earlier read is a figure nobody can vouch
  * for any more.
@@ -70,6 +86,16 @@ export function SpendMeter({ fetchImpl }: SpendMeterProps) {
   const { turnsSettled } = useShellLayout();
   const pathname = usePathname();
   const [state, setState] = useState<MeterState>({ kind: 'reading' });
+  // The month's turn, as a counter the read below is keyed on, and how long
+  // until the next one — set from each reading, so it follows the server.
+  const [monthsTurned, setMonthsTurned] = useState(0);
+  const [wakeIn, setWakeIn] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (wakeIn === null) return;
+    const timer = setTimeout(() => setMonthsTurned((count) => count + 1), wakeIn);
+    return () => clearTimeout(timer);
+  }, [wakeIn]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,6 +103,7 @@ export function SpendMeter({ fetchImpl }: SpendMeterProps) {
       .then((summary) => {
         if (controller.signal.aborted) return;
         setState(meterReading(summary));
+        setWakeIn(msUntilNextMonth(summary.window));
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -84,7 +111,7 @@ export function SpendMeter({ fetchImpl }: SpendMeterProps) {
         logger.warn('Spend meter read failed', { error: String(error) });
       });
     return () => controller.abort();
-  }, [turnsSettled, fetchImpl]);
+  }, [turnsSettled, monthsTurned, fetchImpl]);
 
   const { figure, name } = words(state);
 

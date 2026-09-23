@@ -20,10 +20,10 @@
 
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SpendMeter } from '@/components/app/shell/spend-meter';
-import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { COST_SETTLE_MS, useShellLayout } from '@/components/app/shell/use-shell-layout';
 
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -34,7 +34,23 @@ beforeEach(() => {
   mockPathname.current = '/app';
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/**
+ * Wait out the provider's settle window, on real timers — the counter moves
+ * `COST_SETTLE_MS` after a turn, because the turn's cost row is written without
+ * the platform waiting for it.
+ */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, COST_SETTLE_MS + 50));
+  });
+}
+
 interface Fixture {
+  window?: { from: string; to: string };
   costUsd?: number;
   ceilingUsd?: number;
   remainingUsd?: number;
@@ -45,7 +61,10 @@ interface Fixture {
 function summaryOf(fixture: Fixture = {}) {
   return {
     userId: 'cmu8lt3aw0025o0sbw78xrnd6',
-    window: { from: '2026-03-01T00:00:00.000Z', to: '2026-03-21T14:30:00.000Z' },
+    window: fixture.window ?? {
+      from: '2026-03-01T00:00:00.000Z',
+      to: '2026-03-21T14:30:00.000Z',
+    },
     costUsd: fixture.costUsd ?? 7.6,
     inputTokens: 10,
     outputTokens: 10,
@@ -196,6 +215,7 @@ describe('SpendMeter — the edges draw no bar', () => {
     await waitFor(() => expect(fill()).not.toBeNull());
 
     await userEvent.click(screen.getByRole('button', { name: 'finish a turn' }));
+    await settle();
 
     await waitFor(() => expect(meter().textContent).toBe('usage unreadable'));
     expect(fill()).toBeNull();
@@ -220,6 +240,10 @@ describe('SpendMeter — when it reads', () => {
     await waitFor(() => expect(meter().textContent).toBe('$12.40 left'));
 
     await userEvent.click(screen.getByRole('button', { name: 'finish a turn' }));
+    // Not at the turn: its cost row may not be written yet, and a read now
+    // could sum the month without it.
+    expect(callsTo(fetchImpl)).toHaveLength(1);
+    await settle();
 
     await waitFor(() => expect(meter().textContent).toBe('$11.90 left'));
     expect(fill()?.style.width).toBe('40.5%');
@@ -254,10 +278,51 @@ describe('SpendMeter — when it reads', () => {
     renderMeter(fetchImpl);
 
     await userEvent.click(screen.getByRole('button', { name: 'finish a turn' }));
+    await settle();
     await waitFor(() => expect(meter().textContent).toBe('$11.00 left'));
 
     // The mount's read answers late, with the older figure.
     await act(async () => answerFirst(ok(summaryOf())));
     expect(meter().textContent).toBe('$11.00 left');
+  });
+
+  it("reads once more when the month turns, timed on the server's clock", async () => {
+    // Past the limit, two seconds before the month ends. Left open, the pill
+    // would say so all through the 1st, and a person believing it would not send.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchImpl = fetcherFor(
+      ok(
+        summaryOf({
+          window: { from: '2026-03-01T00:00:00.000Z', to: '2026-03-31T23:59:58.000Z' },
+          costUsd: 21,
+          remainingUsd: 0,
+          fractionUsed: 1.05,
+        })
+      ),
+      ok(
+        summaryOf({
+          window: { from: '2026-04-01T00:00:00.000Z', to: '2026-04-01T00:00:05.000Z' },
+          costUsd: 0,
+          remainingUsd: 20,
+          fractionUsed: 0,
+        })
+      )
+    );
+    renderMeter(fetchImpl);
+    await act(async () => {});
+    expect(meter().textContent).toBe('past your limit');
+
+    // Two seconds to midnight plus the margin; one millisecond short is not yet.
+    await act(async () => {
+      vi.advanceTimersByTime(6_999);
+    });
+    expect(callsTo(fetchImpl)).toHaveLength(1);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    await act(async () => {});
+
+    expect(callsTo(fetchImpl)).toHaveLength(2);
+    expect(meter().textContent).toBe('$20.00 left');
   });
 });

@@ -159,6 +159,21 @@ export function remainingLabel(remaining: string, isFloor: boolean): string {
   return isFloor ? `at most ${remaining}` : remaining;
 }
 
+/**
+ * What is left, in the pill's words.
+ *
+ * `money()` rounds a remainder under half a cent to `$0.00`, which on the pill
+ * reads as "nothing left" while the ceiling still lets a turn start — `$0` is
+ * not a fact there, it is a rounding. So it refuses the rounding the way
+ * {@link moneyWords} does. And like {@link floorLabel}, it qualifies a numeral
+ * only: "less than a cent" is already an upper bound, so "at most less than a
+ * cent" would say the same thing badly (/code-review).
+ */
+export function remainingWords(remainingUsd: number, isFloor: boolean): string {
+  const words = moneyWords(remainingUsd);
+  return words.startsWith('$') ? remainingLabel(words, isFloor) : words;
+}
+
 /** The three figures across the top, and whether each is a floor. */
 export interface UsageStats {
   spent: string;
@@ -241,9 +256,11 @@ export type MeterReading =
 
 export function meterReading(summary: UsageSummary): MeterReading {
   const stats = usageStats(summary);
+  // Null exactly when the ceiling is zero — the server's own test — so this is
+  // the one predicate, and `nothingAllowed` is not asked a second time.
   const fill = meterFill(summary);
 
-  if (stats.nothingAllowed || fill === null) {
+  if (fill === null) {
     const figure = 'nothing to spend';
     return {
       kind: 'nothing-allowed',
@@ -259,13 +276,35 @@ export function meterReading(summary: UsageSummary): MeterReading {
       name: `${METER_NAME}: ${figure} of ${stats.ceiling} this month`,
     };
   }
-  const figure = `${remainingLabel(stats.remaining, stats.spentIsFloor)} left`;
+  const figure = `${remainingWords(summary.remainingUsd, stats.spentIsFloor)} left`;
   return {
     kind: 'meter',
     fill,
     figure,
     name: `${METER_NAME}: ${figure} of ${stats.ceiling} this month`,
   };
+}
+
+/** The longest delay `setTimeout` honours; anything larger fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/** Past the turn of the month, so the read that wakes lands in the new one. */
+const ROLLOVER_MARGIN_MS = 5_000;
+
+/**
+ * How long until this reading's month ends, measured on the SERVER's clock.
+ *
+ * Both instants come from the summary — the month's first instant and the
+ * moment the server answered — so a device clock an hour fast cannot wake the
+ * meter early, find the old month still running, and wake again straight away.
+ * Capped at what `setTimeout` can hold: a wake at the cap simply reads and
+ * schedules again (t-95, /code-review).
+ */
+export function msUntilNextMonth(window: UsageWindow): number {
+  const from = new Date(window.from);
+  const next = Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1);
+  const left = Math.max(0, next - Date.parse(window.to));
+  return Math.min(left + ROLLOVER_MARGIN_MS, MAX_TIMEOUT_MS);
 }
 
 /** One bar of a plot. */

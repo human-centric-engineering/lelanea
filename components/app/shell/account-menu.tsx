@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/hooks/use-theme';
 import { EVENTS, useAnalytics } from '@/lib/analytics';
+import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
+import { METER_NAME } from '@/lib/app/usage/usage-view';
 import { authClient } from '@/lib/auth/client';
 import { isPlatformAdmin } from '@/lib/auth/roles';
 import { logger } from '@/lib/logging';
@@ -50,7 +52,9 @@ export interface AccountMenuUser {
 export const ACCOUNT_MENU_LINKS = [
   { href: '/app/account', label: 'Your account', icon: UserRound },
   { href: '/app/settings', label: 'Settings', icon: SlidersHorizontal },
-  { href: '/app/usage', label: 'Usage and billing', icon: Gauge },
+  // The topbar's spend meter opens the same place under the same name, so both
+  // come from the usage modules rather than being typed twice (t-95).
+  { href: USAGE_PAGE, label: METER_NAME, icon: Gauge },
 ] as const;
 
 export interface AccountMenuProps {

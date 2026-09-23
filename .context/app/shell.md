@@ -457,25 +457,45 @@ menu's words for the same place — and contains the printed figure verbatim.
 
 **When it reads.** One `GET /api/v1/app/usage`, summary only — the by-day
 breakdown is the page's. On mount (the topbar lives in the layout, so moving
-between pages does not remount it), and again whenever `turnsSettled` on the
-provider moves. `useConversation` bumps that once per turn from `finish`, the
-one place every outcome passes through — a reply, an ending, a refusal — and
-never per streamed frame. No timer, no focus listener. That keeps the
-month-to-date aggregate `agent.md` watches to at most one call per thing a
-person sends. `turnsSettled` is `slotsWritten`'s shape for `slotsWritten`'s
-reason: the conversation and the topbar are siblings.
+between pages does not remount it); again whenever `turnsSettled` on the
+provider moves; and once when the month turns. No polling, no focus listener.
+
+- **`turnsSettled`** is `slotsWritten`'s shape for `slotsWritten`'s reason: the
+  conversation and the topbar are siblings. `useConversation` calls
+  `noteTurnSettled` once per turn from `finish`, the one place every outcome
+  passes through — a reply, an ending, a refusal — and never per streamed frame.
+  **The counter moves `COST_SETTLE_MS` (1.5s) later, not at once**: Sunrise
+  writes a turn's cost row fire-and-forget before it yields `done`, so a read
+  taken the instant a turn ends can sum the month without it and then sit one
+  turn behind. A turn whose connection dropped is still running server-side and
+  no fixed wait covers it; its cost shows on the next read — the retry that
+  replays it, or the next turn.
+- **The month's turn** is timed from the summary's own two instants
+  (`msUntilNextMonth`), so a device clock that is off cannot wake it early and
+  loop. Without it a tab left on "past your limit" on the 30th says so all
+  through the 1st.
+- `/app/usage` re-reads on the same counter, so a turn sent from that page
+  moves the page and the pill together.
+
+That keeps the month-to-date aggregate `agent.md` watches to about one call per
+thing a person sends. The exceptions are bounded: a window crossing 900px
+remounts the meter, and dev's strict mode mounts it twice. A ceiling an admin
+changes shows at the next turn, including the attempt a person makes past a
+limit the pill still shows. While a re-read is in flight the previous figure
+stays up, as the notes panel keeps its notes.
 
 **Only one state draws a bar.** `meterReading()` in `lib/app/usage/usage-view.ts`
 decides:
 
-| State             | Shows                              |
-| ----------------- | ---------------------------------- |
-| An ordinary month | The bar, and `$12.40 left`         |
-| Spend is a floor  | The bar, and `at most $12.40 left` |
-| A $0 ceiling      | `nothing to spend` — no bar        |
-| Past the ceiling  | `past your limit` — no bar         |
-| Still reading     | `usage` — no bar, no figure        |
-| The read failed   | `usage unreadable` — no bar        |
+| State             | Shows                                |
+| ----------------- | ------------------------------------ |
+| An ordinary month | The bar, and `$12.40 left`           |
+| Under a cent left | The bar, and `less than a cent left` |
+| Spend is a floor  | The bar, and `at most $12.40 left`   |
+| A $0 ceiling      | `nothing to spend` — no bar          |
+| Past the ceiling  | `past your limit` — no bar           |
+| The first read    | `usage` — no bar, no figure          |
+| The read failed   | `usage unreadable` — no bar          |
 
 A full bar past the ceiling reads as "exactly used up"; an empty track on a $0
 ceiling reads as "all of it left". A later read that fails drops the bar from the

@@ -22,6 +22,7 @@ import {
   moneyTight,
   moneyWords,
   monthPlot,
+  msUntilNextMonth,
   readingWindowFrom,
   remainingLabel,
   spendFloor,
@@ -270,6 +271,51 @@ describe('the topbar meter', () => {
       expect(meter.name.startsWith(`${METER_NAME}: `)).toBe(true);
       expect(meter.name).toContain(meter.figure);
     }
+  });
+});
+
+describe('the topbar meter at the edges of rounding (t-95, /code-review)', () => {
+  it('does not round a remainder under half a cent to "$0.00 left"', () => {
+    // The ceiling still lets a turn start; "$0.00 left" would say it does not.
+    const meter = meterReading(
+      summary({ costUsd: 19.996, remainingUsd: 0.004, fractionUsed: 0.9998 })
+    );
+    expect(meter.figure).toBe('less than a cent left');
+    expect(meter.name).toContain('less than a cent left');
+  });
+
+  it('does not stack "at most" onto words that are already an upper bound', () => {
+    const meter = meterReading(
+      summary({ costUsd: 19.996, remainingUsd: 0.004, fractionUsed: 0.9998, unpricedRows: 1 })
+    );
+    expect(meter.figure).toBe('less than a cent left');
+  });
+
+  it('still says "$0.00 left" when nothing is left and the month is not over', () => {
+    const meter = meterReading(summary({ costUsd: 20, remainingUsd: 0, fractionUsed: 1 }));
+    expect(meter.figure).toBe('$0.00 left');
+  });
+});
+
+describe('when the month turns', () => {
+  it("measures to the next UTC month on the server's clock, plus a margin", () => {
+    expect(
+      msUntilNextMonth({ from: '2026-03-01T00:00:00.000Z', to: '2026-03-31T23:59:58.000Z' })
+    ).toBe(7_000);
+  });
+
+  it('rolls December into January', () => {
+    expect(
+      msUntilNextMonth({ from: '2026-12-01T00:00:00.000Z', to: '2026-12-31T23:59:59.000Z' })
+    ).toBe(6_000);
+  });
+
+  it('never asks setTimeout for more than it can hold', () => {
+    // Early in a 31-day month is ~30 days away: past setTimeout's ~24.8 days,
+    // which it would treat as zero and fire at once.
+    expect(
+      msUntilNextMonth({ from: '2026-03-01T00:00:00.000Z', to: '2026-03-01T00:00:01.000Z' })
+    ).toBe(2_147_483_647);
   });
 });
 
