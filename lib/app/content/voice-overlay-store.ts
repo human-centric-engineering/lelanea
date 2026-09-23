@@ -32,12 +32,19 @@ import {
   storedExemplarsSchema,
   storedProvenanceSchema,
   toVoiceOverlays,
+  VOICE_OVERLAY_SET_ID,
   type VoiceOverlays,
 } from '@/lib/app/content/voice-overlay-view';
 import type { VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
 
-/** The one set there is: the context-selected layer of her fingerprint. */
-export const VOICE_OVERLAY_SET_ID = 'lelanea_voice_fingerprint_overlays';
+/**
+ * The one set there is, re-exported so this module stays its import path.
+ *
+ * Defined in `voice-overlay-view.ts` because the seed needs the same value and
+ * cannot import it from here — the docblock there has the cycle it would
+ * close, and what it deadlocks.
+ */
+export { VOICE_OVERLAY_SET_ID };
 
 // ============================================================================
 // Reads

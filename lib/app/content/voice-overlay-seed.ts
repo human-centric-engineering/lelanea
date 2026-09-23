@@ -21,7 +21,16 @@
 
 import rawVoiceOverlays from '@/seed-data/drafted/lelanea_voice_overlays.json';
 import { voiceOverlaysFileSchema, type VoiceOverlaysFile } from '@/lib/app/content/schemas';
-import type { VoiceOverlayRow, VoiceOverlaySetRow } from '@/lib/app/content/voice-overlay-view';
+// From the view, NOT the store: the store is mocked with an async factory in
+// `context-contributor.test.ts`, and that factory imports the fake-store
+// helper, which imports this module — so a store import here closes a cycle
+// through a factory already in flight and vitest deadlocks (0% CPU, no
+// output). The view imports neither of them. See its docblock on the constant.
+import {
+  VOICE_OVERLAY_SET_ID,
+  type VoiceOverlayRow,
+  type VoiceOverlaySetRow,
+} from '@/lib/app/content/voice-overlay-view';
 
 /** What the seed writes: the set and its overlays, at revision 1. */
 export interface VoiceOverlaySeed {
@@ -40,7 +49,15 @@ export function buildVoiceOverlaySeed(
 ): VoiceOverlaySeed {
   return {
     set: {
-      id: file.fingerprint.id,
+      // The reader's constant, NOT `file.fingerprint.id`, which the schema
+      // allows to be any lowercase slug. `seedVoiceOverlays` keys its
+      // write-once check off `seed.set.id` rather than the table being empty,
+      // so taking the id from the file meant renaming `fingerprint.id` seeded a
+      // SECOND set row, logged "Seeded 4 voice overlays", and left every turn
+      // throwing `ContentNotSeededError` against an id nothing had written.
+      // `buildGoldenSetSeed` pins its id for the same reason; the equality is
+      // pinned in `voice-overlay-seed.test.ts` (found by /code-review).
+      id: VOICE_OVERLAY_SET_ID,
       title: file.fingerprint.title,
       version: file.fingerprint.version,
       locale: file.fingerprint.locale,

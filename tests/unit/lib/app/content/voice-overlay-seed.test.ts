@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { buildVoiceOverlaySeed, readVoiceOverlaysFile } from '@/lib/app/content/voice-overlay-seed';
+import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';
 
@@ -65,6 +66,25 @@ describe('what the seed builds', () => {
     expect(seed.overlays.map((o) => o.situation)).toEqual(
       readVoiceOverlaysFile().overlays.map((o) => o.situation)
     );
+  });
+
+  it('gives the set the id the reader looks for, whatever the file says', () => {
+    const seed = buildVoiceOverlaySeed();
+
+    // The only id `getVoiceOverlays()` will ever ask for. The builder used to
+    // take this from `file.fingerprint.id`, which the schema lets be any
+    // lowercase slug — and `seedVoiceOverlays` keys write-once off
+    // `seed.set.id`, not an empty table. So a rename in the file seeded a
+    // second, unreadable set row and reported success while every turn threw.
+    expect(seed.set.id).toBe(VOICE_OVERLAY_SET_ID);
+
+    // Proved against a file whose `fingerprint.id` is something else, so this
+    // cannot pass by the two merely agreeing today.
+    const renamed = buildVoiceOverlaySeed({
+      ...readVoiceOverlaysFile(),
+      fingerprint: { ...readVoiceOverlaysFile().fingerprint, id: 'renamed_by_an_editor' },
+    });
+    expect(renamed.set.id).toBe(VOICE_OVERLAY_SET_ID);
   });
 
   it("carries the file's `when` across as the reviewer note", () => {

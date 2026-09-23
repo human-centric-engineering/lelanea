@@ -21,6 +21,26 @@ import type { ContentCollectionMeta } from '@/lib/app/content/document-view';
 // Served shape
 // ============================================================================
 
+/**
+ * The one set there is: the context-selected layer of her fingerprint.
+ *
+ * **Here rather than in the store, and that placement is load-bearing.** The
+ * reader (`voice-overlay-store.ts`) and the writer
+ * (`voice-overlay-seed.ts`) both need it, and they must agree — a seed that
+ * writes one id while the read asks for another seeds a row nothing can find,
+ * reports success, and leaves every turn throwing. But the seed cannot import
+ * it FROM the store: `context-contributor.test.ts` mocks the store with an
+ * async factory that imports the fake-store helper, which imports the seed —
+ * so a seed→store edge closes a cycle through a mock factory that is already
+ * in flight, and vitest deadlocks on it with the worker idle at 0% CPU and no
+ * output at all. This module imports neither, which is why it can hold the
+ * constant for both.
+ *
+ * The store re-exports it, so `@/lib/app/content/voice-overlay-store` remains
+ * the import path for every reader.
+ */
+export const VOICE_OVERLAY_SET_ID = 'lelanea_voice_fingerprint_overlays';
+
 /** Whether she has signed a piece of her register off. */
 export type VoiceContentStatus = 'draft' | 'signed_off';
 
