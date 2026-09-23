@@ -29,11 +29,12 @@ import rawFoundationalDocuments from '@/content/lelanea_foundational_documents.j
 import {
   foundationalDocumentsFileSchema,
   storedDocumentBlocksSchema,
-  type DocumentBlock,
+  type FileDocumentBlock,
   type FoundationalDocumentsFile,
   type StoredDocumentBlock,
 } from '@/lib/app/content/schemas';
 import { findPlaceholders } from '@/lib/app/content/placeholders';
+import { foundationalSeedFromFile } from '@/lib/app/content/content-files';
 import type {
   CollectionSeed,
   DocumentSeed,
@@ -174,7 +175,7 @@ export function readFoundationalDocumentsFile(): FoundationalDocumentsFile {
   return fileCache;
 }
 
-function blockText(block: DocumentBlock): string {
+function blockText(block: FileDocumentBlock): string {
   return block.type === 'list' ? block.items.join(' ') : block.text;
 }
 
@@ -187,7 +188,7 @@ function blockText(block: DocumentBlock): string {
  */
 export function keyBlocks(
   documentId: string,
-  blocks: readonly DocumentBlock[],
+  blocks: readonly FileDocumentBlock[],
   ranges: readonly SectionRange[] = SECTION_KEYS[documentId] ?? []
 ): StoredDocumentBlock[] {
   const sections: (string | null)[] = blocks.map(() => null);
@@ -229,46 +230,22 @@ export function keyBlocks(
 }
 
 /**
- * The rows the seed writes, built from the file.
+ * The rows the seed writes, built from the file, with the owner's section keys.
  *
- * Every document carries the collection's version as its own. That is what the
- * acknowledgement gate enforced before t-86, so a person who agreed to version
- * `1.1` of the Terms is not asked again because the words moved into a table.
+ * The projection itself is `foundationalSeedFromFile` (t-91), shared with the
+ * admin import so an export dropped here seeds exactly what was exported. Her
+ * file carries no keys, so {@link keyBlocks} supplies them; a file that carries
+ * its own (an export) keeps them.
+ *
+ * Every document carries the collection's version as its own unless the file
+ * gives one. That is what the acknowledgement gate enforced before t-86, so a
+ * person who agreed to version `1.1` of the Terms is not asked again because the
+ * words moved into a table.
  */
 export function buildFoundationalSeed(
   file: FoundationalDocumentsFile = readFoundationalDocumentsFile()
 ): FoundationalSeed {
-  const { collection } = file;
-  const byId = new Map(file.documents.map((document) => [document.id, document]));
-
-  return {
-    collection: {
-      id: collection.id,
-      title: collection.title,
-      version: collection.version,
-      locale: collection.locale,
-    },
-    // The schema's referential check guarantees every suggested id resolves and
-    // every document is suggested exactly once.
-    documents: collection.suggestedOrder.map((id, position) => {
-      const document = byId.get(id)!;
-      return {
-        id: document.id,
-        position,
-        title: document.title,
-        subtitle: document.subtitle,
-        category: document.category,
-        surface: document.surface,
-        requiresAcknowledgement: document.requiresAcknowledgement ?? false,
-        placeholders: [...(document.placeholders ?? [])],
-        renderStyle: document.renderStyle ?? null,
-        renderNote: document.renderNote ?? null,
-        blocks: keyBlocks(document.id, document.blocks),
-        version: collection.version,
-        locale: collection.locale,
-      };
-    }),
-  };
+  return foundationalSeedFromFile(file, (documentId, blocks) => keyBlocks(documentId, blocks));
 }
 
 /**

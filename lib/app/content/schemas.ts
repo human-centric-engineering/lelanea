@@ -131,6 +131,21 @@ export const storedDocumentBlocksSchema = z
     });
   });
 
+/**
+ * A block as a documents FILE may carry it: the authored block, optionally with
+ * its section key (t-91).
+ *
+ * Her file carries no keys (`content/` stays byte-identical, so the seed keys it
+ * from `SECTION_KEYS`). An admin export carries every block's key, `null`
+ * included, so that a file taken from the database and imported again, or
+ * dropped into the seed folder, keeps the sections a surface selects by.
+ */
+export const fileDocumentBlockSchema = z.discriminatedUnion('type', [
+  headingBlockSchema.extend({ section: sectionKeySchema.nullable().optional() }),
+  paragraphBlockSchema.extend({ section: sectionKeySchema.nullable().optional() }),
+  listBlockSchema.extend({ section: sectionKeySchema.nullable().optional() }),
+]);
+
 export const foundationalDocumentSchema = z.strictObject({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -139,8 +154,20 @@ export const foundationalDocumentSchema = z.strictObject({
   category: z.enum(['onboarding', 'about', 'legal']),
   /** Which app surface shows this document, e.g. `first_run_welcome`. */
   surface: z.string().min(1),
-  sourceFile: z.string().min(1),
-  blocks: z.array(documentBlockSchema).min(1),
+  /**
+   * The source she wrote it in. Optional because nothing stores it: an admin
+   * export (t-91) has no source file to name, and inventing one would be a
+   * provenance claim nobody made.
+   */
+  sourceFile: z.string().min(1).optional(),
+  /**
+   * The version an acknowledgement is recorded against, where it differs from
+   * the collection's. Her file has none, so every document takes the
+   * collection's; an admin export writes each document's own (t-91), which is
+   * how an edited Disclaimer keeps the version it was re-gated at.
+   */
+  version: z.string().min(1).optional(),
+  blocks: z.array(fileDocumentBlockSchema).min(1),
   /** `'cadence'` on `the_initiation` — see `renderNote`. */
   renderStyle: z.string().min(1).optional(),
   renderNote: z.string().min(1).optional(),
@@ -155,21 +182,28 @@ const foundationalDocumentsFileBase = z.strictObject({
     id: z.string().min(1),
     title: z.string().min(1),
     version: z.string().min(1),
-    app: z.strictObject({
-      name: z.string().min(1),
-      trademarkedName: z.string().min(1),
-      url: z.string().min(1),
-      nameNote: z.string().min(1),
-    }),
-    creator: z.strictObject({
-      name: z.string().min(1),
-      titles: z.array(z.string().min(1)),
-    }),
-    textFormat: z.string().min(1),
-    formatNotes: z.array(z.string().min(1)),
+    // `app`, `creator`, `textFormat`, `formatNotes` and `sourceFiles` describe
+    // her source and are never stored, so an admin export (t-91) cannot write
+    // them without inventing them. Optional here; her file still carries all five.
+    app: z
+      .strictObject({
+        name: z.string().min(1),
+        trademarkedName: z.string().min(1),
+        url: z.string().min(1),
+        nameNote: z.string().min(1),
+      })
+      .optional(),
+    creator: z
+      .strictObject({
+        name: z.string().min(1),
+        titles: z.array(z.string().min(1)),
+      })
+      .optional(),
+    textFormat: z.string().min(1).optional(),
+    formatNotes: z.array(z.string().min(1)).optional(),
     /** Document ids in reading order. Validated against `documents` on load. */
     suggestedOrder: z.array(z.string().min(1)).min(1),
-    sourceFiles: z.array(z.string().min(1)),
+    sourceFiles: z.array(z.string().min(1)).optional(),
     locale: z.string().min(1),
   }),
   documents: z.array(foundationalDocumentSchema).min(1),
@@ -260,12 +294,14 @@ export const journeyModuleSchema = z.strictObject({
 const journeyStructureFileBase = z.strictObject({
   app: z.strictObject({
     name: z.string().min(1),
-    url: z.string().min(1),
+    // `url`, `sources` and `structureNotes` are never stored, so an admin export
+    // (t-91) leaves them out rather than inventing them. Her file carries all three.
+    url: z.string().min(1).optional(),
     journeyTitle: z.string().min(1),
     journeySubtitle: z.string().min(1),
     version: z.string().min(1),
-    sources: z.array(z.string().min(1)),
-    structureNotes: z.array(z.string().min(1)),
+    sources: z.array(z.string().min(1)).optional(),
+    structureNotes: z.array(z.string().min(1)).optional(),
     locale: z.string().min(1),
   }),
   tiers: z
@@ -316,11 +352,13 @@ const discoveryQuestionsFileBase = z.strictObject({
     chartTitle: z.string().min(1),
     module: z.string().min(1),
     phase: z.number().int().positive(),
-    sourceFile: z.string().min(1),
+    // `sourceFile`, `textFormat` and `notes` are never stored, so an admin
+    // export (t-91) leaves them out. Her file carries all three.
+    sourceFile: z.string().min(1).optional(),
     version: z.string().min(1),
-    textFormat: z.string().min(1),
+    textFormat: z.string().min(1).optional(),
     questionCount: z.number().int().positive(),
-    notes: z.array(z.string().min(1)),
+    notes: z.array(z.string().min(1)).optional(),
     locale: z.string().min(1),
   }),
   preamble: z.strictObject({
@@ -1143,6 +1181,7 @@ export const valueExplorationsFileSchema = z.strictObject({
 // ============================================================================
 
 export type DocumentBlock = z.infer<typeof documentBlockSchema>;
+export type FileDocumentBlock = z.infer<typeof fileDocumentBlockSchema>;
 export type HeadingBlock = z.infer<typeof headingBlockSchema>;
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>;
 export type ListBlock = z.infer<typeof listBlockSchema>;

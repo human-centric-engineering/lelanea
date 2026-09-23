@@ -19,6 +19,7 @@ import {
   type DiscoveryQuestionsFile,
 } from '@/lib/app/content/schemas';
 import type { QuestionSeed } from '@/lib/app/content/question-view';
+import { questionSeedFromFile } from '@/lib/app/content/content-files';
 
 // Re-exported so the seed unit and its tests keep importing the shape from
 // beside the builder; it is DECLARED in the view (t-89), because the store
@@ -30,35 +31,9 @@ export function readDiscoveryQuestionsFile(): DiscoveryQuestionsFile {
   return discoveryQuestionsFileSchema.parse(rawDiscoveryQuestions);
 }
 
-/** The rows the seed writes, built from the file. */
+/** The rows the seed writes, built from the file. See `questionSeedFromFile`. */
 export function buildQuestionSeed(
   file: DiscoveryQuestionsFile = readDiscoveryQuestionsFile()
 ): QuestionSeed {
-  return {
-    set: {
-      id: file.content.id,
-      title: file.content.title,
-      chartTitle: file.content.chartTitle,
-      moduleId: file.content.module,
-      phase: file.content.phase,
-      preamble: { style: file.preamble.style, text: file.preamble.text },
-      pacing: {
-        rushDiscouraged: file.pacing.rushDiscouraged,
-        allowPartialCompletion: file.pacing.allowPartialCompletion,
-        note: file.pacing.note,
-      },
-      version: file.content.version,
-      locale: file.content.locale,
-    },
-    questions: file.questions.map((question) => ({
-      id: question.id,
-      number: question.number,
-      text: question.text,
-      inputType: question.inputType,
-      hint: question.hint ?? null,
-      conditionalFollowUp: question.conditionalFollowUp
-        ? { ifYes: question.conditionalFollowUp.ifYes, ifNo: question.conditionalFollowUp.ifNo }
-        : null,
-    })),
-  };
+  return questionSeedFromFile(file);
 }
