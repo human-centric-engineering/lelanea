@@ -198,30 +198,30 @@ describe('the copy', () => {
 });
 
 describe('the ceiling frame on a limit of nothing (t-96)', () => {
-  it.each([0, 0.004])(
-    'names no reset for a limit of %s — waiting would not bring replies back',
+  it('names no reset for a limit of zero — waiting would not bring replies back', () => {
+    const frame = ceilingReachedFrame({
+      spentUsd: 0,
+      ceilingUsd: 0,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    expect(frame.message).not.toContain('October');
+    expect(frame.message).not.toContain('resets');
+    expect(frame.message).toContain('still works');
+    // The figures still ride on the frame, as they are.
+    expect(frame.ceiling.ceilingUsd).toBe(0);
+  });
+
+  it.each([0.004, 0.01])(
+    'still names the reset for a positive limit (%s), which the gate lets a turn under',
     (limit) => {
       const frame = ceilingReachedFrame({
-        spentUsd: 0,
+        spentUsd: limit,
         ceilingUsd: limit,
         resetsAt: new Date('2026-10-01T00:00:00.000Z'),
       });
-      expect(frame.message).not.toContain('October');
-      expect(frame.message).not.toContain('resets');
-      expect(frame.message).toContain('still works');
-      // The figures still ride on the frame, as they are.
-      expect(frame.ceiling.ceilingUsd).toBe(limit);
+      expect(frame.message).toContain('resets on 1 October');
     }
   );
-
-  it('still names the reset for any limit a person could spend', () => {
-    const frame = ceilingReachedFrame({
-      spentUsd: 0.01,
-      ceilingUsd: 0.01,
-      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
-    });
-    expect(frame.message).toContain('resets on 1 October');
-  });
 });
 
 describe('the ceiling ending (f-safety t-59)', () => {

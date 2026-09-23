@@ -119,27 +119,29 @@ const STILL_WORKS =
  * reaches no one.
  *
  * **A date is named only when it is a promise the month keeps.** A limit of
- * nothing (`isNothingLimit` — zero, or so small it prints as `$0.00`) ends the
- * turn on the same frame with next month's `resetsAt`, but it is a setting and
- * will be the same on the 1st, so it gets no date. And with the limit unknown
- * there is no telling it is not one of those, so an unknown limit gets no date
- * either — "I can't reply for now" is true whichever it is.
+ * nothing (`isNothingLimit`, the gate's own `<= 0`) ends the turn on the same
+ * frame with next month's `resetsAt`, but it is a setting and will be the same
+ * on the 1st, so it gets no date.
  *
- * **Every figure is optional.** `events.ts` validates each one on its own and
- * drops only what is unusable, so each missing figure costs its own clause and
- * nothing else: an unknown spend drops the amounts, an unknown reset falls back
- * to "the start of next month". Never `$undefined`, never `Invalid Date`.
+ * **Without the limit there are no words of hers — `null`.** The row then
+ * shows the frame's own message, which the server built from figures it knew
+ * and which names them and the date truthfully (it asks `isNothingLimit` too).
+ * Anything she could say without the limit would say less than that, and
+ * could not tell a limit of nothing from a month used up (/code-review round 2).
+ *
+ * **The other figures are optional, one at a time.** `events.ts` validates each
+ * on its own and drops only what is unusable: an unknown spend costs the
+ * amounts and keeps the date; an unknown reset falls back to "the start of next
+ * month". Never `$undefined`, never `Invalid Date`.
  *
  * A proposal in her register until she has read it, like everything above.
  */
-export function ceilingEnding(figures: CeilingFigures | undefined): string {
+export function ceilingEnding(figures: CeilingFigures | undefined): string | null {
   const spent = figures?.spentUsd;
   const limit = figures?.ceilingUsd;
   const resetsAt = figures?.resetsAt;
 
-  if (limit === undefined) {
-    return `You've reached your limit for conversations, so I can't reply for now.\n${STILL_WORKS}`;
-  }
+  if (limit === undefined) return null;
   if (isNothingLimit(limit)) {
     return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
   }

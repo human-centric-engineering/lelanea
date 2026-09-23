@@ -718,9 +718,10 @@ no model call, no cost row.
   it in her register from the figures (`ceilingEnding` in
   `lib/app/conversation/copy.ts`, f-budget t-96; see
   [`conversation.md`](./conversation.md)), so these neutral words are only the
-  fallback. Neither names a reset date on a **limit of nothing** (zero, or under
-  half a cent — `isNothingLimit`): the limit will be the same after the reset,
-  so waiting for it would not bring replies back.
+  fallback — shown when the figures' limit did not parse, so it has to stay
+  true. Neither names a reset date on a **limit of nothing** (`isNothingLimit`,
+  the gate's `<= 0`): the limit will be the same after the reset, so waiting for
+  it would not bring replies back.
 - **One interface, so billing can replace it.** "May this person start a
   generated turn; if not, why" is all the seam knows; `TurnAllowance` has room
   for another reason.

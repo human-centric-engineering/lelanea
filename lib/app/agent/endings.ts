@@ -157,15 +157,20 @@ export function formatResetDay(at: Date): string {
 }
 
 /**
- * A limit that is nothing, as a person would read it: zero, or so small it
- * prints as `$0.00`.
+ * A limit of nothing: zero, where nothing may ever be spent.
  *
  * Such a limit is a setting, not a month's spend, and it will be the same after
  * the reset — so no copy for it may name a reset date as the day replies
  * return. Asked by the frame's neutral words and by hers alike (t-96).
+ *
+ * **Exactly the gate's test, and not "prints as $0.00".** `ceiling.ts` allows a
+ * turn while spend is below a positive limit, so a limit of $0.004 does let one
+ * reply through after the reset; calling it nothing would deny a reply the
+ * person is about to get (/code-review round 2). The usage view's
+ * `nothingAllowed` is the same `<= 0`.
  */
 export function isNothingLimit(ceilingUsd: number): boolean {
-  return ceilingUsd < 0.005;
+  return ceilingUsd <= 0;
 }
 
 /**

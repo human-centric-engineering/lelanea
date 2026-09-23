@@ -3,10 +3,10 @@
  *
  * The frame carries figures, so the copy is a function — and each figure can
  * arrive missing, because `events.ts` drops an unusable one on its own. The
- * properties: every form is a sentence with no hole in it; a missing figure
- * costs only its own clause; and a date is named only where the month keeps
- * the promise — never for a limit of nothing, and never when the limit is
- * unknown and might be one.
+ * properties: every form is a sentence with no hole in it; a missing spend or
+ * date costs only its own clause; a limit of nothing gets no date; and without
+ * the limit there are no words of hers at all (`null`), so the row shows the
+ * frame's own, which the server built truthfully.
  *
  * What counts as unusable (negative, non-finite, not an instant) is decided in
  * `events.test.ts`, where it is decided in the code.
@@ -45,27 +45,26 @@ describe('ceilingEnding', () => {
     ).toContain('from 1 January.');
   });
 
-  it.each([
-    ['zero', 0],
-    ['under half a cent, which prints as $0.00', 0.004],
-  ])('gives a limit of nothing (%s) no date — it will be the same next month', (_c, limit) => {
-    const words = ceilingEnding({ spentUsd: 0, ceilingUsd: limit, resetsAt: RESET });
+  it('gives a limit of nothing no date — it will be the same next month', () => {
+    const words = ceilingEnding({ spentUsd: 0, ceilingUsd: 0, resetsAt: RESET });
     expect(words).toBe(
       "Your limit for conversations is set to nothing at the moment, so I can't reply.\n" +
         STILL_WORKS
     );
   });
 
-  it('names no date when the limit is unknown — it might be a limit of nothing', () => {
-    const words = ceilingEnding({ spentUsd: 4, resetsAt: RESET });
-    expect(words).toBe(
-      "You've reached your limit for conversations, so I can't reply for now.\n" + STILL_WORKS
+  it('keeps the date for a limit under a cent — the gate lets a reply through after the reset', () => {
+    // `ceiling.ts` allows a turn while spend < a positive limit, so $0.004 is
+    // NOT nothing: on the 1st one reply runs. "Set to nothing" would deny it.
+    expect(ceilingEnding({ spentUsd: 0.004, ceilingUsd: 0.004, resetsAt: RESET })).toContain(
+      'I can reply again from 1 October.'
     );
   });
 
-  it('says the same with no figures at all', () => {
-    expect(ceilingEnding(undefined)).toBe(ceilingEnding({}));
-    expect(ceilingEnding(undefined)).toContain("I can't reply for now");
+  it('has no words without the limit, so the frame\u2019s true ones are shown', () => {
+    expect(ceilingEnding({ spentUsd: 4, resetsAt: RESET })).toBeNull();
+    expect(ceilingEnding({})).toBeNull();
+    expect(ceilingEnding(undefined)).toBeNull();
   });
 
   it('drops only the amounts when the spend is unknown, and keeps the date', () => {
@@ -81,18 +80,15 @@ describe('ceilingEnding', () => {
     expect(words).toContain('I can reply again from the start of next month.');
   });
 
-  it('never prints a hole, whichever figures are missing', () => {
+  it('never prints a hole, whichever of the spend and the date is missing', () => {
     const shapes = [
-      {},
-      { spentUsd: 4 },
       { ceilingUsd: 4 },
-      { resetsAt: RESET },
       { spentUsd: 4, ceilingUsd: 4 },
       { ceilingUsd: 4, resetsAt: RESET },
-      { spentUsd: 4, resetsAt: RESET },
+      { spentUsd: 4, ceilingUsd: 4, resetsAt: RESET },
     ];
     for (const figures of shapes) {
-      const words = ceilingEnding(figures);
+      const words = ceilingEnding(figures) ?? '';
       expect(words).not.toMatch(HOLES);
       expect(words.endsWith(STILL_WORKS)).toBe(true);
     }

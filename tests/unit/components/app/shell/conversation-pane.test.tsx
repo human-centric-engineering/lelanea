@@ -380,13 +380,11 @@ describe('when she can\u2019t answer (t-65)', () => {
       expect(words).not.toMatch(/undefined|NaN|Invalid Date|\$/);
     });
 
-    it('still says what happened, and promises no date, when nothing parsed', async () => {
+    it('shows the frame\u2019s own true words when the limit did not parse', async () => {
+      // Without the limit her words could not tell a limit of nothing from a
+      // month used up; the server's message was built from figures it knew.
       await endOn(frame.code, frame.message, { ceiling: 'x' });
-      const words = endingRow().textContent ?? '';
-
-      expect(words).toContain("I can't reply for now");
-      expect(words).not.toMatch(/October|next month|undefined|\$/);
-      expect(screen.queryByText(frame.message)).toBeNull();
+      expect(endingRow().textContent).toBe(frame.message);
     });
   });
 

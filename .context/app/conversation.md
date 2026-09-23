@@ -217,13 +217,18 @@ wait**: no control is drawn beside it and nothing invites a reply, because
 there is no "ask for more" behind either (owner, 22 Sept 2026; `B31`).
 
 - **A date is named only where the month keeps the promise.** A limit of
-  nothing — zero, or so small it prints as `$0.00` (`isNothingLimit` in
-  `lib/app/agent/endings.ts`, shared with the frame's neutral copy) — ends the
-  turn on the same frame with next month's `resetsAt`, but the limit is a
-  setting and will be the same on the 1st, so "I can reply again from
-  1 October" would be false. It says the limit is set to nothing. With the limit
-  **unknown** there is no telling it is not one of those, so that gets no date
-  either: "I can't reply for now".
+  nothing — `isNothingLimit` in `lib/app/agent/endings.ts`, the gate's own
+  `<= 0`, shared with the frame's neutral copy — ends the turn on the same frame
+  with next month's `resetsAt`, but the limit is a setting and will be the same
+  on the 1st, so "I can reply again from 1 October" would be false. It says the
+  limit is set to nothing. **Not** "prints as `$0.00`": the gate lets a turn
+  start under any positive limit, so a $0.004 limit does bring a reply back
+  after the reset.
+- **Without the limit, the frame's own words.** `ceilingEnding` returns `null`
+  when the limit did not parse, and the row shows the frame's `message` — built
+  by the server from figures it knew, true, and naming them and the date. Her
+  words without the limit could not tell a limit of nothing from a month used
+  up.
 - **Every figure is optional, one at a time.** `ceilingFiguresSchema` in
   `events.ts` validates each figure on its own — an amount must be a
   non-negative number, the reset an ISO instant — and drops only the one that

@@ -381,7 +381,8 @@ export function EndingRow({
 
 function endingWords(code: string, ceiling: CeilingFigures | undefined): string | null {
   if (code === TURN_IN_FLIGHT) return CONVERSATION_COPY.stillWorking;
-  // No button beside it: there is nothing to ask for (`B31`).
+  // No button beside it: there is nothing to ask for (`B31`). Null without the
+  // limit, and the row falls back to the frame's own words, which are true.
   if (code === ENDING_CEILING_REACHED) return ceilingEnding(ceiling);
   return Object.hasOwn(CONVERSATION_COPY.endings, code)
     ? CONVERSATION_COPY.endings[code as keyof typeof CONVERSATION_COPY.endings]
