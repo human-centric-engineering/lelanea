@@ -133,8 +133,8 @@ what seeds them.
 
 **One service writes and reads them:** `lib/app/content/document-store.ts`. Pages,
 the gate, both emails, the waitlist's locale fallback and the API all call it.
-The knowledge-base mirror (t-90) and the admin editor (t-91) attach to it, not to
-the tables.
+The knowledge-base mirror (t-90, [below](#her-words-in-the-knowledge-base-the-mirror))
+and the admin editor (t-91) attach to it, not to the tables.
 
 | Function (`document-store.ts`)    | Returns                                                                                   |
 | --------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -177,6 +177,64 @@ migration, and an edit goes through the admin (t-91).
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key
 map, and provides the file-level placeholder checks. Nothing a request reaches
 should import it (t-89 makes that a rule).
+
+## Her words in the knowledge base: the mirror
+
+Since t-90 five of the seven documents are also in the knowledge base, so the
+agent can find her answer when someone asks what this work is, or why it
+exists. `search_knowledge_base` can only find what is there. The row stays
+authoritative; the mirror is an index that is rebuilt from it and never read
+back into the app.
+
+| Mirrored (category `onboarding` or `about`)                                                                | Never mirrored (category `legal`)                |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `the_initiation`, `the_heart_behind_lelanea`, `the_mission`, `about_the_creator`, `the_lineage_of_lelanea` | `disclaimer` ("The Lelañea App"), `terms_of_use` |
+
+**One reconcile does all of it:** `reconcileKnowledgeMirror()` in
+`lib/app/content/knowledge-mirror.ts`. Each mirrored document becomes one
+`AiKnowledgeDocument`, uploaded through the platform's own `uploadDocument`
+(no chunker or embedder of ours), with its `app_knowledge_designation` row
+carrying `sourceKey` `foundational:<id>`. That key is how an edit finds the same
+document and a removed row deletes it. Merge fields are dropped with the comma
+that sets them off (`Welcome, {{first_name}}.` becomes `Welcome.`), because a
+retrieved passage is quoted to a person.
+
+- **Idempotent.** Unchanged text (same SHA-256 as the document's `fileHash`)
+  writes nothing and makes no embedding call.
+- **Changed text** re-ingests into the same document (`rechunkDocument`), so its
+  id, tags and any re-designation survive.
+- **Designated `knowledge` / `public`**, but only where the document has no tag
+  from that family. An admin can re-designate it at `/admin/app/knowledge` and
+  the mirror leaves the choice alone.
+- **Safe on empty.** With no foundational rows at all it does nothing, rather
+  than delete every mirror.
+- **One failed document does not stop the rest.** It is reported, and the next
+  run retries it.
+
+**Three callers, because no single one reaches every database:**
+
+| Caller                                                  | When it runs                          | Why it is needed                                                         |
+| ------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| `seedFoundationalDocuments` (and t-91's editor writes)  | after every write through the service | an edit must not leave the agent recalling the old words                 |
+| seed `app-lelanea/020-knowledge-mirror`                 | `db:seed`, once per source hash       | on `db:reset` the rows come from a migration and seed 015 writes nothing |
+| `GET /api/v1/app/cron/knowledge-mirror` (`vercel.json`) | daily, 04:17 UTC                      | production seeds only when asked, and nothing can embed from a migration |
+
+**Not a migration** (it needs an embedding call). **Not the maintenance tick**,
+because on Vercel nothing calls the tick, and when something does it runs app
+jobs after answering, where the function can be frozen. See the journal
+decision "Knowledge mirror (t-90)…".
+
+**The cron route needs `CRON_SECRET`** (16+ characters) in the Vercel project.
+Vercel Cron sends it as `Authorization: Bearer …`. Without it the route refuses
+every request with 503, so an unconfigured deploy fails visibly in the cron log
+rather than silently.
+
+**The seed unit throws when a document fails**, typically when no embedding
+provider is configured, so the runner records nothing and the next `db:seed`
+retries.
+
+**Values reuses this** for the value explorations: a new source prefix and a
+reader in the same module, not a second path.
 
 ## The journey, the questions and the resources: the database
 
