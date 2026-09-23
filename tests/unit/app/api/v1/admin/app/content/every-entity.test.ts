@@ -710,3 +710,143 @@ describe('a body that is not JSON', () => {
     expect(response.error?.code).toBe('VALIDATION_ERROR');
   });
 });
+
+describe('routes an entity does not fill', () => {
+  it('404s the history and restore of a row with no history', async () => {
+    const h = await call(
+      history(req('GET', '/journey/journey/x/history'), item('journey', 'journey', 'x'))
+    );
+    const r = await call(
+      restore(
+        req('POST', '/documents/collection/x/restore', { revision: 1, revisionRead: 1 }),
+        item('documents', 'collection', 'x')
+      )
+    );
+    expect([h.status, r.status]).toEqual([404, 404]);
+  });
+
+  it('audits nothing for a reorder that moves nothing', async () => {
+    const { documents } = await view<DocumentsAdminView>('documents');
+    const order = documents.map((document) => ({ id: document.id, revision: document.revision }));
+    const response = await call(
+      reorder(req('PUT', '/documents/order', { order }), collectionParams('documents'))
+    );
+    expect(response.data).toEqual({ moved: 0 });
+    expect(audit.logAdminAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('imports through the route', () => {
+  it('a journey file that changes the journey, a tier and a module writes each as a revision, and audits them', async () => {
+    const { POST: applyImport } =
+      await import('@/app/api/v1/admin/app/content/[collection]/import/route');
+    const { GET: exportFile } =
+      await import('@/app/api/v1/admin/app/content/[collection]/export/route');
+    const file = (await (
+      await exportFile(req('GET', '/journey/export'), collectionParams('journey'))
+    ).json()) as {
+      app: { journeyTitle: string };
+      tiers: { intent: string }[];
+      modules: { title: string; subtitle?: string }[];
+    };
+    file.app.journeyTitle = 'Imported journey';
+    file.tiers[0].intent = 'Imported intent.';
+    file.modules[3].title = 'Imported title';
+    delete file.modules[3].subtitle;
+
+    const response = await call(
+      applyImport(req('POST', '/journey/import', { file }), collectionParams('journey'))
+    );
+
+    expect(response.status).toBe(200);
+    const structure = (await view<JourneyAdminView>('journey')).structure!;
+    expect(structure.collection.title).toBe('Imported journey');
+    expect(structure.tiers[0]).toMatchObject({ intent: 'Imported intent.', revision: 2 });
+    expect(structure.modules[3]).toMatchObject({
+      title: 'Imported title',
+      subtitle: null,
+      revision: 2,
+    });
+    expect(audit.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'app_content.journey.import' })
+    );
+
+    const again = await call(
+      applyImport(req('POST', '/journey/import', { file }), collectionParams('journey'))
+    );
+    expect(again.data).toMatchObject({ plan: { writesNothing: true } });
+  });
+
+  it('a resources file that adds one film and drops another names both in the audit', async () => {
+    const { POST: applyImport } =
+      await import('@/app/api/v1/admin/app/content/[collection]/import/route');
+    await call(
+      create(
+        req('POST', '/resources/resource', {
+          id: 'leaving',
+          kind: 'film',
+          title: 'L',
+          subtitle: 'l',
+          relatesTo: null,
+          duration: '1:00',
+          href: 'https://example.com/l',
+        }),
+        entity('resources', 'resource')
+      )
+    );
+    const { GET: exportFile } =
+      await import('@/app/api/v1/admin/app/content/[collection]/export/route');
+    const file = (await (
+      await exportFile(req('GET', '/resources/export'), collectionParams('resources'))
+    ).json()) as { films: Record<string, unknown>[] };
+    file.films = [
+      {
+        id: 'arriving',
+        title: 'A',
+        subtitle: 'a',
+        relatesTo: null,
+        duration: '2:00',
+        href: 'https://example.com/a',
+      },
+    ];
+    audit.logAdminAction.mockClear();
+
+    await call(
+      applyImport(req('POST', '/resources/import', { file }), collectionParams('resources'))
+    );
+
+    expect(audit.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: {
+          sections: expect.arrayContaining([
+            expect.objectContaining({
+              entity: 'resource',
+              created: ['arriving'],
+              removed: ['leaving'],
+              removalKind: 'retire',
+            }),
+          ]),
+        },
+      })
+    );
+  });
+});
+
+describe('the journey row', () => {
+  it('a save that changes nothing writes nothing', async () => {
+    const journey = await view<JourneyAdminView>('journey');
+    const meta = journey.structure!.collection;
+    const body = {
+      title: meta.title,
+      subtitle: meta.subtitle,
+      version: meta.version,
+      locale: meta.locale,
+      updatedAt: journey.updatedAt,
+    };
+    const response = await call(
+      save(req('PUT', '/journey/journey/x', body), item('journey', 'journey', meta.id))
+    );
+    expect(response.data?.changed).toEqual([]);
+    expect(audit.logAdminAction).not.toHaveBeenCalled();
+  });
+});

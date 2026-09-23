@@ -354,3 +354,28 @@ describe('small rules', () => {
     expect(resources.resourcesExportFilename(day)).toBe('lelanea-resources-2026-09-23.json');
   });
 });
+
+describe('the journey’s structure is the roster’s', () => {
+  it('previews a file whose modules differ from the roster as refused, planning nothing', async () => {
+    const file = await journey.exportJourneyFile();
+    file.modules[1].number = 42;
+
+    const plan = await journey.previewJourneyImport(file);
+
+    expect(plan.refusals.join(' ')).toContain('lib/app/journey/roster.ts');
+    expect(plan.writesNothing).toBe(true);
+  });
+
+  it('restores a tier’s words as a new revision, and a restore to the same words writes nothing', async () => {
+    await journey.updateTier(
+      'foundations',
+      { label: 'Foundations, edited', intent: 'Edited.' },
+      1,
+      EDITOR
+    );
+    const restored = await journey.restoreTierRevision('foundations', 1, 2, EDITOR);
+    expect(restored).toMatchObject({ changed: ['label', 'intent'], revision: 3 });
+    const again = await journey.restoreTierRevision('foundations', 1, 3, EDITOR);
+    expect(again.changed).toEqual([]);
+  });
+});
