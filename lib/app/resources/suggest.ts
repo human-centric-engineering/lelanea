@@ -154,7 +154,9 @@ export async function loadLibraryForChips(
   );
   if (!suggested) return null;
   try {
-    return await getResourcesLibrary();
+    // Retired resources included: a chip for a suggestion made before its
+    // resource was retired must still resolve (t-91). See `getResourcesLibrary`.
+    return await getResourcesLibrary({ includeRetired: true });
   } catch (err) {
     logger.warn('Resource library could not be read; suggestions are shown without chips', {
       error: err instanceof Error ? err.message : String(err),
@@ -194,8 +196,9 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
  * nothing to redact).
  *
  * Only a call that answered counts (`capability-answers.ts`), and only an id
- * the library still has: a resource removed from the library after the turn is
- * not shown as a chip to nowhere. Order is the traces' order.
+ * the library still has. A resource retired after the turn still resolves,
+ * because the library is read with its retired resources for exactly this
+ * (t-91), and resources are never deleted. Order is the traces' order.
  *
  * Each takes the library the caller read once ({@link loadLibraryForChips});
  * `null` resolves nothing.

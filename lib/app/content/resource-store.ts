@@ -70,15 +70,28 @@ const RESOURCE_COLUMNS = {
 /**
  * The whole library: every film and reading in order, and her words by key.
  *
+ * **Retired resources are left out** unless `includeRetired` is set (t-91). A
+ * retired resource is no longer offered, listed or suggestable, so every
+ * surface that shows the library reads it without them. Chip resolution is the
+ * one caller that asks for them: a suggestion already made in a conversation
+ * names a resource by id, and its chip must still resolve after the resource is
+ * retired. That is what the tombstone is for.
+ *
  * @throws ContentNotSeededError when the seed has not run.
  */
-export async function getResourcesLibrary(): Promise<ResourcesLibrary> {
+export async function getResourcesLibrary(
+  options: { includeRetired?: boolean } = {}
+): Promise<ResourcesLibrary> {
   const [collection, resources, words] = await Promise.all([
     defaultClient.appResourceCollection.findFirst({
       select: { id: true, title: true, version: true, locale: true, provenance: true },
       orderBy: { createdAt: 'asc' },
     }),
-    defaultClient.appResource.findMany({ select: RESOURCE_COLUMNS, orderBy: { position: 'asc' } }),
+    defaultClient.appResource.findMany({
+      where: options.includeRetired ? {} : { retired: false },
+      select: RESOURCE_COLUMNS,
+      orderBy: { position: 'asc' },
+    }),
     defaultClient.appResourceWords.findMany({
       select: {
         key: true,
@@ -96,19 +109,21 @@ export async function getResourcesLibrary(): Promise<ResourcesLibrary> {
 }
 
 /**
- * One film or reading by id, or `null` when the library has no such id.
+ * One live film or reading by id, or `null` when the library has no such id or
+ * it has been retired.
  *
  * One indexed read, for a caller that needs one item: the suggestion tool, per
- * call. A caller resolving many ids reads the library once instead.
+ * call. A retired resource is `null` here because suggesting it is exactly what
+ * retiring stops. A caller resolving many ids reads the library once instead.
  */
 export async function getResource(
   id: string
 ): Promise<ResourceFilmView | ResourceReadingView | null> {
   const row = await defaultClient.appResource.findUnique({
     where: { id },
-    select: RESOURCE_COLUMNS,
+    select: { ...RESOURCE_COLUMNS, retired: true },
   });
-  if (!row) return null;
+  if (!row || row.retired) return null;
   return row.kind === 'film' ? toFilm(row) : toReading(row);
 }
 
@@ -140,6 +155,7 @@ export const RESOURCE_SNAPSHOT_FIELDS = [
   'readingTime',
   'href',
   'documentId',
+  'retired',
 ] as const;
 
 /** The fields a words revision snapshots. */

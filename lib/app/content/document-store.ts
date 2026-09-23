@@ -196,33 +196,61 @@ export async function seedFoundationalDocuments(
     }),
   ]);
 
-  await mirrorAfterWrite();
+  await syncKnowledgeMirror();
   return { status: 'seeded', documents: seed.documents.length };
 }
 
 /**
  * Bring the knowledge-base mirror into step after a write (t-90). **Every write
- * this service makes calls it**, including t-91's editor writes, so no edit can
- * leave the agent recalling the old words.
+ * to these tables calls it**: the seed's here, and every admin write in
+ * `lib/app/content/admin/documents.ts` (t-91), so no edit can leave the agent
+ * recalling the old words.
  *
  * Best-effort: the rows are already committed and are what every surface reads.
  * A failed mirror is logged and retried by the next reconcile (the seed unit or
  * the cron route), so it must not turn a successful write into an error.
  *
+ * ## Overlapping saves (t-91)
+ *
+ * The t-90 review declined this as unreachable while the seed was the only
+ * writer; the editor makes it reachable. Two saves A then B, each followed by a
+ * reconcile: A's reconcile can read A's text, B's reconcile writes B's, and A's
+ * finishes last with the older words. So after reconciling, this reads the
+ * documents' revisions again, and reconciles once more if they moved while it
+ * ran. Whichever reconcile finishes last does that check after its own write,
+ * so the last word the mirror holds is the rows' current one. The saves
+ * themselves are serialised by the revision lock. **Rejected:** a lock held
+ * across the reconcile, which would hold a database lock across embedding
+ * calls, the reason the t-90 review gave for not adding one.
+ *
  * Imported dynamically so the pages that read this service do not load the
  * ingestion pipeline to render a document.
  */
-async function mirrorAfterWrite(): Promise<void> {
+export async function syncKnowledgeMirror(): Promise<void> {
+  const revisions = async (): Promise<string> =>
+    (
+      await defaultClient.appFoundationalDocument.findMany({
+        select: { id: true, revision: true },
+        orderBy: { id: 'asc' },
+      })
+    )
+      .map((row) => `${row.id}@${row.revision}`)
+      .join(',');
+
   try {
     const { reconcileKnowledgeMirror } = await import('@/lib/app/content/knowledge-mirror');
-    const result = await reconcileKnowledgeMirror();
-    if (result.failed.length > 0) {
-      logger.warn(
-        'Knowledge mirror incomplete after a documents write; the next reconcile retries',
-        {
-          failed: result.failed.map((failure) => failure.sourceKey),
-        }
-      );
+    // Bounded: a third pass means saves are arriving faster than a reconcile
+    // runs, and the next save's own call picks up where this one stops.
+    for (let pass = 0; pass < MIRROR_PASSES; pass++) {
+      const before = await revisions();
+      const result = await reconcileKnowledgeMirror();
+      if (result.failed.length > 0) {
+        logger.warn(
+          'Knowledge mirror incomplete after a documents write; the next reconcile retries',
+          { failed: result.failed.map((failure) => failure.sourceKey) }
+        );
+      }
+      if ((await revisions()) === before) return;
     }
   } catch (error) {
     logger.warn('Knowledge mirror failed after a documents write; the next reconcile retries', {
@@ -230,3 +258,6 @@ async function mirrorAfterWrite(): Promise<void> {
     });
   }
 }
+
+/** How many times one write's mirror sync reconciles, at most. */
+const MIRROR_PASSES = 3;

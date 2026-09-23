@@ -70,6 +70,7 @@ import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { slotTaxonomyFileSchema, type SlotTaxonomyFile } from '@/lib/app/slots/taxonomy-file';
+import { planKeyedImport, type KeyedChange } from '@/lib/app/content/admin/keyed-import';
 import {
   SLOT_DEFINITION_FIELDS,
   changedDefinitionFields,
@@ -592,83 +593,69 @@ export function planTaxonomyUpload(
   mode: SlotUploadMode,
   stored: readonly SlotDefinitionRow[]
 ): SlotUploadPlan {
-  const bySlug = new Map(stored.map((row) => [row.slug, row]));
-  const inFile = new Set(file.slots.map((slot) => slot.slug));
+  // The mechanism is the shared keyed planner (t-91 generalised it from this
+  // function). What stays here is what is specific to a taxonomy: a file entry
+  // carries no `isActive`, so a create is born active and an update keeps the
+  // stored flag; retirement is `isActive = false`; and absence retires only in
+  // `replace`.
+  const plan = planKeyedImport<SlotTaxonomyFile['slots'][number], StoredSlotDefinitionFields>({
+    incoming: file.slots.map((slot) => ({ key: slot.slug, value: slot })),
+    stored: stored.map((row) => ({
+      key: row.slug,
+      fields: fieldsOf(row),
+      revision: row.version,
+      retired: !row.isActive,
+    })),
+    diff: changedDefinitionFields,
+    allFields: SLOT_DEFINITION_FIELDS,
+    toCreate: (slot) => ({ ...authoredOf(slot), isActive: true }),
+    toUpdate: (before, slot) => ({ ...before, ...authoredOf(slot) }),
+    onAbsent: mode === 'replace' ? (before) => ({ ...before, isActive: false }) : 'keep',
+  });
 
-  const plan: SlotUploadPlan = {
+  const toSlotChange = (
+    change: KeyedChange<StoredSlotDefinitionFields>,
+    kind: SlotUploadChange['kind']
+  ): SlotUploadChange => ({
+    slug: change.key,
+    kind,
+    // The keyed planner reports the fields `changedDefinitionFields` returned,
+    // or every field on a create, which is `SLOT_DEFINITION_FIELDS` itself.
+    changedFields: change.changedFields.filter(isSlotDefinitionField),
+    before: change.before,
+    // Non-null: a taxonomy removal is a retirement, never a delete.
+    after: change.after!,
+    version: change.revision,
+  });
+
+  return {
     mode,
-    creates: [],
-    updates: [],
-    retirements: [],
-    unchanged: [],
-    skippedRetired: [],
-    absentFromFile: [],
+    creates: plan.creates.map((change) => toSlotChange(change, 'create')),
+    updates: plan.updates.map((change) => toSlotChange(change, 'update')),
+    retirements: plan.removals.map((change) => toSlotChange(change, 'retire')),
+    unchanged: plan.unchanged,
+    skippedRetired: plan.skippedRetired,
+    absentFromFile: plan.absentFromFile,
   };
+}
 
-  for (const slot of file.slots) {
-    const current = bySlug.get(slot.slug);
-    const authored = {
-      group: slot.group,
-      description: slot.description,
-      visibility: slot.visibility,
-      mode: slot.mode,
-      dataType: slot.dataType,
-      sensitivity: slot.sensitivity,
-      priorityWeight: slot.priorityWeight,
-    };
+/** The fields a taxonomy file entry authors: everything but `isActive`. */
+function authoredOf(
+  slot: SlotTaxonomyFile['slots'][number]
+): Omit<StoredSlotDefinitionFields, 'isActive'> {
+  return {
+    group: slot.group,
+    description: slot.description,
+    visibility: slot.visibility,
+    mode: slot.mode,
+    dataType: slot.dataType,
+    sensitivity: slot.sensitivity,
+    priorityWeight: slot.priorityWeight,
+  };
+}
 
-    if (!current) {
-      plan.creates.push({
-        slug: slot.slug,
-        kind: 'create',
-        changedFields: [...SLOT_DEFINITION_FIELDS],
-        before: null,
-        after: { ...authored, isActive: true },
-        version: 1,
-      });
-      continue;
-    }
-
-    if (!current.isActive) {
-      plan.skippedRetired.push(slot.slug);
-      continue;
-    }
-
-    const before = fieldsOf(current);
-    const after: StoredSlotDefinitionFields = { ...before, ...authored };
-    const changedFields = changedDefinitionFields(before, after);
-    if (changedFields.length === 0) {
-      plan.unchanged.push(slot.slug);
-      continue;
-    }
-    plan.updates.push({
-      slug: slot.slug,
-      kind: 'update',
-      changedFields,
-      before,
-      after,
-      version: current.version + 1,
-    });
-  }
-
-  for (const row of stored) {
-    if (inFile.has(row.slug) || !row.isActive) continue;
-    plan.absentFromFile.push(row.slug);
-    if (mode !== 'replace') continue;
-
-    const before = fieldsOf(row);
-    const after: StoredSlotDefinitionFields = { ...before, isActive: false };
-    plan.retirements.push({
-      slug: row.slug,
-      kind: 'retire',
-      changedFields: changedDefinitionFields(before, after),
-      before,
-      after,
-      version: row.version + 1,
-    });
-  }
-
-  return plan;
+function isSlotDefinitionField(field: string): field is SlotDefinitionField {
+  return SLOT_DEFINITION_FIELDS.some((known) => known === field);
 }
 
 /** Whether a plan would write anything at all. */
