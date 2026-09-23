@@ -20,29 +20,44 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { queryRaw, findTurn, findCostRows, findUsers, getEffectiveMonthlyCeiling } = vi.hoisted(
-  () => ({
-    queryRaw: vi.fn(),
-    findTurn: vi.fn(),
-    findCostRows: vi.fn(),
-    findUsers: vi.fn(),
-    getEffectiveMonthlyCeiling: vi.fn(),
-  })
-);
+const {
+  queryRaw,
+  findTurn,
+  findTurns,
+  findCostRows,
+  findUsers,
+  findConversations,
+  getEffectiveMonthlyCeiling,
+  getEffectiveMonthlyCeilings,
+} = vi.hoisted(() => ({
+  queryRaw: vi.fn(),
+  findTurn: vi.fn(),
+  findTurns: vi.fn(),
+  findCostRows: vi.fn(),
+  findUsers: vi.fn(),
+  findConversations: vi.fn(),
+  getEffectiveMonthlyCeiling: vi.fn(),
+  getEffectiveMonthlyCeilings: vi.fn(),
+}));
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     $queryRaw: queryRaw,
-    appTurn: { findUnique: findTurn },
+    appTurn: { findUnique: findTurn, findMany: findTurns },
     aiCostLog: { findMany: findCostRows },
     user: { findMany: findUsers },
+    aiConversation: { findMany: findConversations },
   },
 }));
-vi.mock('@/lib/app/agent/settings', () => ({ getEffectiveMonthlyCeiling }));
+vi.mock('@/lib/app/agent/settings', () => ({
+  getEffectiveMonthlyCeiling,
+  getEffectiveMonthlyCeilings,
+}));
 
 import {
   classifyCostRow,
   getAdminBreakdown,
+  getConversationTurns,
   getMemberBreakdown,
   getMonthToDate,
   getTurnMeter,
@@ -222,6 +237,7 @@ describe('breakdowns', () => {
       rawTotals({ cost_usd: 3.5 })
     );
     findUsers.mockResolvedValue([{ id: ME, name: 'Ada', email: 'ada@example.com' }]);
+    getEffectiveMonthlyCeilings.mockResolvedValue(new Map());
 
     const result = await getAdminBreakdown({ by: 'user', window: WINDOW, limit: 10 });
 
@@ -236,11 +252,68 @@ describe('breakdowns', () => {
     ]);
   });
 
+  it('gives each person their effective ceiling in one read, and platform cost none (t-97)', async () => {
+    answerBreakdown(
+      [
+        { key: ME, ...rawTotals({ cost_usd: 21 }) },
+        { key: null, ...rawTotals({ cost_usd: 1 }) },
+      ],
+      rawTotals({ cost_usd: 22 })
+    );
+    findUsers.mockResolvedValue([{ id: ME, name: 'Ada', email: 'ada@example.com' }]);
+    getEffectiveMonthlyCeilings.mockResolvedValue(
+      new Map([[ME, { ceilingUsd: 20, source: 'override' }]])
+    );
+
+    const result = await getAdminBreakdown({ by: 'user', window: WINDOW, limit: 10 });
+
+    // One read for the whole list — never one per person — and only the ids
+    // listed, never the null group.
+    expect(getEffectiveMonthlyCeilings).toHaveBeenCalledTimes(1);
+    expect(getEffectiveMonthlyCeilings).toHaveBeenCalledWith([ME]);
+    expect(result.groups.map((group) => ('ceiling' in group ? group.ceiling : 'absent'))).toEqual([
+      { ceilingUsd: 20, source: 'override' },
+      null,
+    ]);
+  });
+
+  it('names each conversation and its owner, two reads for the whole list (t-97)', async () => {
+    const OWNER = 'cmu0000000000000000owner';
+    answerBreakdown(
+      [
+        { key: 'cmuconv0000000000000one', ...rawTotals({ cost_usd: 3 }) },
+        { key: 'cmuconv00000000000000gone', ...rawTotals({ cost_usd: 1 }) },
+        { key: null, ...rawTotals({ cost_usd: 0.5 }) },
+      ],
+      rawTotals({ cost_usd: 4.5 })
+    );
+    findConversations.mockResolvedValue([
+      { id: 'cmuconv0000000000000one', title: 'Loyalty', userId: OWNER },
+    ]);
+    findUsers.mockResolvedValue([{ id: OWNER, name: 'Bea', email: 'bea@example.com' }]);
+
+    const result = await getAdminBreakdown({ by: 'conversation', window: WINDOW, limit: 10 });
+
+    expect(findConversations).toHaveBeenCalledTimes(1);
+    expect(findUsers).toHaveBeenCalledTimes(1);
+    expect(findUsers.mock.calls[0][0]).toMatchObject({ where: { id: { in: [OWNER] } } });
+    expect(
+      result.groups.map((group) => ('conversation' in group ? group.conversation : 'absent'))
+    ).toEqual([
+      { title: 'Loyalty', userId: OWNER, user: { name: 'Bea', email: 'bea@example.com' } },
+      null, // since deleted
+      null, // rows with no conversation
+    ]);
+  });
+
   it('does not look anyone up for any other dimension', async () => {
     answerBreakdown([{ key: 'onboarding', ...rawTotals() }], rawTotals());
     const result = await getAdminBreakdown({ by: 'seat', window: WINDOW, limit: 10 });
     expect(findUsers).not.toHaveBeenCalled();
+    expect(findConversations).not.toHaveBeenCalled();
+    expect(getEffectiveMonthlyCeilings).not.toHaveBeenCalled();
     expect(result.groups[0]).not.toHaveProperty('user');
+    expect(result.groups[0]).not.toHaveProperty('conversation');
   });
 });
 
@@ -446,5 +519,100 @@ describe('one turn', () => {
     findCostRows.mockResolvedValue([costRow({ totalCostUsd: 0, isLocal: true })]);
     const meter = await getTurnMeter(ME, TURN.turnId);
     expect(meter!.unpricedRows).toBe(0);
+  });
+});
+
+/**
+ * One conversation's turns (t-97). The rule that matters is that a turn's
+ * figure here is the figure its detail page shows: the same rows, found the
+ * same way — tagged with the turn id for that person, plus its reply's
+ * embedding — so the drill-down cannot contradict the page it opens.
+ */
+describe("one conversation's turns", () => {
+  const CONV = 'cmuconv0000000000000one';
+  const turn = (turnId: string, over: Record<string, unknown> = {}) => ({
+    turnId,
+    userId: ME,
+    seat: 'conversation',
+    status: 'completed',
+    attempts: 1,
+    errorCode: null,
+    modelId: 'claude-sonnet-5',
+    startedAt: new Date('2026-09-10T10:00:00Z'),
+    completedAt: new Date('2026-09-10T10:00:05Z'),
+    assistantMessageId: null,
+    ...over,
+  });
+  const costRow = (cost: number, metadata: Record<string, unknown>, over = {}) => ({
+    userId: ME,
+    totalCostUsd: cost,
+    isLocal: false,
+    inputTokens: 10,
+    outputTokens: 10,
+    metadata,
+    ...over,
+  });
+
+  it('reads the turns that started in the window, by conversation', async () => {
+    findTurns.mockResolvedValue([]);
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+
+    expect(findTurns.mock.calls[0][0]).toMatchObject({
+      where: { conversationId: CONV, startedAt: { gte: WINDOW.from, lt: WINDOW.to } },
+    });
+    // No turns, no second read.
+    expect(findCostRows).not.toHaveBeenCalled();
+    expect(result).toEqual({ conversationId: CONV, window: WINDOW, turns: [], truncated: false });
+  });
+
+  it("sums each turn's tagged rows and its reply's embedding, costliest first", async () => {
+    findTurns.mockResolvedValue([
+      turn('t-cheap', { startedAt: new Date('2026-09-10T10:00:00Z') }),
+      turn('t-dear', { startedAt: new Date('2026-09-11T10:00:00Z'), assistantMessageId: 'msg-2' }),
+    ]);
+    findCostRows.mockResolvedValue([
+      costRow(0.01, { turnId: 't-cheap' }),
+      costRow(0.2, { turnId: 't-dear' }),
+      costRow(0.05, { turnId: 't-dear', kind: 'tool_call' }),
+      costRow(0.001, { kind: 'message_embedding', messageId: 'msg-2' }),
+      // Unpriced: tokens used, costed at nothing, not local.
+      costRow(0, { turnId: 't-dear' }),
+    ]);
+
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+
+    expect(result.turns.map((row) => row.turnId)).toEqual(['t-dear', 't-cheap']);
+    expect(result.turns[0]).toMatchObject({ costRows: 4, unpricedRows: 1, userId: ME });
+    expect(result.turns[0].costUsd).toBeCloseTo(0.251);
+    expect(result.turns[1]).toMatchObject({ costUsd: 0.01, costRows: 1, unpricedRows: 0 });
+    // One read for every turn's rows, scoped to the turns' people.
+    expect(findCostRows).toHaveBeenCalledTimes(1);
+    expect(findCostRows.mock.calls[0][0]).toMatchObject({ where: { userId: { in: [ME] } } });
+  });
+
+  it("never gives one person's row to another's turn with the same id", async () => {
+    // Turn ids are unique per person, not globally.
+    const OTHER = 'cmu0000000000000000other';
+    findTurns.mockResolvedValue([turn('t-1')]);
+    findCostRows.mockResolvedValue([
+      costRow(0.3, { turnId: 't-1' }),
+      costRow(9, { turnId: 't-1' }, { userId: OTHER }),
+    ]);
+
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+    expect(result.turns[0].costUsd).toBe(0.3);
+  });
+
+  it('cuts the cheapest past the limit, after summing, and says so', async () => {
+    findTurns.mockResolvedValue([turn('a'), turn('b'), turn('c')]);
+    findCostRows.mockResolvedValue([
+      costRow(0.1, { turnId: 'a' }),
+      costRow(0.3, { turnId: 'b' }),
+      costRow(0.2, { turnId: 'c' }),
+    ]);
+
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 2 });
+    expect(result.turns.map((row) => row.turnId)).toEqual(['b', 'c']);
+    expect(result.truncated).toBe(true);
   });
 });

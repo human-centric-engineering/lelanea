@@ -128,6 +128,39 @@ export async function getEffectiveMonthlyCeiling(userId: string): Promise<Effect
 }
 
 /**
+ * Several people's effective ceilings in one read — the admin cost view's
+ * by-user breakdown flags whoever is at or past theirs (f-budget t-97).
+ *
+ * The same rule as {@link getEffectiveMonthlyCeiling}, over a list: one read
+ * of the overrides for exactly these ids, one of the default. Never a read per
+ * person — that is the per-row fetch the cost view exists to avoid.
+ */
+export async function getEffectiveMonthlyCeilings(
+  userIds: readonly string[]
+): Promise<Map<string, EffectiveCeiling>> {
+  if (userIds.length === 0) return new Map();
+  const [overrides, settings] = await Promise.all([
+    prisma.appUserBudget.findMany({
+      where: { userId: { in: [...userIds] } },
+      select: { userId: true, monthlyCeilingUsd: true },
+    }),
+    getAgentSettings(),
+  ]);
+  const own = new Map(overrides.map((row) => [row.userId, row.monthlyCeilingUsd]));
+  return new Map(
+    userIds.map((userId) => {
+      const override = own.get(userId);
+      return [
+        userId,
+        override === undefined
+          ? { ceilingUsd: settings.defaultMonthlyCeilingUsd, source: 'default' as const }
+          : { ceilingUsd: override, source: 'override' as const },
+      ];
+    })
+  );
+}
+
+/**
  * Replace the singleton's three values.
  *
  * An upsert rather than an update so that saving the page is also the remedy

@@ -15,7 +15,12 @@ import { mockAdminUser } from '@/tests/helpers/auth';
 const PERSON = 'cmu7person000000000000000';
 
 const { meter, findUser, routeLog } = vi.hoisted(() => ({
-  meter: { getAdminBreakdown: vi.fn(), getMonthToDate: vi.fn(), getTurnMeter: vi.fn() },
+  meter: {
+    getAdminBreakdown: vi.fn(),
+    getMonthToDate: vi.fn(),
+    getTurnMeter: vi.fn(),
+    getConversationTurns: vi.fn(),
+  },
   findUser: vi.fn(),
   routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -35,6 +40,7 @@ import { auth } from '@/lib/auth/config';
 import { GET as getBreakdown } from '@/app/api/v1/admin/app/metering/route';
 import { GET as getUsage } from '@/app/api/v1/admin/app/metering/users/[userId]/route';
 import { GET as getTurn } from '@/app/api/v1/admin/app/metering/users/[userId]/turns/[turnId]/route';
+import { GET as getConversation } from '@/app/api/v1/admin/app/metering/conversations/[conversationId]/route';
 
 function request(path: string): NextRequest {
   return new NextRequest(`https://lelanea.com${path}`);
@@ -46,6 +52,7 @@ beforeEach(() => {
   meter.getAdminBreakdown.mockResolvedValue({ groups: [], truncated: false });
   meter.getMonthToDate.mockResolvedValue({ userId: PERSON, costUsd: 2 });
   meter.getTurnMeter.mockResolvedValue({ turnId: 't', seat: 'onboarding' });
+  meter.getConversationTurns.mockResolvedValue({ turns: [], truncated: false });
   findUser.mockResolvedValue({ id: PERSON });
 });
 
@@ -119,5 +126,59 @@ describe('GET /api/v1/admin/app/metering/users/:userId/turns/:turnId', () => {
   it('refuses a malformed turn id with 400', async () => {
     expect((await turn(PERSON, 'x'.repeat(129))).status).toBe(400);
     expect(meter.getTurnMeter).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/admin/app/metering/conversations/:conversationId (t-97)', () => {
+  const CONVERSATION = 'cmu7conversation000000000';
+  const turns = (conversationId: string, query = '') =>
+    getConversation(request(`/api/v1/admin/app/metering/conversations/${conversationId}${query}`), {
+      params: Promise.resolve({ conversationId }),
+    });
+
+  it("reads that conversation's turns over this month by default", async () => {
+    const response = await turns(CONVERSATION);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    const [query] = meter.getConversationTurns.mock.calls[0] as [
+      { conversationId: string; window: { from: Date; to: Date }; limit: number },
+    ];
+    expect(query.conversationId).toBe(CONVERSATION);
+    expect(query.limit).toBe(200);
+    // The first instant of this UTC month.
+    const now = new Date();
+    expect(query.window.from.toISOString()).toBe(
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+    );
+  });
+
+  it('passes a stated window and limit through', async () => {
+    await turns(CONVERSATION, '?from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z&limit=5');
+    expect(meter.getConversationTurns).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 5,
+        window: {
+          from: new Date('2026-08-01T00:00:00Z'),
+          to: new Date('2026-09-01T00:00:00Z'),
+        },
+      })
+    );
+  });
+
+  it.each([
+    ['a malformed conversation id', 'not an id', ''],
+    ['a limit over the cap', CONVERSATION, '?limit=501'],
+    ['a window that ends before it starts', CONVERSATION, '?from=2026-09-10&to=2026-09-01'],
+  ])('refuses %s with 400', async (_name, id, query) => {
+    expect((await turns(id, query)).status).toBe(400);
+    expect(meter.getConversationTurns).not.toHaveBeenCalled();
+  });
+
+  it('logs the admin and the conversation, and no figure', async () => {
+    await turns(CONVERSATION);
+    expect(routeLog.info).toHaveBeenCalledWith(
+      'Metering conversation turns read',
+      expect.objectContaining({ conversationId: CONVERSATION, turns: 0, truncated: false })
+    );
   });
 });

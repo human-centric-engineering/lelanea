@@ -76,5 +76,23 @@ export const adminBreakdownQuerySchema = z
 
 export type AdminBreakdownQuery = z.infer<typeof adminBreakdownQuerySchema>;
 
+/** The most turns one conversation's drill-down lists; the cheapest are cut (t-97). */
+export const MAX_CONVERSATION_TURNS = 500;
+export const DEFAULT_CONVERSATION_TURNS = 200;
+
+/** One conversation's turns, over a window — the admin cost view's drill-down (t-97). */
+export const conversationTurnsQuerySchema = z
+  .object({
+    from: windowFields.from,
+    to: windowFields.to,
+    limit: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(MAX_CONVERSATION_TURNS)
+      .default(DEFAULT_CONVERSATION_TURNS),
+  })
+  .superRefine(windowIsSane);
+
 /** A turn id as a client sends one — the same bound the turn hook accepts. */
 export const turnIdParamSchema = z.string().trim().min(1).max(128);
