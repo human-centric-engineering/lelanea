@@ -50,10 +50,9 @@ const CATEGORIES = ['onboarding', 'about', 'legal'] as const;
 
 // ─── Blocks ─────────────────────────────────────────────────────────────────
 
-function newBlock(type: Block['type'], section: string | null): Block {
-  if (type === 'heading') return { type, text: '', level: 2, section };
-  if (type === 'list') return { type, style: 'unordered', items: [''], section };
-  return { type, text: '', section };
+/** A new block is an empty paragraph in its neighbour's section; retype it after. */
+function newParagraph(section: string | null): Block {
+  return { type: 'paragraph', text: '', section };
 }
 
 function retype(block: Block, type: Block['type']): Block {
@@ -117,9 +116,15 @@ function BlocksEditor({
                   aria-label={`Block ${index + 1} heading level`}
                   className="h-8 w-20"
                   value={block.level}
-                  onChange={(event) =>
-                    set(index, { ...block, level: Number(event.target.value) || 1 })
-                  }
+                  onChange={(event) => {
+                    // A level is 1 to 6. Anything else (an emptied field
+                    // mid-edit) is not taken, rather than snapped to 1, which
+                    // turned backspace-then-"4" into "14".
+                    const level = Number(event.target.value);
+                    if (Number.isInteger(level) && level >= 1 && level <= 6) {
+                      set(index, { ...block, level });
+                    }
+                  }}
                 />
               )}
               <Input
@@ -165,7 +170,7 @@ function BlocksEditor({
                   aria-label="Add a block below"
                   onClick={() => {
                     const next = [...blocks];
-                    next.splice(index + 1, 0, newBlock('paragraph', block.section));
+                    next.splice(index + 1, 0, newParagraph(block.section));
                     onChange(next);
                   }}
                 >
