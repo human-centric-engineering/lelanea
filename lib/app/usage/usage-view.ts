@@ -196,8 +196,9 @@ export function usageStats(summary: UsageSummary): UsageStats {
   const nothingAllowed = summary.ceiling.ceilingUsd <= 0;
   return {
     spent: moneyWords(summary.costUsd),
-    // Words under a cent, as `remainingWords` says it — never a rounded `$0.00`.
-    remaining: moneyWords(summary.remainingUsd),
+    // The one derivation of what is left: words under a cent, `at most` when
+    // spend is a floor — the page's stat and the pill both say this.
+    remaining: remainingWords(summary.remainingUsd, spendFloor(summary)),
     ceiling: money(summary.ceiling.ceilingUsd),
     spentIsFloor: spendFloor(summary),
     nothingAllowed,
@@ -222,6 +223,17 @@ export function meterFill(summary: UsageSummary): number | null {
   if (summary.fractionUsed === null) return null;
   return Math.max(0, Math.min(1, summary.fractionUsed));
 }
+
+/**
+ * Where a person reads it.
+ *
+ * The single source for the path: the page, the topbar's spend meter
+ * (`spend-meter.tsx`), the account menu's row and the shell's tone map
+ * (`view-tone.ts`) all import it (t-95). It lives here rather than in
+ * `usage-client.ts` so a route string does not bring a fetch wrapper and its
+ * schemas along with it.
+ */
+export const USAGE_PAGE = '/app/usage';
 
 /**
  * What the topbar's meter is called, before it says anything else.
@@ -280,7 +292,7 @@ export function meterReading(summary: UsageSummary): MeterReading {
       name: `${METER_NAME}: ${figure} of ${stats.ceiling} this month`,
     };
   }
-  const figure = `${remainingWords(summary.remainingUsd, stats.spentIsFloor)} left`;
+  const figure = `${stats.remaining} left`;
   return {
     kind: 'meter',
     fill,

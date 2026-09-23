@@ -136,8 +136,12 @@ Every page in the shell carries a glanceable version of the same reading: a bar
 and what is left, linking here. It reads the summary only, on mount, once per
 finished turn and once at the month's turn, and draws a bar only when a bar is
 honest — a $0 ceiling, a month past the ceiling, the first read and a failed
-read are each words. This page re-reads on the same per-turn signal, so the two
-never disagree about one month. The rules
+read are each words. This page re-reads on the same per-turn signal, so a turn
+moves both together. **It does not wake at the month's turn** — only the pill
+does — so a page left open across midnight on the 1st shows last month until it
+is reloaded or a turn is sent, while the pill above it has moved on. Accepted
+at t-95 (/code-review round 3): the page is a place a person opens, the pill is
+the thing that stays on screen. The rules
 live in [`shell.md`](./shell.md#the-spend-meter-reads-when-a-person-could-have-spent);
 the judgement is `meterReading()` beside the page's own in `usage-view.ts`.
 

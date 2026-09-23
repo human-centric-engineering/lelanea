@@ -17,8 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/hooks/use-theme';
 import { EVENTS, useAnalytics } from '@/lib/analytics';
-import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
-import { METER_NAME } from '@/lib/app/usage/usage-view';
+import { METER_NAME, USAGE_PAGE } from '@/lib/app/usage/usage-view';
 import { authClient } from '@/lib/auth/client';
 import { isPlatformAdmin } from '@/lib/auth/roles';
 import { logger } from '@/lib/logging';

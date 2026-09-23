@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { fetchUsageSummary, USAGE_PAGE } from '@/lib/app/usage/usage-client';
+import { fetchUsageSummary } from '@/lib/app/usage/usage-client';
 import {
   METER_NAME,
+  USAGE_PAGE,
   meterReading,
   msUntilNextMonth,
   type MeterReading,

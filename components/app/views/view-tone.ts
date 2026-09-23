@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
-import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
+import { USAGE_PAGE } from '@/lib/app/usage/usage-view';
 
 /**
  * The hue each destination carries, keyed by its route.

@@ -44,15 +44,6 @@ export const USAGE_ENDPOINT = '/api/v1/app/usage';
 /** The reader's own spend, grouped. */
 export const USAGE_BREAKDOWN_ENDPOINT = '/api/v1/app/usage/breakdown';
 
-/**
- * Where a person reads it.
- *
- * The single source for the path: the page, the topbar's spend meter
- * (`spend-meter.tsx`), the account menu's row and the shell's tone map
- * (`view-tone.ts`) all import it (t-95).
- */
-export const USAGE_PAGE = '/app/usage';
-
 /** The read failed, or answered something this cannot trust. */
 export class UsageUnreadable extends Error {
   readonly status: number;
