@@ -123,9 +123,27 @@ const unit: SeedUnit = {
   // authored fields reach the projection at all — and `golden-set.ts` because it
   // owns the dataset id and the control's slug: change either and this unit must
   // re-run, or the install keeps a dataset under an id nothing looks for.
+  //
+  // The loader's path tracks where the loader lives: t-89 moved it out of
+  // `lib/app/content/index.ts` into `seed-input/`, and this list kept naming the
+  // barrel — a path that still resolves, so the `names paths that resolve` case
+  // stayed green while the hash stopped covering the loader. **Move a module
+  // named here and move its entry in the same commit.**
+  //
+  // `seed-input/golden-set-seed.ts` is DELIBERATELY ABSENT, and it reads like an
+  // omission: `buildGoldenSetSeed()` picks the five authored fields that become
+  // the pointer row, which is exactly the "decides what reaches the projection"
+  // test the loader is here for. But its only consumer is
+  // `seedGoldenSetPointer()`, which is write-once — it returns `skipped` the
+  // moment the row exists (`golden-set-store.ts`), because after the seed the
+  // admin surface owns that row. So hashing the builder would re-run the unit
+  // and change nothing: the pointer path would no-op on the way past. Adding
+  // the entry buys no property and costs a re-run of the dataset reconcile.
+  // Re-derive this before "fixing" it — if the pointer ever stops being
+  // write-once, the entry has to go in.
   hashInputs: [
     '../../../seed-data/drafted/lelanea_voice_golden_set.json',
-    '../../../lib/app/content/index.ts',
+    '../../../lib/app/content/seed-input/voice-golden-set.ts',
     '../../../lib/app/content/schemas.ts',
     '../../../lib/app/voice/golden-set.ts',
   ],
