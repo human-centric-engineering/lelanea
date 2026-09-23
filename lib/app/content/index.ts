@@ -2,7 +2,7 @@
  * The one way in to Lelañea's authored content — the shapes, and the reads that
  * do not touch a file.
  *
- * Fifteen JSON files hold the words this app is built from. Six, under
+ * Twelve JSON files hold the words this app is built from. Six, under
  * `content/`, are transcriptions of documents Lelañea Fulton wrote. Six, under
  * `seed-data/drafted/`, were drafted FOR her — the voice fingerprint's core, its
  * context-selected overlays, the golden set of prompts a PERSON puts to her, the

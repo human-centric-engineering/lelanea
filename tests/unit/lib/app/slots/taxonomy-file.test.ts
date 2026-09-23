@@ -35,7 +35,7 @@ import { slotTaxonomyFileSchema } from '@/lib/app/slots/taxonomy-file';
  * reading it the way the seed does keeps this honest about what the seed sees.
  */
 function draft(): Record<string, unknown> {
-  return structuredClone(getSlotTaxonomy()) as unknown as Record<string, unknown>;
+  return structuredClone(getSlotTaxonomy());
 }
 
 /** The parse error's messages and paths, joined for a readable assertion. */

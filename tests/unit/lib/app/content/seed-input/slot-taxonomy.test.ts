@@ -143,4 +143,3 @@ describe('the bundled taxonomy', () => {
     expect(getSlotTaxonomy().slots.every((s) => s.mode === 'targeted')).toBe(true);
   });
 });
-

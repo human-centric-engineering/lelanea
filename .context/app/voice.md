@@ -65,7 +65,7 @@ a substitute.
 The file says so about itself. `fingerprint.provenance` is a required block
 carrying `status: 'drafted_from_corpus'` and `awaitingSignOffFrom`, it is
 **served** rather than withheld like `reviewNotes`, and a case in
-`tests/unit/lib/app/content/voice-fingerprint.test.ts` pins the name in it. That
+`tests/unit/lib/app/content/seed-input/voice-fingerprint.test.ts` pins the name in it. That
 case is **meant to be edited** — once, on the day she signs the core off.
 
 Her sign-off is a feature-level check before ship (`fp3b`), not a criterion any
@@ -1024,13 +1024,13 @@ the run that produced these answers is gone — and the surface says so.
 
 ## Tests
 
-| File                                                            | Proves                                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------------- |
-| `tests/unit/lib/app/voice/comparison.test.ts`                   | The arms are two arms, on the composed prompts — load-bearing |
-| `tests/unit/lib/app/voice/comparison-admin.test.ts`             | The join is on the question, and a gap renders as a gap       |
-| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts`  | The seed's writes, its idempotence, and the freeze            |
-| `tests/unit/lib/app/content/voice-golden-set.test.ts`           | The set covers every moment, and still awaits sign-off        |
-| `tests/unit/lib/app/content/seed-input/golden-set-seed.test.ts` | The data migration writes exactly what the builder does       |
+| File                                                             | Proves                                                        |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/comparison.test.ts`                    | The arms are two arms, on the composed prompts — load-bearing |
+| `tests/unit/lib/app/voice/comparison-admin.test.ts`              | The join is on the question, and a gap renders as a gap       |
+| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts`   | The seed's writes, its idempotence, and the freeze            |
+| `tests/unit/lib/app/content/seed-input/voice-golden-set.test.ts` | The set covers every moment, and still awaits sign-off        |
+| `tests/unit/lib/app/content/seed-input/golden-set-seed.test.ts`  | The data migration writes exactly what the builder does       |
 
 Reverting the implementation fails them, and this was run rather than reasoned
 about: delete the identical-prompt check and one case goes red; delete the two
@@ -1491,7 +1491,7 @@ on purpose and the development command reads that divergence as drift.
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `tests/unit/lib/app/voice/fingerprint.test.ts`                      | The core reaches the prompt with nothing retrieved — load-bearing          |
 | `tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts`     | The seed's writes, its idempotence, and `restricted` via the resolver      |
-| `tests/unit/lib/app/content/voice-fingerprint.test.ts`              | The authored file parses, and still says it is awaiting sign-off           |
+| `tests/unit/lib/app/content/seed-input/voice-fingerprint.test.ts`   | The authored file parses, and still says it is awaiting sign-off           |
 | `tests/unit/lib/app/voice/corpus-access.test.ts`                    | The rule end to end through Sunrise's resolver — the load-bearing one      |
 | `tests/unit/lib/app/voice/designation.test.ts`                      | The vocabulary, the slugs, the safe reading of a conflict                  |
 | `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy, both axes   |

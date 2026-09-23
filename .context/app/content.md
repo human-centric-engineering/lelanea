@@ -53,18 +53,18 @@ and only if no value specifier rides along" is not.
 Three places may read a file: `lib/app/content/seed-input/**`,
 `prisma/seeds/**`, and `tests/**` (a test ships in no build).
 
-| Collection                                | Read at runtime through                                                  | Seeded from `seed-input/` | Since |
-| ----------------------------------------- | ------------------------------------------------------------------------ | ------------------------- | ----- |
-| Foundational documents                    | `document-store.ts`                                                      | `foundational-seed.ts`    | t-86  |
-| Journey structure                         | `journey-store.ts`                                                       | `journey-seed.ts`         | t-87  |
-| Discovery questions                       | `question-store.ts`                                                      | `question-seed.ts`        | t-87  |
-| Resource library                          | `resource-store.ts`                                                      | `resources-seed.ts`       | t-87  |
-| Voice overlays                            | `voice-overlay-store.ts`                                                 | `voice-overlay-seed.ts`   | t-88  |
-| Golden set pointer                        | `golden-set-store.ts`                                                    | `golden-set-seed.ts`      | t-88  |
-| Voice fingerprint core                    | _no table yet_ — seed 003 reconciles it onto the agent profile every run | `voice-fingerprint.ts`    | —     |
-| Crisis resources                          | `lib/app/safety/` reads `app_crisis_resource`                            | `crisis-resources.ts`     | t-88  |
-| Slot taxonomy                             | `lib/app/slots/taxonomy-store.ts`                                        | `slot-taxonomy.ts`        | t-70  |
-| Values, reference framework, explorations | _not served_                                                             | `values.ts`               | —     |
+| Collection                                | Read at runtime through                                                      | Seeded from `seed-input/` | Since |
+| ----------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | ----- |
+| Foundational documents                    | `document-store.ts`                                                          | `foundational-seed.ts`    | t-86  |
+| Journey structure                         | `journey-store.ts`                                                           | `journey-seed.ts`         | t-87  |
+| Discovery questions                       | `question-store.ts`                                                          | `question-seed.ts`        | t-87  |
+| Resource library                          | `resource-store.ts`                                                          | `resources-seed.ts`       | t-87  |
+| Voice overlays                            | `voice-overlay-store.ts`                                                     | `voice-overlay-seed.ts`   | t-88  |
+| Golden set pointer                        | `golden-set-store.ts`                                                        | `golden-set-seed.ts`      | t-88  |
+| Voice fingerprint core                    | _no table yet_ — seed 003 reconciles it onto the agent profile every run     | `voice-fingerprint.ts`    | —     |
+| Crisis resources                          | `lib/app/safety/resources-store.ts` (`app_crisis_copy`, `app_crisis_region`) | `crisis-resources.ts`     | t-88  |
+| Slot taxonomy                             | `lib/app/slots/taxonomy-store.ts` (`app_slot_definition`)                    | `slot-taxonomy.ts`        | t-70  |
+| Values, reference framework, explorations | _not served_                                                                 | `values.ts`               | —     |
 
 **Locations:** `content/*.json` (her words) ·
 `seed-data/drafted/*.json` (drafted seed data) ·
