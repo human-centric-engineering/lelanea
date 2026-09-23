@@ -11,8 +11,11 @@
  *   - to      optional ISO date, exclusive — default: now
  *   - limit   default 100, max 500 — groups returned; totals always cover all
  *
- * Returns `{ by, window, totals: { …, platformCostUsd }, groups, truncated }`.
- * Grouped by `user`, each group carries `user: { name, email }`, and the group
+ * Returns `{ by, window, totals: { …, platformCostUsd, platformUnpricedRows },
+ * groups, truncated }`.
+ * Grouped by `user`, each group carries `user: { name, email }` and its effective
+ * `ceiling: { ceilingUsd, source }` (f-budget t-97); grouped by `conversation`,
+ * `conversation: { title, userId, user }`. Grouped by user, the group
  * whose `key` is null is **platform cost** — rows no person incurred
  * (ingestion, scheduled work, an erased account). It is reported, never dropped
  * and never attributed.

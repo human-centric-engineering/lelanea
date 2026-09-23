@@ -52,7 +52,11 @@ import type { AppTurn, AppTurnPricing, AppTurnStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { isRecord } from '@/lib/utils';
 import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/agents/surface';
-import { getEffectiveMonthlyCeiling, type EffectiveCeiling } from '@/lib/app/agent/settings';
+import {
+  getEffectiveMonthlyCeiling,
+  getEffectiveMonthlyCeilings,
+  type EffectiveCeiling,
+} from '@/lib/app/agent/settings';
 import type { MeterDimension } from '@/lib/validations/app-metering';
 
 /** A half-open UTC window, `[from, to)`. */
@@ -84,9 +88,30 @@ export interface MeterGroup extends MeterTotals {
   key: string | null;
 }
 
-/** An admin breakdown by user names the people, so the view needs no second fetch. */
+/**
+ * An admin breakdown by user names the people, and carries what each may spend
+ * this month, so the view needs no second fetch — neither for a name nor to
+ * flag whoever is at or past their limit (f-budget t-97). Both are null on the
+ * platform-cost group, which is nobody.
+ */
 export interface MeterUserGroup extends MeterGroup {
   user: { name: string; email: string } | null;
+  ceiling: EffectiveCeiling | null;
+}
+
+/**
+ * An admin breakdown by conversation says whose each one is and what it is
+ * called (t-97). Null for the group of rows with no conversation, and for a
+ * conversation since deleted. The drill-down's links to a turn do NOT use this
+ * owner: each turn carries its own person's id, which is the one the turn route
+ * is keyed on.
+ */
+export interface MeterConversationGroup extends MeterGroup {
+  conversation: {
+    title: string | null;
+    userId: string | null;
+    user: { name: string; email: string } | null;
+  } | null;
 }
 
 export interface MeterBreakdown<G extends MeterGroup = MeterGroup> {
@@ -96,6 +121,12 @@ export interface MeterBreakdown<G extends MeterGroup = MeterGroup> {
   totals: MeterTotals & {
     /** The share of `costUsd` with no user. Always 0 on a member's own read. */
     platformCostUsd: number;
+    /**
+     * The share of `unpricedRows` with no user (t-97) — so a view can say which
+     * of its two halves is a floor, the platform's or the people's, rather than
+     * doubting both for a row only one of them has.
+     */
+    platformUnpricedRows: number;
   };
   groups: G[];
   /**
@@ -206,7 +237,9 @@ async function breakdown(scope: BreakdownScope): Promise<MeterBreakdown> {
         key ASC NULLS LAST
       LIMIT ${limit + 1}
     `,
-    prisma.$queryRaw<Array<RawTotals & { platform_cost_usd: unknown }>>`
+    prisma.$queryRaw<
+      Array<RawTotals & { platform_cost_usd: unknown; platform_unpriced_rows: unknown }>
+    >`
       SELECT
         SUM(c."totalCostUsd") AS cost_usd,
         SUM(c."inputTokens") AS input_tokens,
@@ -215,7 +248,11 @@ async function breakdown(scope: BreakdownScope): Promise<MeterBreakdown> {
         COUNT(*) FILTER (
           WHERE c."totalCostUsd" = 0 AND NOT c."isLocal" AND c."inputTokens" + c."outputTokens" > 0
         ) AS unpriced_rows,
-        SUM(c."totalCostUsd") FILTER (WHERE c."userId" IS NULL) AS platform_cost_usd
+        SUM(c."totalCostUsd") FILTER (WHERE c."userId" IS NULL) AS platform_cost_usd,
+        COUNT(*) FILTER (
+          WHERE c."userId" IS NULL
+            AND c."totalCostUsd" = 0 AND NOT c."isLocal" AND c."inputTokens" + c."outputTokens" > 0
+        ) AS platform_unpriced_rows
       FROM ai_cost_log c
       WHERE c."createdAt" >= ${window.from}
         AND c."createdAt" < ${window.to}
@@ -226,7 +263,11 @@ async function breakdown(scope: BreakdownScope): Promise<MeterBreakdown> {
   return {
     by,
     window,
-    totals: { ...toTotals(totals[0]), platformCostUsd: toNumber(totals[0]?.platform_cost_usd) },
+    totals: {
+      ...toTotals(totals[0]),
+      platformCostUsd: toNumber(totals[0]?.platform_cost_usd),
+      platformUnpricedRows: toNumber(totals[0]?.platform_unpriced_rows),
+    },
     // By day the query keeps the NEWEST days — the cut is the oldest, which a
     // usage view needs least — and they are handed back oldest first, to chart.
     groups: (by === 'day' ? groups.slice(0, limit).reverse() : groups.slice(0, limit)).map(
@@ -256,24 +297,75 @@ export async function getAdminBreakdown(query: {
   window: MeterWindow;
   limit: number;
   userId?: string;
-}): Promise<MeterBreakdown<MeterGroup | MeterUserGroup>> {
+}): Promise<MeterBreakdown<MeterGroup | MeterUserGroup | MeterConversationGroup>> {
   const result = await breakdown({ ...query, userId: query.userId ?? null });
-  if (query.by !== 'user') return result;
+  if (query.by === 'user') return withPeople(result);
+  if (query.by === 'conversation') return withConversations(result);
+  return result;
+}
 
+/** Name each person, and give each their effective ceiling — two reads for the whole list. */
+async function withPeople(result: MeterBreakdown): Promise<MeterBreakdown<MeterUserGroup>> {
   const ids = result.groups.flatMap((group) => (group.key ? [group.key] : []));
-  const users = ids.length
-    ? await prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, name: true, email: true },
-      })
-    : [];
+  const [users, ceilings] = await Promise.all([
+    ids.length
+      ? prisma.user.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true, email: true },
+        })
+      : Promise.resolve([]),
+    getEffectiveMonthlyCeilings(ids),
+  ]);
   const byId = new Map(users.map((user) => [user.id, user]));
 
   return {
     ...result,
     groups: result.groups.map((group) => {
       const user = group.key ? byId.get(group.key) : undefined;
-      return { ...group, user: user ? { name: user.name, email: user.email } : null };
+      return {
+        ...group,
+        user: user ? { name: user.name, email: user.email } : null,
+        ceiling: group.key ? (ceilings.get(group.key) ?? null) : null,
+      };
+    }),
+  };
+}
+
+/** Title and owner for each conversation — two reads for the whole list. */
+async function withConversations(
+  result: MeterBreakdown
+): Promise<MeterBreakdown<MeterConversationGroup>> {
+  const ids = result.groups.flatMap((group) => (group.key ? [group.key] : []));
+  const conversations = ids.length
+    ? await prisma.aiConversation.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, title: true, userId: true },
+      })
+    : [];
+  const ownerIds = [...new Set(conversations.flatMap((row) => (row.userId ? [row.userId] : [])))];
+  const owners = ownerIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: ownerIds } },
+        select: { id: true, name: true, email: true },
+      })
+    : [];
+  const byId = new Map(conversations.map((row) => [row.id, row]));
+  const ownerById = new Map(owners.map((user) => [user.id, user]));
+
+  return {
+    ...result,
+    groups: result.groups.map((group) => {
+      const row = group.key ? byId.get(group.key) : undefined;
+      if (!row) return { ...group, conversation: null };
+      const owner = row.userId ? ownerById.get(row.userId) : undefined;
+      return {
+        ...group,
+        conversation: {
+          title: row.title,
+          userId: row.userId,
+          user: owner ? { name: owner.name, email: owner.email } : null,
+        },
+      };
     }),
   };
 }
@@ -389,6 +481,22 @@ function metadataString(metadata: unknown, key: string): string | null {
 }
 
 /**
+ * A row that used tokens and was costed at nothing on a provider not configured
+ * as local: priced by a registry with no rate for its model. The SQL above asks
+ * the same thing in three places; this is the one TypeScript copy of it, which
+ * every row-level read here uses, so a turn's figure and its drill-down count
+ * unpriced rows alike (t-97, /code-review).
+ */
+export function isUnpricedRow(row: {
+  totalCostUsd: number;
+  isLocal: boolean;
+  inputTokens: number;
+  outputTokens: number;
+}): boolean {
+  return row.totalCostUsd === 0 && !row.isLocal && row.inputTokens + row.outputTokens > 0;
+}
+
+/**
  * The cost rows one turn caused: those tagged with its id, and the embedding of
  * its reply, which the platform writes without the tag and joins by message id.
  *
@@ -439,7 +547,7 @@ async function turnCostRows(
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
     costUsd: row.totalCostUsd,
-    unpriced: row.totalCostUsd === 0 && !row.isLocal && row.inputTokens + row.outputTokens > 0,
+    unpriced: isUnpricedRow(row),
     createdAt: row.createdAt,
   }));
 }
@@ -482,5 +590,239 @@ export async function getTurnMeter(userId: string, turnId: string): Promise<Turn
     replyCostUsd,
     sideCostUsd: costUsd - replyCostUsd,
     rows,
+  };
+}
+
+// ─── One conversation's turns ────────────────────────────────────────────────
+
+/**
+ * Turns per cost-log read in {@link getConversationTurns}.
+ *
+ * Each turn is up to three JSON-path predicates with their own bound values; a
+ * runaway conversation of thousands of turns in one statement would be slow to
+ * plan and could pass Postgres's 32,767-parameter limit — failing on exactly
+ * the conversation the drill-down exists for (/code-review).
+ */
+const TURN_ROW_BATCH = 200;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** One turn in a conversation, with what it cost — the row the drill-down opens. */
+export interface ConversationTurnCost {
+  turnId: string;
+  /** The turn's person — the other half of the key the turn route needs. */
+  userId: string;
+  seat: string;
+  status: AppTurnStatus;
+  attempts: number;
+  errorCode: string | null;
+  model: string | null;
+  startedAt: Date;
+  completedAt: Date | null;
+  costUsd: number;
+  costRows: number;
+  unpricedRows: number;
+}
+
+export interface ConversationTurns {
+  conversationId: string;
+  window: MeterWindow;
+  /** Costliest first, so the turn that made it costly is the first row. */
+  turns: ConversationTurnCost[];
+  /** More turns started in the window than `limit`; the cheapest were left out. */
+  truncated: boolean;
+}
+
+/**
+ * The turns of one conversation that started in a window, each with its whole
+ * cost — for an admin drilling from a costly conversation to the turn that made
+ * it costly (f-budget t-97).
+ *
+ * **The same rows as {@link getTurnMeter}**, found the same way: tagged with the
+ * turn's id, plus the embedding of its reply, and every attempt's. So a turn's
+ * figure here is the figure its detail page shows. That is a turn's WHOLE cost,
+ * not its cost inside the window, which is why a conversation whose turns
+ * straddle the 1st can list a little more than its month's group.
+ *
+ * The turns — linked here by the turn table, or tagged on this conversation's
+ * rows in the window — then each one's cost rows, in batches of
+ * {@link TURN_ROW_BATCH} turns read one after another, so a runaway's
+ * thousands of turns never land in one statement. Sorted and cut here, after
+ * the sums.
+ */
+export async function getConversationTurns(query: {
+  conversationId: string;
+  window: MeterWindow;
+  limit: number;
+}): Promise<ConversationTurns> {
+  // Which turns: those the turn table links here that started in the window,
+  // AND any whose rows in this conversation in the window carry their id. The
+  // second matters because a retry resets a turn's `conversationId` to null
+  // until its new attempt starts (`claimTurn`) — a turn whose first attempt
+  // spent here and whose retry failed early would otherwise vanish from the
+  // conversation its cost is counted in (/code-review round 2).
+  // Through the client, not raw SQL: one conversation's rows for one window
+  // are few, and the pairs are picked out here (the raw-SQL allowlist asks for
+  // exactly that where a query does not need to be raw).
+  const conversationRows = await prisma.aiCostLog.findMany({
+    where: {
+      conversationId: query.conversationId,
+      createdAt: { gte: query.window.from, lt: query.window.to },
+      userId: { not: null },
+    },
+    select: { userId: true, metadata: true },
+  });
+  const tagged = [
+    ...new Map(
+      conversationRows.flatMap((row) => {
+        const turnId = metadataString(row.metadata, 'turnId');
+        return row.userId && turnId
+          ? [[`${row.userId}\u0000${turnId}`, { user_id: row.userId, turn_id: turnId }] as const]
+          : [];
+      })
+    ).values(),
+  ];
+  const taggedKeys = new Set(tagged.map((row) => `${row.user_id}\u0000${row.turn_id}`));
+
+  const candidates = await prisma.appTurn.findMany({
+    where: {
+      OR: [
+        {
+          conversationId: query.conversationId,
+          startedAt: { gte: query.window.from, lt: query.window.to },
+        },
+        ...(tagged.length
+          ? [
+              {
+                userId: { in: [...new Set(tagged.map((row) => row.user_id))] },
+                turnId: { in: [...new Set(tagged.map((row) => row.turn_id))] },
+              },
+            ]
+          : []),
+      ],
+    },
+    select: {
+      turnId: true,
+      userId: true,
+      seat: true,
+      status: true,
+      attempts: true,
+      errorCode: true,
+      modelId: true,
+      startedAt: true,
+      completedAt: true,
+      assistantMessageId: true,
+      conversationId: true,
+    },
+  });
+  // The second clause matches ids as two lists, a superset of the pairs; keep
+  // only a turn linked here or whose own (person, id) pair was tagged here.
+  const turns = candidates.filter(
+    (turn) =>
+      turn.conversationId === query.conversationId ||
+      taggedKeys.has(`${turn.userId}\u0000${turn.turnId}`)
+  );
+  if (turns.length === 0) {
+    return {
+      conversationId: query.conversationId,
+      window: query.window,
+      turns: [],
+      truncated: false,
+    };
+  }
+
+  // Each turn's WHOLE cost, as `getTurnMeter` reads it — every attempt's rows,
+  // with no time bound: a retry resets `startedAt`, so an earlier attempt can
+  // have spent before the window began and is still this turn's cost
+  // (/code-review round 2). One batch at a time, not all at once, so a runaway
+  // of thousands of turns is a queue of small reads rather than dozens of
+  // concurrent scans competing for the pool.
+  const userIds = [...new Set(turns.map((turn) => turn.userId))];
+  const rows = [];
+  for (const batch of chunk(turns, TURN_ROW_BATCH)) {
+    rows.push(
+      ...(await prisma.aiCostLog.findMany({
+        where: {
+          userId: { in: userIds },
+          OR: [
+            ...batch.map((turn) => ({ metadata: { path: ['turnId'], equals: turn.turnId } })),
+            ...batch.flatMap((turn) =>
+              turn.assistantMessageId
+                ? [
+                    {
+                      AND: [
+                        { metadata: { path: ['kind'], equals: 'message_embedding' } },
+                        { metadata: { path: ['messageId'], equals: turn.assistantMessageId } },
+                      ],
+                    },
+                  ]
+                : []
+            ),
+          ],
+        },
+        select: {
+          id: true,
+          userId: true,
+          totalCostUsd: true,
+          isLocal: true,
+          inputTokens: true,
+          outputTokens: true,
+          metadata: true,
+        },
+      }))
+    );
+  }
+
+  // A row belongs to a turn by (person, turn id), or by its reply's message id.
+  const turnKey = (userId: string | null, turnId: string) => `${userId ?? ''}\u0000${turnId}`;
+  const byTurnKey = new Map(turns.map((turn) => [turnKey(turn.userId, turn.turnId), turn]));
+  const byMessage = new Map(
+    turns.flatMap((turn) => (turn.assistantMessageId ? [[turn.assistantMessageId, turn]] : []))
+  );
+  const sums = new Map(turns.map((turn) => [turn, { costUsd: 0, costRows: 0, unpricedRows: 0 }]));
+
+  // A row can match two batches only through an embedding whose message id
+  // repeats — never in practice — but it must still count once.
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    const tagged = metadataString(row.metadata, 'turnId');
+    const turn =
+      (tagged ? byTurnKey.get(turnKey(row.userId, tagged)) : undefined) ??
+      (metadataString(row.metadata, 'kind') === 'message_embedding'
+        ? byMessage.get(metadataString(row.metadata, 'messageId') ?? '')
+        : undefined);
+    const sum = turn ? sums.get(turn) : undefined;
+    if (!sum) continue;
+    sum.costUsd += row.totalCostUsd;
+    sum.costRows += 1;
+    if (isUnpricedRow(row)) sum.unpricedRows += 1;
+  }
+
+  const costed = turns
+    .map((turn) => ({
+      turnId: turn.turnId,
+      userId: turn.userId,
+      seat: turn.seat,
+      status: turn.status,
+      attempts: turn.attempts,
+      errorCode: turn.errorCode,
+      model: turn.modelId,
+      startedAt: turn.startedAt,
+      completedAt: turn.completedAt,
+      ...(sums.get(turn) ?? { costUsd: 0, costRows: 0, unpricedRows: 0 }),
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd || a.startedAt.getTime() - b.startedAt.getTime());
+
+  return {
+    conversationId: query.conversationId,
+    window: query.window,
+    turns: costed.slice(0, query.limit),
+    truncated: costed.length > query.limit,
   };
 }

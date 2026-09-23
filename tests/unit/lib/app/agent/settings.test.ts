@@ -183,6 +183,7 @@ import {
   getAgentDeadlines,
   getAgentSettings,
   getEffectiveMonthlyCeiling,
+  getEffectiveMonthlyCeilings,
   listUserBudgets,
   setUserBudget,
   updateAgentSettings,
@@ -303,6 +304,43 @@ describe('read per request', () => {
     await getEffectiveMonthlyCeiling(ADA);
     expect(prisma.appAgentSettings.findUnique).toHaveBeenCalledTimes(3);
     expect(prisma.appUserBudget.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('several people’s limits at once (t-97)', () => {
+  it('is the same answer per person as asking one at a time, in one read of each table', async () => {
+    await setUserBudget(ADA, 12.5);
+    vi.mocked(prisma.appUserBudget.findMany).mockClear();
+    vi.mocked(prisma.appAgentSettings.findUnique).mockClear();
+
+    const ceilings = await getEffectiveMonthlyCeilings([ADA, BO]);
+
+    expect(ceilings.get(ADA)).toEqual(await getEffectiveMonthlyCeiling(ADA));
+    expect(ceilings.get(BO)).toEqual(await getEffectiveMonthlyCeiling(BO));
+    expect(ceilings.get(ADA)).toEqual({ ceilingUsd: 12.5, source: 'override' });
+    expect(ceilings.get(BO)).toEqual({ ceilingUsd: 5, source: 'default' });
+  });
+
+  it('reads overrides once for the whole list, never per person', async () => {
+    vi.mocked(prisma.appUserBudget.findMany).mockClear();
+    vi.mocked(prisma.appUserBudget.findUnique).mockClear();
+
+    await getEffectiveMonthlyCeilings([ADA, BO]);
+
+    expect(prisma.appUserBudget.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.appUserBudget.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('keeps an override of zero as an answer', async () => {
+    await setUserBudget(ADA, 0);
+    const ceilings = await getEffectiveMonthlyCeilings([ADA]);
+    expect(ceilings.get(ADA)).toEqual({ ceilingUsd: 0, source: 'override' });
+  });
+
+  it('asks nothing for nobody', async () => {
+    vi.mocked(prisma.appUserBudget.findMany).mockClear();
+    await expect(getEffectiveMonthlyCeilings([])).resolves.toEqual(new Map());
+    expect(prisma.appUserBudget.findMany).not.toHaveBeenCalled();
   });
 });
 

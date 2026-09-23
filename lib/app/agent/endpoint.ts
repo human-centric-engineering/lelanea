@@ -23,3 +23,40 @@ export const AGENT_SETTINGS_PAGE = '/admin/app/agent';
 
 /** Whether a turn can be expected to be answered now — `GET`, any member (§08 t-55). */
 export const AGENT_STATUS_ENDPOINT = '/api/v1/app/agent/status';
+
+/** Anyone's spend, grouped — `?by=user|conversation|seat|model|day` (§08 t-56). */
+export const ADMIN_METERING_ENDPOINT = '/api/v1/admin/app/metering';
+
+/**
+ * A path segment, encoded. A turn id is client-chosen (any trimmed 1–128
+ * characters), so one of `.` or `..` would resolve away — and escaping cannot
+ * stop that: the URL standard treats `%2E` and `%2E%2E` as dot segments too.
+ * The only fix is refusing such ids where turns are accepted; until then the
+ * cost is one admin link that 404s, on a turn its own person named that way.
+ */
+function segment(value: string): string {
+  return encodeURIComponent(value);
+}
+
+/** One conversation's turns, each with its cost (f-budget t-97). */
+export function adminConversationTurnsEndpoint(conversationId: string): string {
+  return `${ADMIN_METERING_ENDPOINT}/conversations/${segment(conversationId)}`;
+}
+
+/** One person's turn, every cost row it caused (§08 t-56). */
+export function adminTurnMeterEndpoint(userId: string, turnId: string): string {
+  return `${ADMIN_METERING_ENDPOINT}/users/${segment(userId)}/turns/${segment(turnId)}`;
+}
+
+/** Where an admin reads what this month cost, and who and what spent it (t-97). */
+export const COST_ADMIN_PAGE = '/admin/app/cost';
+
+/** A costly conversation, opened to its turns. */
+export function costConversationPage(conversationId: string): string {
+  return `${COST_ADMIN_PAGE}/conversations/${segment(conversationId)}`;
+}
+
+/** One turn, opened to every row it cost. Person and turn, as the turn route is. */
+export function costTurnPage(userId: string, turnId: string): string {
+  return `${COST_ADMIN_PAGE}/turns/${segment(userId)}/${segment(turnId)}`;
+}

@@ -29,6 +29,7 @@ const ME = 'cmjbv4i3x00003wsloputgwul';
 /** Somebody else, with spend and a turn of their own. */
 const OTHER = 'cmu7other0000000000000000';
 const THEIR_TURN = 'their-turn-1';
+const THEIR_CONVERSATION = 'cmu7conversation000000000';
 
 const store = vi.hoisted(() => ({
   spend: new Map<string, number>(),
@@ -61,6 +62,7 @@ const meter = vi.hoisted(() => ({
   getTurnMeter: vi.fn(async (userId: string, turnId: string) => {
     return store.turns.get(`${userId}:${turnId}`) ?? null;
   }),
+  getConversationTurns: vi.fn(async () => ({ turns: [], truncated: false })),
   resolveWindow: vi.fn(() => ({ from: new Date(0), to: new Date() })),
 }));
 
@@ -84,6 +86,7 @@ import { GET as getOwnTurn } from '@/app/api/v1/app/usage/turns/[turnId]/route';
 import { GET as getAnyBreakdown } from '@/app/api/v1/admin/app/metering/route';
 import { GET as getAnyUsage } from '@/app/api/v1/admin/app/metering/users/[userId]/route';
 import { GET as getAnyTurn } from '@/app/api/v1/admin/app/metering/users/[userId]/turns/[turnId]/route';
+import { GET as getAnyConversation } from '@/app/api/v1/admin/app/metering/conversations/[conversationId]/route';
 
 function request(path: string): NextRequest {
   return new NextRequest(`https://lelanea.com${path}`);
@@ -218,11 +221,20 @@ describe('a member reads only their own', () => {
           params({ userId: OTHER, turnId: THEIR_TURN })
         ),
     ],
+    [
+      "conversation's turns",
+      () =>
+        getAnyConversation(
+          request(`/api/v1/admin/app/metering/conversations/${THEIR_CONVERSATION}`),
+          params({ conversationId: THEIR_CONVERSATION })
+        ),
+    ],
   ])('is refused the admin %s route, and nothing is read', async (_name, call) => {
     expect((await call()).status).toBe(403);
     expect(meter.getAdminBreakdown).not.toHaveBeenCalled();
     expect(meter.getMonthToDate).not.toHaveBeenCalled();
     expect(meter.getTurnMeter).not.toHaveBeenCalled();
+    expect(meter.getConversationTurns).not.toHaveBeenCalled();
   });
 });
 
@@ -248,6 +260,14 @@ describe('unauthenticated is refused everywhere, and nothing is read', () => {
         getAnyTurn(
           request(`/api/v1/admin/app/metering/users/${OTHER}/turns/${THEIR_TURN}`),
           params({ userId: OTHER, turnId: THEIR_TURN })
+        ),
+    ],
+    [
+      "admin conversation's turns",
+      () =>
+        getAnyConversation(
+          request(`/api/v1/admin/app/metering/conversations/${THEIR_CONVERSATION}`),
+          params({ conversationId: THEIR_CONVERSATION })
         ),
     ],
   ])('%s → 401', async (_name, call) => {
