@@ -44,13 +44,20 @@ import { cn } from '@/lib/utils';
  *   however it ended, never per streamed frame, and `COST_SETTLE_MS` after the
  *   turn rather than at it, because the platform writes the turn's cost without
  *   waiting and a read at `done` can miss it.
- * - **Once, when the month turns** (`msUntilNextMonth`, on the server's clock).
+ * - **Once, when the month turns** (`msUntilNextMonth`, on the server's clock,
+ *   or on the page being shown again after that moment).
  *   A tab left open showing "past your limit" on the 30th would otherwise say
  *   so all through the 1st, and a person believing it would not send.
  *
- * That is the whole schedule: no polling, no focus listener. The month-to-date
+ * That is the whole schedule: no polling. The one listener is a visibility
+ * check for the month's turn, because timers stop while a machine sleeps; it
+ * reads only when that deadline has passed. The month-to-date
  * aggregate it calls is the watch item in `agent.md` (f-budget ruling 5), and
- * gets no index and no cache here. A ceiling an admin changes shows at the
+ * gets no index and no cache here. On `/app/usage` a turn also re-reads the
+ * page's own pair, so there it costs three reads rather than one. A turn
+ * whose cost row takes longer than `COST_SETTLE_MS` to write shows a turn
+ * late — the platform does not wait for the write, deliberately, so `done` is
+ * never held up by it. A ceiling an admin changes shows at the
  * next turn — including the turn a person tries past a limit the pill still
  * shows, since that attempt settles too.
  *
@@ -91,10 +98,31 @@ export function SpendMeter({ fetchImpl }: SpendMeterProps) {
   const [monthsTurned, setMonthsTurned] = useState(0);
   const [wakeIn, setWakeIn] = useState<number | null>(null);
 
+  /*
+   * A timer alone misses the case it is for. Browser timers do not run while
+   * the machine sleeps, so a laptop shut on the 30th and opened on the 2nd
+   * would still be waiting (/code-review, round 2). So the wake also has a
+   * wall-clock deadline, checked when the page is shown again — one comparison
+   * on a visibility change, and a read only if the month has actually turned.
+   */
   useEffect(() => {
     if (wakeIn === null) return;
-    const timer = setTimeout(() => setMonthsTurned((count) => count + 1), wakeIn);
-    return () => clearTimeout(timer);
+    const deadline = Date.now() + wakeIn;
+    let woken = false;
+    const wake = () => {
+      if (woken) return;
+      woken = true;
+      setMonthsTurned((count) => count + 1);
+    };
+    const timer = setTimeout(wake, wakeIn);
+    const onShow = () => {
+      if (document.visibilityState === 'visible' && Date.now() >= deadline) wake();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onShow);
+    };
   }, [wakeIn]);
 
   useEffect(() => {

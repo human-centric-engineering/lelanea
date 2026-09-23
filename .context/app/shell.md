@@ -458,7 +458,7 @@ menu's words for the same place — and contains the printed figure verbatim.
 **When it reads.** One `GET /api/v1/app/usage`, summary only — the by-day
 breakdown is the page's. On mount (the topbar lives in the layout, so moving
 between pages does not remount it); again whenever `turnsSettled` on the
-provider moves; and once when the month turns. No polling, no focus listener.
+provider moves; and once when the month turns. No polling.
 
 - **`turnsSettled`** is `slotsWritten`'s shape for `slotsWritten`'s reason: the
   conversation and the topbar are siblings. `useConversation` calls
@@ -469,17 +469,23 @@ provider moves; and once when the month turns. No polling, no focus listener.
   taken the instant a turn ends can sum the month without it and then sit one
   turn behind. A turn whose connection dropped is still running server-side and
   no fixed wait covers it; its cost shows on the next read — the retry that
-  replays it, or the next turn.
+  replays it, or the next turn. An insert slower than the wait shows a turn late
+  for the same reason; the platform does not await the write so that `done` is
+  never held up by it, and a fixed wait is the leaf's side of that trade.
 - **The month's turn** is timed from the summary's own two instants
   (`msUntilNextMonth`), so a device clock that is off cannot wake it early and
   loop. Without it a tab left on "past your limit" on the 30th says so all
-  through the 1st.
+  through the 1st. Timers stop while a machine sleeps, so the wake also keeps a
+  wall-clock deadline and checks it when the page is shown again — the only
+  listener the meter has, and it reads only once the deadline has passed.
 - `/app/usage` re-reads on the same counter, so a turn sent from that page
-  moves the page and the pill together.
+  moves the page and the pill together — both say a sub-cent remainder through
+  `remainingWords()`, so they cannot disagree about it either.
 
-That keeps the month-to-date aggregate `agent.md` watches to about one call per
-thing a person sends. The exceptions are bounded: a window crossing 900px
-remounts the meter, and dev's strict mode mounts it twice. A ceiling an admin
+That keeps the month-to-date aggregate `agent.md` watches to one call per thing
+a person sends — three on `/app/usage`, where the page re-reads its own
+summary and breakdown beside the meter's. The other exceptions are bounded: a
+window crossing 900px remounts the meter, and dev's strict mode mounts it twice. A ceiling an admin
 changes shows at the next turn, including the attempt a person makes past a
 limit the pill still shows. While a re-read is in flight the previous figure
 stays up, as the notes panel keeps its notes.

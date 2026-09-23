@@ -168,6 +168,9 @@ export function remainingLabel(remaining: string, isFloor: boolean): string {
  * {@link moneyWords} does. And like {@link floorLabel}, it qualifies a numeral
  * only: "less than a cent" is already an upper bound, so "at most less than a
  * cent" would say the same thing badly (/code-review).
+ *
+ * The page's "left" stat and the topbar's pill both say it through this, so
+ * the two cannot disagree about one month's remainder.
  */
 export function remainingWords(remainingUsd: number, isFloor: boolean): string {
   const words = moneyWords(remainingUsd);
@@ -193,7 +196,8 @@ export function usageStats(summary: UsageSummary): UsageStats {
   const nothingAllowed = summary.ceiling.ceilingUsd <= 0;
   return {
     spent: moneyWords(summary.costUsd),
-    remaining: money(summary.remainingUsd),
+    // Words under a cent, as `remainingWords` says it — never a rounded `$0.00`.
+    remaining: moneyWords(summary.remainingUsd),
     ceiling: money(summary.ceiling.ceilingUsd),
     spentIsFloor: spendFloor(summary),
     nothingAllowed,

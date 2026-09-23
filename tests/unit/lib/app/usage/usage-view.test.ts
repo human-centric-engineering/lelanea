@@ -297,6 +297,12 @@ describe('the topbar meter at the edges of rounding (t-95, /code-review)', () =>
   });
 });
 
+describe('the page and the pill say one remainder', () => {
+  it('gives the page\'s "left" stat the same refusal to round to $0.00', () => {
+    expect(usageStats(summary({ remainingUsd: 0.004 })).remaining).toBe('less than a cent');
+  });
+});
+
 describe('when the month turns', () => {
   it("measures to the next UTC month on the server's clock, plus a margin", () => {
     expect(

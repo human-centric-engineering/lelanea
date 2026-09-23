@@ -326,3 +326,36 @@ describe('SpendMeter — when it reads', () => {
     expect(meter().textContent).toBe('$20.00 left');
   });
 });
+
+describe('SpendMeter — a machine that slept through the month', () => {
+  it('reads when shown again after the month turned, though the timer never fired', async () => {
+    // Browser timers stop during sleep, so the timer alone would still be
+    // waiting. The deadline is wall-clock, checked on a visibility change.
+    const fetchImpl = fetcherFor(
+      ok(
+        summaryOf({
+          window: { from: '2026-03-01T00:00:00.000Z', to: '2026-03-31T23:59:58.000Z' },
+          costUsd: 21,
+          remainingUsd: 0,
+          fractionUsed: 1.05,
+        })
+      ),
+      ok(summaryOf({ costUsd: 0, remainingUsd: 20, fractionUsed: 0 }))
+    );
+    renderMeter(fetchImpl);
+    await waitFor(() => expect(meter().textContent).toBe('past your limit'));
+
+    // Shown again before the deadline: nothing to do.
+    document.dispatchEvent(new Event('visibilitychange'));
+    await act(async () => {});
+    expect(callsTo(fetchImpl)).toHaveLength(1);
+
+    // The wall clock jumps past it, as waking from sleep does.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 8_000);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(meter().textContent).toBe('$20.00 left'));
+    expect(callsTo(fetchImpl)).toHaveLength(2);
+    clock.mockRestore();
+  });
+});

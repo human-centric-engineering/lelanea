@@ -25,6 +25,11 @@ import { CHAT_MAX, CHAT_MIN } from '@/components/app/shell/use-shell-layout';
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+// The topbar's spend meter reads `/api/v1/app/usage` on mount; this suite is not
+// about it (`spend-meter.test.tsx` is), and an unstubbed read would be a real
+// relative-URL fetch settling after the assertions.
+vi.mock('@/components/app/shell/spend-meter', () => ({ SpendMeter: () => null }));
+
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 // `ShellNav` mounts the account menu, whose hooks want their providers. Neither

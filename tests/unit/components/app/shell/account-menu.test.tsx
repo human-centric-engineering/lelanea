@@ -30,6 +30,11 @@ vi.mock('@/lib/analytics', () => ({
 vi.mock('@/lib/logging', () => ({
   logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
+// The topbar's spend meter reads `/api/v1/app/usage` on mount; this suite is not
+// about it (`spend-meter.test.tsx` is), and an unstubbed read would be a real
+// relative-URL fetch settling after the assertions.
+vi.mock('@/components/app/shell/spend-meter', () => ({ SpendMeter: () => null }));
+
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
 import { AccountMenu, type AccountMenuUser } from '@/components/app/shell/account-menu';

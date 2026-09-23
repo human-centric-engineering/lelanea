@@ -10,7 +10,7 @@ import {
   floorLabel,
   meterFill,
   monthPlot,
-  remainingLabel,
+  remainingWords,
   usageStats,
   weekPlot,
   type UsageReading,
@@ -200,7 +200,10 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
           figure={stats.spent}
           label={stats.spentIsFloor ? 'used this month, at least' : 'used this month'}
         />
-        <Stat figure={remainingLabel(stats.remaining, stats.spentIsFloor)} label="left" />
+        <Stat
+          figure={remainingWords(reading.summary.remainingUsd, stats.spentIsFloor)}
+          label="left"
+        />
         <Stat
           figure={stats.ceiling}
           label={stats.ownLimit ? 'your monthly limit' : 'monthly limit'}

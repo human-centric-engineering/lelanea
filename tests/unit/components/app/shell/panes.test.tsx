@@ -23,6 +23,11 @@ import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
+// The topbar's spend meter reads `/api/v1/app/usage` on mount; this suite is not
+// about it (`spend-meter.test.tsx` is), and an unstubbed read would be a real
+// relative-URL fetch settling after the assertions.
+vi.mock('@/components/app/shell/spend-meter', () => ({ SpendMeter: () => null }));
+
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 vi.mock('@/hooks/use-theme', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }));
