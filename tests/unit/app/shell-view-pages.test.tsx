@@ -57,7 +57,7 @@ import JourneyPage, { metadata as journeyMeta } from '@/app/(lelanea)/app/journe
 import SettingsPage, { metadata as settingsMeta } from '@/app/(lelanea)/app/settings/page';
 import SharePage, { metadata as shareMeta } from '@/app/(lelanea)/app/share/page';
 import SituationsPage, { metadata as situationsMeta } from '@/app/(lelanea)/app/situations/page';
-import UsagePage, { metadata as usageMeta } from '@/app/(lelanea)/app/usage/page';
+import { metadata as usageMeta } from '@/app/(lelanea)/app/usage/page';
 import WorkspacePage, { metadata as workspaceMeta } from '@/app/(lelanea)/app/workspace/page';
 import { metadata as accountMeta } from '@/app/(lelanea)/app/account/page';
 import { metadata as notesMeta } from '@/app/(lelanea)/app/notes/page';
@@ -85,7 +85,11 @@ const MODULES = {
   '/app/journey': { Page: JourneyPage, metadata: journeyMeta, placeholder: true },
   '/app/situations': { Page: SituationsPage, metadata: situationsMeta, placeholder: true },
   '/app/share': { Page: SharePage, metadata: shareMeta, placeholder: true },
-  '/app/usage': { Page: UsagePage, metadata: usageMeta, placeholder: true },
+  // Real from §13 t-94, and async because it reads the session the way the
+  // account and notes views do — so it is rendered where a session and a
+  // `fetch` can be stood up (`tests/unit/components/app/usage/`). The metadata
+  // row is still checked here with everything else's.
+  '/app/usage': { Page: null, metadata: usageMeta, placeholder: false },
   '/app/settings': { Page: SettingsPage, metadata: settingsMeta, placeholder: false },
   // Account is async and reads the session, so it is rendered in
   // `shell-account-page.test.tsx` where the session can be stood up. Its
