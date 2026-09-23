@@ -98,7 +98,7 @@ function renderMeter(fetchImpl: typeof fetch) {
 }
 
 const meter = () => screen.getByRole('link', { name: /^Usage and billing/ });
-const fill = () => document.querySelector('[data-meter-fill]');
+const fill = () => document.querySelector<HTMLElement>('[data-meter-fill]');
 
 describe('SpendMeter — an ordinary month', () => {
   it('shows what is left beside a bar filled to the fraction used', async () => {
