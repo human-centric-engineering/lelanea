@@ -530,6 +530,28 @@ describe('one turn', () => {
  * same way — tagged with the turn id for that person, plus its reply's
  * embedding — so the drill-down cannot contradict the page it opens.
  */
+/**
+ * Two cost-log reads in a conversation's drill-down: the conversation's own
+ * rows (to find tagged turn ids) and then each batch of turns' rows. Answer
+ * each by what it asks for.
+ */
+function answerCostReads(
+  conversationRows: unknown[],
+  turnRows: unknown[] | (() => Promise<unknown[]>)
+) {
+  findCostRows.mockImplementation(async (args: { where: Record<string, unknown> }) => {
+    if ('conversationId' in args.where) return conversationRows;
+    return typeof turnRows === 'function' ? turnRows() : turnRows;
+  });
+}
+
+/** The turn-row reads only — every call but the conversation's own. */
+function turnRowReads(): Array<{ where: Record<string, unknown> }> {
+  return findCostRows.mock.calls
+    .map(([args]) => args as { where: Record<string, unknown> })
+    .filter((args) => !('conversationId' in args.where));
+}
+
 describe("one conversation's turns", () => {
   const CONV = 'cmuconv0000000000000one';
   const turn = (turnId: string, over: Record<string, unknown> = {}) => ({
@@ -558,11 +580,6 @@ describe("one conversation's turns", () => {
     ...over,
   });
 
-  beforeEach(() => {
-    // No turn ids tagged on the conversation's rows unless a case says so.
-    queryRaw.mockResolvedValue([]);
-  });
-
   it('reads the turns that started in the window, by conversation', async () => {
     findTurns.mockResolvedValue([]);
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
@@ -571,7 +588,7 @@ describe("one conversation's turns", () => {
       where: { OR: [{ conversationId: CONV, startedAt: { gte: WINDOW.from, lt: WINDOW.to } }] },
     });
     // No turns, no second read.
-    expect(findCostRows).not.toHaveBeenCalled();
+    expect(turnRowReads()).toHaveLength(0);
     expect(result).toEqual({ conversationId: CONV, window: WINDOW, turns: [], truncated: false });
   });
 
@@ -580,14 +597,17 @@ describe("one conversation's turns", () => {
       turn('t-cheap', { startedAt: new Date('2026-09-10T10:00:00Z') }),
       turn('t-dear', { startedAt: new Date('2026-09-11T10:00:00Z'), assistantMessageId: 'msg-2' }),
     ]);
-    findCostRows.mockResolvedValue([
-      costRow(0.01, { turnId: 't-cheap' }),
-      costRow(0.2, { turnId: 't-dear' }),
-      costRow(0.05, { turnId: 't-dear', kind: 'tool_call' }),
-      costRow(0.001, { kind: 'message_embedding', messageId: 'msg-2' }),
-      // Unpriced: tokens used, costed at nothing, not local.
-      costRow(0, { turnId: 't-dear' }),
-    ]);
+    answerCostReads(
+      [],
+      [
+        costRow(0.01, { turnId: 't-cheap' }),
+        costRow(0.2, { turnId: 't-dear' }),
+        costRow(0.05, { turnId: 't-dear', kind: 'tool_call' }),
+        costRow(0.001, { kind: 'message_embedding', messageId: 'msg-2' }),
+        // Unpriced: tokens used, costed at nothing, not local.
+        costRow(0, { turnId: 't-dear' }),
+      ]
+    );
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
 
@@ -596,18 +616,18 @@ describe("one conversation's turns", () => {
     expect(result.turns[0].costUsd).toBeCloseTo(0.251);
     expect(result.turns[1]).toMatchObject({ costUsd: 0.01, costRows: 1, unpricedRows: 0 });
     // One read for every turn's rows, scoped to the turns' people.
-    expect(findCostRows).toHaveBeenCalledTimes(1);
-    expect(findCostRows.mock.calls[0][0]).toMatchObject({ where: { userId: { in: [ME] } } });
+    expect(turnRowReads()).toHaveLength(1);
+    expect(turnRowReads()[0]).toMatchObject({ where: { userId: { in: [ME] } } });
   });
 
   it("never gives one person's row to another's turn with the same id", async () => {
     // Turn ids are unique per person, not globally.
     const OTHER = 'cmu0000000000000000other';
     findTurns.mockResolvedValue([turn('t-1')]);
-    findCostRows.mockResolvedValue([
-      costRow(0.3, { turnId: 't-1' }),
-      costRow(9, { turnId: 't-1' }, { userId: OTHER }),
-    ]);
+    answerCostReads(
+      [],
+      [costRow(0.3, { turnId: 't-1' }), costRow(9, { turnId: 't-1' }, { userId: OTHER })]
+    );
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
     expect(result.turns[0].costUsd).toBe(0.3);
@@ -615,11 +635,10 @@ describe("one conversation's turns", () => {
 
   it('cuts the cheapest past the limit, after summing, and says so', async () => {
     findTurns.mockResolvedValue([turn('a'), turn('b'), turn('c')]);
-    findCostRows.mockResolvedValue([
-      costRow(0.1, { turnId: 'a' }),
-      costRow(0.3, { turnId: 'b' }),
-      costRow(0.2, { turnId: 'c' }),
-    ]);
+    answerCostReads(
+      [],
+      [costRow(0.1, { turnId: 'a' }), costRow(0.3, { turnId: 'b' }), costRow(0.2, { turnId: 'c' })]
+    );
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 2 });
     expect(result.turns.map((row) => row.turnId)).toEqual(['b', 'c']);
@@ -644,30 +663,28 @@ describe("one conversation's turns — what round 2 of review found (t-97)", () 
     ...over,
   });
 
-  beforeEach(() => {
-    queryRaw.mockResolvedValue([]);
-  });
-
   it("finds a retried turn whose link was reset, by the id on this conversation's rows", async () => {
     // A retry nulls conversationId until its attempt starts; the first
     // attempt's rows here still carry the turn id.
-    queryRaw.mockResolvedValue([{ user_id: ME, turn_id: 't-retried' }]);
     findTurns.mockResolvedValue([
       turnRow('t-retried', { conversationId: null, status: 'failed', attempts: 2 }),
       // Matched by the two id lists, but not a pair tagged here: left out.
       turnRow('t-elsewhere', { conversationId: 'cmuconv0000000000000two' }),
     ]);
-    findCostRows.mockResolvedValue([
-      {
-        id: 'r1',
-        userId: ME,
-        totalCostUsd: 4,
-        isLocal: false,
-        inputTokens: 1,
-        outputTokens: 1,
-        metadata: { turnId: 't-retried' },
-      },
-    ]);
+    answerCostReads(
+      [{ userId: ME, metadata: { turnId: 't-retried' } }],
+      [
+        {
+          id: 'r1',
+          userId: ME,
+          totalCostUsd: 4,
+          isLocal: false,
+          inputTokens: 1,
+          outputTokens: 1,
+          metadata: { turnId: 't-retried' },
+        },
+      ]
+    );
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
 
@@ -684,16 +701,16 @@ describe("one conversation's turns — what round 2 of review found (t-97)", () 
     // A retry resets startedAt; an earlier attempt can have spent before the
     // window began, and is still this turn's cost, as the turn page shows it.
     findTurns.mockResolvedValue([turnRow('t-1')]);
-    findCostRows.mockResolvedValue([]);
+    answerCostReads([], []);
     await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
-    expect(findCostRows.mock.calls[0][0].where).not.toHaveProperty('createdAt');
+    expect(turnRowReads()[0].where).not.toHaveProperty('createdAt');
   });
 
   it('reads a runaway in batches, one after another', async () => {
     findTurns.mockResolvedValue(Array.from({ length: 450 }, (_, i) => turnRow(`t-${i}`)));
     let inFlight = 0;
     let most = 0;
-    findCostRows.mockImplementation(async () => {
+    answerCostReads([], async () => {
       inFlight += 1;
       most = Math.max(most, inFlight);
       await Promise.resolve();
@@ -703,9 +720,7 @@ describe("one conversation's turns — what round 2 of review found (t-97)", () 
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
 
-    const sizes = findCostRows.mock.calls.map(
-      ([args]) => (args as { where: { OR: unknown[] } }).where.OR.length
-    );
+    const sizes = turnRowReads().map((args) => (args.where.OR as unknown[]).length);
     expect(sizes).toEqual([200, 200, 50]);
     expect(most).toBe(1);
     expect(result.truncated).toBe(true);
@@ -722,7 +737,7 @@ describe("one conversation's turns — what round 2 of review found (t-97)", () 
       outputTokens: 1,
       metadata: { turnId: 't-1' },
     };
-    findCostRows.mockResolvedValue([row, row]);
+    answerCostReads([], [row, row]);
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
     expect(result.turns[0].costUsd).toBe(0.4);
     expect(result.turns[0].costRows).toBe(1);

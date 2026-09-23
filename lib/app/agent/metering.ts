@@ -665,15 +665,27 @@ export async function getConversationTurns(query: {
   // until its new attempt starts (`claimTurn`) — a turn whose first attempt
   // spent here and whose retry failed early would otherwise vanish from the
   // conversation its cost is counted in (/code-review round 2).
-  const tagged = await prisma.$queryRaw<Array<{ user_id: string; turn_id: string }>>`
-    SELECT DISTINCT c."userId" AS user_id, c.metadata->>'turnId' AS turn_id
-    FROM ai_cost_log c
-    WHERE c."conversationId" = ${query.conversationId}
-      AND c."createdAt" >= ${query.window.from}
-      AND c."createdAt" < ${query.window.to}
-      AND c."userId" IS NOT NULL
-      AND c.metadata->>'turnId' IS NOT NULL
-  `;
+  // Through the client, not raw SQL: one conversation's rows for one window
+  // are few, and the pairs are picked out here (the raw-SQL allowlist asks for
+  // exactly that where a query does not need to be raw).
+  const conversationRows = await prisma.aiCostLog.findMany({
+    where: {
+      conversationId: query.conversationId,
+      createdAt: { gte: query.window.from, lt: query.window.to },
+      userId: { not: null },
+    },
+    select: { userId: true, metadata: true },
+  });
+  const tagged = [
+    ...new Map(
+      conversationRows.flatMap((row) => {
+        const turnId = metadataString(row.metadata, 'turnId');
+        return row.userId && turnId
+          ? [[`${row.userId}\u0000${turnId}`, { user_id: row.userId, turn_id: turnId }] as const]
+          : [];
+      })
+    ).values(),
+  ];
   const taggedKeys = new Set(tagged.map((row) => `${row.user_id}\u0000${row.turn_id}`));
 
   const candidates = await prisma.appTurn.findMany({
