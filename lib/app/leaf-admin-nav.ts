@@ -66,6 +66,14 @@
  * own page rather than a tab on "Deadlines & budgets" (owner, 22 Sept 2026):
  * that page is settings you write; this is a reading you interrogate.
  *
+ * ## And the eighth, because a re-seed is not an edit path
+ *
+ * f-content-seeds moved her documents, the journey's text, the discovery
+ * questions and the resources into the database, seeded once and never
+ * overwritten, so an edit survives every later seed. That leaves no way to
+ * change them at all without a surface: `/admin/app/content` (t-91) is where
+ * they are edited, exported and imported.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -83,13 +91,23 @@
  * not restate it, because it drifted the moment an item was added.
  */
 
-import { AudioLines, ClipboardList, Coins, Gauge, LifeBuoy, Library, ListTree } from 'lucide-react';
+import {
+  AudioLines,
+  BookOpenText,
+  ClipboardList,
+  Coins,
+  Gauge,
+  LifeBuoy,
+  Library,
+  ListTree,
+} from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
 import { DESIGNATION_ADMIN_PAGE, VOICE_COMPARISON_PAGE } from '@/lib/app/voice/endpoint';
 import { AGENT_SETTINGS_PAGE, COST_ADMIN_PAGE } from '@/lib/app/agent/endpoint';
 import { CRISIS_RESOURCES_PAGE } from '@/lib/app/safety/endpoint';
 import { SLOT_DEFINITIONS_PAGE } from '@/lib/app/slots/endpoint';
+import { CONTENT_ADMIN_PAGE } from '@/lib/app/content/admin/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
@@ -138,6 +156,13 @@ export function initLeafAdminNav(): void {
         icon: ListTree,
         description:
           'The data slots the AI tries to fill in about a person, and every past version of each',
+      },
+      {
+        href: CONTENT_ADMIN_PAGE,
+        label: 'Content',
+        icon: BookOpenText,
+        description:
+          'Her documents, the journey text, the discovery questions and the resources, edited without a deploy',
       },
     ],
   });

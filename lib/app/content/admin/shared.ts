@@ -131,24 +131,7 @@ export function parkingPosition(index: number): number {
   return -1_000_000 - index;
 }
 
-// ─── Acknowledgement versions ───────────────────────────────────────────────
-
-/**
- * The next acknowledgement version after `current`: `1.1` → `1.2`, `2` → `2.1`.
- *
- * A label, not arithmetic: the gate compares versions as strings (a row
- * satisfies a kind only for exactly the required string), so all this has to do
- * is produce one nobody has acknowledged yet. Every earlier label is one the
- * document has already had, and minor numbers only go up, so it never repeats.
- */
-export function nextAcknowledgementVersion(current: string): string {
-  const match = /^(.*?)(\d+)$/.exec(current);
-  const [, head, tail] = match ?? [];
-  if (head !== undefined && tail !== undefined && head.endsWith('.')) {
-    return `${head}${Number(tail) + 1}`;
-  }
-  return `${current}.1`;
-}
+export { nextAcknowledgementVersion } from '@/lib/app/content/admin/ack-version';
 
 // ─── Import plans ───────────────────────────────────────────────────────────
 

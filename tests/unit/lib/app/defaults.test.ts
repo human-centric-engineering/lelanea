@@ -445,6 +445,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin/app/safety',
         // f-slots t-71 — the taxonomy, and every past version of each slot.
         '/admin/app/slots',
+        // f-content-seeds t-91 — her documents, the journey text, the discovery
+        // questions and the resources, edited, exported and imported.
+        '/admin/app/content',
       ]);
     },
   },
