@@ -21,6 +21,14 @@ import type { PrismaClient } from '@prisma/client';
 
 vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 
+// The service mirrors into the knowledge base after it writes (t-90). The
+// mirror's own behaviour is `tests/unit/lib/app/content/knowledge-mirror.test.ts`;
+// here it is only whether, and when, the write service calls it.
+const { reconcileKnowledgeMirror } = vi.hoisted(() => ({
+  reconcileKnowledgeMirror: vi.fn(),
+}));
+vi.mock('@/lib/app/content/knowledge-mirror', () => ({ reconcileKnowledgeMirror }));
+
 import unit from '@/prisma/seeds/app-lelanea/015-foundational-documents';
 import { DOCUMENT_SNAPSHOT_FIELDS } from '@/lib/app/content/document-store';
 import { readFoundationalDocumentsFile } from '@/lib/app/content/seed-input/foundational-seed';
@@ -69,6 +77,7 @@ let db: ReturnType<typeof inMemoryDatabase>;
 beforeEach(() => {
   vi.clearAllMocks();
   db = inMemoryDatabase();
+  reconcileKnowledgeMirror.mockResolvedValue({ status: 'reconciled', failed: [] });
 });
 
 async function runSeed() {
@@ -164,6 +173,26 @@ describe('015-foundational-documents', () => {
     expect(db.tables.revision).toHaveLength(7);
     expect(db.raw.$transaction).toHaveBeenCalledTimes(1);
     expect(logger.info).toHaveBeenLastCalledWith(expect.stringMatching(/left as they are/));
+  });
+
+  it('mirrors into the knowledge base after it writes, and not when it writes nothing', async () => {
+    await runSeed();
+    expect(reconcileKnowledgeMirror).toHaveBeenCalledTimes(1);
+    // After the rows landed, so the mirror reads what was just written.
+    expect(db.raw.$transaction.mock.invocationCallOrder[0]).toBeLessThan(
+      reconcileKnowledgeMirror.mock.invocationCallOrder[0]
+    );
+
+    await runSeed();
+    expect(reconcileKnowledgeMirror).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fail the write when the mirror fails; the next reconcile retries', async () => {
+    reconcileKnowledgeMirror.mockRejectedValue(new Error('Embedding provider unavailable'));
+
+    await expect(runSeed()).resolves.toBeUndefined();
+
+    expect(db.tables.document).toHaveLength(7);
   });
 
   it('declares no hashInputs over the file, so an edit to it cannot imply it landed', () => {

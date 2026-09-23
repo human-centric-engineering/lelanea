@@ -215,6 +215,12 @@ model AppKnowledgeDesignation {
   /// make `eraseUser()` fail or silently rewrite the record of who designated
   /// what. Rendered as an id, resolved by the admin list when it can.
   designatedBy String?
+  /// Set only on a document the knowledge mirror wrote, e.g.
+  /// `foundational:the_mission` (f-content-seeds t-90). It names the app row the
+  /// document mirrors, so an edit re-ingests the same document and a removed row
+  /// deletes it. Null on everything an admin uploaded, which the mirror never
+  /// touches. See `lib/app/content/knowledge-mirror.ts`.
+  sourceKey    String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
