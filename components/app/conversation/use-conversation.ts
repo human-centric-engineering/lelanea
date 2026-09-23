@@ -164,6 +164,14 @@ interface Options {
    * failed has still written.
    */
   onSlotsWritten?: () => void;
+  /**
+   * A turn is over, however it ended (t-95). Called **once per turn**, from
+   * `finish` — the one place every outcome passes through — and never per
+   * streamed frame, so the spend meter that listens re-reads at most once for
+   * each thing a person sends. A turn abandoned by unmounting never finishes,
+   * and does not call it.
+   */
+  onTurnSettled?: () => void;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
 }
@@ -171,7 +179,7 @@ interface Options {
 export function useConversation(options: Options = {}): ConversationState {
   const seat = options.seat ?? CONVERSATION_SEAT;
   const fetchImpl = options.fetchImpl;
-  const { onSlotsWritten } = options;
+  const { onSlotsWritten, onTurnSettled } = options;
   // Read through a ref so `send` does not have to be rebuilt when a parent
   // passes a fresh closure — the whole callback list below is a dependency of
   // the composer's `onSend`, and this one changes on every render of the pane.
@@ -179,6 +187,10 @@ export function useConversation(options: Options = {}): ConversationState {
   useEffect(() => {
     notifySlots.current = onSlotsWritten;
   }, [onSlotsWritten]);
+  const notifyTurn = useRef(onTurnSettled);
+  useEffect(() => {
+    notifyTurn.current = onTurnSettled;
+  }, [onTurnSettled]);
 
   const [phase, setPhase] = useState<ConversationPhase>('loading');
   const [entries, setEntries] = useState<ConversationEntry[]>([]);
@@ -300,6 +312,7 @@ export function useConversation(options: Options = {}): ConversationState {
         setPhase('idle');
         busy.current = false;
         inFlight.current = null;
+        notifyTurn.current?.();
       };
 
       void (async () => {

@@ -16,6 +16,8 @@ import {
   daysBetween,
   floorLabel,
   meterFill,
+  meterReading,
+  METER_NAME,
   money,
   moneyTight,
   moneyWords,
@@ -198,6 +200,76 @@ describe('the meter', () => {
     const over = summary({ costUsd: 21.4, fractionUsed: 1.07, remainingUsd: 0 });
     expect(meterFill(over)).toBe(1);
     expect(usageStats(over).overCeiling).toBe(true);
+  });
+});
+
+/**
+ * The topbar's meter (t-95): which states may draw a bar at all.
+ *
+ * The page can put an edge into a sentence under its stats. The pill cannot,
+ * so the two edges a bar would misstate get no bar — and the name a screen
+ * reader hears has to carry the printed words, or the words a sighted person
+ * would say to reach it are not in its name.
+ */
+describe('the topbar meter', () => {
+  it('draws a bar and what is left, in an ordinary month', () => {
+    const meter = meterReading(summary());
+    expect(meter).toEqual({
+      kind: 'meter',
+      fill: 0.4675,
+      figure: '$10.65 left',
+      name: 'Usage and billing: $10.65 left of $20.00 this month',
+    });
+  });
+
+  it('says a full limit is left, with an empty bar, when nothing is spent', () => {
+    // An empty track is honest HERE — the summary has been read and says so.
+    const meter = meterReading(summary({ costUsd: 0, remainingUsd: 20, fractionUsed: 0 }));
+    expect(meter.kind).toBe('meter');
+    expect(meter.kind === 'meter' && meter.fill).toBe(0);
+    expect(meter.figure).toBe('$20.00 left');
+  });
+
+  it('says "at most" what is left when spend is a floor', () => {
+    const meter = meterReading(summary({ unpricedRows: 2 }));
+    expect(meter.figure).toBe('at most $10.65 left');
+  });
+
+  it('draws no bar on a $0 ceiling, and says nothing may be spent', () => {
+    const meter = meterReading(
+      summary({
+        costUsd: 0,
+        remainingUsd: 0,
+        fractionUsed: null,
+        ceiling: { ceilingUsd: 0, source: 'override' },
+      })
+    );
+    expect(meter.kind).toBe('nothing-allowed');
+    expect(meter).not.toHaveProperty('fill');
+    expect(meter.figure).toBe('nothing to spend');
+    expect(meter.name).toContain('$0.00');
+  });
+
+  it('draws no bar past the ceiling, where a full one would read as "exactly used up"', () => {
+    const meter = meterReading(summary({ costUsd: 21.4, fractionUsed: 1.07, remainingUsd: 0 }));
+    expect(meter.kind).toBe('over');
+    expect(meter).not.toHaveProperty('fill');
+    expect(meter.figure).toBe('past your limit');
+  });
+
+  it('names itself with the printed words, in every state', () => {
+    const states = [
+      summary(),
+      summary({ unpricedRows: 1 }),
+      summary({ fractionUsed: null, ceiling: { ceilingUsd: 0, source: 'default' } }),
+      summary({ costUsd: 30, fractionUsed: 1.5, remainingUsd: 0 }),
+    ].map(meterReading);
+    // Four distinct states, or this proves less than it says.
+    expect(new Set(states.map((meter) => meter.figure)).size).toBe(4);
+    for (const meter of states) {
+      expect(meter.name.startsWith(`${METER_NAME}: `)).toBe(true);
+      expect(meter.name).toContain(meter.figure);
+    }
   });
 });
 

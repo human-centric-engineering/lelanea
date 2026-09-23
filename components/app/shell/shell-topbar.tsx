@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { ICON_RADIUS } from '@/components/app/shell/chrome';
+import { SpendMeter } from '@/components/app/shell/spend-meter';
 import { NAV_TOGGLE_ATTR, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
@@ -15,13 +16,18 @@ import { cn } from '@/lib/utils';
 /**
  * The top bar: 58px, ruled off from the panes below it.
  *
- * ## What is deliberately absent, and why the bar still earns its place
+ * ## What it carries, and what is deliberately absent
  *
- * The prototype's bar carries five things. Two of them still cannot be honest:
+ * The prototype's bar carries five things. Three are here:
  *
- * - **The budget meter** needs metered spend. Nothing calls a model until phase
- *   2, so `$12.40 left` would be a number we invented (D6, `B31`).
- * - **The `prototype` tag** is the prototype labelling itself.
+ * - **Recents**, below — where this reader has been.
+ * - **The spend meter** (`spend-meter.tsx`, f-budget t-95) — this month against
+ *   the ceiling, opening `/app/usage`. It was absent until spend was metered:
+ *   before §10, `$12.40 left` would have been a number we invented (D6, `B31`).
+ *   Above 900px only, as in the prototype.
+ * - **The burger and the pane switch**, both ≤900px controls.
+ *
+ * **The `prototype` tag** is the prototype labelling itself, and stays out.
  *
  * **Recents was the third, and is not any more.** It was omitted because nothing
  * opened a module until §05 and the strip would have been permanently empty.
@@ -33,8 +39,7 @@ import { cn } from '@/lib/utils';
  * **The fourth, the theme toggle, left rather than never arrived.** It was here
  * until 15 September 2026 and now lives in the account menu
  * (`account-menu.tsx`) with everything else about the person — owner ruling:
- * one place, not two. Do not put it back to fill space; recents does that, and
- * the rest of the bar is the burger and the pane switch, both ≤900px controls.
+ * one place, not two. Do not put it back to fill space; recents does that.
  */
 export function ShellTopbar() {
   const { width, wsOpen, navOpen, setNavOpen, pane, setPane } = useShellLayout();
@@ -119,6 +124,8 @@ export function ShellTopbar() {
       ) : (
         <Recents />
       )}
+
+      {small ? null : <SpendMeter />}
     </header>
   );
 }

@@ -620,3 +620,66 @@ describe('a turn that writes a note tells the panel, once', () => {
     expect(onSlotsWritten).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * The signal the topbar's spend meter re-reads on (t-95).
+ *
+ * The meter calls the month-to-date aggregate `agent.md` flags as a watch item,
+ * so the property is a count: **one per turn, however many frames it streamed,
+ * and however it ended**. Every "once" below is asserted on a turn that pushed
+ * several frames, so a per-frame call would read as a number above one rather
+ * than passing for free.
+ */
+describe('every finished turn tells the spend meter, once', () => {
+  it('tells it once for a reply, not once per streamed frame', async () => {
+    const onTurnSettled = vi.fn();
+    const hook = renderHook(() => useConversation({ fetchImpl, onTurnSettled }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.send('hello'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      for (const delta of ['One ', 'word ', 'at ', 'a ', 'time.']) {
+        latest().push('content', { delta });
+      }
+      // Mid-stream, nothing has finished.
+      expect(onTurnSettled).not.toHaveBeenCalled();
+      latest().push('done', {});
+      latest().close();
+    });
+
+    expect(hook.result.current.entries.some((entry) => entry.kind === 'reply')).toBe(true);
+    expect(onTurnSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells it once when the turn ended without her', async () => {
+    // An ending can still have cost something — the model ran before it failed.
+    const onTurnSettled = vi.fn();
+    const hook = renderHook(() => useConversation({ fetchImpl, onTurnSettled }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.send('hello'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().push('content', { delta: 'Half an ans' });
+      latest().push('error', { code: 'unavailable', message: 'x' });
+      latest().close();
+    });
+
+    expect(hook.result.current.entries.some((entry) => entry.kind === 'ending')).toBe(true);
+    expect(onTurnSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing for a turn abandoned by unmounting', async () => {
+    const onTurnSettled = vi.fn();
+    const hook = renderHook(() => useConversation({ fetchImpl, onTurnSettled }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.send('hello'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+
+    hook.unmount();
+    expect(onTurnSettled).not.toHaveBeenCalled();
+  });
+});

@@ -166,6 +166,20 @@ export interface UsageFetchOptions {
 }
 
 /**
+ * The summary alone — what the topbar's meter reads (t-95).
+ *
+ * The meter needs one number against one ceiling, so it does not ask for the
+ * by-day breakdown the page draws. That keeps the read the shell repeats to the
+ * one aggregate `agent.md` already watches (f-budget ruling 5), rather than two.
+ */
+export async function fetchUsageSummary(options: UsageFetchOptions = {}): Promise<UsageSummary> {
+  return read(USAGE_ENDPOINT, summarySchema, {
+    signal: options.signal,
+    fetchImpl: boundFetch(options.fetchImpl),
+  });
+}
+
+/**
  * Both readings — the summary first, because it says which window to ask for.
  *
  * Nothing is drawn until both have landed (the panel shows one skeleton for the
@@ -175,10 +189,7 @@ export async function fetchUsage(
   options: UsageFetchOptions = {}
 ): Promise<{ summary: UsageSummary; days: UsageBreakdown }> {
   const fetchImpl = boundFetch(options.fetchImpl);
-  const summary = await read(USAGE_ENDPOINT, summarySchema, {
-    signal: options.signal,
-    fetchImpl,
-  });
+  const summary = await fetchUsageSummary({ signal: options.signal, fetchImpl });
 
   const from = readingWindowFrom(
     new Date(summary.window.to),

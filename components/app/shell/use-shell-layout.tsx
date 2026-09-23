@@ -167,6 +167,22 @@ export interface ShellLayout {
    */
   noteSlotsWritten: () => void;
   /**
+   * How many turns have finished, this session, whatever they did.
+   *
+   * `slotsWritten`'s shape and its reason for living here: a counter the
+   * topbar's spend meter compares against the value it saw last, because the
+   * conversation that spends and the bar that shows it are siblings (t-95).
+   * Kept apart from `slotsWritten` because that one counts only turns that
+   * wrote a note, and a turn that wrote nothing still cost something.
+   */
+  turnsSettled: number;
+  /**
+   * A turn is over — answered, ended, or refused. Called once per turn by
+   * `useConversation`, never per streamed frame, so what reads it re-reads at
+   * most as often as a person sends.
+   */
+  noteTurnSettled: () => void;
+  /**
    * Words the composer should be holding, put there by something outside the
    * conversation — today, "Ask her about this" on a note. `null` when there is
    * nothing waiting, which is almost always.
@@ -243,6 +259,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [pane, setPaneState] = useState<Pane>('chat');
   const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
   const [slotsWritten, setSlotsWritten] = useState(0);
+  const [turnsSettled, setTurnsSettled] = useState(0);
   const [ask, setAskState] = useState<string | null>(null);
 
   /**
@@ -558,6 +575,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * two, and so the callback never has to depend on the count it increments.
    */
   const noteSlotsWritten = useCallback(() => setSlotsWritten((count) => count + 1), []);
+  const noteTurnSettled = useCallback(() => setTurnsSettled((count) => count + 1), []);
   const setAsk = useCallback((text: string) => setAskState(text), []);
   const takeAsk = useCallback(() => setAskState(null), []);
 
@@ -638,6 +656,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setModulePlace,
       slotsWritten,
       noteSlotsWritten,
+      turnsSettled,
+      noteTurnSettled,
       ask,
       setAsk,
       takeAsk,
@@ -665,6 +685,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setModulePlace,
       slotsWritten,
       noteSlotsWritten,
+      turnsSettled,
+      noteTurnSettled,
       ask,
       setAsk,
       takeAsk,

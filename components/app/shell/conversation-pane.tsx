@@ -98,16 +98,21 @@ export function ConversationPane() {
     pane,
     modulePlace,
     noteSlotsWritten,
+    noteTurnSettled,
     ask,
     takeAsk,
   } = useShellLayout();
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
-  // The two cross-pane channels, both explained on the provider: a turn that
-  // captured tells the notes panel to re-read, and "Ask her about this" on a
-  // note puts its question in the box here. Neither is layout, and both live
-  // there because the panes are siblings (see `modulePlace`).
-  const conversation = useConversation({ onSlotsWritten: noteSlotsWritten });
+  // The cross-pane channels, all explained on the provider: a turn that
+  // captured tells the notes panel to re-read, any finished turn tells the
+  // topbar's spend meter to, and "Ask her about this" on a note puts its
+  // question in the box here. None is layout, and all live there because the
+  // panes are siblings (see `modulePlace`).
+  const conversation = useConversation({
+    onSlotsWritten: noteSlotsWritten,
+    onTurnSettled: noteTurnSettled,
+  });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
   const foldByKeyboard = useRef(false);

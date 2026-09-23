@@ -12,6 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import {
   fetchUsage,
+  fetchUsageSummary,
   UsageUnreadable,
   USAGE_BREAKDOWN_ENDPOINT,
   USAGE_ENDPOINT,
@@ -173,5 +174,25 @@ describe('when it cannot be read', () => {
       } as unknown as Response,
     });
     await expect(fetchUsage({ fetchImpl: notJson })).rejects.toBeInstanceOf(UsageUnreadable);
+  });
+});
+
+describe('the summary alone, for the topbar meter (t-95)', () => {
+  it('asks for the summary and never the breakdown', async () => {
+    // The shell repeats this read after every turn; the breakdown is the
+    // page's, and asking for it here would double what each turn costs.
+    const fetchImpl = fetcher({});
+    const summary = await fetchUsageSummary({ fetchImpl });
+
+    expect(summary.remainingUsd).toBe(10.65);
+    const urls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls.map(
+      (c) => c[0]
+    );
+    expect(urls).toEqual([USAGE_ENDPOINT]);
+  });
+
+  it('throws the same unreadable error on a refusal', async () => {
+    const fetchImpl = fetcher({ usage: json({ success: false }, 500) });
+    await expect(fetchUsageSummary({ fetchImpl })).rejects.toBeInstanceOf(UsageUnreadable);
   });
 });
