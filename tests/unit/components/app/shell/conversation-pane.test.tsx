@@ -369,15 +369,24 @@ describe('when she can\u2019t answer (t-65)', () => {
       expect(within(endingRow()).queryAllByRole('link')).toHaveLength(0);
     });
 
-    it('still says what happened when the figures did not parse', async () => {
-      // `ceilingField` drops a malformed object to undefined; the row must not
-      // fall back to the frame's words or print a hole.
-      await endOn(frame.code, frame.message, { ceiling: { spentUsd: 'lots' } });
+    it('keeps the date when only an amount did not parse', async () => {
+      await endOn(frame.code, frame.message, {
+        ceiling: { ...frame.ceiling, spentUsd: 'lots' },
+      });
       const words = endingRow().textContent ?? '';
 
       expect(words).toContain("That's this month's conversations used up.");
-      expect(words).toContain('from the start of next month');
+      expect(words).toContain('I can reply again from 1 October.');
       expect(words).not.toMatch(/undefined|NaN|Invalid Date|\$/);
+    });
+
+    it('still says what happened, and promises no date, when nothing parsed', async () => {
+      await endOn(frame.code, frame.message, { ceiling: 'x' });
+      const words = endingRow().textContent ?? '';
+
+      expect(words).toContain("I can't reply for now");
+      expect(words).not.toMatch(/October|next month|undefined|\$/);
+      expect(screen.queryByText(frame.message)).toBeNull();
     });
   });
 

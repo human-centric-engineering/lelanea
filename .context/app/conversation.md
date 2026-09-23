@@ -216,15 +216,21 @@ writable still works — the part a person will not assume. **Explain and
 wait**: no control is drawn beside it and nothing invites a reply, because
 there is no "ask for more" behind either (owner, 22 Sept 2026; `B31`).
 
-- **A $0 limit gets no date.** It ends the turn on the same frame with next
-  month's `resetsAt`, but the limit is a setting and will still be nothing on
-  the 1st, so "I can reply again from 1 October" would be false. It says the
-  limit is set to nothing, and that everything else works.
-- **Every figure is optional.** `events.ts` parses them leniently and drops a
-  malformed object to `undefined`; `useConversation` keeps what arrived on the
-  entry as `ceiling`. Each unusable piece drops its own clause, so the row never
-  prints `$undefined` or `Invalid Date`, and with nothing usable it still says
-  what happened and "from the start of next month".
+- **A date is named only where the month keeps the promise.** A limit of
+  nothing — zero, or so small it prints as `$0.00` (`isNothingLimit` in
+  `lib/app/agent/endings.ts`, shared with the frame's neutral copy) — ends the
+  turn on the same frame with next month's `resetsAt`, but the limit is a
+  setting and will be the same on the 1st, so "I can reply again from
+  1 October" would be false. It says the limit is set to nothing. With the limit
+  **unknown** there is no telling it is not one of those, so that gets no date
+  either: "I can't reply for now".
+- **Every figure is optional, one at a time.** `ceilingFiguresSchema` in
+  `events.ts` validates each figure on its own — an amount must be a
+  non-negative number, the reset an ISO instant — and drops only the one that
+  fails; `useConversation` keeps what arrived on the entry as `ceiling`. An
+  unknown spend costs the amounts and keeps the date; an unknown reset falls
+  back to "the start of next month". The row never prints `$undefined` or
+  `Invalid Date`. The validation is there once; `ceilingEnding` trusts it.
 
 **The crisis resource is laid out verbatim** (`CrisisRow`): the intro, every
 service — name, contact (a link where the file gives a URL), hours — the

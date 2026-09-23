@@ -1,4 +1,4 @@
-import type { TurnEnding } from '@/lib/app/agent/endings';
+import { formatResetDay, isNothingLimit, type TurnEnding } from '@/lib/app/agent/endings';
 import type { CeilingFigures } from '@/lib/app/conversation/events';
 import { money } from '@/lib/app/usage/usage-view';
 
@@ -101,24 +101,6 @@ export const CONVERSATION_COPY = {
   crisisLabel: 'Somewhere to turn',
 } as const;
 
-const resetDay = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-  timeZone: 'UTC',
-});
-
-/** A figure the frame could state: finite and not negative. */
-function amount(value: number | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-}
-
-/** The reset as a day and month, or null for a date that does not parse. */
-function resetWords(resetsAt: string | undefined): string | null {
-  if (typeof resetsAt !== 'string') return null;
-  const at = new Date(resetsAt);
-  return Number.isNaN(at.getTime()) ? null : resetDay.format(at);
-}
-
 /** Said on every form of the ending, because it is the part a person will not assume. */
 const STILL_WORKS =
   'What you wrote is still in the box, and everything you can read and write here still works.';
@@ -136,36 +118,38 @@ const STILL_WORKS =
  * monthly limit"). The words say what is true and hand nothing back that
  * reaches no one.
  *
- * **A limit of nothing is not a month used up.** A $0 ceiling ends the turn on
- * the same frame, and its `resetsAt` is next month like any other — but the
- * limit is a setting, not a month's spend, and it will still be nothing on the
- * 1st. So it gets no date: "I can reply again from 1 October" would be a
- * promise the next month does not keep.
+ * **A date is named only when it is a promise the month keeps.** A limit of
+ * nothing (`isNothingLimit` — zero, or so small it prints as `$0.00`) ends the
+ * turn on the same frame with next month's `resetsAt`, but it is a setting and
+ * will be the same on the 1st, so it gets no date. And with the limit unknown
+ * there is no telling it is not one of those, so an unknown limit gets no date
+ * either — "I can't reply for now" is true whichever it is.
  *
- * **Every figure is optional here.** The client parses the figures leniently
- * (`events.ts`, `ceilingField`), so they can be absent, and a figure that is
- * present can still be one no sentence should state. Each missing piece drops
- * its own clause rather than printing `$undefined` or `Invalid Date`, and with
- * nothing usable the ending still says what happened and when, in general
- * terms.
+ * **Every figure is optional.** `events.ts` validates each one on its own and
+ * drops only what is unusable, so each missing figure costs its own clause and
+ * nothing else: an unknown spend drops the amounts, an unknown reset falls back
+ * to "the start of next month". Never `$undefined`, never `Invalid Date`.
  *
  * A proposal in her register until she has read it, like everything above.
  */
-export function ceilingEnding(figures: Partial<CeilingFigures> | undefined): string {
-  const spent = amount(figures?.spentUsd);
-  const limit = amount(figures?.ceilingUsd);
-  const resets = resetWords(figures?.resetsAt);
+export function ceilingEnding(figures: CeilingFigures | undefined): string {
+  const spent = figures?.spentUsd;
+  const limit = figures?.ceilingUsd;
+  const resetsAt = figures?.resetsAt;
 
-  if (limit === 0) {
+  if (limit === undefined) {
+    return `You've reached your limit for conversations, so I can't reply for now.\n${STILL_WORKS}`;
+  }
+  if (isNothingLimit(limit)) {
     return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
   }
 
   const used =
-    spent !== null && limit !== null
-      ? `That's this month's conversations used up — ${money(spent)} of your ${money(limit)} limit.`
-      : "That's this month's conversations used up.";
-  const back = resets
-    ? `I can reply again from ${resets}.`
+    spent === undefined
+      ? "That's this month's conversations used up."
+      : `That's this month's conversations used up — ${money(spent)} of your ${money(limit)} limit.`;
+  const back = resetsAt
+    ? `I can reply again from ${formatResetDay(new Date(resetsAt))}.`
     : 'I can reply again from the start of next month.';
   return `${used}\n${back}\n${STILL_WORKS}`;
 }

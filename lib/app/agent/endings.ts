@@ -147,24 +147,50 @@ const resetDay = new Intl.DateTimeFormat('en-GB', {
 });
 
 /**
+ * The reset as a person reads it — `1 October` — in UTC, because the month
+ * resets at the first instant of the next UTC month wherever they are. One
+ * formatter, shared with her words for the same ending (`ceilingEnding`), so the
+ * neutral copy and hers cannot name different days.
+ */
+export function formatResetDay(at: Date): string {
+  return resetDay.format(at);
+}
+
+/**
+ * A limit that is nothing, as a person would read it: zero, or so small it
+ * prints as `$0.00`.
+ *
+ * Such a limit is a setting, not a month's spend, and it will be the same after
+ * the reset — so no copy for it may name a reset date as the day replies
+ * return. Asked by the frame's neutral words and by hers alike (t-96).
+ */
+export function isNothingLimit(ceilingUsd: number): boolean {
+  return ceilingUsd < 0.005;
+}
+
+/**
  * The frame a turn ends on when the person has used their month's budget.
  *
  * The default copy says why, and what they can do that exists: keep reading
  * and writing, or wait for the reset (`HB10`). It offers no "ask for more" —
- * there is no mechanism behind one (`B31`).
+ * there is no mechanism behind one (`B31`). On a limit of nothing it names no
+ * reset: waiting for one would not bring replies back ({@link isNothingLimit}).
  */
 export function ceilingReachedFrame(figures: {
   spentUsd: number;
   ceilingUsd: number;
   resetsAt: Date;
 }): CeilingReachedFrame {
+  const message = isNothingLimit(figures.ceilingUsd)
+    ? 'Your conversation budget is set to nothing, so there are no replies for now. ' +
+      'Everything you can read and write in the app still works.'
+    : `You've used this month's conversation budget (${usd.format(figures.spentUsd)} of ` +
+      `${usd.format(figures.ceilingUsd)}), so there are no more replies until it resets on ` +
+      `${formatResetDay(figures.resetsAt)}. Everything you can read and write in the app still works.`;
   return {
     type: 'error',
     code: ENDING_CEILING_REACHED,
-    message:
-      `You've used this month's conversation budget (${usd.format(figures.spentUsd)} of ` +
-      `${usd.format(figures.ceilingUsd)}), so there are no more replies until it resets on ` +
-      `${resetDay.format(figures.resetsAt)}. Everything you can read and write in the app still works.`,
+    message,
     ceiling: {
       spentUsd: figures.spentUsd,
       ceilingUsd: figures.ceilingUsd,
