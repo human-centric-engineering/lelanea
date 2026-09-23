@@ -45,6 +45,9 @@ import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
 
 type Block = StoredDocumentBlock;
 
+const BLOCK_TYPES = ['paragraph', 'heading', 'list'] as const satisfies readonly Block['type'][];
+const CATEGORIES = ['onboarding', 'about', 'legal'] as const;
+
 // ─── Blocks ─────────────────────────────────────────────────────────────────
 
 function newBlock(type: Block['type'], section: string | null): Block {
@@ -92,7 +95,10 @@ function BlocksEditor({
               <span className="text-muted-foreground w-8 text-xs">{index + 1}</span>
               <Select
                 value={block.type}
-                onValueChange={(type) => set(index, retype(block, type as Block['type']))}
+                onValueChange={(type) => {
+                  const known = BLOCK_TYPES.find((candidate) => candidate === type);
+                  if (known) set(index, retype(block, known));
+                }}
               >
                 <SelectTrigger className="h-8 w-32" aria-label={`Block ${index + 1} type`}>
                   <SelectValue />
@@ -329,7 +335,10 @@ function DocumentEditor({
         >
           <Select
             value={draft.category}
-            onValueChange={(value) => field('category', value as Draft['category'])}
+            onValueChange={(value) => {
+              const known = CATEGORIES.find((candidate) => candidate === value);
+              if (known) field('category', known);
+            }}
           >
             <SelectTrigger id={`${id}-category`}>
               <SelectValue />
