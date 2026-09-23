@@ -62,10 +62,18 @@ const statusSchema = z.enum(['draft', 'signed_off']);
 /**
  * Which golden set is current.
  *
+ * Takes an optional client like {@link seedGoldenSetPointer} beside it, so a
+ * caller that was handed a transaction client reads this row on the same one.
+ * `getGoldenSetAdminView` composes this read with two others; before t-88 this
+ * one ignored the client it was given and two of the three queries ran
+ * somewhere else (found by /code-review).
+ *
  * @throws ContentNotSeededError when the seed has not run.
  */
-export async function getGoldenSetPointer(): Promise<VoiceGoldenSetPointer> {
-  const row = await defaultClient.appVoiceGoldenSet.findUnique({
+export async function getGoldenSetPointer(
+  client: PrismaClient = defaultClient
+): Promise<VoiceGoldenSetPointer> {
+  const row = await client.appVoiceGoldenSet.findUnique({
     where: { id: VOICE_GOLDEN_SET_ID },
   });
   if (!row) {

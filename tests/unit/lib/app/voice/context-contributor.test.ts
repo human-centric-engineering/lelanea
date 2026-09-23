@@ -291,6 +291,11 @@ beforeEach(() => {
   invalidateAllAgentAccess();
   __resetAgentAccessContributorsForTests();
   fakeVoiceOverlayStore().reset();
+  // Reset here as well as in the offering's own describe: cases outside it set
+  // these too now, and a leaked `text` would silently add a block to whatever
+  // ran next.
+  offering.text = '';
+  offering.fail = false;
   seedWorld();
 });
 
@@ -347,23 +352,50 @@ describe('the voice context block', () => {
 
   it('serves no register at all, rather than the file, when the rows are gone', async () => {
     fakeVoiceOverlayStore().empty();
+    const { logger } = await import('@/lib/logging');
 
     const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation);
     const body = bodyOf(block);
 
-    // What the platform does with a throwing contributor is NOT ours: Sunrise's
-    // `buildContext` degrades to a placeholder and leaves it uncached, so one
-    // bad read cannot fail a whole chat turn
-    // (`lib/orchestration/chat/context-builder.ts`). Worth pinning here anyway,
-    // because it decides what an unseeded install actually sounds like: she
-    // loses her register for the turn and falls back to the always-on core on
-    // the profile. That is the honest outcome, and the point of the case is the
-    // two assertions below it — none of her authored words reach the prompt
-    // from a file.
-    expect(body).toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
+    // The point of the case: none of her authored words reach the prompt,
+    // because there is nowhere left for them to come from but the rows.
     expect(body).not.toContain(KNOWN_SITUATION.heading);
     for (const line of KNOWN_SITUATION.lines) expect(body).not.toContain(line);
     expect(body).not.toContain(CONTENT.coreOnly.heading);
+
+    // And it is loud. An unreadable set is an operator's problem to see, not
+    // something the turn absorbs quietly.
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('voiceOverlays'),
+      expect.objectContaining({ error: expect.stringContaining('No voice overlays') })
+    );
+  });
+
+  it('keeps the rest of the block when the overlay rows are gone', async () => {
+    // The read is caught IN the contributor rather than left to Sunrise's
+    // `buildContext`, and this is why. `buildContext` degrades a throwing
+    // contributor to `No context loader for type 'voice'` — which would take
+    // the slot vocabulary and the resource offering down with the register,
+    // since all three are composed here. The vocabulary is the one whose
+    // absence is unrecoverable: the agent still holds `fill_slot` and is still
+    // told to record, so with no taxonomy in front of it, it mints a slug —
+    // and a mint is never masked (`lib/app/slots/vocabulary.ts`). Found by
+    // /code-review.
+    //
+    // The offering stands in for both here: this file's `prisma` fake carries
+    // no slot models, so the vocabulary is empty in every case and asserting
+    // on it would be vacuous. What the case actually proves is that the
+    // placeholder is NOT emitted — the contributor returned a block — and that
+    // a sibling composed after the failed read still reaches the prompt.
+    fakeVoiceOverlayStore().empty();
+    offering.text = 'Films and writing of Lelañea’s you may offer this person, by id:';
+
+    const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation, {
+      userId: 'user-1',
+    });
+
+    expect(block).not.toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
+    expect(block).toContain('you may offer this person');
   });
 
   it('carries the authored register for the situation, beat by beat', async () => {

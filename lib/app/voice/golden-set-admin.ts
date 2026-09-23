@@ -53,7 +53,7 @@ const caseMetadataSchema = z.object({
 export async function getGoldenSetAdminView(
   client: PrismaClient = defaultClient
 ): Promise<GoldenSetAdminView> {
-  const pointer = await getGoldenSetPointer();
+  const pointer = await getGoldenSetPointer(client);
 
   const [cases, control] = await Promise.all([
     client.aiDatasetCase.findMany({
@@ -79,7 +79,15 @@ export async function getGoldenSetAdminView(
     provenanceNote: pointer.provenance.note,
     awaitingSignOffFrom: pointer.provenance.awaitingSignOffFrom,
     prompts: cases.map((row) => {
-      const metadata = caseMetadataSchema.parse(row.metadata ?? {});
+      // `safeParse`, not `parse`: `metadata` is a JSON column, so a row holding
+      // a string, a number or an array is a shape the schema rejects rather
+      // than a field it can default. Throwing there would lose the whole list
+      // — every prompt, not the malformed one — for the same reason the
+      // fallbacks below exist: a prompt missing from the list reads as a prompt
+      // that was never asked. A row that parses to nothing gets the same
+      // treatment as one whose `key` is absent (found by /code-review).
+      const parsed = caseMetadataSchema.safeParse(row.metadata ?? {});
+      const metadata: z.infer<typeof caseMetadataSchema> = parsed.success ? parsed.data : {};
       return {
         key: metadata.key ?? `position-${row.position}`,
         kind: metadata.kind ?? 'unknown',

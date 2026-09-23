@@ -358,16 +358,31 @@ See [`safety.md`](./safety.md#the-resource).
 ### An unseeded overlay database does not fail a turn
 
 `getVoiceOverlays()` throws `ContentNotSeededError`, and the throw never reaches
-the person. Sunrise's `buildContext` catches a throwing contributor, logs at
-`error`, and degrades to the placeholder `No context loader for type 'voice'.` —
-**left uncached**, so the next turn tries again once the migration has run.
+the person. Two nets sit under it. Sunrise's `buildContext` is the outer one: it
+catches a throwing contributor, logs at `error`, and degrades to the placeholder
+`No context loader for type 'voice'.` — **left uncached**, so the next turn
+tries again once the migration has run.
 
-What the person loses is her register for that turn: no overlay, no `coreOnly`
-body, no passages, and no slot vocabulary or resource offering either, because
-they are composed in the same contributor. What she keeps is the always-on core,
-which rides on the agent's profile and is present whether or not this block is.
-That is the right direction to degrade in, and it is the reason the core is not
-repeated here.
+The throw is caught **in the contributor**, not left to `buildContext`, and the
+difference is the whole point. `loadVoiceContext` wraps the `getVoiceOverlays()`
+call, logs at `error` and composes no voice block; the slot vocabulary and the
+resource offering are built after it and still reach the prompt. Letting the
+throw travel one level up blanked all three, and the vocabulary is the one whose
+absence is not recoverable — an agent holding `fill_slot` with no taxonomy in
+front of it mints slugs, and a mint is never masked
+([`slots.md`](./slots.md)). Losing the register and keeping the vocabulary is
+strictly better than losing both. `slotVocabulary()` and `loadResourceOffering()`
+are each guarded for the same reason.
+
+That is not a fallback returning by the back door: no file is read and no
+register is served from anywhere else. An unreadable overlay set means **no
+register this turn**, loudly in the log.
+
+What the person loses is therefore her register for that turn: no overlay, no
+`coreOnly` body, no passages. What she keeps is the always-on core, which rides
+on the agent's profile and is present whether or not this block is. That is the
+right direction to degrade in, and it is the reason the core is not repeated
+here.
 
 ## Selection is a lookup, and stays one
 
@@ -774,6 +789,14 @@ An environment migrating for the first time therefore has the pointer and no
 cases until the seeder runs. That is the honest failure the comparison already
 reports — "the golden set v1.1 is not in this install" — rather than silently
 running the previous version's questions.
+
+**The page degrades rather than throwing in that state**, which is not a
+softening of the rule above. `getGoldenSetAdminView()` still throws; the page
+catches it, logs at error and passes `null` to `GoldenSetDialog`, which says
+the set has not been seeded and names `npm run db:seed`. Letting it throw
+rendered `admin/error.tsx` over the whole surface — so a first deploy lost the
+comparison board, the preflight and the run button, and the operator was shown
+no page in the one state whose remedy that page would have named.
 
 **`projectGoldenSetCases()` no longer defaults to the authored set.** Its one
 production caller is seed 004, where reading seed material is the point; the

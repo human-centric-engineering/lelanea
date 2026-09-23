@@ -235,8 +235,28 @@ export async function loadVoiceContext(id: string): Promise<string> {
   // One read of the set per turn. `selectOverlayFrom` matches against what was
   // read here, and `composeVoiceContext` takes the same object for `coreOnly`
   // and `exemplars`, so the rows are not fetched twice to build one block.
-  const content = await getVoiceOverlays();
-  const overlay = selectOverlayFrom(content, id);
+  //
+  // Guarded for the reason the offering below is, and with more at stake: a
+  // throw here does not just lose the register, it blanks the WHOLE context
+  // block — taking the slot vocabulary with it, which is the one piece whose
+  // absence is not recoverable (an agent holding `fill_slot` with no taxonomy
+  // in front of it mints slugs, and a mint is never masked). Losing the voice
+  // block and keeping the vocabulary is strictly better than losing both, so
+  // the failure is logged at error and contributes nothing.
+  //
+  // This does NOT restore a fallback: there is no file to serve and none is
+  // served. An unreadable overlay set means no register this turn, loudly in
+  // the log, not a register from somewhere else. Found by /code-review.
+  let content: Awaited<ReturnType<typeof getVoiceOverlays>> | null = null;
+  try {
+    content = await getVoiceOverlays();
+  } catch (err) {
+    logger.error('voiceOverlays: could not read the set; this turn carries no register', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  const overlay = content === null ? null : selectOverlayFrom(content, id);
   const exemplars =
     overlay === null ? [] : await retrieveVoiceExemplarsSafely(overlay.exemplarQuery);
 
@@ -263,9 +283,8 @@ export async function loadVoiceContext(id: string): Promise<string> {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  return [composeVoiceContext(content, overlay, exemplars), vocabulary, offering]
-    .filter(Boolean)
-    .join('\n\n');
+  const voice = content === null ? '' : composeVoiceContext(content, overlay, exemplars);
+  return [voice, vocabulary, offering].filter(Boolean).join('\n\n');
 }
 
 /**

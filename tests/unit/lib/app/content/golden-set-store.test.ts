@@ -99,6 +99,23 @@ describe('getGoldenSetPointer', () => {
 
     await expect(getGoldenSetPointer()).rejects.toThrow(/failed validation on read/);
   });
+
+  it('reads on the client it is handed, like `seedGoldenSetPointer` beside it', async () => {
+    // It used to ignore one, which split `getGoldenSetAdminView`'s three
+    // queries across two clients: a caller inside a transaction read two rows
+    // on it and this one outside it. Found by /code-review.
+    const injected = vi.fn().mockResolvedValue(pointerRow({ version: '4.2' }));
+    const client = {
+      appVoiceGoldenSet: { findUnique: injected },
+    } as unknown as PrismaClient;
+
+    const pointer = await getGoldenSetPointer(client);
+
+    expect(pointer).toMatchObject({ version: '4.2' });
+    expect(injected).toHaveBeenCalledWith({ where: { id: VOICE_GOLDEN_SET_ID } });
+    // The module's own client was not touched.
+    expect(findUnique).not.toHaveBeenCalled();
+  });
 });
 
 // ============================================================================

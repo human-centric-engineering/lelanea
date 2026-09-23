@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
+import { logger } from '@/lib/logging';
 import { VoiceComparisonBoard } from '@/components/app/admin/voice-comparison';
 import { GoldenSetDialog } from '@/components/app/admin/golden-set-dialog';
-import { getGoldenSetAdminView } from '@/lib/app/voice/golden-set-admin';
+import { getGoldenSetAdminView, type GoldenSetAdminView } from '@/lib/app/voice/golden-set-admin';
 import { VOICE_COMPARISON_ENDPOINT, VOICE_PREFLIGHT_ENDPOINT } from '@/lib/app/voice/endpoint';
 import type { VoicePreflight } from '@/lib/app/voice/preflight';
 import type { VoiceComparisonSummary } from '@/lib/app/voice/comparison-admin';
@@ -62,6 +63,30 @@ async function getPreflight(): Promise<VoicePreflight | null> {
 }
 
 /**
+ * The golden set the run would ask, from the database.
+ *
+ * Null on any failure rather than thrown, for the same reason as
+ * {@link getPreflight} and with a sharper case behind it: the dataset having no
+ * cases is a state the seeding model produces on purpose. Migrations run before
+ * every deploy and the seeder runs only when someone asks it to, which
+ * `20260929100400_app_voice_golden_set_data` states in its own header — "an
+ * environment migrating for the first time therefore gets the pointer here and
+ * the cases when the seeder is run". Throwing would render `admin/error.tsx`
+ * over the whole surface, taking away the page that tells the operator to run
+ * the seeder because the seeder has not been run.
+ */
+async function getGoldenSet(): Promise<GoldenSetAdminView | null> {
+  try {
+    return await getGoldenSetAdminView();
+  } catch (err) {
+    logger.error('Golden set view failed to load', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
  * No change to the voice ships without being read against the previous one (§05 t-28).
  *
  * A voice fingerprint is tuned by editing prose, and prose edits have no
@@ -75,9 +100,10 @@ async function getPreflight(): Promise<VoicePreflight | null> {
  * and carries no Lelañea styling of its own.
  */
 export default async function VoiceComparisonPage() {
-  const [{ comparisons, loadError }, preflight] = await Promise.all([
+  const [{ comparisons, loadError }, preflight, goldenSet] = await Promise.all([
     getComparisons(),
     getPreflight(),
+    getGoldenSet(),
   ]);
 
   return (
@@ -102,7 +128,7 @@ export default async function VoiceComparisonPage() {
           </p>
         </div>
         <div className="shrink-0">
-          <GoldenSetDialog goldenSet={await getGoldenSetAdminView()} />
+          <GoldenSetDialog goldenSet={goldenSet} />
         </div>
       </header>
 

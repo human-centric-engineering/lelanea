@@ -151,6 +151,47 @@ describe('getGoldenSetAdminView', () => {
     expect(view.prompts[0]).toMatchObject({ key: 'position-0', kind: 'unknown', probe: '' });
   });
 
+  it('keeps the whole list when one case’s metadata is the wrong JSON shape', async () => {
+    // `metadata` is a JSON column, so a row can hold a string, a number or an
+    // array — shapes the schema rejects rather than fields it can default. A
+    // `.parse()` here threw, and the throw did not lose the bad case: it lost
+    // EVERY prompt, and (through the page's loader) the whole Voice surface.
+    // The same reason the fallbacks above exist — a prompt missing from the
+    // list reads as a prompt that was never asked. Found by /code-review.
+    vi.mocked(getGoldenSetPointer).mockResolvedValue(pointer());
+    const client = stubClient({
+      cases: [
+        { position: 0, input: 'The good one', metadata: { key: 'opening', kind: 'warmth' } },
+        { position: 1, input: 'The one with a string for metadata', metadata: 'not an object' },
+        { position: 2, input: 'The one with an array', metadata: ['also', 'not'] },
+      ],
+    });
+
+    const view = await getGoldenSetAdminView(client);
+
+    expect(view.prompts).toHaveLength(3);
+    expect(view.prompts[0]).toMatchObject({ key: 'opening', kind: 'warmth' });
+    // Treated exactly as a row whose fields were absent, which is what it is.
+    expect(view.prompts[1]).toMatchObject({
+      key: 'position-1',
+      kind: 'unknown',
+      probe: '',
+      prompt: 'The one with a string for metadata',
+    });
+    expect(view.prompts[2]).toMatchObject({ key: 'position-2', kind: 'unknown', probe: '' });
+  });
+
+  it('reads the pointer on the client it was handed, not the module’s own', async () => {
+    // All three queries on one client, so a caller inside a transaction does
+    // not get two rows from it and one from outside it. Found by /code-review.
+    vi.mocked(getGoldenSetPointer).mockResolvedValue(pointer());
+    const client = stubClient({ cases: [{ position: 0, input: 'x', metadata: {} }] });
+
+    await getGoldenSetAdminView(client);
+
+    expect(getGoldenSetPointer).toHaveBeenCalledWith(client);
+  });
+
   it('throws ContentNotSeededError naming the seed unit when the dataset has no cases', async () => {
     vi.mocked(getGoldenSetPointer).mockResolvedValue(pointer());
     const client = stubClient({ cases: [] });
