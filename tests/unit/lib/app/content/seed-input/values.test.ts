@@ -73,18 +73,18 @@ describe('release-2 authored content', () => {
   });
 
   describe('the release-2 boundary', () => {
-    it('is not reachable from the served loader’s module graph', () => {
+    it('is not reachable from the barrel’s module graph', () => {
       // The 271KB of value explorations must not ride along in a bundle that
       // only wanted a mission statement. A static import in either direction
       // would undo that, and nothing else in the repo would notice.
       //
-      // Comments are stripped first. The served loader's own docblock *names*
-      // `@/lib/app/content/seed-input/values` when explaining the split, and matching the
-      // raw text failed on that — a mention is not an import, which is the
-      // oldest false positive in this repo's tooling.
+      // Comments are stripped first. The barrel's own docblock *names*
+      // `@/lib/app/content/seed-input/values` when explaining the split, and
+      // matching the raw text failed on that — a mention is not an import,
+      // which is the oldest false positive in this repo's tooling.
       const servedLoader = stripComments(readFileSync('lib/app/content/index.ts', 'utf8'));
 
-      expect(servedLoader).not.toMatch(/@\/lib\/app\/content\/values/);
+      expect(servedLoader).not.toMatch(/@\/lib\/app\/content\/seed-input\/values/);
       expect(servedLoader).not.toMatch(/@\/content\/values_module/);
       expect(servedLoader).not.toMatch(/@\/content\/value_explorations/);
       expect(servedLoader).not.toMatch(/@\/content\/values_reference_framework/);
@@ -101,7 +101,7 @@ describe('release-2 authored content', () => {
         '\nconst b = 2;'
       );
       expect(stripComments("import x from '@/lib/app/content/seed-input/values';")).toMatch(
-        /@\/lib\/app\/content\/values/
+        /@\/lib\/app\/content\/seed-input\/values/
       );
     });
 

@@ -7,7 +7,8 @@
  * `app_resource_collection`, `app_resource` and `app_resource_words` through
  * `@/lib/app/content/resource-store`. This module is where the file is still
  * imported; its callers are the seed
- * (`prisma/seeds/app-lelanea/018-resources.ts`) and tests.
+ * (`prisma/seeds/app-lelanea/018-resources.ts`) and tests. Nothing a request
+ * reaches may import it, or this folder at all (t-89).
  *
  * The file is validated against the roster's module ids and the documents
  * file's ids, as it was at runtime before. `resources.notes` are working notes

@@ -6,8 +6,9 @@
  * `@/lib/app/content/document-store`. This module is the one place the file is
  * still imported, and its callers are the seed
  * (`prisma/seeds/app-lelanea/015-foundational-documents.ts`) and the tests that
- * check the file itself. Nothing a request reaches may import it; t-89 makes
- * that a lint rule.
+ * check the file itself. Nothing a request
+ * reaches may import it, or this folder at all — t-89 made that a lint rule
+ * plus a graph test (`tests/unit/lib/app/content/runtime-import-graph.test.ts`).
  *
  * ## Section keys live here, not in the file
  *

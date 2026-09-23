@@ -6,7 +6,8 @@
  * read `app_voice_overlay_set` and `app_voice_overlay` through
  * `@/lib/app/content/voice-overlay-store`. This module is where the file is
  * still imported; its callers are the seed
- * (`prisma/seeds/app-lelanea/019-voice-overlays.ts`) and tests.
+ * (`prisma/seeds/app-lelanea/019-voice-overlays.ts`) and tests. Nothing a request
+ * reaches may import it, or this folder at all (t-89).
  *
  * **The file stays a drafted proposal.** It was written in her register rather
  * than transcribed from her, and the owner's ruling (2026-09-21) is that it

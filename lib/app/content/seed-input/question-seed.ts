@@ -5,7 +5,8 @@
  * time. `/api/v1/app/content/discovery-questions` reads `app_question_set` and
  * `app_discovery_question` through `@/lib/app/content/question-store`. This
  * module is where the file is still imported; its callers are the seed
- * (`prisma/seeds/app-lelanea/017-discovery-questions.ts`) and tests.
+ * (`prisma/seeds/app-lelanea/017-discovery-questions.ts`) and tests. Nothing a request
+ * reaches may import it, or this folder at all (t-89).
  *
  * What is seeded is what was served: the file's `notes`, `sourceFile`,
  * `textFormat` and `reviewNotes` are working notes about the words and are not

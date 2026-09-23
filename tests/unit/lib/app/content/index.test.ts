@@ -42,7 +42,23 @@ import { describe, it, expect } from 'vitest';
 
 import * as content from '@/lib/app/content';
 
-const source = readFileSync(path.join(process.cwd(), 'lib/app/content/index.ts'), 'utf8');
+/**
+ * The module's source with comments stripped.
+ *
+ * Its docblock names `@/content/`, `@/seed-data/drafted/` and `seed-input/`
+ * several times, because explaining the boundary means naming what is on the
+ * far side of it. Matching the raw text fails on that prose — a mention is not
+ * an import, and it is the oldest false positive in this repo's tooling. The
+ * stripper is exercised below so an over-eager one cannot make the cases
+ * vacuous.
+ */
+const source = stripComments(
+  readFileSync(path.join(process.cwd(), 'lib/app/content/index.ts'), 'utf8')
+);
+
+function stripComments(code: string): string {
+  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[^\n'"`]*\/\/.*$/gm, '');
+}
 
 describe('the authored-content barrel', () => {
   it('imports no authored file at all — not one, not by any spelling', () => {
@@ -56,6 +72,14 @@ describe('the authored-content barrel', () => {
     // type import is erased, but a module here importing one is a standing
     // invitation to reach for the value beside it.
     expect(source).not.toMatch(/@\/lib\/app\/content\/seed-input\//);
+  });
+
+  it('strips comments before looking, and does not strip the code', () => {
+    // Without this the case above is vacuous: a stripper that returned '' would
+    // pass against any file, including one that does import a drafted file.
+    expect(stripComments('/* @/content/x.json */\nconst a = 1;')).toBe('\nconst a = 1;');
+    expect(stripComments('// @/content/x.json\nconst b = 2;')).toBe('\nconst b = 2;');
+    expect(stripComments("import x from '@/content/x.json';")).toMatch(/@\/content\//);
   });
 
   it('exposes no read of a database-backed collection, only the shapes', () => {

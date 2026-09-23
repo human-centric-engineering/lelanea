@@ -32,15 +32,23 @@ identity, cadence, how she grounds a claim, and what she declines.
 
 ## Where it lives, and why it is a file and not code
 
-`seed-data/drafted/lelanea_voice_fingerprint.json`, with a Zod
-schema in `lib/app/content/schemas.ts` and `getVoiceFingerprint()` in
-`lib/app/content/index.ts`.
+`seed-data/drafted/lelanea_voice_fingerprint.json`, with a Zod schema in
+`lib/app/content/schemas.ts` and `getVoiceFingerprint()` in
+`lib/app/content/seed-input/voice-fingerprint.ts`.
 
 It is drafted in her register, so it is held the way her words are: as data
-behind one loader, never as a TypeScript constant. `lib/app/eslint.config.mjs`
-fails any import of `content/*.json` or of the drafted seed data from outside
-`lib/app/content/**`. A loose constant in a new directory would be a second
-authoring path for her voice, which is the thing that rule exists to prevent.
+behind one accessor, never as a TypeScript constant. A loose constant in a new
+directory would be a second authoring path for her voice, which is what the
+import boundary exists to prevent — `lib/app/eslint.config.mjs` fails any import
+of `content/*.json` or of the drafted seed data from outside
+`lib/app/content/seed-input/**`, `prisma/seeds/**` and `tests/**`.
+
+**And the accessor is seed-only (t-89).** It is the one collection with no table
+of its own: seed 003 projects it onto the agent profile and reconciles it on
+every run, because there is no editable surface to protect. So nothing a request
+reaches may import that module — the accessor lived on `lib/app/content/index.ts`
+until t-89, which put the file into every bundle that imported the barrel, one of
+them a client component. See [`content.md`](./content.md).
 
 It sits in the drafted folder, not beside her six files in `content/`, because
 it is not hers until she signs it off (§22, owner ruling 2026-09-21; see
@@ -764,7 +772,7 @@ not hold is _which version is current_: the dataset is keyed **by** the version
 (`goldenSetDatasetId(version)`), so reading it required already knowing the
 answer. The authored file was the only thing that knew, and that is what kept
 `/admin/app/voice`, the preflight and the comparison reading a bundled file at
-request time.
+request time until t-88 gave the pointer a row.
 
 | Table                           | Holds                                                                     |
 | ------------------------------- | ------------------------------------------------------------------------- |
@@ -1449,9 +1457,10 @@ populated. `prisma/runner.ts` upserts the
 `return` would bank the aborted run as a success and every later `db:seed` would
 skip the unit, leaving a fresh install with no profile and no agent until
 somebody deleted the history row by hand. The strict schema makes an empty source
-hard to reach today, but the loader's own docblock says the file moves behind a
-database the first time copy has to change without a deploy, and on that day the
-guard is the only thing between a bad read and a profile with no voice in it.
+hard to reach today, but the core is the one collection still without a table,
+and the day it gains one — the first time this copy has to change without a
+deploy — the guard is the only thing between a bad read and a profile with no
+voice in it.
 
 `prisma/seeds/app-lelanea/002-knowledge-designation.ts` creates a missing tag and
 **never rewrites an existing one**. The slug is code — the rule addresses these

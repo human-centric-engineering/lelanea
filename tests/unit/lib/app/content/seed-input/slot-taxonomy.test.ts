@@ -1,58 +1,30 @@
 /**
- * The bundled slot taxonomy parses, and a malformed one fails naming the fault
+ * The bundled slot taxonomy parses, and says what the seed will write
  * (f-slots t-70).
  *
  * The real file is parsed first, for the reason `schemas.test.ts` gives: a
  * content mistake has to be a red CI run rather than a throw at boot, and the
  * boot seam deliberately registers the provider BEFORE anything that can throw.
  *
- * The negative cases are the point of the rest. Every one of them would produce
- * a taxonomy that looks fine in the file and is wrong in the database — a
- * duplicate slug silently losing one of two definitions, a group nothing
- * declares rendering as an unlabelled section, a classifier Daybreak does not
- * recognise reaching `framework_slot_definition` and from there the capture
- * prompt.
+ * **What the FILE SHAPE must reject** lives in
+ * `tests/unit/lib/app/slots/taxonomy-file.test.ts`, beside the schema it
+ * exercises. The two were one file until t-89 split the schema out of the
+ * module that imports the JSON — the split that stopped 60KB of taxonomy
+ * riding into six admin routes behind `definitions-admin.ts`.
  *
  * @see lib/app/content/seed-input/slot-taxonomy.ts
+ * @see lib/app/slots/taxonomy-file.ts — the shape, and its own test
  */
 
 import { describe, it, expect } from 'vitest';
 
 import { getSlotTaxonomy, readableSlotGroups } from '@/lib/app/content/seed-input/slot-taxonomy';
-// The file SHAPE moved to `lib/app/slots/taxonomy-file.ts` in t-89, out of the
-// module that imports the file: `definitions-admin.ts` needs the schema for the
-// upload/export round trip, and importing it from here put 60KB of JSON behind
-// six admin routes. The negative cases below still belong with the file.
-import { slotTaxonomyFileSchema } from '@/lib/app/slots/taxonomy-file';
 import {
   SLOT_VISIBILITY,
   SLOT_MODE,
   SLOT_SENSITIVITY,
   SLOT_DATA_TYPE,
 } from '@/lib/framework/data-slots';
-
-/**
- * A mutable deep clone of the real file, to break one field of per case.
- *
- * Cloned from the LOADER's output rather than from the raw JSON. A test IS
- * permitted a raw import (t-89 narrowed the boundary to `seed-input/`,
- * `prisma/seeds/` and `tests/`), but the parsed value round-trips through the
- * same schema, so each case below still starts from a file that parses — and
- * reading it the way the seed does keeps this honest about what the seed sees.
- */
-function draft(): Record<string, unknown> {
-  return structuredClone(getSlotTaxonomy());
-}
-
-/** The parse error's messages and paths, joined for a readable assertion. */
-function failure(file: unknown): string {
-  const result = slotTaxonomyFileSchema.safeParse(file);
-  expect(result.success).toBe(false);
-  if (result.success) throw new Error('unreachable');
-  return result.error.issues
-    .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-    .join(' | ');
-}
 
 describe('the bundled taxonomy', () => {
   it('parses, and is frozen and memoised like the rest of the content', () => {
@@ -172,60 +144,3 @@ describe('the bundled taxonomy', () => {
   });
 });
 
-describe('a malformed taxonomy fails, naming the fault', () => {
-  it('rejects a duplicate slug', () => {
-    const file = draft();
-    const slots = file.slots as Array<Record<string, unknown>>;
-    slots.push({ ...slots[0] });
-    expect(failure(file)).toContain('each slot slug may appear once');
-  });
-
-  it('rejects a slot naming a group nothing declares', () => {
-    const file = draft();
-    (file.slots as Array<Record<string, unknown>>)[0].group = 'not_a_group';
-    expect(failure(file)).toContain('must name a group declared in `groups`');
-  });
-
-  it('rejects a declared group with no slots', () => {
-    const file = draft();
-    (file.groups as Array<Record<string, unknown>>).push({
-      key: 'unused_group',
-      title: 'Unused',
-      description: 'Nothing points at this.',
-    });
-    expect(failure(file)).toContain('every declared group must have at least one slot');
-  });
-
-  it('rejects a duplicate group key', () => {
-    const file = draft();
-    const groups = file.groups as Array<Record<string, unknown>>;
-    groups.push({ ...groups[0] });
-    expect(failure(file)).toContain('each group key may appear once');
-  });
-
-  it('rejects a classifier the framework does not recognise', () => {
-    const file = draft();
-    (file.slots as Array<Record<string, unknown>>)[0].sensitivity = 'very_secret';
-    expect(failure(file)).toContain('sensitivity');
-  });
-
-  it('rejects a slug that is not a slug', () => {
-    const file = draft();
-    (file.slots as Array<Record<string, unknown>>)[0].slug = 'Not A Slug';
-    expect(failure(file)).toContain('lower-case letters, digits and underscores');
-  });
-
-  it('rejects an unknown key rather than dropping it', () => {
-    // `strictObject`, like every other authored file: a field somebody added to
-    // the JSON and nothing reads is a mistake, not something to ignore.
-    const file = draft();
-    (file.slots as Array<Record<string, unknown>>)[0].retired = true;
-    expect(failure(file)).toContain('slots.0');
-  });
-
-  it('rejects an empty slot list', () => {
-    const file = draft();
-    file.slots = [];
-    expect(failure(file)).toContain('slots');
-  });
-});
