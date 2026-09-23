@@ -16,6 +16,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
+import type { seededDocumentRows as SeededDocumentRows } from '@/tests/helpers/app/foundational-documents';
+
+type FoundationalRow = ReturnType<typeof SeededDocumentRows>[number];
 
 // ---------------------------------------------------------------------------
 // The in-memory store
@@ -33,7 +36,7 @@ interface KnowledgeDocument {
 }
 
 const store = vi.hoisted(() => ({
-  foundational: [] as Record<string, unknown>[],
+  foundational: [] as FoundationalRow[],
   documents: [] as KnowledgeDocument[],
   designations: [] as {
     documentId: string;
