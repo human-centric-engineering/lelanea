@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
 import { CostOverview } from '@/components/app/admin/cost-view';
 import { ADMIN_METERING_ENDPOINT } from '@/lib/app/agent/endpoint';
+import { MAX_METER_GROUPS } from '@/lib/validations/app-metering';
 import type {
   ConversationGroup,
   CostBreakdown,
@@ -16,9 +17,14 @@ export const metadata: Metadata = {
 };
 
 /** One breakdown of this UTC month; null when it did not load, so the rest still stands. */
-async function breakdown<G extends CostGroup>(by: string): Promise<CostBreakdown<G> | null> {
+async function breakdown<G extends CostGroup>(
+  by: string,
+  limit?: number
+): Promise<CostBreakdown<G> | null> {
   try {
-    const response = await serverFetch(`${ADMIN_METERING_ENDPOINT}?by=${by}`);
+    const response = await serverFetch(
+      `${ADMIN_METERING_ENDPOINT}?by=${by}${limit ? `&limit=${limit}` : ''}`
+    );
     if (!response.ok) return null;
     const parsed = await parseApiResponse<CostBreakdown<G>>(response);
     return parsed.success ? parsed.data : null;
@@ -42,7 +48,10 @@ async function breakdown<G extends CostGroup>(by: string): Promise<CostBreakdown
 export default async function CostAdminPage() {
   const [byUser, byConversation, bySeat, byModel, byDay] = await Promise.all([
     breakdown<PersonGroup>('user'),
-    breakdown<ConversationGroup>('conversation'),
+    // As many as the API gives: the runaway flag measures against the median of
+    // the conversations LISTED, and a list cut to the costliest 100 would make
+    // the costliest typical (/code-review round 2).
+    breakdown<ConversationGroup>('conversation', MAX_METER_GROUPS),
     breakdown('seat'),
     breakdown('model'),
     breakdown('day'),

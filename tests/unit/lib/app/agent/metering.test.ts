@@ -535,6 +535,7 @@ describe("one conversation's turns", () => {
   const turn = (turnId: string, over: Record<string, unknown> = {}) => ({
     turnId,
     userId: ME,
+    conversationId: CONV,
     seat: 'conversation',
     status: 'completed',
     attempts: 1,
@@ -557,12 +558,17 @@ describe("one conversation's turns", () => {
     ...over,
   });
 
+  beforeEach(() => {
+    // No turn ids tagged on the conversation's rows unless a case says so.
+    queryRaw.mockResolvedValue([]);
+  });
+
   it('reads the turns that started in the window, by conversation', async () => {
     findTurns.mockResolvedValue([]);
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
 
     expect(findTurns.mock.calls[0][0]).toMatchObject({
-      where: { conversationId: CONV, startedAt: { gte: WINDOW.from, lt: WINDOW.to } },
+      where: { OR: [{ conversationId: CONV, startedAt: { gte: WINDOW.from, lt: WINDOW.to } }] },
     });
     // No turns, no second read.
     expect(findCostRows).not.toHaveBeenCalled();
@@ -621,11 +627,12 @@ describe("one conversation's turns", () => {
   });
 });
 
-describe("one conversation's turns — bounded reads (t-97, /code-review)", () => {
+describe("one conversation's turns — what round 2 of review found (t-97)", () => {
   const CONV = 'cmuconv0000000000000one';
-  const turnRow = (turnId: string) => ({
+  const turnRow = (turnId: string, over: Record<string, unknown> = {}) => ({
     turnId,
     userId: ME,
+    conversationId: CONV,
     seat: 'conversation',
     status: 'completed',
     attempts: 1,
@@ -634,28 +641,73 @@ describe("one conversation's turns — bounded reads (t-97, /code-review)", () =
     startedAt: new Date('2026-09-10T10:00:00Z'),
     completedAt: null,
     assistantMessageId: null,
+    ...over,
   });
 
-  it("reads cost rows only from the window's start — a turn in it cannot have spent before", async () => {
-    findTurns.mockResolvedValue([turnRow('t-1')]);
-    findCostRows.mockResolvedValue([]);
-    await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
-    expect(findCostRows.mock.calls[0][0]).toMatchObject({
-      where: { createdAt: { gte: WINDOW.from } },
-    });
+  beforeEach(() => {
+    queryRaw.mockResolvedValue([]);
   });
 
-  it('reads a runaway in batches, so no one statement carries thousands of predicates', async () => {
-    findTurns.mockResolvedValue(Array.from({ length: 450 }, (_, i) => turnRow(`t-${i}`)));
-    findCostRows.mockResolvedValue([]);
+  it("finds a retried turn whose link was reset, by the id on this conversation's rows", async () => {
+    // A retry nulls conversationId until its attempt starts; the first
+    // attempt's rows here still carry the turn id.
+    queryRaw.mockResolvedValue([{ user_id: ME, turn_id: 't-retried' }]);
+    findTurns.mockResolvedValue([
+      turnRow('t-retried', { conversationId: null, status: 'failed', attempts: 2 }),
+      // Matched by the two id lists, but not a pair tagged here: left out.
+      turnRow('t-elsewhere', { conversationId: 'cmuconv0000000000000two' }),
+    ]);
+    findCostRows.mockResolvedValue([
+      {
+        id: 'r1',
+        userId: ME,
+        totalCostUsd: 4,
+        isLocal: false,
+        inputTokens: 1,
+        outputTokens: 1,
+        metadata: { turnId: 't-retried' },
+      },
+    ]);
 
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
 
-    expect(findCostRows).toHaveBeenCalledTimes(3);
+    expect(result.turns.map((row) => row.turnId)).toEqual(['t-retried']);
+    expect(result.turns[0].costUsd).toBe(4);
+    expect(findTurns.mock.calls[0][0]).toMatchObject({
+      where: {
+        OR: [{ conversationId: CONV }, { userId: { in: [ME] }, turnId: { in: ['t-retried'] } }],
+      },
+    });
+  });
+
+  it("reads a turn's whole cost, every attempt's — no time bound on its rows", async () => {
+    // A retry resets startedAt; an earlier attempt can have spent before the
+    // window began, and is still this turn's cost, as the turn page shows it.
+    findTurns.mockResolvedValue([turnRow('t-1')]);
+    findCostRows.mockResolvedValue([]);
+    await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+    expect(findCostRows.mock.calls[0][0].where).not.toHaveProperty('createdAt');
+  });
+
+  it('reads a runaway in batches, one after another', async () => {
+    findTurns.mockResolvedValue(Array.from({ length: 450 }, (_, i) => turnRow(`t-${i}`)));
+    let inFlight = 0;
+    let most = 0;
+    findCostRows.mockImplementation(async () => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return [];
+    });
+
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+
     const sizes = findCostRows.mock.calls.map(
       ([args]) => (args as { where: { OR: unknown[] } }).where.OR.length
     );
     expect(sizes).toEqual([200, 200, 50]);
+    expect(most).toBe(1);
     expect(result.truncated).toBe(true);
   });
 

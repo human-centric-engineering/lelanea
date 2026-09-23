@@ -167,15 +167,19 @@ row it cost, with her reply and its side costs apart: a search's embedding, a
 summary, tool calls, an earlier attempt. That last page is the first reader the
 admin turn route has had since #66.
 
-**No per-row fetch, and no unbounded one.** A conversation's cost rows are read
-from the window's start on (a turn in it cannot have spent before) and in
-batches of 200 turns, so a runaway of thousands of turns never lands in one
-statement or near Postgres's parameter limit.
+**No per-row fetch, and no statement too large.** A conversation's turns are
+found two ways — linked by the turn table, or tagged on the conversation's own
+cost rows in the window, because a retry resets a turn's `conversationId`
+until its new attempt starts — and each turn's cost is its whole cost, every
+attempt's rows with no time bound, read in batches of 200 turns one after
+another. A runaway of thousands of turns is a queue of small reads, never one
+statement near Postgres's parameter limit.
 
-**No per-row fetch.** The month page makes five list reads, one per dimension,
-all at once. The API enriches each list in the same request (a person's name
-and limit, a conversation's title and owner), which is what the enrichment
-exists for. The drill-down pages make one read each. Each read fails on its own
+The month page makes five list reads, one per dimension, all at once —
+conversations at the API's maximum of 500, because the runaway flag's
+"typical" is the median of the conversations listed. The API enriches each
+list in the same request (a person's name and limit, a conversation's title and
+owner), which is what the enrichment exists for. The drill-down pages make one read each. Each read fails on its own
 and says so where its table would be.
 
 **Three things it must not get wrong:**

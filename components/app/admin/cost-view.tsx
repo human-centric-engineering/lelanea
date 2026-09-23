@@ -359,7 +359,7 @@ export function CostOverview({
 
       <Section
         title="Which conversations"
-        lede={`Open one to see its turns. A conversation costing ${RUNAWAY_MULTIPLE}× or more the typical one is flagged.`}
+        lede={`Open one to see its turns. A conversation costing ${RUNAWAY_MULTIPLE}× or more the typical one listed here is flagged.`}
       >
         {byConversation ? (
           <ConversationsTable breakdown={byConversation} />

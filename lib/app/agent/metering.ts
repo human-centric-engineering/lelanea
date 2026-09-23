@@ -101,9 +101,10 @@ export interface MeterUserGroup extends MeterGroup {
 
 /**
  * An admin breakdown by conversation says whose each one is and what it is
- * called (t-97) — the owner's id is also what the drill-down to a turn needs,
- * because turn ids are unique per person, not globally. Null for the group of
- * rows with no conversation, and for a conversation since deleted.
+ * called (t-97). Null for the group of rows with no conversation, and for a
+ * conversation since deleted. The drill-down's links to a turn do NOT use this
+ * owner: each turn carries its own person's id, which is the one the turn route
+ * is keyed on.
  */
 export interface MeterConversationGroup extends MeterGroup {
   conversation: {
@@ -647,20 +648,50 @@ export interface ConversationTurns {
  * not its cost inside the window, which is why a conversation whose turns
  * straddle the 1st can list a little more than its month's group.
  *
- * The turns (by the `conversationId` index), then their cost rows — from the
- * window's start on, in batches of {@link TURN_ROW_BATCH} turns, so neither the
- * person's whole history nor a runaway's thousands of turns lands in one
- * statement. Sorted and cut here, after the sums.
+ * The turns — linked here by the turn table, or tagged on this conversation's
+ * rows in the window — then each one's cost rows, in batches of
+ * {@link TURN_ROW_BATCH} turns read one after another, so a runaway's
+ * thousands of turns never land in one statement. Sorted and cut here, after
+ * the sums.
  */
 export async function getConversationTurns(query: {
   conversationId: string;
   window: MeterWindow;
   limit: number;
 }): Promise<ConversationTurns> {
-  const turns = await prisma.appTurn.findMany({
+  // Which turns: those the turn table links here that started in the window,
+  // AND any whose rows in this conversation in the window carry their id. The
+  // second matters because a retry resets a turn's `conversationId` to null
+  // until its new attempt starts (`claimTurn`) — a turn whose first attempt
+  // spent here and whose retry failed early would otherwise vanish from the
+  // conversation its cost is counted in (/code-review round 2).
+  const tagged = await prisma.$queryRaw<Array<{ user_id: string; turn_id: string }>>`
+    SELECT DISTINCT c."userId" AS user_id, c.metadata->>'turnId' AS turn_id
+    FROM ai_cost_log c
+    WHERE c."conversationId" = ${query.conversationId}
+      AND c."createdAt" >= ${query.window.from}
+      AND c."createdAt" < ${query.window.to}
+      AND c."userId" IS NOT NULL
+      AND c.metadata->>'turnId' IS NOT NULL
+  `;
+  const taggedKeys = new Set(tagged.map((row) => `${row.user_id}\u0000${row.turn_id}`));
+
+  const candidates = await prisma.appTurn.findMany({
     where: {
-      conversationId: query.conversationId,
-      startedAt: { gte: query.window.from, lt: query.window.to },
+      OR: [
+        {
+          conversationId: query.conversationId,
+          startedAt: { gte: query.window.from, lt: query.window.to },
+        },
+        ...(tagged.length
+          ? [
+              {
+                userId: { in: [...new Set(tagged.map((row) => row.user_id))] },
+                turnId: { in: [...new Set(tagged.map((row) => row.turn_id))] },
+              },
+            ]
+          : []),
+      ],
     },
     select: {
       turnId: true,
@@ -673,8 +704,16 @@ export async function getConversationTurns(query: {
       startedAt: true,
       completedAt: true,
       assistantMessageId: true,
+      conversationId: true,
     },
   });
+  // The second clause matches ids as two lists, a superset of the pairs; keep
+  // only a turn linked here or whose own (person, id) pair was tagged here.
+  const turns = candidates.filter(
+    (turn) =>
+      turn.conversationId === query.conversationId ||
+      taggedKeys.has(`${turn.userId}\u0000${turn.turnId}`)
+  );
   if (turns.length === 0) {
     return {
       conversationId: query.conversationId,
@@ -684,46 +723,47 @@ export async function getConversationTurns(query: {
     };
   }
 
+  // Each turn's WHOLE cost, as `getTurnMeter` reads it — every attempt's rows,
+  // with no time bound: a retry resets `startedAt`, so an earlier attempt can
+  // have spent before the window began and is still this turn's cost
+  // (/code-review round 2). One batch at a time, not all at once, so a runaway
+  // of thousands of turns is a queue of small reads rather than dozens of
+  // concurrent scans competing for the pool.
   const userIds = [...new Set(turns.map((turn) => turn.userId))];
-  const rows = (
-    await Promise.all(
-      chunk(turns, TURN_ROW_BATCH).map((batch) =>
-        prisma.aiCostLog.findMany({
-          where: {
-            userId: { in: userIds },
-            // A turn that started in the window cannot have spent before it,
-            // so this bounds the read to the window's rows without losing any
-            // of these turns' — however long the person's history.
-            createdAt: { gte: query.window.from },
-            OR: [
-              ...batch.map((turn) => ({ metadata: { path: ['turnId'], equals: turn.turnId } })),
-              ...batch.flatMap((turn) =>
-                turn.assistantMessageId
-                  ? [
-                      {
-                        AND: [
-                          { metadata: { path: ['kind'], equals: 'message_embedding' } },
-                          { metadata: { path: ['messageId'], equals: turn.assistantMessageId } },
-                        ],
-                      },
-                    ]
-                  : []
-              ),
-            ],
-          },
-          select: {
-            id: true,
-            userId: true,
-            totalCostUsd: true,
-            isLocal: true,
-            inputTokens: true,
-            outputTokens: true,
-            metadata: true,
-          },
-        })
-      )
-    )
-  ).flat();
+  const rows = [];
+  for (const batch of chunk(turns, TURN_ROW_BATCH)) {
+    rows.push(
+      ...(await prisma.aiCostLog.findMany({
+        where: {
+          userId: { in: userIds },
+          OR: [
+            ...batch.map((turn) => ({ metadata: { path: ['turnId'], equals: turn.turnId } })),
+            ...batch.flatMap((turn) =>
+              turn.assistantMessageId
+                ? [
+                    {
+                      AND: [
+                        { metadata: { path: ['kind'], equals: 'message_embedding' } },
+                        { metadata: { path: ['messageId'], equals: turn.assistantMessageId } },
+                      ],
+                    },
+                  ]
+                : []
+            ),
+          ],
+        },
+        select: {
+          id: true,
+          userId: true,
+          totalCostUsd: true,
+          isLocal: true,
+          inputTokens: true,
+          outputTokens: true,
+          metadata: true,
+        },
+      }))
+    );
+  }
 
   // A row belongs to a turn by (person, turn id), or by its reply's message id.
   const turnKey = (userId: string | null, turnId: string) => `${userId ?? ''}\u0000${turnId}`;
