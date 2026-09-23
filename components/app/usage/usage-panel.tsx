@@ -151,8 +151,9 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
     fetchUsage({ fetchImpl, signal: controller.signal })
       .then((next) => {
         // The same guard the catch has, and the one `notes-panel.tsx` puts on
-        // both: benign today with one fetch per mount, but t-95 adds a refresh
-        // and a settled read from an abandoned request must not land then.
+        // both: benign with one fetch per mount, and there so a refresh added
+        // later cannot let a settled read from an abandoned request land. (The
+        // topbar meter, t-95, refreshes after each turn; this page does not.)
         if (controller.signal.aborted) return;
         setReading(next);
         setFailed(null);
