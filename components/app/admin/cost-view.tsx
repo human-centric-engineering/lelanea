@@ -14,13 +14,16 @@
  * `waitlist-table.tsx` gives: `/admin/**` is the `admin` surface, which the
  * brand theme does not reach.
  *
- * ## Every figure through `figure()`
+ * ## Every spend through `figure()`, every other amount through `amount()`
  *
- * Every dollar amount on these pages goes through `figure()` in
+ * Every figure that sums spend goes through `figure()` in
  * `lib/app/agent/cost-view.ts`, which says "at least" where unpriced rows make
- * it short — so no row can forget the floor. And the page's headline totals are
- * the API's own, never a sum of the listed rows, which would state the shown
- * part as the whole whenever the list is cut.
+ * it short — so no total can forget the floor — and each half of the headline,
+ * and each of a turn's reply and side, is a floor only for its own unpriced
+ * rows. Amounts that carry no floor of their own — a limit, an overage, one
+ * row — go through `amount()`. Both refuse to print `$0.00` for spend that
+ * exists. And the headline totals are the API's own, never a sum of the listed
+ * rows, which would state the shown part as the whole whenever the list is cut.
  *
  * @see lib/app/agent/cost-view.ts — every judgement these render
  * @see .context/app/budget.md — "The admin cost view"
@@ -39,6 +42,7 @@ import {
 } from '@/components/ui/table';
 import { costConversationPage, costTurnPage } from '@/lib/app/agent/endpoint';
 import {
+  amount,
   figure,
   limitStanding,
   people,
@@ -52,7 +56,6 @@ import {
   type PersonGroup,
   type TurnReading,
 } from '@/lib/app/agent/cost-view';
-import { money } from '@/lib/app/usage/usage-view';
 
 /** Said wherever a read failed — the rest of the page still stands. */
 function Unread({ what }: { what: string }) {
@@ -103,7 +106,10 @@ function Section({
   );
 }
 
-/** The headline: everything, the part no person incurred, and whether it is a floor. */
+/**
+ * The headline: everything, the part no person incurred, the part people did —
+ * each a floor only for its own unpriced rows.
+ */
 function Headline({ breakdown }: { breakdown: CostBreakdown }) {
   const { totals } = breakdown;
   return (
@@ -121,7 +127,10 @@ function Headline({ breakdown }: { breakdown: CostBreakdown }) {
       <div className="rounded-md border p-3">
         <p className="text-muted-foreground text-xs">Platform cost — no person incurred it</p>
         <p className="text-xl font-semibold tabular-nums" data-figure="platform">
-          {money(totals.platformCostUsd)}
+          {figure({
+            costUsd: totals.platformCostUsd,
+            unpricedRows: totals.platformUnpricedRows,
+          })}
         </p>
         <p className="text-muted-foreground text-xs">
           Ingestion, scheduled work, and erased accounts. Never added to anyone below.
@@ -132,7 +141,9 @@ function Headline({ breakdown }: { breakdown: CostBreakdown }) {
         <p className="text-xl font-semibold tabular-nums" data-figure="people">
           {figure({
             costUsd: totals.costUsd - totals.platformCostUsd,
-            unpricedRows: totals.unpricedRows,
+            // Each half carries only its own unpriced rows, so one side's
+            // missing price never casts doubt on the other's figure.
+            unpricedRows: totals.unpricedRows - totals.platformUnpricedRows,
           })}
         </p>
       </div>
@@ -145,7 +156,8 @@ function StandingBadge({ group }: { group: PersonGroup }) {
   if (!standing || standing.kind === 'under') return null;
   const label =
     standing.kind === 'past'
-      ? `past limit by ${money(standing.byUsd)}`
+      ? // `amount()`, so an overage under a cent is `<$0.01`, never "$0.00".
+        `past limit by ${amount(standing.byUsd)}`
       : standing.kind === 'nothing-allowed'
         ? 'spent against a $0 limit'
         : 'at limit';
@@ -189,7 +201,7 @@ function PeopleTable({ breakdown }: { breakdown: CostBreakdown<PersonGroup> }) {
               <TableCell className="text-right tabular-nums">
                 {group.ceiling ? (
                   <>
-                    {money(group.ceiling.ceilingUsd)}
+                    {amount(group.ceiling.ceilingUsd)}
                     {group.ceiling.source === 'override' ? (
                       <span className="text-muted-foreground text-xs"> · their own</span>
                     ) : null}
@@ -205,7 +217,8 @@ function PeopleTable({ breakdown }: { breakdown: CostBreakdown<PersonGroup> }) {
           ))}
         </TableBody>
       </Table>
-      {breakdown.truncated ? <Truncated shown={breakdown.groups.length} /> : null}
+      {/* The rows shown, not the groups returned: the platform group is one of those. */}
+      {breakdown.truncated ? <Truncated shown={rows.length} /> : null}
     </>
   );
 }
@@ -452,6 +465,9 @@ export function ConversationTurnsView({ reading }: { reading: ConversationTurnsR
 
 /** One turn, every row it cost — the bottom of the drill-down. */
 export function TurnCostView({ reading }: { reading: TurnReading }) {
+  // The reply and the side each a floor only for their own unpriced rows.
+  const unpricedReply = reading.rows.filter((row) => row.unpriced && row.part === 'reply').length;
+  const unpricedSide = reading.rows.filter((row) => row.unpriced && row.part !== 'reply').length;
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -462,9 +478,9 @@ export function TurnCostView({ reading }: { reading: TurnReading }) {
           </p>
         </div>
         <div className="rounded-md border p-3">
-          <p className="text-muted-foreground text-xs">Her reply</p>
+          <p className="text-muted-foreground text-xs">The reply</p>
           <p className="text-xl font-semibold tabular-nums" data-figure="reply">
-            {money(reading.replyCostUsd)}
+            {figure({ costUsd: reading.replyCostUsd, unpricedRows: unpricedReply })}
           </p>
         </div>
         <div className="rounded-md border p-3">
@@ -472,7 +488,7 @@ export function TurnCostView({ reading }: { reading: TurnReading }) {
             On the side — searches, summaries, tools, earlier attempts
           </p>
           <p className="text-xl font-semibold tabular-nums" data-figure="side">
-            {money(reading.sideCostUsd)}
+            {figure({ costUsd: reading.sideCostUsd, unpricedRows: unpricedSide })}
           </p>
         </div>
       </div>
@@ -517,7 +533,7 @@ export function TurnCostView({ reading }: { reading: TurnReading }) {
                 {row.unpriced ? (
                   <span className="text-muted-foreground">no price on file</span>
                 ) : (
-                  money(row.costUsd)
+                  amount(row.costUsd)
                 )}
               </TableCell>
             </TableRow>

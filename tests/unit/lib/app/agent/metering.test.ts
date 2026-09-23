@@ -177,6 +177,8 @@ describe('breakdowns', () => {
       costRows: 5,
       unpricedRows: 1,
       platformCostUsd: 0.05,
+      // Absent from the raw row, so zero — never undefined (t-97).
+      platformUnpricedRows: 0,
     });
     expect(result.groups).toEqual([
       {
@@ -543,7 +545,9 @@ describe("one conversation's turns", () => {
     assistantMessageId: null,
     ...over,
   });
+  let rowId = 0;
   const costRow = (cost: number, metadata: Record<string, unknown>, over = {}) => ({
+    id: `row-${++rowId}`,
     userId: ME,
     totalCostUsd: cost,
     isLocal: false,
@@ -614,5 +618,70 @@ describe("one conversation's turns", () => {
     const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 2 });
     expect(result.turns.map((row) => row.turnId)).toEqual(['b', 'c']);
     expect(result.truncated).toBe(true);
+  });
+});
+
+describe("one conversation's turns — bounded reads (t-97, /code-review)", () => {
+  const CONV = 'cmuconv0000000000000one';
+  const turnRow = (turnId: string) => ({
+    turnId,
+    userId: ME,
+    seat: 'conversation',
+    status: 'completed',
+    attempts: 1,
+    errorCode: null,
+    modelId: null,
+    startedAt: new Date('2026-09-10T10:00:00Z'),
+    completedAt: null,
+    assistantMessageId: null,
+  });
+
+  it("reads cost rows only from the window's start — a turn in it cannot have spent before", async () => {
+    findTurns.mockResolvedValue([turnRow('t-1')]);
+    findCostRows.mockResolvedValue([]);
+    await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+    expect(findCostRows.mock.calls[0][0]).toMatchObject({
+      where: { createdAt: { gte: WINDOW.from } },
+    });
+  });
+
+  it('reads a runaway in batches, so no one statement carries thousands of predicates', async () => {
+    findTurns.mockResolvedValue(Array.from({ length: 450 }, (_, i) => turnRow(`t-${i}`)));
+    findCostRows.mockResolvedValue([]);
+
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+
+    expect(findCostRows).toHaveBeenCalledTimes(3);
+    const sizes = findCostRows.mock.calls.map(
+      ([args]) => (args as { where: { OR: unknown[] } }).where.OR.length
+    );
+    expect(sizes).toEqual([200, 200, 50]);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('counts a row once even if two batches return it', async () => {
+    findTurns.mockResolvedValue([turnRow('t-1')]);
+    const row = {
+      id: 'dup',
+      userId: ME,
+      totalCostUsd: 0.4,
+      isLocal: false,
+      inputTokens: 1,
+      outputTokens: 1,
+      metadata: { turnId: 't-1' },
+    };
+    findCostRows.mockResolvedValue([row, row]);
+    const result = await getConversationTurns({ conversationId: CONV, window: WINDOW, limit: 10 });
+    expect(result.turns[0].costUsd).toBe(0.4);
+    expect(result.turns[0].costRows).toBe(1);
+  });
+});
+
+describe('breakdown totals — the platform\u2019s own unpriced rows (t-97)', () => {
+  it('coerces platform_unpriced_rows, so a view can floor each half on its own', async () => {
+    answerBreakdown([], rawTotals({ unpriced_rows: 3n, platform_unpriced_rows: 2n }));
+    const result = await getAdminBreakdown({ by: 'seat', window: WINDOW, limit: 10 });
+    expect(result.totals.unpricedRows).toBe(3);
+    expect(result.totals.platformUnpricedRows).toBe(2);
   });
 });

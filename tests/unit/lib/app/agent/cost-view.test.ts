@@ -30,6 +30,7 @@ const TOTALS = {
   costRows: 0,
   unpricedRows: 0,
   platformCostUsd: 0,
+  platformUnpricedRows: 0,
 };
 
 function person(
@@ -74,6 +75,12 @@ describe('figure', () => {
 
   it('says "at least" when an unpriced row makes it short', () => {
     expect(figure({ costUsd: 12.4, unpricedRows: 3 })).toBe('at least $12.40');
+  });
+
+  it('never prints $0.00 for spend that exists — a cheap turn is <$0.01', () => {
+    expect(figure({ costUsd: 0.0031, unpricedRows: 0 })).toBe('<$0.01');
+    // And exact zero is still a fact.
+    expect(figure({ costUsd: 0, unpricedRows: 0 })).toBe('$0.00');
   });
 });
 
@@ -169,14 +176,29 @@ describe('runawayConversations', () => {
     expect(flagged.size).toBe(0);
   });
 
-  it('flags nothing when the typical conversation cost nothing', () => {
+  it('still flags a runaway when most conversations cost nothing', () => {
+    // The median is $0; a multiple of nothing would flag nothing, and the $48
+    // conversation would go unseen in the month it matters most.
+    const flagged = runawayConversations(
+      conversations([
+        ['c1', 0],
+        ['c2', 0],
+        ['c3', 0],
+        ['small', 0.02],
+        ['big', 48],
+      ])
+    );
+    expect([...flagged]).toEqual(['big']);
+  });
+
+  it('does not flag a cent or two among free conversations', () => {
     expect(
       runawayConversations(
         conversations([
           ['c1', 0],
           ['c2', 0],
           ['c3', 0],
-          ['c4', 0.01],
+          ['c4', 0.02],
         ])
       ).size
     ).toBe(0);

@@ -24,7 +24,7 @@
  * @see .context/app/budget.md — "The admin cost view"
  */
 
-import { floorLabel, money, spendFloor } from '@/lib/app/usage/usage-view';
+import { floorLabel, moneyTight, spendFloor } from '@/lib/app/usage/usage-view';
 
 /** Wire dates are ISO strings; nothing here needs them as dates. */
 export interface CostWindow {
@@ -60,7 +60,7 @@ export interface ConversationGroup extends CostGroup {
 export interface CostBreakdown<G extends CostGroup = CostGroup> {
   by: string;
   window: CostWindow;
-  totals: CostTotals & { platformCostUsd: number };
+  totals: CostTotals & { platformCostUsd: number; platformUnpricedRows: number };
   groups: G[];
   truncated: boolean;
 }
@@ -119,11 +119,22 @@ export interface TurnReading extends CostTotals {
 /**
  * A figure, "at least" when it is known to be short.
  *
- * The one place the view turns a total into words, so no figure on the page can
- * forget the floor. `floorLabel` qualifies a numeral only.
+ * The one place the view turns an amount into words, so no figure on the page
+ * can forget the floor. `floorLabel` qualifies a numeral only.
+ *
+ * **Never `$0.00` for spend that exists.** A turn is often a fraction of a
+ * cent, and `money()` would print every cheap turn — and every row of its
+ * drill-down — as nothing, which `usage-view.ts` already refuses as a lie. So it
+ * is `moneyTight`, which says `<$0.01` there; exact zero stays `$0.00`, a fact
+ * (/code-review).
  */
 export function figure(totals: { costUsd: number; unpricedRows: number }): string {
-  return floorLabel(money(totals.costUsd), spendFloor(totals));
+  return floorLabel(moneyTight(totals.costUsd), spendFloor(totals));
+}
+
+/** An amount that has no floor of its own to carry — a limit, an overage. */
+export function amount(usd: number): string {
+  return moneyTight(usd);
 }
 
 /** Where a person stands against their limit this month. */
@@ -170,19 +181,30 @@ export const RUNAWAY_MULTIPLE = 3;
 export const RUNAWAY_MIN_CONVERSATIONS = 4;
 
 /**
+ * The least a typical conversation is taken to cost: one cent.
+ *
+ * When most conversations cost nothing — a local model, or rows with no price —
+ * the median is $0, and a multiple of nothing is nothing: the $48 conversation
+ * beside four free ones would go unflagged, in the month it matters most
+ * (/code-review). Held to a cent, "far above the rest" means at least three
+ * cents there, which a free conversation is not and a runaway is.
+ */
+export const RUNAWAY_TYPICAL_FLOOR_USD = 0.01;
+
+/**
  * The conversations far above the rest, by key.
  *
  * Only among conversations — the group of rows with no conversation is not
  * one, and is neither measured nor flagged. With too few to have a typical
- * one, nothing is flagged rather than everything.
+ * one, nothing is flagged rather than everything; and a typical one is taken to
+ * cost at least {@link RUNAWAY_TYPICAL_FLOOR_USD}.
  */
 export function runawayConversations(breakdown: CostBreakdown<ConversationGroup>): Set<string> {
   const listed = breakdown.groups.filter(
     (group): group is ConversationGroup & { key: string } => group.key !== null
   );
   if (listed.length < RUNAWAY_MIN_CONVERSATIONS) return new Set();
-  const typical = median(listed.map((group) => group.costUsd));
-  if (typical <= 0) return new Set();
+  const typical = Math.max(median(listed.map((group) => group.costUsd)), RUNAWAY_TYPICAL_FLOOR_USD);
   return new Set(
     listed.filter((group) => group.costUsd >= typical * RUNAWAY_MULTIPLE).map((group) => group.key)
   );

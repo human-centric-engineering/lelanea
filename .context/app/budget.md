@@ -167,6 +167,11 @@ row it cost, with her reply and its side costs apart: a search's embedding, a
 summary, tool calls, an earlier attempt. That last page is the first reader the
 admin turn route has had since #66.
 
+**No per-row fetch, and no unbounded one.** A conversation's cost rows are read
+from the window's start on (a turn in it cannot have spent before) and in
+batches of 200 turns, so a runaway of thousands of turns never lands in one
+statement or near Postgres's parameter limit.
+
 **No per-row fetch.** The month page makes five list reads, one per dimension,
 all at once. The API enriches each list in the same request (a person's name
 and limit, a conversation's title and owner), which is what the enrichment
@@ -180,7 +185,12 @@ and says so where its table would be.
   (`SET NULL`). They are `platformCostUsd`, shown as their own figure and never
   listed as a person (`people()` leaves the null group out).
 - **A figure with unpriced rows is a floor**, and says "at least" (ruling 4).
-  Every amount goes through `figure()`, so no row can forget it.
+  Every sum of spend goes through `figure()`, so no total can forget it — and
+  each is a floor only for its **own** unpriced rows: the platform's half and
+  the people's half of the headline, a turn's reply and its side costs. The API
+  reports `platformUnpricedRows` beside `platformCostUsd` for exactly that.
+  Neither `figure()` nor `amount()` prints `$0.00` for spend that exists: a
+  cheap turn reads `<$0.01`.
 - **The headline is the API's total, never a re-sum of the rows listed.** Those
   totals are computed apart so they cover every row even when the list is cut,
   and a cut list says it is cut and that the totals are not.
@@ -194,9 +204,11 @@ job.
 - **A conversation at 3× the median** of those listed (`RUNAWAY_MULTIPLE`). The
   median rather than the mean, because a runaway drags the mean up towards
   itself and hides. No fixed dollar figure, because what is normal moves with
-  the model and the prices. It needs at least four conversations to have a
-  typical one, and otherwise flags nothing rather than everything. Revisit when
-  real months give a shape.
+  the model and the prices — but the typical conversation is taken to cost at
+  least a cent (`RUNAWAY_TYPICAL_FLOOR_USD`), or a month of mostly free
+  conversations would have a median of nothing and flag no runaway at all. It
+  needs at least four conversations to have a typical one, and otherwise flags
+  nothing rather than everything. Revisit when real months give a shape.
 
 ## The monthly-limit ending (t-96)
 

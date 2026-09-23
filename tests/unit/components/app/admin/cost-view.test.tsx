@@ -31,8 +31,21 @@ import type {
 const WINDOW = { from: '2026-09-01T00:00:00.000Z', to: '2026-09-23T14:30:00.000Z' };
 const ADA = 'cmu0000000000000000000ada';
 
-function totals(costUsd: number, platformCostUsd: number, unpricedRows = 0) {
-  return { costUsd, inputTokens: 0, outputTokens: 0, costRows: 40, unpricedRows, platformCostUsd };
+function totals(
+  costUsd: number,
+  platformCostUsd: number,
+  unpricedRows = 0,
+  platformUnpricedRows = 0
+) {
+  return {
+    costUsd,
+    inputTokens: 0,
+    outputTokens: 0,
+    costRows: 40,
+    unpricedRows,
+    platformCostUsd,
+    platformUnpricedRows,
+  };
 }
 
 function group<G extends CostGroup>(key: string | null, costUsd: number, extra: object = {}): G {
@@ -273,11 +286,19 @@ describe('TurnCostView', () => {
     ],
   };
 
-  it('splits the reply from what the turn spent on the side', () => {
+  it('splits the reply from the side, each a floor only for its own unpriced rows', () => {
+    // The unpriced row is a search — a side cost — so the side is the floor
+    // and the reply, fully priced, is stated exactly.
     render(<TurnCostView reading={reading} />);
     expect(figureOf('turn')).toBe('at least $0.30');
     expect(figureOf('reply')).toBe('$0.25');
-    expect(figureOf('side')).toBe('$0.05');
+    expect(figureOf('side')).toBe('at least $0.05');
+  });
+
+  it('calls the reply the reply — never "her" reply', () => {
+    render(<TurnCostView reading={reading} />);
+    expect(screen.getByText('The reply')).toBeTruthy();
+    expect(screen.queryByText(/her reply/i)).toBeNull();
   });
 
   it('says a row has no price rather than printing $0.00 for it', () => {
@@ -430,5 +451,53 @@ describe('ConversationTurnsView and TurnCostView — what went wrong, said plain
       screen.getByText(/no model recorded · failed · 3 attempts · ended unavailable/)
     ).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'its conversation' })).toBeNull();
+  });
+});
+
+describe('CostOverview — round 1 of review (t-97)', () => {
+  it('puts each unpriced row on its own half of the headline', () => {
+    // Two unpriced rows, both the platform's: the platform figure is the floor,
+    // and the people's — every row priced — is stated exactly.
+    render(
+      <CostOverview
+        {...props({ byUser: breakdown<PersonGroup>('user', [], { totals: totals(30, 4, 2, 2) }) })}
+      />
+    );
+    expect(figureOf('platform')).toBe('at least $4.00');
+    expect(figureOf('people')).toBe('$26.00');
+  });
+
+  it('counts the people shown when it says the list was cut, not the groups returned', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>(
+            'user',
+            [
+              group(ADA, 3, { user: { name: 'Ada', email: 'a@x' }, ceiling: null }),
+              group(null, 9, { user: null, ceiling: null }),
+            ],
+            { truncated: true }
+          ),
+        })}
+      />
+    );
+    expect(screen.getByText(/The 1 largest are listed/)).toBeTruthy();
+  });
+
+  it('never says a person is past their limit by $0.00', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>('user', [
+            group(ADA, 5.0004, {
+              user: { name: 'Ada', email: 'a@x' },
+              ceiling: { ceilingUsd: 5, source: 'default' },
+            }),
+          ]),
+        })}
+      />
+    );
+    expect(screen.getByText('past limit by <$0.01')).toBeTruthy();
   });
 });
