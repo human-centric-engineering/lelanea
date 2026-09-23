@@ -50,8 +50,11 @@ import is erased and costs no bytes, but "does not name `seed-input/`" is a rule
 you can grep and apply by eye, and "may name it, but only after the word `type`,
 and only if no value specifier rides along" is not.
 
-Three places may read a file: `lib/app/content/seed-input/**`,
-`prisma/seeds/**`, and `tests/**` (a test ships in no build).
+Two places may read a file: `lib/app/content/seed-input/**` and `tests/**` (a
+test ships in no build). **A seed unit is not one of them** — it reads through
+its `seed-input/` builder, which is where the Zod schema runs, so a seed that
+imported the JSON itself would write rows nothing had validated. t-89 briefly
+put `prisma/seeds/**` on the list; the entry is gone.
 
 | Collection                                | Read at runtime through                                                      | Seeded from `seed-input/` | Since |
 | ----------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | ----- |
@@ -77,7 +80,7 @@ renderer)
 
 **Do not import `content/*.json` or `seed-data/drafted/*.json`.** The ESLint
 rule fails any static import, dynamic `import()`, or re-export of either from
-outside the three permitted folders. A re-export is the worst of the three — it
+outside the two permitted folders. A re-export is the worst of the three — it
 hands the unvalidated JSON to every consumer of the re-exporting module, not
 just one file. Read the collection from its `*-store.ts`.
 

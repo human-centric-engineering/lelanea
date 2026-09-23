@@ -136,8 +136,27 @@ describe('content/*.json import boundary', () => {
       expect(result.errorCount).toBe(0);
     });
 
-    it('allows a seed unit to import a file directly', async () => {
+    it('fails a seed unit importing a file directly — it reads through its builder', async () => {
+      // Inverted rather than deleted, because t-89 briefly allowed this and the
+      // allowance is the interesting part. A seed that imports the JSON itself
+      // writes rows the Zod schema never saw, skipping the referential and
+      // placeholder checks the `seed-input/` builders exist to run. Nothing
+      // needed it — no seed imports a file directly — and nothing else would
+      // have caught its use, because the graph walk does not root at `prisma/`.
+      // Caught by /code-review.
       const result = await lint(DRAFTED_IMPORT, 'prisma/seeds/app-lelanea/019-voice-overlays.ts');
+
+      expect(result.errorCount).toBe(1);
+      expect(result.messages[0].message).toMatch(/SEED INPUT/);
+    });
+
+    it('allows a seed unit to reach a file through its seed-input builder', async () => {
+      // The permitted shape, beside the banned one: the specifier names the
+      // builder, not the JSON, so the rule does not match and the schema runs.
+      const result = await lint(
+        `import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';\nexport const seed = buildVoiceOverlaySeed;\n`,
+        'prisma/seeds/app-lelanea/019-voice-overlays.ts'
+      );
 
       expect(result.errorCount).toBe(0);
     });
@@ -199,15 +218,20 @@ describe('content/*.json import boundary', () => {
       expect(config.rules['no-restricted-syntax']).toBeUndefined();
     });
 
-    it('is not active for a seed unit or a test', async () => {
-      for (const file of [
-        'prisma/seeds/app-lelanea/019-voice-overlays.ts',
-        'tests/unit/lib/app/content/schemas.test.ts',
-      ]) {
-        const config = await new ESLint().calculateConfigForFile(file);
+    it('is not active for a test', async () => {
+      const config = await new ESLint().calculateConfigForFile(
+        'tests/unit/lib/app/content/schemas.test.ts'
+      );
 
-        expect(config.rules['no-restricted-syntax'], file).toBeUndefined();
-      }
+      expect(config.rules['no-restricted-syntax']).toBeUndefined();
+    });
+
+    it('IS active for a seed unit — the one exemption t-89 added and gave back', async () => {
+      const config = await new ESLint().calculateConfigForFile(
+        'prisma/seeds/app-lelanea/019-voice-overlays.ts'
+      );
+
+      expect(config.rules['no-restricted-syntax']).toBeDefined();
     });
   });
 });

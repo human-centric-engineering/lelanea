@@ -945,7 +945,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // `app/**` would lift the framework ban from the shell, and the first's
     // `ignores` is the list of places allowed to read her material — it said
     // `lib/app/content/**` until t-89, which let the barrel import two drafted
-    // files and hand them to 347 import paths. Both blocks' behaviour is
+    // files and hand them to 347 import paths. It then briefly said
+    // `prisma/seeds/**` too, which would have let a seed write rows its Zod
+    // schema never saw; the entry is gone and a seed reads through its builder.
+    // Both blocks' behaviour is
     // asserted in `tests/unit/lib/app/content/eslint-boundary.test.ts`, and the
     // reachability the lint rule cannot see in
     // `tests/unit/lib/app/content/runtime-import-graph.test.ts`; this row only
@@ -957,7 +960,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appEslintConfig).toHaveLength(2);
       expect(appEslintConfig[0]).toMatchObject({
         name: 'lelanea/content-json-boundary',
-        ignores: ['lib/app/content/seed-input/**', 'prisma/seeds/**', 'tests/**'],
+        ignores: ['lib/app/content/seed-input/**', 'tests/**'],
         rules: { 'no-restricted-syntax': expect.arrayContaining(['error']) },
       });
       expect(appEslintConfig[1]).toMatchObject({
