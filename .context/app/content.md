@@ -134,7 +134,7 @@ what seeds them.
 **One service writes and reads them:** `lib/app/content/document-store.ts`. Pages,
 the gate, both emails, the waitlist's locale fallback and the API all call it.
 The knowledge-base mirror (t-90, [below](#her-words-in-the-knowledge-base-the-mirror))
-and the admin editor (t-91) attach to it, not to the tables.
+and the admin editor (t-91, [below](#editing-her-content-in-the-admin)) attach to it, not to the tables.
 
 | Function (`document-store.ts`)    | Returns                                                                                   |
 | --------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -171,7 +171,7 @@ two drift. The seed unit (`prisma/seeds/app-lelanea/015-foundational-documents.t
 `fp4`) writes the same rows once, only while no collection row exists, so after
 the migration it skips, and a re-seed never undoes an admin edit. A change to the
 file does not reach an existing database; one that must, ships as a new `app_`
-migration, and an edit goes through the admin (t-91).
+migration, and an edit goes through the admin ([below](#editing-her-content-in-the-admin)).
 
 `lib/app/content/seed-input/foundational-seed.ts` is the one module that still imports
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key
@@ -219,7 +219,7 @@ retrieved passage is quoted to a person.
 
 | Caller                                                  | When it runs                          | Why it is needed                                                         |
 | ------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| `seedFoundationalDocuments` (and t-91's editor writes)  | after every write through the service | an edit must not leave the agent recalling the old words                 |
+| `seedFoundationalDocuments` and every admin write       | after every write through the service | an edit must not leave the agent recalling the old words                 |
 | seed `app-lelanea/020-knowledge-mirror`                 | `db:seed`, once per source hash       | on `db:reset` the rows come from a migration and seed 015 writes nothing |
 | `GET /api/v1/app/cron/knowledge-mirror` (`vercel.json`) | daily, 04:17 UTC                      | production seeds only when asked, and nothing can embed from a migration |
 
@@ -697,8 +697,11 @@ entry cites its `source` — a foundational document id, or a step of the Values
 module (`values_module.json`, release-2 content that is validated but not
 otherwise served) — and `tests/unit/lib/app/content/resources.test.ts` asserts
 the quote and every paragraph the seed writes occur character for character in
-that source. An admin edit (t-91) is not held to that test, and t-91 decides how
-it keeps the claim true. A
+that source. An admin edit (t-91) is held to the same rule at the write: a
+passage citing one of her documents must occur word for word in the document as
+stored, or the save (and an import) is refused. A passage citing the Values
+module cannot be checked at runtime, since that file is seed input with no
+table yet, and the editor says so. A
 tidied comma fails CI. Nothing in this file is drafted in her register: the
 voice fingerprint's drafted-with-provenance precedent describes her voice,
 whereas this is shown _as_ her words, so the two are held to different rules.
@@ -736,6 +739,66 @@ the latter is a 200 with the default words.
 Referential checks beyond the four above: every `relatesTo` and every `words`
 key is a module id or a fixed key; every `documentId`, and every source that is
 a document, resolves; ids are unique within each list.
+
+## Editing her content in the admin
+
+`/admin/app/content` (t-91, the "Content" item in the Lelañea nav) edits the four
+collections above without a deploy: documents, journey text, discovery questions
+and resources. Every field the seeds write can be viewed and edited, each item's
+revisions are listed and any can be restored (as a new revision, never a
+rewind), and each collection exports and imports as a file.
+
+| Where                                                              | What                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `lib/app/content/admin/{documents,journey,questions,resources}.ts` | the write services: lock, revision, guards, export, import                   |
+| `lib/app/content/admin/keyed-import.ts`                            | the import planner, generalised from the slot taxonomy's (which now uses it) |
+| `lib/app/content/content-files.ts`                                 | file → rows (the seed and the import) and rows → file (the export)           |
+| `lib/app/content/admin/readers.ts`                                 | who reads each document, section key and collection                          |
+| `app/api/v1/admin/app/content/[collection]/…`                      | nine routes over a registry (`registry.ts`), all `withAdminAuth`             |
+
+**The rules, and where each is enforced:**
+
+- **Every save names the revision it read** and is refused (409 `revision_moved`)
+  if another landed first. The three collection rows, which have no history, are
+  locked on `updatedAt`. A save that changes nothing writes nothing and is not
+  audited. Every write that changed something is audited with `logAdminAction`.
+- **Ids are never edited.** A document id is its API path and the gate's key, a
+  module or tier id is the roster's, a resource id is what past suggestions name.
+- **A document a surface renders is never deleted**: all seven are in
+  `DOCUMENT_READERS`, and the refusal names the surfaces.
+- **A section key code selects by cannot be removed or renamed** here
+  (`SECTION_READERS`); renaming one is a code change to its reader. Any other key
+  is free. `tests/unit/lib/app/content/admin/readers.test.ts` scans the code so a
+  new reader cannot go unlisted.
+- **The Disclaimer and the Terms mint a new version when their words change.**
+  See [`gateway.md`](./gateway.md).
+- **The journey is text only.** The roster owns structure, so nothing adds or
+  removes a tier or module; clearing a module's subtitle is how its text is
+  "removed". Every write re-registers the module definitions.
+- **Questions keep their ids** and their numbers stay 1…N: removing one
+  re-numbers the rest.
+- **Resources are retired, never deleted** (`app_resource.retired`). A retired
+  resource leaves the drawer, the list the AI is given and `suggest_resource`,
+  and still resolves the chip of a suggestion already made
+  (`getResourcesLibrary({ includeRetired: true })` in `loadLibraryForChips`).
+
+**Export** writes the shape the seed reads, with only what is stored: the
+source metadata a row does not hold (`sourceFile`, `reviewNotes`, her `app` and
+`creator` blocks…) is left out, and the schemas make it optional for that
+reason. A documents export carries every block's section key and every
+document's own version, so it seeds exactly what it came from. **Import**
+treats a file as the whole collection: preview (writes nothing), then apply,
+which re-plans inside its transaction and refuses the whole file if any change
+is guarded. Bodies over 1 MB are refused 413 before they are parsed. Imported
+rows are `origin: admin` revisions. A fresh export re-imported plans nothing,
+pinned per collection in `tests/unit/lib/app/content/admin/round-trip.test.ts`.
+
+**An edit reaches every client on its next request.** Nothing caches content
+server-side, and the public API's ETag covers each record's `revision`
+(`tests/unit/lib/app/content/admin/edit-reaches-clients.test.ts`). The two
+copies that are not read per request are the knowledge mirror, which every
+documents write reconciles (again, if another save lands while it runs), and
+the registered module definitions, re-registered by every journey write.
 
 ## Storage
 

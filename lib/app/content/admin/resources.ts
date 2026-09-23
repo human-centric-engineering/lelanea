@@ -90,6 +90,14 @@ import type {
 
 const IMPORT_TX_TIMEOUT_MS = 30_000;
 
+/**
+ * Every field a resource revision records: the seed's set plus `retired`
+ * (t-91). The seed's own list is left as it was, because the t-87 data
+ * migration wrote revision 1 with exactly that set and a test pins the two
+ * together; a retirement is an admin act, so only the admin's list names it.
+ */
+const RESOURCE_FIELDS = [...RESOURCE_SNAPSHOT_FIELDS, 'retired'] as const;
+
 type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 
 /** Every field a resource revision snapshots. */
@@ -188,7 +196,7 @@ function toChanges<F extends object>(before: F, after: F, changed: readonly (key
 }
 
 function resourceDiff(before: ResourceFields, after: ResourceFields) {
-  return changedFieldsOf(before, after, RESOURCE_SNAPSHOT_FIELDS);
+  return changedFieldsOf(before, after, RESOURCE_FIELDS);
 }
 
 function wordsDiff(before: WordsFields, after: WordsFields) {
@@ -229,6 +237,53 @@ async function assertServable(tx: Tx, id: string, fields: ResourceFields): Promi
     });
     if (!document)
       throw new ValidationError(`There is no foundational document "${fields.documentId}".`);
+  }
+}
+
+/**
+ * The passages of `fields` that do not occur, character for character, in the
+ * foundational document they cite. Empty when they all do.
+ *
+ * The drawer presents these as her words, and the seed's are pinned verbatim
+ * by `tests/unit/lib/app/content/resources.test.ts`. An admin edit is held to
+ * the same rule here, at the write, against the document as stored now. A
+ * passage citing the Values module cannot be checked: that file is seed input
+ * with no table yet, and nothing at runtime may read it. The editor says so.
+ */
+export function unverbatimPassages(
+  fields: WordsFields,
+  document: { blocks: unknown } | null
+): string[] {
+  if (fields.sourceCollection !== 'foundational_documents') return [];
+  const leaves: string[] = [];
+  const collect = (value: unknown): void => {
+    if (typeof value === 'string') leaves.push(value);
+    else if (Array.isArray(value)) value.forEach(collect);
+    else if (value !== null && typeof value === 'object') Object.values(value).forEach(collect);
+  };
+  collect(document?.blocks ?? []);
+  return [fields.quote, ...fields.paragraphs].filter(
+    (passage) => !leaves.some((leaf) => leaf.includes(passage))
+  );
+}
+
+async function assertVerbatim(tx: Tx, key: string, fields: WordsFields): Promise<void> {
+  if (fields.sourceCollection !== 'foundational_documents') return;
+  const document = await tx.appFoundationalDocument.findUnique({
+    where: { id: fields.sourceId },
+    select: { blocks: true },
+  });
+  if (!document) {
+    throw new ValidationError(
+      `The words for "${key}" cite "${fields.sourceId}", which is not one of her documents.`
+    );
+  }
+  const missing = unverbatimPassages(fields, document);
+  if (missing.length > 0) {
+    throw new ValidationError(
+      `The words for "${key}" are shown as hers, so each passage must appear word for word in "${fields.sourceId}". These do not: ${missing.map((passage) => `"${passage.slice(0, 80)}"`).join('; ')}.`,
+      { reason: 'not_verbatim', passages: missing }
+    );
   }
 }
 
@@ -523,7 +578,7 @@ export async function createResource(
         resourceId: id,
         revision: 1,
         ...fields,
-        changedFields: [...RESOURCE_SNAPSHOT_FIELDS],
+        changedFields: [...RESOURCE_FIELDS],
         origin: 'admin',
         editorId,
       },
@@ -600,6 +655,7 @@ async function writeWords(
     const before = wordsFieldsOf(row);
     const next = toNext(before);
     assertWords(key, next);
+    await assertVerbatim(tx, key, next);
     const changed = wordsDiff(before, next);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
     const revision = row.revision + 1;
@@ -648,6 +704,7 @@ export async function createWords(
     if (!collection) throw new NotFoundError('The resource library has not been seeded yet.');
     const fields = wordsFromEdit(edit);
     assertWords(key, fields);
+    await assertVerbatim(tx, key, fields);
     const clash = await tx.appResourceWords.findUnique({ where: { key }, select: { key: true } });
     if (clash)
       throw new ConflictError(`"${key}" already has words. Edit them instead.`, {
@@ -773,6 +830,8 @@ interface StoredResources {
   } | null;
   resources: readonly AppResource[];
   words: readonly AppResourceWords[];
+  /** Her documents' blocks, which a words passage citing one must occur in. */
+  documents: readonly { id: string; blocks: unknown }[];
 }
 
 interface ResourcesImport {
@@ -822,7 +881,7 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
       retired: row.retired,
     })),
     diff: resourceDiff,
-    allFields: RESOURCE_SNAPSHOT_FIELDS,
+    allFields: RESOURCE_FIELDS,
     toCreate: (row) => resourceFieldsOf({ ...row, retired: false }),
     toUpdate: (_before, row) => resourceFieldsOf({ ...row, retired: false }),
     onAbsent: (before) => ({ ...before, retired: true, position: --retiredBelow }),
@@ -849,6 +908,18 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
     toUpdate: (_before, row) => wordsFieldsOf(row),
     onAbsent: () => null,
   });
+  const documentsById = new Map(stored.documents.map((document) => [document.id, document]));
+  for (const change of [...words.creates, ...words.updates]) {
+    const missing = unverbatimPassages(
+      change.after!,
+      documentsById.get(change.after!.sourceId) ?? null
+    );
+    if (missing.length > 0) {
+      refusals.push(
+        `The words for "${change.key}" are shown as hers, but ${missing.length} passage(s) do not appear word for word in "${change.after!.sourceId}".`
+      );
+    }
+  }
 
   const collectionAfter = {
     title: seed.collection.title,
@@ -900,14 +971,18 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
 }
 
 async function readStored(
-  client: Pick<typeof prisma, 'appResourceCollection' | 'appResource' | 'appResourceWords'>
+  client: Pick<
+    typeof prisma,
+    'appResourceCollection' | 'appResource' | 'appResourceWords' | 'appFoundationalDocument'
+  >
 ): Promise<StoredResources> {
-  const [collection, resources, words] = await Promise.all([
+  const [collection, resources, words, documents] = await Promise.all([
     client.appResourceCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appResource.findMany({ orderBy: [{ kind: 'asc' }, { position: 'asc' }] }),
     client.appResourceWords.findMany({ orderBy: { key: 'asc' } }),
+    client.appFoundationalDocument.findMany({ select: { id: true, blocks: true } }),
   ]);
-  return { collection, resources, words };
+  return { collection, resources, words, documents };
 }
 
 async function parseResourcesFile(raw: unknown): Promise<ResourcesFile> {

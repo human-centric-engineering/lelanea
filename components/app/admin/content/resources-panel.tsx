@@ -37,6 +37,10 @@ import type { ResourceAdminRow, ResourcesAdminView } from '@/lib/app/content/adm
 
 type Kind = 'film' | 'reading';
 
+/** The rule her words are held to, said where the source is chosen. */
+const VERBATIM_HELP =
+  'Where the words are taken from. The drawer shows them as hers, so words from one of her documents are checked word for word against it when you save. Words from the Values module cannot be checked yet: copy them exactly.';
+
 interface ResourceDraft {
   id: string;
   kind: Kind;
@@ -468,11 +472,7 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
             />
           </FieldRow>
           <div className="grid gap-3 md:grid-cols-2">
-            <FieldRow
-              id={`${id}-collection`}
-              label="Source collection"
-              help="Where the words are taken from: foundational_documents or values_module."
-            >
+            <FieldRow id={`${id}-collection`} label="Source collection" help={VERBATIM_HELP}>
               <select
                 id={`${id}-collection`}
                 className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
@@ -608,11 +608,7 @@ function AddWords({
         />
       </FieldRow>
       <div className="grid gap-3 md:grid-cols-2">
-        <FieldRow
-          id="new-words-collection"
-          label="Source collection"
-          help="Where the words are taken from."
-        >
+        <FieldRow id="new-words-collection" label="Source collection" help={VERBATIM_HELP}>
           <Picker
             id="new-words-collection"
             value={draft.sourceCollection}

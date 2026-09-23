@@ -66,8 +66,13 @@ One authoring rule follows, and the code cannot enforce it: **an edit to the
 Disclaimer or the Terms that people must agree to again has to change that
 document's `version`.** A typo fix need not. Without the change nobody is
 re-gated, and people are bound by text they never saw. The admin editor (t-91)
-is where the choice is made, and the revision history is how to see what was
-in force on a given day.
+makes that the default rather than a choice: a save that changes the title,
+subtitle or blocks of a document with `requiresAcknowledgement`, and leaves its
+version alone, mints the next one (`1.1` → `1.2`), and the editor says so beside
+the Save button. A restore of earlier words mints too. An import is refused
+instead of minting (so a second apply stays a no-op): the file must carry the
+new version. The revision history is how to see what was in force on a given
+day.
 
 **Insert-only.** No `updatedAt`; nothing updates or deletes a row except
 erasure. `@@unique([userId, kind, documentVersion])` is what makes a repeat

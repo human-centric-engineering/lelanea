@@ -227,15 +227,20 @@ export async function seedFoundationalDocuments(
  * ingestion pipeline to render a document.
  */
 export async function syncKnowledgeMirror(): Promise<void> {
-  const revisions = async (): Promise<string> =>
-    (
-      await defaultClient.appFoundationalDocument.findMany({
+  // The documents' revisions, as one string, or null when they cannot be read.
+  // A failed read must not cost the mirror: it just means reconciling once,
+  // which is what every write did before overlapping saves were possible.
+  const revisions = async (): Promise<string | null> => {
+    try {
+      const rows = await defaultClient.appFoundationalDocument.findMany({
         select: { id: true, revision: true },
         orderBy: { id: 'asc' },
-      })
-    )
-      .map((row) => `${row.id}@${row.revision}`)
-      .join(',');
+      });
+      return rows.map((row) => `${row.id}@${row.revision}`).join(',');
+    } catch {
+      return null;
+    }
+  };
 
   try {
     const { reconcileKnowledgeMirror } = await import('@/lib/app/content/knowledge-mirror');
@@ -250,7 +255,8 @@ export async function syncKnowledgeMirror(): Promise<void> {
           { failed: result.failed.map((failure) => failure.sourceKey) }
         );
       }
-      if ((await revisions()) === before) return;
+      const after = await revisions();
+      if (before === null || after === null || after === before) return;
     }
   } catch (error) {
     logger.warn('Knowledge mirror failed after a documents write; the next reconcile retries', {

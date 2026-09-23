@@ -155,7 +155,6 @@ export const RESOURCE_SNAPSHOT_FIELDS = [
   'readingTime',
   'href',
   'documentId',
-  'retired',
 ] as const;
 
 /** The fields a words revision snapshots. */

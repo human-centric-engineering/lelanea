@@ -285,7 +285,15 @@ function ModuleEditor({
   module: JourneyModuleView;
   onSaved: (message: string) => void;
 }) {
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<{
+    displayNumber: string;
+    title: string;
+    subtitle: string;
+    chartTitle: string;
+    phases: Phase[];
+    phaseTiers: string;
+    produces: string;
+  }>({
     displayNumber: module.displayNumber,
     title: module.title,
     subtitle: module.subtitle ?? '',
