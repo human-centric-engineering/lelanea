@@ -802,7 +802,7 @@ running the previous version's questions.
 softening of the rule above. `getGoldenSetAdminView()` still throws; the page
 catches it, logs at error and passes `null` to `GoldenSetDialog`, which says
 the set has not been seeded and names `npm run db:seed`. Letting it throw
-rendered `admin/error.tsx` over the whole surface — so a first deploy lost the
+rendered `app/admin/error.tsx` over the whole surface — so a first deploy lost the
 comparison board, the preflight and the run button, and the operator was shown
 no page in the one state whose remedy that page would have named.
 
