@@ -14,10 +14,16 @@
  * @see components/app/usage/usage-panel.tsx
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { COST_SETTLE_MS, useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { UsagePanel } from '@/components/app/usage/usage-panel';
+
+import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
+
+// The shell provider it reads `turnsSettled` from asks for the route.
+vi.mock('next/navigation', () => ({ usePathname: () => '/app/usage' }));
 
 const NOW = new Date('2026-03-21T14:30:00.000Z');
 
@@ -71,7 +77,7 @@ function fetcherFor(fixture: Fixture = {}) {
 }
 
 function renderPanel(fixture: Fixture = {}) {
-  return render(<UsagePanel fetchImpl={fetcherFor(fixture)} />);
+  return renderInShell(<UsagePanel fetchImpl={fetcherFor(fixture)} />);
 }
 
 describe('a month with spend', () => {
@@ -186,7 +192,7 @@ describe('when the read fails', () => {
     const failing = vi.fn(
       async () => ({ ok: false, status: 500 }) as Response
     ) as unknown as typeof fetch;
-    render(<UsagePanel fetchImpl={failing} />);
+    renderInShell(<UsagePanel fetchImpl={failing} />);
 
     expect(await screen.findByText('This could not be read.')).toBeInTheDocument();
     expect(screen.getByText(/Nothing has been charged/)).toBeInTheDocument();
@@ -200,7 +206,7 @@ describe('when the read fails', () => {
           release = resolve;
         })
     ) as unknown as typeof fetch;
-    render(<UsagePanel fetchImpl={slow} />);
+    renderInShell(<UsagePanel fetchImpl={slow} />);
 
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent(/Reading what this month cost/);
@@ -219,5 +225,43 @@ describe('what this page no longer claims', () => {
     // "a budget you set" — the commercial phase's, and not being built.
     expect(screen.queryByText(/budget you set/)).not.toBeInTheDocument();
     expect(screen.queryByText(/card on file/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The page and the topbar pill above it read the same thing, so they re-read on
+ * the same signal (t-95) — or a turn sent from this page moves the pill while
+ * the page it links to keeps the old figure.
+ */
+describe('after a turn', () => {
+  function FinishTurn() {
+    const { noteTurnSettled } = useShellLayout();
+    return (
+      <button type="button" onClick={noteTurnSettled}>
+        finish a turn
+      </button>
+    );
+  }
+
+  it('re-reads once the turn has settled, keeping the old figures up meanwhile', async () => {
+    const fetchImpl = fetcherFor();
+    renderInShell(
+      <>
+        <UsagePanel fetchImpl={fetchImpl} />
+        <FinishTurn />
+      </>
+    );
+    await waitFor(() => expect(screen.getAllByText('$9.35').length).toBeGreaterThan(0));
+    const calls = () => vi.mocked(fetchImpl).mock.calls.length;
+    const afterMount = calls();
+
+    fireEvent.click(screen.getByRole('button', { name: 'finish a turn' }));
+    // Nothing yet: the turn's cost row may still be being written.
+    expect(calls()).toBe(afterMount);
+    expect(screen.getAllByText('$9.35').length).toBeGreaterThan(0);
+
+    await waitFor(() => expect(calls()).toBe(afterMount * 2), { timeout: COST_SETTLE_MS + 1500 });
+    // No skeleton on a refresh — the figures stayed on screen.
+    expect(screen.queryByText('Reading what this month cost.')).toBeNull();
   });
 });

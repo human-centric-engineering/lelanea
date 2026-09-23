@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { MonthPlot, WeekPlot } from '@/components/app/usage/plot';
 import { Banner } from '@/components/app/ui/banner';
 import { fetchUsage, UsageUnreadable } from '@/lib/app/usage/usage-client';
@@ -9,7 +10,6 @@ import {
   floorLabel,
   meterFill,
   monthPlot,
-  remainingLabel,
   usageStats,
   weekPlot,
   type UsageReading,
@@ -142,7 +142,15 @@ function Stat({ figure, label }: { figure: string; label: string }) {
   );
 }
 
+/**
+ * It re-reads when a turn has finished (t-95), on the same `turnsSettled`
+ * signal the topbar's spend meter uses — otherwise a person sending from this
+ * page would watch the pill above it move to a new figure while the page it
+ * links to kept the old one. The page keeps what it has on screen while the
+ * re-read runs; the skeleton is the first read's only.
+ */
 export function UsagePanel({ fetchImpl }: UsagePanelProps) {
+  const { turnsSettled } = useShellLayout();
   const [reading, setReading] = useState<UsageReading | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -151,8 +159,8 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
     fetchUsage({ fetchImpl, signal: controller.signal })
       .then((next) => {
         // The same guard the catch has, and the one `notes-panel.tsx` puts on
-        // both: benign today with one fetch per mount, but t-95 adds a refresh
-        // and a settled read from an abandoned request must not land then.
+        // both: a turn that finishes while a read is in flight aborts it, and
+        // its late answer must not land over the newer one.
         if (controller.signal.aborted) return;
         setReading(next);
         setFailed(null);
@@ -167,7 +175,7 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
         logger.warn('Usage read failed', { error: String(error) });
       });
     return () => controller.abort();
-  }, [fetchImpl]);
+  }, [fetchImpl, turnsSettled]);
 
   if (failed) {
     return (
@@ -191,7 +199,7 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
           figure={stats.spent}
           label={stats.spentIsFloor ? 'used this month, at least' : 'used this month'}
         />
-        <Stat figure={remainingLabel(stats.remaining, stats.spentIsFloor)} label="left" />
+        <Stat figure={stats.remaining} label="left" />
         <Stat
           figure={stats.ceiling}
           label={stats.ownLimit ? 'your monthly limit' : 'monthly limit'}

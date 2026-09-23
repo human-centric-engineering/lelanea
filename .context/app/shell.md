@@ -29,7 +29,8 @@ one that breaks something silently.
 | Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame     |
 | Nav          | `components/app/shell/shell-nav.tsx`                  | Six destinations + the account menu; 234px, or 64px slim               |
 | Account menu | `components/app/shell/account-menu.tsx`               | The footer's popover: account, settings, usage, admin, theme, sign out |
-| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; `recently`, and ≤900 the burger and the pane switch              |
+| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; `recently` and the spend meter, and ≤900 the burger and switch   |
+| Spend meter  | `components/app/shell/spend-meter.tsx`                | This month against the ceiling, opening `/app/usage`; above 900px      |
 | Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone      |
 | Conversation | `components/app/shell/conversation-pane.tsx`          | Resizable 330–660, folds at 296 to a 56px strip                        |
 | Workspace    | `components/app/shell/workspace.tsx`                  | Where the route's view renders                                         |
@@ -332,9 +333,10 @@ foot of the nav: name and email · **Your account** (`/app/account`) · **Settin
 · **Usage and billing** · **Admin** (only when `role === 'ADMIN'`) · **Dark mode**
 · **Sign out**. Owner ruling, 15 September 2026: Settings and Usage came out of
 `SHELL_NAV` and the theme toggle came out of the topbar, so this is the one place
-and not a second route to the same pages. The prototype's budget meter, when it
-arrives in phase 2, will open Usage too — the meter is the glanceable control and
-the row is the tidy-away; both stay.
+and not a second route to the same pages. The topbar's spend meter (§13 t-95)
+opens Usage too — the meter is the glanceable control and the row is the
+tidy-away; both stay. Below 900px the meter is not drawn and the row is the way
+there.
 
 Composed from Sunrise's `DropdownMenu` + `Avatar` + `authClient.signOut`, not
 `UserButton`, which takes no props, hardcodes `align="end"` with no `side`, and
@@ -440,6 +442,74 @@ The list is kept apart from `LAST_MODULE_STORAGE_KEY` on purpose. That key
 answers "where does the Workspace nav item go", which is a single value with its
 own meaning; a list that happened to have one entry would answer both questions
 by accident, and the day the strip drops an entry the nav item would follow it.
+
+## The spend meter reads when a person could have spent
+
+`components/app/shell/spend-meter.tsx` (§13 t-95). The prototype's `.budget`
+pill: a 40px bar and what is left, `$12.40 left`, at the right of the topbar. It
+was on the D6 list until spend was metered; it is the standing answer to "how
+much is left", so a person learns about the limit before reaching it.
+
+**It is a link, not the prototype's `<button>`.** All it does is go to
+`/app/usage`, and a link is what a screen reader, a middle click and "open in new
+tab" expect of that. Its accessible name starts `Usage and billing` — the account
+menu's words for the same place — and contains the printed figure verbatim.
+
+**When it reads.** One `GET /api/v1/app/usage`, summary only — the by-day
+breakdown is the page's. On mount (the topbar lives in the layout, so moving
+between pages does not remount it); again whenever `turnsSettled` on the
+provider moves; and once when the month turns. No polling.
+
+- **`turnsSettled`** is `slotsWritten`'s shape for `slotsWritten`'s reason: the
+  conversation and the topbar are siblings. `useConversation` calls
+  `noteTurnSettled` once per turn from `finish`, the one place every outcome
+  passes through — a reply, an ending, a refusal — and never per streamed frame.
+  **The counter moves `COST_SETTLE_MS` (1.5s) later, not at once**: Sunrise
+  writes a turn's cost row fire-and-forget before it yields `done`, so a read
+  taken the instant a turn ends can sum the month without it and then sit one
+  turn behind. A turn whose connection dropped is still running server-side and
+  no fixed wait covers it; its cost shows on the next read — the retry that
+  replays it, or the next turn. An insert slower than the wait shows a turn late
+  for the same reason; the platform does not await the write so that `done` is
+  never held up by it, and a fixed wait is the leaf's side of that trade.
+- **The month's turn** is timed from the summary's own two instants
+  (`msUntilNextMonth`), so a device clock that is off cannot wake it early and
+  loop. Without it a tab left on "past your limit" on the 30th says so all
+  through the 1st. Timers stop while a machine sleeps, so the wake also keeps a
+  wall-clock deadline and checks it when the page is shown again — the only
+  listener the meter has, and it reads only once the deadline has passed.
+- `/app/usage` re-reads on the same counter, so a turn sent from that page
+  moves the page and the pill together — both say a sub-cent remainder through
+  `remainingWords()`, so they cannot disagree about it either.
+
+That keeps the month-to-date aggregate `agent.md` watches to one call per thing
+a person sends — three on `/app/usage`, where the page re-reads its own
+summary and breakdown beside the meter's. The other exceptions are bounded: a
+window crossing 900px remounts the meter, and dev's strict mode mounts it twice. A ceiling an admin
+changes shows at the next turn, including the attempt a person makes past a
+limit the pill still shows. While a re-read is in flight the previous figure
+stays up, as the notes panel keeps its notes.
+
+**Only one state draws a bar.** `meterReading()` in `lib/app/usage/usage-view.ts`
+decides:
+
+| State             | Shows                                |
+| ----------------- | ------------------------------------ |
+| An ordinary month | The bar, and `$12.40 left`           |
+| Under a cent left | The bar, and `less than a cent left` |
+| Spend is a floor  | The bar, and `at most $12.40 left`   |
+| A $0 ceiling      | `nothing to spend` — no bar          |
+| Past the ceiling  | `past your limit` — no bar           |
+| The first read    | `usage` — no bar, no figure          |
+| The read failed   | `usage unreadable` — no bar          |
+
+A full bar past the ceiling reads as "exactly used up"; an empty track on a $0
+ceiling reads as "all of it left". A later read that fails drops the bar from the
+earlier one rather than leaving a figure nobody can vouch for.
+
+**Not drawn at ≤900px**, as in the prototype — "a desk-side reassurance, not a
+phone one", and one tap away in the account menu — so a phone does not re-read
+after every turn for a bar it cannot show.
 
 ## One radius, because four of them drifted
 
@@ -590,9 +660,9 @@ is the specific failure D6 names.
   the system rather than about the reader, and putting it in the column made all
   seventeen rows say the same non-word about themselves. `STATE_ROW` in
   `map-drawer.tsx` is the seam that widens.
-- **The budget meter** — omitted from the topbar rather than faked. Still
-  absent, but no longer for want of a number: §13 t-94 put the figures on
-  `/app/usage`, and t-95 is the meter itself.
+- ~~**The budget meter** — omitted from the topbar rather than faked.~~ In the
+  topbar from §13 t-95, reading the same endpoint as `/app/usage`. See
+  [the spend meter](#the-spend-meter-reads-when-a-person-could-have-spent) below.
 - ~~**The composer** — present, inert.~~ Live from §10 t-64; see
   [`conversation.md`](./conversation.md). What the pane still leaves out —
   the account row, the endings in her words, the mic — is listed there.

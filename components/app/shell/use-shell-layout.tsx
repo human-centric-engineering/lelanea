@@ -167,6 +167,31 @@ export interface ShellLayout {
    */
   noteSlotsWritten: () => void;
   /**
+   * How many turns have finished, this session, and had time for their cost to
+   * be written.
+   *
+   * `slotsWritten`'s shape and its reason for living here: a counter the
+   * topbar's spend meter and the usage page compare against the value they saw
+   * last, because the conversation that spends and the figures that show it
+   * are siblings (t-95). Kept apart from `slotsWritten` because that one counts
+   * only turns that wrote a note, and a turn that wrote nothing still cost
+   * something.
+   *
+   * **It moves {@link COST_SETTLE_MS} after the turn, not at it.** The platform
+   * writes a turn's cost row fire-and-forget (`void logCost(...)` in Sunrise's
+   * streaming handler) before it yields `done`, so a read taken the instant the
+   * turn ends can sum the month without it — and the reader would then show the
+   * pre-turn figure until the next turn (/code-review). The wait belongs here,
+   * once, rather than in each reader.
+   */
+  turnsSettled: number;
+  /**
+   * A turn is over — answered, ended, or refused. Called once per turn by
+   * `useConversation`, never per streamed frame, so what reads `turnsSettled`
+   * re-reads at most as often as a person sends.
+   */
+  noteTurnSettled: () => void;
+  /**
    * Words the composer should be holding, put there by something outside the
    * conversation — today, "Ask her about this" on a note. `null` when there is
    * nothing waiting, which is almost always.
@@ -208,6 +233,17 @@ export function useShellLayout(): ShellLayout {
   return value;
 }
 
+/**
+ * How long after a turn ends its cost is assumed written.
+ *
+ * The write is one insert issued before the `done` frame is even sent, so it
+ * has normally landed long before this; the margin is for a slow database, not
+ * for a slow model. A turn whose connection dropped is still being answered
+ * server-side and is not covered by any fixed wait — its cost reaches the
+ * figures on the next read: the retry that replays it, or the next turn.
+ */
+export const COST_SETTLE_MS = 1500;
+
 function classify(w: number): WidthClass {
   if (w <= 900) return 'small';
   return w <= 1240 ? 'medium' : 'large';
@@ -243,6 +279,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   const [pane, setPaneState] = useState<Pane>('chat');
   const [modulePlaceState, setModulePlaceState] = useState<ModulePlace | null>(null);
   const [slotsWritten, setSlotsWritten] = useState(0);
+  const [turnsSettled, setTurnsSettled] = useState(0);
   const [ask, setAskState] = useState<string | null>(null);
 
   /**
@@ -558,6 +595,18 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    * two, and so the callback never has to depend on the count it increments.
    */
   const noteSlotsWritten = useCallback(() => setSlotsWritten((count) => count + 1), []);
+  const settleTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const noteTurnSettled = useCallback(() => {
+    const timer = setTimeout(() => {
+      settleTimers.current.delete(timer);
+      setTurnsSettled((count) => count + 1);
+    }, COST_SETTLE_MS);
+    settleTimers.current.add(timer);
+  }, []);
+  useEffect(() => {
+    const timers = settleTimers.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
   const setAsk = useCallback((text: string) => setAskState(text), []);
   const takeAsk = useCallback(() => setAskState(null), []);
 
@@ -638,6 +687,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setModulePlace,
       slotsWritten,
       noteSlotsWritten,
+      turnsSettled,
+      noteTurnSettled,
       ask,
       setAsk,
       takeAsk,
@@ -665,6 +716,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       setModulePlace,
       slotsWritten,
       noteSlotsWritten,
+      turnsSettled,
+      noteTurnSettled,
       ask,
       setAsk,
       takeAsk,

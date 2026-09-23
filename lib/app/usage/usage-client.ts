@@ -44,19 +44,6 @@ export const USAGE_ENDPOINT = '/api/v1/app/usage';
 /** The reader's own spend, grouped. */
 export const USAGE_BREAKDOWN_ENDPOINT = '/api/v1/app/usage/breakdown';
 
-/**
- * Where a person reads it.
- *
- * **Three other places still hardcode this path** — the account menu's link
- * (`components/app/shell/account-menu.tsx`), the shell's tone map
- * (`view-tone.ts`) and the nav roster. This constant is not yet the single
- * source it ought to be, and saying otherwise would send the next reader
- * looking for imports that do not exist (/code-review). The page below uses
- * it, and t-95's topbar meter — which links here — is the change that can
- * reasonably unify the rest.
- */
-export const USAGE_PAGE = '/app/usage';
-
 /** The read failed, or answered something this cannot trust. */
 export class UsageUnreadable extends Error {
   readonly status: number;
@@ -166,6 +153,20 @@ export interface UsageFetchOptions {
 }
 
 /**
+ * The summary alone — what the topbar's meter reads (t-95).
+ *
+ * The meter needs one number against one ceiling, so it does not ask for the
+ * by-day breakdown the page draws. That keeps the read the shell repeats to the
+ * one aggregate `agent.md` already watches (f-budget ruling 5), rather than two.
+ */
+export async function fetchUsageSummary(options: UsageFetchOptions = {}): Promise<UsageSummary> {
+  return read(USAGE_ENDPOINT, summarySchema, {
+    signal: options.signal,
+    fetchImpl: boundFetch(options.fetchImpl),
+  });
+}
+
+/**
  * Both readings — the summary first, because it says which window to ask for.
  *
  * Nothing is drawn until both have landed (the panel shows one skeleton for the
@@ -175,10 +176,7 @@ export async function fetchUsage(
   options: UsageFetchOptions = {}
 ): Promise<{ summary: UsageSummary; days: UsageBreakdown }> {
   const fetchImpl = boundFetch(options.fetchImpl);
-  const summary = await read(USAGE_ENDPOINT, summarySchema, {
-    signal: options.signal,
-    fetchImpl,
-  });
+  const summary = await fetchUsageSummary({ signal: options.signal, fetchImpl });
 
   const from = readingWindowFrom(
     new Date(summary.window.to),

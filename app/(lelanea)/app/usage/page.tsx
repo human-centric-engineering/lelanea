@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { USAGE_LEDE, USAGE_NOTE, UsagePanel } from '@/components/app/usage/usage-panel';
-import { USAGE_PAGE } from '@/lib/app/usage/usage-client';
+import { USAGE_PAGE } from '@/lib/app/usage/usage-view';
 import { View } from '@/components/app/views/view';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';

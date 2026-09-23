@@ -1,24 +1,23 @@
 // @vitest-environment happy-dom
 
 /**
- * The top bar — the two ≤900px controls, and the four things that must NOT be
- * on it.
+ * The top bar — recents, the spend meter, the two ≤900px controls, and what
+ * must NOT be on it.
  *
- * The absences carry the weight here. Recents, the budget meter and the
- * prototype's own tag are all omitted because nothing feeds them (D6, `B31`),
- * and the cheapest way for a fake to arrive later is somebody porting the
- * prototype's bar wholesale and leaving `$12.40 left` in it. A digit on this bar
- * is the tell, so that is what is asserted. The fourth absence is the theme
- * toggle, which moved into the account menu on 15 September 2026 — so above
- * 900px the bar is empty, and a control appearing there to fill it is the
- * regression.
+ * The budget meter was an absence guarded here until f-budget t-95: nothing
+ * metered spend, so `$12.40 left` would have been invented, and a digit on this
+ * bar was the tell. It is now real, and the tell narrows to **a digit the bar
+ * did not read** — asserted against a read that has not answered, which is the
+ * one state where any figure would be a fake. The meter's own states are in
+ * `spend-meter.test.tsx`. The theme toggle moved into the account menu on 15
+ * September 2026, so a button appearing above 900px is still the regression.
  *
  * @see components/app/shell/shell-topbar.tsx
  */
 
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 
@@ -27,8 +26,17 @@ import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell
 const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
 
+/** The meter's read, held unanswered: nothing it shows can have come from it. */
+const pendingFetch = vi.fn(() => new Promise<Response>(() => {}));
+
 beforeEach(() => {
   mockPathname.current = '/app';
+  vi.stubGlobal('fetch', pendingFetch);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  pendingFetch.mockClear();
 });
 
 /** `large` unless stated: the burger and pane switch are ≤900px controls. */
@@ -37,9 +45,10 @@ function renderBar(width: WidthName = 'large') {
 }
 
 describe('ShellTopbar — what it must not invent', () => {
-  it('shows no number anywhere', () => {
-    // Nothing meters spend until phase 2. `$12.40 left` in the prototype's bar
-    // is the specific fake this guards against.
+  it('shows no number it has not read', () => {
+    // `$12.40 left` in the prototype's bar is the specific fake this guards
+    // against. The meter's read is held unanswered here, so any figure on the
+    // bar would be one nothing supplied.
     //
     // Deliberately the DEFAULT render, with no recents stored: a real pill says
     // `01 · Values`, and that digit is the module's authored number rather than
@@ -51,13 +60,18 @@ describe('ShellTopbar — what it must not invent', () => {
     expect(container.textContent ?? '').not.toMatch(/\d/);
   });
 
-  it('carries no budget control', () => {
-    // Recents is no longer on this list, and that is the change. It was here
-    // because nothing opened a module until §05 and the strip would have been
-    // permanently empty; §05 landed and `RememberModule` records real visits.
-    // The budget stays: nothing meters spend until phase 2.
-    renderBar();
-    expect(screen.queryByRole('button', { name: /usage|billing|budget/i })).toBeNull();
+  it('carries the spend meter above 900px, and it opens the usage page', () => {
+    // It was on the list of absences until t-95, for want of metered spend.
+    renderBar('large');
+    const meter = screen.getByRole('link', { name: /^Usage and billing/ });
+    expect(meter.getAttribute('href')).toBe('/app/usage');
+    expect(pendingFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the meter off a phone, where it is one tap away in the account menu', () => {
+    // The prototype's own call: "a desk-side reassurance, not a phone one".
+    renderBar('small');
+    expect(screen.queryByRole('link', { name: /^Usage and billing/ })).toBeNull();
   });
 
   it('shows the recents strip, and says plainly when it is empty', () => {
@@ -88,13 +102,13 @@ describe('ShellTopbar — what it must not invent', () => {
     expect(pills[0].getAttribute('href')).toBe('/app/modules/boundaries');
   });
 
-  it('offers nothing above 900px — not even the theme toggle', () => {
+  it('offers no button above 900px — not even the theme toggle', () => {
     // t-9 wrote "exactly one control" for the toggle; t-10 kept the burger and
     // pane switch off this width because the nav is a column with nothing to
     // open and both panes are on screen. Now the toggle has gone to the
-    // account menu too, and the bar is deliberately empty until recents and
-    // the budget meter have something real to show. A button here is either a
-    // dead control or the toggle coming back to fill the space.
+    // account menu too. The spend meter is here, and is a LINK — it goes
+    // somewhere. A button here is either a dead control or the toggle coming
+    // back to fill the space.
     renderBar('large');
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByRole('group', { name: 'Show' })).toBeNull();

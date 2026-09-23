@@ -130,10 +130,23 @@ injects a `fetchImpl`, so **the default path is the one no test takes** — this
 survived a green suite and was found by opening the page. `boundFetch()` in
 `usage-client.ts` binds it once; the call sites cannot reintroduce it.
 
+## The topbar meter (t-95)
+
+Every page in the shell carries a glanceable version of the same reading: a bar
+and what is left, linking here. It reads the summary only, on mount, once per
+finished turn and once at the month's turn, and draws a bar only when a bar is
+honest — a $0 ceiling, a month past the ceiling, the first read and a failed
+read are each words. This page re-reads on the same per-turn signal, so a turn
+moves both together. **It does not wake at the month's turn** — only the pill
+does — so a page left open across midnight on the 1st shows last month until it
+is reloaded or a turn is sent, while the pill above it has moved on. Accepted
+at t-95 (/code-review round 3): the page is a place a person opens, the pill is
+the thing that stays on screen. The rules
+live in [`shell.md`](./shell.md#the-spend-meter-reads-when-a-person-could-have-spent);
+the judgement is `meterReading()` beside the page's own in `usage-view.ts`.
+
 ## Still to come on this feature
 
-- **t-95** — the spend meter in the topbar. [`shell.md`](./shell.md) has held
-  the seam open: "omitted from the topbar rather than faked".
 - **t-96** — the `ceiling_reached` ending in her register. Today that frame
   keeps the platform's contract words, which is what `turns.tsx` says it does
   for a code it does not know.

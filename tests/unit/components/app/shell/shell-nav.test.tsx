@@ -33,6 +33,11 @@ import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell
 
 const mockPathname = vi.hoisted(() => ({ current: '/app' }));
 
+// The topbar's spend meter reads `/api/v1/app/usage` on mount; this suite is not
+// about it (`spend-meter.test.tsx` is), and an unstubbed read would be a real
+// relative-URL fetch settling after the assertions.
+vi.mock('@/components/app/shell/spend-meter', () => ({ SpendMeter: () => null }));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
 }));

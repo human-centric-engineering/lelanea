@@ -159,6 +159,24 @@ export function remainingLabel(remaining: string, isFloor: boolean): string {
   return isFloor ? `at most ${remaining}` : remaining;
 }
 
+/**
+ * What is left, in the pill's words.
+ *
+ * `money()` rounds a remainder under half a cent to `$0.00`, which on the pill
+ * reads as "nothing left" while the ceiling still lets a turn start — `$0` is
+ * not a fact there, it is a rounding. So it refuses the rounding the way
+ * {@link moneyWords} does. And like {@link floorLabel}, it qualifies a numeral
+ * only: "less than a cent" is already an upper bound, so "at most less than a
+ * cent" would say the same thing badly (/code-review).
+ *
+ * The page's "left" stat and the topbar's pill both say it through this, so
+ * the two cannot disagree about one month's remainder.
+ */
+export function remainingWords(remainingUsd: number, isFloor: boolean): string {
+  const words = moneyWords(remainingUsd);
+  return words.startsWith('$') ? remainingLabel(words, isFloor) : words;
+}
+
 /** The three figures across the top, and whether each is a floor. */
 export interface UsageStats {
   spent: string;
@@ -178,7 +196,9 @@ export function usageStats(summary: UsageSummary): UsageStats {
   const nothingAllowed = summary.ceiling.ceilingUsd <= 0;
   return {
     spent: moneyWords(summary.costUsd),
-    remaining: money(summary.remainingUsd),
+    // The one derivation of what is left: words under a cent, `at most` when
+    // spend is a floor — the page's stat and the pill both say this.
+    remaining: remainingWords(summary.remainingUsd, spendFloor(summary)),
     ceiling: money(summary.ceiling.ceilingUsd),
     spentIsFloor: spendFloor(summary),
     nothingAllowed,
@@ -202,6 +222,105 @@ export function usageStats(summary: UsageSummary): UsageStats {
 export function meterFill(summary: UsageSummary): number | null {
   if (summary.fractionUsed === null) return null;
   return Math.max(0, Math.min(1, summary.fractionUsed));
+}
+
+/**
+ * Where a person reads it.
+ *
+ * The single source for the path: the page, the topbar's spend meter
+ * (`spend-meter.tsx`), the account menu's row and the shell's tone map
+ * (`view-tone.ts`) all import it (t-95). It lives here rather than in
+ * `usage-client.ts` so a route string does not bring a fetch wrapper and its
+ * schemas along with it.
+ */
+export const USAGE_PAGE = '/app/usage';
+
+/**
+ * What the topbar's meter is called, before it says anything else.
+ *
+ * The account menu's own words for the same destination (`ACCOUNT_MENU_LINKS`),
+ * and the prototype's `aria-label` on its `.budget` button — so a screen reader
+ * hears one name for one place however a person reaches it.
+ */
+export const METER_NAME = 'Usage and billing';
+
+/**
+ * The topbar meter's state, once the summary has been read (t-95).
+ *
+ * Three answers, and only one of them draws a bar. The page can say each edge
+ * in a sentence under its stats; a 32px pill cannot, so what a sentence does
+ * there a short phrase does here — and the edges that a bar would state
+ * wrongly get **no bar at all**:
+ *
+ * - `meter` — a fill, and what is left. What is left is `at most` when spend is
+ *   a floor, for {@link remainingLabel}'s reason.
+ * - `nothing-allowed` — a $0 ceiling. `fractionUsed` is null and there is no
+ *   honest fraction to draw: an empty track reads as "all of it left", a full
+ *   one as "all of it spent", and neither is true of a limit of nothing.
+ * - `over` — spend past the ceiling. {@link meterFill} would clamp this to a
+ *   full bar, which is "exactly used up", the misreading the page's docblock
+ *   names. A phrase says what the bar cannot.
+ *
+ * `figure` is what is printed; `name` is what a screen reader hears, and
+ * begins with {@link METER_NAME} and contains `figure` verbatim, so the words
+ * a sighted person would say to activate it are in its accessible name.
+ */
+export type MeterReading =
+  | { kind: 'meter'; fill: number; figure: string; name: string }
+  | { kind: 'nothing-allowed'; figure: string; name: string }
+  | { kind: 'over'; figure: string; name: string };
+
+export function meterReading(summary: UsageSummary): MeterReading {
+  const stats = usageStats(summary);
+  // Null exactly when the ceiling is zero — the server's own test — so this is
+  // the one predicate, and `nothingAllowed` is not asked a second time.
+  const fill = meterFill(summary);
+
+  if (fill === null) {
+    const figure = 'nothing to spend';
+    return {
+      kind: 'nothing-allowed',
+      figure,
+      name: `${METER_NAME}: ${figure}, your limit this month is ${stats.ceiling}`,
+    };
+  }
+  if (stats.overCeiling) {
+    const figure = 'past your limit';
+    return {
+      kind: 'over',
+      figure,
+      name: `${METER_NAME}: ${figure} of ${stats.ceiling} this month`,
+    };
+  }
+  const figure = `${stats.remaining} left`;
+  return {
+    kind: 'meter',
+    fill,
+    figure,
+    name: `${METER_NAME}: ${figure} of ${stats.ceiling} this month`,
+  };
+}
+
+/** The longest delay `setTimeout` honours; anything larger fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/** Past the turn of the month, so the read that wakes lands in the new one. */
+const ROLLOVER_MARGIN_MS = 5_000;
+
+/**
+ * How long until this reading's month ends, measured on the SERVER's clock.
+ *
+ * Both instants come from the summary — the month's first instant and the
+ * moment the server answered — so a device clock an hour fast cannot wake the
+ * meter early, find the old month still running, and wake again straight away.
+ * Capped at what `setTimeout` can hold: a wake at the cap simply reads and
+ * schedules again (t-95, /code-review).
+ */
+export function msUntilNextMonth(window: UsageWindow): number {
+  const from = new Date(window.from);
+  const next = Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1);
+  const left = Math.max(0, next - Date.parse(window.to));
+  return Math.min(left + ROLLOVER_MARGIN_MS, MAX_TIMEOUT_MS);
 }
 
 /** One bar of a plot. */
