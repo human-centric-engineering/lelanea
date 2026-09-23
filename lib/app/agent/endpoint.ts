@@ -23,3 +23,29 @@ export const AGENT_SETTINGS_PAGE = '/admin/app/agent';
 
 /** Whether a turn can be expected to be answered now — `GET`, any member (§08 t-55). */
 export const AGENT_STATUS_ENDPOINT = '/api/v1/app/agent/status';
+
+/** Anyone's spend, grouped — `?by=user|conversation|seat|model|day` (§08 t-56). */
+export const ADMIN_METERING_ENDPOINT = '/api/v1/admin/app/metering';
+
+/** One conversation's turns, each with its cost (f-budget t-97). */
+export function adminConversationTurnsEndpoint(conversationId: string): string {
+  return `${ADMIN_METERING_ENDPOINT}/conversations/${encodeURIComponent(conversationId)}`;
+}
+
+/** One person's turn, every cost row it caused (§08 t-56). */
+export function adminTurnMeterEndpoint(userId: string, turnId: string): string {
+  return `${ADMIN_METERING_ENDPOINT}/users/${encodeURIComponent(userId)}/turns/${encodeURIComponent(turnId)}`;
+}
+
+/** Where an admin reads what this month cost, and who and what spent it (t-97). */
+export const COST_ADMIN_PAGE = '/admin/app/cost';
+
+/** A costly conversation, opened to its turns. */
+export function costConversationPage(conversationId: string): string {
+  return `${COST_ADMIN_PAGE}/conversations/${encodeURIComponent(conversationId)}`;
+}
+
+/** One turn, opened to every row it cost. Person and turn, as the turn route is. */
+export function costTurnPage(userId: string, turnId: string): string {
+  return `${COST_ADMIN_PAGE}/turns/${encodeURIComponent(userId)}/${encodeURIComponent(turnId)}`;
+}

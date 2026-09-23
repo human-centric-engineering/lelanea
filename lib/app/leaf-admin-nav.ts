@@ -56,6 +56,16 @@
  * migration. `/admin/app/slots` is where a slot is added, reworded, retired and
  * read back through every version it has had.
  *
+ * ## And the seventh, because every conversation is pure cost
+ *
+ * With no revenue, what the app costs to run is the number that sets prices
+ * later (§7.2). §08 t-56 built the admin meter read and nothing read it;
+ * Sunrise's own costs page is per agent and per model, and with one agent it
+ * cannot say which person is running away. f-budget t-97 is that surface:
+ * `/admin/app/cost`, who and what spent this month, down to a single turn. Its
+ * own page rather than a tab on "Deadlines & budgets" (owner, 22 Sept 2026):
+ * that page is settings you write; this is a reading you interrogate.
+ *
  * ## The section title is "Lelañea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
@@ -73,11 +83,11 @@
  * not restate it, because it drifted the moment an item was added.
  */
 
-import { AudioLines, ClipboardList, Gauge, LifeBuoy, Library, ListTree } from 'lucide-react';
+import { AudioLines, ClipboardList, Coins, Gauge, LifeBuoy, Library, ListTree } from 'lucide-react';
 import { registerNavSection } from '@/lib/admin-nav/registry';
 import { WAITLIST_ADMIN_PAGE } from '@/lib/app/waitlist/endpoint';
 import { DESIGNATION_ADMIN_PAGE, VOICE_COMPARISON_PAGE } from '@/lib/app/voice/endpoint';
-import { AGENT_SETTINGS_PAGE } from '@/lib/app/agent/endpoint';
+import { AGENT_SETTINGS_PAGE, COST_ADMIN_PAGE } from '@/lib/app/agent/endpoint';
 import { CRISIS_RESOURCES_PAGE } from '@/lib/app/safety/endpoint';
 import { SLOT_DEFINITIONS_PAGE } from '@/lib/app/slots/endpoint';
 
@@ -108,6 +118,12 @@ export function initLeafAdminNav(): void {
         label: 'Deadlines & budgets',
         icon: Gauge,
         description: 'How long the AI may take to answer, and what each person may spend a month',
+      },
+      {
+        href: COST_ADMIN_PAGE,
+        label: 'Cost',
+        icon: Coins,
+        description: 'What this month has cost, and which people and conversations spent it',
       },
       {
         href: CRISIS_RESOURCES_PAGE,

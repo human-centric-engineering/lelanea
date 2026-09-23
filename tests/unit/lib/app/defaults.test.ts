@@ -438,6 +438,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin/app/voice',
         // §08 t-53 — the agent's deadlines and the monthly limits.
         '/admin/app/agent',
+        // f-budget t-97 — what this month cost, and who and what spent it. Its own
+        // page beside the limits rather than a tab on them (owner, 22 Sept 2026).
+        '/admin/app/cost',
         // f-safety t-63 — the crisis helplines, per region.
         '/admin/app/safety',
         // f-slots t-71 — the taxonomy, and every past version of each slot.
