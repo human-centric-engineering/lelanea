@@ -23,7 +23,7 @@ vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 
 import unit from '@/prisma/seeds/app-lelanea/015-foundational-documents';
 import { DOCUMENT_SNAPSHOT_FIELDS } from '@/lib/app/content/document-store';
-import { readFoundationalDocumentsFile } from '@/lib/app/content/foundational-seed';
+import { readFoundationalDocumentsFile } from '@/lib/app/content/seed-input/foundational-seed';
 import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
 
 type Row = Record<string, unknown> & { id?: string };

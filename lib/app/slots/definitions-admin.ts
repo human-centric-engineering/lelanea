@@ -69,7 +69,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/api/errors'
 import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
-import { slotTaxonomyFileSchema, type SlotTaxonomyFile } from '@/lib/app/content/slot-taxonomy';
+import { slotTaxonomyFileSchema, type SlotTaxonomyFile } from '@/lib/app/slots/taxonomy-file';
 import {
   SLOT_DEFINITION_FIELDS,
   changedDefinitionFields,

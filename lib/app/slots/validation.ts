@@ -58,7 +58,7 @@ import {
 /**
  * A slug is lower-case letters, digits and underscores, starting with a letter.
  *
- * **One rule, read from here by both ends.** `lib/app/content/slot-taxonomy.ts`
+ * **One rule, read from here by both ends.** `lib/app/content/seed-input/slot-taxonomy.ts`
  * imports it to parse the bundled file, and the routes use it for the path
  * param and the create body, so a file the seed would accept and a slug the
  * editor would accept cannot drift apart. It lives in this module rather than

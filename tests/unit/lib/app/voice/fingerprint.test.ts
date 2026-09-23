@@ -52,7 +52,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import {
   FINGERPRINT_VERSION_MARKER_PREFIX,
   VOICE_AGENT_SLUG,

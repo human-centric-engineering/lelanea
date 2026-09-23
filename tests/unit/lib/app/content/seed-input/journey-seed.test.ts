@@ -11,7 +11,7 @@
  * Also: the builder refuses a file that disagrees with the code roster, and the
  * data migration embeds exactly what the builder writes.
  *
- * @see lib/app/content/journey-seed.ts
+ * @see lib/app/content/seed-input/journey-seed.ts
  * @see lib/app/content/journey-view.ts
  */
 
@@ -23,7 +23,7 @@ import {
   assertRosterMatchesFile,
   buildJourneySeed,
   readJourneyStructureFile,
-} from '@/lib/app/content/journey-seed';
+} from '@/lib/app/content/seed-input/journey-seed';
 import { toJourneyStructure, type JourneyStructure } from '@/lib/app/content/journey-view';
 import { seededJourneyRows } from '@/tests/helpers/app/content-stores';
 

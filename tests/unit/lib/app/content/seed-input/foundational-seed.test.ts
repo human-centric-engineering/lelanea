@@ -8,7 +8,7 @@
  * overlaps another, or that runs past the document must throw before anything is
  * written, never key the wrong passage.
  *
- * @see lib/app/content/foundational-seed.ts
+ * @see lib/app/content/seed-input/foundational-seed.ts
  */
 
 import { readFileSync } from 'node:fs';
@@ -21,7 +21,7 @@ import {
   buildFoundationalSeed,
   keyBlocks,
   readFoundationalDocumentsFile,
-} from '@/lib/app/content/foundational-seed';
+} from '@/lib/app/content/seed-input/foundational-seed';
 import type { DocumentBlock } from '@/lib/app/content/schemas';
 
 const blocks: DocumentBlock[] = [

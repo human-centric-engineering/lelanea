@@ -24,7 +24,7 @@
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
+import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
 import { seedResources } from '@/lib/app/content/resource-store';
 
 const unit: SeedUnit = {

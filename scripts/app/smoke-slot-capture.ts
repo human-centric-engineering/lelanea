@@ -70,10 +70,10 @@
 import { prisma } from '@/lib/db/client';
 import { isRecord } from '@/lib/utils';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
-import { slotExposureConfig } from '@/lib/app/content/slot-taxonomy';
+import { slotExposureConfig } from '@/lib/app/content/seed-input/slot-taxonomy';
 
 const SLOT_EXPOSURE_CONFIG = slotExposureConfig();
-import { getSlotTaxonomy } from '@/lib/app/content/slot-taxonomy';
+import { getSlotTaxonomy } from '@/lib/app/content/seed-input/slot-taxonomy';
 import { accountLine, accountParts } from '@/lib/app/conversation/account';
 import { capabilityDispatcher } from '@/lib/orchestration/capabilities/dispatcher';
 import { registerBuiltInCapabilities } from '@/lib/orchestration/capabilities/registry';

@@ -41,12 +41,12 @@
  * of its first and last block, so a block inserted in the file fails here
  * instead of keying the wrong passage for every client.
  *
- * @see lib/app/content/foundational-seed.ts — the file, and the section keys
+ * @see lib/app/content/seed-input/foundational-seed.ts — the file, and the section keys
  * @see lib/app/content/document-store.ts — the one service that writes these tables
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
+import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
 import { seedFoundationalDocuments } from '@/lib/app/content/document-store';
 
 const unit: SeedUnit = {

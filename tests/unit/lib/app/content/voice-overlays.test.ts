@@ -41,12 +41,12 @@
  * deleting it; if your fork ships none, delete the file and the schema together.
  *
  * @see lib/app/content/schemas.ts — `voiceOverlaysFileSchema`
- * @see lib/app/content/voice-overlay-seed.ts — the seed builder this file exercises
+ * @see lib/app/content/seed-input/voice-overlay-seed.ts — the seed builder this file exercises
  * @see tests/unit/lib/app/voice/overlays.test.ts — how one is selected
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { toVoiceOverlays, type VoiceOverlays } from '@/lib/app/content/voice-overlay-view';
 import { voiceOverlaysFileSchema } from '@/lib/app/content/schemas';
 

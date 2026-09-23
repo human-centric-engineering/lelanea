@@ -24,7 +24,7 @@
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 
 const unit: SeedUnit = {

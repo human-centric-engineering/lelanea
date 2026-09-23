@@ -13,16 +13,17 @@
  * recognise reaching `framework_slot_definition` and from there the capture
  * prompt.
  *
- * @see lib/app/content/slot-taxonomy.ts
+ * @see lib/app/content/seed-input/slot-taxonomy.ts
  */
 
 import { describe, it, expect } from 'vitest';
 
-import {
-  getSlotTaxonomy,
-  readableSlotGroups,
-  slotTaxonomyFileSchema,
-} from '@/lib/app/content/slot-taxonomy';
+import { getSlotTaxonomy, readableSlotGroups } from '@/lib/app/content/seed-input/slot-taxonomy';
+// The file SHAPE moved to `lib/app/slots/taxonomy-file.ts` in t-89, out of the
+// module that imports the file: `definitions-admin.ts` needs the schema for the
+// upload/export round trip, and importing it from here put 60KB of JSON behind
+// six admin routes. The negative cases below still belong with the file.
+import { slotTaxonomyFileSchema } from '@/lib/app/slots/taxonomy-file';
 import {
   SLOT_VISIBILITY,
   SLOT_MODE,
@@ -33,11 +34,11 @@ import {
 /**
  * A mutable deep clone of the real file, to break one field of per case.
  *
- * Cloned from the LOADER's output rather than from `@/content/*.json`: the
- * ESLint content boundary (`contentJsonImportBoundary`) fails a raw import from
- * anywhere but `lib/app/content/**`, and a test is not an exception to it. The
- * parsed value round-trips through the same schema, so each case below still
- * starts from a file that parses.
+ * Cloned from the LOADER's output rather than from the raw JSON. A test IS
+ * permitted a raw import (t-89 narrowed the boundary to `seed-input/`,
+ * `prisma/seeds/` and `tests/`), but the parsed value round-trips through the
+ * same schema, so each case below still starts from a file that parses — and
+ * reading it the way the seed does keeps this honest about what the seed sees.
  */
 function draft(): Record<string, unknown> {
   return structuredClone(getSlotTaxonomy());

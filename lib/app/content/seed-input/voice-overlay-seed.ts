@@ -26,17 +26,12 @@ import { voiceOverlaysFileSchema, type VoiceOverlaysFile } from '@/lib/app/conte
 // helper, which imports this module — so a store import here closes a cycle
 // through a factory already in flight and vitest deadlocks (0% CPU, no
 // output). The view imports neither of them. See its docblock on the constant.
-import {
-  VOICE_OVERLAY_SET_ID,
-  type VoiceOverlayRow,
-  type VoiceOverlaySetRow,
-} from '@/lib/app/content/voice-overlay-view';
+import { VOICE_OVERLAY_SET_ID, type VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-view';
 
-/** What the seed writes: the set and its overlays, at revision 1. */
-export interface VoiceOverlaySeed {
-  set: Omit<VoiceOverlaySetRow, 'revision' | 'status'>;
-  overlays: Omit<VoiceOverlayRow, 'revision' | 'status'>[];
-}
+// Re-exported so the seed unit and its tests keep importing the shape from
+// beside the builder; it is DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { VoiceOverlaySeed };
 
 /** The overlays file, validated. Seeds and tests only. */
 export function readVoiceOverlaysFile(): VoiceOverlaysFile {

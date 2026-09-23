@@ -18,7 +18,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { buildVoiceOverlaySeed, readVoiceOverlaysFile } from '@/lib/app/content/voice-overlay-seed';
+import {
+  buildVoiceOverlaySeed,
+  readVoiceOverlaysFile,
+} from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';

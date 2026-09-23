@@ -29,7 +29,7 @@
  * the file.
  *
  * @see lib/app/content/journey-view.ts — the projection and the stored JSON schemas
- * @see lib/app/content/journey-seed.ts — what the seed writes
+ * @see lib/app/content/seed-input/journey-seed.ts — what the seed writes
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -42,7 +42,7 @@ import {
   toJourneyStructure,
   type JourneyStructure,
 } from '@/lib/app/content/journey-view';
-import type { JourneySeed } from '@/lib/app/content/journey-seed';
+import type { JourneySeed } from '@/lib/app/content/journey-view';
 
 const NOT_SEEDED = ['No journey in the database', '016-journey-structure.ts'] as const;
 

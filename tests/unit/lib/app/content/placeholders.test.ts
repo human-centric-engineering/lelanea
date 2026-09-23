@@ -33,7 +33,7 @@ import {
   buildFoundationalSeed,
   listDeclaredPlaceholders,
   listOccurringPlaceholders,
-} from '@/lib/app/content/foundational-seed';
+} from '@/lib/app/content/seed-input/foundational-seed';
 
 /**
  * Her documents as the seed builds them from the file (t-86). These cases check

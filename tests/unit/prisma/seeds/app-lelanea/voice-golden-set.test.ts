@@ -272,7 +272,7 @@ import { logger } from '@/lib/logging';
 import unit, {
   CONTROL_KNOWLEDGE_ACCESS_MODE,
 } from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { VOICE_CONTROL_AGENT_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { VOICE_GOLDEN_SET_ID } from '@/lib/app/content/golden-set-store';
 

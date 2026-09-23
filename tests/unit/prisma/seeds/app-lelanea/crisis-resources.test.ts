@@ -18,8 +18,9 @@ vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 
 /** Flip to seed from a file Lelañea has signed off. */
 const fileStatus = vi.hoisted(() => ({ value: null as 'draft' | 'signed_off' | null }));
-vi.mock('@/lib/app/content/crisis-resources', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/app/content/crisis-resources')>();
+vi.mock('@/lib/app/content/seed-input/crisis-resources', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/app/content/seed-input/crisis-resources')>();
   return {
     ...actual,
     getCrisisResources: () => {
@@ -37,7 +38,7 @@ vi.mock('@/lib/app/content/crisis-resources', async (importOriginal) => {
 });
 
 import unit from '@/prisma/seeds/app-lelanea/010-crisis-resources';
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
+import { getCrisisResources } from '@/lib/app/content/seed-input/crisis-resources';
 
 interface RegionRow {
   region: string;

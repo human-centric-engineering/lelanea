@@ -30,15 +30,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readJourneyStructureFile } from '@/lib/app/content/journey-seed';
-import { readDiscoveryQuestionsFile } from '@/lib/app/content/question-seed';
+import { readJourneyStructureFile } from '@/lib/app/content/seed-input/journey-seed';
+import { readDiscoveryQuestionsFile } from '@/lib/app/content/seed-input/question-seed';
 import {
   foundationalDocumentsFileSchema,
   journeyStructureFileSchema,
   discoveryQuestionsFileSchema,
   type ModuleTier,
 } from '@/lib/app/content/schemas';
-import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
+import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
 
 /**
  * Her documents as the seed builds them from the file (t-86). These cases check

@@ -54,7 +54,7 @@ import {
   goldenSetDatasetId,
   isVoiceArm,
 } from '@/lib/app/voice/golden-set';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { serviceAccountWhere } from '@/lib/auth/account';
 
 async function dbReachable(): Promise<boolean> {

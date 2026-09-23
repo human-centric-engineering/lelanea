@@ -21,7 +21,7 @@
  * on the first.
  *
  * @see lib/app/content/voice-overlay-view.ts — the projection
- * @see lib/app/content/voice-overlay-seed.ts — what the seed writes
+ * @see lib/app/content/seed-input/voice-overlay-seed.ts — what the seed writes
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -35,7 +35,7 @@ import {
   VOICE_OVERLAY_SET_ID,
   type VoiceOverlays,
 } from '@/lib/app/content/voice-overlay-view';
-import type { VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import type { VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-view';
 
 /**
  * The one set there is, re-exported so this module stays its import path.

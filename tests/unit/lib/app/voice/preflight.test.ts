@@ -23,7 +23,7 @@ const { resolveVoiceArms, estimateEvaluationRunCost, datasetFindUnique } = vi.ho
 }));
 
 vi.mock('@/lib/app/content/golden-set-store', async () => {
-  const { buildGoldenSetSeed } = await import('@/lib/app/content/golden-set-seed');
+  const { buildGoldenSetSeed } = await import('@/lib/app/content/seed-input/golden-set-seed');
   const seed = buildGoldenSetSeed();
   return {
     VOICE_GOLDEN_SET_ID: seed.id,

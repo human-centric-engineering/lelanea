@@ -94,7 +94,7 @@
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import {
   VOICE_AGENT_SLUG,
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,

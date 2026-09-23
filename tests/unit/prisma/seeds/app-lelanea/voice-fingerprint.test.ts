@@ -201,8 +201,13 @@ let sectionsOverride: {
  */
 let coreOverride: unknown = null;
 
-vi.mock('@/lib/app/content', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/app/content')>();
+// The seed reads the core from `seed-input/voice-fingerprint`, not from the
+// barrel — t-89 moved it there so the drafted file stops reaching the bundles.
+// Mocking the barrel here silently stopped overriding anything the moment it
+// did, which the type-check caught; keep this pointed at the real module.
+vi.mock('@/lib/app/content/seed-input/voice-fingerprint', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/app/content/seed-input/voice-fingerprint')>();
   return {
     ...actual,
     getVoiceFingerprint: () => coreOverride ?? actual.getVoiceFingerprint(),
@@ -232,7 +237,7 @@ import {
   composeFingerprintProfileSections,
   readFingerprintVersion,
 } from '@/lib/app/voice/fingerprint';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import { CORPUS_AGENT_SLUG_PREFIX, isCorpusAgent } from '@/lib/app/voice/corpus-access';
 import {
   resolveAgentDocumentAccess,

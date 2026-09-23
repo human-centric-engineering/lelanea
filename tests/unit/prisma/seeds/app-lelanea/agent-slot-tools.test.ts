@@ -84,7 +84,8 @@ const { logger } = await import('@/lib/logging');
 const unit = (await import('@/prisma/seeds/app-lelanea/013-agent-slot-tools')).default;
 const { SLOT_CAPABILITY_SLUGS } = await import('@/lib/app/agent/pins');
 const { VOICE_AGENT_SLUG } = await import('@/lib/app/voice/fingerprint');
-const { getSlotTaxonomy, slotExposureConfig } = await import('@/lib/app/content/slot-taxonomy');
+const { getSlotTaxonomy, slotExposureConfig } =
+  await import('@/lib/app/content/seed-input/slot-taxonomy');
 
 async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
@@ -255,7 +256,7 @@ describe('the unit itself', () => {
     expect(unit.hashInputs).toEqual([
       '../../../lib/app/agent/pins.ts',
       '../../../seed-data/drafted/lelanea_slot_taxonomy.json',
-      '../../../lib/app/content/slot-taxonomy.ts',
+      '../../../lib/app/content/seed-input/slot-taxonomy.ts',
     ]);
   });
 

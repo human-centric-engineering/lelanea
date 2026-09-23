@@ -23,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
+import { getCrisisResources } from '@/lib/app/content/seed-input/crisis-resources';
 
 const MIGRATION = 'prisma/migrations/20260929100200_app_crisis_resources_data/migration.sql';
 

@@ -68,13 +68,13 @@
  * re-run a unit that short-circuits on a seeded database — it would read one
  * row and do nothing, while implying the edit had landed.
  *
- * @see lib/app/content/slot-taxonomy.ts — the bundled file
+ * @see lib/app/content/seed-input/slot-taxonomy.ts — the bundled file
  * @see lib/app/slots/taxonomy-store.ts — the provider the sync calls
  * @see .context/app/slots.md
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { getSlotTaxonomy } from '@/lib/app/content/slot-taxonomy';
+import { getSlotTaxonomy } from '@/lib/app/content/seed-input/slot-taxonomy';
 import { SLOT_DEFINITION_FIELDS } from '@/lib/app/slots/taxonomy-store';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { syncGlobalSlotDefinitions } from '@/lib/framework/data-slots';

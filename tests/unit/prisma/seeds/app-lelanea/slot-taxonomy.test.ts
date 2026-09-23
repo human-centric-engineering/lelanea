@@ -50,8 +50,9 @@ vi.mock('@/lib/framework/data-slots', async (importOriginal) => ({
 
 /** Lets one case seed from a short, controlled file instead of the real one. */
 const override = vi.hoisted(() => ({ slots: null as unknown[] | null }));
-vi.mock('@/lib/app/content/slot-taxonomy', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/app/content/slot-taxonomy')>();
+vi.mock('@/lib/app/content/seed-input/slot-taxonomy', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/app/content/seed-input/slot-taxonomy')>();
   return {
     ...actual,
     getSlotTaxonomy: () => {
@@ -63,7 +64,7 @@ vi.mock('@/lib/app/content/slot-taxonomy', async (importOriginal) => {
 });
 
 import unit from '@/prisma/seeds/app-lelanea/011-slot-taxonomy';
-import { getSlotTaxonomy } from '@/lib/app/content/slot-taxonomy';
+import { getSlotTaxonomy } from '@/lib/app/content/seed-input/slot-taxonomy';
 import { SLOT_DEFINITION_FIELDS } from '@/lib/app/slots/taxonomy-store';
 
 interface DefinitionRow {

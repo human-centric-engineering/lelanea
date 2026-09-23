@@ -22,7 +22,7 @@
  * verbatim check in section 2 is content-independent and should be kept.
  *
  * @see lib/app/content/resources.ts
- * @see lib/app/content/resources-seed.ts
+ * @see lib/app/content/seed-input/resources-seed.ts
  * @see lib/app/content/resource-view.ts
  */
 
@@ -41,9 +41,9 @@ import {
 } from '@/lib/app/content/resources';
 import { toJourneyStructure } from '@/lib/app/content/journey-view';
 import { toResourcesLibrary } from '@/lib/app/content/resource-view';
-import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
-import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
-import { getValuesModule } from '@/lib/app/content/values';
+import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
+import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
+import { getValuesModule } from '@/lib/app/content/seed-input/values';
 import { seededJourneyRows, seededResourceRows } from '@/tests/helpers/app/content-stores';
 
 /** A file's library, as the seed would write it and the store would serve it. */

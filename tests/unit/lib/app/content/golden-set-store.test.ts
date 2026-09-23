@@ -30,7 +30,7 @@ import {
   GOLDEN_SET_SNAPSHOT_FIELDS,
   VOICE_GOLDEN_SET_ID,
 } from '@/lib/app/content/golden-set-store';
-import { buildGoldenSetSeed } from '@/lib/app/content/golden-set-seed';
+import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
 
 const seed = buildGoldenSetSeed();
 

@@ -45,7 +45,7 @@ import {
   toWords,
   type ResourceRow,
 } from '@/lib/app/content/resource-view';
-import type { ResourcesSeed } from '@/lib/app/content/resources-seed';
+import type { ResourcesSeed } from '@/lib/app/content/resource-view';
 
 const NOT_SEEDED = ['No resource library in the database', '018-resources.ts'] as const;
 

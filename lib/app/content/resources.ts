@@ -7,7 +7,7 @@
  * through `@/lib/app/content/resource-store`. What is left here imports no
  * database and no file: the schemas every write and read is checked against,
  * the served shapes, and the prototype's selection rule as a pure function. The
- * seed reads the drafted file through `@/lib/app/content/resources-seed`.
+ * seed reads the drafted file through `@/lib/app/content/seed-input/resources-seed`.
  *
  * ## The shape
  *

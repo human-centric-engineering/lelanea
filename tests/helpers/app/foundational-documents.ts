@@ -28,7 +28,7 @@
  */
 
 import { vi } from 'vitest';
-import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
+import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
 import {
   ContentNotSeededError,
   toDocumentDetail,

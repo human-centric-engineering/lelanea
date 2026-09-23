@@ -30,7 +30,7 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
+import { getCrisisResources } from '@/lib/app/content/seed-input/crisis-resources';
 import { invalidateCrisisContentCache } from '@/lib/app/safety/resources-store';
 import {
   crisisFrame,

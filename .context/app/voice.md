@@ -346,7 +346,7 @@ because production migrates before every start and seeds only when asked
 ([`database-changes.md`](./database-changes.md)). Without it an environment would
 have the tables and no register at all. The migration's JSON literal is
 `buildVoiceOverlaySeed()`, and
-`tests/unit/lib/app/content/voice-overlay-seed.test.ts` parses it back out and
+`tests/unit/lib/app/content/seed-input/voice-overlay-seed.test.ts` parses it back out and
 fails if the two have drifted — a data migration is a second copy of the seed,
 and a second copy is the thing that drifts.
 
@@ -612,7 +612,7 @@ Anything true of every turn belongs in the core file.
 | `seed-data/drafted/lelanea_voice_overlays.json`            | The authored overlays, the labelling copy, the fallback — seed only |
 | `lib/app/content/voice-overlay-store.ts`                   | The one service for the two tables: the read, and the seed write    |
 | `lib/app/content/voice-overlay-view.ts`                    | The served shape, the stored-JSON schemas, the projection           |
-| `lib/app/content/voice-overlay-seed.ts`                    | The one module that still imports the file                          |
+| `lib/app/content/seed-input/voice-overlay-seed.ts`         | The one module that still imports the file                          |
 | `lib/app/voice/overlays.ts`                                | Selection — an exact-match lookup, and nothing more                 |
 | `lib/app/voice/exemplars.ts`                               | Retrieval, the passage pipeline, the label guard                    |
 | `lib/app/voice/context-contributor.ts`                     | Composition, and the origin labels                                  |
@@ -621,15 +621,15 @@ Anything true of every turn belongs in the core file.
 | `prisma/migrations/20260929100000_app_voice_overlays`      | The four tables and the `app_voice_content_status` enum             |
 | `prisma/migrations/20260929100100_app_voice_overlays_data` | The rows, in every environment                                      |
 
-| Test                                                    | Proves                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| `tests/unit/lib/app/voice/context-contributor.test.ts`  | The whole chain, on the emitted block — load-bearing         |
-| `tests/unit/lib/app/voice/exemplars.test.ts`            | The allowlist, the fences, the label, the degrade            |
-| `tests/unit/lib/app/voice/corpus-access.test.ts`        | Both rules against all 64 tag sets — load-bearing            |
-| `tests/unit/lib/app/voice/overlays.test.ts`             | Selection is a lookup, and stays deterministic               |
-| `tests/unit/lib/app/context-contributors.test.ts`       | Exactly one contributor, and which type                      |
-| `tests/unit/lib/app/content/voice-overlays.test.ts`     | The authored file parses, and still awaits sign-off          |
-| `tests/unit/lib/app/content/voice-overlay-seed.test.ts` | The data migration writes exactly what the seed builder does |
+| Test                                                               | Proves                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `tests/unit/lib/app/voice/context-contributor.test.ts`             | The whole chain, on the emitted block — load-bearing         |
+| `tests/unit/lib/app/voice/exemplars.test.ts`                       | The allowlist, the fences, the label, the degrade            |
+| `tests/unit/lib/app/voice/corpus-access.test.ts`                   | Both rules against all 64 tag sets — load-bearing            |
+| `tests/unit/lib/app/voice/overlays.test.ts`                        | Selection is a lookup, and stays deterministic               |
+| `tests/unit/lib/app/context-contributors.test.ts`                  | Exactly one contributor, and which type                      |
+| `tests/unit/lib/app/content/voice-overlays.test.ts`                | The authored file parses, and still awaits sign-off          |
+| `tests/unit/lib/app/content/seed-input/voice-overlay-seed.test.ts` | The data migration writes exactly what the seed builder does |
 
 `tests/helpers/app/content-stores.ts` carries the in-memory stand-in
 (`fakeVoiceOverlayStore()`), built from the real file through the real seed
@@ -972,7 +972,7 @@ admin's id.
 | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `seed-data/drafted/lelanea_voice_golden_set.json`  | The authored prompts, the control's prompt, the dataset copy — seed only |
 | `lib/app/content/golden-set-store.ts`              | The pointer row: which version is current, and its provenance            |
-| `lib/app/content/golden-set-seed.ts`               | The pointer the seed writes, built from the authored set                 |
+| `lib/app/content/seed-input/golden-set-seed.ts`    | The pointer the seed writes, built from the authored set                 |
 | `lib/app/voice/golden-set-admin.ts`                | What the voice page shows, composed from three stores                    |
 | `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases                   |
 | `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                                           |
@@ -1016,13 +1016,13 @@ the run that produced these answers is gone — and the surface says so.
 
 ## Tests
 
-| File                                                           | Proves                                                        |
-| -------------------------------------------------------------- | ------------------------------------------------------------- |
-| `tests/unit/lib/app/voice/comparison.test.ts`                  | The arms are two arms, on the composed prompts — load-bearing |
-| `tests/unit/lib/app/voice/comparison-admin.test.ts`            | The join is on the question, and a gap renders as a gap       |
-| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts` | The seed's writes, its idempotence, and the freeze            |
-| `tests/unit/lib/app/content/voice-golden-set.test.ts`          | The set covers every moment, and still awaits sign-off        |
-| `tests/unit/lib/app/content/golden-set-seed.test.ts`           | The data migration writes exactly what the builder does       |
+| File                                                            | Proves                                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/comparison.test.ts`                   | The arms are two arms, on the composed prompts — load-bearing |
+| `tests/unit/lib/app/voice/comparison-admin.test.ts`             | The join is on the question, and a gap renders as a gap       |
+| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts`  | The seed's writes, its idempotence, and the freeze            |
+| `tests/unit/lib/app/content/voice-golden-set.test.ts`           | The set covers every moment, and still awaits sign-off        |
+| `tests/unit/lib/app/content/seed-input/golden-set-seed.test.ts` | The data migration writes exactly what the builder does       |
 
 Reverting the implementation fails them, and this was run rather than reasoned
 about: delete the identical-prompt check and one case goes red; delete the two

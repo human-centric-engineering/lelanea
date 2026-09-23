@@ -21,8 +21,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { buildGoldenSetSeed } from '@/lib/app/content/golden-set-seed';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 
 const MIGRATION = 'prisma/migrations/20260929100400_app_voice_golden_set_data/migration.sql';

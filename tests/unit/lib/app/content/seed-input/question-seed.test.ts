@@ -7,7 +7,7 @@
  * `toQuestionSet()`. And the data migration embeds exactly what the builder
  * writes.
  *
- * @see lib/app/content/question-seed.ts
+ * @see lib/app/content/seed-input/question-seed.ts
  * @see lib/app/content/question-view.ts
  */
 
@@ -15,7 +15,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { buildQuestionSeed, readDiscoveryQuestionsFile } from '@/lib/app/content/question-seed';
+import {
+  buildQuestionSeed,
+  readDiscoveryQuestionsFile,
+} from '@/lib/app/content/seed-input/question-seed';
 import { toQuestionSet } from '@/lib/app/content/question-view';
 import { seededQuestionRows } from '@/tests/helpers/app/content-stores';
 

@@ -17,13 +17,12 @@ import {
   discoveryQuestionsFileSchema,
   type DiscoveryQuestionsFile,
 } from '@/lib/app/content/schemas';
-import type { DiscoveryQuestionRow, QuestionSetRow } from '@/lib/app/content/question-view';
+import type { QuestionSeed } from '@/lib/app/content/question-view';
 
-/** What the seed writes: the set and its questions, at revision 1. */
-export interface QuestionSeed {
-  set: Omit<QuestionSetRow, 'revision'>;
-  questions: Omit<DiscoveryQuestionRow, 'revision'>[];
-}
+// Re-exported so the seed unit and its tests keep importing the shape from
+// beside the builder; it is DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { QuestionSeed };
 
 /** The questions file, validated. Seeds and tests only. */
 export function readDiscoveryQuestionsFile(): DiscoveryQuestionsFile {

@@ -16,22 +16,14 @@
 
 import rawResources from '@/seed-data/drafted/lelanea_resources.json';
 import { buildResourcesFileSchema, type ResourcesFile } from '@/lib/app/content/resources';
-import {
-  resourceToRow,
-  wordsToRow,
-  type ResourceCollectionRow,
-  type ResourceRow,
-  type ResourceWordsRow,
-} from '@/lib/app/content/resource-view';
-import { readFoundationalDocumentsFile } from '@/lib/app/content/foundational-seed';
+import { resourceToRow, wordsToRow, type ResourcesSeed } from '@/lib/app/content/resource-view';
+import { readFoundationalDocumentsFile } from '@/lib/app/content/seed-input/foundational-seed';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
 
-/** What the seed writes: the collection, every film and reading, every key's words. */
-export interface ResourcesSeed {
-  collection: ResourceCollectionRow;
-  resources: Omit<ResourceRow, 'revision'>[];
-  words: Omit<ResourceWordsRow, 'revision'>[];
-}
+// Re-exported so the seed unit and its tests keep importing the shape from
+// beside the builder; it is DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { ResourcesSeed };
 
 /** The resources file, validated against the roster and the documents file. Seeds and tests only. */
 export function readResourcesFile(): ResourcesFile {

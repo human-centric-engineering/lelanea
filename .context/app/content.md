@@ -123,7 +123,7 @@ the migration it skips, and a re-seed never undoes an admin edit. A change to th
 file does not reach an existing database; one that must, ships as a new `app_`
 migration, and an edit goes through the admin (t-91).
 
-`lib/app/content/foundational-seed.ts` is the one module that still imports
+`lib/app/content/seed-input/foundational-seed.ts` is the one module that still imports
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key
 map, and provides the file-level placeholder checks. Nothing a request reaches
 should import it (t-89 makes that a rule).
@@ -269,7 +269,7 @@ or arrives through `any`. **Copy before you transform.**
 
 Release-2 content — the Values module, the reference framework, the sixteen value
 explorations — is validated but not served, and lives in
-`lib/app/content/values.ts`. It is a separate module so that
+`lib/app/content/seed-input/values.ts`. It is a separate module so that
 `value_explorations.json` (271KB) stays out of bundles that only want a document.
 
 ## Endpoints

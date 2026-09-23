@@ -63,7 +63,7 @@ import type {
 } from '@/lib/orchestration/llm/types';
 import { getCapabilityDefinitions } from '@/lib/orchestration/capabilities/registry';
 import type { ChatEvent } from '@/types/orchestration';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import {

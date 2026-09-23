@@ -70,9 +70,9 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
-import { buildGoldenSetSeed } from '@/lib/app/content/golden-set-seed';
+import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
 import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import {
   VOICE_CONTROL_AGENT_SLUG,
   goldenSetDatasetId,

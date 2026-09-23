@@ -30,17 +30,14 @@ import {
   storedPhaseTiersSchema,
   storedProducesSchema,
   type JourneyModuleRow,
-  type JourneyRow,
-  type JourneyTierRow,
+  type JourneySeed,
 } from '@/lib/app/content/journey-view';
 import { JOURNEY_MODULES, JOURNEY_TIERS } from '@/lib/app/journey/roster';
 
-/** What the seed writes: the journey row, and each tier's and module's text at revision 1. */
-export interface JourneySeed {
-  journey: JourneyRow;
-  tiers: Omit<JourneyTierRow, 'revision'>[];
-  modules: Omit<JourneyModuleRow, 'revision'>[];
-}
+// Re-exported so the seed unit and its tests keep importing the shape from
+// beside the builder; it is DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { JourneySeed };
 
 /** The structure file, validated. Seeds and tests only. */
 export function readJourneyStructureFile(): JourneyStructureFile {

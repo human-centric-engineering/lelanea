@@ -43,7 +43,7 @@ vi.mock('@/lib/db/client', async () => {
   // seeded here exactly as `010-crisis-resources.ts` seeds them, and these
   // cases go on asserting against her authored words — now by way of a row.
   // Built inside the factory because `vi.mock` is hoisted above any const.
-  const { getCrisisResources } = await import('@/lib/app/content/crisis-resources');
+  const { getCrisisResources } = await import('@/lib/app/content/seed-input/crisis-resources');
   const file = getCrisisResources();
   const crisisTables = {
     appCrisisCopy: {

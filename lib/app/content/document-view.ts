@@ -164,3 +164,41 @@ export function toDocumentSummary(detail: FoundationalDocumentDetail): Foundatio
   const { blocks: _blocks, ...summary } = detail;
   return summary;
 }
+
+// ---------------------------------------------------------------------------
+// Seed shapes (t-89)
+// ---------------------------------------------------------------------------
+// What the seed unit writes, declared here rather than beside the builder in
+// `./seed-input/`: the store reads these rows back and needs the shape, and no
+// runtime module may import anything from that folder — not even a type, which
+// is what `tests/unit/lib/app/content/runtime-import-graph.test.ts` enforces.
+
+/** The collection row the seed writes. */
+export interface CollectionSeed {
+  id: string;
+  title: string;
+  version: string;
+  locale: string;
+}
+
+/** One document row the seed writes, blocks already keyed and validated. */
+export interface DocumentSeed {
+  id: string;
+  position: number;
+  title: string;
+  subtitle: string | null;
+  category: 'onboarding' | 'about' | 'legal';
+  surface: string;
+  requiresAcknowledgement: boolean;
+  placeholders: string[];
+  renderStyle: string | null;
+  renderNote: string | null;
+  blocks: StoredDocumentBlock[];
+  version: string;
+  locale: string;
+}
+
+export interface FoundationalSeed {
+  collection: CollectionSeed;
+  documents: DocumentSeed[];
+}
