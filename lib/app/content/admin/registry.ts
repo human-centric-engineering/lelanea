@@ -389,5 +389,9 @@ export function entityHandlers(collection: string, segment: string): EntityHandl
   return entity;
 }
 
-/** An id or key in a path: anything a stored one could be, and nothing else. */
-export const CONTENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+/**
+ * An id or key in a path: anything a stored one could be, and nothing else.
+ * Letters are Unicode letters, because the journey row's id is the app's name,
+ * `Lelañea`; an ASCII-only pattern turned every journey save into a 404.
+ */
+export const CONTENT_ID_PATTERN = /^[\p{L}\p{N}_-]{1,80}$/u;
