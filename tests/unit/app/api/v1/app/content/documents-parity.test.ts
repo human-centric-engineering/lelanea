@@ -33,7 +33,7 @@ import { GET as getDocument } from '@/app/api/v1/app/content/documents/[id]/rout
 import { GET as getIndex } from '@/app/api/v1/app/content/documents/route';
 import { computeETag } from '@/lib/api/etag';
 import { getFoundationalCollectionMeta } from '@/lib/app/content/document-store';
-import { SECTION_KEYS } from '@/lib/app/content/foundational-seed';
+import { SECTION_KEYS } from '@/lib/app/content/seed-input/foundational-seed';
 import { requireDocument } from '@/lib/app/content/sections';
 import {
   fakeDocumentStore,

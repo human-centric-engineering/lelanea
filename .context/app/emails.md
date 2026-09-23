@@ -118,6 +118,6 @@ verified in Resend. Nothing in code can check that.
 
 ## See also
 
-- [`content.md`](./content.md) — the loader, the never-paraphrase rule
+- [`content.md`](./content.md) — seed input vs. what is served, the never-paraphrase rule
 - [`brand-theme.md`](./brand-theme.md) — the tokens the palette copies
 - `.claude/skills/email-designer/SKILL.md` — the platform's conventions

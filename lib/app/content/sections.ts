@@ -19,7 +19,7 @@
  * ## Sections are found by KEY (t-86)
  *
  * Each stored block carries a `section` key or `null`. The owner named the keys,
- * and the seed puts them on the blocks (`lib/app/content/foundational-seed.ts`).
+ * and the seed puts them on the blocks (`lib/app/content/seed-input/foundational-seed.ts`).
  * Before t-86 these pages cut her text by paragraph index, by heading text and,
  * on `/data`, by a regex over the prose. That was composition logic living in a
  * page, which a native client would have had to re-implement and which broke

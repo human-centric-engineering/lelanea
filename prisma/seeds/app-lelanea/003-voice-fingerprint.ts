@@ -94,7 +94,7 @@
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import {
   VOICE_AGENT_SLUG,
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,
@@ -138,9 +138,16 @@ const unit: SeedUnit = {
   // her designated material drops out of the agent's document set with no error
   // anywhere. Both omissions were caught by /code-review, the second of them
   // introduced by the fix for the first.
+  //
+  // A third was: t-89 moved the loader out of `lib/app/content/index.ts` into
+  // `seed-input/`, and this list kept naming the barrel — which this unit no
+  // longer imports at all. A stale path is worse than a missing one, because
+  // it still resolves, so the `names paths that resolve` case below stays
+  // green while the hash stops covering the loader. **Move a module named
+  // here and move its entry in the same commit.**
   hashInputs: [
     '../../../seed-data/drafted/lelanea_voice_fingerprint.json',
-    '../../../lib/app/content/index.ts',
+    '../../../lib/app/content/seed-input/voice-fingerprint.ts',
     '../../../lib/app/content/schemas.ts',
     '../../../lib/app/voice/designation.ts',
     '../../../lib/app/voice/fingerprint.ts',

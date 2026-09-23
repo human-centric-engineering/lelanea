@@ -29,7 +29,7 @@
  * the first admin edit failed to appear.
  *
  * @see prisma/schema/app.prisma — `AppFoundationalDocument` and its revisions
- * @see lib/app/content/foundational-seed.ts — what the seed writes
+ * @see lib/app/content/seed-input/foundational-seed.ts — what the seed writes
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -43,7 +43,7 @@ import {
   type FoundationalDocumentDetail,
   type FoundationalDocumentIndex,
 } from '@/lib/app/content/document-view';
-import type { FoundationalSeed } from '@/lib/app/content/foundational-seed';
+import type { FoundationalSeed } from '@/lib/app/content/document-view';
 
 export {
   ContentNotSeededError,

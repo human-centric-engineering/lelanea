@@ -6,7 +6,8 @@ and how it changes, how she fills it, and — since t-73 — how the person it i
 about reads it back, corrects it, or argues with it ("Her notes", below).
 
 **Locations:** `seed-data/drafted/lelanea_slot_taxonomy.json` (the v1 draft) ·
-`lib/app/content/slot-taxonomy.ts` (schema + loader) ·
+`lib/app/slots/taxonomy-file.ts` (the file schema, runtime-safe) ·
+`lib/app/content/seed-input/slot-taxonomy.ts` (the loader — seeds only) ·
 `lib/app/slots/taxonomy-store.ts` (the store, and the provider) ·
 `prisma/seeds/app-lelanea/011-slot-taxonomy.ts` (the one-time load) ·
 `prisma/schema/app.prisma` (`AppSlotDefinition`, `AppSlotDefinitionRevision`)
@@ -497,7 +498,7 @@ and type names.
 **Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/slots/vocabulary.ts`
 (what she can see) · `lib/app/capabilities.ts` (the mount) ·
 `lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`) ·
-`lib/app/content/slot-taxonomy.ts` (`slotExposureConfig`) ·
+`lib/app/content/seed-input/slot-taxonomy.ts` (`slotExposureConfig`) ·
 `lib/app/voice/fingerprint.ts` (when to write) ·
 `lib/app/voice/context-contributor.ts` (where the vocabulary is spliced in) ·
 `prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
@@ -524,11 +525,11 @@ instruction, not the allowlist.
 The read list is **derived** by `readableSlotGroups()`, never typed out, so
 marking a slot hidden is the whole act. That is only lossless while no group
 mixes `open` and `hidden` slots, which
-`tests/unit/lib/app/content/slot-taxonomy.test.ts` asserts for any taxonomy —
+`tests/unit/lib/app/content/seed-input/slot-taxonomy.test.ts` asserts for any taxonomy —
 not just today's.
 
 **It is derived at seed time, not at import (t-88).** The config is
-`slotExposureConfig()` in `lib/app/content/slot-taxonomy.ts`, called by seed 013
+`slotExposureConfig()` in `lib/app/content/seed-input/slot-taxonomy.ts`, called by seed 013
 when it writes the grant. It used to be `SLOT_EXPOSURE_CONFIG`, a module-scope
 constant in `lib/app/agent/pins.ts` — which made importing a list of capability
 slugs parse the 60KB taxonomy file, on every path that touched `pins.ts`.

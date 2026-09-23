@@ -44,7 +44,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { GOLDEN_SET_REQUIRED_KINDS, voiceGoldenSetFileSchema } from '@/lib/app/content/schemas';
 import { projectGoldenSetCases } from '@/lib/app/voice/golden-set';
 

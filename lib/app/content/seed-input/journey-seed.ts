@@ -5,8 +5,9 @@
  * Every surface reads `app_journey`, `app_journey_tier` and `app_journey_module`
  * through `@/lib/app/content/journey-store`, joined with the code roster. This
  * module is where the file is still imported, and its callers are the seed
- * (`prisma/seeds/app-lelanea/016-journey-structure.ts`) and tests. Nothing a
- * request reaches may import it; t-89 makes that a lint rule.
+ * (`prisma/seeds/app-lelanea/016-journey-structure.ts`) and tests. Nothing a request
+ * reaches may import it, or this folder at all — t-89 made that a lint rule
+ * plus a graph test (`tests/unit/lib/app/content/runtime-import-graph.test.ts`).
  *
  * **What is seeded is what was served.** Each phase is projected field by field
  * exactly as `getJourneyStructure()` projected it from the file before t-87, so
@@ -30,17 +31,14 @@ import {
   storedPhaseTiersSchema,
   storedProducesSchema,
   type JourneyModuleRow,
-  type JourneyRow,
-  type JourneyTierRow,
+  type JourneySeed,
 } from '@/lib/app/content/journey-view';
 import { JOURNEY_MODULES, JOURNEY_TIERS } from '@/lib/app/journey/roster';
 
-/** What the seed writes: the journey row, and each tier's and module's text at revision 1. */
-export interface JourneySeed {
-  journey: JourneyRow;
-  tiers: Omit<JourneyTierRow, 'revision'>[];
-  modules: Omit<JourneyModuleRow, 'revision'>[];
-}
+// Re-exported so the seed unit and its tests keep importing the shape from
+// beside the builder; it is DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { JourneySeed };
 
 /** The structure file, validated. Seeds and tests only. */
 export function readJourneyStructureFile(): JourneyStructureFile {

@@ -103,7 +103,7 @@ deploy:
   number and the ordered services (`{ name, contact, hours }`).
 
 `seed-data/drafted/lelanea_crisis_resources.json` (loaded by
-`lib/app/content/crisis-resources.ts`) stays in the repo as **seed material**,
+`lib/app/content/seed-input/crisis-resources.ts`) stays in the repo as **seed material**,
 and is what the seed and the data migration copy from. It is no longer a floor
 under the read path — see below.
 

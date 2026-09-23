@@ -7,20 +7,15 @@
  * `projectGoldenSetCases`, and the control's instructions onto the control
  * agent — both by the same seed unit, `004-voice-golden-set.ts`.
  *
- * This module is where the file is still imported; its callers are that seed
- * and tests.
+ * Its callers are that seed and tests. The shape it builds is declared in
+ * `lib/app/content/voice-core-view.ts`, because `golden-set-store.ts` reads the
+ * row back and no runtime module may import anything from this folder (t-89).
  */
 
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
+import type { GoldenSetSeed } from '@/lib/app/content/voice-core-view';
 
-/** What the seed writes: the pointer, at revision 1. */
-export interface GoldenSetSeed {
-  id: string;
-  title: string;
-  version: string;
-  locale: string;
-  provenance: { status: string; awaitingSignOffFrom: string; note: string };
-}
+export type { GoldenSetSeed };
 
 /** The pointer row the seed writes, built from the authored set. */
 export function buildGoldenSetSeed(goldenSet = getVoiceGoldenSet()): GoldenSetSeed {

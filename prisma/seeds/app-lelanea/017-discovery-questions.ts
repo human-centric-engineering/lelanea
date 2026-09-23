@@ -17,7 +17,7 @@
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { buildQuestionSeed } from '@/lib/app/content/question-seed';
+import { buildQuestionSeed } from '@/lib/app/content/seed-input/question-seed';
 import { seedDiscoveryQuestions } from '@/lib/app/content/question-store';
 
 const unit: SeedUnit = {

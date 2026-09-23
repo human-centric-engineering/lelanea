@@ -43,6 +43,9 @@
  * @see prisma/seeds/app-lelanea/004-voice-golden-set.ts
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 interface FakeDataset {
@@ -272,7 +275,7 @@ import { logger } from '@/lib/logging';
 import unit, {
   CONTROL_KNOWLEDGE_ACCESS_MODE,
 } from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { VOICE_CONTROL_AGENT_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { VOICE_GOLDEN_SET_ID } from '@/lib/app/content/golden-set-store';
 
@@ -559,5 +562,75 @@ describe('a set that projected to nothing', () => {
 
     vi.doUnmock('@/lib/app/voice/golden-set');
     vi.resetModules();
+  });
+});
+
+describe('what a change to the tree has to re-run', () => {
+  const SEED_PATH = join(
+    process.cwd(),
+    'prisma',
+    'seeds',
+    'app-lelanea',
+    '004-voice-golden-set.ts'
+  );
+
+  it('names every input between the authored words and the rows', () => {
+    // This unit had no pin at all, which is how its loader entry went stale
+    // unnoticed: t-89 moved `getVoiceGoldenSet()` into `seed-input/` and the
+    // list kept naming `lib/app/content/index.ts`, a module this unit does not
+    // import. Nothing was asserting the list, so nothing had to be updated.
+    //
+    // Without a correct `hashInputs` the unit's content hash covers only its own
+    // source: change what the loader projects, run `db:seed` against a seeded
+    // database, and the unit is skipped — leaving stale dataset cases and a
+    // stale control prompt with nothing anywhere to say so.
+    //
+    // `seed-input/golden-set-seed.ts` is absent on purpose, which this pin is
+    // the natural place to "correct". `buildGoldenSetSeed()` does choose what
+    // lands in the pointer row — but its only consumer is write-once, as
+    // `a re-run > leaves an edited golden set pointer alone on a second run`
+    // pins, so hashing it would re-run the unit and no-op on the way past.
+    // The premise is that case, not this comment: if it ever goes, add it.
+    expect(unit.hashInputs).toEqual([
+      '../../../seed-data/drafted/lelanea_voice_golden_set.json',
+      '../../../lib/app/content/seed-input/voice-golden-set.ts',
+      '../../../lib/app/content/schemas.ts',
+      '../../../lib/app/voice/golden-set.ts',
+    ]);
+  });
+
+  it('names paths that resolve', () => {
+    // RESOLVED, not just compared to a string. `prisma/runner.ts` throws on a
+    // hashInput it cannot read — at seed time, which is the wrong moment to find
+    // out a relative path is one `../` short.
+    expect(unit.hashInputs?.length).toBeGreaterThan(0);
+    for (const relative of unit.hashInputs ?? []) {
+      expect(existsSync(resolve(dirname(SEED_PATH), relative)), relative).toBe(true);
+    }
+  });
+
+  it('names a seed-input module this unit actually imports', () => {
+    // The case above cannot catch a path that is stale but still resolves, which
+    // is exactly what was here: `lib/app/content/index.ts` resolves, so a
+    // resolution check would have passed while the hash covered the wrong module.
+    //
+    // Scoped to `seed-input/` on purpose: a seed reaches its loader and builder
+    // directly, because that folder is the only way to the file. The rest of the
+    // list is reached transitively and would need a graph walk, which is what
+    // `tests/unit/lib/app/content/runtime-import-graph.test.ts` is for.
+    const source = readFileSync(SEED_PATH, 'utf-8');
+    const seedInputs = (unit.hashInputs ?? []).filter((relative) =>
+      relative.includes('/lib/app/content/seed-input/')
+    );
+
+    expect(seedInputs.length).toBeGreaterThan(0);
+    for (const relative of seedInputs) {
+      const specifier = `@${relative.replace(/^(\.\.\/)+/, '/').replace(/\.tsx?$/, '')}`;
+      expect(source, `${relative} is hashed but never imported`).toContain(`from '${specifier}'`);
+    }
+  });
+
+  it('is filed where the runner will discover it', () => {
+    expect(unit.name).toBe('app-lelanea/004-voice-golden-set');
   });
 });

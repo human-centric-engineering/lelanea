@@ -32,15 +32,23 @@ identity, cadence, how she grounds a claim, and what she declines.
 
 ## Where it lives, and why it is a file and not code
 
-`seed-data/drafted/lelanea_voice_fingerprint.json`, with a Zod
-schema in `lib/app/content/schemas.ts` and `getVoiceFingerprint()` in
-`lib/app/content/index.ts`.
+`seed-data/drafted/lelanea_voice_fingerprint.json`, with a Zod schema in
+`lib/app/content/schemas.ts` and `getVoiceFingerprint()` in
+`lib/app/content/seed-input/voice-fingerprint.ts`.
 
 It is drafted in her register, so it is held the way her words are: as data
-behind one loader, never as a TypeScript constant. `lib/app/eslint.config.mjs`
-fails any import of `content/*.json` or of the drafted seed data from outside
-`lib/app/content/**`. A loose constant in a new directory would be a second
-authoring path for her voice, which is the thing that rule exists to prevent.
+behind one accessor, never as a TypeScript constant. A loose constant in a new
+directory would be a second authoring path for her voice, which is what the
+import boundary exists to prevent — `lib/app/eslint.config.mjs` fails any import
+of `content/*.json` or of the drafted seed data from outside
+`lib/app/content/seed-input/**`, `prisma/seeds/**` and `tests/**`.
+
+**And the accessor is seed-only (t-89).** It is the one collection with no table
+of its own: seed 003 projects it onto the agent profile and reconciles it on
+every run, because there is no editable surface to protect. So nothing a request
+reaches may import that module — the accessor lived on `lib/app/content/index.ts`
+until t-89, which put the file into every bundle that imported the barrel, one of
+them a client component. See [`content.md`](./content.md).
 
 It sits in the drafted folder, not beside her six files in `content/`, because
 it is not hers until she signs it off (§22, owner ruling 2026-09-21; see
@@ -57,7 +65,7 @@ a substitute.
 The file says so about itself. `fingerprint.provenance` is a required block
 carrying `status: 'drafted_from_corpus'` and `awaitingSignOffFrom`, it is
 **served** rather than withheld like `reviewNotes`, and a case in
-`tests/unit/lib/app/content/voice-fingerprint.test.ts` pins the name in it. That
+`tests/unit/lib/app/content/seed-input/voice-fingerprint.test.ts` pins the name in it. That
 case is **meant to be edited** — once, on the day she signs the core off.
 
 Her sign-off is a feature-level check before ship (`fp3b`), not a criterion any
@@ -346,7 +354,7 @@ because production migrates before every start and seeds only when asked
 ([`database-changes.md`](./database-changes.md)). Without it an environment would
 have the tables and no register at all. The migration's JSON literal is
 `buildVoiceOverlaySeed()`, and
-`tests/unit/lib/app/content/voice-overlay-seed.test.ts` parses it back out and
+`tests/unit/lib/app/content/seed-input/voice-overlay-seed.test.ts` parses it back out and
 fails if the two have drifted — a data migration is a second copy of the seed,
 and a second copy is the thing that drifts.
 
@@ -612,7 +620,7 @@ Anything true of every turn belongs in the core file.
 | `seed-data/drafted/lelanea_voice_overlays.json`            | The authored overlays, the labelling copy, the fallback — seed only |
 | `lib/app/content/voice-overlay-store.ts`                   | The one service for the two tables: the read, and the seed write    |
 | `lib/app/content/voice-overlay-view.ts`                    | The served shape, the stored-JSON schemas, the projection           |
-| `lib/app/content/voice-overlay-seed.ts`                    | The one module that still imports the file                          |
+| `lib/app/content/seed-input/voice-overlay-seed.ts`         | The one module that still imports the file                          |
 | `lib/app/voice/overlays.ts`                                | Selection — an exact-match lookup, and nothing more                 |
 | `lib/app/voice/exemplars.ts`                               | Retrieval, the passage pipeline, the label guard                    |
 | `lib/app/voice/context-contributor.ts`                     | Composition, and the origin labels                                  |
@@ -621,15 +629,15 @@ Anything true of every turn belongs in the core file.
 | `prisma/migrations/20260929100000_app_voice_overlays`      | The four tables and the `app_voice_content_status` enum             |
 | `prisma/migrations/20260929100100_app_voice_overlays_data` | The rows, in every environment                                      |
 
-| Test                                                    | Proves                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| `tests/unit/lib/app/voice/context-contributor.test.ts`  | The whole chain, on the emitted block — load-bearing         |
-| `tests/unit/lib/app/voice/exemplars.test.ts`            | The allowlist, the fences, the label, the degrade            |
-| `tests/unit/lib/app/voice/corpus-access.test.ts`        | Both rules against all 64 tag sets — load-bearing            |
-| `tests/unit/lib/app/voice/overlays.test.ts`             | Selection is a lookup, and stays deterministic               |
-| `tests/unit/lib/app/context-contributors.test.ts`       | Exactly one contributor, and which type                      |
-| `tests/unit/lib/app/content/voice-overlays.test.ts`     | The authored file parses, and still awaits sign-off          |
-| `tests/unit/lib/app/content/voice-overlay-seed.test.ts` | The data migration writes exactly what the seed builder does |
+| Test                                                               | Proves                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `tests/unit/lib/app/voice/context-contributor.test.ts`             | The whole chain, on the emitted block — load-bearing         |
+| `tests/unit/lib/app/voice/exemplars.test.ts`                       | The allowlist, the fences, the label, the degrade            |
+| `tests/unit/lib/app/voice/corpus-access.test.ts`                   | Both rules against all 64 tag sets — load-bearing            |
+| `tests/unit/lib/app/voice/overlays.test.ts`                        | Selection is a lookup, and stays deterministic               |
+| `tests/unit/lib/app/context-contributors.test.ts`                  | Exactly one contributor, and which type                      |
+| `tests/unit/lib/app/content/voice-overlays.test.ts`                | The authored file parses, and still awaits sign-off          |
+| `tests/unit/lib/app/content/seed-input/voice-overlay-seed.test.ts` | The data migration writes exactly what the seed builder does |
 
 `tests/helpers/app/content-stores.ts` carries the in-memory stand-in
 (`fakeVoiceOverlayStore()`), built from the real file through the real seed
@@ -764,7 +772,7 @@ not hold is _which version is current_: the dataset is keyed **by** the version
 (`goldenSetDatasetId(version)`), so reading it required already knowing the
 answer. The authored file was the only thing that knew, and that is what kept
 `/admin/app/voice`, the preflight and the comparison reading a bundled file at
-request time.
+request time until t-88 gave the pointer a row.
 
 | Table                           | Holds                                                                     |
 | ------------------------------- | ------------------------------------------------------------------------- |
@@ -794,7 +802,7 @@ running the previous version's questions.
 softening of the rule above. `getGoldenSetAdminView()` still throws; the page
 catches it, logs at error and passes `null` to `GoldenSetDialog`, which says
 the set has not been seeded and names `npm run db:seed`. Letting it throw
-rendered `admin/error.tsx` over the whole surface — so a first deploy lost the
+rendered `app/admin/error.tsx` over the whole surface — so a first deploy lost the
 comparison board, the preflight and the run button, and the operator was shown
 no page in the one state whose remedy that page would have named.
 
@@ -972,7 +980,7 @@ admin's id.
 | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `seed-data/drafted/lelanea_voice_golden_set.json`  | The authored prompts, the control's prompt, the dataset copy — seed only |
 | `lib/app/content/golden-set-store.ts`              | The pointer row: which version is current, and its provenance            |
-| `lib/app/content/golden-set-seed.ts`               | The pointer the seed writes, built from the authored set                 |
+| `lib/app/content/seed-input/golden-set-seed.ts`    | The pointer the seed writes, built from the authored set                 |
 | `lib/app/voice/golden-set-admin.ts`                | What the voice page shows, composed from three stores                    |
 | `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases                   |
 | `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                                           |
@@ -1016,13 +1024,13 @@ the run that produced these answers is gone — and the surface says so.
 
 ## Tests
 
-| File                                                           | Proves                                                        |
-| -------------------------------------------------------------- | ------------------------------------------------------------- |
-| `tests/unit/lib/app/voice/comparison.test.ts`                  | The arms are two arms, on the composed prompts — load-bearing |
-| `tests/unit/lib/app/voice/comparison-admin.test.ts`            | The join is on the question, and a gap renders as a gap       |
-| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts` | The seed's writes, its idempotence, and the freeze            |
-| `tests/unit/lib/app/content/voice-golden-set.test.ts`          | The set covers every moment, and still awaits sign-off        |
-| `tests/unit/lib/app/content/golden-set-seed.test.ts`           | The data migration writes exactly what the builder does       |
+| File                                                             | Proves                                                        |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `tests/unit/lib/app/voice/comparison.test.ts`                    | The arms are two arms, on the composed prompts — load-bearing |
+| `tests/unit/lib/app/voice/comparison-admin.test.ts`              | The join is on the question, and a gap renders as a gap       |
+| `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts`   | The seed's writes, its idempotence, and the freeze            |
+| `tests/unit/lib/app/content/seed-input/voice-golden-set.test.ts` | The set covers every moment, and still awaits sign-off        |
+| `tests/unit/lib/app/content/seed-input/golden-set-seed.test.ts`  | The data migration writes exactly what the builder does       |
 
 Reverting the implementation fails them, and this was run rather than reasoned
 about: delete the identical-prompt check and one case goes red; delete the two
@@ -1449,9 +1457,10 @@ populated. `prisma/runner.ts` upserts the
 `return` would bank the aborted run as a success and every later `db:seed` would
 skip the unit, leaving a fresh install with no profile and no agent until
 somebody deleted the history row by hand. The strict schema makes an empty source
-hard to reach today, but the loader's own docblock says the file moves behind a
-database the first time copy has to change without a deploy, and on that day the
-guard is the only thing between a bad read and a profile with no voice in it.
+hard to reach today, but the core is the one collection still without a table,
+and the day it gains one — the first time this copy has to change without a
+deploy — the guard is the only thing between a bad read and a profile with no
+voice in it.
 
 `prisma/seeds/app-lelanea/002-knowledge-designation.ts` creates a missing tag and
 **never rewrites an existing one**. The slug is code — the rule addresses these
@@ -1482,7 +1491,7 @@ on purpose and the development command reads that divergence as drift.
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `tests/unit/lib/app/voice/fingerprint.test.ts`                      | The core reaches the prompt with nothing retrieved — load-bearing          |
 | `tests/unit/prisma/seeds/app-lelanea/voice-fingerprint.test.ts`     | The seed's writes, its idempotence, and `restricted` via the resolver      |
-| `tests/unit/lib/app/content/voice-fingerprint.test.ts`              | The authored file parses, and still says it is awaiting sign-off           |
+| `tests/unit/lib/app/content/seed-input/voice-fingerprint.test.ts`   | The authored file parses, and still says it is awaiting sign-off           |
 | `tests/unit/lib/app/voice/corpus-access.test.ts`                    | The rule end to end through Sunrise's resolver — the load-bearing one      |
 | `tests/unit/lib/app/voice/designation.test.ts`                      | The vocabulary, the slugs, the safe reading of a conflict                  |
 | `tests/unit/lib/app/voice/designation-admin.test.ts`                | The partitioned write, the cache eviction, the seeding remedy, both axes   |

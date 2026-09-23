@@ -1,22 +1,26 @@
 /**
- * The crisis resources: where a person in danger is pointed, by region
- * (f-safety t-58; product description §12).
+ * The crisis resources as drafted: where a person in danger is pointed, by
+ * region (f-safety t-58; product description §12).
  *
- * Authored content, served the way the rest of `content/` is: validated once,
- * frozen, reached only through here. Its own module rather than a member of
- * `./index` because the turn path loads it on every turn that trips the crisis
- * check, and `./index` bundles six other files that path never reads.
+ * **Seed input, and nothing else.** The turn path reads `app_crisis_resource`
+ * through `lib/app/safety/resources-store.ts` and throws when the tables cannot
+ * answer — t-88 removed the fallback to this file on the owner's ruling
+ * (2026-09-22), because a floor that quietly answers from a stale bundle is
+ * worse than a crisis path that fails loudly. So an edit here reaches a
+ * database that has never been seeded, and nothing else: changing what a person
+ * in danger is shown is an admin edit or a migration
+ * (`.context/app/database-changes.md`).
+ *
+ * Its callers are `prisma/seeds/app-lelanea/010-crisis-resources.ts` and tests.
+ * Nothing under `app/`, `components/` or the rest of `lib/` may reach this
+ * module — `tests/unit/lib/app/content/runtime-import-graph.test.ts` fails on
+ * the path, naming it.
  *
  * **It ships as a draft.** `provenance.status` is `draft` and the accessor
  * returns it, so every surface that shows the resource can show that it is
  * awaiting sign-off. The schema admits nothing but `draft` and `signed_off`.
  *
- * **Since f-safety t-63 this file is the floor, not the source.** The seed
- * copies it into the tables an admin edits, once; after that the tables are
- * served, and this file only when they cannot answer
- * (`lib/app/safety/resources-store.ts`). An edit here reaches a database that
- * has not been seeded, and every fallback — not a seeded one.
- *
+ * @see lib/app/safety/resources-store.ts — what the turn path actually reads
  * @see lib/app/safety/resource.ts — which entry a request gets
  * @see .context/app/safety.md
  */

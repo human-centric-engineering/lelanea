@@ -933,19 +933,26 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     seam: 'lib/app/eslint.config.mjs',
     risk: 'a stray flat-config block would apply lint rules to every fork',
     // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads two
-    // blocks — the `content/*.json` import boundary that keeps authored content
-    // reachable only through `lib/app/content`, and the block that lets a
-    // leaf test under `tests/**/lib/app/**` import the framework it exercises
-    // — so the row is PINNED to those two rather than deleted: deleting it
-    // would stop noticing the NEXT block, and a lint block added here applies
-    // to the whole repo.
+    // blocks — the boundary that keeps her material readable only as seed input,
+    // and the block that lets a leaf test under `tests/**/lib/app/**` import the
+    // framework it exercises — so the row is PINNED to those two rather than
+    // deleted: deleting it would stop noticing the NEXT block, and a lint block
+    // added here applies to the whole repo.
     //
     // Pin the count, the names, the file globs and the rule, not the message
-    // text, so rewording a lint message is not a test change. The second
-    // block's `files` is pinned because that is the whole risk: widened to
-    // `app/**` it would lift the framework ban from the shell. Both blocks'
-    // behaviour is asserted in `tests/unit/lib/app/content/eslint-boundary.test.ts`;
-    // this row only asserts that the seam still holds exactly what we think.
+    // text, so rewording a lint message is not a test change. BOTH blocks' globs
+    // are pinned because that is the whole risk on each: the second widened to
+    // `app/**` would lift the framework ban from the shell, and the first's
+    // `ignores` is the list of places allowed to read her material — it said
+    // `lib/app/content/**` until t-89, which let the barrel import two drafted
+    // files and hand them to 347 import paths. It then briefly said
+    // `prisma/seeds/**` too, which would have let a seed write rows its Zod
+    // schema never saw; the entry is gone and a seed reads through its builder.
+    // Both blocks' behaviour is
+    // asserted in `tests/unit/lib/app/content/eslint-boundary.test.ts`, and the
+    // reachability the lint rule cannot see in
+    // `tests/unit/lib/app/content/runtime-import-graph.test.ts`; this row only
+    // asserts that the seam still holds exactly what we think.
     //
     // The root eslint.config.mjs spreads this array last; that spread itself is
     // exercised by every `npm run lint` run.
@@ -953,7 +960,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appEslintConfig).toHaveLength(2);
       expect(appEslintConfig[0]).toMatchObject({
         name: 'lelanea/content-json-boundary',
-        ignores: ['lib/app/content/**'],
+        ignores: ['lib/app/content/seed-input/**', 'tests/**'],
         rules: { 'no-restricted-syntax': expect.arrayContaining(['error']) },
       });
       expect(appEslintConfig[1]).toMatchObject({

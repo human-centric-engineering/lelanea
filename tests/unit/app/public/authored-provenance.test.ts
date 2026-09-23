@@ -78,7 +78,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildFoundationalSeed } from '@/lib/app/content/foundational-seed';
+import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
 
 /** Consecutive words per sentinel. See the header for why six. */
 const WINDOW = 6;

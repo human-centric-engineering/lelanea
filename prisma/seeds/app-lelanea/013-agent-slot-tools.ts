@@ -54,14 +54,14 @@
  * reconnects (`sunrise.mcp-reseed`). Nothing here can do either.
  *
  * @see lib/app/agent/pins.ts — `SLOT_CAPABILITY_SLUGS`
- * @see lib/app/content/slot-taxonomy.ts — `slotExposureConfig`
+ * @see lib/app/content/seed-input/slot-taxonomy.ts — `slotExposureConfig`
  * @see lib/app/slots/capture.ts — the retry guard on the write
  * @see .context/app/slots.md — "Capture"
  */
 
 import type { SeedUnit } from '@/prisma/runner';
 import { SLOT_CAPABILITY_SLUGS } from '@/lib/app/agent/pins';
-import { slotExposureConfig } from '@/lib/app/content/slot-taxonomy';
+import { slotExposureConfig } from '@/lib/app/content/seed-input/slot-taxonomy';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 
 const unit: SeedUnit = {
@@ -69,7 +69,7 @@ const unit: SeedUnit = {
   hashInputs: [
     '../../../lib/app/agent/pins.ts',
     '../../../seed-data/drafted/lelanea_slot_taxonomy.json',
-    '../../../lib/app/content/slot-taxonomy.ts',
+    '../../../lib/app/content/seed-input/slot-taxonomy.ts',
   ],
   async run({ prisma, logger }) {
     logger.info('🧠 Giving her the profile...');

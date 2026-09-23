@@ -209,7 +209,7 @@ import {
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
-import { readVoiceOverlaysFile } from '@/lib/app/content/voice-overlay-seed';
+import { readVoiceOverlaysFile } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { fakeVoiceOverlayStore } from '@/tests/helpers/app/content-stores';
 import { searchKnowledge } from '@/lib/orchestration/knowledge/search';
 

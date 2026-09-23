@@ -11,7 +11,7 @@
  * {@link ContentNotSeededError}, both for the reasons `document-store.ts` gives.
  *
  * @see lib/app/content/question-view.ts — the projection
- * @see lib/app/content/question-seed.ts — what the seed writes
+ * @see lib/app/content/seed-input/question-seed.ts — what the seed writes
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -24,7 +24,7 @@ import {
   toQuestionSet,
   type DiscoveryQuestionSet,
 } from '@/lib/app/content/question-view';
-import type { QuestionSeed } from '@/lib/app/content/question-seed';
+import type { QuestionSeed } from '@/lib/app/content/question-view';
 
 /** The one set there is: the onboarding module's discovery questions. */
 export const DISCOVERY_QUESTION_SET_ID = 'onboarding_discovery_questions';

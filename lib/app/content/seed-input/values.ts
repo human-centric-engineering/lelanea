@@ -8,12 +8,19 @@
  * `app/api/v1/app/content` deliberately exposes only the public documents and
  * the journey structure.
  *
- * Kept in its own module rather than in `lib/app/content/index.ts` for a
- * mundane reason with real consequences: `content/value_explorations.json` is
- * 271KB, and a static import inside the shared entry point would pull it into
- * every bundle that only wanted a mission statement.
+ * **Seed input, like everything else in this folder.** It is not served yet, so
+ * it has no store and no table; when release 2 lands it gains both, on the
+ * pattern t-86 and t-87 set, and this module becomes the thing that seeds them.
+ * Until then its callers are tests.
  *
- * @see lib/app/content/index.ts — the content that is served
+ * It was already kept out of `lib/app/content/index.ts` for a mundane reason
+ * with real consequences — `content/value_explorations.json` is 271KB, and a
+ * static import in the shared entry point would have pulled it into every
+ * bundle that only wanted a mission statement. t-89 generalised that: the
+ * barrel imports no file at all, and nothing at runtime reaches this folder.
+ *
+ * @see lib/app/content/index.ts — the shapes, and what is served
+ * @see .context/app/content.md
  */
 
 import rawValuesModule from '@/content/values_module.json';

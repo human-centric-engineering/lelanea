@@ -59,7 +59,7 @@
  * outcomes are opposites — which is the whole reason the log distinguishes
  * them. See {@link loadGlobalSlotDefinitions}.
  *
- * @see lib/app/content/slot-taxonomy.ts — the bundled file the seed loads
+ * @see lib/app/content/seed-input/slot-taxonomy.ts — the bundled file the seed loads
  * @see .context/app/slots.md
  */
 

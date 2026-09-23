@@ -1,7 +1,8 @@
 # Authored Content — `content/`, `lib/app/content`, `/api/v1/app/content`
 
-Lelañea Fulton's words, and the data drafted from them, validated against Zod
-schemas and served through the versioned API. **Never paraphrased in the build.**
+Lelañea Fulton's words, and the data drafted from them: **seeded into the
+database, served from it through the versioned API, and never paraphrased in the
+build.**
 
 **Two folders, and the difference is whose words they are.**
 
@@ -17,35 +18,84 @@ schemas and served through the versioned API. **Never paraphrased in the build.*
   That block is **served**, not withheld, so a drafted file can never pass as
   her words. See [`voice.md`](./voice.md).
 
-Both folders are seed and reference input (§22, owner ruling 2026-09-21). They
-are not what the running app is meant to read. **Her foundational documents have
-moved (t-86):** every surface reads them from `app_foundational_document`, and
-the file only seeds that table. See [Her foundational documents: the
-database](#her-foundational-documents-the-database). **So have the journey's
-text, the discovery questions and the resource library (t-87)**: see [The
-journey, the questions and the resources: the
-database](#the-journey-the-questions-and-the-resources-the-database). **The
-context-selected voice overlays and the golden set's pointer followed in t-88**:
-see [The voice overlays and the golden set: the
-database](#the-voice-overlays-and-the-golden-set-the-database). What the loader
-below still reads from a file is the voice fingerprint's always-on core and the
-golden set's prompts, and neither is read on a request.
+## Both folders are seed input, and nothing at runtime reads them
+
+**§22, owner ruling 2026-09-21.** `content/` and `seed-data/drafted/` are seed
+and reference data for building the app and informing agents. They are never
+content the running app refers to. The seeds project them into the database
+once; the admin surfaces are how they change after that; every surface reads the
+database. That is what lets one of her words change without a deploy, and it is
+the pipeline a native client will share.
+
+**Since t-89 that is enforced rather than intended**, by two checks that cover
+different halves:
+
+| Check                                                     | Catches                                                                                | Misses                                                                              |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `contentJsonImportBoundary` (`lib/app/eslint.config.mjs`) | a file importing the JSON directly, in any of the four import spellings                | that a _permitted_ module is reachable from a page — ESLint sees one file at a time |
+| `tests/unit/lib/app/content/runtime-import-graph.test.ts` | any import path from `app/`, `components/` or `lib/` into a file or into `seed-input/` | an import written but not yet committed to a file it can resolve                    |
+
+**The lint rule alone was not enough, and the record says how.** It permitted
+the whole of `lib/app/content/**`, so `index.ts` importing the voice fingerprint
+and the golden set passed — while 347 import paths reached that barrel,
+including `components/app/content/authored-document.tsx`, a client component
+asking for `findPlaceholders`. Both drafted files shipped to the browser.
+`lib/app/slots/definitions-admin.ts` had the same shape: it imported the
+taxonomy _schema_ from the module that parses the taxonomy _file_, putting 60KB
+of JSON behind six admin routes.
+
+**So every module that reads a file lives in `lib/app/content/seed-input/`**,
+and no runtime module may import that folder at all — not even a type. A type
+import is erased and costs no bytes, but "does not name `seed-input/`" is a rule
+you can grep and apply by eye, and "may name it, but only after the word `type`,
+and only if no value specifier rides along" is not.
+
+Two places may read a file: `lib/app/content/seed-input/**` and `tests/**` (a
+test ships in no build). **A seed unit is not one of them** — it reads through
+its `seed-input/` builder, which is where the Zod schema runs, so a seed that
+imported the JSON itself would write rows nothing had validated. t-89 briefly
+put `prisma/seeds/**` on the list; the entry is gone.
+
+| Collection                                | Read at runtime through                                                      | Seeded from `seed-input/` | Since |
+| ----------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | ----- |
+| Foundational documents                    | `document-store.ts`                                                          | `foundational-seed.ts`    | t-86  |
+| Journey structure                         | `journey-store.ts`                                                           | `journey-seed.ts`         | t-87  |
+| Discovery questions                       | `question-store.ts`                                                          | `question-seed.ts`        | t-87  |
+| Resource library                          | `resource-store.ts`                                                          | `resources-seed.ts`       | t-87  |
+| Voice overlays                            | `voice-overlay-store.ts`                                                     | `voice-overlay-seed.ts`   | t-88  |
+| Golden set pointer                        | `golden-set-store.ts`                                                        | `golden-set-seed.ts`      | t-88  |
+| Voice fingerprint core                    | _no table yet_ — seed 003 reconciles it onto the agent profile every run     | `voice-fingerprint.ts`    | —     |
+| Crisis resources                          | `lib/app/safety/resources-store.ts` (`app_crisis_copy`, `app_crisis_region`) | `crisis-resources.ts`     | t-88  |
+| Slot taxonomy                             | `lib/app/slots/taxonomy-store.ts` (`app_slot_definition`)                    | `slot-taxonomy.ts`        | t-70  |
+| Values, reference framework, explorations | _not served_                                                                 | `values.ts`               | —     |
 
 **Locations:** `content/*.json` (her words) ·
 `seed-data/drafted/*.json` (drafted seed data) ·
-`lib/app/content/` (schemas + loader) · `app/api/v1/app/content/` (the HTTP
-surface) · `components/app/content/` (the renderer)
+`lib/app/content/seed-input/` (the file readers — seeds only) ·
+`lib/app/content/` (schemas, `*-view.ts` shapes, `*-store.ts` reads) ·
+`app/api/v1/app/content/` (the HTTP surface) · `components/app/content/` (the
+renderer)
 
 ## Anti-patterns
 
-**Do not import `content/*.json`.** An ESLint rule
-(`contentJsonImportBoundary` in `lib/app/eslint.config.mjs`) fails any static
-import, dynamic `import()`, or re-export of `@/content/*.json` or
-`@/seed-data/drafted/*.json` from outside `lib/app/content/`. A re-export is the worst of the three — it hands the
-unvalidated JSON to every consumer of the re-exporting module, not just one
-file. A direct
-import gets unvalidated data, skips the referential and placeholder checks, and
-forks the pipeline this seam exists to prevent. Go through the loader.
+**Do not import `content/*.json` or `seed-data/drafted/*.json`.** The ESLint
+rule fails any static import, dynamic `import()`, or re-export of either from
+outside the two permitted folders. A re-export is the worst of the three — it
+hands the unvalidated JSON to every consumer of the re-exporting module, not
+just one file. Read the collection from its `*-store.ts`.
+
+**Do not import anything from `lib/app/content/seed-input/`, type or value.**
+The graph test fails on the path, naming it. If you want a shape a seed builds
+— `FoundationalSeed`, `JourneySeed`, `GoldenSetSeed` and the rest — it is
+declared in the `*-view.ts` module beside the store that reads those rows back,
+and the seed module re-exports it from there.
+
+**Do not put a schema in a module that imports the file it validates.** That is
+the `definitions-admin.ts` bug verbatim: the admin routes wanted
+`slotTaxonomyFileSchema`, got `lelanea_slot_taxonomy.json` with it, and nothing
+said so. A schema is runtime code; the parse of a bundled file is seed input.
+`lib/app/slots/taxonomy-file.ts` and
+`lib/app/content/seed-input/slot-taxonomy.ts` are the split.
 
 **Do not retype the copy into a component.** If a page needs the mission
 statement, it calls `requireDocument('the_mission')` from
@@ -123,7 +173,7 @@ the migration it skips, and a re-seed never undoes an admin edit. A change to th
 file does not reach an existing database; one that must, ships as a new `app_`
 migration, and an edit goes through the admin (t-91).
 
-`lib/app/content/foundational-seed.ts` is the one module that still imports
+`lib/app/content/seed-input/foundational-seed.ts` is the one module that still imports
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key
 map, and provides the file-level placeholder checks. Nothing a request reaches
 should import it (t-89 makes that a rule).
@@ -235,25 +285,30 @@ degrades to a placeholder and leaves it uncached. A turn on an unseeded database
 loses her register, not the turn. See
 [`voice.md`](./voice.md#an-unseeded-overlay-database-does-not-fail-a-turn).
 
-## The loader
+## The barrel, and the seed-input folder
 
-`lib/app/content/index.ts`. What is left in it after t-88 is the voice
-fingerprint's always-on core — projected onto the agent profile by seed 003,
-which reconciles it on every run because it has no editable surface yet — and
-the golden set, whose prompts reach the database through seed 004 as an
-`AiDataset`. Neither is read on a request. It parses each file on first use and
-memoises for the life of the process; static JSON imports rather than `fs`,
-because `lib/app/**` may not touch Node built-ins.
+`lib/app/content/index.ts` **reads no file at all** as of t-89. It carries the
+shapes every surface renders — re-exported from the `*-view.ts` modules beside
+it — and `findPlaceholders`, and nothing else. The reads live on the
+`*-store.ts` modules, which are deliberately **not** re-exported from it: the
+barrel is imported by code that must stay free of the database, such as the
+voice fingerprint, and a test walks that import closure.
 
-| Function                      | Returns                                                           |
-| ----------------------------- | ----------------------------------------------------------------- |
-| `getVoiceFingerprint()`       | the always-on voice core, and its provenance                      |
-| `getVoiceGoldenSet()`         | the authored prompts, the control's prompt, the dataset copy      |
-| `findPlaceholders(text)`      | merge fields in a string, deduplicated                            |
-| `listDeclaredPlaceholders()`  | placeholders the file declares (`foundational-seed.ts`)           |
-| `listOccurringPlaceholders()` | placeholders present in the file's prose (`foundational-seed.ts`) |
+The two accessors that still parse a file moved out with the rest:
 
-**Everything the loader returns is memoised and deeply frozen.** Each accessor
+| Function                      | Module (`lib/app/content/seed-input/`) | Returns                                                      |
+| ----------------------------- | -------------------------------------- | ------------------------------------------------------------ |
+| `getVoiceFingerprint()`       | `voice-fingerprint.ts`                 | the always-on voice core, and its provenance                 |
+| `getVoiceGoldenSet()`         | `voice-golden-set.ts`                  | the authored prompts, the control's prompt, the dataset copy |
+| `listDeclaredPlaceholders()`  | `foundational-seed.ts`                 | placeholders the file declares                               |
+| `listOccurringPlaceholders()` | `foundational-seed.ts`                 | placeholders present in the file's prose                     |
+
+Each parses its file on first use and memoises for the life of the process;
+static JSON imports rather than `fs`, because `lib/app/**` may not touch Node
+built-ins. Their callers are the seed units, the smoke scripts and tests.
+
+**Everything a store or a seed-input accessor returns is memoised and deeply
+frozen.** Each accessor
 projects once and hands out that same object on every later call — the served
 payloads are constant for the life of the process, so rebuilding seventeen
 modules per request bought nothing. That makes the result shared, which makes
@@ -268,9 +323,10 @@ is exactly the substitution case. The freeze catches whoever casts past the type
 or arrives through `any`. **Copy before you transform.**
 
 Release-2 content — the Values module, the reference framework, the sixteen value
-explorations — is validated but not served, and lives in
-`lib/app/content/values.ts`. It is a separate module so that
-`value_explorations.json` (271KB) stays out of bundles that only want a document.
+explorations — is validated but not served yet, and lives in
+`lib/app/content/seed-input/values.ts`. It is seed input like the rest, so
+nothing at runtime reaches it and `value_explorations.json` (271KB) is in no
+bundle at all.
 
 ## Endpoints
 
@@ -410,7 +466,7 @@ collection by its test); the welcome has no page and renders as a row that goes
 nowhere.
 
 `<AuthoredDocument document={…} firstName={…} />` — a server component. It takes
-a `FoundationalDocumentDetail` straight from the loader and renders the category
+a `FoundationalDocumentDetail` straight from the store and renders the category
 eyebrow, the title, the subtitle where there is one, and every block in authored
 order.
 
@@ -421,9 +477,9 @@ a React child, so there is no `dangerouslySetInnerHTML` and no HTML parser in th
 path. A test asserts that of the source, with comments stripped — the docblock
 names the API in order to rule it out.
 
-**Substitution happens in the renderer, never in the loader.** The loader parses
-once, memoises and deep-freezes precisely so a per-reader edit cannot leak into
-every other reader, and `{{first_name}}` is a per-reader edit. A test renders
+**Substitution happens in the renderer, never on the way out of a store.** The
+served shape is deep-frozen precisely so a per-reader edit cannot leak into every
+other reader, and `{{first_name}}` is a per-reader edit. A test renders
 with a name and then re-reads the document to prove the authored text is intact.
 
 **Headings.** The document title is the page's only `h1`; authored levels render

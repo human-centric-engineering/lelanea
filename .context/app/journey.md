@@ -52,7 +52,7 @@ what that column is created with, and they stay until an operator renames them. 
 
 Adding a module is an edit to the roster, a migration inserting its text row,
 and a re-publish of the map (seed `001-journey-map` re-runs when the roster
-changes). `tests/unit/lib/app/content/journey-seed.test.ts` pins the roster
+changes). `tests/unit/lib/app/content/seed-input/journey-seed.test.ts` pins the roster
 against the structure file, so the two cannot drift before the seed runs.
 
 ## The pieces

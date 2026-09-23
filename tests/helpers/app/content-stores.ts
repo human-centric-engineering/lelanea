@@ -26,20 +26,20 @@
 
 import { vi } from 'vitest';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
-import { buildJourneySeed } from '@/lib/app/content/journey-seed';
+import { buildJourneySeed } from '@/lib/app/content/seed-input/journey-seed';
 import {
   toJourneyStructure,
   type JourneyModuleRow,
   type JourneyRow,
   type JourneyTierRow,
 } from '@/lib/app/content/journey-view';
-import { buildQuestionSeed } from '@/lib/app/content/question-seed';
+import { buildQuestionSeed } from '@/lib/app/content/seed-input/question-seed';
 import {
   toQuestionSet,
   type DiscoveryQuestionRow,
   type QuestionSetRow,
 } from '@/lib/app/content/question-view';
-import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
+import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
 import {
   toFilm,
   toReading,
@@ -49,7 +49,7 @@ import {
   type ResourceWordsRow,
 } from '@/lib/app/content/resource-view';
 import { selectResources } from '@/lib/app/content/resources';
-import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import {
   toVoiceOverlays,
   type VoiceOverlayRow,

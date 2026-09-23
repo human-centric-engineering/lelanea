@@ -33,7 +33,7 @@ import {
   VOICE_OVERLAY_SET_SNAPSHOT_FIELDS,
   VOICE_OVERLAY_SNAPSHOT_FIELDS,
 } from '@/lib/app/content/voice-overlay-store';
-import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { seededVoiceOverlayRows } from '@/tests/helpers/app/content-stores';
 
 // ============================================================================

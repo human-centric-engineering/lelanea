@@ -33,13 +33,13 @@ import {
   QUESTION_SNAPSHOT_FIELDS,
 } from '@/lib/app/content/question-store';
 import { WORDS_SNAPSHOT_FIELDS, seedResources } from '@/lib/app/content/resource-store';
-import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
+import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
 import {
   VOICE_OVERLAY_SET_SNAPSHOT_FIELDS,
   VOICE_OVERLAY_SNAPSHOT_FIELDS,
 } from '@/lib/app/content/voice-overlay-store';
-import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 
 type Row = Record<string, unknown>;
 

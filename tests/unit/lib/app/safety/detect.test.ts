@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { detectCrisisTier, normaliseForCrisisScan } from '@/lib/app/safety/detect';
 
 const HARD: ReadonlyArray<[string, string]> = [

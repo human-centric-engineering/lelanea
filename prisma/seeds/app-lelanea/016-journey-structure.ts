@@ -30,12 +30,12 @@
  * **It throws before writing anything if the file and the roster disagree**
  * about which modules exist, their numbers or their tiers.
  *
- * @see lib/app/content/journey-seed.ts — the file, projected
+ * @see lib/app/content/seed-input/journey-seed.ts — the file, projected
  * @see lib/app/journey/roster.ts — the structure the text is joined with
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { buildJourneySeed } from '@/lib/app/content/journey-seed';
+import { buildJourneySeed } from '@/lib/app/content/seed-input/journey-seed';
 import { seedJourneyStructure } from '@/lib/app/content/journey-store';
 
 const unit: SeedUnit = {

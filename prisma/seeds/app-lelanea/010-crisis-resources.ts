@@ -26,7 +26,7 @@
  */
 
 import type { SeedUnit } from '@/prisma/runner';
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
+import { getCrisisResources } from '@/lib/app/content/seed-input/crisis-resources';
 import { CRISIS_COPY_SLUG } from '@/lib/app/safety/resources-store';
 
 const unit: SeedUnit = {

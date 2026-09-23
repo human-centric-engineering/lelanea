@@ -24,7 +24,7 @@
  * {@link ContentNotSeededError} and there is no fallback to the file.
  *
  * @see lib/app/voice/golden-set.ts — `goldenSetDatasetId`, and the case shape
- * @see lib/app/content/golden-set-seed.ts — what the seed writes
+ * @see lib/app/content/seed-input/golden-set-seed.ts — what the seed writes
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -36,7 +36,7 @@ import {
   type VoiceContentStatus,
   type VoiceProvenance,
 } from '@/lib/app/content/voice-overlay-view';
-import type { GoldenSetSeed } from '@/lib/app/content/golden-set-seed';
+import type { GoldenSetSeed } from '@/lib/app/content/voice-core-view';
 
 /** The one row there is. */
 export const VOICE_GOLDEN_SET_ID = 'lelanea_voice_golden_set';

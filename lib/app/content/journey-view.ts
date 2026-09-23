@@ -299,3 +299,18 @@ export function toJourneyStructure(
     modules,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Seed shapes (t-89)
+// ---------------------------------------------------------------------------
+// What the seed unit writes, declared here rather than beside the builder in
+// `./seed-input/`: the store reads these rows back and needs the shape, and no
+// runtime module may import anything from that folder — not even a type, which
+// is what `tests/unit/lib/app/content/runtime-import-graph.test.ts` enforces.
+
+/** What the seed writes: the journey row, and each tier's and module's text at revision 1. */
+export interface JourneySeed {
+  journey: JourneyRow;
+  tiers: Omit<JourneyTierRow, 'revision'>[];
+  modules: Omit<JourneyModuleRow, 'revision'>[];
+}

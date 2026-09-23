@@ -85,7 +85,7 @@ let nextId = 0;
 // prisma stand-in below: what these cases are about is the DATASET being
 // present or absent, and the pointer only supplies the version that names it.
 vi.mock('@/lib/app/content/golden-set-store', async () => {
-  const { buildGoldenSetSeed } = await import('@/lib/app/content/golden-set-seed');
+  const { buildGoldenSetSeed } = await import('@/lib/app/content/seed-input/golden-set-seed');
   const seed = buildGoldenSetSeed();
   return {
     VOICE_GOLDEN_SET_ID: seed.id,
@@ -164,14 +164,14 @@ import {
   VOICE_CONTROL_AGENT_SLUG,
   goldenSetDatasetId,
 } from '@/lib/app/voice/golden-set';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import {
   VOICE_AGENT_SLUG,
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,
   composeFingerprintProfileSections,
 } from '@/lib/app/voice/fingerprint';
 import { isCorpusAgent } from '@/lib/app/voice/corpus-access';
-import { getVoiceGoldenSet } from '@/lib/app/content';
+import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 
 /** The world the seeds are supposed to leave behind. */
 function seedWorld(): void {

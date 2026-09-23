@@ -6,8 +6,9 @@
  * `@/lib/app/content/document-store`. This module is the one place the file is
  * still imported, and its callers are the seed
  * (`prisma/seeds/app-lelanea/015-foundational-documents.ts`) and the tests that
- * check the file itself. Nothing a request reaches may import it; t-89 makes
- * that a lint rule.
+ * check the file itself. Nothing a request
+ * reaches may import it, or this folder at all — t-89 made that a lint rule
+ * plus a graph test (`tests/unit/lib/app/content/runtime-import-graph.test.ts`).
  *
  * ## Section keys live here, not in the file
  *
@@ -33,6 +34,16 @@ import {
   type StoredDocumentBlock,
 } from '@/lib/app/content/schemas';
 import { findPlaceholders } from '@/lib/app/content/placeholders';
+import type {
+  CollectionSeed,
+  DocumentSeed,
+  FoundationalSeed,
+} from '@/lib/app/content/document-view';
+
+// Re-exported so the seed unit and its tests keep importing the shapes from
+// beside the builder; they are DECLARED in the view (t-89), because the store
+// reads these rows back and no runtime module may import this folder.
+export type { CollectionSeed, DocumentSeed, FoundationalSeed };
 
 /** One key's run of blocks, and the opening words that prove the run is right. */
 interface SectionRange {
@@ -155,36 +166,6 @@ export const SECTION_KEYS: Readonly<Record<string, readonly SectionRange[]>> = {
   ],
 };
 
-/** The collection row the seed writes. */
-export interface CollectionSeed {
-  id: string;
-  title: string;
-  version: string;
-  locale: string;
-}
-
-/** One document row the seed writes, blocks already keyed and validated. */
-export interface DocumentSeed {
-  id: string;
-  position: number;
-  title: string;
-  subtitle: string | null;
-  category: 'onboarding' | 'about' | 'legal';
-  surface: string;
-  requiresAcknowledgement: boolean;
-  placeholders: string[];
-  renderStyle: string | null;
-  renderNote: string | null;
-  blocks: StoredDocumentBlock[];
-  version: string;
-  locale: string;
-}
-
-export interface FoundationalSeed {
-  collection: CollectionSeed;
-  documents: DocumentSeed[];
-}
-
 let fileCache: FoundationalDocumentsFile | null = null;
 
 /** The authored file, validated. Seeds and tests only. */
@@ -228,7 +209,7 @@ export function keyBlocks(
         throw new Error(
           `Section "${range.key}" of "${documentId}": its ${end} block should start ` +
             `"${pin}" but reads "${blockText(block).slice(0, 60)}". The file changed; ` +
-            `update SECTION_KEYS in lib/app/content/foundational-seed.ts.`
+            `update SECTION_KEYS in lib/app/content/seed-input/foundational-seed.ts.`
         );
       }
     }

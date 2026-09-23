@@ -52,7 +52,7 @@
  * @see lib/orchestration/knowledge/resolveAgentDocumentAccess.ts — the short-circuit
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -201,8 +201,13 @@ let sectionsOverride: {
  */
 let coreOverride: unknown = null;
 
-vi.mock('@/lib/app/content', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/app/content')>();
+// The seed reads the core from `seed-input/voice-fingerprint`, not from the
+// barrel — t-89 moved it there so the drafted file stops reaching the bundles.
+// Mocking the barrel here silently stopped overriding anything the moment it
+// did, which the type-check caught; keep this pointed at the real module.
+vi.mock('@/lib/app/content/seed-input/voice-fingerprint', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/app/content/seed-input/voice-fingerprint')>();
   return {
     ...actual,
     getVoiceFingerprint: () => coreOverride ?? actual.getVoiceFingerprint(),
@@ -232,7 +237,7 @@ import {
   composeFingerprintProfileSections,
   readFingerprintVersion,
 } from '@/lib/app/voice/fingerprint';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import { CORPUS_AGENT_SLUG_PREFIX, isCorpusAgent } from '@/lib/app/voice/corpus-access';
 import {
   resolveAgentDocumentAccess,
@@ -492,9 +497,16 @@ describe('what a change to the tree has to re-run', () => {
     // whose slug no longer matches `isCorpusAgent()`. The corpus contributor
     // then stops widening her restricted agent, and her designated material
     // drops out of its document set silently.
+    //
+    // The loader entry is the one that has been wrong rather than missing.
+    // t-89 moved `getVoiceFingerprint()` into `seed-input/` and this pin kept
+    // asserting `lib/app/content/index.ts` — a path that still resolves, so the
+    // `names paths that resolve` case below could not catch it, and the pin
+    // agreed with the unit because both were stale. The case after this one
+    // now asserts the loader entry is a module the unit actually imports.
     expect(unit.hashInputs).toEqual([
       '../../../seed-data/drafted/lelanea_voice_fingerprint.json',
-      '../../../lib/app/content/index.ts',
+      '../../../lib/app/content/seed-input/voice-fingerprint.ts',
       '../../../lib/app/content/schemas.ts',
       '../../../lib/app/voice/designation.ts',
       '../../../lib/app/voice/fingerprint.ts',
@@ -508,6 +520,32 @@ describe('what a change to the tree has to re-run', () => {
     expect(unit.hashInputs?.length).toBeGreaterThan(0);
     for (const relative of unit.hashInputs ?? []) {
       expect(existsSync(resolve(dirname(SEED_PATH), relative)), relative).toBe(true);
+    }
+  });
+
+  it('names a seed-input module this unit actually imports', () => {
+    // The case above cannot catch a path that is stale but still resolves,
+    // which is what t-89 left behind: the list named the content barrel after
+    // the loader had moved to `seed-input/`, so the hash covered a module this
+    // unit does not import and stopped covering the one that decides which
+    // authored fields reach the projection. Both the unit and its pin were
+    // wrong together, so they agreed.
+    //
+    // Scoped to `seed-input/` on purpose: a seed reaches its loader and builder
+    // directly, because that folder is the only way to the file. The rest of the
+    // list is reached transitively — `schemas.ts` through the loader,
+    // `designation.ts` through `fingerprint.ts` — and proving those would need a
+    // graph walk, which is what
+    // `tests/unit/lib/app/content/runtime-import-graph.test.ts` is for.
+    const source = readFileSync(SEED_PATH, 'utf-8');
+    const seedInputs = (unit.hashInputs ?? []).filter((relative) =>
+      relative.includes('/lib/app/content/seed-input/')
+    );
+
+    expect(seedInputs.length).toBeGreaterThan(0);
+    for (const relative of seedInputs) {
+      const specifier = `@${relative.replace(/^(\.\.\/)+/, '/').replace(/\.tsx?$/, '')}`;
+      expect(source, `${relative} is hashed but never imported`).toContain(`from '${specifier}'`);
     }
   });
 

@@ -10,6 +10,15 @@
  * fixture that fails lint would have to be excluded from `npm run lint` to keep
  * the gate green, and an excluded fixture proves nothing.
  *
+ * **What this cannot see, and what covers it.** A lint rule is given one file at
+ * a time, so nothing here can tell that a permitted module is reachable from a
+ * page — which is exactly how the barrel came to hand two drafted files to 347
+ * import paths while every case below passed. The graph half is
+ * `tests/unit/lib/app/content/runtime-import-graph.test.ts`. Neither check
+ * replaces the other: this one fails the moment someone writes the import,
+ * against a fixture that never has to exist; that one fails on a path no single
+ * file reveals.
+ *
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/eslint.config.mjs` seam
  * ---------------------------------------------------------------------------
@@ -18,6 +27,10 @@
  * still pass (the rule is looked up by name, not by position), but a fork that
  * removes the content boundary should delete this file rather than loosen it —
  * a boundary test that no longer tests a boundary is worse than none.
+ *
+ * A fork that serves authored content from files rather than a database wants a
+ * WIDER `ignores`, not a missing rule: add the module that reads them and keep
+ * every other path held to it.
  *
  * @see lib/app/eslint.config.mjs — `contentJsonImportBoundary`, and why the rule
  *   is `no-restricted-syntax` rather than the obvious `no-restricted-imports`
@@ -34,7 +47,8 @@ const boundaryBlock = contentJsonImportBoundary as unknown as Linter.Config;
 
 const STATIC_IMPORT = `import documents from '@/content/lelanea_foundational_documents.json';\nexport const first = documents;\n`;
 const DYNAMIC_IMPORT = `export const load = () => import('@/content/values_module.json');\n`;
-const VIA_LOADER = `import { getJourneyStructure } from '@/lib/app/content';\nexport const journey = getJourneyStructure();\n`;
+// What a page is meant to do instead: read the collection from its store.
+const VIA_STORE = `import { getJourneyStructure } from '@/lib/app/content/journey-store';\nexport const journey = getJourneyStructure();\n`;
 const NAMED_REEXPORT = `export { default as documents } from '@/content/lelanea_foundational_documents.json';\n`;
 const STAR_REEXPORT = `export * from '@/content/lelanea_module_structure.json';\n`;
 const DRAFTED_IMPORT = `import overlays from '@/seed-data/drafted/lelanea_voice_overlays.json';\nexport const all = overlays;\n`;
@@ -57,12 +71,15 @@ async function lint(code: string, filePath: string) {
 
 describe('content/*.json import boundary', () => {
   describe('the rule itself', () => {
-    it('fails a static import of authored JSON from outside lib/app/content', async () => {
+    it('fails a static import of authored JSON from a page', async () => {
       const result = await lint(STATIC_IMPORT, 'app/(public)/about/page.ts');
 
       expect(result.errorCount).toBe(1);
       expect(result.messages[0].ruleId).toBe('no-restricted-syntax');
-      expect(result.messages[0].message).toMatch(/read through `@\/lib\/app\/content`/);
+      expect(result.messages[0].message).toMatch(/SEED INPUT/);
+      // The message has to name where reading it IS allowed, or the person who
+      // hits this has a refusal and no next move (HB10).
+      expect(result.messages[0].message).toMatch(/seed-input/);
     });
 
     it('fails a dynamic import too, which a plain grep would miss', async () => {
@@ -101,14 +118,57 @@ describe('content/*.json import boundary', () => {
       expect(result.errorCount).toBe(0);
     });
 
-    it('allows the loader itself to import the files', async () => {
+    it('fails the barrel too — the exemption it used to have is what t-89 removed', async () => {
+      // `lib/app/content/**` was permitted wholesale until t-89, and this case
+      // asserted the barrel could import a file. It could, and did: the voice
+      // fingerprint and the golden set reached 347 import paths through it, one
+      // of them a client component. The case is inverted rather than deleted,
+      // because the inversion is the whole change.
       const result = await lint(STATIC_IMPORT, 'lib/app/content/index.ts');
+
+      expect(result.errorCount).toBe(1);
+      expect(result.messages[0].message).toMatch(/SEED INPUT/);
+    });
+
+    it('allows a seed-input module to import a file — that is what the folder is', async () => {
+      const result = await lint(STATIC_IMPORT, 'lib/app/content/seed-input/foundational-seed.ts');
 
       expect(result.errorCount).toBe(0);
     });
 
-    it('allows any other file to reach content through the loader', async () => {
-      const result = await lint(VIA_LOADER, 'app/(public)/journey/page.ts');
+    it('fails a seed unit importing a file directly — it reads through its builder', async () => {
+      // Inverted rather than deleted, because t-89 briefly allowed this and the
+      // allowance is the interesting part. A seed that imports the JSON itself
+      // writes rows the Zod schema never saw, skipping the referential and
+      // placeholder checks the `seed-input/` builders exist to run. Nothing
+      // needed it — no seed imports a file directly — and nothing else would
+      // have caught its use, because the graph walk does not root at `prisma/`.
+      // Caught by /code-review.
+      const result = await lint(DRAFTED_IMPORT, 'prisma/seeds/app-lelanea/019-voice-overlays.ts');
+
+      expect(result.errorCount).toBe(1);
+      expect(result.messages[0].message).toMatch(/SEED INPUT/);
+    });
+
+    it('allows a seed unit to reach a file through its seed-input builder', async () => {
+      // The permitted shape, beside the banned one: the specifier names the
+      // builder, not the JSON, so the rule does not match and the schema runs.
+      const result = await lint(
+        `import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';\nexport const seed = buildVoiceOverlaySeed;\n`,
+        'prisma/seeds/app-lelanea/019-voice-overlays.ts'
+      );
+
+      expect(result.errorCount).toBe(0);
+    });
+
+    it('allows a test to import a file — a test ships in no build', async () => {
+      const result = await lint(STATIC_IMPORT, 'tests/unit/lib/app/content/schemas.test.ts');
+
+      expect(result.errorCount).toBe(0);
+    });
+
+    it('allows a page to reach a collection through its store', async () => {
+      const result = await lint(VIA_STORE, 'app/(public)/journey/page.ts');
 
       expect(result.errorCount).toBe(0);
     });
@@ -141,10 +201,37 @@ describe('content/*.json import boundary', () => {
       ]);
     });
 
-    it('is not active inside lib/app/content', async () => {
+    it('is active inside lib/app/content, outside the seed-input folder', async () => {
+      // The barrel is an ordinary module now. Asserted against the RESOLVED
+      // config rather than the block, because the narrowing that matters is the
+      // one ESLint actually applies to that path.
       const config = await new ESLint().calculateConfigForFile('lib/app/content/index.ts');
 
+      expect(config.rules['no-restricted-syntax']).toBeDefined();
+    });
+
+    it('is not active inside lib/app/content/seed-input', async () => {
+      const config = await new ESLint().calculateConfigForFile(
+        'lib/app/content/seed-input/foundational-seed.ts'
+      );
+
       expect(config.rules['no-restricted-syntax']).toBeUndefined();
+    });
+
+    it('is not active for a test', async () => {
+      const config = await new ESLint().calculateConfigForFile(
+        'tests/unit/lib/app/content/schemas.test.ts'
+      );
+
+      expect(config.rules['no-restricted-syntax']).toBeUndefined();
+    });
+
+    it('IS active for a seed unit — the one exemption t-89 added and gave back', async () => {
+      const config = await new ESLint().calculateConfigForFile(
+        'prisma/seeds/app-lelanea/019-voice-overlays.ts'
+      );
+
+      expect(config.rules['no-restricted-syntax']).toBeDefined();
     });
   });
 });

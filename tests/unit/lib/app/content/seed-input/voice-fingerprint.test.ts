@@ -34,7 +34,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getVoiceFingerprint } from '@/lib/app/content';
+import { getVoiceFingerprint } from '@/lib/app/content/seed-input/voice-fingerprint';
 import { voiceFingerprintFileSchema } from '@/lib/app/content/schemas';
 
 /** A file that satisfies every rule, to mutate in the drift cases below. */

@@ -1,5 +1,5 @@
 /**
- * Unit Tests: lib/app/content/values.ts — release-2 authored content
+ * Unit Tests: lib/app/content/seed-input/values.ts — release-2 authored content
  *
  * The Values module, the exploration framework, and the sixteen written value
  * explorations. Validated on the same terms as the served content and drifting
@@ -17,7 +17,7 @@
  * asserted (the files parse, and release-2 content stays out of the served
  * module's import graph) holds for any content.
  *
- * @see lib/app/content/values.ts
+ * @see lib/app/content/seed-input/values.ts
  */
 
 import { describe, it, expect } from 'vitest';
@@ -26,7 +26,7 @@ import {
   getValuesModule,
   getValuesReferenceFramework,
   getValueExplorations,
-} from '@/lib/app/content/values';
+} from '@/lib/app/content/seed-input/values';
 
 describe('release-2 authored content', () => {
   describe('the three files parse', () => {
@@ -73,18 +73,18 @@ describe('release-2 authored content', () => {
   });
 
   describe('the release-2 boundary', () => {
-    it('is not reachable from the served loader’s module graph', () => {
+    it('is not reachable from the barrel’s module graph', () => {
       // The 271KB of value explorations must not ride along in a bundle that
       // only wanted a mission statement. A static import in either direction
       // would undo that, and nothing else in the repo would notice.
       //
-      // Comments are stripped first. The served loader's own docblock *names*
-      // `@/lib/app/content/values` when explaining the split, and matching the
-      // raw text failed on that — a mention is not an import, which is the
-      // oldest false positive in this repo's tooling.
+      // Comments are stripped first. The barrel's own docblock *names*
+      // `@/lib/app/content/seed-input/values` when explaining the split, and
+      // matching the raw text failed on that — a mention is not an import,
+      // which is the oldest false positive in this repo's tooling.
       const servedLoader = stripComments(readFileSync('lib/app/content/index.ts', 'utf8'));
 
-      expect(servedLoader).not.toMatch(/@\/lib\/app\/content\/values/);
+      expect(servedLoader).not.toMatch(/@\/lib\/app\/content\/seed-input\/values/);
       expect(servedLoader).not.toMatch(/@\/content\/values_module/);
       expect(servedLoader).not.toMatch(/@\/content\/value_explorations/);
       expect(servedLoader).not.toMatch(/@\/content\/values_reference_framework/);
@@ -94,10 +94,14 @@ describe('release-2 authored content', () => {
       // Without this, a stripper that returned '' would make the assertion
       // above vacuous — it would pass against any file, including one that
       // does import the release-2 loader.
-      expect(stripComments('/* @/lib/app/content/values */\nconst a = 1;')).toBe('\nconst a = 1;');
-      expect(stripComments('// @/lib/app/content/values\nconst b = 2;')).toBe('\nconst b = 2;');
-      expect(stripComments("import x from '@/lib/app/content/values';")).toMatch(
-        /@\/lib\/app\/content\/values/
+      expect(stripComments('/* @/lib/app/content/seed-input/values */\nconst a = 1;')).toBe(
+        '\nconst a = 1;'
+      );
+      expect(stripComments('// @/lib/app/content/seed-input/values\nconst b = 2;')).toBe(
+        '\nconst b = 2;'
+      );
+      expect(stripComments("import x from '@/lib/app/content/seed-input/values';")).toMatch(
+        /@\/lib\/app\/content\/seed-input\/values/
       );
     });
 
