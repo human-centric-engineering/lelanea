@@ -15,6 +15,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { reconcileKnowledgeMirror } = vi.hoisted(() => ({ reconcileKnowledgeMirror: vi.fn() }));
 vi.mock('@/lib/app/content/knowledge-mirror', () => ({ reconcileKnowledgeMirror }));
+const { resolveEmbeddingAvailability } = vi.hoisted(() => ({
+  resolveEmbeddingAvailability: vi.fn(),
+}));
+vi.mock('@/lib/orchestration/knowledge/embedder', () => ({ resolveEmbeddingAvailability }));
 
 import unit from '@/prisma/seeds/app-lelanea/020-knowledge-mirror';
 
@@ -24,7 +28,6 @@ const result = (overrides: Record<string, unknown> = {}) => ({
   status: 'reconciled',
   created: ['foundational:the_mission'],
   reingested: [],
-  designated: [],
   removed: [],
   unchanged: [],
   failed: [],
@@ -37,6 +40,7 @@ async function runSeed() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resolveEmbeddingAvailability.mockResolvedValue('ok');
 });
 
 describe('020-knowledge-mirror', () => {
@@ -65,6 +69,29 @@ describe('020-knowledge-mirror', () => {
     reconcileKnowledgeMirror.mockResolvedValue(result({ status: 'not_seeded', created: [] }));
 
     await expect(runSeed()).rejects.toThrow(/Seed 015/);
+  });
+
+  it.each(['none_configured', 'none_permitted'])(
+    'skips with a warning naming the remedy, and does not fail the seed, when availability is %s',
+    async (availability) => {
+      resolveEmbeddingAvailability.mockResolvedValue(availability);
+
+      await expect(runSeed()).resolves.toBeUndefined();
+
+      expect(reconcileKnowledgeMirror).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/app/cron/knowledge-mirror')
+      );
+    }
+  );
+
+  it('still runs, and fails loudly, when availability cannot be determined', async () => {
+    resolveEmbeddingAvailability.mockResolvedValue('unknown');
+    reconcileKnowledgeMirror.mockResolvedValue(
+      result({ failed: [{ sourceKey: 'foundational:the_mission', error: 'boom' }] })
+    );
+
+    await expect(runSeed()).rejects.toThrow(/foundational:the_mission/);
   });
 
   it('re-runs when the mirror module changes', () => {

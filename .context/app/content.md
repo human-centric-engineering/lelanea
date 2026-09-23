@@ -203,9 +203,13 @@ retrieved passage is quoted to a person.
   writes nothing and makes no embedding call.
 - **Changed text** re-ingests into the same document (`rechunkDocument`), so its
   id, tags and any re-designation survive.
-- **Designated `knowledge` / `public`**, but only where the document has no tag
-  from that family. An admin can re-designate it at `/admin/app/knowledge` and
-  the mirror leaves the choice alone.
+- **Designated `knowledge` / `public` once**, when the mirror first creates the
+  document's designation row, and only for a family with no tag yet. After that
+  the tags are the admin's. They can re-designate at `/admin/app/knowledge`, or
+  clear the purpose so the agent stops retrieving it, and the mirror leaves the
+  choice alone through every later run and re-ingest.
+- **Never adopts someone else's document.** If the upload deduplicates to a
+  document an admin uploaded or designated, that one document fails.
 - **Safe on empty.** With no foundational rows at all it does nothing, rather
   than delete every mirror.
 - **One failed document does not stop the rest.** It is reported, and the next
@@ -229,9 +233,12 @@ Vercel Cron sends it as `Authorization: Bearer …`. Without it the route refuse
 every request with 503, so an unconfigured deploy fails visibly in the cron log
 rather than silently.
 
-**The seed unit throws when a document fails**, typically when no embedding
-provider is configured, so the runner records nothing and the next `db:seed`
-retries.
+**The seed unit skips, with a warning, when no embedding provider is
+configured**, so CI's smoke job and a fresh clone still seed everything else. The
+mirror then comes from the cron route: on production its daily schedule, and
+locally `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/v1/app/cron/knowledge-mirror`.
+With a provider, a failed document makes the unit throw, so the runner records
+nothing and the next `db:seed` retries.
 
 **Values reuses this** for the value explorations: a new source prefix and a
 reader in the same module, not a second path.

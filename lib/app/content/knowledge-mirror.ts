@@ -33,18 +33,21 @@
  *
  * Purpose `knowledge`, never `voice` or `both`: these are her words about the
  * app, not examples of her register. Sensitivity `public`, because every one of
- * them is already on a public page. **Those are defaults, applied only where a
- * family has no tag yet**, so an admin who re-designates a mirrored document
- * through `/admin/app/knowledge` keeps their choice through every later
- * re-ingest.
+ * them is already on a public page. **They are written once, when the
+ * designation row is created, and never again.** The row and its tags land in
+ * one transaction, so once the row exists, whatever tags the document carries
+ * are somebody's choice. An admin who re-designates a mirrored document through
+ * `/admin/app/knowledge`, or clears its purpose so the agent stops retrieving
+ * it, keeps that choice through every later reconcile and re-ingest.
  *
  * The designation is written in one transaction immediately after the upload,
  * not inside it. `uploadDocument` commits the document itself, and doing better
  * would mean copying the platform's private chunk insert (`fp5`). An
  * undesignated document reaches nothing, which is the safe direction. If the
- * designation write fails, the next reconcile adds it, so the window is
- * momentary and never permanent (idea #23; an upstream ask for an
- * in-transaction hook is filed with Sunrise).
+ * designation write fails, the next reconcile finds the same document again
+ * (the upload deduplicates by hash) and designates it, so the window is
+ * momentary and never permanent (idea #23; the upstream ask for an
+ * in-transaction hook is sunrise#848).
  *
  * ## Who runs it
  *
@@ -69,8 +72,10 @@
  *   unseeded, and the reconcile returns without a removal pass. A missing seed
  *   must never read as "every document was deleted".
  * - **Partitioned.** It touches only documents whose designation carries a
- *   `foundational:` source key. An admin's uploads have none, and a key
- *   conflict fails that one document rather than adopting someone else's.
+ *   `foundational:` source key. An admin's uploads have none. If the upload
+ *   deduplicates to a document somebody else uploaded or designated, that one
+ *   document fails rather than being adopted, because adopting it would put an
+ *   admin's upload under a reconcile that rewrites and deletes.
  *
  * **Cost accepted:** an embedding call per mirrored document per change. A
  * handful of documents, edited rarely.
@@ -182,8 +187,6 @@ export interface KnowledgeMirrorResult {
   created: string[];
   /** Source keys whose text had changed and was ingested again. */
   reingested: string[];
-  /** Source keys whose designation was missing and has been added. */
-  designated: string[];
   /** Source keys that are no longer mirrored, and whose document was deleted. */
   removed: string[];
   /** Source keys already in step: nothing written. */
@@ -204,7 +207,6 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
     status: 'reconciled',
     created: [],
     reingested: [],
-    designated: [],
     removed: [],
     unchanged: [],
     failed: [],
@@ -261,11 +263,7 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
       }
 
       if (existing.fileHash === target.hash && existing.status === 'ready') {
-        if (await designate(existing.id, target.sourceKey)) {
-          result.designated.push(target.sourceKey);
-        } else {
-          result.unchanged.push(target.sourceKey);
-        }
+        result.unchanged.push(target.sourceKey);
         continue;
       }
 
@@ -286,13 +284,13 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
           },
         });
         await rechunkDocument(existing.id);
-        await designate(existing.id, target.sourceKey);
       } else {
         // `rechunkDocument` will not rebuild a document with no chunks, so this
         // one is replaced. The designation row cascades with it and is written
         // again with the defaults.
         await deleteDocument(existing.id);
-        const replaced = await uploadMirror(target, await uploader());
+        const uploadedBy = await uploader();
+        const replaced = await uploadMirror(target, uploadedBy);
         await designate(replaced, target.sourceKey);
       }
       result.reingested.push(target.sourceKey);
@@ -321,11 +319,7 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
     }
   }
 
-  const changed =
-    result.created.length +
-    result.reingested.length +
-    result.designated.length +
-    result.removed.length;
+  const changed = result.created.length + result.reingested.length + result.removed.length;
   if (changed > 0) {
     // The same two sixty-second caches `setDesignation` clears, for the same
     // reason: a document that just appeared, or just went, must not wait a
@@ -337,7 +331,6 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
   logger.info('Knowledge mirror reconciled', {
     created: result.created.length,
     reingested: result.reingested.length,
-    designated: result.designated.length,
     removed: result.removed.length,
     unchanged: result.unchanged.length,
     failed: result.failed.length,
@@ -348,45 +341,59 @@ export async function reconcileKnowledgeMirror(): Promise<KnowledgeMirrorResult>
 /**
  * Upload one document and return its id.
  *
+ * `uploadDocument` returns any `ready` document with the same hash, including
+ * one an admin uploaded and never designated, which the designation guard
+ * cannot see. So a document the mirror's own uploader did not upload is
+ * refused here. The mirror's own earlier upload, left undesignated by a failed
+ * designation write, passes and is designated: that is the repair.
+ *
  * A failed upload leaves a `failed` row behind, which `uploadDocument` does not
  * dedup against. Left there, every later retry would add another, so it is
  * removed before the error goes on.
  */
 async function uploadMirror(target: MirrorTarget, uploadedBy: string): Promise<string> {
+  let document: Awaited<ReturnType<typeof uploadDocument>>;
   try {
-    const document = await uploadDocument(
+    document = await uploadDocument(
       target.text,
       target.fileName,
       uploadedBy,
       undefined,
       target.name
     );
-    return document.id;
   } catch (error) {
     await prisma.aiKnowledgeDocument.deleteMany({
       where: { fileHash: target.hash, fileName: target.fileName, status: 'failed' },
     });
     throw error;
   }
+  if (document.uploadedBy !== uploadedBy) {
+    throw new Error(
+      `Knowledge document ${document.id} holds the same text but was uploaded by someone else; not mirroring ${target.sourceKey} onto it`
+    );
+  }
+  return document.id;
 }
 
 /**
- * Make sure a mirrored document carries its source key and a designation.
+ * Give a newly uploaded mirror its source key and default designation.
  *
- * Adds a family's default tag only where the document has no tag from that
- * family, so an admin's re-designation is never overwritten. Returns whether it
- * wrote anything.
+ * Writes the defaults only while the document has no designation row, in one
+ * transaction with the row, and only for a family with no tag yet. Once the
+ * row exists, the document's tags are an admin's to change, including to
+ * nothing.
  *
- * @throws when the document already belongs to something else: an admin's
- *   upload (no source key) that `uploadDocument` deduplicated to, or another
- *   source key. Adopting it would take the document out of the admin's hands.
+ * @throws when the document already has a designation of its own: an admin's
+ *   (no source key) or another source's. Adopting it would take the document
+ *   out of the admin's hands.
  */
-async function designate(documentId: string, sourceKey: string): Promise<boolean> {
+async function designate(documentId: string, sourceKey: string): Promise<void> {
   const designation = await prisma.appKnowledgeDesignation.findUnique({
     where: { documentId },
     select: { sourceKey: true },
   });
-  if (designation && designation.sourceKey !== sourceKey) {
+  if (designation) {
+    if (designation.sourceKey === sourceKey) return;
     throw new Error(
       `Knowledge document ${documentId} is already designated as ${
         designation.sourceKey ?? 'an admin upload'
@@ -394,6 +401,9 @@ async function designate(documentId: string, sourceKey: string): Promise<boolean
     );
   }
 
+  // A family already tagged keeps its tag: an admin can tag a document through
+  // Sunrise's own modal, or `setDesignation`, before this row exists, and
+  // neither writes the row unless a licensing note is set.
   const current = await prisma.aiKnowledgeDocumentTag.findMany({
     where: {
       documentId,
@@ -410,8 +420,6 @@ async function designate(documentId: string, sourceKey: string): Promise<boolean
       ? []
       : [sensitivityTagSlug(MIRROR_SENSITIVITY)]),
   ];
-  if (designation && wanted.length === 0) return false;
-
   const tags = await prisma.knowledgeTag.findMany({
     where: { slug: { in: wanted } },
     select: { id: true, slug: true },
@@ -430,14 +438,11 @@ async function designate(documentId: string, sourceKey: string): Promise<boolean
       data: tags.map((tag) => ({ documentId, tagId: tag.id })),
       skipDuplicates: true,
     }),
-    prisma.appKnowledgeDesignation.upsert({
-      where: { documentId },
-      // `designatedBy` null: the operator wrote this, not a person.
-      create: { documentId, sourceKey, designatedBy: null },
-      update: {},
+    // `designatedBy` null: the operator wrote this, not a person.
+    prisma.appKnowledgeDesignation.create({
+      data: { documentId, sourceKey, designatedBy: null },
     }),
   ]);
-  return true;
 }
 
 /**

@@ -32,6 +32,7 @@ interface KnowledgeDocument {
   status: string;
   chunkCount: number;
   metadata: Record<string, unknown> | null;
+  uploadedBy: string;
   chunks: string[];
 }
 
@@ -72,18 +73,18 @@ vi.mock('@/lib/db/client', () => {
           async ({ where }: { where: { documentId: string } }) =>
             store.designations.find((row) => row.documentId === where.documentId) ?? null
         ),
-        upsert: vi.fn(
+        create: vi.fn(
           async ({
-            where,
-            create,
+            data,
           }: {
-            where: { documentId: string };
-            create: { documentId: string; sourceKey: string; designatedBy: null };
+            data: { documentId: string; sourceKey: string; designatedBy: null };
           }) => {
-            const existing = store.designations.find((row) => row.documentId === where.documentId);
-            if (existing) return existing;
-            store.designations.push({ ...create });
-            return create;
+            // The primary key.
+            if (store.designations.some((row) => row.documentId === data.documentId)) {
+              throw new Error('Unique constraint failed on documentId');
+            }
+            store.designations.push({ ...data });
+            return data;
           }
         ),
       },
@@ -155,7 +156,7 @@ vi.mock('@/lib/orchestration/knowledge/document-manager', () => {
   return {
     parseDocumentMetadata: (raw: unknown) => raw as Record<string, unknown> | null,
     uploadDocument: vi.fn(
-      async (content: string, fileName: string, _userId: string, _url?: string, name?: string) => {
+      async (content: string, fileName: string, userId: string, _url?: string, name?: string) => {
         const fileHash = hash(content);
         // The platform's dedup: an identical READY document comes back as is.
         const same = store.documents.find(
@@ -170,6 +171,7 @@ vi.mock('@/lib/orchestration/knowledge/document-manager', () => {
           status: 'processing',
           chunkCount: 0,
           metadata: null,
+          uploadedBy: userId,
           chunks: [],
         };
         store.documents.push(document);
@@ -446,17 +448,39 @@ describe('reconcileKnowledgeMirror', () => {
     ]);
   });
 
-  it('adds a designation a mirror lost, without re-ingesting', async () => {
+  it('leaves a designation an admin cleared as cleared', async () => {
     await reconcileKnowledgeMirror();
     const key = foundationalSourceKey('the_mission');
     const { documentId } = designationOf(key)!;
+    // The admin sets purpose and sensitivity to none: `setDesignation` removes
+    // both families' tags and leaves the row.
+    expect(designationOf(key)?.slugs).toHaveLength(2);
     store.documentTags = store.documentTags.filter((row) => row.documentId !== documentId);
+    vi.clearAllMocks();
 
     const result = await reconcileKnowledgeMirror();
 
-    expect(result.designated).toEqual([key]);
-    expect(rechunkDocument).not.toHaveBeenCalled();
-    expect(designationOf(key)?.slugs).toEqual(['purpose-knowledge', 'sensitivity-public']);
+    expect(result.unchanged).toContain(key);
+    expect(designationOf(key)).toEqual({ documentId, slugs: [] });
+    expect(invalidateAllAgentAccess).not.toHaveBeenCalled();
+  });
+
+  it('keeps a tag an admin set before the designation row existed', async () => {
+    const vocabulary = store.tags;
+    store.tags = vocabulary.filter((tag) => tag.slug !== 'sensitivity-public');
+    await reconcileKnowledgeMirror();
+    // Uploaded, undesignated. An admin marks the mission `voice` meanwhile.
+    const mission = store.documents.find((row) => row.name === 'The Mission')!;
+    const voice = vocabulary.find((tag) => tag.slug === 'purpose-voice')!;
+    store.documentTags.push({ documentId: mission.id, tagId: voice.id });
+
+    store.tags = vocabulary;
+    await reconcileKnowledgeMirror();
+
+    expect(designationOf(foundationalSourceKey('the_mission'))?.slugs).toEqual([
+      'purpose-voice',
+      'sensitivity-public',
+    ]);
   });
 
   it('refuses to adopt an admin upload that holds the same text', async () => {
@@ -471,6 +495,7 @@ describe('reconcileKnowledgeMirror', () => {
       status: 'ready',
       chunkCount: 1,
       metadata: { rawContent: text },
+      uploadedBy: 'admin-1',
       chunks: [text],
     });
     store.designations.push({ documentId: 'admin-doc', sourceKey: null, designatedBy: 'admin-1' });
@@ -482,5 +507,29 @@ describe('reconcileKnowledgeMirror', () => {
     ]);
     expect(store.designations.find((row) => row.documentId === 'admin-doc')?.sourceKey).toBeNull();
     expect(result.created).toHaveLength(MIRRORED_IDS.length - 1);
+  });
+
+  it('refuses to adopt an admin upload with the same text that nobody designated', async () => {
+    const mission = store.foundational.find((row) => row.id === 'the_mission')!;
+    const text = renderMirrorText(mission as Parameters<typeof renderMirrorText>[0]);
+    store.documents.push({
+      id: 'admin-doc',
+      name: 'Her mission, uploaded by hand',
+      fileName: 'mission.md',
+      fileHash: hash(text),
+      status: 'ready',
+      chunkCount: 1,
+      metadata: { rawContent: text },
+      uploadedBy: 'admin-1',
+      chunks: [text],
+    });
+
+    const result = await reconcileKnowledgeMirror();
+
+    expect(result.failed.map((failure) => failure.sourceKey)).toEqual([
+      foundationalSourceKey('the_mission'),
+    ]);
+    expect(store.designations.some((row) => row.documentId === 'admin-doc')).toBe(false);
+    expect(store.documentTags.some((row) => row.documentId === 'admin-doc')).toBe(false);
   });
 });

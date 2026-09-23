@@ -14,10 +14,17 @@
  * and delete. It stays idempotent: in step, it writes nothing and makes no
  * embedding call.
  *
- * **It throws when a document fails**, typically when no embedding provider is
- * configured. The runner then records no `SeedHistory` row, so the next
- * `db:seed` tries again rather than marking a missing mirror as done. The
- * documents that succeeded stay mirrored.
+ * **With no embedding provider it skips, with a warning, and does not fail the
+ * seed.** CI's smoke job and a fresh clone seed without an embedding key, and
+ * everything else in the seed must still land. The runner records the unit as
+ * applied, so the mirror comes later from the cron route, which is the remedy
+ * the warning names: on production the daily schedule, locally a `curl` with
+ * `CRON_SECRET`. Or from the next documents write.
+ *
+ * **With a provider, it throws when a document fails.** That is a real failure
+ * rather than a missing configuration. The runner then records no
+ * `SeedHistory` row, so the next `db:seed` tries again. The documents that
+ * succeeded stay mirrored.
  *
  * `hashInputs` folds in the mirror module, so a change to what is mirrored, or
  * how it is rendered, re-runs this unit on the next seed.
@@ -25,11 +32,22 @@
 
 import type { SeedUnit } from '@/prisma/runner';
 import { reconcileKnowledgeMirror } from '@/lib/app/content/knowledge-mirror';
+import { resolveEmbeddingAvailability } from '@/lib/orchestration/knowledge/embedder';
 
 const unit: SeedUnit = {
   name: 'app-lelanea/020-knowledge-mirror',
   hashInputs: ['../../../lib/app/content/knowledge-mirror.ts'],
   async run({ logger }) {
+    const availability = await resolveEmbeddingAvailability();
+    if (availability === 'none_configured' || availability === 'none_permitted') {
+      logger.warn(
+        `⚠️  Knowledge mirror skipped: no embedding provider (${availability}). Her documents are ` +
+          'not in the knowledge base yet. Once a provider is configured, run the cron route: ' +
+          'curl -H "Authorization: Bearer $CRON_SECRET" <app>/api/v1/app/cron/knowledge-mirror'
+      );
+      return;
+    }
+
     const result = await reconcileKnowledgeMirror();
 
     if (result.status === 'not_seeded') {
@@ -45,8 +63,7 @@ const unit: SeedUnit = {
 
     logger.info(
       `🪞 Knowledge mirror: ${result.created.length} created, ${result.reingested.length} re-ingested, ` +
-        `${result.designated.length} designated, ${result.removed.length} removed, ` +
-        `${result.unchanged.length} unchanged`
+        `${result.removed.length} removed, ${result.unchanged.length} unchanged`
     );
   },
 };

@@ -30,7 +30,6 @@ const inStep = {
   status: 'reconciled',
   created: [],
   reingested: [],
-  designated: [],
   removed: [],
   unchanged: ['foundational:the_mission'],
   failed: [],
