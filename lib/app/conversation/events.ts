@@ -53,13 +53,24 @@ export type CrisisResource = z.infer<typeof crisisResourceSchema>;
  */
 const resourceField = crisisResourceSchema.optional().catch(undefined);
 
-/** The figures the ceiling ending carries (`ceilingReachedFrame`, f-safety). Same leniency. */
+/**
+ * The figures the ceiling ending carries (`ceilingReachedFrame`, f-safety).
+ *
+ * Lenient **per field**, not all-or-nothing: each figure that is not one a
+ * sentence could state — a negative or non-finite amount, a reset that is not
+ * an instant — drops to `undefined` on its own, and the others survive. Her
+ * words (`ceilingEnding`) drop only the clause the missing figure fed, so a
+ * frame with a bad amount still names the reset date (t-96, /code-review). The
+ * validation lives here, once; the copy trusts what it is given.
+ */
 export const ceilingFiguresSchema = z.object({
-  spentUsd: z.number(),
-  ceilingUsd: z.number(),
-  resetsAt: z.string(),
+  spentUsd: z.number().min(0).optional().catch(undefined),
+  ceilingUsd: z.number().min(0).optional().catch(undefined),
+  resetsAt: z.iso.datetime().optional().catch(undefined),
 });
 const ceilingField = ceilingFiguresSchema.optional().catch(undefined);
+
+export type CeilingFigures = z.infer<typeof ceilingFiguresSchema>;
 
 const tokenUsageSchema = z.object({
   inputTokens: z.number(),

@@ -60,22 +60,55 @@ describe('every frame her seat sends', () => {
 });
 
 describe('the ceiling frame keeps its figures', () => {
-  it('on an error frame, and drops a malformed one keeping the message', () => {
+  it('on an error frame, whole when every figure is usable', () => {
     const ceiling = { spentUsd: 5.1, ceilingUsd: 5, resetsAt: '2026-10-01T00:00:00.000Z' };
     const kept = parseConversationEvent(
       block('error', { code: 'ceiling_reached', message: 'figures as text', ceiling })
     );
     expect(kept && 'ceiling' in kept ? kept.ceiling : undefined).toEqual(ceiling);
+  });
 
-    const broken = parseConversationEvent(
+  it('drops each unusable figure on its own, keeping the rest (t-96)', () => {
+    // All-or-nothing used to lose a good reset date to a bad amount, and her
+    // words then said "the start of next month" with the date in the frame.
+    const parsed = parseConversationEvent(
       block('error', {
         code: 'ceiling_reached',
         message: 'figures as text',
-        ceiling: { spentUsd: 'x' },
+        ceiling: { spentUsd: 'lots', ceilingUsd: 4, resetsAt: '2026-10-01T00:00:00.000Z' },
       })
     );
-    expect(broken?.type).toBe('error');
-    expect(broken && 'ceiling' in broken ? broken.ceiling : 'absent').toBeUndefined();
+    expect(parsed?.type).toBe('error');
+    expect(parsed && 'ceiling' in parsed ? parsed.ceiling : 'absent').toEqual({
+      spentUsd: undefined,
+      ceilingUsd: 4,
+      resetsAt: '2026-10-01T00:00:00.000Z',
+    });
+  });
+
+  it.each([
+    ['a negative spend', { spentUsd: -1 }, 'spentUsd'],
+    ['a negative limit', { ceilingUsd: -4 }, 'ceilingUsd'],
+    ['a reset that is not an instant', { resetsAt: 'soon' }, 'resetsAt'],
+  ])('treats %s as unknown', (_case, bad, field) => {
+    const good = { spentUsd: 4, ceilingUsd: 4, resetsAt: '2026-10-01T00:00:00.000Z' };
+    const parsed = parseConversationEvent(
+      block('error', { code: 'ceiling_reached', message: 'x', ceiling: { ...good, ...bad } })
+    );
+    const ceiling = parsed && 'ceiling' in parsed ? parsed.ceiling : undefined;
+    expect(ceiling).toBeDefined();
+    expect(ceiling?.[field as keyof typeof good]).toBeUndefined();
+    // And only that one.
+    const others = Object.keys(good).filter((key) => key !== field);
+    for (const key of others) expect(ceiling?.[key as keyof typeof good]).toBeDefined();
+  });
+
+  it('drops figures that are not an object at all, keeping the message', () => {
+    const parsed = parseConversationEvent(
+      block('error', { code: 'ceiling_reached', message: 'figures as text', ceiling: 'x' })
+    );
+    expect(parsed?.type).toBe('error');
+    expect(parsed && 'ceiling' in parsed ? parsed.ceiling : 'absent').toBeUndefined();
   });
 });
 

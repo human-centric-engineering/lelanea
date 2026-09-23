@@ -1,4 +1,6 @@
-import type { TurnEnding } from '@/lib/app/agent/endings';
+import { formatResetDay, isNothingLimit, type TurnEnding } from '@/lib/app/agent/endings';
+import type { CeilingFigures } from '@/lib/app/conversation/events';
+import { money } from '@/lib/app/usage/usage-view';
 
 /**
  * Every word the conversation pane says of its own (§10 t-64, t-65).
@@ -19,7 +21,8 @@ import type { TurnEnding } from '@/lib/app/agent/endings';
  * plain about large things, no stacked apology, and it hands the next move
  * back to the person. `stillWorking` is the one refusal a person can meet from
  * this client (`TURN_IN_FLIGHT`: the earlier request is still being answered).
- * The `ceiling_reached` frame keeps its own words: it carries the figures.
+ * The `ceiling_reached` ending is {@link ceilingEnding}, beside them rather than
+ * among them: it carries figures, so it is a function and not a constant.
  *
  * These are proposals in her register, not her words, until she has read them
  * — the same standing the voice core has (`provenance.status`).
@@ -97,3 +100,58 @@ export const CONVERSATION_COPY = {
   /** Accessible name of the crisis resource row. Its words are authored (safety.md). */
   crisisLabel: 'Somewhere to turn',
 } as const;
+
+/** Said on every form of the ending, because it is the part a person will not assume. */
+const STILL_WORKS =
+  'What you wrote is still in the box, and everything you can read and write here still works.';
+
+/**
+ * The monthly-limit ending, in her register (f-budget t-96).
+ *
+ * The frame (`ceilingReachedFrame`, f-safety t-59) carries what was spent, the
+ * limit, and when the month resets — the first instant of the next UTC month.
+ * Three beats, as the other endings have: what happened, with the figures;
+ * when she can answer again; and that nothing else has stopped.
+ *
+ * **Explain and wait.** No "ask for more", no invitation to reply: there is no
+ * mechanism behind either (owner, 22 Sept 2026; `B31`; `agent.md`, "The
+ * monthly limit"). The words say what is true and hand nothing back that
+ * reaches no one.
+ *
+ * **A date is named only when it is a promise the month keeps.** A limit of
+ * nothing (`isNothingLimit`, the gate's own `<= 0`) ends the turn on the same
+ * frame with next month's `resetsAt`, but it is a setting and will be the same
+ * on the 1st, so it gets no date.
+ *
+ * **Without the limit there are no words of hers — `null`.** The row then
+ * shows the frame's own message, which the server built from figures it knew
+ * and which names them and the date truthfully (it asks `isNothingLimit` too).
+ * Anything she could say without the limit would say less than that, and
+ * could not tell a limit of nothing from a month used up (/code-review round 2).
+ *
+ * **The other figures are optional, one at a time.** `events.ts` validates each
+ * on its own and drops only what is unusable: an unknown spend costs the
+ * amounts and keeps the date; an unknown reset falls back to "the start of next
+ * month". Never `$undefined`, never `Invalid Date`.
+ *
+ * A proposal in her register until she has read it, like everything above.
+ */
+export function ceilingEnding(figures: CeilingFigures | undefined): string | null {
+  const spent = figures?.spentUsd;
+  const limit = figures?.ceilingUsd;
+  const resetsAt = figures?.resetsAt;
+
+  if (limit === undefined) return null;
+  if (isNothingLimit(limit)) {
+    return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
+  }
+
+  const used =
+    spent === undefined
+      ? "That's this month's conversations used up."
+      : `That's this month's conversations used up — ${money(spent)} of your ${money(limit)} limit.`;
+  const back = resetsAt
+    ? `I can reply again from ${formatResetDay(new Date(resetsAt))}.`
+    : 'I can reply again from the start of next month.';
+  return `${used}\n${back}\n${STILL_WORKS}`;
+}
