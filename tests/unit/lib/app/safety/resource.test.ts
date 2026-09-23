@@ -1,11 +1,16 @@
 /**
  * Which services a person in danger is shown, and the frame that carries them
- * (f-safety t-58), and where their words come from (t-63).
+ * (f-safety t-58), and where their words come from (t-63; the bundled fallback
+ * removed in t-88).
  *
- * The first blocks read the real authored file — the tables are empty here, so
- * the bundled file is what answers — and a change to the table that breaks a
- * region fails here. "Where the words come from" puts rows in the tables, then
- * breaks the read three ways.
+ * The mocked database is seeded, by default, with the same content as the
+ * bundled `seed-data/drafted/lelanea_crisis_resources.json` file — exactly
+ * what `010-crisis-resources` writes into a fresh database. So the blocks
+ * that compare served text against `getCrisisResources()` are comparing
+ * DATABASE-served content that happens to match the seed, not a file
+ * fallback: there is none any more. "Where the words come from" then puts
+ * different rows in the tables, and breaks the read three ways — every one
+ * of which must now reject rather than quietly serving the bundled file.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -26,10 +31,7 @@ vi.mock('@/lib/db/client', () => ({
 }));
 
 import { getCrisisResources } from '@/lib/app/content/crisis-resources';
-import {
-  CRISIS_READ_DEADLINE_MS,
-  invalidateCrisisContentCache,
-} from '@/lib/app/safety/resources-store';
+import { invalidateCrisisContentCache } from '@/lib/app/safety/resources-store';
 import {
   crisisFrame,
   crisisResourceText,
@@ -39,12 +41,38 @@ import {
 
 const INTERNATIONAL = 'Find A Helpline';
 
+const FILE = getCrisisResources();
+
+/** What `010-crisis-resources` writes for the copy row, from the bundled file. */
+const SEEDED_COPY = {
+  slug: 'global',
+  hardIntro: FILE.copy.hardIntro,
+  softIntro: FILE.copy.softIntro,
+  emergency: FILE.copy.emergency,
+  keptMessage: FILE.copy.keptMessage,
+  internationalName: FILE.international.name,
+  internationalContact: FILE.international.contact,
+  internationalUrl: FILE.international.url,
+  internationalHours: FILE.international.hours,
+  status: FILE.resources.provenance.status,
+  version: 1,
+};
+
+/** What `010-crisis-resources` writes for the region rows, from the bundled file. */
+const SEEDED_REGIONS = FILE.regions.map((r) => ({
+  region: r.region,
+  emergencyNumber: r.emergencyNumber,
+  services: r.services.map((s) => ({ ...s })),
+  status: FILE.resources.provenance.status,
+  version: 1,
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   invalidateCrisisContentCache();
-  // Unseeded: the bundled file answers, as it does before `db:seed` has run.
-  db.findCopy.mockResolvedValue(null);
-  db.findRegions.mockResolvedValue([]);
+  // Seeded to match the bundled file, as a freshly migrated database is.
+  db.findCopy.mockResolvedValue(SEEDED_COPY);
+  db.findRegions.mockResolvedValue(SEEDED_REGIONS);
 });
 
 describe('regionOfLocale', () => {
@@ -143,7 +171,7 @@ describe('the authored table', () => {
   });
 });
 
-describe('where the words come from (t-63)', () => {
+describe('where the words come from (t-63 / t-88)', () => {
   const STORED_COPY = {
     slug: 'global',
     hardIntro: 'Stored hard intro — you deserve a person, now.',
@@ -170,14 +198,6 @@ describe('where the words come from (t-63)', () => {
     db.findRegions.mockResolvedValue([STORED_GB]);
   }
 
-  /** What the bundled file names for GB — the floor every failure must land on. */
-  function expectBundledGb(resource: Awaited<ReturnType<typeof resolveCrisisResource>>): void {
-    expect(resource.region).toBe('GB');
-    expect(resource.services.map((s) => s.name)).toEqual(['Samaritans', 'Shout', INTERNATIONAL]);
-    expect(resource.intro).toBe(getCrisisResources().copy.hardIntro);
-    expect(resource.version).toBe(getCrisisResources().resources.version);
-  }
-
   it('serves the stored rows once seeded — an edited region, the stored copy and directory', async () => {
     seeded();
     const resource = await resolveCrisisResource('en-GB', 'hard');
@@ -196,7 +216,7 @@ describe('where the words come from (t-63)', () => {
     expect(elsewhere).toMatchObject({ status: 'signed_off', region: null, version: 'c3' });
   });
 
-  it('treats a removed region as unlisted once seeded — the file does not bring it back', async () => {
+  it('treats a removed region as unlisted once seeded — a re-seed does not bring it back', async () => {
     db.findCopy.mockResolvedValue(STORED_COPY);
     db.findRegions.mockResolvedValue([]);
     const resource = await resolveCrisisResource('en-GB', 'hard');
@@ -204,29 +224,67 @@ describe('where the words come from (t-63)', () => {
     expect(resource.services.map((s) => s.name)).toEqual(['Stored Directory']);
   });
 
-  it('serves the bundled file while the tables are empty', async () => {
-    expectBundledGb(await resolveCrisisResource('en-GB', 'hard'));
+  // Every case below used to serve the bundled file (f-safety t-63). t-88
+  // removed that floor: none of them may resolve to anything at all now, and
+  // in particular none may resolve to the bundled GB entry ('Samaritans',
+  // 'Shout') that used to paper over exactly these failures.
+
+  it('rejects when the tables are unseeded — no bundled copy fills in', async () => {
+    db.findCopy.mockResolvedValue(null);
+    db.findRegions.mockResolvedValue([]);
+
+    await expect(resolveCrisisResource('en-GB', 'hard')).rejects.toThrow(/unseeded/);
     expect(db.findCopy).toHaveBeenCalled();
   });
 
-  it('serves the bundled file when the read throws', async () => {
+  it('rejects when the read throws — no bundled copy fills in', async () => {
     db.findCopy.mockRejectedValue(new Error('connection terminated'));
     db.findRegions.mockResolvedValue([STORED_GB]);
-    expectBundledGb(await resolveCrisisResource('en-GB', 'hard'));
+
+    await expect(resolveCrisisResource('en-GB', 'hard')).rejects.toThrow('connection terminated');
   });
 
-  it('serves the bundled file when a stored row fails validation', async () => {
+  it('rejects when a stored row fails validation — no bundled copy fills in', async () => {
     db.findCopy.mockResolvedValue(STORED_COPY);
     db.findRegions.mockResolvedValue([{ ...STORED_GB, services: [] }]);
-    expectBundledGb(await resolveCrisisResource('en-GB', 'hard'));
+
+    await expect(resolveCrisisResource('en-GB', 'hard')).rejects.toThrow();
   });
 
-  describe('a read that passes its deadline', () => {
+  it('never lets the bundled file’s words reach the frame when the tables cannot answer', async () => {
+    db.findCopy.mockRejectedValue(new Error('connection terminated'));
+    db.findRegions.mockResolvedValue([STORED_GB]);
+
+    // Before t-88 this pipeline resolved to a frame carrying the bundled GB
+    // entry ('Samaritans', 'Shout' — see the block above). Now the whole
+    // pipeline rejects, so that text is never assembled into a served frame:
+    // a positive check that no bundled copy stands in for the failed read.
+    let settledValue: unknown = 'not settled';
+    await resolveCrisisResource('en-GB', 'hard')
+      .then(crisisFrame)
+      .then(
+        (frame) => {
+          settledValue = frame;
+        },
+        (err: unknown) => {
+          settledValue = err;
+        }
+      );
+
+    expect(settledValue).toBeInstanceOf(Error);
+    expect((settledValue as Error).message).toBe('connection terminated');
+    expect(JSON.stringify(settledValue)).not.toContain('Samaritans');
+  });
+
+  describe('a slow read', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    it('serves the bundled file at the deadline, without waiting for the read', async () => {
-      db.findCopy.mockReturnValue(new Promise(() => undefined)); // never settles
+    // The read deadline/race was deleted with the bundled fallback (t-88): a
+    // slow read now waits instead of timing out to a bundled copy.
+    it('waits for the tables rather than racing a deadline to the bundled file', async () => {
+      let resolveRead: (value: typeof STORED_COPY) => void = () => undefined;
+      db.findCopy.mockReturnValue(new Promise((resolve) => (resolveRead = resolve)));
       db.findRegions.mockResolvedValue([STORED_GB]);
 
       let settled = false;
@@ -234,10 +292,15 @@ describe('where the words come from (t-63)', () => {
         settled = true;
         return resource;
       });
-      await vi.advanceTimersByTimeAsync(CRISIS_READ_DEADLINE_MS - 1);
+
+      // Ten minutes: comfortably past the old 750ms race, which used to hand
+      // over to the bundled file at this point instead of waiting.
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
       expect(settled).toBe(false);
-      await vi.advanceTimersByTimeAsync(1);
-      expectBundledGb(await pending);
+
+      resolveRead(STORED_COPY);
+      const resource = await pending;
+      expect(resource.services.map((s) => s.name)).toEqual(['Edited Line', 'Stored Directory']);
     });
   });
 });

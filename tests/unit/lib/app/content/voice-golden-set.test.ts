@@ -27,6 +27,10 @@
  *   because the second would be unreachable and whoever authored it would have
  *   no way to tell from the file that their prompt is never read.
  *
+ * `projectGoldenSetCases()` lost its default parameter in t-88 (it used to read
+ * the authored file itself, which made a `lib/app/voice` module a file reader at
+ * runtime) — every call here passes `getVoiceGoldenSet()` explicitly.
+ *
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
@@ -106,7 +110,7 @@ describe('the authored golden set', () => {
     // Asserted on the PROJECTION rather than on the file, because the projection
     // is what reaches the dataset rows: a reference answer smuggled in through
     // the seed rather than the schema would pass a file-level check.
-    for (const projected of projectGoldenSetCases()) {
+    for (const projected of projectGoldenSetCases(getVoiceGoldenSet())) {
       expect(projected).not.toHaveProperty('expectedOutput');
     }
   });

@@ -10,12 +10,19 @@
  * every question, what each one is probing, and the control's whole system
  * prompt, before anything has been queued.
  *
- * It takes the set as a prop rather than reading it. `getVoiceGoldenSet()`
- * parses a file off disk, so calling it here would pull `fs` into the client
- * bundle; the server page reads it once and passes the view down.
+ * It takes the set as a prop rather than reading it: since t-88 the set comes
+ * from the database (`getGoldenSetAdminView()`), and a client component cannot
+ * query it. The server page reads it once and passes the view down.
  *
- * @see app/admin/app/voice/page.tsx — where the set is read
- * @see lib/app/content/index.ts — `getVoiceGoldenSet()`, the authored view
+ * **`goldenSet` is nullable, and the null branch is the point.** The page
+ * degrades rather than throwing when the dataset has no cases, because that is
+ * the normal state of an environment that has migrated but not yet been seeded.
+ * So this dialog has to be the thing that says so — an operator who opens "what
+ * is in the test set?" and is told nothing has been seeded learns more than one
+ * who is shown a button that silently describes zero questions.
+ *
+ * @see app/admin/app/voice/page.tsx — where the set is read, and degraded
+ * @see lib/app/voice/golden-set-admin.ts — the view, composed from three stores
  * @see .context/app/voice.md
  */
 
@@ -51,8 +58,36 @@ export interface GoldenSetView {
   controlInstructions: string;
 }
 
-export function GoldenSetDialog({ goldenSet }: { goldenSet: GoldenSetView }) {
+export function GoldenSetDialog({ goldenSet }: { goldenSet: GoldenSetView | null }) {
   const [open, setOpen] = useState(false);
+
+  if (goldenSet === null) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <BookOpen className="mr-2 h-4 w-4" />
+            What is in the test set?
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>The test set could not be read</DialogTitle>
+            <DialogDescription>
+              Nothing has been loaded into the dataset the two arms answer from, so there are no
+              questions to show and a run would have nothing to ask.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-muted-foreground text-sm">
+            The questions are authored in <code>{SOURCE_FILE}</code> and written into the database
+            by the seeder, which — unlike migrations — runs only when someone asks it to. Run{' '}
+            <code>npm run db:seed</code> on this environment and reload. If they have been seeded,
+            the database read itself failed; the server log names it.
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

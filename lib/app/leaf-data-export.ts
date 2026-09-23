@@ -281,6 +281,43 @@ export function initLeafSubjectSources(): void {
           'Every past version of those passages. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
       },
       {
+        // f-content-seeds t-88. The context-selected layer of her voice: the
+        // register a particular moment calls for. Instructions to the model
+        // about how to sound, never anything about the person it is speaking
+        // to. The two revision tables keep an editing admin's id, and say so.
+        model: 'AppVoiceOverlaySet',
+        reason:
+          'The name and version of the register Lelañea’s voice shifts into for a given moment, and whether she has signed it off. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppVoiceOverlaySetRevision',
+        reason:
+          'Every past version of that framing. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        model: 'AppVoiceOverlay',
+        reason:
+          'Guidance on how to sound in a particular kind of moment — a first meeting, a hard one. It is guidance to the assistant about its own register, is the same for everyone, and holds no information about any person.',
+      },
+      {
+        model: 'AppVoiceOverlayRevision',
+        reason:
+          'Every past version of that guidance. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
+        // f-content-seeds t-88. Which set of test questions this install
+        // checks her voice against. The questions themselves are an
+        // orchestration dataset, not one of ours.
+        model: 'AppVoiceGoldenSet',
+        reason:
+          'Which version of the standard set of test questions is used to check that Lelañea\u2019s voice still sounds like her, and whether she has approved it. It is the same for everyone and holds no information about any person.',
+      },
+      {
+        model: 'AppVoiceGoldenSetRevision',
+        reason:
+          'Every past version of that choice. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+      },
+      {
         // f-slots t-72. A ledger of writes, not the writes themselves — it
         // exists so a retried turn cannot record one thing twice, and it holds
         // a slug, a version number and a timestamp. What was actually learned

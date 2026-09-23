@@ -1,9 +1,12 @@
 /**
  * The crisis content cache (f-safety t-63): a database answer is reused for the
  * TTL, an admin write drops it, and a failure is never cached — so the turn
- * after a blip reads the tables again rather than serving the file for a minute.
+ * after a blip reads the tables again rather than reusing a stale rejection.
  *
- * Which source answers, and every fallback, is `resource.test.ts`.
+ * Since t-88 there is one source and no floor beneath it: a read that cannot
+ * answer — an unseeded database or a failed read — makes `loadCrisisContent()`
+ * reject, not fall back to a bundled file. `resource.test.ts` covers how that
+ * propagates through `resolveCrisisResource`.
  *
  * @see lib/app/safety/resources-store.ts
  */
@@ -55,7 +58,7 @@ afterEach(() => vi.useRealTimers());
 
 describe('loadCrisisContent', () => {
   it('reuses a database answer until the TTL passes, then reads again', async () => {
-    expect((await loadCrisisContent()).source).toBe('database');
+    expect((await loadCrisisContent()).copy.hardIntro).toBe('Hard.');
     await loadCrisisContent();
     expect(db.findCopy).toHaveBeenCalledTimes(1);
 
@@ -85,23 +88,42 @@ describe('loadCrisisContent', () => {
     expect((await loadCrisisContent()).copy.hardIntro).toBe('Edited.');
   });
 
-  it('never caches a failure: the next call reads the tables again', async () => {
+  // Inverted for t-88: a failed read used to fall back to the bundled file and
+  // resolve. There is no bundled file any more, so the same failure must now
+  // reject — and, because a failure is never cached, the very next call reads
+  // the tables again rather than replaying that rejection.
+  it('rejects on a failed read, logs it, and reads the tables again next time', async () => {
     db.findCopy.mockRejectedValueOnce(new Error('pool exhausted'));
-    expect((await loadCrisisContent()).source).toBe('bundled');
+
+    await expect(loadCrisisContent()).rejects.toThrow('pool exhausted');
     expect(logger.error).toHaveBeenCalledWith(
-      'Crisis resource read failed — serving the bundled file',
-      expect.objectContaining({ reason: 'error' })
+      'Crisis resource read failed',
+      expect.objectContaining({ error: 'pool exhausted' })
     );
 
-    expect((await loadCrisisContent()).source).toBe('database');
+    const content = await loadCrisisContent();
+    expect(content.copy.hardIntro).toBe('Hard.');
     expect(db.findCopy).toHaveBeenCalledTimes(2);
   });
 
-  it('says so when it serves the file because the tables are unseeded', async () => {
+  // Inverted for t-88: an unseeded database used to serve the bundled file.
+  // Every environment now gets the copy row from a data migration, so this
+  // state means something is actually wrong — and the honest answer is a
+  // rejection, not a second copy of the helpline nobody is watching.
+  it('rejects when the tables are unseeded, with no bundled copy served', async () => {
     db.findCopy.mockResolvedValue(null);
-    expect((await loadCrisisContent()).source).toBe('bundled');
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Crisis resource tables are unseeded — serving the bundled file'
+
+    await expect(loadCrisisContent()).rejects.toThrow(/unseeded/);
+    expect(logger.error).toHaveBeenCalledWith(
+      'Crisis resource tables are unseeded — no copy row to serve'
     );
+  });
+
+  it('rejects when a stored row fails validation, rather than serving it anyway', async () => {
+    db.findRegions.mockResolvedValue([
+      { region: 'gb', emergencyNumber: '999', services: [], status: 'draft', version: 1 },
+    ]);
+
+    await expect(loadCrisisContent()).rejects.toThrow(/invalid region code/);
   });
 });

@@ -333,7 +333,9 @@ describe('a re-run', () => {
     await runSeed();
 
     expect(writes.profileUpdate).toBe(1);
-    expect(world.profiles[0].persona).toBe(composeFingerprintProfileSections().persona);
+    expect(world.profiles[0].persona).toBe(
+      composeFingerprintProfileSections(getVoiceFingerprint()).persona
+    );
   });
 
   it('puts the access mode back when something has flipped it to full', async () => {
@@ -393,7 +395,9 @@ describe('a re-run', () => {
 
 describe('safe on empty', () => {
   it('recognises a projection with a blank section', () => {
-    expect(sectionsArePopulated(composeFingerprintProfileSections())).toBe(true);
+    expect(sectionsArePopulated(composeFingerprintProfileSections(getVoiceFingerprint()))).toBe(
+      true
+    );
     expect(
       sectionsArePopulated({ persona: 'a', guardrails: '', brandVoiceInstructions: 'c' })
     ).toBe(false);

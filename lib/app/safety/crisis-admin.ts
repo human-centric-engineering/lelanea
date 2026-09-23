@@ -13,10 +13,13 @@
  * - **drops the resolver's cache** in this instance, so the next crisis turn
  *   here shows the edit (`resources-store.ts`).
  *
- * **Nothing is written before the seed has run.** While the copy row is absent
- * the bundled file is served, and a lone admin-created row would make the
- * tables the source with every other region missing — so each write refuses
- * 409 instead, naming the seed.
+ * **Nothing is written before the seed has run.** A lone admin-created row
+ * would leave the tables the source with every other region missing, so each
+ * write refuses 409 instead, naming the seed. Since t-88 removed the bundled
+ * fallback this state should be unreachable — the copy row and its regions
+ * arrive with the tables, from
+ * `20260929100200_app_crisis_resources_data` — and the refusal is kept as the
+ * guard for a database somebody has emptied by hand.
  *
  * A save and a sign-off both name the version the admin read. If someone else
  * saved in between, either is refused 409: a stale form cannot silently put
@@ -46,8 +49,14 @@ import {
   type CrisisService,
 } from '@/lib/validations/app-crisis-resources';
 
+/**
+ * Shown to an admin, so it says what is actually true of a crisis turn right
+ * now. Before t-88 that was "the bundled file is being served"; there is no
+ * bundled file any more, and an unseeded database means a crisis turn FAILS.
+ * Understating that would be the worst thing this string could do.
+ */
 export const NOT_SEEDED_MESSAGE =
-  'The crisis resource tables have not been seeded, so the bundled file is being served. Run `npm run db:seed` before editing here.';
+  'The crisis resource tables have not been seeded, so a crisis turn cannot be answered at all. Every environment gets these rows from its migrations — run `npm run db:migrate:deploy`, or `npm run db:seed`, before editing here.';
 
 export interface CrisisCopyRow extends CrisisCopyUpdate {
   status: CrisisContentStatus;
@@ -61,9 +70,10 @@ export interface CrisisRegionRow {
   emergencyNumber: string;
   services: CrisisService[];
   /**
-   * The stored services failed validation — a hand edit. The resolver serves
-   * the bundled file while any row is malformed, so the page says so; saving the
-   * region repairs it.
+   * The stored services failed validation — a hand edit, since every write
+   * route validates through these same schemas. The resolver THROWS while any
+   * row is malformed (t-88 removed the bundled fallback), so the page says so;
+   * saving the region repairs it.
    */
   malformed: boolean;
   status: CrisisContentStatus;
@@ -73,13 +83,13 @@ export interface CrisisRegionRow {
 }
 
 export interface CrisisAdminView {
-  /** Whether the tables are the source. `false` means the bundled file is served. */
+  /** `false` means no copy row, and therefore no crisis answer at all. */
   seeded: boolean;
   /**
    * Why the stored rows cannot be served, or `null` when they can. Non-null
-   * means every crisis turn is getting the bundled file — the same check the
-   * turn makes (`contentFromRows`), so the page never edits words nobody sees
-   * without saying so.
+   * means every crisis turn is FAILING — the same check the turn makes
+   * (`contentFromRows`), so the page never edits words nobody sees without
+   * saying so.
    */
   unservable: string | null;
   copy: CrisisCopyRow | null;

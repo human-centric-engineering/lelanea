@@ -177,6 +177,11 @@ export function registerLeafDriftProbes(): void {
     'app_discovery_question_revision',
     'app_resource_revision',
     'app_resource_words_revision',
+    // f-content-seeds t-88. The two revision tables of the voice overlays, for
+    // exactly the same reason.
+    'app_voice_overlay_set_revision',
+    'app_voice_overlay_revision',
+    'app_voice_golden_set_revision',
   ]) {
     registerAppDriftProbe({
       name: `${table}_editorId_fkey (hand-written FK → user)`,

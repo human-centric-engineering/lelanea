@@ -211,10 +211,12 @@ general rule is in [`database-changes.md`](./database-changes.md).
 
 ## Anti-patterns
 
-**Do not fall back to the bundled file at read time.** The crisis resource does
-(`lib/app/safety/resources-store.ts`) because a crisis turn must never depend on
-a database read succeeding. A slot definition is not that, and a fallback would
-be actively wrong in the case that matters: on a database where an admin has
+**Do not fall back to the bundled file at read time.** Nothing in the app does
+any more — t-88 removed the last one, from the crisis resource
+(`lib/app/safety/resources-store.ts`), for the reason this module never had one:
+a second source that answers when the first cannot is a second thing to keep
+signed off, and it is the one nobody looks at. Here a fallback would also be
+actively wrong in the case that matters: on a database where an admin has
 retired a slot, a boot that failed to read the table would re-supply the retired
 slug and the sync would dutifully reactivate its projection.
 
@@ -494,7 +496,8 @@ and type names.
 
 **Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/slots/vocabulary.ts`
 (what she can see) · `lib/app/capabilities.ts` (the mount) ·
-`lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`, `SLOT_EXPOSURE_CONFIG`) ·
+`lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`) ·
+`lib/app/content/slot-taxonomy.ts` (`slotExposureConfig`) ·
 `lib/app/voice/fingerprint.ts` (when to write) ·
 `lib/app/voice/context-contributor.ts` (where the vocabulary is spliced in) ·
 `prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
@@ -523,6 +526,16 @@ marking a slot hidden is the whole act. That is only lossless while no group
 mixes `open` and `hidden` slots, which
 `tests/unit/lib/app/content/slot-taxonomy.test.ts` asserts for any taxonomy —
 not just today's.
+
+**It is derived at seed time, not at import (t-88).** The config is
+`slotExposureConfig()` in `lib/app/content/slot-taxonomy.ts`, called by seed 013
+when it writes the grant. It used to be `SLOT_EXPOSURE_CONFIG`, a module-scope
+constant in `lib/app/agent/pins.ts` — which made importing a list of capability
+slugs parse the 60KB taxonomy file, on every path that touched `pins.ts`.
+Nothing under `lib/app/agent` reads the file now. The shape is built in
+`slot-taxonomy.ts` rather than at the call site so the seed, the smoke script
+(`scripts/app/smoke-slot-capture.ts`) and their tests cannot drift into three
+spellings of the same config.
 
 **The cost, accepted with the ruling:** the same filter drops null-group slots,
 so **she cannot read her own mints back**. The panel (t-73) reads by its own

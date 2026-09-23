@@ -36,7 +36,6 @@
  */
 
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
-import { readableSlotGroups } from '@/lib/app/content/slot-taxonomy';
 // One spelling of the capture slug, shared with the panel that refreshes when
 // it answers — see the constant's own docblock for why it lives there.
 import { SLOT_WRITE_CAPABILITY } from '@/lib/app/slots/notes-view';
@@ -147,7 +146,7 @@ export const GRANTED_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_k
  * a person, and writes what she newly learns (f-slots t-72).
  *
  * A separate list from `GRANTED_CAPABILITY_SLUGS` because these two bindings
- * carry an exposure allowlist ({@link SLOT_EXPOSURE_CONFIG}) and 007's do not —
+ * carry an exposure allowlist (seed 013's stored `customConfig`) and 007's do not —
  * the seeds are what differ, not the ceiling, and both lists are checked
  * against {@link HER_CAPABILITY_SLUGS} by the same test.
  *
@@ -172,36 +171,6 @@ export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state',
 export const RESOURCE_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['suggest_resource'];
 
 /**
- * The exposure allowlist on both slot bindings — what she may read back, and
- * what she may write (f-slots t-72).
- *
- * Daybreak's allowlist filters on a slot's `group` and `scope` only
- * (`lib/framework/data-slots/capabilities/exposure.ts`), and the two facets are
- * deliberately asymmetric here:
- *
- * - **No `write` facet, which is permissive.** Not an oversight, and not the
- *   same as forgetting to restrict. An open-mode mint has no definition row, so
- *   it has no group and no scope — and `facetAllows()` refuses a null group
- *   against any named list. So ANY write restriction, however wide, also forbids
- *   her inventing a slot. The owner ruled on 20 Sept 2026 that she may invent
- *   one; that ruling and a `write` facet cannot both hold. What bounds her
- *   writing is her instruction, until the admin-mode feature lands (idea #33).
- * - **A `read` facet naming the groups whose slots are all visible.** §12:
- *   development is "a tuning signal, never a grade. It must never rank, score,
- *   or display that as a level." `visibility: hidden` is that mechanism, and
- *   this is what keeps it true of the model as well as of the panel — she writes
- *   a development slot and never reads one back, so it cannot reach a sentence
- *   she says. The cost, accepted with the ruling: the same filter drops her own
- *   mints, which have no group either, so she cannot read those back.
- *
- * **Derived from the bundled taxonomy, never typed out** — see
- * {@link readableSlotGroups}.
- */
-export const SLOT_EXPOSURE_CONFIG = {
-  read: { groups: readableSlotGroups() },
-} as const;
-
-/**
  * The capabilities she holds that only read (f-safety t-60).
  *
  * `search_knowledge_base` reads chunks. It is mounted in this leaf as
@@ -211,7 +180,7 @@ export const SLOT_EXPOSURE_CONFIG = {
  *
  * `get_state` reads the head value of the caller's own slots, through
  * Daybreak's `canRead` guard and this leaf's exposure allowlist
- * ({@link SLOT_EXPOSURE_CONFIG}). It writes nothing and cannot reach another
+ * (seed 013's stored `customConfig`). It writes nothing and cannot reach another
  * person's slots (f-slots t-72).
  */
 export const READ_ONLY_CAPABILITY_SLUGS = [

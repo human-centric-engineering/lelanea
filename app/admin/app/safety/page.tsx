@@ -45,8 +45,9 @@ export default async function CrisisResourcesPage() {
         <p className="text-muted-foreground mt-2 max-w-3xl text-sm">
           <strong>Every change goes back to draft</strong> until someone signs it off, and every
           change and sign-off is recorded in the audit log. Before signing off a region, check that
-          each number still answers. If this page&rsquo;s data cannot be read when someone needs it,
-          the app shows the version built into the code instead, so they are never shown nothing.
+          each number still answers. <strong>What is stored here is the only copy.</strong> If it
+          cannot be read when someone needs it, the turn fails and they are shown no helpline at
+          all, so any warning on this page is urgent.
         </p>
       </div>
 

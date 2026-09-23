@@ -70,6 +70,8 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
+import { buildGoldenSetSeed } from '@/lib/app/content/golden-set-seed';
+import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { getVoiceGoldenSet } from '@/lib/app/content';
 import {
   VOICE_CONTROL_AGENT_SLUG,
@@ -130,6 +132,18 @@ const unit: SeedUnit = {
   async run({ prisma, logger }) {
     const goldenSet = getVoiceGoldenSet();
     const cases = projectGoldenSetCases(goldenSet);
+
+    // Which version this install treats as current, and the provenance the
+    // voice page shows. Written once and never again (t-88), unlike the
+    // dataset below: the dataset is a pure projection of the authored prompts,
+    // but this row becomes editable in t-92 and an operator who repoints the
+    // install must not have that undone on the next boot.
+    const pointer = await seedGoldenSetPointer(buildGoldenSetSeed(goldenSet), prisma);
+    logger.info(
+      pointer.status === 'skipped'
+        ? `⏭  Golden set pointer already in the database (v${pointer.version}); left as it is`
+        : `📌 Golden set pointer written at v${goldenSet.collection.version}, revision 1 and draft`
+    );
 
     if (cases.length === 0) {
       // THROW, not return — see the header. A quiet return banks the aborted run

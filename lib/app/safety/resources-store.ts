@@ -1,37 +1,45 @@
 /**
- * Where the crisis resource's content comes from: the admin-edited tables, or
- * the bundled file when they cannot answer (f-safety t-63).
+ * Where the crisis resource's content comes from: the admin-edited tables, and
+ * nothing else (f-safety t-63; the fallback removed in f-content-seeds t-88).
  *
  * ## The rule this module exists for
  *
- * **A crisis turn never depends on a database read succeeding.** The tables are
- * the source once seeded; `seed-data/drafted/lelanea_crisis_resources.json` is the floor.
- * The bundled file is served when:
+ * **A crisis turn is served from the database, or it fails loudly.** There is
+ * no bundled floor any more. That was the owner's ruling (2026-09-22), and the
+ * reasoning is worth keeping because the old behaviour reads as the safer one:
  *
- * - the tables are **unseeded** — no `app_crisis_copy` row (the seed writes it
- *   with the regions, once);
- * - the read **throws**, or a stored row **fails validation** (a hand edit);
- * - the read passes {@link CRISIS_READ_DEADLINE_MS}.
+ * - A second copy of a helpline is a second thing to keep signed off, and it is
+ *   the one nobody looks at. It went stale silently and answered in place of
+ *   the rows an admin had just corrected.
+ * - The states that used to need it are now unreachable rather than handled.
+ *   The row is inserted by a data migration in every environment
+ *   (`20260929100200_app_crisis_resources_data`), so "tables but no copy row"
+ *   cannot happen; and every admin write validates through the same schemas
+ *   {@link contentFromRows} reads with, so an edit cannot store a row that
+ *   fails on the way out.
+ * - What is left is a database that cannot be read at all — and then the app is
+ *   down, so a crisis turn has nothing to say that the rest of the app would
+ *   not already have failed to say.
  *
- * {@link loadCrisisContent} therefore never throws and never waits longer than
- * the deadline. The fallback, not the cache, is the safety net.
+ * **The read deadline went with it.** Racing a 750ms timer only made sense when
+ * losing the race meant serving the file instead. With no file, a timeout is
+ * just a crisis turn failing faster, so the read now waits for the answer: a
+ * slow helpline beats a prompt error with no helpline in it.
  *
  * ## The cache
  *
- * Module scope, {@link CRISIS_CACHE_TTL_MS}. A database answer (including
- * "unseeded") is cached; a failure or timeout is not, so the next crisis turn
- * tries again. An admin write calls {@link invalidateCrisisContentCache}, so the
- * instance that served the edit shows it at once; any other instance shows it
- * within the TTL. Nothing else caches this: a stale minute of a helpline's old
- * wording is acceptable, a minute of no helpline is not — and the fallback
- * rules that out.
+ * Module scope, {@link CRISIS_CACHE_TTL_MS}. A successful read is cached; a
+ * failure is not, so the next crisis turn tries again. An admin write calls
+ * {@link invalidateCrisisContentCache}, so the instance that served the edit
+ * shows it at once; any other instance shows it within the TTL. A stale minute
+ * of a helpline's old wording is acceptable.
  *
  * ## Once seeded, the tables are the whole list
  *
  * A region an admin removed is gone: people from there get the directory and
- * the local emergency line, exactly as for a region never listed. The file's
- * regions are not merged back in. That is also why the seed writes nothing
- * once the copy row exists (`prisma/seeds/app-lelanea/010-crisis-resources.ts`).
+ * the local emergency line, exactly as for a region never listed. That is also
+ * why the seed writes nothing once the copy row exists
+ * (`prisma/seeds/app-lelanea/010-crisis-resources.ts`).
  *
  * @see lib/app/safety/resource.ts — which region a request gets
  * @see lib/app/safety/crisis-admin.ts — the only writer after the seed
@@ -42,7 +50,6 @@ import type { AppCrisisCopy, AppCrisisRegion } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
-import { getCrisisResources } from '@/lib/app/content/crisis-resources';
 import {
   crisisCopyUpdateSchema,
   crisisServicesSchema,
@@ -51,9 +58,6 @@ import {
 
 /** The singleton copy row's key. */
 export const CRISIS_COPY_SLUG = 'global';
-
-/** How long a crisis turn waits for the tables before serving the bundled file. */
-export const CRISIS_READ_DEADLINE_MS = 750;
 
 /** How long a database answer is reused before the next read. */
 export const CRISIS_CACHE_TTL_MS = 60_000;
@@ -65,55 +69,25 @@ export interface CrisisRegionContent {
   emergencyNumber: string;
   services: CrisisService[];
   status: CrisisContentStatus;
-  /** A number for a stored row; `null` in the bundled file, which has one version for all. */
-  version: number | null;
+  version: number;
 }
 
-/** Everything the resolver needs, from whichever source answered. */
+/** Everything the resolver needs. Always from the tables. */
 export interface CrisisContent {
-  source: 'database' | 'bundled';
   copy: { hardIntro: string; softIntro: string; emergency: string; keptMessage: string };
   international: { name: string; contact: string; url: string; hours: string };
   copyStatus: CrisisContentStatus;
-  /** The stored copy's version, or the file's `resources.version` string. */
-  copyVersion: number | string;
+  /** The stored copy's version. */
+  copyVersion: number;
   regions: CrisisRegionContent[];
-}
-
-/** The bundled file, in the same shape as a database answer. Never throws: the file is validated at import. */
-export function bundledCrisisContent(): CrisisContent {
-  const file = getCrisisResources();
-  return {
-    source: 'bundled',
-    copy: { ...file.copy },
-    international: {
-      name: file.international.name,
-      contact: file.international.contact,
-      url: file.international.url,
-      hours: file.international.hours,
-    },
-    copyStatus: file.resources.provenance.status,
-    copyVersion: file.resources.version,
-    regions: file.regions.map((r) => ({
-      region: r.region,
-      emergencyNumber: r.emergencyNumber,
-      services: r.services.map((s) => ({ ...s })),
-      status: file.resources.provenance.status,
-      version: null,
-    })),
-  };
-}
-
-class CrisisReadDeadline extends Error {
-  constructor() {
-    super(`crisis resource read passed ${CRISIS_READ_DEADLINE_MS}ms`);
-  }
 }
 
 /**
  * Stored rows as a {@link CrisisContent}. **Throws on any row the turn may not
  * serve** — the one definition of "servable", shared with the admin page so it
- * warns about exactly what sends everyone to the bundled file.
+ * warns about exactly what would fail a crisis turn. Since t-88 every write
+ * path validates through these same schemas, so reaching one of these throws
+ * means a row was changed outside the admin.
  */
 export function contentFromRows(copy: AppCrisisCopy, regions: AppCrisisRegion[]): CrisisContent {
   const text = crisisCopyUpdateSchema.parse({
@@ -128,7 +102,6 @@ export function contentFromRows(copy: AppCrisisCopy, regions: AppCrisisRegion[])
   });
 
   return {
-    source: 'database',
     copy: {
       hardIntro: text.hardIntro,
       softIntro: text.softIntro,
@@ -160,8 +133,7 @@ export function contentFromRows(copy: AppCrisisCopy, regions: AppCrisisRegion[])
 
 /**
  * The tables as a {@link CrisisContent}, or `null` when unseeded. Throws on a
- * read error or a row that fails validation — the caller turns both into the
- * fallback.
+ * read error or a row that fails validation.
  */
 async function readFromDatabase(): Promise<CrisisContent | null> {
   const [copy, regions] = await Promise.all([
@@ -190,39 +162,41 @@ function cache(content: CrisisContent, readGeneration: number, now: number): voi
 }
 
 /**
- * The content a crisis resource is built from. **Never throws, and never waits
- * past {@link CRISIS_READ_DEADLINE_MS}** — see the module docblock.
+ * The content a crisis resource is built from.
+ *
+ * **Throws** when the tables cannot answer — there is no floor beneath this
+ * any more, and the module docblock says why the two states that used to reach
+ * one are now unreachable instead.
+ *
+ * @throws when the copy row is missing, a row fails validation, or the read
+ * fails. All three mean the app cannot serve a crisis turn honestly.
  */
 export async function loadCrisisContent(): Promise<CrisisContent> {
   const now = Date.now();
   if (cached && cached.expiresAt > now) return cached.content;
 
   const readGeneration = generation;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const read = readFromDatabase();
-  // A read that loses the race may still reject later; it has nobody to tell.
-  read.catch(() => undefined);
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new CrisisReadDeadline()), CRISIS_READ_DEADLINE_MS);
-  });
-
+  let stored: CrisisContent | null;
   try {
-    const stored = await Promise.race([read, deadline]);
-    if (stored === null) {
-      logger.warn('Crisis resource tables are unseeded — serving the bundled file');
-      const content = bundledCrisisContent();
-      cache(content, readGeneration, now);
-      return content;
-    }
-    cache(stored, readGeneration, now);
-    return stored;
+    stored = await readFromDatabase();
   } catch (err) {
-    logger.error('Crisis resource read failed — serving the bundled file', {
-      reason: err instanceof CrisisReadDeadline ? 'timeout' : 'error',
+    // Logged here as well as rethrown: the caller turns this into a failed
+    // turn, and whoever reads that needs to know it was the crisis tables.
+    logger.error('Crisis resource read failed', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return bundledCrisisContent();
-  } finally {
-    clearTimeout(timer);
+    throw err;
   }
+
+  if (stored === null) {
+    logger.error('Crisis resource tables are unseeded — no copy row to serve');
+    throw new Error(
+      'Crisis resource tables are unseeded: no app_crisis_copy row. ' +
+        'Every environment gets one from 20260929100200_app_crisis_resources_data; ' +
+        'run `npm run db:migrate:deploy`.'
+    );
+  }
+
+  cache(stored, readGeneration, now);
+  return stored;
 }

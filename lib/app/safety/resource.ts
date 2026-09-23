@@ -31,12 +31,13 @@
  *
  * ## Where the words come from
  *
- * The admin-edited tables, or the bundled file when those cannot answer in
- * time (f-safety t-63). `resources-store.ts` decides which and never throws, so
- * this module never withholds a resource either. The frame's shape does not
- * depend on the source.
+ * The admin-edited tables, and nothing else (f-safety t-63; the bundled
+ * fallback removed in f-content-seeds t-88). `resources-store.ts` throws when
+ * the tables cannot answer, so this module does too. Its docblock says why
+ * that is the honest behaviour rather than a regression, and why the two
+ * states that used to reach the fallback are now unreachable instead.
  *
- * @see lib/app/safety/resources-store.ts — the tables, the cache and the fallback
+ * @see lib/app/safety/resources-store.ts — the tables and the cache
  * @see .context/app/safety.md
  */
 
@@ -84,8 +85,10 @@ export function regionOfLocale(locale: string | null): string | null {
 }
 
 /**
- * The resource for a locale and tier, from whichever source is answering.
- * Never throws: see `resources-store.ts`.
+ * The resource for a locale and tier.
+ *
+ * **Throws when the tables cannot answer** (t-88 removed the bundled floor) —
+ * see `resources-store.ts` for why that is the honest behaviour.
  */
 export async function resolveCrisisResource(
   locale: string | null,
@@ -104,13 +107,11 @@ function statusOf(content: CrisisContent, entry: CrisisContent['regions'][number
 }
 
 /**
- * Which versions were shown. The bundled file has one version for everything
- * (`0.1`); a stored resource names the copy's and, where one was chosen, the
+ * Which versions were shown: the copy's and, where one was chosen, the
  * region's — `c3` or `c3/GB.2` — so a report of what someone saw can be matched
  * to the audit log's edits.
  */
 function versionOf(content: CrisisContent, entry: CrisisContent['regions'][number] | undefined) {
-  if (content.source === 'bundled') return String(content.copyVersion);
   const copy = `c${content.copyVersion}`;
   return entry ? `${copy}/${entry.region}.${entry.version}` : copy;
 }

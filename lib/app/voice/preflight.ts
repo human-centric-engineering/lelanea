@@ -39,8 +39,8 @@
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { ensurePinnedModelPriced } from '@/lib/app/agent/pinned-model';
-import { getVoiceGoldenSet } from '@/lib/app/content';
 import { resolveVoiceArms } from '@/lib/app/voice/comparison';
+import { getGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { BRAND_VOICE_JUDGE_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { estimateEvaluationRunCost } from '@/lib/orchestration/cost-estimation/evaluation-cost';
 
@@ -87,8 +87,8 @@ export interface VoicePreflight {
  *   which is the honest basis for "we have not run this yet".
  */
 export async function getVoicePreflight(userId: string): Promise<VoicePreflight> {
-  const goldenSet = getVoiceGoldenSet();
-  const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+  const pointer = await getGoldenSetPointer();
+  const datasetId = goldenSetDatasetId(pointer.version);
 
   const [arms, dataset] = await Promise.all([
     resolveVoiceArms().catch(() => []),

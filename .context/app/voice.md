@@ -269,12 +269,133 @@ which moment it is). See [`agent.md`](./agent.md#her-voice-on-a-seat). The core
 consumer route refuses a context type outright, so a turn through it gets the
 always-on core and no block.
 
+## Where the overlays live: the database (t-88)
+
+Since t-88 the context-selected layer is four `app_` tables, on the pattern t-86
+and t-87 set for her documents, the journey, the questions and the resources
+(see [`content.md`](./content.md#the-journey-the-questions-and-the-resources-the-database)).
+`seed-data/drafted/lelanea_voice_overlays.json` is seed material and is **not
+read on a turn**.
+
+| Table                            | Holds                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `app_voice_overlay_set`          | the layer's identity and `provenance`, plus `exemplars` and `coreOnly` — the two blocks belonging to no situation |
+| `app_voice_overlay`              | one row per situation: `label`, `reviewerNote`, `heading`, `lines`, `exemplarQuery`, `position`                   |
+| `app_voice_overlay_set_revision` | a full snapshot of the framing per revision, `origin: seed \| admin`, `editorId` (`ON DELETE SET NULL`)           |
+| `app_voice_overlay_revision`     | the same, per overlay                                                                                             |
+
+**`exemplars` and `coreOnly` are on the SET row, not per overlay**, because that
+is what they are: the labelling copy a retrieved passage carries whichever
+overlay matched, and the body emitted when none did. Both are JSONB and both are
+validated on the way out (`storedExemplarsSchema`, `storedCoreOnlySchema` in
+`voice-overlay-view.ts`) — a row that fails throws rather than composing a prompt
+out of half a block, because a partial `exemplars` loses `originLabel`, which is
+the load-bearing string of the whole feature.
+
+**The overlay's primary key is the situation**, because that key is also the
+`contextId` a chat request carries; there is no second identifier to keep in step
+with it. A duplicate is impossible at the row level, still rejected by the file's
+schema, and still thrown on by `toVoiceOverlays()` — a lookup takes the first
+match, so the second overlay's lines would ship nowhere and nothing would say so.
+
+**`when` is stored as the column `reviewerNote`**, `when` being reserved in SQL.
+It is the same field: a note to whoever reviews the overlays, served because a
+reviewer needs it and emitted into no prompt.
+
+| Function (`lib/app/content/voice-overlay-store.ts`) | Returns                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------- |
+| `getVoiceOverlays()`                                | the set, its overlays in authored order, `exemplars`, `coreOnly` |
+| `seedVoiceOverlays(seed, client)`                   | writes the set, the overlays and each revision 1 — **once**      |
+
+**`getVoiceOverlays()` is async and is no longer on `@/lib/app/content`.** That
+module re-exports the types and nothing else; importing the function from there
+is the mistake to avoid, and it will not resolve. Read it from
+`@/lib/app/content/voice-overlay-store`, whose import closure includes the
+database client — which is why the content index, whose closure a test walks,
+does not re-export it.
+
+**Read per request, with no cache here, and that is deliberate.** The composed
+block is already cached for 60s per `(type, id, userId)` by
+`buildContext`, above this read; a second cache below the first would only stack
+a second staleness window on it.
+
+**One read of the set per turn.** `loadVoiceContext()` reads once and hands the
+same object to `selectOverlayFrom()` and `composeVoiceContext()`, because the
+same turn needs the overlay, `coreOnly` and `exemplars` from it.
+`selectOverlay(situation)` exists for a caller that wants one overlay and nothing
+else; using it inside the contributor would pay for a second read of the same
+rows.
+
+**Seeded once, and operator-owned (`fp4`).**
+`prisma/seeds/app-lelanea/019-voice-overlays.ts` writes through the store only
+while the set row is absent, so the first admin edit in t-92 is not undone by the
+next boot. That is the opposite call from `003-voice-fingerprint`, which
+reconciles the always-on core onto the agent profile on every run — and the
+difference is only that the core has no editable surface yet.
+
+**Every row is seeded `draft`, never `signed_off`.** The file was drafted in her
+register rather than transcribed from her, and a seed is not the thing that can
+say she has approved it. `status` on the row is the operator's sign-off;
+`provenance` is what the file says about who drafted it. They answer different
+questions and both are served.
+
+**Two migrations, and the second is the one that matters.**
+`20260929100000_app_voice_overlays` creates the tables empty;
+`20260929100100_app_voice_overlays_data` inserts the rows in every environment,
+because production migrates before every start and seeds only when asked
+([`database-changes.md`](./database-changes.md)). Without it an environment would
+have the tables and no register at all. The migration's JSON literal is
+`buildVoiceOverlaySeed()`, and
+`tests/unit/lib/app/content/voice-overlay-seed.test.ts` parses it back out and
+fails if the two have drifted — a data migration is a second copy of the seed,
+and a second copy is the thing that drifts.
+
+**There is no fallback to the bundled file**, the same rule t-88 applied to the
+crisis copy and for the same reason: a second source that answers when the first
+cannot is a second thing to keep signed off, and it is the one nobody looks at.
+See [`safety.md`](./safety.md#the-resource).
+
+### An unseeded overlay database does not fail a turn
+
+`getVoiceOverlays()` throws `ContentNotSeededError`, and the throw never reaches
+the person. Two nets sit under it. Sunrise's `buildContext` is the outer one: it
+catches a throwing contributor, logs at `error`, and degrades to the placeholder
+`No context loader for type 'voice'.` — **left uncached**, so the next turn
+tries again once the migration has run.
+
+The throw is caught **in the contributor**, not left to `buildContext`, and the
+difference is the whole point. `loadVoiceContext` wraps the `getVoiceOverlays()`
+call, logs at `error` and composes no voice block; the slot vocabulary and the
+resource offering are built after it and still reach the prompt. Letting the
+throw travel one level up blanked all three, and the vocabulary is the one whose
+absence is not recoverable — an agent holding `fill_slot` with no taxonomy in
+front of it mints slugs, and a mint is never masked
+([`slots.md`](./slots.md)). Losing the register and keeping the vocabulary is
+strictly better than losing both. `slotVocabulary()` and `loadResourceOffering()`
+are each guarded for the same reason.
+
+That is not a fallback returning by the back door: no file is read and no
+register is served from anywhere else. An unreadable overlay set means **no
+register this turn**, loudly in the log.
+
+What the person loses is therefore her register for that turn: no overlay, no
+`coreOnly` body, no passages. What she keeps is the always-on core, which rides
+on the agent's profile and is present whether or not this block is. That is the
+right direction to degrade in, and it is the reason the core is not repeated
+here.
+
 ## Selection is a lookup, and stays one
 
 `lib/app/voice/overlays.ts`. Exact match on the trimmed, lower-cased situation
 key; `null` for anything else. No fuzzy matching and no "closest overlay" — the
 register a person meets must not depend on a similarity score, and the same
 situation must compose the same block in every environment.
+
+**The read moved into the database in t-88 and the selection did not change.**
+`selectOverlay()` and `knownSituations()` are async now because the rows are
+fetched; what they do with what comes back is what they always did. Nothing here
+looks anything up by similarity, and there is still no TypeScript list of
+situations to fall out of step with the table.
 
 An unknown situation falls back to **core-only**: the authored `coreOnly` body
 and nothing else. Two things about that fallback are deliberate and both are
@@ -464,34 +585,56 @@ file is awaiting her sign-off. A case in
 `tests/unit/lib/app/content/voice-overlays.test.ts` pins the name in it, and is
 **meant to be edited** once, on the day she signs them off.
 
+**Since t-88 the file is a seed draft and nothing more**, which does not change
+what it is: the owner's 2026-09-21 ruling is that it stays a proposal labelled
+as one. Its `provenance` block is copied into the set row and served from there,
+and every row is seeded `draft` so no read can imply she has signed it off.
+`sourceFiles`, `notes`, `textFormat` and `reviewNotes` are working notes about
+the words and are written to no row, the way every collection's are.
+
 Four situations, chosen because the app has them today: arriving, the thirty
-discovery questions, the values work, and something painful surfacing. Adding a
-fifth is an edit to that file and nothing else — there is no TypeScript list of
-situations to fall out of step with it. A duplicate situation is a **parse
-error**, because selection is a lookup and the second would be silently
-unreachable.
+discovery questions, the values work, and something painful surfacing. **Adding
+a fifth is a row.** Editing the file reaches only a database that was never
+seeded, so a fifth situation that existing environments must have ships as an
+`app_…` migration beside the file edit — the standing rule in
+[`database-changes.md`](./database-changes.md) — until the t-92 editor makes it
+an admin's act. There is still no TypeScript list of situations to fall out of
+step with the table. A duplicate is refused three times over: the file's schema,
+the table's primary key, and `toVoiceOverlays()` on the way out.
 
 An overlay **shades** the core; it never softens it and never restates it.
 Anything true of every turn belongs in the core file.
 
 ## The files
 
-| File                                            | What it is                                              |
-| ----------------------------------------------- | ------------------------------------------------------- |
-| `seed-data/drafted/lelanea_voice_overlays.json` | The authored overlays, the labelling copy, the fallback |
-| `lib/app/voice/overlays.ts`                     | Selection — an exact-match lookup, and nothing more     |
-| `lib/app/voice/exemplars.ts`                    | Retrieval, the passage pipeline, the label guard        |
-| `lib/app/voice/context-contributor.ts`          | Composition, and the origin labels                      |
-| `lib/app/context-contributors.ts`               | The seam registration — one contributor, type `voice`   |
+| File                                                       | What it is                                                          |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| `seed-data/drafted/lelanea_voice_overlays.json`            | The authored overlays, the labelling copy, the fallback — seed only |
+| `lib/app/content/voice-overlay-store.ts`                   | The one service for the two tables: the read, and the seed write    |
+| `lib/app/content/voice-overlay-view.ts`                    | The served shape, the stored-JSON schemas, the projection           |
+| `lib/app/content/voice-overlay-seed.ts`                    | The one module that still imports the file                          |
+| `lib/app/voice/overlays.ts`                                | Selection — an exact-match lookup, and nothing more                 |
+| `lib/app/voice/exemplars.ts`                               | Retrieval, the passage pipeline, the label guard                    |
+| `lib/app/voice/context-contributor.ts`                     | Composition, and the origin labels                                  |
+| `lib/app/context-contributors.ts`                          | The seam registration — one contributor, type `voice`               |
+| `prisma/seeds/app-lelanea/019-voice-overlays.ts`           | The seed unit — write-once                                          |
+| `prisma/migrations/20260929100000_app_voice_overlays`      | The four tables and the `app_voice_content_status` enum             |
+| `prisma/migrations/20260929100100_app_voice_overlays_data` | The rows, in every environment                                      |
 
-| Test                                                   | Proves                                               |
-| ------------------------------------------------------ | ---------------------------------------------------- |
-| `tests/unit/lib/app/voice/context-contributor.test.ts` | The whole chain, on the emitted block — load-bearing |
-| `tests/unit/lib/app/voice/exemplars.test.ts`           | The allowlist, the fences, the label, the degrade    |
-| `tests/unit/lib/app/voice/corpus-access.test.ts`       | Both rules against all 64 tag sets — load-bearing    |
-| `tests/unit/lib/app/voice/overlays.test.ts`            | Selection is a lookup, and stays deterministic       |
-| `tests/unit/lib/app/context-contributors.test.ts`      | Exactly one contributor, and which type              |
-| `tests/unit/lib/app/content/voice-overlays.test.ts`    | The authored file parses, and still awaits sign-off  |
+| Test                                                    | Proves                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `tests/unit/lib/app/voice/context-contributor.test.ts`  | The whole chain, on the emitted block — load-bearing         |
+| `tests/unit/lib/app/voice/exemplars.test.ts`            | The allowlist, the fences, the label, the degrade            |
+| `tests/unit/lib/app/voice/corpus-access.test.ts`        | Both rules against all 64 tag sets — load-bearing            |
+| `tests/unit/lib/app/voice/overlays.test.ts`             | Selection is a lookup, and stays deterministic               |
+| `tests/unit/lib/app/context-contributors.test.ts`       | Exactly one contributor, and which type                      |
+| `tests/unit/lib/app/content/voice-overlays.test.ts`     | The authored file parses, and still awaits sign-off          |
+| `tests/unit/lib/app/content/voice-overlay-seed.test.ts` | The data migration writes exactly what the seed builder does |
+
+`tests/helpers/app/content-stores.ts` carries the in-memory stand-in
+(`fakeVoiceOverlayStore()`), built from the real file through the real seed
+builder and the real projection, so a test that edits a row sees what a turn
+would see — including the throws.
 
 Reverting the feature fails them: drop the origin label and three cases go red;
 remove `'voice'` from `VOICE_PATH_PURPOSES` and nineteen do across three files;
@@ -606,6 +749,61 @@ a case cannot be deleted once a run has scored it: `AiEvaluationCaseResult
 mints a new dataset beside the old one. Reconciling instead would re-caption every
 historical answer with a question it was never asked.
 
+### Which version is current is a row, and only that (t-88)
+
+`app_voice_golden_set` holds the **pointer** and the **provenance**, and nothing
+else. The prompts stay in the platform's `AiDataset` / `AiDatasetCase`; the
+control's system instructions stay on the control agent. Both are written by the
+same seed unit, 004.
+
+That split is `fp4` — one owner per field — and it is the point of the table
+rather than a compromise. Copying the prompts into a table of ours would give
+her questions two writable homes, which is the failure t-87 named when it split
+the journey's roster from the journey's words. What the dataset genuinely could
+not hold is _which version is current_: the dataset is keyed **by** the version
+(`goldenSetDatasetId(version)`), so reading it required already knowing the
+answer. The authored file was the only thing that knew, and that is what kept
+`/admin/app/voice`, the preflight and the comparison reading a bundled file at
+request time.
+
+| Table                           | Holds                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `app_voice_golden_set`          | one row: `version`, `title`, `locale`, `provenance`, `status`, `revision` |
+| `app_voice_golden_set_revision` | a snapshot per revision, `origin`, `editorId` (`ON DELETE SET NULL`)      |
+
+`getGoldenSetPointer()` (`lib/app/content/golden-set-store.ts`) is the one read;
+it throws `ContentNotSeededError` when the row is absent and has no fallback to
+the file. Three callers resolve the dataset id from it — `preflight.ts`,
+`comparison.ts` and `golden-set-admin.ts` — so none of them reads the authored
+file any more.
+
+**Written once, unlike the dataset beside it**, and the asymmetry is deliberate:
+a dataset is a pure projection of the authored prompts, so reconciling it cannot
+lose anyone's work, whereas this row becomes editable in t-92 and an operator who
+repoints the install at another version must not have that undone on the next
+boot. `20260929100300_app_voice_golden_set` creates the tables and
+`20260929100400_app_voice_golden_set_data` inserts the row in every environment;
+`golden-set-seed.test.ts` pins the literal against `buildGoldenSetSeed()`.
+
+An environment migrating for the first time therefore has the pointer and no
+cases until the seeder runs. That is the honest failure the comparison already
+reports — "the golden set v1.1 is not in this install" — rather than silently
+running the previous version's questions.
+
+**The page degrades rather than throwing in that state**, which is not a
+softening of the rule above. `getGoldenSetAdminView()` still throws; the page
+catches it, logs at error and passes `null` to `GoldenSetDialog`, which says
+the set has not been seeded and names `npm run db:seed`. Letting it throw
+rendered `admin/error.tsx` over the whole surface — so a first deploy lost the
+comparison board, the preflight and the run button, and the operator was shown
+no page in the one state whose remedy that page would have named.
+
+**`projectGoldenSetCases()` no longer defaults to the authored set.** Its one
+production caller is seed 004, where reading seed material is the point; the
+default made a module under `lib/app/voice` a file reader at request time. Same
+for `missingCoreBlocks()` and `composeFingerprintProfileSections()`, which now
+take the core as a required argument.
+
 ## The judge is pinned to HER voice on both arms
 
 One metric: `eval-judge-brand-voice`, a platform-seeded judge. Sunrise's own
@@ -624,11 +822,21 @@ coming back unscored — two walls of text look exactly like a scored comparison
 `/admin/app/voice` — **Voice** in the Lelañea admin section. The set is called
 _the voice test set_ on screen: "golden set" is the term in this document, in the
 content file and in the schema, and it stays there, but it is jargon on an
-operator page. One button queues a comparison, a dialog shows the authored
-questions and the control's whole system prompt before anything has been run; a picker puts a second one's columns in the same table,
+operator page. One button queues a comparison, a dialog shows the questions and
+the control's whole system prompt before anything has been run; a picker puts a second one's columns in the same table,
 which is how two versions are read side by side. Each comparison brings its own
 bare arm, so a drop that both versions share is the model having a different day
 rather than her voice changing.
+
+**The dialog is composed from three rows, not from the file (t-88).**
+`getGoldenSetAdminView()` (`lib/app/voice/golden-set-admin.ts`) reads the version
+and provenance from the pointer, the prompts from the dataset's cases, and the
+control's instructions from the control agent. It lives under `lib/app/voice`
+rather than in `lib/app/content` because it composes three stores and owns none
+of them; a content store reaching into `lib/app/voice` for the dataset id would
+have inverted the dependency, and did, until ESLint's type-aware pass refused it.
+A case whose metadata lost its `key` is keyed by its position rather than
+dropped — a prompt missing from the list reads as a prompt that was never asked.
 
 **The page is two sections, and the split is the point.** A **Run** panel is
 everything above the fold: what a run would ask, what it would cost, and the
@@ -760,20 +968,31 @@ admin's id.
 
 ## The files
 
-| File                                               | What it is                                                   |
-| -------------------------------------------------- | ------------------------------------------------------------ |
-| `seed-data/drafted/lelanea_voice_golden_set.json`  | The authored prompts, the control's prompt, the dataset copy |
-| `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases       |
-| `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                               |
-| `lib/app/voice/comparison-admin.ts`                | The list and the join-by-key read                            |
-| `prisma/seeds/app-lelanea/004-voice-golden-set.ts` | The dataset, its cases, and the control agent                |
-| `components/app/admin/voice-comparison.tsx`        | The board                                                    |
-| `prisma/schema/app.prisma`                         | `AppVoiceComparison` + `AppVoiceComparisonArm`               |
+| File                                               | What it is                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| `seed-data/drafted/lelanea_voice_golden_set.json`  | The authored prompts, the control's prompt, the dataset copy — seed only |
+| `lib/app/content/golden-set-store.ts`              | The pointer row: which version is current, and its provenance            |
+| `lib/app/content/golden-set-seed.ts`               | The pointer the seed writes, built from the authored set                 |
+| `lib/app/voice/golden-set-admin.ts`                | What the voice page shows, composed from three stores                    |
+| `lib/app/voice/golden-set.ts`                      | The ids, the arm vocabulary, the projection onto cases                   |
+| `lib/app/voice/comparison.ts`                      | The arms, the guard, the queue                                           |
+| `lib/app/voice/comparison-admin.ts`                | The list and the join-by-key read                                        |
+| `prisma/seeds/app-lelanea/004-voice-golden-set.ts` | The pointer, the dataset, its cases, and the control agent               |
+| `components/app/admin/voice-comparison.tsx`        | The board                                                                |
+| `prisma/schema/app.prisma`                         | `AppVoiceComparison` + `AppVoiceComparisonArm` + `AppVoiceGoldenSet`     |
 
 Routes: `GET`/`POST /api/v1/admin/app/voice/comparisons` and
 `GET .../comparisons/:id?against=<id>`. Page: `/admin/app/voice`.
 
-## The migration
+## The migrations
+
+`prisma/migrations/20260929100300_app_voice_golden_set` (the pointer table and
+its revisions) and `20260929100400_app_voice_golden_set_data` (the row, in every
+environment). Both were generated with `prisma migrate diff` and stripped of the
+drops Prisma emits for objects it cannot model; the revision table's `editorId`
+FK is hand-written against the mapped `user` table with `ON DELETE SET NULL` and
+pinned by a probe in `lib/app/leaf-db-drift.ts`, for the reason every `app_`
+revision table's is.
 
 `prisma/migrations/20260916140000_app_voice_comparison` — apply with
 `npm run db:migrate:deploy`, not `migrate dev`. The FK from the arm to
@@ -803,6 +1022,7 @@ the run that produced these answers is gone — and the surface says so.
 | `tests/unit/lib/app/voice/comparison-admin.test.ts`            | The join is on the question, and a gap renders as a gap       |
 | `tests/unit/prisma/seeds/app-lelanea/voice-golden-set.test.ts` | The seed's writes, its idempotence, and the freeze            |
 | `tests/unit/lib/app/content/voice-golden-set.test.ts`          | The set covers every moment, and still awaits sign-off        |
+| `tests/unit/lib/app/content/golden-set-seed.test.ts`           | The data migration writes exactly what the builder does       |
 
 Reverting the implementation fails them, and this was run rather than reasoned
 about: delete the identical-prompt check and one case goes red; delete the two

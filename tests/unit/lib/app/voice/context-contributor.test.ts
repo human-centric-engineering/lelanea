@@ -160,6 +160,10 @@ vi.mock('@/lib/app/resources/offering', () => ({
  * unrestricted search over the corpus is the failure mode that would put a
  * `sensitivity-client` document in front of the model.
  */
+vi.mock('@/lib/app/content/voice-overlay-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeVoiceOverlayStore()
+);
+
 vi.mock('@/lib/orchestration/knowledge/search', () => ({
   getPatternDetail: vi.fn(),
   searchKnowledge: vi.fn(
@@ -205,13 +209,17 @@ import {
   sensitivityTagSlug,
 } from '@/lib/app/voice/designation';
 import { APP_SCOPE } from '@/lib/app/voice/corpus-access';
-import { getVoiceOverlays } from '@/lib/app/content';
+import { readVoiceOverlaysFile } from '@/lib/app/content/voice-overlay-seed';
+import { fakeVoiceOverlayStore } from '@/tests/helpers/app/content-stores';
 import { searchKnowledge } from '@/lib/orchestration/knowledge/search';
 
 const searchKnowledgeMock = searchKnowledge as ReturnType<typeof vi.fn>;
 
 const HER_AGENT = 'agent-hers';
-const CONTENT = getVoiceOverlays();
+// The AUTHORED file, still the yardstick: it is what the rows are seeded from,
+// so asserting the emitted block against it proves the words survived the move
+// into the database rather than proving the fake agrees with itself (t-88).
+const CONTENT = readVoiceOverlaysFile();
 const KNOWN_SITUATION = CONTENT.overlays[0];
 const UNKNOWN_SITUATION = 'a-situation-nobody-authored';
 
@@ -282,6 +290,12 @@ beforeEach(() => {
   __resetContextContributorsForTests();
   invalidateAllAgentAccess();
   __resetAgentAccessContributorsForTests();
+  fakeVoiceOverlayStore().reset();
+  // Reset here as well as in the offering's own describe: cases outside it set
+  // these too now, and a leaked `text` would silently add a block to whatever
+  // ran next.
+  offering.text = '';
+  offering.fail = false;
   seedWorld();
 });
 
@@ -298,6 +312,90 @@ describe('the voice context block', () => {
     // is what makes this case fail if the seam is emptied.
     expect(block).not.toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
     expect(bodyOf(block)).toContain(KNOWN_SITUATION.heading);
+  });
+
+  it('takes the register from the ROW, not the file it was seeded from', async () => {
+    // The t-88 done-when. Every other case here asserts the emitted block
+    // against the authored file, which passes identically whether the block
+    // came from the database or from a leftover file read. This one makes the
+    // two disagree: edit the row, and the prompt must follow the row.
+    const edited = 'Register for this moment — edited in the database.';
+    fakeVoiceOverlayStore().editOverlay(KNOWN_SITUATION.situation, {
+      heading: edited,
+      lines: ['Only this beat, and it exists in no file.'],
+    });
+
+    const body = bodyOf(await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation));
+
+    expect(body).toContain(edited);
+    expect(body).toContain('Only this beat, and it exists in no file.');
+    // The authored wording is gone from the prompt, which is what rules out a
+    // file read sitting behind or beside the row.
+    expect(body).not.toContain(KNOWN_SITUATION.heading);
+    for (const line of KNOWN_SITUATION.lines) expect(body).not.toContain(line);
+  });
+
+  it('takes the core-only body and the exemplar framing from the row too', async () => {
+    // The same proof for the two blocks that belong to no situation. They live
+    // on the set row, and a turn with no overlay is the only thing that shows
+    // `coreOnly` at all.
+    fakeVoiceOverlayStore().editSet({
+      coreOnly: { heading: 'Core only, from the row.', lines: ['One stored beat.'] },
+    });
+
+    const body = bodyOf(await buildContext(VOICE_CONTEXT_TYPE, UNKNOWN_SITUATION));
+
+    expect(body).toContain('Core only, from the row.');
+    expect(body).toContain('One stored beat.');
+    expect(body).not.toContain(CONTENT.coreOnly.heading);
+  });
+
+  it('serves no register at all, rather than the file, when the rows are gone', async () => {
+    fakeVoiceOverlayStore().empty();
+    const { logger } = await import('@/lib/logging');
+
+    const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation);
+    const body = bodyOf(block);
+
+    // The point of the case: none of her authored words reach the prompt,
+    // because there is nowhere left for them to come from but the rows.
+    expect(body).not.toContain(KNOWN_SITUATION.heading);
+    for (const line of KNOWN_SITUATION.lines) expect(body).not.toContain(line);
+    expect(body).not.toContain(CONTENT.coreOnly.heading);
+
+    // And it is loud. An unreadable set is an operator's problem to see, not
+    // something the turn absorbs quietly.
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('voiceOverlays'),
+      expect.objectContaining({ error: expect.stringContaining('No voice overlays') })
+    );
+  });
+
+  it('keeps the rest of the block when the overlay rows are gone', async () => {
+    // The read is caught IN the contributor rather than left to Sunrise's
+    // `buildContext`, and this is why. `buildContext` degrades a throwing
+    // contributor to `No context loader for type 'voice'` — which would take
+    // the slot vocabulary and the resource offering down with the register,
+    // since all three are composed here. The vocabulary is the one whose
+    // absence is unrecoverable: the agent still holds `fill_slot` and is still
+    // told to record, so with no taxonomy in front of it, it mints a slug —
+    // and a mint is never masked (`lib/app/slots/vocabulary.ts`). Found by
+    // /code-review.
+    //
+    // The offering stands in for both here: this file's `prisma` fake carries
+    // no slot models, so the vocabulary is empty in every case and asserting
+    // on it would be vacuous. What the case actually proves is that the
+    // placeholder is NOT emitted — the contributor returned a block — and that
+    // a sibling composed after the failed read still reaches the prompt.
+    fakeVoiceOverlayStore().empty();
+    offering.text = 'Films and writing of Lelañea’s you may offer this person, by id:';
+
+    const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation, {
+      userId: 'user-1',
+    });
+
+    expect(block).not.toContain(`No context loader for type '${VOICE_CONTEXT_TYPE}'`);
+    expect(block).toContain('you may offer this person');
   });
 
   it('carries the authored register for the situation, beat by beat', async () => {

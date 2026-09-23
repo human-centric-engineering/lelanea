@@ -57,7 +57,7 @@
  * @see lib/orchestration/agents/resolve-effective-prompt.ts — the composition order
  */
 
-import { getVoiceFingerprint, type VoiceFingerprintCore } from '@/lib/app/content';
+import type { VoiceFingerprintCore } from '@/lib/app/content';
 import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/designation';
 
 /**
@@ -263,7 +263,7 @@ function inlineList(label: string, entries: readonly string[]): string {
  * Returns block names rather than a boolean so a caller can say WHICH one went
  * missing; an operator reading "a section was empty" has nowhere to start.
  */
-export function missingCoreBlocks(core: VoiceFingerprintCore = getVoiceFingerprint()): string[] {
+export function missingCoreBlocks(core: VoiceFingerprintCore): string[] {
   const blocks: [string, readonly string[]][] = [
     ['identity', core.identity.lines],
     ['cadence', core.cadence.lines],
@@ -294,7 +294,7 @@ export function missingCoreBlocks(core: VoiceFingerprintCore = getVoiceFingerpri
  * untestable and therefore decorative (`fp6`).
  */
 export function composeFingerprintProfileSections(
-  core: VoiceFingerprintCore = getVoiceFingerprint()
+  core: VoiceFingerprintCore
 ): FingerprintProfileSections {
   const identity = block(core.identity.heading, core.identity.lines);
   // The marker rides WITH the identity rather than beside it. Emitted on its own

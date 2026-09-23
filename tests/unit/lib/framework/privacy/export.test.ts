@@ -158,6 +158,15 @@ const LEAF_EXCLUDED_MODELS = [
   // f-slots t-72 — the retry guard's ledger: that a write happened, not what was
   // written. The reading itself is the `framework_slot_value` above.
   'AppTurnSlotWrite',
+  // f-content-seeds t-88 — how she sounds in a given moment, and which set of
+  // test questions her voice is checked against. Guidance to the assistant
+  // about its own register, never anything about the person it speaks to.
+  'AppVoiceOverlaySet',
+  'AppVoiceOverlaySetRevision',
+  'AppVoiceOverlay',
+  'AppVoiceOverlayRevision',
+  'AppVoiceGoldenSet',
+  'AppVoiceGoldenSetRevision',
 ];
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');

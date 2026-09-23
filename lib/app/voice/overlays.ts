@@ -28,23 +28,25 @@
  * indistinguishable from a broken loader, both to the model and to whoever is
  * reading the prompt trying to work out what happened.
  *
- * ## The vocabulary lives in the authored file
+ * ## The vocabulary lives in the rows
  *
- * `seed-data/drafted/lelanea_voice_overlays.json` holds the situations, and this module
- * reads them through `getVoiceOverlays()`. Adding a fifth situation is an edit
- * to that file and nothing else. There is no TypeScript list of situation keys
- * here to fall out of step with it, and no string literal of her words anywhere
- * in this module — the same rule the content seam and its ESLint boundary exist
- * to hold.
+ * `app_voice_overlay` holds the situations, and this module reads them through
+ * `getVoiceOverlays()` (t-88 — until then they came from a bundled file).
+ * Adding a fifth situation is a row, and nothing else. There is no TypeScript
+ * list of situation keys here to fall out of step with the table, and no
+ * string literal of her words anywhere in this module — the same rule the
+ * content seam and its ESLint boundary exist to hold.
  *
- * Nothing here reads a database or looks anything up, transitively included:
- * the only import is the content accessor, which parses a bundled JSON file.
+ * **Selection is still an exact match and nothing else.** The read is now a
+ * database read, so these functions are async; what they do with what comes
+ * back is unchanged. Nothing here looks anything up by similarity.
  *
  * @see .context/app/voice.md
  * @see lib/app/voice/context-contributor.ts — what composes the block
  */
 
-import { getVoiceOverlays, type VoiceOverlay } from '@/lib/app/content';
+import { getVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
+import type { VoiceOverlay, VoiceOverlays } from '@/lib/app/content';
 
 /**
  * Normalise a situation key as it arrived over the wire.
@@ -61,17 +63,34 @@ export function normaliseSituation(situation: string): string {
 }
 
 /**
- * The overlay for this situation, or `null` when none matches.
+ * The overlay for this situation in an already-read set, or `null` when none
+ * matches.
  *
  * `null` rather than a default overlay: "no overlay" and "the overlay that
  * happens to be first" are different facts, and the caller has to be able to say
  * which one it is looking at. Returning a default here would make the core-only
  * fallback unreachable and the assertion that proves it fires meaningless.
  */
-export function selectOverlay(situation: string): VoiceOverlay | null {
+export function selectOverlayFrom(content: VoiceOverlays, situation: string): VoiceOverlay | null {
   const key = normaliseSituation(situation);
   if (key === '') return null;
-  return getVoiceOverlays().overlays.find((overlay) => overlay.situation === key) ?? null;
+  return content.overlays.find((overlay) => overlay.situation === key) ?? null;
+}
+
+/**
+ * The same selection, reading the set itself.
+ *
+ * For a caller that wants one overlay and nothing else. A caller that also
+ * needs the set's other blocks — `context-contributor.ts` needs `coreOnly` and
+ * `exemplars` on the same turn — reads once and uses
+ * {@link selectOverlayFrom}, rather than paying for a second read of the same
+ * rows.
+ */
+export async function selectOverlay(situation: string): Promise<VoiceOverlay | null> {
+  // Before the read, not after: an empty key matches nothing, and asking the
+  // database to confirm that is a query every core-only turn would pay for.
+  if (normaliseSituation(situation) === '') return null;
+  return selectOverlayFrom(await getVoiceOverlays(), situation);
 }
 
 /**
@@ -81,6 +100,7 @@ export function selectOverlay(situation: string): VoiceOverlay | null {
  * `contextId`, her review path in t-28, a test asserting the file and the
  * selector agree — so none of them grows its own copy of the vocabulary.
  */
-export function knownSituations(): string[] {
-  return getVoiceOverlays().overlays.map((overlay) => overlay.situation);
+export async function knownSituations(): Promise<string[]> {
+  const { overlays } = await getVoiceOverlays();
+  return overlays.map((overlay) => overlay.situation);
 }

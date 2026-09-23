@@ -95,4 +95,19 @@ describe('GoldenSetDialog', () => {
 
     expect(screen.queryByText(/drafted, not final/i)).toBeNull();
   });
+
+  it('names the seeder when there is no set to show, rather than an empty list', async () => {
+    // `null` is what the page passes when `getGoldenSetAdminView()` threw, and
+    // that is the ordinary state of an environment which has migrated but not
+    // been seeded — migrations run before every deploy, the seeder only on
+    // request. The page degrades instead of throwing so the operator keeps the
+    // surface; this dialog is then the thing that has to say why it is empty.
+    const user = userEvent.setup();
+    render(<GoldenSetDialog goldenSet={null} />);
+
+    await user.click(screen.getByRole('button', { name: /what is in the test set/i }));
+
+    expect(screen.getByText(/npm run db:seed/)).toBeVisible();
+    expect(screen.getByText(/could not be read/i)).toBeVisible();
+  });
 });

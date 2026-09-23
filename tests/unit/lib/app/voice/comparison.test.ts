@@ -81,6 +81,22 @@ const world = {
 
 let nextId = 0;
 
+// The pointer row is its own store (t-88). Mocked rather than added to the
+// prisma stand-in below: what these cases are about is the DATASET being
+// present or absent, and the pointer only supplies the version that names it.
+vi.mock('@/lib/app/content/golden-set-store', async () => {
+  const { buildGoldenSetSeed } = await import('@/lib/app/content/golden-set-seed');
+  const seed = buildGoldenSetSeed();
+  return {
+    VOICE_GOLDEN_SET_ID: seed.id,
+    getGoldenSetPointer: vi.fn(() =>
+      Promise.resolve({ ...seed, status: 'draft' as const, revision: 1 })
+    ),
+    seedGoldenSetPointer: vi.fn(),
+    GOLDEN_SET_SNAPSHOT_FIELDS: [] as const,
+  };
+});
+
 vi.mock('@/lib/db/client', () => {
   const tx = {
     appVoiceComparison: {
@@ -148,6 +164,7 @@ import {
   VOICE_CONTROL_AGENT_SLUG,
   goldenSetDatasetId,
 } from '@/lib/app/voice/golden-set';
+import { getVoiceFingerprint } from '@/lib/app/content';
 import {
   VOICE_AGENT_SLUG,
   VOICE_AGENT_SYSTEM_INSTRUCTIONS,
@@ -158,7 +175,7 @@ import { getVoiceGoldenSet } from '@/lib/app/content';
 
 /** The world the seeds are supposed to leave behind. */
 function seedWorld(): void {
-  const sections = composeFingerprintProfileSections();
+  const sections = composeFingerprintProfileSections(getVoiceFingerprint());
   const goldenSet = getVoiceGoldenSet();
 
   world.agents = [
@@ -314,7 +331,7 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
     // The failure the whole file exists for. Both arms answer, both sound like
     // her, the comparison reports no difference, and the conclusion drawn is
     // that her fingerprint does nothing.
-    const sections = composeFingerprintProfileSections();
+    const sections = composeFingerprintProfileSections(getVoiceFingerprint());
     agent(VOICE_CONTROL_AGENT_SLUG).profile = {
       id: 'profile-core',
       name: 'core',
@@ -392,7 +409,8 @@ describe('queueVoiceComparison', () => {
     // is null — the judge would fall back to a generic rubric and score the bare
     // arm against nothing in particular, producing a number that cannot be
     // compared with the other arm's.
-    const brandVoice = composeFingerprintProfileSections().brandVoiceInstructions;
+    const brandVoice =
+      composeFingerprintProfileSections(getVoiceFingerprint()).brandVoiceInstructions;
     expect(brandVoice.length).toBeGreaterThan(0);
 
     await queueVoiceComparison('admin-1');
@@ -416,7 +434,7 @@ describe('queueVoiceComparison', () => {
     agent(VOICE_CONTROL_AGENT_SLUG).profile = {
       id: 'profile-core',
       name: 'core',
-      ...composeFingerprintProfileSections(),
+      ...composeFingerprintProfileSections(getVoiceFingerprint()),
     };
 
     await expect(queueVoiceComparison('admin-1')).rejects.toThrow();
@@ -445,7 +463,7 @@ describe('queueVoiceComparison', () => {
 /** The version the authored core carries, read the way the prompt carries it. */
 function getVoiceGoldenSetCoreVersion(): string {
   const marker = /Voice fingerprint:\s+\S+\s+v(\d+\.\d+(?:\.\d+)?)/.exec(
-    composeFingerprintProfileSections().persona
+    composeFingerprintProfileSections(getVoiceFingerprint()).persona
   );
   if (!marker) throw new Error('The authored core composed no version marker');
   return marker[1];

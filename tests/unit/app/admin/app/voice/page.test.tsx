@@ -19,6 +19,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
+// The golden set is read from the database since t-88, and this page test is
+// about the comparisons board rather than the dialog. Mocked so the case does
+// not need a migrated database to assert what the board was handed.
+vi.mock('@/lib/app/voice/golden-set-admin', () => ({
+  getGoldenSetAdminView: vi.fn(() =>
+    Promise.resolve({
+      version: '1.1',
+      provenanceNote: 'A drafted proposal.',
+      awaitingSignOffFrom: 'Lelañea Fulton',
+      prompts: [
+        { key: 'p1', kind: 'register', prompt: 'What brought you here?', probe: 'Opening.' },
+      ],
+      controlInstructions: 'Answer plainly.',
+    })
+  ),
+}));
+
 vi.mock('@/lib/api/server-fetch', () => ({
   serverFetch: vi.fn(),
   parseApiResponse: vi.fn(),

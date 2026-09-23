@@ -14,8 +14,13 @@
  * only for a saved draft: unsaved edits have to be saved (and so become the
  * draft) first.
  *
- * Before the tables are seeded nothing here is editable: the bundled file is
- * being served, and the page says to run the seed.
+ * Before the tables are seeded nothing here is editable, and the banner says
+ * what that costs: since t-88 there is no bundled file under the read path, so
+ * an unseeded install answers nobody in crisis at all. The same goes for the
+ * `unservable` and malformed-region banners — all three used to say the
+ * built-in version was being served, which read as "handled" to an operator
+ * during the one incident they are shown in (found by /code-review). Their
+ * wording is pinned, negatively, in the component's test.
  *
  * The browser checks nothing the route does not; the route's schema is the
  * authority, and its message is what the admin reads.
@@ -133,12 +138,16 @@ export function CrisisResourcesPanel({
 
   if (!initialView.seeded || copy === null) {
     return (
-      <div role="alert" className="max-w-3xl rounded-md border border-amber-500 p-4 text-sm">
-        <p className="font-medium">The helplines have not been loaded into the database yet.</p>
+      <div role="alert" className="border-destructive max-w-3xl rounded-md border p-4 text-sm">
+        <p className="text-destructive font-medium">
+          The helplines have not been loaded into the database yet, so nobody in crisis can be
+          answered at all.
+        </p>
         <p className="text-muted-foreground mt-1">
-          Until they are, everyone is shown the version built into the code, which is safe but
-          cannot be edited here. Run <code>npm run db:seed</code> on this environment, then reload
-          this page.
+          There is no copy of them anywhere else: until these rows exist, a turn that needs a
+          helpline fails and shows no number. Every environment gets them from its migrations — run{' '}
+          <code>npm run db:migrate:deploy</code>, or <code>npm run db:seed</code>, on this
+          environment, then reload this page.
         </p>
       </div>
     );
@@ -152,17 +161,20 @@ export function CrisisResourcesPanel({
     <div className="space-y-10">
       {initialView.unservable && (
         <p role="alert" className="text-destructive max-w-3xl text-sm">
-          What is stored here cannot be shown to anyone, so everyone is being shown the version
-          built into the code instead. The problem: {initialView.unservable}. Correct it and save;
-          until then, edits and sign-offs here reach nobody.
+          What is stored here cannot be read, so{' '}
+          <strong>every crisis turn is failing right now</strong> and nobody is being shown a
+          helpline. The problem: {initialView.unservable}. Correct it and save — there is no other
+          copy to fall back on.
         </p>
       )}
 
       {malformed.length > 0 && (
         <p role="alert" className="text-destructive max-w-3xl text-sm">
-          The stored services for {malformed.join(', ')} are malformed, so everyone is being shown
-          the version built into the code instead of this page. Open{' '}
-          {malformed.length === 1 ? 'that region' : 'those regions'}, correct the services and save.
+          The stored services for {malformed.join(', ')} are malformed, so{' '}
+          <strong>every crisis turn is failing right now</strong> — not only the ones from{' '}
+          {malformed.length === 1 ? 'that region' : 'those regions'} — and nobody is being shown a
+          helpline. Open {malformed.length === 1 ? 'that region' : 'those regions'}, correct the
+          services and save.
         </p>
       )}
 

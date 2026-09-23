@@ -1,7 +1,7 @@
 /**
- * The journey, discovery-question and resource seeds: each fills its empty
- * tables from the file, with a first revision per row, and never touches them
- * again (f-content-seeds t-87).
+ * The journey, discovery-question, resource and voice-overlay seeds: each
+ * fills its empty tables from the file, with a first revision per row, and
+ * never touches them again (f-content-seeds t-87; the overlays t-88).
  *
  * ## `fp4` — operator-owned, written once
  *
@@ -15,6 +15,7 @@
  * @see prisma/seeds/app-lelanea/016-journey-structure.ts
  * @see prisma/seeds/app-lelanea/017-discovery-questions.ts
  * @see prisma/seeds/app-lelanea/018-resources.ts
+ * @see prisma/seeds/app-lelanea/019-voice-overlays.ts
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -25,6 +26,7 @@ vi.mock('@/lib/db/client', () => ({ prisma: {} }));
 import journeyUnit from '@/prisma/seeds/app-lelanea/016-journey-structure';
 import questionsUnit from '@/prisma/seeds/app-lelanea/017-discovery-questions';
 import resourcesUnit from '@/prisma/seeds/app-lelanea/018-resources';
+import overlaysUnit from '@/prisma/seeds/app-lelanea/019-voice-overlays';
 import { MODULE_SNAPSHOT_FIELDS, TIER_SNAPSHOT_FIELDS } from '@/lib/app/content/journey-store';
 import {
   QUESTION_SET_SNAPSHOT_FIELDS,
@@ -33,6 +35,11 @@ import {
 import { WORDS_SNAPSHOT_FIELDS, seedResources } from '@/lib/app/content/resource-store';
 import { buildResourcesSeed } from '@/lib/app/content/resources-seed';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
+import {
+  VOICE_OVERLAY_SET_SNAPSHOT_FIELDS,
+  VOICE_OVERLAY_SNAPSHOT_FIELDS,
+} from '@/lib/app/content/voice-overlay-store';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/voice-overlay-seed';
 
 type Row = Record<string, unknown>;
 
@@ -51,6 +58,10 @@ const TABLES = [
   'appResourceRevision',
   'appResourceWords',
   'appResourceWordsRevision',
+  'appVoiceOverlaySet',
+  'appVoiceOverlaySetRevision',
+  'appVoiceOverlay',
+  'appVoiceOverlayRevision',
 ] as const;
 type Table = (typeof TABLES)[number];
 
@@ -111,6 +122,7 @@ async function runAll() {
   await run(journeyUnit);
   await run(questionsUnit);
   await run(resourcesUnit);
+  await run(overlaysUnit);
 }
 
 describe('016-journey-structure', () => {
@@ -379,5 +391,89 @@ describe('all three', () => {
     expect(journeyUnit.hashInputs).toBeUndefined();
     expect(questionsUnit.hashInputs).toBeUndefined();
     expect(resourcesUnit.hashInputs).toBeUndefined();
+  });
+});
+
+describe('019-voice-overlays', () => {
+  it('writes the set, every overlay and a first revision for each', async () => {
+    const seed = buildVoiceOverlaySeed();
+
+    await run(overlaysUnit);
+
+    expect(db.tables.appVoiceOverlaySet).toHaveLength(1);
+    expect(db.tables.appVoiceOverlaySet[0]).toMatchObject({
+      id: seed.set.id,
+      version: seed.set.version,
+      status: 'draft',
+      revision: 1,
+    });
+    expect(db.tables.appVoiceOverlay.map((row) => row.situation)).toEqual(
+      seed.overlays.map((overlay) => overlay.situation)
+    );
+    // fp6: the file is non-empty, so the comparison above is not vacuous.
+    expect(seed.overlays.length).toBeGreaterThan(0);
+    expect(db.tables.appVoiceOverlaySetRevision).toHaveLength(1);
+    expect(db.tables.appVoiceOverlayRevision).toHaveLength(seed.overlays.length);
+  });
+
+  it('stamps every first revision as the seed, by an author who is not a person', async () => {
+    await run(overlaysUnit);
+
+    for (const row of [
+      ...db.tables.appVoiceOverlaySetRevision,
+      ...db.tables.appVoiceOverlayRevision,
+    ]) {
+      expect(row).toMatchObject({ revision: 1, origin: 'seed', editorId: null });
+    }
+    expect(db.tables.appVoiceOverlaySetRevision[0].changedFields).toEqual([
+      ...VOICE_OVERLAY_SET_SNAPSHOT_FIELDS,
+    ]);
+    expect(db.tables.appVoiceOverlayRevision[0].changedFields).toEqual([
+      ...VOICE_OVERLAY_SNAPSHOT_FIELDS,
+    ]);
+  });
+
+  it('writes every row as a draft: a seed cannot sign her register off', async () => {
+    await run(overlaysUnit);
+
+    for (const row of [...db.tables.appVoiceOverlaySet, ...db.tables.appVoiceOverlay]) {
+      expect(row.status).toBe('draft');
+    }
+  });
+
+  it('writes the whole set in one transaction, so the marker cannot land alone', async () => {
+    await run(overlaysUnit);
+
+    // The write-once guard reads the set row. If the set could be written
+    // without its overlays, a half-seeded database would look complete and
+    // never be repaired.
+    expect(db.raw.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an EDITED overlay alone on a second run', async () => {
+    await run(overlaysUnit);
+    const [first] = db.tables.appVoiceOverlay;
+    first.heading = 'Edited by an admin.';
+    first.revision = 2;
+
+    await run(overlaysUnit);
+
+    // The case that matters (`fp4`). An admin edits these in t-92, and a seed
+    // that rewrote them would undo the edit on the next deploy that seeded.
+    expect(db.tables.appVoiceOverlay[0]).toMatchObject({
+      heading: 'Edited by an admin.',
+      revision: 2,
+    });
+    expect(db.tables.appVoiceOverlay).toHaveLength(buildVoiceOverlaySeed().overlays.length);
+    expect(db.tables.appVoiceOverlayRevision).toHaveLength(buildVoiceOverlaySeed().overlays.length);
+  });
+
+  it('does not resurrect an overlay an admin deleted', async () => {
+    await run(overlaysUnit);
+    const removed = db.tables.appVoiceOverlay.pop();
+
+    await run(overlaysUnit);
+
+    expect(db.tables.appVoiceOverlay.map((row) => row.situation)).not.toContain(removed?.situation);
   });
 });
