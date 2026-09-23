@@ -100,4 +100,11 @@ describe('CostAdminPage', () => {
     const props = overviewProps();
     expect(Object.values(props).every((value) => value === null)).toBe(true);
   });
+
+  it('hands an envelope that is not a success down as null', async () => {
+    vi.mocked(serverFetch).mockResolvedValue({ ok: true, url: '/x?by=user' } as Response);
+    vi.mocked(parseApiResponse).mockResolvedValue({ success: false } as never);
+    render(await CostAdminPage());
+    expect(Object.values(overviewProps()).every((value) => value === null)).toBe(true);
+  });
 });

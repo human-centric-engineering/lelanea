@@ -292,3 +292,143 @@ describe('TurnCostView', () => {
     );
   });
 });
+
+describe('CostOverview — the edges a table can meet', () => {
+  it('names an erased account as such, and a person with no limit read as a dash', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>('user', [
+            group('cmu00000000000000000gone', 2, { user: null, ceiling: null }),
+          ]),
+        })}
+      />
+    );
+    const row = document.querySelector('[data-person="cmu00000000000000000gone"]') as HTMLElement;
+    expect(row.textContent).toContain('An account that no longer exists');
+    expect(row.textContent).toContain('—');
+  });
+
+  it('says there is nothing yet, rather than drawing empty tables', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>('user', [group(null, 4, { user: null, ceiling: null })]),
+          byConversation: breakdown<ConversationGroup>('conversation', []),
+          bySeat: breakdown('seat', []),
+        })}
+      />
+    );
+    expect(screen.getByText('No one has spent anything yet this month.')).toBeTruthy();
+    expect(screen.getByText('No conversation has cost anything yet this month.')).toBeTruthy();
+    expect(screen.getByText('Nothing yet this month.')).toBeTruthy();
+  });
+
+  it('flags spend against a limit of nothing, and a person exactly at their limit', () => {
+    render(
+      <CostOverview
+        {...props({
+          byUser: breakdown<PersonGroup>('user', [
+            group('cmu000000000000000000zer', 0.2, {
+              user: { name: 'Zed', email: 'z@x' },
+              ceiling: { ceilingUsd: 0, source: 'override' },
+            }),
+            group('cmu000000000000000000eql', 20, {
+              user: { name: 'Eve', email: 'e@x' },
+              ceiling: { ceilingUsd: 20, source: 'default' },
+            }),
+          ]),
+        })}
+      />
+    );
+    expect(screen.getByText('spent against a $0 limit')).toBeTruthy();
+    expect(screen.getByText('at limit')).toBeTruthy();
+  });
+
+  it('calls an untitled conversation that, and says a cut conversation list is cut', () => {
+    render(
+      <CostOverview
+        {...props({
+          byConversation: breakdown<ConversationGroup>(
+            'conversation',
+            [
+              group('cmuconvuntitled0000000000', 3, {
+                conversation: { title: null, userId: null, user: null },
+              }),
+            ],
+            { truncated: true }
+          ),
+          bySeat: breakdown('seat', [group(null, 1)], { truncated: true }),
+        })}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Untitled conversation' })).toBeTruthy();
+    expect(screen.getAllByText(/largest are listed/).length).toBe(2);
+    expect(screen.getByText('No seat')).toBeTruthy();
+  });
+});
+
+describe('ConversationTurnsView and TurnCostView — what went wrong, said plainly', () => {
+  it('names a turn that ended on an error, and a cut turn list', () => {
+    render(
+      <ConversationTurnsView
+        reading={{
+          conversationId: 'c',
+          window: WINDOW,
+          truncated: true,
+          turns: [
+            {
+              turnId: 'failed',
+              userId: ADA,
+              seat: 'conversation',
+              status: 'failed',
+              attempts: 1,
+              errorCode: 'timed_out',
+              model: null,
+              startedAt: '2026-09-22T10:00:00.000Z',
+              completedAt: null,
+              costUsd: 0.02,
+              costRows: 1,
+              unpricedRows: 0,
+            },
+          ],
+        }}
+      />
+    );
+    const row = document.querySelector('[data-turn="failed"]') as HTMLElement;
+    expect(row.textContent).toContain('timed_out');
+    expect(row.textContent).toContain('—');
+    expect(screen.getByText(/costliest turns are listed/)).toBeTruthy();
+  });
+
+  it('says how a turn ended and offers no conversation link when it had none', () => {
+    render(
+      <TurnCostView
+        reading={{
+          turnId: 't',
+          seat: 'onboarding',
+          status: 'failed',
+          attempts: 3,
+          errorCode: 'unavailable',
+          model: null,
+          provider: null,
+          conversationId: null,
+          startedAt: '2026-09-22T10:00:00.000Z',
+          completedAt: null,
+          costUsd: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          costRows: 0,
+          unpricedRows: 0,
+          replyCostUsd: 0,
+          sideCostUsd: 0,
+          rows: [],
+        }}
+      />
+    );
+    expect(
+      screen.getByText(/no model recorded · failed · 3 attempts · ended unavailable/)
+    ).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'its conversation' })).toBeNull();
+  });
+});
