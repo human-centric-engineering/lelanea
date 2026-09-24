@@ -5,12 +5,12 @@
  * Pure, with no database import, so the store, the seed's tests and the fake
  * store all build the library the same way.
  *
- * **One table, two kinds.** Films and readings share `app_resource`, because
+ * **One table, three kinds.** Videos, audio and articles share `app_resource`, because
  * they share one id namespace. The rules the old file's schema held by shape
- * are checked here, on every write and every read: a film has a duration and a
- * link and nothing else; a reading has a reading time and exactly one of a link
- * and a document. Each row is run through the same `filmSchema` or
- * `readingSchema` the file was, so a row an admin writes (t-91) is held to the
+ * are checked here, on every write and every read: a video or an audio piece has a
+ * duration and a link and nothing else; an article has a reading time and exactly one of a link
+ * and a document. Each row is run through the same `videoSchema` or
+ * `articleSchema` the file was, so a row an admin writes (t-91) is held to the
  * same rules the seed was.
  *
  * @see lib/app/content/resource-store.ts — the reads and writes
@@ -18,14 +18,15 @@
  */
 
 import {
-  filmSchema,
+  videoSchema,
   provenanceSchema,
-  readingSchema,
+  articleSchema,
   wordsSchema,
-  type ResourceFilm,
-  type ResourceFilmView,
-  type ResourceReading,
-  type ResourceReadingView,
+  type ResourceAudioView,
+  type ResourceVideo,
+  type ResourceVideoView,
+  type ResourceArticle,
+  type ResourceArticleView,
   type ResourcesLibrary,
   type ResourceWords,
   type ResourceWordsView,
@@ -35,7 +36,7 @@ import {
 // Rows
 // ============================================================================
 
-export const RESOURCE_KINDS = ['film', 'reading'] as const;
+export const RESOURCE_KINDS = ['video', 'audio', 'article'] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
 export interface ResourceCollectionRow {
@@ -75,9 +76,10 @@ export interface ResourceWordsRow {
 // Item ↔ row
 // ============================================================================
 
-/** A film or a reading as the columns hold it, without its revision. */
+/** A video, audio or article as the columns hold it, without its revision. */
 export function resourceToRow(
-  item: ResourceFilm | ResourceReading,
+  // An audio piece has the video's shape, so `ResourceVideo` covers it.
+  item: ResourceVideo | ResourceArticle,
   kind: ResourceKind,
   position: number
 ): Omit<ResourceRow, 'revision'> {
@@ -107,17 +109,20 @@ export function wordsToRow(key: string, words: ResourceWords): Omit<ResourceWord
 }
 
 /**
- * A stored film, validated. The columns a film does not have must be empty, or
- * the row is a reading mislabelled, and serving it as a film would drop its
- * document on the floor.
+ * A stored video or audio piece, validated. The columns neither has must be
+ * empty, or the row is an article mislabelled, and serving it as either would
+ * drop its document on the floor.
  *
  * @throws naming the row and the rule it broke.
  */
-export function toFilm(row: ResourceRow): ResourceFilmView {
-  if (row.kind !== 'film' || row.readingTime !== null || row.documentId !== null) {
-    throw new Error(`Resource "${row.id}" is not a well-formed film`);
+function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceVideoView {
+  const label = kind === 'video' ? 'a video' : 'an audio piece';
+  if (row.kind !== kind || row.readingTime !== null || row.documentId !== null) {
+    throw new Error(
+      `Resource "${row.id}" is not a well-formed ${kind === 'video' ? 'video' : 'audio piece'}`
+    );
   }
-  const parsed = filmSchema.safeParse({
+  const parsed = videoSchema.safeParse({
     id: row.id,
     title: row.title,
     subtitle: row.subtitle,
@@ -126,25 +131,35 @@ export function toFilm(row: ResourceRow): ResourceFilmView {
     href: row.href,
   });
   if (!parsed.success) {
-    throw new Error(`Resource "${row.id}" failed validation as a film: ${parsed.error.message}`);
+    throw new Error(`Resource "${row.id}" failed validation as ${label}: ${parsed.error.message}`);
   }
   return { ...parsed.data, revision: row.revision };
 }
 
+/** A stored video, validated. @throws naming the row and the rule it broke. */
+export function toVideo(row: ResourceRow): ResourceVideoView {
+  return toTimed(row, 'video');
+}
+
+/** A stored audio piece, validated — held to what a video is. @throws as `toVideo`. */
+export function toAudio(row: ResourceRow): ResourceAudioView {
+  return toTimed(row, 'audio');
+}
+
 /**
- * A stored reading, validated: a reading time, and exactly one of a link and a
+ * A stored article, validated: a reading time, and exactly one of a link and a
  * document.
  *
  * @throws naming the row and the rule it broke.
  */
-export function toReading(row: ResourceRow): ResourceReadingView {
+export function toArticle(row: ResourceRow): ResourceArticleView {
   if (
-    row.kind !== 'reading' ||
+    row.kind !== 'article' ||
     row.duration !== null ||
     (row.href === null) === (row.documentId === null)
   ) {
     throw new Error(
-      `Resource "${row.id}" is not a well-formed reading: it needs exactly one of a link and a document`
+      `Resource "${row.id}" is not a well-formed article: it needs exactly one of a link and a document`
     );
   }
   const base = {
@@ -154,13 +169,32 @@ export function toReading(row: ResourceRow): ResourceReadingView {
     relatesTo: row.relatesTo,
     readingTime: row.readingTime,
   };
-  const parsed = readingSchema.safeParse(
+  const parsed = articleSchema.safeParse(
     row.documentId !== null ? { ...base, documentId: row.documentId } : { ...base, href: row.href }
   );
   if (!parsed.success) {
-    throw new Error(`Resource "${row.id}" failed validation as a reading: ${parsed.error.message}`);
+    throw new Error(
+      `Resource "${row.id}" failed validation as an article: ${parsed.error.message}`
+    );
   }
   return { ...parsed.data, revision: row.revision };
+}
+
+/** A row's kind, checked. @throws for a kind that is none of the three. */
+export function resourceKindOf(row: Pick<ResourceRow, 'id' | 'kind'>): ResourceKind {
+  const kind = RESOURCE_KINDS.find((k) => k === row.kind);
+  if (!kind) throw new Error(`Resource "${row.id}" has unknown kind "${row.kind}"`);
+  return kind;
+}
+
+/** A stored resource of any kind, validated as its kind. @throws as the per-kind readers. */
+export function toResource(
+  row: ResourceRow
+): ResourceVideoView | ResourceAudioView | ResourceArticleView {
+  const kind = resourceKindOf(row);
+  if (kind === 'video') return toVideo(row);
+  if (kind === 'audio') return toAudio(row);
+  return toArticle(row);
 }
 
 /** A stored key's words, validated. @throws naming the key. */
@@ -181,7 +215,7 @@ export function toWords(row: ResourceWordsRow): ResourceWordsView {
 // ============================================================================
 
 /**
- * The library as served: films and readings each in their stored order, and
+ * The library as served: videos, audio and articles each in their stored order, and
  * the words by key.
  *
  * @throws when a row fails validation, a row's kind is neither, or there are no
@@ -214,8 +248,9 @@ export function toResourcesLibrary(
       locale: collection.locale,
       provenance: provenance.data,
     },
-    films: ordered.filter((row) => row.kind === 'film').map(toFilm),
-    readings: ordered.filter((row) => row.kind === 'reading').map(toReading),
+    videos: ordered.filter((row) => row.kind === 'video').map(toVideo),
+    audio: ordered.filter((row) => row.kind === 'audio').map(toAudio),
+    articles: ordered.filter((row) => row.kind === 'article').map(toArticle),
     words,
   };
 }
@@ -228,7 +263,7 @@ export function toResourcesLibrary(
 // runtime module may import anything from that folder — not even a type, which
 // is what `tests/unit/lib/app/content/runtime-import-graph.test.ts` enforces.
 
-/** What the seed writes: the collection, every film and reading, every key's words. */
+/** What the seed writes: the collection, every video, audio and article, every key's words. */
 export interface ResourcesSeed {
   collection: ResourceCollectionRow;
   resources: Omit<ResourceRow, 'revision'>[];

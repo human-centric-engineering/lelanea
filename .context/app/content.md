@@ -134,7 +134,7 @@ what seeds them.
 **One service writes and reads them:** `lib/app/content/document-store.ts`. Pages,
 the gate, both emails, the waitlist's locale fallback and the API all call it.
 The knowledge-base mirror (t-90, [below](#her-words-in-the-knowledge-base-the-mirror))
-and the admin editor (t-91) attach to it, not to the tables.
+and the admin editor (t-91, [below](#editing-her-content-in-the-admin)) attach to it, not to the tables.
 
 | Function (`document-store.ts`)    | Returns                                                                                   |
 | --------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -171,7 +171,7 @@ two drift. The seed unit (`prisma/seeds/app-lelanea/015-foundational-documents.t
 `fp4`) writes the same rows once, only while no collection row exists, so after
 the migration it skips, and a re-seed never undoes an admin edit. A change to the
 file does not reach an existing database; one that must, ships as a new `app_`
-migration, and an edit goes through the admin (t-91).
+migration, and an edit goes through the admin ([below](#editing-her-content-in-the-admin)).
 
 `lib/app/content/seed-input/foundational-seed.ts` is the one module that still imports
 `lelanea_foundational_documents.json`. It builds the seed, holds the section-key
@@ -219,7 +219,7 @@ retrieved passage is quoted to a person.
 
 | Caller                                                  | When it runs                          | Why it is needed                                                         |
 | ------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| `seedFoundationalDocuments` (and t-91's editor writes)  | after every write through the service | an edit must not leave the agent recalling the old words                 |
+| `seedFoundationalDocuments` and every admin write       | after every write through the service | an edit must not leave the agent recalling the old words                 |
 | seed `app-lelanea/020-knowledge-mirror`                 | `db:seed`, once per source hash       | on `db:reset` the rows come from a migration and seed 015 writes nothing |
 | `GET /api/v1/app/cron/knowledge-mirror` (`vercel.json`) | daily, 04:17 UTC                      | production seeds only when asked, and nothing can embed from a migration |
 
@@ -258,14 +258,14 @@ the rows the moment it migrates. The files only seed them.
 | Questions   | `app_question_set`, `app_discovery_question` (+ revisions)                    | `question-store.ts`          | `017-discovery-questions.ts` |
 | Resources   | `app_resource_collection`, `app_resource`, `app_resource_words` (+ revisions) | `resource-store.ts`          | `018-resources.ts`           |
 
-| Function                                                            | Returns                                                                       |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster |
-| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                  |
-| `getResourcesLibrary()`                                             | collection + provenance, every film and reading, every key's words            |
-| `getResource(id)`                                                   | one film or reading, or `null` — the suggestion tool's per-call lookup        |
-| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key        |
-| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                              |
+| Function                                                            | Returns                                                                          |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster    |
+| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                     |
+| `getResourcesLibrary()`                                             | collection + provenance, every video, audio piece and article, every key's words |
+| `getResource(id)`                                                   | one video, audio or article, or `null` — the suggestion tool's per-call lookup   |
+| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key           |
+| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                                 |
 
 All async, read per request with no cache, and an unseeded database throws
 `ContentNotSeededError`, as the documents' do. Each has a pure `*-view.ts` that
@@ -278,13 +278,20 @@ rows own the words, including every module's title. See
 [`journey.md`](./journey.md#who-owns-what-t-87) for why, and how the registered
 module names are derived from the rows at startup.
 
-**Films and readings share `app_resource`**, because they share one id
-namespace (the suggestion tool and the drawer's pin resolve by id). A film has a
-duration and a link; a reading has a reading time and exactly one of a link and
+**Videos, audio and articles share `app_resource`**, because they share one id
+namespace (the suggestion tool and the drawer's pin resolve by id). A video or an audio
+piece has a duration and a link; an article has a reading time and exactly one of a link and
 a document (`documentId` is a foreign key to `app_foundational_document`). Every
-row is run through the same `filmSchema` / `readingSchema` the file was, on
+row is run through the same `videoSchema` / `articleSchema` the file was, on
 write and on read. The resources seed also refuses a key that names no module
 in the database, so it runs after the journey's.
+
+**The stored kinds are `video`, `audio` and `article`** (`RESOURCE_KINDS` in
+`resource-view.ts`), and those are the only words for them anywhere: code,
+copy, the AI's prompt and tool, docs and tests (owner ruling, 24 Sept 2026).
+`20261001100000_app_resource_kinds` renamed the earlier stored values on every
+existing database; `tests/unit/lib/app/resource-vocabulary.test.ts` fails the
+build if the old words come back.
 
 **Every served item carries its `revision`**, and every route's ETag covers the
 whole payload, so an edit to any row changes the ETag. A parity test per
@@ -300,7 +307,7 @@ every chip it resolves (`loadLibraryForChips`), and not at all when nothing was
 suggested; if the read fails, the replies are shown without chips and a warning
 is logged.
 
-**Her list of films and reading (t-76) is therefore a migration**, not an edit
+**Her list of videos, audio and articles (t-76) is therefore a migration**, not an edit
 to `seed-data/drafted/lelanea_resources.json`: once the library is written, the
 file reaches only a database that was never seeded.
 
@@ -401,7 +408,7 @@ bundle at all.
 | `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id                                        |
 | `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases                                           |
 | `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets                                      |
-| `GET /api/v1/app/content/resources`           | `withAuth` | the library: films, reading, her words per key                   |
+| `GET /api/v1/app/content/resources`           | `withAuth` | the library: videos, audio, articles, her words per key          |
 | `GET /api/v1/app/content/resources/[key]`     | `withAuth` | what the drawer shows for one open thing; `?pin=` puts one first |
 
 All six carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
@@ -525,7 +532,7 @@ The second consumer of her words is the resources drawer
 `words` passage — a quote and its paragraphs, not a block list — from
 `/resources/:key`. It is held to the same rule: every paragraph is its own
 element, every string reaches the DOM as a React child, and nothing is
-re-flowed. A reading that names a `documentId` links to the page the site
+re-flowed. An article that names a `documentId` links to the page the site
 renders that document on (`DOCUMENT_PAGES` in the drawer, pinned to the real
 collection by its test); the welcome has no page and renders as a row that goes
 nowhere.
@@ -673,7 +680,7 @@ which otherwise fails far from its cause:
 - `content.questionCount` matches the questions actually present, and they are
   numbered from one in order
 
-## Resources — her films and reading, and her words on whatever is open
+## Resources — her videos, audio and articles, and her words on whatever is open
 
 `seed-data/drafted/lelanea_resources.json` (seed) · `app_resource*` (served,
 since t-87) · `lib/app/content/resources.ts` (schemas + selection) ·
@@ -681,14 +688,14 @@ since t-87) · `lib/app/content/resources.ts` (schemas + selection) ·
 (f-resources t-74; product description §6.1, §9). The drawer's content: what the
 Curator agent surfaces and what is browsable directly.
 
-**Keyed like the journey.** `films[]` and `readings[]` each carry what
+**Keyed like the journey.** `videos[]`, `audio[]` and `articles[]` each carry what
 the piece is for (`subtitle`) and where it belongs (`relatesTo`: a module id
 such as `module_01_values`, or `journey`, `situations`, or `null` for a piece
 that belongs to everything — never `default`, which the schema refuses on a
 piece: it is the `words` fallback, and a piece tagged with it would show for
 nothing). `words` is per key — a `quote` and a few short
 `paragraphs` — with `default` required, because it is what every key without
-words of its own reads. A film links out (`href`); a reading is a foundational
+words of its own reads. A video or an audio piece links out (`href`); an article is a foundational
 document (`documentId`) or a link (`href`), never both, as a union. No
 thumbnails: nothing exists to show.
 
@@ -697,8 +704,11 @@ entry cites its `source` — a foundational document id, or a step of the Values
 module (`values_module.json`, release-2 content that is validated but not
 otherwise served) — and `tests/unit/lib/app/content/resources.test.ts` asserts
 the quote and every paragraph the seed writes occur character for character in
-that source. An admin edit (t-91) is not held to that test, and t-91 decides how
-it keeps the claim true. A
+that source. An admin edit (t-91) is held to the same rule at the write: a
+passage citing one of her documents must occur word for word in the document as
+stored, or the save (and an import) is refused. A passage citing the Values
+module cannot be checked at runtime, since that file is seed input with no
+table yet, and the editor says so. A
 tidied comma fails CI. Nothing in this file is drafted in her register: the
 voice fingerprint's drafted-with-provenance precedent describes her voice,
 whereas this is shown _as_ her words, so the two are held to different rules.
@@ -708,22 +718,22 @@ nothing.
 **It ships as a draft.** `collection.provenance` (`status`,
 `awaitingSignOffFrom`, `note`) is served, not withheld. Today: two passages the
 builder picked from her material (values, from the "Centered Living" lesson; the
-default, from the welcome statement) and **empty film and reading lists** — no
-film of hers exists yet and only she can say which pieces belong beside which
+default, from the welcome statement) and **empty video, audio and article lists** — no
+video or audio of hers exists yet and only she can say which pieces belong beside which
 module. Her list lands in t-76, as a migration (see above). The working `notes`
 are withheld, as every file's are.
 
-| Function                                    | Returns                                                                                                         |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `getResourcesLibrary()` (store)             | collection meta + provenance, every film, every reading, every `words` entry                                    |
-| `selectResourcesFor(key, { pin? })` (store) | her words on it, up to two films and three readings, the module's `title` and `tier`; `null` for an unknown key |
-| `selectResources(library, modules, key, …)` | the same as a pure function of a library — what the store and the tests use                                     |
-| `buildResourcesFileSchema(known)`           | the file's strict schema, parameterised on the module and document ids its referential checks need              |
+| Function                                    | Returns                                                                                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `getResourcesLibrary()` (store)             | collection meta + provenance, every video, audio piece and article, every `words` entry                                            |
+| `selectResourcesFor(key, { pin? })` (store) | her words on it, up to two videos, two audio pieces and three articles, the module's `title` and `tier`; `null` for an unknown key |
+| `selectResources(library, modules, key, …)` | the same as a pure function of a library — what the store and the tests use                                                        |
+| `buildResourcesFileSchema(known)`           | the file's strict schema, parameterised on the module and document ids its referential checks need                                 |
 
 **The selection is the prototype's `pickFor`.** What belongs to the open thing
-first, then what belongs to everything, capped at two films and three readings
+first, then what belongs to everything, capped at two videos, two audio pieces and three articles
 ("the drawer is for one thing at a time"); a key with no words of its own reads
-`default`'s and says so (`wordsAreOwn: false`). `pin` puts one film or reading first in its list,
+`default`'s and says so (`wordsAreOwn: false`). `pin` puts one video, audio or article first in its list,
 which is how a suggestion made in conversation opens the drawer on it (t-77).
 
 **Slugs in, ids inside.** The shell asks by module slug (`values`), the library
@@ -736,6 +746,69 @@ the latter is a 200 with the default words.
 Referential checks beyond the four above: every `relatesTo` and every `words`
 key is a module id or a fixed key; every `documentId`, and every source that is
 a document, resolves; ids are unique within each list.
+
+## Editing her content in the admin
+
+`/admin/app/content` (t-91, the "Content" item in the Lelañea nav) edits the four
+collections above without a deploy: documents, journey text, discovery questions
+and resources. Every field the seeds write can be viewed and edited, each item's
+revisions are listed and any can be restored (as a new revision, never a
+rewind), and each collection exports and imports as a file.
+
+| Where                                                              | What                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `lib/app/content/admin/{documents,journey,questions,resources}.ts` | the write services: lock, revision, guards, export, import                   |
+| `lib/app/content/admin/keyed-import.ts`                            | the import planner, generalised from the slot taxonomy's (which now uses it) |
+| `lib/app/content/content-files.ts`                                 | file → rows (the seed and the import) and rows → file (the export)           |
+| `lib/app/content/admin/readers.ts`                                 | who reads each document, section key and collection                          |
+| `app/api/v1/admin/app/content/[collection]/…`                      | nine routes over a registry (`registry.ts`), all `withAdminAuth`             |
+
+**The rules, and where each is enforced:**
+
+- **Every save names the revision it read** and is refused (409 `revision_moved`)
+  if another landed first. The three collection rows, which have no history, are
+  locked on `updatedAt`. A save that changes nothing writes nothing and is not
+  audited. Every write that changed something is audited with `logAdminAction`.
+- **Ids are never edited.** A document id is its API path and the gate's key, a
+  module or tier id is the roster's, a resource id is what past suggestions name.
+- **A document a surface renders is never deleted**: all seven are in
+  `DOCUMENT_READERS`, and the refusal names the surfaces. Nor is one a
+  resource opens (retired resources included), whether by a delete or by an
+  import that leaves it out; the refusal names the resources. A delete, like a
+  save, names the revision it read (`?revision=`).
+- **A section key code selects by cannot be removed or renamed** here
+  (`SECTION_READERS`); renaming one is a code change to its reader. Any other key
+  is free. `tests/unit/lib/app/content/admin/readers.test.ts` scans the code so a
+  new reader cannot go unlisted.
+- **The Disclaimer and the Terms mint a new version when their words change.**
+  See [`gateway.md`](./gateway.md).
+- **The journey is text only.** The roster owns structure, so nothing adds or
+  removes a tier or module; clearing a module's subtitle is how its text is
+  "removed". Every write re-registers the module definitions.
+- **Questions keep their ids** and their numbers stay 1…N: removing one
+  re-numbers the rest.
+- **Resources are retired, never deleted** (`app_resource.retired`). A retired
+  resource leaves the drawer, the list the AI is given and `suggest_resource`,
+  and still resolves the chip of a suggestion already made
+  (`getResourcesLibrary({ includeRetired: true })` in `loadLibraryForChips`).
+
+**Export** writes the shape the seed reads, with only what is stored: the
+source metadata a row does not hold (`sourceFile`, `reviewNotes`, her `app` and
+`creator` blocks…) is left out, and the schemas make it optional for that
+reason. A documents export carries every block's section key and every
+document's own version, so it seeds exactly what it came from. **Import**
+treats a file as the whole collection: preview (writes nothing), then apply,
+which re-plans inside its transaction and refuses the whole file if any change
+is guarded. Bodies over 1 MB are refused 413 before they are parsed. Imported
+rows are `origin: admin` revisions. A fresh export re-imported plans nothing,
+pinned per collection in `tests/unit/lib/app/content/admin/round-trip.test.ts`.
+
+**An edit reaches every client on its next request.** Nothing caches content
+server-side, and the public API's ETag covers each record's `revision`
+(`tests/unit/lib/app/content/admin/edit-reaches-clients.test.ts`). The two
+copies that are not read per request are the knowledge mirror, which every
+documents write reconciles (again, if another save lands while it runs), and
+the registered module definitions, re-registered by every journey write.
 
 ## Storage
 

@@ -49,15 +49,20 @@ import type { ResourcesLibrary } from '@/lib/app/content/resources';
  * in the tool's description because this is where a model weighing "does
  * anything here fit?" is looking.
  */
-const HEADING = 'Films and writing of Lelañea’s you may offer this person, by id:';
+const HEADING = 'Videos, audio and articles of Lelañea’s you may offer this person, by id:';
 
 const RULE = [
   'Offer one of these only when it genuinely fits what the person is working',
-  'through right now — most turns need none, and two at once is a reading list,',
-  'not a suggestion. Use the tool with the id exactly as written; never invent',
-  'an id, and never describe a film or a piece in your own words as if it were',
+  'through right now — most turns need none, and two at once is a list, not a',
+  'suggestion. Use the tool with the id exactly as written; never invent an id,',
+  'and never describe a video, audio or article in your own words as if it were',
   'hers. The person sees what you offered beside your reply and can open it.',
 ].join('\n');
+
+/** Whether the library holds nothing to offer. */
+function isEmpty(library: ResourcesLibrary): boolean {
+  return library.videos.length + library.audio.length + library.articles.length === 0;
+}
 
 /** Any run of whitespace to one space — nothing authored may reach column 0. */
 function flatten(value: string): string {
@@ -83,7 +88,7 @@ function belongs(relatesTo: string | null, titles: ReadonlyMap<string, string>):
  */
 export async function loadResourceOffering(): Promise<string> {
   const library = await getResourcesLibrary();
-  if (library.films.length === 0 && library.readings.length === 0) return '';
+  if (isEmpty(library)) return '';
   return resourceOffering(library, await getJourneyStructure());
 }
 
@@ -92,20 +97,24 @@ export async function loadResourceOffering(): Promise<string> {
  * the library holds nothing to offer. Pure, so a test can hand it rows.
  */
 export function resourceOffering(library: ResourcesLibrary, journey: JourneyStructure): string {
-  if (library.films.length === 0 && library.readings.length === 0) return '';
+  if (isEmpty(library)) return '';
 
   const titles = new Map<string, string>(journey.modules.map((m) => [m.id, m.title] as const));
   titles.set('journey', 'the journey');
   titles.set('situations', 'life situations');
 
   const lines = [
-    ...library.films.map(
+    ...library.videos.map(
       (f) =>
-        `- ${flatten(f.id)} (film, ${flatten(f.duration)}): ${flatten(f.title)} — ${flatten(f.subtitle)}${belongs(f.relatesTo, titles)}`
+        `- ${flatten(f.id)} (video, ${flatten(f.duration)}): ${flatten(f.title)} — ${flatten(f.subtitle)}${belongs(f.relatesTo, titles)}`
     ),
-    ...library.readings.map(
+    ...library.audio.map(
+      (a) =>
+        `- ${flatten(a.id)} (audio, ${flatten(a.duration)}): ${flatten(a.title)} — ${flatten(a.subtitle)}${belongs(a.relatesTo, titles)}`
+    ),
+    ...library.articles.map(
       (r) =>
-        `- ${flatten(r.id)} (reading, ${flatten(r.readingTime)}): ${flatten(r.title)} — ${flatten(r.subtitle)}${belongs(r.relatesTo, titles)}`
+        `- ${flatten(r.id)} (article, ${flatten(r.readingTime)}): ${flatten(r.title)} — ${flatten(r.subtitle)}${belongs(r.relatesTo, titles)}`
     ),
   ];
 

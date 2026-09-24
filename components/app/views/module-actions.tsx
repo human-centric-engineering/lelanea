@@ -12,7 +12,7 @@ import { Button } from '@/components/app/ui/button';
  * "In Lelañea's own words" opens the resources drawer, which follows the open
  * module on its own (`resources-drawer.tsx` reads the route), so the button
  * passes nothing — a plain `openDrawer('resources')` lands on her words on
- * this module, two films and three readings chosen for it. "Talk about this
+ * this module, two videos and three articles chosen for it. "Talk about this
  * part" needs the conversation, which arrives in a later phase; it is
  * `disabled` with the same reason the composer gives, so the two surfaces never
  * disagree about why.

@@ -17,7 +17,8 @@
 
 import rawResources from '@/seed-data/drafted/lelanea_resources.json';
 import { buildResourcesFileSchema, type ResourcesFile } from '@/lib/app/content/resources';
-import { resourceToRow, wordsToRow, type ResourcesSeed } from '@/lib/app/content/resource-view';
+import type { ResourcesSeed } from '@/lib/app/content/resource-view';
+import { resourcesSeedFromFile } from '@/lib/app/content/content-files';
 import { readFoundationalDocumentsFile } from '@/lib/app/content/seed-input/foundational-seed';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
 
@@ -35,24 +36,7 @@ export function readResourcesFile(): ResourcesFile {
   return schema.parse(rawResources);
 }
 
-/** The rows the seed writes, built from the file. Films, then readings, each in authored order. */
+/** The rows the seed writes, built from the file. See `resourcesSeedFromFile`. */
 export function buildResourcesSeed(file: ResourcesFile = readResourcesFile()): ResourcesSeed {
-  return {
-    collection: {
-      id: file.resources.id,
-      title: file.resources.title,
-      version: file.resources.version,
-      locale: file.resources.locale,
-      provenance: {
-        status: file.resources.provenance.status,
-        awaitingSignOffFrom: file.resources.provenance.awaitingSignOffFrom,
-        note: file.resources.provenance.note,
-      },
-    },
-    resources: [
-      ...file.films.map((film, position) => resourceToRow(film, 'film', position)),
-      ...file.readings.map((reading, position) => resourceToRow(reading, 'reading', position)),
-    ],
-    words: Object.entries(file.words).map(([key, words]) => wordsToRow(key, words)),
-  };
+  return resourcesSeedFromFile(file);
 }

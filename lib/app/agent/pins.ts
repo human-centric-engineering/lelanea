@@ -159,7 +159,7 @@ export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state',
 
 /**
  * What the resources seed grants: the agent may hand a person one of Lelañea
- * Fulton's films or pieces of writing (f-resources t-77).
+ * Fulton's videos, audio or articles (f-resources t-77).
  *
  * Its own list because its own seed grants it
  * (`prisma/seeds/app-lelanea/014-suggest-resource.ts`), which also creates the
@@ -186,7 +186,7 @@ export const RESOURCE_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['suggest
 export const READ_ONLY_CAPABILITY_SLUGS = [
   'search_knowledge_base',
   'get_state',
-  // Hands the person one of Lelañea Fulton's films or pieces of writing, by
+  // Hands the person one of Lelañea Fulton's videos, audio or articles, by
   // id (f-resources t-77). Reads the library and returns a record: no write,
   // no delete, nothing on anyone's behalf — `lib/app/resources/suggest.ts`.
   'suggest_resource',

@@ -1300,6 +1300,10 @@ model AppResource {
   /// A reading that is one of her foundational documents.
   documentId   String?
   document     AppFoundationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  /// Retired by an admin (t-91): no longer offered, listed or suggestable, but
+  /// kept so a suggestion already made in a conversation still resolves to its
+  /// chip. A resource is never deleted; retiring is the tombstone.
+  retired      Boolean                  @default(false)
   revision     Int                      @default(1)
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
@@ -1325,6 +1329,7 @@ model AppResourceRevision {
   readingTime   String?
   href          String?
   documentId    String?
+  retired       Boolean                  @default(false)
   changedFields String[]
   origin        AppContentRevisionOrigin
   editorId      String?

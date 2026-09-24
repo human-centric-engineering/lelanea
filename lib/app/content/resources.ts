@@ -1,5 +1,5 @@
 /**
- * The resources: her films and reading, and her words on whatever is open
+ * The resources: her videos, audio and articles, and her words on whatever is open
  * (f-resources t-74; product description §6.1, §9 Resources).
  *
  * **The shapes and the selection, pure.** Since t-87 the library is stored in
@@ -11,12 +11,12 @@
  *
  * ## The shape
  *
- * Three lists, keyed the way the journey keys its modules (`module_01_values`)
+ * Four lists, keyed the way the journey keys its modules (`module_01_values`)
  * plus three fixed keys — `journey`, `situations` and `default`:
  *
- * - `films` and `readings`: what each is for, in her words, and which key it
+ * - `videos`, `audio` and `articles`: what each is for, in her words, and which key it
  *   belongs beside (`relatesTo`; `null` for a piece that belongs to everything).
- *   A film links out. A reading is a foundational document or a link, never
+ *   A video or an audio piece links out. An article is a foundational document or a link, never
  *   both. **No thumbnails**: nothing exists to show, and an invented one is what
  *   D6 forbids.
  * - `words`: per key, a quote and a few short paragraphs — **verbatim excerpts
@@ -31,9 +31,9 @@
  *
  * {@link selectResources} implements `lelanea.html`'s `pickFor` and
  * `resourceKey`: what belongs to the open thing first, then what belongs to
- * everything, capped at two films and three readings — "the drawer is for one
- * thing at a time". A key with no words of its own reads `default`'s. A film or
- * a reading may be pinned to the front of its list, which is how a suggestion
+ * everything, capped at two videos, two audio pieces and three articles — "the drawer is for one
+ * thing at a time". A key with no words of its own reads `default`'s. A video, audio piece or
+ * an article may be pinned to the front of its list, which is how a suggestion
  * made in conversation opens the drawer on the thing suggested (t-77).
  *
  * The shell asks by **slug** (`values`), which is what its routes carry; the
@@ -42,7 +42,7 @@
  * used here rather than re-derived.
  *
  * **It ships as a draft.** The two passages are the builder's pick of her
- * material and both lists are empty; `provenance` says so and is served rather
+ * material and every list is empty; `provenance` says so and is served rather
  * than withheld. Her list lands in t-76.
  *
  * @see lib/app/content/resource-store.ts — the reads and writes
@@ -64,9 +64,10 @@ import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 export const FIXED_RESOURCE_KEYS = ['journey', 'situations', 'default'] as const;
 export type FixedResourceKey = (typeof FIXED_RESOURCE_KEYS)[number];
 
-/** How many of each the drawer shows — the prototype's `pickFor(…, 2)` / `(…, 3)`. */
-export const FILMS_SHOWN = 2;
-export const READINGS_SHOWN = 3;
+/** How many of each the drawer shows — the prototype's `pickFor(…, 2)` / `(…, 3)`; audio as video. */
+export const VIDEOS_SHOWN = 2;
+export const AUDIO_SHOWN = 2;
+export const ARTICLES_SHOWN = 3;
 
 /** A module id as the structure file writes it, or one of the fixed keys. */
 const moduleIdPattern = /^module_\d{2}_[a-z0-9_]+$/;
@@ -82,9 +83,9 @@ export const resourceKeySchema = z
  *
  * **Not `default`.** For `words`, `default` means "the fallback every key
  * reads"; for a piece, "belongs to everything" is spelled `null`, and the
- * picker matches a piece by its own key or by `null` — so a film tagged
+ * picker matches a piece by its own key or by `null` — so a video tagged
  * `default` would parse clean and show for nothing but the literal `default`
- * key. Refused here rather than left to be discovered as a missing film
+ * key. Refused here rather than left to be discovered as a missing video
  * (`/code-review` round 1).
  */
 export const relatesToSchema = z
@@ -112,7 +113,7 @@ export const resourceIdSchema = z
  */
 const linkSchema = z.url({ protocol: /^https?$/ });
 
-export const filmSchema = z.strictObject({
+export const videoSchema = z.strictObject({
   id: resourceIdSchema,
   title: z.string().trim().min(1),
   /** What it is for, in her words — the line under the title. */
@@ -123,7 +124,10 @@ export const filmSchema = z.strictObject({
   href: linkSchema,
 });
 
-const readingBase = z.strictObject({
+/** An audio piece is held to what a video is: a length as `m:ss`, and a link. */
+export const audioSchema = videoSchema;
+
+const articleBase = z.strictObject({
   id: resourceIdSchema,
   title: z.string().trim().min(1),
   subtitle: z.string().trim().min(1),
@@ -132,10 +136,10 @@ const readingBase = z.strictObject({
   readingTime: z.string().regex(/^\d{1,3} min$/, { message: 'readingTime is "N min"' }),
 });
 
-/** A reading is a foundational document OR a link — the union makes "neither" and "both" unrepresentable. */
-export const readingSchema = z.union([
-  readingBase.extend({ documentId: z.string().min(1) }),
-  readingBase.extend({ href: linkSchema }),
+/** An article is a foundational document OR a link — the union makes "neither" and "both" unrepresentable. */
+export const articleSchema = z.union([
+  articleBase.extend({ documentId: z.string().min(1) }),
+  articleBase.extend({ href: linkSchema }),
 ]);
 
 /**
@@ -172,8 +176,9 @@ const resourcesFileBase = z.strictObject({
     provenance: provenanceSchema,
     notes: z.array(z.string().min(1)),
   }),
-  films: z.array(filmSchema),
-  readings: z.array(readingSchema),
+  videos: z.array(videoSchema),
+  audio: z.array(audioSchema),
+  articles: z.array(articleSchema),
   /** `default` is required: it is what every key without words of its own reads. */
   words: z
     .record(resourceKeySchema, wordsSchema)
@@ -196,28 +201,37 @@ export function buildResourcesFileSchema(known: {
   const isPieceKey = (key: string): boolean => isKey(key) && key !== 'default';
 
   return resourcesFileBase.superRefine((file, ctx) => {
-    for (const [index, film] of file.films.entries()) {
-      if (film.relatesTo !== null && !isPieceKey(film.relatesTo)) {
+    for (const [index, video] of file.videos.entries()) {
+      if (video.relatesTo !== null && !isPieceKey(video.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
-          path: ['films', index, 'relatesTo'],
-          message: `film "${film.id}" relates to unknown key "${film.relatesTo}"`,
+          path: ['videos', index, 'relatesTo'],
+          message: `video "${video.id}" relates to unknown key "${video.relatesTo}"`,
         });
       }
     }
-    for (const [index, reading] of file.readings.entries()) {
-      if (reading.relatesTo !== null && !isPieceKey(reading.relatesTo)) {
+    for (const [index, piece] of file.audio.entries()) {
+      if (piece.relatesTo !== null && !isPieceKey(piece.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
-          path: ['readings', index, 'relatesTo'],
-          message: `reading "${reading.id}" relates to unknown key "${reading.relatesTo}"`,
+          path: ['audio', index, 'relatesTo'],
+          message: `audio "${piece.id}" relates to unknown key "${piece.relatesTo}"`,
         });
       }
-      if ('documentId' in reading && !known.documentIds.has(reading.documentId)) {
+    }
+    for (const [index, article] of file.articles.entries()) {
+      if (article.relatesTo !== null && !isPieceKey(article.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
-          path: ['readings', index, 'documentId'],
-          message: `reading "${reading.id}" names unknown document "${reading.documentId}"`,
+          path: ['articles', index, 'relatesTo'],
+          message: `article "${article.id}" relates to unknown key "${article.relatesTo}"`,
+        });
+      }
+      if ('documentId' in article && !known.documentIds.has(article.documentId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['articles', index, 'documentId'],
+          message: `article "${article.id}" names unknown document "${article.documentId}"`,
         });
       }
     }
@@ -240,20 +254,21 @@ export function buildResourcesFileSchema(known: {
         });
       }
     }
-    // One namespace across BOTH lists, not one per list: an id is what the
-    // suggestion tool and the drawer's pin resolve by, and a film and a
-    // reading sharing one would always resolve to the film (`/code-review`).
+    // One namespace across ALL THREE lists, not one per list: an id is what the
+    // suggestion tool and the drawer's pin resolve by, and a video and an
+    // article sharing one would always resolve to the video (`/code-review`).
     const seen = new Set<string>();
     for (const [list, items] of [
-      ['films', file.films],
-      ['readings', file.readings],
+      ['videos', file.videos],
+      ['audio', file.audio],
+      ['articles', file.articles],
     ] as const) {
       for (const [index, item] of items.entries()) {
         if (seen.has(item.id)) {
           ctx.addIssue({
             code: 'custom',
             path: [list, index, 'id'],
-            message: `duplicate resource id "${item.id}" — ids are one namespace across films and readings`,
+            message: `duplicate resource id "${item.id}" — ids are one namespace across videos, audio and articles`,
           });
         }
         seen.add(item.id);
@@ -263,8 +278,9 @@ export function buildResourcesFileSchema(known: {
 }
 
 export type ResourcesFile = z.infer<typeof resourcesFileBase>;
-export type ResourceFilm = ResourcesFile['films'][number];
-export type ResourceReading = ResourcesFile['readings'][number];
+export type ResourceVideo = ResourcesFile['videos'][number];
+export type ResourceAudio = ResourcesFile['audio'][number];
+export type ResourceArticle = ResourcesFile['articles'][number];
 export type ResourceWords = ResourcesFile['words'][string];
 
 // ============================================================================
@@ -280,10 +296,12 @@ export interface ResourcesCollectionMeta {
   provenance: DeepReadonly<ResourcesProvenance>;
 }
 
-/** A film as served: the authored shape, and how many times it has been written. */
-export type ResourceFilmView = ResourceFilm & { revision: number };
-/** A reading as served. */
-export type ResourceReadingView = ResourceReading & { revision: number };
+/** A video as served: the authored shape, and how many times it has been written. */
+export type ResourceVideoView = ResourceVideo & { revision: number };
+/** An audio piece as served. */
+export type ResourceAudioView = ResourceAudio & { revision: number };
+/** An article as served. */
+export type ResourceArticleView = ResourceArticle & { revision: number };
 /** One key's words as served. */
 export type ResourceWordsView = ResourceWords & { revision: number };
 
@@ -291,8 +309,9 @@ export type ResourceWordsView = ResourceWords & { revision: number };
 export interface ResourcesLibrary {
   collection: ResourcesCollectionMeta;
   /** In their authored order. */
-  films: readonly DeepReadonly<ResourceFilmView>[];
-  readings: readonly DeepReadonly<ResourceReadingView>[];
+  videos: readonly DeepReadonly<ResourceVideoView>[];
+  audio: readonly DeepReadonly<ResourceAudioView>[];
+  articles: readonly DeepReadonly<ResourceArticleView>[];
   words: DeepReadonly<Record<string, ResourceWordsView>>;
 }
 
@@ -309,8 +328,9 @@ export interface ResourcesSelection {
   words: DeepReadonly<ResourceWordsView>;
   /** Whether `words` are this key's own or the fallback. */
   wordsAreOwn: boolean;
-  films: readonly DeepReadonly<ResourceFilmView>[];
-  readings: readonly DeepReadonly<ResourceReadingView>[];
+  videos: readonly DeepReadonly<ResourceVideoView>[];
+  audio: readonly DeepReadonly<ResourceAudioView>[];
+  articles: readonly DeepReadonly<ResourceArticleView>[];
 }
 
 /** The fixed keys' titles — the prototype's `renderResources` names them so. */
@@ -357,7 +377,7 @@ export interface ResourceModuleRef {
  * `key` is what the shell has: a module **slug**, or `journey` / `situations` /
  * `default`. Returns `null` for anything else, so the route owns the 404 — a
  * typo is not a module with nothing to show, and the two must not look the
- * same. `pin` names a film or a reading to put first in its list (a suggestion
+ * same. `pin` names a video, audio or article to put first in its list (a suggestion
  * made in conversation, t-77).
  */
 export function selectResources(
@@ -394,7 +414,8 @@ export function selectResources(
     tier,
     words,
     wordsAreOwn: own !== undefined,
-    films: pickFor(library.films, fileKey, FILMS_SHOWN, options.pin),
-    readings: pickFor(library.readings, fileKey, READINGS_SHOWN, options.pin),
+    videos: pickFor(library.videos, fileKey, VIDEOS_SHOWN, options.pin),
+    audio: pickFor(library.audio, fileKey, AUDIO_SHOWN, options.pin),
+    articles: pickFor(library.articles, fileKey, ARTICLES_SHOWN, options.pin),
   };
 }

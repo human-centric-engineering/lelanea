@@ -30,7 +30,8 @@ The rows are read through `lib/app/content/journey-store.ts` and are
 operator-owned: seeded once from `content/lelanea_module_structure.json` (seed
 `016-journey-structure`, and the data migration
 `20260928100100_app_journey_questions_resources_data`), then edited in the
-admin (t-91). The file is not read at runtime.
+admin at `/admin/app/content/journey` (t-91; see [content.md](./content.md#editing-her-content-in-the-admin)).
+The file is not read at runtime.
 
 **Startup registers twice.** `initLeafApp()` registers every slug from the
 roster synchronously — so the registry is complete before anything touches a
@@ -47,8 +48,13 @@ definition's name into that column once, when the row is created, and after
 that an operator may override it in Daybreak's admin. It is the framework's
 display label and nothing of Lelañea's reads it. One consequence: if a new
 environment's very first boot cannot read the rows, the slug-spelled names are
-what that column is created with, and they stay until an operator renames them. Whether her admin editor
-(t-91) writes it alongside a title edit is open on that task.
+what that column is created with, and they stay until an operator renames them. Her admin editor
+(t-91) does not write it: the module title field says the title is hers and that
+label is Daybreak's. What a title edit does reach is the registered definition:
+every journey write re-registers the modules from the rows
+(`refreshModuleDefinitions` in `lib/app/content/admin/journey.ts`), in the
+process that saved it. Another server instance keeps its names until it next
+starts, which on today's single web container is the same process.
 
 Adding a module is an edit to the roster, a migration inserting its text row,
 and a re-publish of the map (seed `001-journey-map` re-runs when the roster

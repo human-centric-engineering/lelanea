@@ -1,5 +1,5 @@
 /**
- * Unit Tests: the resources — her films and reading, and her words on
+ * Unit Tests: the resources — her videos, audio and articles, and her words on
  * whatever is open (f-resources t-74).
  *
  * Three jobs, and the middle one is the load-bearing one:
@@ -33,8 +33,8 @@ import { describe, it, expect } from 'vitest';
 import {
   selectResources,
   buildResourcesFileSchema,
-  FILMS_SHOWN,
-  READINGS_SHOWN,
+  VIDEOS_SHOWN,
+  ARTICLES_SHOWN,
   type ResourcesFile,
   type ResourcesLibrary,
   type ResourceModuleRef,
@@ -106,11 +106,11 @@ describe('the bundled resources', () => {
     });
   });
 
-  it('invents no film and no reading — her list is t-76', () => {
+  it('invents no video, no audio and no article — her list is t-76', () => {
     // Pinned so that the first entry is a deliberate change to this test, not
     // something that slipped in beside a code change.
-    expect(getResourcesLibrary().films).toEqual([]);
-    expect(getResourcesLibrary().readings).toEqual([]);
+    expect(getResourcesLibrary().videos).toEqual([]);
+    expect(getResourcesLibrary().articles).toEqual([]);
   });
 });
 
@@ -205,19 +205,24 @@ function fixture(overrides: Partial<ResourcesFile> = {}): ResourcesFile {
       provenance: { status: 'draft', awaitingSignOffFrom: 'Her', note: 'fixture' },
       notes: [],
     },
-    films: [
-      film('values-a', 'module_01_values'),
-      film('values-b', 'module_01_values'),
-      film('values-c', 'module_01_values'),
-      film('general-a', null),
-      film('boundaries-a', 'module_02_boundaries'),
+    videos: [
+      video('values-a', 'module_01_values'),
+      video('values-b', 'module_01_values'),
+      video('values-c', 'module_01_values'),
+      video('general-a', null),
+      video('boundaries-a', 'module_02_boundaries'),
     ],
-    readings: [
-      reading('read-values', 'module_01_values'),
-      reading('read-general-a', null),
-      reading('read-general-b', null),
-      reading('read-general-c', null),
-      documentReading('read-doc', null, 'the_mission'),
+    audio: [
+      audio('listen-values', 'module_01_values'),
+      audio('listen-general-a', null),
+      audio('listen-general-b', null),
+    ],
+    articles: [
+      article('read-values', 'module_01_values'),
+      article('read-general-a', null),
+      article('read-general-b', null),
+      article('read-general-c', null),
+      documentArticle('read-doc', null, 'the_mission'),
     ],
     words: {
       default: {
@@ -235,7 +240,7 @@ function fixture(overrides: Partial<ResourcesFile> = {}): ResourcesFile {
   };
 }
 
-function film(id: string, relatesTo: string | null): ResourcesFile['films'][number] {
+function video(id: string, relatesTo: string | null): ResourcesFile['videos'][number] {
   return {
     id,
     title: id,
@@ -246,7 +251,18 @@ function film(id: string, relatesTo: string | null): ResourcesFile['films'][numb
   };
 }
 
-function reading(id: string, relatesTo: string | null): ResourcesFile['readings'][number] {
+function audio(id: string, relatesTo: string | null): ResourcesFile['audio'][number] {
+  return {
+    id,
+    title: id,
+    subtitle: 'for',
+    relatesTo,
+    duration: '12:05',
+    href: 'https://example.com/' + id,
+  };
+}
+
+function article(id: string, relatesTo: string | null): ResourcesFile['articles'][number] {
   return {
     id,
     title: id,
@@ -257,11 +273,11 @@ function reading(id: string, relatesTo: string | null): ResourcesFile['readings'
   };
 }
 
-function documentReading(
+function documentArticle(
   id: string,
   relatesTo: string | null,
   documentId: string
-): ResourcesFile['readings'][number] {
+): ResourcesFile['articles'][number] {
   return { id, title: id, subtitle: 'for', relatesTo, readingTime: '5 min', documentId };
 }
 
@@ -278,44 +294,44 @@ describe('a malformed file fails, naming the fault', () => {
     expect(parse(fixture())).toEqual({ ok: true, messages: [] });
   });
 
-  it('rejects a film that relates to a module the structure does not have', () => {
-    const { ok, messages } = parse(fixture({ films: [film('x', 'module_99_nowhere')] }));
+  it('rejects a video that relates to a module the structure does not have', () => {
+    const { ok, messages } = parse(fixture({ videos: [video('x', 'module_99_nowhere')] }));
     expect(ok).toBe(false);
-    expect(messages.join('\n')).toMatch(/film "x" relates to unknown key "module_99_nowhere"/);
+    expect(messages.join('\n')).toMatch(/video "x" relates to unknown key "module_99_nowhere"/);
   });
 
   it('rejects a piece that relates to `default` — that is spelled null', () => {
     // `default` is the words fallback, not a place a piece can belong; the
     // picker would never show it for any module (review round 1).
-    const { ok, messages } = parse(fixture({ films: [film('x', 'default')] }));
+    const { ok, messages } = parse(fixture({ videos: [video('x', 'default')] }));
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/never default/);
-    expect(parse(fixture({ readings: [reading('r', 'default')] })).ok).toBe(false);
+    expect(parse(fixture({ articles: [article('r', 'default')] })).ok).toBe(false);
   });
 
   it('rejects a key that is neither a module id nor a fixed key', () => {
-    const { ok, messages } = parse(fixture({ films: [film('x', 'values')] }));
+    const { ok, messages } = parse(fixture({ videos: [video('x', 'values')] }));
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/module id/);
   });
 
-  it('rejects a reading naming a document that does not exist', () => {
+  it('rejects an article naming a document that does not exist', () => {
     const { ok, messages } = parse(
-      fixture({ readings: [documentReading('r', null, 'no_such_document')] })
+      fixture({ articles: [documentArticle('r', null, 'no_such_document')] })
     );
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/unknown document "no_such_document"/);
   });
 
-  it('rejects a reading that is both a document and a link, and one that is neither', () => {
+  it('rejects an article that is both a document and a link, and one that is neither', () => {
     // Neither shape is representable in `ResourcesFile` — that is the point of
     // the union — so both are built as the untyped JSON the schema actually reads.
-    const base: Record<string, unknown> = { ...reading('r', null) };
+    const base: Record<string, unknown> = { ...article('r', null) };
     const both = { ...base, documentId: 'the_mission' };
-    expect(parse({ ...fixture(), readings: [both] }).ok).toBe(false);
+    expect(parse({ ...fixture(), articles: [both] }).ok).toBe(false);
 
     const { href: _href, ...neither } = base;
-    expect(parse({ ...fixture(), readings: [neither] }).ok).toBe(false);
+    expect(parse({ ...fixture(), articles: [neither] }).ok).toBe(false);
   });
 
   it('rejects words citing a document that does not exist', () => {
@@ -343,33 +359,33 @@ describe('a malformed file fails, naming the fault', () => {
   });
 
   it('rejects an id longer than the suggestion tool accepts', () => {
-    const { ok, messages } = parse(fixture({ films: [film('x'.repeat(81), null)] }));
+    const { ok, messages } = parse(fixture({ videos: [video('x'.repeat(81), null)] }));
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/at most 80/);
-    expect(parse(fixture({ films: [film('x'.repeat(80), null)] })).ok).toBe(true);
+    expect(parse(fixture({ videos: [video('x'.repeat(80), null)] })).ok).toBe(true);
   });
 
   it('rejects a duplicate id within a list, and across the two lists', () => {
-    const { ok, messages } = parse(fixture({ films: [film('dup', null), film('dup', null)] }));
+    const { ok, messages } = parse(fixture({ videos: [video('dup', null), video('dup', null)] }));
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/duplicate resource id "dup"/);
 
-    // An id is what the suggestion tool resolves by: a film and a reading
-    // sharing one would always resolve to the film.
+    // An id is what the suggestion tool resolves by: a video and an article
+    // sharing one would always resolve to the video.
     const across = parse(
-      fixture({ films: [film('same', null)], readings: [reading('same', null)] })
+      fixture({ videos: [video('same', null)], articles: [article('same', null)] })
     );
     expect(across.ok).toBe(false);
     expect(across.messages.join('\n')).toMatch(/one namespace/);
   });
 
-  it('rejects a film or reading whose link is not http(s)', () => {
-    const scheme = { ...film('x', null), href: 'javascript:alert(1)' };
-    const { ok, messages } = parse(fixture({ films: [scheme] }));
+  it('rejects a video, audio or article whose link is not http(s)', () => {
+    const scheme = { ...video('x', null), href: 'javascript:alert(1)' };
+    const { ok, messages } = parse(fixture({ videos: [scheme] }));
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/protocol|URL/i);
     expect(
-      parse(fixture({ films: [{ ...film('y', null), href: 'https://example.com/y' }] })).ok
+      parse(fixture({ videos: [{ ...video('y', null), href: 'https://example.com/y' }] })).ok
     ).toBe(true);
   });
 
@@ -395,18 +411,18 @@ describe('the selection', () => {
   it('shows what belongs to the module first, then what belongs to everything, capped', () => {
     const selection = selectResources(file, MODULES, 'values');
 
-    expect(selection?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
-    expect(selection?.films).toHaveLength(FILMS_SHOWN);
-    expect(selection?.readings.map((r) => r.id)).toEqual([
+    expect(selection?.videos.map((f) => f.id)).toEqual(['values-a', 'values-b']);
+    expect(selection?.videos).toHaveLength(VIDEOS_SHOWN);
+    expect(selection?.articles.map((r) => r.id)).toEqual([
       'read-values',
       'read-general-a',
       'read-general-b',
     ]);
-    expect(selection?.readings).toHaveLength(READINGS_SHOWN);
+    expect(selection?.articles).toHaveLength(ARTICLES_SHOWN);
   });
 
   it('never shows another module’s pieces', () => {
-    const ids = selectResources(file, MODULES, 'boundaries')?.films.map((f) => f.id);
+    const ids = selectResources(file, MODULES, 'boundaries')?.videos.map((f) => f.id);
     expect(ids).toEqual(['boundaries-a', 'general-a']);
   });
 
@@ -421,7 +437,7 @@ describe('the selection', () => {
     expect(selectResources(file, MODULES, 'journey')).toMatchObject({
       title: 'The journey',
       tier: null,
-      films: [expect.objectContaining({ id: 'general-a' })],
+      videos: [expect.objectContaining({ id: 'general-a' })],
     });
     expect(selectResources(file, MODULES, 'situations')?.title).toBe('Life situations');
     expect(selectResources(file, MODULES, 'default')?.title).toBe('Lelañea');
@@ -433,27 +449,27 @@ describe('the selection', () => {
     expect(selectResources(file, MODULES, 'module_01_values')).toBeNull();
   });
 
-  it('puts a pinned film first and still holds the cap', () => {
+  it('puts a pinned video first and still holds the cap', () => {
     const pinned = selectResources(file, MODULES, 'values', { pin: 'values-c' });
-    expect(pinned?.films.map((f) => f.id)).toEqual(['values-c', 'values-a']);
+    expect(pinned?.videos.map((f) => f.id)).toEqual(['values-c', 'values-a']);
 
     const foreign = selectResources(file, MODULES, 'values', { pin: 'boundaries-a' });
-    expect(foreign?.films.map((f) => f.id)).toEqual(['boundaries-a', 'values-a']);
+    expect(foreign?.videos.map((f) => f.id)).toEqual(['boundaries-a', 'values-a']);
   });
 
-  it('pins a reading too, in its own list, and leaves the films alone', () => {
+  it('pins an article too, in its own list, and leaves the videos alone', () => {
     const pinned = selectResources(file, MODULES, 'values', { pin: 'read-general-c' });
-    expect(pinned?.readings.map((r) => r.id)).toEqual([
+    expect(pinned?.articles.map((r) => r.id)).toEqual([
       'read-general-c',
       'read-values',
       'read-general-a',
     ]);
-    expect(pinned?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
+    expect(pinned?.videos.map((f) => f.id)).toEqual(['values-a', 'values-b']);
   });
 
   it('ignores a pin that names nothing', () => {
     const selection = selectResources(file, MODULES, 'values', { pin: 'ghost' });
-    expect(selection?.films.map((f) => f.id)).toEqual(['values-a', 'values-b']);
+    expect(selection?.videos.map((f) => f.id)).toEqual(['values-a', 'values-b']);
   });
 
   it('is what the real rows give for values', () => {
@@ -466,7 +482,7 @@ describe('the selection', () => {
     expect(real?.tier).toBe('foundations');
     expect(real?.wordsAreOwn).toBe(true);
     expect(real?.words.source.id).toBe('lesson_centered_living');
-    expect(real?.films).toEqual([]);
+    expect(real?.videos).toEqual([]);
     expect(selectResources(getResourcesLibrary(), journey.modules, 'nope')).toBeNull();
   });
 });
@@ -480,11 +496,11 @@ describe('a stored row is held to the file’s rules on the way out', () => {
 
   it('round-trips the fixture: what the seed writes is what the store serves', () => {
     const file = fixture();
-    expect(base.films.map(({ revision: _r, ...film }) => film)).toEqual(file.films);
-    expect(base.readings.map(({ revision: _r, ...reading }) => reading)).toEqual(file.readings);
+    expect(base.videos.map(({ revision: _r, ...video }) => video)).toEqual(file.videos);
+    expect(base.articles.map(({ revision: _r, ...article }) => article)).toEqual(file.articles);
   });
 
-  it('refuses a reading that is both a link and a document', () => {
+  it('refuses an article that is both a link and a document', () => {
     const seed = buildResourcesSeed(fixture());
     const both = seed.resources.map((row) =>
       row.id === 'read-doc'
@@ -498,10 +514,10 @@ describe('a stored row is held to the file’s rules on the way out', () => {
         both,
         seed.words.map((w) => ({ ...w, revision: 1 }))
       )
-    ).toThrow(/"read-doc" is not a well-formed reading/);
+    ).toThrow(/"read-doc" is not a well-formed article/);
   });
 
-  it('refuses a film whose link is not http(s), as the file schema did', () => {
+  it('refuses a video whose link is not http(s), as the file schema did', () => {
     const seed = buildResourcesSeed(fixture());
     const bad = seed.resources.map((row) =>
       row.id === 'values-a'
@@ -515,7 +531,7 @@ describe('a stored row is held to the file’s rules on the way out', () => {
         bad,
         seed.words.map((w) => ({ ...w, revision: 1 }))
       )
-    ).toThrow(/"values-a" failed validation as a film/);
+    ).toThrow(/"values-a" failed validation as a video/);
   });
 
   it('refuses a library with no default words, which every key falls back to', () => {
@@ -537,13 +553,47 @@ describe('the data migration', () => {
     'prisma/migrations/20260928100100_app_journey_questions_resources_data/migration.sql'
   );
 
-  it('writes exactly what the seed builds today', () => {
+  // The resource kinds' rename (24 Sept 2026) moved the seeded title and note
+  // where they were still at the values this migration wrote. The frozen file
+  // cannot change, so the seed is what the two write together.
+  const KINDS_MIGRATION = path.join(
+    process.cwd(),
+    'prisma/migrations/20261001100000_app_resource_kinds/migration.sql'
+  );
+
+  /** The value between a pair of dollar-quote tags in the kinds migration. */
+  function quoted(sql: string, tag: string): string {
+    const match = new RegExp(`\\$${tag}\\$([\\s\\S]*?)\\$${tag}\\$`).exec(sql);
+    if (!match) throw new Error(`The kinds migration no longer carries $${tag}$`);
+    return match[1];
+  }
+
+  it('writes, with the kinds rename after it, exactly what the seed builds today', () => {
     const match = /\$t87resources\$([\s\S]*?)\$t87resources\$/.exec(
       readFileSync(MIGRATION, 'utf8')
     );
-
     expect(match, 'the migration no longer embeds the resources seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildResourcesSeed());
+    const written = JSON.parse(match![1]) as ReturnType<typeof buildResourcesSeed>;
+
+    const kinds = readFileSync(KINDS_MIGRATION, 'utf8');
+    // It moves only the values this migration wrote…
+    expect(quoted(kinds, 'title_from')).toBe(written.collection.title);
+    expect(quoted(kinds, 'note_from')).toBe(
+      (written.collection.provenance as { note: string }).note
+    );
+    // …and the result is the seed.
+    const moved = {
+      ...written,
+      collection: {
+        ...written.collection,
+        title: quoted(kinds, 'title_to'),
+        provenance: {
+          ...(written.collection.provenance as object),
+          note: quoted(kinds, 'note_to'),
+        },
+      },
+    };
+    expect(moved).toEqual(buildResourcesSeed());
   });
 
   it('records the same changed fields the service records', async () => {

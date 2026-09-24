@@ -33,15 +33,17 @@ import {
   FIXED_RESOURCE_KEYS,
   provenanceSchema,
   selectResources,
-  type ResourceFilmView,
-  type ResourceReadingView,
+  type ResourceAudioView,
+  type ResourceVideoView,
+  type ResourceArticleView,
   type ResourcesLibrary,
   type ResourcesSelection,
 } from '@/lib/app/content/resources';
 import {
-  toFilm,
-  toReading,
+  resourceKindOf,
+  toResource,
   toResourcesLibrary,
+  type ResourceKind,
   toWords,
   type ResourceRow,
 } from '@/lib/app/content/resource-view';
@@ -68,17 +70,30 @@ const RESOURCE_COLUMNS = {
 // ============================================================================
 
 /**
- * The whole library: every film and reading in order, and her words by key.
+ * The whole library: every video, audio and article in order, and her words by key.
+ *
+ * **Retired resources are left out** unless `includeRetired` is set (t-91). A
+ * retired resource is no longer offered, listed or suggestable, so every
+ * surface that shows the library reads it without them. Chip resolution is the
+ * one caller that asks for them: a suggestion already made in a conversation
+ * names a resource by id, and its chip must still resolve after the resource is
+ * retired. That is what the tombstone is for.
  *
  * @throws ContentNotSeededError when the seed has not run.
  */
-export async function getResourcesLibrary(): Promise<ResourcesLibrary> {
+export async function getResourcesLibrary(
+  options: { includeRetired?: boolean } = {}
+): Promise<ResourcesLibrary> {
   const [collection, resources, words] = await Promise.all([
     defaultClient.appResourceCollection.findFirst({
       select: { id: true, title: true, version: true, locale: true, provenance: true },
       orderBy: { createdAt: 'asc' },
     }),
-    defaultClient.appResource.findMany({ select: RESOURCE_COLUMNS, orderBy: { position: 'asc' } }),
+    defaultClient.appResource.findMany({
+      where: options.includeRetired ? {} : { retired: false },
+      select: RESOURCE_COLUMNS,
+      orderBy: { position: 'asc' },
+    }),
     defaultClient.appResourceWords.findMany({
       select: {
         key: true,
@@ -96,24 +111,28 @@ export async function getResourcesLibrary(): Promise<ResourcesLibrary> {
 }
 
 /**
- * One film or reading by id, or `null` when the library has no such id.
+ * One live video, audio or article by id, with its kind, or `null` when the
+ * library has no such id or it has been retired. The kind travels with it
+ * because a video and an audio piece have the same shape.
  *
  * One indexed read, for a caller that needs one item: the suggestion tool, per
- * call. A caller resolving many ids reads the library once instead.
+ * call. A retired resource is `null` here because suggesting it is exactly what
+ * retiring stops. A caller resolving many ids reads the library once instead.
  */
-export async function getResource(
-  id: string
-): Promise<ResourceFilmView | ResourceReadingView | null> {
+export async function getResource(id: string): Promise<{
+  kind: ResourceKind;
+  resource: ResourceVideoView | ResourceAudioView | ResourceArticleView;
+} | null> {
   const row = await defaultClient.appResource.findUnique({
     where: { id },
-    select: RESOURCE_COLUMNS,
+    select: { ...RESOURCE_COLUMNS, retired: true },
   });
-  if (!row) return null;
-  return row.kind === 'film' ? toFilm(row) : toReading(row);
+  if (!row || row.retired) return null;
+  return { kind: resourceKindOf(row), resource: toResource(row) };
 }
 
 /**
- * Her words, two films and three readings for whatever is open — or `null` for
+ * Her words, two videos and three articles for whatever is open — or `null` for
  * a key that is neither a module on the journey nor a fixed key. See
  * {@link selectResources}.
  */
@@ -171,8 +190,7 @@ async function assertWritable(seed: ResourcesSeed, client: PrismaClient): Promis
     // Run through the read path's rules, so nothing is written that could not be read.
     const asRead = { ...row, revision: 1 } satisfies ResourceRow;
     try {
-      if (row.kind === 'film') toFilm(asRead);
-      else toReading(asRead);
+      toResource(asRead);
     } catch (error) {
       problems.push(error instanceof Error ? error.message : String(error));
     }
@@ -198,12 +216,12 @@ async function assertWritable(seed: ResourcesSeed, client: PrismaClient): Promis
 }
 
 /**
- * Write the collection, every film, reading and key's words, and each one's
+ * Write the collection, every video, audio, article and key's words, and each one's
  * first revision, once.
  *
  * **Write-once (`fp4`)**, marked by the collection row, written in the same
  * transaction as everything else. **Safe on empty**: no removal pass, and a
- * library with no films or readings is a real state (her list lands in t-76).
+ * library with no videos, audio or articles is a real state (her list lands in t-76).
  *
  * Runs after the journey is seeded: a key is checked against the modules in
  * the database.

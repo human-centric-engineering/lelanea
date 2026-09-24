@@ -31,7 +31,7 @@
  *   redaction — is inherited untouched.
  *
  * - **`suggest_resource`** — the agent hands a person one of Lelañea Fulton's
- *   films or pieces of writing, by id, when it fits (f-resources t-77). The
+ *   videos, audio or articles, by id, when it fits (f-resources t-77). The
  *   app's own tool, not an override: its `ai_capability` row and the grant to
  *   the guide are `prisma/seeds/app-lelanea/014-suggest-resource.ts`.
  *

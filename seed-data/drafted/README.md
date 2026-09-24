@@ -10,7 +10,7 @@ description. Each one is a proposal until she signs it off, and each carries a
 - `lelanea_voice_golden_set.json`: the prompts her voice is heard through
 - `lelanea_crisis_resources.json`: the crisis copy and helplines, by region
 - `lelanea_slot_taxonomy.json`: what the guide may remember about a person
-- `lelanea_resources.json`: the films, readings and words per module
+- `lelanea_resources.json`: the videos, audio, articles and words per module
 
 These files are seed input: the seeds in `prisma/seeds/app-lelanea/` write them
 to the database. The crisis resources and the slot taxonomy are already edited in the

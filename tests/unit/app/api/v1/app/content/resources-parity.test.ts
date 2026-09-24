@@ -10,7 +10,7 @@
  *
  * - the library route's payload is deep-equal to `getResourcesLibrary()`, and
  *   each selection route's to `selectResourcesFor()`;
- * - it carries the collection's `version`, a `revision` on every film, reading
+ * - it carries the collection's `version`, a `revision` on every video, audio piece, article
  *   and key of words, and an ETag over exactly that record;
  * - every resource the voice block offers the model is in the API, by id;
  * - a change to a row changes every side together, and changes the ETag.
@@ -42,8 +42,8 @@ import { mockAuthenticatedUser } from '@/tests/helpers/auth';
 import {
   fakeJourneyStore,
   fakeResourceStore,
-  filmRow,
-  readingRow,
+  videoRow,
+  articleRow,
 } from '@/tests/helpers/app/content-stores';
 
 const journey = fakeJourneyStore();
@@ -52,10 +52,10 @@ const store = fakeResourceStore();
 beforeEach(() => {
   journey.reset();
   store.reset();
-  // A library with something in it, so the parity is over films and readings
+  // A library with something in it, so the parity is over videos and articles
   // and not only over two empty lists.
-  store.addResource(filmRow('the-quiet', { relatesTo: 'module_01_values' }));
-  store.addResource(readingRow('the-heart'));
+  store.addResource(videoRow('the-quiet', { relatesTo: 'module_01_values' }));
+  store.addResource(articleRow('the-heart'));
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
 });
 
@@ -83,8 +83,8 @@ describe('API and reader parity, the resource library', () => {
     const api = await libraryFromApi();
 
     expect(api.library).toEqual(wire(await getResourcesLibrary()));
-    expect(api.library.films.map((f) => f.id)).toEqual(['the-quiet']);
-    expect(api.library.readings.map((r) => r.id)).toEqual(['the-heart']);
+    expect(api.library.videos.map((f) => f.id)).toEqual(['the-quiet']);
+    expect(api.library.articles.map((r) => r.id)).toEqual(['the-heart']);
   });
 
   it.each(['values', 'boundaries', 'journey', 'situations', 'default'])(
@@ -101,7 +101,7 @@ describe('API and reader parity, the resource library', () => {
     const api = await libraryFromApi();
 
     expect(api.library.collection.version).toBe('0.1');
-    expect([...api.library.films, ...api.library.readings].every((i) => i.revision === 1)).toBe(
+    expect([...api.library.videos, ...api.library.articles].every((i) => i.revision === 1)).toBe(
       true
     );
     expect(Object.values(api.library.words).every((w) => w.revision === 1)).toBe(true);
@@ -113,7 +113,7 @@ describe('API and reader parity, the resource library', () => {
     const offered = [...(await loadResourceOffering()).matchAll(/^- (\S+) \(/gm)].map((m) => m[1]);
 
     expect(offered).toEqual(['the-quiet', 'the-heart']);
-    const ids = new Set([...api.library.films, ...api.library.readings].map((item) => item.id));
+    const ids = new Set([...api.library.videos, ...api.library.articles].map((item) => item.id));
     for (const id of offered) expect(ids.has(id)).toBe(true);
   });
 
@@ -128,7 +128,7 @@ describe('API and reader parity, the resource library', () => {
     expect(after.etag).not.toBe(before.etag);
     expect(selectionAfter.etag).not.toBe(selectionBefore.etag);
     expect(after.library).toEqual(wire(await getResourcesLibrary()));
-    expect(after.library.films[0]).toMatchObject({ title: 'The quiet, edited', revision: 2 });
+    expect(after.library.videos[0]).toMatchObject({ title: 'The quiet, edited', revision: 2 });
     expect(await loadResourceOffering()).toContain('The quiet, edited');
   });
 });

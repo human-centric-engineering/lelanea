@@ -182,6 +182,15 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'been selected anyway; running them always costs a few hundred ' +
       'milliseconds. t-70.',
   },
+  {
+    path: 'tests/unit/lib/app/resource-vocabulary.test.ts',
+    reason:
+      'fails when the old words for resources come back anywhere we own: ' +
+      'resources are videos, audio and articles (owner ruling, 24 Sept 2026). ' +
+      'It reads the tree off disk and imports none of it, so the branch that ' +
+      'reintroduces a word in a comment, a doc or a new component reaches it ' +
+      'through no module graph.',
+  },
 ];
 
 /**

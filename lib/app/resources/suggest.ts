@@ -1,6 +1,6 @@
 /**
- * `suggest_resource` — the agent hands a person one of Lelañea Fulton's films
- * or pieces of writing, in conversation (f-resources t-77; product description
+ * `suggest_resource` — the agent hands a person one of Lelañea Fulton's videos
+ * or articles, in conversation (f-resources t-77; product description
  * §5 the Curator, §9 Resources).
  *
  * ## What it does, and what it deliberately cannot
@@ -51,6 +51,7 @@ import { z } from 'zod';
 import { answeredCalls, type AnsweredCall } from '@/lib/app/agent/capability-answers';
 import { getResource, getResourcesLibrary } from '@/lib/app/content/resource-store';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
+import type { ResourceKind } from '@/lib/app/content/resource-view';
 import { logger } from '@/lib/logging';
 import {
   SUGGEST_RESOURCE_SLUG,
@@ -75,13 +76,13 @@ import type {
 export const SUGGEST_RESOURCE_DEFINITION: CapabilityFunctionDefinition = {
   name: SUGGEST_RESOURCE_SLUG,
   description:
-    'Offer the person one of Lelañea’s films or pieces of writing, by its id, when it genuinely fits what they are working through right now. Use an id from the list of resources in your context — never invent one. Suggest one thing at a time, and only when it would help; most turns need none. The person sees the resource beside your reply and can open it.',
+    'Offer the person one of Lelañea’s videos, audio or articles, by its id, when it genuinely fits what they are working through right now. Use an id from the list of resources in your context — never invent one. Suggest one thing at a time, and only when it would help; most turns need none. The person sees the resource beside your reply and can open it.',
   parameters: {
     type: 'object',
     properties: {
       id: {
         type: 'string',
-        description: 'The id of the film or reading, exactly as listed in your context.',
+        description: 'The id of the video, audio or article, exactly as listed in your context.',
         maxLength: 80,
       },
     },
@@ -102,38 +103,39 @@ const argsSchema = z.object({
 });
 type SuggestArgs = z.infer<typeof argsSchema>;
 
-type LibraryItem = ResourcesLibrary['films'][number] | ResourcesLibrary['readings'][number];
+type LibraryItem =
+  | ResourcesLibrary['videos'][number]
+  | ResourcesLibrary['audio'][number]
+  | ResourcesLibrary['articles'][number];
 
-/** A film or a reading, as the chip shows it. */
-function toSuggestion(item: LibraryItem): ResourceSuggestion {
-  return 'duration' in item
-    ? {
-        id: item.id,
-        kind: 'film',
-        title: item.title,
-        subtitle: item.subtitle,
-        length: item.duration,
-      }
-    : {
-        id: item.id,
-        kind: 'reading',
-        title: item.title,
-        subtitle: item.subtitle,
-        length: item.readingTime,
-      };
+/**
+ * A video, audio or article, as the chip shows it. The kind is passed in, not
+ * read off the shape: a video and an audio piece have the same fields.
+ */
+function toSuggestion(kind: ResourceKind, item: LibraryItem): ResourceSuggestion {
+  return {
+    id: item.id,
+    kind,
+    title: item.title,
+    subtitle: item.subtitle,
+    length: 'duration' in item ? item.duration : item.readingTime,
+  };
 }
 
 /** A resource by id, as a suggestion — or `null` when the library has no such id. One read. */
 export async function findResource(id: string): Promise<ResourceSuggestion | null> {
-  const item = await getResource(id);
-  return item ? toSuggestion(item) : null;
+  const found = await getResource(id);
+  return found ? toSuggestion(found.kind, found.resource) : null;
 }
 
 /** The same lookup against a library already read. */
 function findIn(library: ResourcesLibrary, id: string): ResourceSuggestion | null {
-  const item: LibraryItem | undefined =
-    library.films.find((f) => f.id === id) ?? library.readings.find((r) => r.id === id);
-  return item ? toSuggestion(item) : null;
+  const video = library.videos.find((item) => item.id === id);
+  if (video) return toSuggestion('video', video);
+  const audio = library.audio.find((item) => item.id === id);
+  if (audio) return toSuggestion('audio', audio);
+  const article = library.articles.find((item) => item.id === id);
+  return article ? toSuggestion('article', article) : null;
 }
 
 /**
@@ -154,7 +156,9 @@ export async function loadLibraryForChips(
   );
   if (!suggested) return null;
   try {
-    return await getResourcesLibrary();
+    // Retired resources included: a chip for a suggestion made before its
+    // resource was retired must still resolve (t-91). See `getResourcesLibrary`.
+    return await getResourcesLibrary({ includeRetired: true });
   } catch (err) {
     logger.warn('Resource library could not be read; suggestions are shown without chips', {
       error: err instanceof Error ? err.message : String(err),
@@ -194,8 +198,9 @@ export class SuggestResourceCapability extends BaseCapability<SuggestArgs, Resou
  * nothing to redact).
  *
  * Only a call that answered counts (`capability-answers.ts`), and only an id
- * the library still has: a resource removed from the library after the turn is
- * not shown as a chip to nowhere. Order is the traces' order.
+ * the library still has. A resource retired after the turn still resolves,
+ * because the library is read with its retired resources for exactly this
+ * (t-91), and resources are never deleted. Order is the traces' order.
  *
  * Each takes the library the caller read once ({@link loadLibraryForChips});
  * `null` resolves nothing.

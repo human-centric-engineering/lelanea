@@ -2,10 +2,10 @@
  * Authored Content — Resources for whatever is open
  *
  * GET /api/v1/app/content/resources/:key — her words on the open thing, two
- * films and three readings chosen for it: what belongs to it first, then what
+ * videos, two audio pieces and three articles chosen for it: what belongs to it first, then what
  * belongs to everything. `:key` is what the shell has — a module slug
  * (`values`), or `journey`, `situations` or `default`. `?pin=<id>` puts one
- * film or reading first in its list, which is how a suggestion made in
+ * video, audio or article first in its list, which is how a suggestion made in
  * conversation opens the drawer on the thing suggested (t-77).
  *
  * The response carries the module's `title` and `tier`, so the drawer can name
@@ -41,7 +41,7 @@ const OWNERSHIP: WithAuthOptions<{ key: string }> = {
   ownership: {
     decidedBy: 'nothing',
     because:
-      'Serves a selection of the published resource library keyed by what is open, which is authored content every member shares. There are no per-user rows: every member opening Values is offered the same two films.',
+      'Serves a selection of the published resource library keyed by what is open, which is authored content every member shares. There are no per-user rows: every member opening Values is offered the same resources.',
   },
 };
 
@@ -67,8 +67,9 @@ export const GET = withAuth<{ key: string }>(async (request, _session, { params 
   log.info('Resources selection served', {
     key,
     wordsAreOwn: selection.wordsAreOwn,
-    films: selection.films.length,
-    readings: selection.readings.length,
+    videos: selection.videos.length,
+    audio: selection.audio.length,
+    articles: selection.articles.length,
     pinned: pin ?? null,
   });
 

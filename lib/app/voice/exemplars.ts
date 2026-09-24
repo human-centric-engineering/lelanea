@@ -77,7 +77,7 @@ export const MAX_EXEMPLAR_CHARS = 1_200;
  * The most of a document NAME that is emitted in an origin label.
  *
  * Short on purpose. The label exists so a passage can be traced back to the
- * piece of writing it came from, and a name longer than this is not doing that
+ * document it came from, and a name longer than this is not doing that
  * job — it is something somebody put in a filename.
  */
 export const MAX_SOURCE_CHARS = 120;

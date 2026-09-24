@@ -84,15 +84,15 @@ const db = vi.hoisted(() => ({
 
 const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 
-// One film in the library, so a replay can carry a suggestion on its call's
+// One video in the library, so a replay can carry a suggestion on its call's
 // frame (t-77). The shipped file holds none until her list lands.
-// The library is rows since t-87: the seed's, plus one film a replay's chip
+// The library is rows since t-87: the seed's, plus one video a replay's chip
 // resolves to.
 vi.mock('@/lib/app/content/resource-store', async () => {
-  const { fakeResourceStore, filmRow } = await import('@/tests/helpers/app/content-stores');
+  const { fakeResourceStore, videoRow } = await import('@/tests/helpers/app/content-stores');
   const store = fakeResourceStore();
   store.addResource(
-    filmRow('on-stalling', {
+    videoRow('on-stalling', {
       title: 'On stalling',
       subtitle: 'why the words you avoid are the work',
       duration: '5:04',
@@ -1058,7 +1058,7 @@ describe('a replay of a turn that used a tool', () => {
             success: true,
             data: {
               id: 'on-stalling',
-              kind: 'film',
+              kind: 'video',
               title: 'On stalling',
               subtitle: 'why the words you avoid are the work',
               length: '5:04',

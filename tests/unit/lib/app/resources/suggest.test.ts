@@ -16,7 +16,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
 
 // The library is rows since t-87. The fake serves what the seed writes (no
-// films, no readings yet) plus the two rows each test adds.
+// videos, no articles yet) plus the two rows each test adds.
 vi.mock('@/lib/app/content/resource-store', async () =>
   (await import('@/tests/helpers/app/content-stores')).fakeResourceStore()
 );
@@ -31,7 +31,7 @@ import {
 import { suggestionFromResult, SUGGEST_RESOURCE_SLUG } from '@/lib/app/resources/suggestion';
 import { getResourcesLibrary } from '@/lib/app/content/resource-store';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
-import { fakeResourceStore, filmRow, readingRow } from '@/tests/helpers/app/content-stores';
+import { fakeResourceStore, videoRow, articleRow } from '@/tests/helpers/app/content-stores';
 
 const store = fakeResourceStore();
 
@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   store.reset();
   store.addResource(
-    filmRow('on-stalling', {
+    videoRow('on-stalling', {
       title: 'On stalling',
       subtitle: 'why the words you avoid are the work',
       duration: '5:04',
@@ -47,7 +47,7 @@ beforeEach(() => {
     })
   );
   store.addResource(
-    readingRow('evidence', {
+    articleRow('evidence', {
       title: 'What counts as evidence',
       subtitle: 'why a value needs a receipt',
       relatesTo: 'module_01_values',
@@ -73,14 +73,14 @@ describe('the capability', () => {
     expect(capability.processesPii).toBe(false);
   });
 
-  it('answers a film with the library’s own words', async () => {
+  it('answers a video with the library’s own words', async () => {
     const result = await capability.execute(capability.validate({ id: 'on-stalling' }), context);
 
     expect(result).toEqual({
       success: true,
       data: {
         id: 'on-stalling',
-        kind: 'film',
+        kind: 'video',
         title: 'On stalling',
         subtitle: 'why the words you avoid are the work',
         length: '5:04',
@@ -88,12 +88,12 @@ describe('the capability', () => {
     });
   });
 
-  it('answers a reading, with its reading time as its length', async () => {
+  it('answers an article, with its reading time as its length', async () => {
     const result = await capability.execute(capability.validate({ id: 'evidence' }), context);
 
     expect(result).toMatchObject({
       success: true,
-      data: { id: 'evidence', kind: 'reading', length: '6 min' },
+      data: { id: 'evidence', kind: 'article', length: '6 min' },
     });
   });
 
@@ -120,7 +120,7 @@ describe('the capability', () => {
 
 describe('reading a suggestion back', () => {
   it('finds a resource by id and nothing by a title', async () => {
-    expect((await findResource('on-stalling'))?.kind).toBe('film');
+    expect((await findResource('on-stalling'))?.kind).toBe('video');
     expect(await findResource('On stalling')).toBeNull();
   });
 

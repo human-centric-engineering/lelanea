@@ -61,13 +61,13 @@ export const SUGGEST_RESOURCE_IMPL = {
   functionDefinition: {
     name: 'suggest_resource',
     description:
-      'Offer the person one of Lelañea’s films or pieces of writing, by its id, when it genuinely fits what they are working through right now. Use an id from the list of resources in your context — never invent one. Suggest one thing at a time, and only when it would help; most turns need none. The person sees the resource beside your reply and can open it.',
+      'Offer the person one of Lelañea’s videos, audio or articles, by its id, when it genuinely fits what they are working through right now. Use an id from the list of resources in your context — never invent one. Suggest one thing at a time, and only when it would help; most turns need none. The person sees the resource beside your reply and can open it.',
     parameters: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
-          description: 'The id of the film or reading, exactly as listed in your context.',
+          description: 'The id of the video, audio or article, exactly as listed in your context.',
           maxLength: 80,
         },
       },
@@ -89,7 +89,7 @@ const unit: SeedUnit = {
         slug: SLUG,
         name: 'Suggest a resource',
         description:
-          'Hands the person one of Lelañea Fulton’s films or pieces of writing, by id, when it fits what they are working through. Read-only: the library answers with its own words.',
+          'Hands the person one of Lelañea Fulton’s videos, audio or articles, by id, when it fits what they are working through. Read-only: the library answers with its own words.',
         category: 'app',
         rateLimit: 30,
         isActive: true,
@@ -124,7 +124,7 @@ const unit: SeedUnit = {
     await prisma.aiAgentCapability.create({
       data: { agentId: agent.id, capabilityId: capability.id },
     });
-    logger.info(`🧬 Granted ${SLUG} — the guide may hand a person a film or a piece of writing`);
+    logger.info(`🧬 Granted ${SLUG} — the guide may hand a person a video, audio piece or article`);
   },
 };
 

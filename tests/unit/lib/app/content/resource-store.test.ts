@@ -3,8 +3,8 @@
  * `app_resource_collection`, `app_resource` and `app_resource_words`, one item
  * by id, and the drawer's selection.
  *
- * Prisma is a stub returning the rows the real seed builds, plus a film and a
- * reading added here, since the shipped library has none yet. The write path is
+ * Prisma is a stub returning the rows the real seed builds, plus a video and an
+ * article added here, since the shipped library has none yet. The write path is
  * covered through the real seed unit in
  * `tests/unit/prisma/seeds/app-lelanea/content-collections.test.ts`.
  *
@@ -40,8 +40,8 @@ import {
 import type { ResourceRow } from '@/lib/app/content/resource-view';
 import {
   fakeJourneyStore,
-  filmRow,
-  readingRow,
+  videoRow,
+  articleRow,
   seededResourceRows,
 } from '@/tests/helpers/app/content-stores';
 
@@ -52,8 +52,8 @@ beforeEach(() => {
   fakeJourneyStore().reset();
   const rows = seededResourceRows();
   resources = [
-    { ...filmRow('the-quiet', { relatesTo: 'module_01_values' }), position: 0, revision: 1 },
-    { ...readingRow('the-heart'), position: 0, revision: 1 },
+    { ...videoRow('the-quiet', { relatesTo: 'module_01_values' }), position: 0, revision: 1 },
+    { ...articleRow('the-heart'), position: 0, revision: 1 },
   ];
   db.collectionFindFirst.mockResolvedValue(rows.collection);
   db.resourceFindMany.mockImplementation(async () => resources);
@@ -64,15 +64,15 @@ beforeEach(() => {
 });
 
 describe('getResourcesLibrary', () => {
-  it('serves films and readings from their rows, and her words by key', async () => {
+  it('serves videos, audio and articles from their rows, and her words by key', async () => {
     const library = await getResourcesLibrary();
 
     expect(library.collection).toMatchObject({
       id: 'lelanea_resources',
       provenance: { status: 'draft' },
     });
-    expect(library.films).toEqual([expect.objectContaining({ id: 'the-quiet', revision: 1 })]);
-    expect(library.readings).toEqual([
+    expect(library.videos).toEqual([expect.objectContaining({ id: 'the-quiet', revision: 1 })]);
+    expect(library.articles).toEqual([
       expect.objectContaining({ id: 'the-heart', documentId: 'the_heart_behind_lelanea' }),
     ]);
     expect(Object.keys(library.words).sort()).toEqual(['default', 'module_01_values']);
@@ -100,9 +100,15 @@ describe('getResourcesLibrary', () => {
 });
 
 describe('getResource', () => {
-  it('looks one id up, as a film or a reading by its kind', async () => {
-    await expect(getResource('the-quiet')).resolves.toMatchObject({ duration: '6:12' });
-    await expect(getResource('the-heart')).resolves.toMatchObject({ readingTime: '8 min' });
+  it('looks one id up, as a video, audio or article by its kind', async () => {
+    await expect(getResource('the-quiet')).resolves.toMatchObject({
+      kind: 'video',
+      resource: { duration: '6:12' },
+    });
+    await expect(getResource('the-heart')).resolves.toMatchObject({
+      kind: 'article',
+      resource: { readingTime: '8 min' },
+    });
     expect(db.resourceFindMany).not.toHaveBeenCalled();
   });
 
@@ -122,8 +128,8 @@ describe('selectResourcesFor', () => {
       tier: 'foundations',
       wordsAreOwn: true,
     });
-    expect(selection?.films.map((f) => f.id)).toEqual(['the-quiet']);
-    expect(selection?.readings.map((r) => r.id)).toEqual(['the-heart']);
+    expect(selection?.videos.map((f) => f.id)).toEqual(['the-quiet']);
+    expect(selection?.articles.map((r) => r.id)).toEqual(['the-heart']);
   });
 
   it('is null for a key that is nothing', async () => {

@@ -258,17 +258,17 @@ export function initLeafSubjectSources(): void {
       {
         model: 'AppResourceCollection',
         reason:
-          'The name and version of Lelañea\u2019s library of films and reading, and whether she has signed it off. It is the same for everyone and holds no information about any person.',
+          'The name and version of Lelañea\u2019s library of videos, audio and articles, and whether she has signed it off. It is the same for everyone and holds no information about any person.',
       },
       {
         model: 'AppResource',
         reason:
-          'The films and pieces of reading in that library. They are the same for everyone and hold no information about any person.',
+          'The videos, audio and articles in that library. They are the same for everyone and hold no information about any person.',
       },
       {
         model: 'AppResourceRevision',
         reason:
-          'Every past version of those films and pieces of reading. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
+          'Every past version of those videos, audio and articles. It says nothing about you; if you are an administrator here, it retains the account id of whoever made each edit, and nothing else.',
       },
       {
         model: 'AppResourceWords',

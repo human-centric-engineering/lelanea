@@ -8,7 +8,7 @@
  *
  * The library is rows since t-87. The stores are faked with exactly the rows
  * the seeds write from the real files, so the selection assertions are on what
- * ships: her words on values, and no films yet. The selection rule itself is
+ * ships: her words on values, and no videos yet. The selection rule itself is
  * covered on fixtures in `tests/unit/lib/app/content/resources.test.ts`.
  *
  * @see app/api/v1/app/content/resources/route.ts
@@ -32,7 +32,7 @@ vi.mock('@/lib/app/content/resource-store', async () =>
 import { auth } from '@/lib/auth/config';
 import { GET as getLibrary } from '@/app/api/v1/app/content/resources/route';
 import { GET as getSelection } from '@/app/api/v1/app/content/resources/[key]/route';
-import { fakeJourneyStore, fakeResourceStore, filmRow } from '@/tests/helpers/app/content-stores';
+import { fakeJourneyStore, fakeResourceStore, videoRow } from '@/tests/helpers/app/content-stores';
 
 const journey = fakeJourneyStore();
 const resources = fakeResourceStore();
@@ -47,8 +47,8 @@ interface LibraryBody {
   success: true;
   data: {
     collection: Collection;
-    films: { id: string }[];
-    readings: { id: string }[];
+    videos: { id: string }[];
+    articles: { id: string }[];
     words: Record<string, { quote: string; paragraphs: string[]; source: { id: string } }>;
   };
 }
@@ -62,8 +62,8 @@ interface SelectionBody {
     tier: string | null;
     words: { quote: string; paragraphs: string[] };
     wordsAreOwn: boolean;
-    films: { id: string }[];
-    readings: { id: string }[];
+    videos: { id: string }[];
+    articles: { id: string }[];
   };
 }
 
@@ -105,13 +105,13 @@ describe('GET /api/v1/app/content/resources', () => {
     expect(body.error).toBeUndefined();
   });
 
-  it('serves the library with its provenance, and no film yet', async () => {
+  it('serves the library with its provenance, and no video yet', async () => {
     const body = (await (await getLibrary(libraryRequest())).json()) as LibraryBody;
 
     expect(body.data.collection.id).toBe('lelanea_resources');
     expect(body.data.collection.provenance.status).toBe('draft');
-    expect(body.data.films).toEqual([]);
-    expect(body.data.readings).toEqual([]);
+    expect(body.data.videos).toEqual([]);
+    expect(body.data.articles).toEqual([]);
     expect(body.data.words.module_01_values.source.id).toBe('lesson_centered_living');
   });
 
@@ -165,8 +165,8 @@ describe('GET /api/v1/app/content/resources/:key', () => {
     expect(body.data.words.quote).toBe(
       "If you don't shape your values, the world will shape them for you."
     );
-    expect(body.data.films).toEqual([]);
-    expect(body.data.readings).toEqual([]);
+    expect(body.data.videos).toEqual([]);
+    expect(body.data.articles).toEqual([]);
     expect(body.data.collection.provenance.status).toBe('draft');
   });
 
@@ -268,15 +268,15 @@ describe('GET /api/v1/app/content/resources/:key', () => {
 });
 
 describe('the rows are what is served (t-87)', () => {
-  it('serves a film an admin added, from the row', async () => {
-    resources.addResource(filmRow('the-quiet', { relatesTo: 'module_01_values' }));
+  it('serves a video an admin added, from the row', async () => {
+    resources.addResource(videoRow('the-quiet', { relatesTo: 'module_01_values' }));
 
     const library = (await (await getLibrary(libraryRequest())).json()) as LibraryBody;
     const { request, context } = selectionRequest('values');
     const selection = (await (await getSelection(request, context)).json()) as SelectionBody;
 
-    expect(library.data.films.map((film) => film.id)).toEqual(['the-quiet']);
-    expect(selection.data.films.map((film) => film.id)).toEqual(['the-quiet']);
+    expect(library.data.videos.map((video) => video.id)).toEqual(['the-quiet']);
+    expect(selection.data.videos.map((video) => video.id)).toEqual(['the-quiet']);
   });
 
   it('names the drawer from the module row, so an edited title reaches it', async () => {

@@ -200,6 +200,14 @@
 > `daybreak#237` → already open as `sunrise#702` (Daybreak had diverged, but the
 > defect was in Sunrise's copy too).
 >
+> ### Resources are videos, audio and articles — never "films" or "readings"
+>
+> In every string, comment, test name, doc, prompt and tool description. The
+> stored kinds are `video`, `audio` and `article` (`RESOURCE_KINDS`,
+> `lib/app/content/resource-view.ts`).
+> `tests/unit/lib/app/resource-vocabulary.test.ts` (always-run) fails the build
+> if the old words come back; never loosen it to make a change pass.
+>
 > ### A change existing databases need ships as a migration
 >
 > Editing seed content (`content/*.json`, a seed unit) reaches only a database
