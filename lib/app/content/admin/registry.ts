@@ -45,6 +45,7 @@ import {
   wordsSaveSchema,
 } from '@/lib/app/content/admin/validation';
 import { CONTENT_COLLECTIONS, type ContentCollection } from '@/lib/app/content/admin/endpoint';
+import { RESOURCE_KINDS } from '@/lib/app/content/resource-view';
 
 /** What a save, restore or removal reports back and the audit log records. */
 export interface ContentWriteOutcome {
@@ -279,10 +280,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
     preview: resources.previewResourcesImport,
     apply: resources.applyResourcesImport,
     reorder: (body, editorId) => {
-      const { kind, order } = parse(
-        reorderSchema.extend({ kind: z.enum(['film', 'reading']) }),
-        body
-      );
+      const { kind, order } = parse(reorderSchema.extend({ kind: z.enum(RESOURCE_KINDS) }), body);
       return resources.reorderResources(kind, order, editorId);
     },
     entities: {

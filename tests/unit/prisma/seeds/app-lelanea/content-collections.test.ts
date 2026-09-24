@@ -266,7 +266,7 @@ describe('017-discovery-questions', () => {
 });
 
 describe('018-resources', () => {
-  it('writes the collection with its provenance, no films or readings yet, and her words', async () => {
+  it('writes the collection with its provenance, no videos, audio or articles yet, and her words', async () => {
     await runAll();
 
     expect(db.tables.appResourceCollection).toEqual([
@@ -317,14 +317,14 @@ describe('018-resources', () => {
     expect(db.raw.$transaction).not.toHaveBeenCalled();
   });
 
-  it('refuses a film that is not well formed, rather than writing what cannot be read', async () => {
+  it('refuses a video that is not well formed, rather than writing what cannot be read', async () => {
     await run(journeyUnit);
     const seed = buildResourcesSeed();
     seed.resources.push({
-      id: 'half-a-film',
-      kind: 'film',
+      id: 'half-a-video',
+      kind: 'video',
       position: 0,
-      title: 'Half a film',
+      title: 'Half a video',
       subtitle: 'no link',
       relatesTo: null,
       duration: '1:00',
@@ -333,7 +333,7 @@ describe('018-resources', () => {
       documentId: null,
     });
 
-    await expect(seedResources(seed, db.client)).rejects.toThrow(/half-a-film/);
+    await expect(seedResources(seed, db.client)).rejects.toThrow(/half-a-video/);
     expect(db.tables.appResource).toEqual([]);
   });
 });
@@ -347,7 +347,7 @@ describe('seedResources refuses what could not be read back', () => {
     const seed = buildResourcesSeed();
     seed.resources.push({
       id: 'for-everything',
-      kind: 'film',
+      kind: 'video',
       position: 0,
       title: 'For everything',
       subtitle: 'tagged the wrong way',

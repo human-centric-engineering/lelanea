@@ -154,7 +154,7 @@ describe('what the heads say', () => {
     // selection names a module (`resources-drawer.test.tsx` covers that).
     renderDrawers();
     expect(screen.getByText(/Sixteen modules/)).toBeTruthy();
-    expect(screen.getByText(/Films and reading, in her own words/)).toBeTruthy();
+    expect(screen.getByText(/Videos, audio and articles, in her own words/)).toBeTruthy();
   });
 
   it('invents no counts while nothing has loaded', () => {

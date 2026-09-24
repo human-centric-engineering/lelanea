@@ -45,7 +45,7 @@ export interface AccountInput {
   /** Capability slugs the turn called, in order. */
   capabilities: string[];
   citations: Citation[];
-  /** What the turn offered the person — a film or a piece of writing (t-77). */
+  /** What the turn offered the person — a video, audio piece or article (t-77). */
   suggestions: ResourceSuggestion[];
   /** The turn row, or null for a reply written before the seam. */
   turn: TurnAccount | null;
@@ -141,7 +141,7 @@ const wroteToProfile: AccountSource = (input) => {
 };
 
 /**
- * Pointed the person to one of Lelañea Fulton's films or pieces of writing
+ * Pointed the person to one of Lelañea Fulton's videos, audio or articles
  * (f-resources t-77).
  *
  * Named, because the chip beside the reply already shows it and the account
@@ -175,16 +175,17 @@ const pointedTo: AccountSource = (input) => {
   const titles = input.suggestions.map((s) => `“${s.title}”`);
   const list =
     titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(', ')} and ${titles.at(-1)}`;
-  const films = input.suggestions.filter((s) => s.kind === 'film').length;
-  const readings = input.suggestions.length - films;
-  // Plural where there is more than one of a kind: "two films" reads as two
-  // films, and "a film" over two of them read as one (`/code-review`).
+  const of = (kind: ResourceSuggestion['kind']) =>
+    input.suggestions.filter((s) => s.kind === kind).length;
+  // Plural where there is more than one of a kind: "two videos" reads as two
+  // videos, and "a video" over two of them read as one (`/code-review`).
+  const parts = [
+    count(of('video'), 'video', 'videos'),
+    count(of('audio'), 'audio piece', 'audio pieces'),
+    count(of('article'), 'article', 'articles'),
+  ].filter((part) => part !== '');
   const what =
-    films > 0 && readings > 0
-      ? `${count(films, 'film', 'films')} and ${count(readings, 'piece of writing', 'pieces of writing')}`
-      : films > 0
-        ? count(films, 'film', 'films')
-        : count(readings, 'piece of writing', 'pieces of writing');
+    parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
   return {
     key: 'pointed_to',
     line: `Pointed you to ${list}`,
@@ -192,9 +193,10 @@ const pointedTo: AccountSource = (input) => {
   };
 };
 
-/** "a film", "two films", "three pieces of writing" — small counts as words. */
+/** "a video", "two videos", "three articles" — small counts as words; `''` for none. */
 function count(n: number, one: string, many: string): string {
-  const words = ['', 'a', 'two', 'three', 'four', 'five'];
+  if (n === 0) return '';
+  const words = ['', /^[aeiou]/.test(one) ? 'an' : 'a', 'two', 'three', 'four', 'five'];
   const number = words[n] ?? String(n);
   return n === 1 ? `${number} ${one}` : `${number} ${many}`;
 }

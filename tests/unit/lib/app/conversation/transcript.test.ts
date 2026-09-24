@@ -30,8 +30,8 @@ vi.mock('@/lib/framework/facilitation/agents/surface', () => ({
   resolveFacilitationSurface: resolveSurface,
   FACILITATION_SURFACE_CONTEXT_TYPE: 'facilitation',
 }));
-// One film in the library, so a suggestion can be resolved from a trace (t-77).
-// The library is rows since t-87: the seed's, plus this film.
+// One video in the library, so a suggestion can be resolved from a trace (t-77).
+// The library is rows since t-87: the seed's, plus this video.
 vi.mock('@/lib/app/content/resource-store', async () =>
   (await import('@/tests/helpers/app/content-stores')).fakeResourceStore()
 );
@@ -43,9 +43,13 @@ import {
 } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { toResourcesLibrary } from '@/lib/app/content/resource-view';
-import { fakeResourceStore, filmRow, seededResourceRows } from '@/tests/helpers/app/content-stores';
+import {
+  fakeResourceStore,
+  videoRow,
+  seededResourceRows,
+} from '@/tests/helpers/app/content-stores';
 
-const ON_STALLING = filmRow('on-stalling', {
+const ON_STALLING = videoRow('on-stalling', {
   title: 'On stalling',
   subtitle: 'why the words you avoid are the work',
   duration: '5:04',
@@ -53,7 +57,7 @@ const ON_STALLING = filmRow('on-stalling', {
 });
 fakeResourceStore().addResource(ON_STALLING);
 
-/** The library the pure assembly resolves chips against: the seed's, plus the film. */
+/** The library the pure assembly resolves chips against: the seed's, plus the video. */
 const seededLibrary = seededResourceRows();
 const LIBRARY = toResourcesLibrary(
   seededLibrary.collection,
@@ -382,7 +386,7 @@ describe('assembleTranscript', () => {
       suggestions: [
         {
           id: 'on-stalling',
-          kind: 'film',
+          kind: 'video',
           title: 'On stalling',
           subtitle: 'why the words you avoid are the work',
           length: '5:04',

@@ -136,7 +136,7 @@ export interface LiveTurn {
   stillThinking: boolean;
   /** Capability slugs the turn called, for the account row. */
   capabilities: string[];
-  /** What the turn offered — a film or a piece of writing, by id (t-77). */
+  /** What the turn offered — a video, audio piece or article, by id (t-77). */
   suggestions: ResourceSuggestion[];
   /** A soft crisis frame shown ahead of her turn. */
   resource?: CrisisResource;

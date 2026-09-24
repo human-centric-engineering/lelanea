@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { ChevronDown, FileText, Play } from 'lucide-react';
+import { ChevronDown, FileText, Headphones, Play } from 'lucide-react';
 
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
@@ -133,8 +133,16 @@ export function ReplyTurn({
   );
 }
 
+/** How a chip shows each kind: its icon and the verb its tooltip leads with. */
+const CHIP_KIND: Readonly<Record<ResourceSuggestion['kind'], { Icon: typeof Play; verb: string }>> =
+  {
+    video: { Icon: Play, verb: 'Watch' },
+    audio: { Icon: Headphones, verb: 'Listen' },
+    article: { Icon: FileText, verb: 'Read' },
+  };
+
 /**
- * What the turn offered: a film or a piece of Lelañea Fulton's, as a chip
+ * What the turn offered: a video, audio or article of Lelañea Fulton's, as a chip
  * under the reply that opens the resources drawer on it (f-resources t-77).
  *
  * The title, what it is for and the length are the library's — resolved
@@ -148,8 +156,7 @@ export function SuggestionChips({ suggestions }: { suggestions: readonly Resourc
   return (
     <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Offered with this reply">
       {suggestions.map((suggestion) => {
-        const Icon = suggestion.kind === 'film' ? Play : FileText;
-        const verb = suggestion.kind === 'film' ? 'Watch' : 'Read';
+        const { Icon, verb } = CHIP_KIND[suggestion.kind];
         return (
           <li key={suggestion.id}>
             <button

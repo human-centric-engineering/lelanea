@@ -1,7 +1,7 @@
 /**
  * Add an item to a collection (f-content-seeds t-91).
  *
- * `POST` — a discovery question (appended, with the next id), a film or
+ * `POST` — a discovery question (appended, with the next id), a video or
  * reading (with its permanent id, appended to its kind), or a key's words.
  * Documents, tiers and modules are not added here: the journey's structure is
  * the roster's, and a new document needs a surface to show it.

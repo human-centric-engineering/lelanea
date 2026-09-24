@@ -75,19 +75,19 @@ const WORDS_ON_VALUES = {
   revision: 1,
 };
 
-function film(id: string, title: string, duration: string) {
+function video(id: string, title: string, duration: string) {
   return {
     id,
     title,
     subtitle: `what ${id} is for`,
     relatesTo: 'module_01_values',
     duration,
-    href: `https://films.example/${id}`,
+    href: `https://videos.example/${id}`,
     revision: 1,
   };
 }
 
-/** Her words on values, two films, three readings — the full panel. */
+/** Her words on values, two videos, three articles — the full panel. */
 function fullSelection(): ResourcesSelection {
   return {
     collection: COLLECTION,
@@ -96,11 +96,12 @@ function fullSelection(): ResourcesSelection {
     tier: 'foundations',
     words: WORDS_ON_VALUES,
     wordsAreOwn: true,
-    films: [
-      film('why-values', 'Why values come first', '6:12'),
-      film('four-marks', 'The four marks', '4:48'),
+    videos: [
+      video('why-values', 'Why values come first', '6:12'),
+      video('four-marks', 'The four marks', '4:48'),
     ],
-    readings: [
+    audio: [video('a-quiet-hour', 'A quiet hour', '12:05')],
+    articles: [
       {
         id: 'inheritance-test',
         title: 'The inheritance test',
@@ -136,8 +137,9 @@ function fullSelection(): ResourcesSelection {
 function emptySelection(overrides: Partial<ResourcesSelection> = {}): ResourcesSelection {
   return {
     ...fullSelection(),
-    films: [],
-    readings: [],
+    videos: [],
+    audio: [],
+    articles: [],
     ...overrides,
   };
 }
@@ -385,25 +387,25 @@ describe('to watch and to read', () => {
     await within(panel()).findByText(/anchor/);
 
     const watch = within(panel()).getByRole('heading', { name: 'to watch' }).closest('section')!;
-    const films = within(watch).getAllByRole('link');
-    expect(films).toHaveLength(2);
-    expect(films[0]).toHaveTextContent('Why values come first');
-    expect(films[0]).toHaveTextContent('6:12');
+    const videos = within(watch).getAllByRole('link');
+    expect(videos).toHaveLength(2);
+    expect(videos[0]).toHaveTextContent('Why values come first');
+    expect(videos[0]).toHaveTextContent('6:12');
 
     const read = within(panel()).getByRole('heading', { name: 'to read' }).closest('section')!;
     expect(read.querySelectorAll('li')).toHaveLength(3);
   });
 
-  it('opens a film in a new tab, safely', async () => {
+  it('opens a video in a new tab, safely', async () => {
     renderDrawers();
     await openResources();
     const card = await within(panel()).findByRole('link', { name: /Why values come first/ });
-    expect(card).toHaveAttribute('href', 'https://films.example/why-values');
+    expect(card).toHaveAttribute('href', 'https://videos.example/why-values');
     expect(card).toHaveAttribute('target', '_blank');
     expect(card).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('opens an external reading in a new tab, and a document on its own page', async () => {
+  it('opens an external article in a new tab, and a document on its own page', async () => {
     renderDrawers();
     await openResources();
     const external = await within(panel()).findByRole('link', { name: /The inheritance test/ });
@@ -652,7 +654,7 @@ describe('a fresh open on a different key', () => {
   });
 });
 
-describe('a pinned film', () => {
+describe('a pinned video', () => {
   it('does not outlive the route it was suggested on', async () => {
     serve({ 'values?pin=four-marks': fullSelection(), boundaries: fallbackSelection() });
     function Opener() {
@@ -686,7 +688,7 @@ describe('a pinned film', () => {
 
     // The Boundaries request carried no pin.
     expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/boundaries`);
-    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('boundaries?film'));
+    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('boundaries?video'));
   });
 
   it('is honoured on a new key after a close and a navigation — the t-77 path', async () => {
@@ -698,18 +700,18 @@ describe('a pinned film', () => {
       'values?pin=four-marks': fullSelection(),
       'boundaries?pin=a-line': fallbackSelection(),
     });
-    function Opener({ film }: { film: string }) {
+    function Opener({ video }: { video: string }) {
       const { openDrawer } = useShellLayout();
       return (
-        <button type="button" onClick={() => openDrawer('resources', { pin: film })}>
-          pin {film}
+        <button type="button" onClick={() => openDrawer('resources', { pin: video })}>
+          pin {video}
         </button>
       );
     }
     mockPathname.current = '/app/modules/values';
     const view = renderInShell(
       <>
-        <Opener film="four-marks" />
+        <Opener video="four-marks" />
         <ShellRail />
         <Drawers />
       </>
@@ -721,7 +723,7 @@ describe('a pinned film', () => {
     mockPathname.current = '/app/modules/boundaries';
     view.rerender(
       <>
-        <Opener film="a-line" />
+        <Opener video="a-line" />
         <ShellRail />
         <Drawers />
       </>

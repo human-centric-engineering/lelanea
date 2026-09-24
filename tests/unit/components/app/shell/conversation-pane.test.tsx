@@ -981,7 +981,7 @@ describe('collapsing the conversation', () => {
 describe('a resource offered with a reply', () => {
   const onStalling = {
     id: 'on-stalling',
-    kind: 'film' as const,
+    kind: 'video' as const,
     title: 'On stalling',
     subtitle: 'why the words you avoid are the work',
     length: '5:04',

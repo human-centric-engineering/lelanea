@@ -424,35 +424,35 @@ describe('resources', () => {
   it('an added and then edited resource is served next, under a new ETag each time', async () => {
     const empty = await libraryFromApi();
     await createResource(
-      'a-film',
+      'a-video',
       {
-        kind: 'film',
-        title: 'A film',
+        kind: 'video',
+        title: 'A video',
         subtitle: 'For the start.',
         relatesTo: null,
         duration: '6:12',
-        href: 'https://example.com/film',
+        href: 'https://example.com/video',
       },
       EDITOR
     );
     const added = await libraryFromApi();
     await updateResource(
-      'a-film',
+      'a-video',
       {
-        kind: 'film',
-        title: 'A film, retitled',
+        kind: 'video',
+        title: 'A video, retitled',
         subtitle: 'For the start.',
         relatesTo: null,
         duration: '6:12',
-        href: 'https://example.com/film',
+        href: 'https://example.com/video',
       },
       1,
       EDITOR
     );
     const edited = await libraryFromApi();
 
-    expect(JSON.stringify(added.data)).toContain('A film');
-    expect(JSON.stringify(edited.data)).toContain('A film, retitled');
+    expect(JSON.stringify(added.data)).toContain('A video');
+    expect(JSON.stringify(edited.data)).toContain('A video, retitled');
     expect(new Set([empty.etag, added.etag, edited.etag]).size).toBe(3);
   });
 
@@ -460,8 +460,8 @@ describe('resources', () => {
     await createResource(
       'the-reading',
       {
-        kind: 'reading',
-        title: 'A reading',
+        kind: 'article',
+        title: 'An article',
         subtitle: 'Her words.',
         relatesTo: null,
         readingTime: '8 min',
@@ -480,7 +480,7 @@ describe('resources', () => {
     const library = await libraryFromApi();
     expect(JSON.stringify(library.data)).not.toContain('the-reading');
     const chips = suggestionsFromProvenance(provenance, await loadLibraryForChips([provenance]));
-    expect(chips).toEqual([expect.objectContaining({ id: 'the-reading', title: 'A reading' })]);
+    expect(chips).toEqual([expect.objectContaining({ id: 'the-reading', title: 'An article' })]);
     // Never deleted: the row and its history are both still there.
     expect(db.current!.rows('appResource').find((row) => row.id === 'the-reading')).toMatchObject({
       retired: true,
@@ -517,7 +517,7 @@ describe('resources', () => {
     await createResource(
       'kept-id',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'Before',
         subtitle: 'x',
         relatesTo: null,
@@ -529,7 +529,7 @@ describe('resources', () => {
     await updateResource(
       'kept-id',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'After',
         subtitle: 'x',
         relatesTo: null,

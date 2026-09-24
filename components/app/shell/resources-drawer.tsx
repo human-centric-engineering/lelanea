@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, FileText, Play } from 'lucide-react';
+import { ExternalLink, FileText, Headphones, Play } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -9,6 +9,7 @@ import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
+import type { LucideIcon } from 'lucide-react';
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +17,7 @@ import { cn } from '@/lib/utils';
 export const RESOURCES_ENDPOINT = '/api/v1/app/content/resources';
 
 /** The lede while there is nothing to name yet — true of the panel either way. */
-export const RESOURCES_FALLBACK_LEDE = 'Films and reading, in her own words.';
+export const RESOURCES_FALLBACK_LEDE = 'Videos, audio and articles, in her own words.';
 
 /** The tone while there is no module to take an arc from. */
 const FALLBACK_TONE = 'var(--color-secondary-ink)';
@@ -44,7 +45,7 @@ export function resourceKeyFor(pathname: string): string {
 }
 
 /**
- * Where the site renders each foundational document, for a reading that names
+ * Where the site renders each foundational document, for an article that names
  * one by `documentId`.
  *
  * The API serves the id and not a path on purpose: a native client renders the
@@ -198,22 +199,22 @@ const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
 /**
  * The resources drawer's body: her words on whatever is open, two to watch,
- * three to read — the prototype's `renderResources`, over the API.
+ * two to listen to, three to read — the prototype's `renderResources`, over the API.
  *
  * ## What is here, and what is deliberately not
  *
  * The card carries her `quote` and `paragraphs` as the API serves them — every
  * paragraph its own element, never re-flowed into prose, because the source
- * files carry her cadence as data (`content.md`). A film is a card with its
+ * files carry her cadence as data (`content.md`). A video or an audio piece is a card with its
  * title, what it is for, and its length, and it opens its link in a new tab;
  * there is **no thumbnail and no inline player**, because nothing exists to
- * show and where her films will be hosted is not decided (reconciliation ruling
- * 3 on f-resources). A reading is a row that opens its link, or the page the
+ * show and where her videos and audio will be hosted is not decided (reconciliation ruling
+ * 3 on f-resources). An article is a row that opens its link, or the page the
  * site renders its document on.
  *
  * ## The empty states stay honest
  *
- * Until her list lands (t-76) both lists are empty, and a section with nothing
+ * Until her list lands (t-76) every list is empty, and a section with nothing
  * under its eyebrow reads as something that failed to load. So each says which
  * it is, inside the section rather than instead of it.
  *
@@ -254,9 +255,9 @@ export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
   );
 }
 
-/** The panel once the selection is here: the card, `to watch`, `to read`. */
+/** The panel once the selection is here: the card, `to watch`, `to listen`, `to read`. */
 function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }) {
-  const { words, wordsAreOwn, films, readings } = selection;
+  const { words, wordsAreOwn, videos, audio, articles } = selection;
   return (
     <>
       {/* The prototype's `.words`: her voice on the card wash, not on the page. */}
@@ -276,79 +277,36 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         )}
       </figure>
 
-      <section aria-labelledby="resources-to-watch" className="flex flex-col gap-2.5">
-        <Eyebrow as="h3" id="resources-to-watch" className="px-0.5">
-          to watch
-        </Eyebrow>
-        {films.length === 0 ? (
-          <p className="text-muted-foreground px-0.5 text-[13px] leading-[1.6]">
-            Nothing to watch yet. Her films land here as the programme opens.
-          </p>
-        ) : (
-          <ul className="m-0 flex list-none flex-col gap-3.5 p-0">
-            {films.map((film) => (
-              <li key={film.id}>
-                {/*
-                  The prototype's `.videocard` minus its 16:9 still — a card,
-                  not a thumbnail with a caption, because there is no still to
-                  show and a stock one is what D6 forbids. The play glyph says
-                  what kind of thing it is; the duration says how long.
-                */}
-                <a
-                  href={film.href}
-                  {...EXTERNAL}
-                  title={`${film.title} · ${film.duration}`}
-                  className={cn(
-                    'flex items-start gap-3 rounded-[16px] border border-[var(--color-card-border)]',
-                    'bg-[var(--color-card)] px-[13px] py-[11px] no-underline hover:no-underline',
-                    'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
-                    'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
-                    'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                    'focus-visible:outline-[var(--color-ring)]'
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-                      'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
-                    )}
-                  >
-                    <Play size={15} strokeWidth={1.6} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[14px] leading-[1.35] font-medium text-[var(--color-heading)]">
-                      {film.title}
-                    </span>
-                    <span className="text-muted-foreground mt-[3px] block text-[12px] leading-[1.5]">
-                      {film.subtitle}
-                    </span>
-                  </span>
-                  <span className="text-muted-foreground mt-1 flex-none text-[11.5px] tabular-nums">
-                    {film.duration}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <TimedSection
+        id="resources-to-watch"
+        eyebrow="to watch"
+        empty="Nothing to watch yet. Her videos land here as the programme opens."
+        items={videos}
+        Icon={Play}
+      />
+
+      <TimedSection
+        id="resources-to-listen"
+        eyebrow="to listen"
+        empty="Nothing to listen to yet. Her audio lands here as the programme opens."
+        items={audio}
+        Icon={Headphones}
+      />
 
       <section aria-labelledby="resources-to-read" className="flex flex-col gap-2.5">
         <Eyebrow as="h3" id="resources-to-read" className="px-0.5">
           to read
         </Eyebrow>
-        {readings.length === 0 ? (
+        {articles.length === 0 ? (
           <p className="text-muted-foreground px-0.5 text-[13px] leading-[1.6]">
             Nothing to read yet. Her pieces land here as the programme opens.
           </p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-            {readings.map((reading) => {
+            {articles.map((article) => {
               const href =
-                'href' in reading ? reading.href : (DOCUMENT_PAGES[reading.documentId] ?? null);
-              const external = 'href' in reading;
+                'href' in article ? article.href : (DOCUMENT_PAGES[article.documentId] ?? null);
+              const external = 'href' in article;
               const rowClass = cn(
                 'flex w-full items-start gap-3 rounded-[14px] border border-[var(--color-card-border)]',
                 'bg-[var(--color-card)] px-3.5 py-3 text-left no-underline hover:no-underline',
@@ -365,25 +323,25 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
                   />
                   <span className="min-w-0 flex-1">
                     <span className="brand-display block text-[17.5px] text-[var(--color-heading)]">
-                      {reading.title}
+                      {article.title}
                     </span>
                     <span className="text-muted-foreground mt-1 block text-[12px] leading-[1.5]">
-                      {reading.subtitle}
+                      {article.subtitle}
                     </span>
                   </span>
                   <span className="text-muted-foreground mt-1 flex flex-none items-center gap-1 text-[11.5px]">
-                    {reading.readingTime}
+                    {article.readingTime}
                     {external && <ExternalLink size={11} strokeWidth={1.6} aria-hidden="true" />}
                   </span>
                 </>
               );
               return (
-                <li key={reading.id}>
+                <li key={article.id}>
                   {href ? (
                     <a
                       href={href}
                       {...(external ? EXTERNAL : {})}
-                      title={`${reading.title} · ${reading.readingTime}`}
+                      title={`${article.title} · ${article.readingTime}`}
                       className={cn(
                         rowClass,
                         'hover:bg-[var(--color-pill-hover)]',
@@ -405,5 +363,83 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * A section of things with a length and a link — the videos, or the audio. One
+ * component, because the two are the same shape and differ only in their
+ * glyph and what the section is called.
+ */
+function TimedSection({
+  id,
+  eyebrow,
+  empty,
+  items,
+  Icon,
+}: {
+  id: string;
+  eyebrow: string;
+  empty: string;
+  items: ResourcesSelection['videos'];
+  Icon: LucideIcon;
+}) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2.5">
+      <Eyebrow as="h3" id={id} className="px-0.5">
+        {eyebrow}
+      </Eyebrow>
+      {items.length === 0 ? (
+        <p className="text-muted-foreground px-0.5 text-[13px] leading-[1.6]">{empty}</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-3.5 p-0">
+          {items.map((item) => (
+            <li key={item.id}>
+              {/*
+                The prototype's `.videocard` minus its 16:9 still — a card,
+                not a thumbnail with a caption, because there is no still to
+                show and a stock one is what D6 forbids. The glyph says what
+                kind of thing it is; the duration says how long.
+              */}
+              <a
+                href={item.href}
+                {...EXTERNAL}
+                title={`${item.title} · ${item.duration}`}
+                className={cn(
+                  'flex items-start gap-3 rounded-[16px] border border-[var(--color-card-border)]',
+                  'bg-[var(--color-card)] px-[13px] py-[11px] no-underline hover:no-underline',
+                  'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
+                  'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
+                  'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                  'focus-visible:outline-[var(--color-ring)]'
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
+                    'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
+                  )}
+                >
+                  <Icon size={15} strokeWidth={1.6} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] leading-[1.35] font-medium text-[var(--color-heading)]">
+                    {item.title}
+                  </span>
+                  <span className="text-muted-foreground mt-[3px] block text-[12px] leading-[1.5]">
+                    {item.subtitle}
+                  </span>
+                </span>
+                <span className="text-muted-foreground mt-1 flex-none text-[11.5px] tabular-nums">
+                  {item.duration}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

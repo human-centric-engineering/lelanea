@@ -293,12 +293,12 @@ is permissive in between; 014 creates the capability's own row as well as the
 grant, because `suggest_resource` is the app's tool rather than Daybreak's or
 Sunrise's, and a row with no grant is a tool nobody holds.
 
-| Tool                    | Seed | Does                                                                              |
-| ----------------------- | ---- | --------------------------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is                        |
-| `get_state`             | 013  | reads back what is already understood about this person                           |
-| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                            |
-| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's films or pieces of writing, by id (t-77) |
+| Tool                    | Seed | Does                                                                             |
+| ----------------------- | ---- | -------------------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in her material, each result labelled by whose it is                       |
+| `get_state`             | 013  | reads back what is already understood about this person                          |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                           |
+| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77) |
 
 **014 reaches a fresh database; a migration reaches every existing one.** The
 seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)

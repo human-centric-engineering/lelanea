@@ -3,7 +3,7 @@
  *
  * Each edit schema is built from the schema the store already validates the
  * row with on every read (`storedDocumentBlocksSchema`, `storedPhasesSchema`,
- * `filmSchema` …), so the editor cannot save something the read path would then
+ * `videoSchema` …), so the editor cannot save something the read path would then
  * refuse, and the admin reads the same message the seed would give.
  *
  * **No schema here admits an id.** A document id is its API path and the key
@@ -33,9 +33,10 @@ import {
   storedPreambleSchema,
 } from '@/lib/app/content/question-view';
 import {
-  filmSchema,
+  audioSchema,
+  videoSchema,
   provenanceSchema,
-  readingSchema,
+  articleSchema,
   relatesToSchema,
   resourceIdSchema,
   resourceKeySchema,
@@ -181,17 +182,18 @@ export const resourceCollectionEditSchema = z.strictObject({
 });
 export const resourceCollectionSaveSchema = resourceCollectionEditSchema.extend({ updatedAt });
 
-const [readingByDocument, readingByLink] = readingSchema.options;
+const [articleByDocument, articleByLink] = articleSchema.options;
 
 /**
  * One resource's fields, by kind. The kind itself is fixed once created: a
- * film and a reading are offered in different places, and turning one into the
+ * video, an audio piece and an article are offered in different places, and turning one into the
  * other is a new resource.
  */
 export const resourceEditSchema = z.union([
-  filmSchema.omit({ id: true }).extend({ kind: z.literal('film') }),
-  readingByDocument.omit({ id: true }).extend({ kind: z.literal('reading') }),
-  readingByLink.omit({ id: true }).extend({ kind: z.literal('reading') }),
+  videoSchema.omit({ id: true }).extend({ kind: z.literal('video') }),
+  audioSchema.omit({ id: true }).extend({ kind: z.literal('audio') }),
+  articleByDocument.omit({ id: true }).extend({ kind: z.literal('article') }),
+  articleByLink.omit({ id: true }).extend({ kind: z.literal('article') }),
 ]);
 export const resourceSaveSchema = z.intersection(resourceEditSchema, z.object({ revision }));
 export const resourceCreateSchema = z.intersection(

@@ -1183,11 +1183,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // Daybreak's two, declared in the bridge itself.
         'tests/unit/prisma/framework-boot-seed.test.ts',
         'tests/unit/scripts/release/changelog-structure.test.ts',
-        // LELAÑEA's seven, spread after them from `leaf-ci.ts`. Pinned here as
+        // LELAÑEA's eight, spread after them from `leaf-ci.ts`. Pinned here as
         // well as on the row below because this row is what proves the bridge
         // actually REACHES the leaf seam — the leaf row alone would still pass
         // if the spread were dropped, and every scoped run would then silently
-        // stop loading these seven.
+        // stop loading these eight.
         'tests/unit/components/app/ui/tokens-only.test.ts',
         'tests/unit/app/public/authored-provenance.test.ts',
         'tests/unit/context/app-docs-paths.test.ts',
@@ -1197,6 +1197,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // f-slots t-70 — pins `SLOT_DEFINITION_FIELDS` against `app.prisma`,
         // which no module graph reaches.
         'tests/unit/lib/app/slots/taxonomy-store.test.ts',
+        // The resource vocabulary guard (24 Sept 2026) — a tree scan.
+        'tests/unit/lib/app/resource-vocabulary.test.ts',
       ]);
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
         'lib/framework/facilitation/evaluation/conversation.ts',
@@ -1242,6 +1244,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/components/app/shell/chrome.test.tsx',
         'tests/unit/lib/app/voice/upload-scope.test.ts',
         'tests/unit/lib/app/slots/taxonomy-store.test.ts',
+        'tests/unit/lib/app/resource-vocabulary.test.ts',
       ]);
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
       // §08 t-56 — the meter's seat-only conversation join, by design.

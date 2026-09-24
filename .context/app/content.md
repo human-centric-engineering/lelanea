@@ -258,14 +258,14 @@ the rows the moment it migrates. The files only seed them.
 | Questions   | `app_question_set`, `app_discovery_question` (+ revisions)                    | `question-store.ts`          | `017-discovery-questions.ts` |
 | Resources   | `app_resource_collection`, `app_resource`, `app_resource_words` (+ revisions) | `resource-store.ts`          | `018-resources.ts`           |
 
-| Function                                                            | Returns                                                                       |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster |
-| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                  |
-| `getResourcesLibrary()`                                             | collection + provenance, every film and reading, every key's words            |
-| `getResource(id)`                                                   | one film or reading, or `null` — the suggestion tool's per-call lookup        |
-| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key        |
-| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                              |
+| Function                                                            | Returns                                                                          |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster    |
+| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                     |
+| `getResourcesLibrary()`                                             | collection + provenance, every video, audio piece and article, every key's words |
+| `getResource(id)`                                                   | one video, audio or article, or `null` — the suggestion tool's per-call lookup   |
+| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key           |
+| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                                 |
 
 All async, read per request with no cache, and an unseeded database throws
 `ContentNotSeededError`, as the documents' do. Each has a pure `*-view.ts` that
@@ -278,13 +278,20 @@ rows own the words, including every module's title. See
 [`journey.md`](./journey.md#who-owns-what-t-87) for why, and how the registered
 module names are derived from the rows at startup.
 
-**Films and readings share `app_resource`**, because they share one id
-namespace (the suggestion tool and the drawer's pin resolve by id). A film has a
-duration and a link; a reading has a reading time and exactly one of a link and
+**Videos, audio and articles share `app_resource`**, because they share one id
+namespace (the suggestion tool and the drawer's pin resolve by id). A video or an audio
+piece has a duration and a link; an article has a reading time and exactly one of a link and
 a document (`documentId` is a foreign key to `app_foundational_document`). Every
-row is run through the same `filmSchema` / `readingSchema` the file was, on
+row is run through the same `videoSchema` / `articleSchema` the file was, on
 write and on read. The resources seed also refuses a key that names no module
 in the database, so it runs after the journey's.
+
+**The stored kinds are `video`, `audio` and `article`** (`RESOURCE_KINDS` in
+`resource-view.ts`), and those are the only words for them anywhere: code,
+copy, the AI's prompt and tool, docs and tests (owner ruling, 24 Sept 2026).
+`20261001100000_app_resource_kinds` renamed the earlier stored values on every
+existing database; `tests/unit/lib/app/resource-vocabulary.test.ts` fails the
+build if the old words come back.
 
 **Every served item carries its `revision`**, and every route's ETag covers the
 whole payload, so an edit to any row changes the ETag. A parity test per
@@ -300,7 +307,7 @@ every chip it resolves (`loadLibraryForChips`), and not at all when nothing was
 suggested; if the read fails, the replies are shown without chips and a warning
 is logged.
 
-**Her list of films and reading (t-76) is therefore a migration**, not an edit
+**Her list of videos, audio and articles (t-76) is therefore a migration**, not an edit
 to `seed-data/drafted/lelanea_resources.json`: once the library is written, the
 file reaches only a database that was never seeded.
 
@@ -401,7 +408,7 @@ bundle at all.
 | `GET /api/v1/app/content/documents/[id]`      | public     | blocks; 404 on unknown id                                        |
 | `GET /api/v1/app/content/journey-structure`   | public     | tiers, modules, phases                                           |
 | `GET /api/v1/app/content/discovery-questions` | `withAuth` | the questions a member gets                                      |
-| `GET /api/v1/app/content/resources`           | `withAuth` | the library: films, reading, her words per key                   |
+| `GET /api/v1/app/content/resources`           | `withAuth` | the library: videos, audio, articles, her words per key          |
 | `GET /api/v1/app/content/resources/[key]`     | `withAuth` | what the drawer shows for one open thing; `?pin=` puts one first |
 
 All six carry a weak `ETag` and answer `304` to a matching `If-None-Match`, and
@@ -525,7 +532,7 @@ The second consumer of her words is the resources drawer
 `words` passage — a quote and its paragraphs, not a block list — from
 `/resources/:key`. It is held to the same rule: every paragraph is its own
 element, every string reaches the DOM as a React child, and nothing is
-re-flowed. A reading that names a `documentId` links to the page the site
+re-flowed. An article that names a `documentId` links to the page the site
 renders that document on (`DOCUMENT_PAGES` in the drawer, pinned to the real
 collection by its test); the welcome has no page and renders as a row that goes
 nowhere.
@@ -673,7 +680,7 @@ which otherwise fails far from its cause:
 - `content.questionCount` matches the questions actually present, and they are
   numbered from one in order
 
-## Resources — her films and reading, and her words on whatever is open
+## Resources — her videos, audio and articles, and her words on whatever is open
 
 `seed-data/drafted/lelanea_resources.json` (seed) · `app_resource*` (served,
 since t-87) · `lib/app/content/resources.ts` (schemas + selection) ·
@@ -681,14 +688,14 @@ since t-87) · `lib/app/content/resources.ts` (schemas + selection) ·
 (f-resources t-74; product description §6.1, §9). The drawer's content: what the
 Curator agent surfaces and what is browsable directly.
 
-**Keyed like the journey.** `films[]` and `readings[]` each carry what
+**Keyed like the journey.** `videos[]`, `audio[]` and `articles[]` each carry what
 the piece is for (`subtitle`) and where it belongs (`relatesTo`: a module id
 such as `module_01_values`, or `journey`, `situations`, or `null` for a piece
 that belongs to everything — never `default`, which the schema refuses on a
 piece: it is the `words` fallback, and a piece tagged with it would show for
 nothing). `words` is per key — a `quote` and a few short
 `paragraphs` — with `default` required, because it is what every key without
-words of its own reads. A film links out (`href`); a reading is a foundational
+words of its own reads. A video or an audio piece links out (`href`); an article is a foundational
 document (`documentId`) or a link (`href`), never both, as a union. No
 thumbnails: nothing exists to show.
 
@@ -711,22 +718,22 @@ nothing.
 **It ships as a draft.** `collection.provenance` (`status`,
 `awaitingSignOffFrom`, `note`) is served, not withheld. Today: two passages the
 builder picked from her material (values, from the "Centered Living" lesson; the
-default, from the welcome statement) and **empty film and reading lists** — no
-film of hers exists yet and only she can say which pieces belong beside which
+default, from the welcome statement) and **empty video, audio and article lists** — no
+video or audio of hers exists yet and only she can say which pieces belong beside which
 module. Her list lands in t-76, as a migration (see above). The working `notes`
 are withheld, as every file's are.
 
-| Function                                    | Returns                                                                                                         |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `getResourcesLibrary()` (store)             | collection meta + provenance, every film, every reading, every `words` entry                                    |
-| `selectResourcesFor(key, { pin? })` (store) | her words on it, up to two films and three readings, the module's `title` and `tier`; `null` for an unknown key |
-| `selectResources(library, modules, key, …)` | the same as a pure function of a library — what the store and the tests use                                     |
-| `buildResourcesFileSchema(known)`           | the file's strict schema, parameterised on the module and document ids its referential checks need              |
+| Function                                    | Returns                                                                                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `getResourcesLibrary()` (store)             | collection meta + provenance, every video, audio piece and article, every `words` entry                                            |
+| `selectResourcesFor(key, { pin? })` (store) | her words on it, up to two videos, two audio pieces and three articles, the module's `title` and `tier`; `null` for an unknown key |
+| `selectResources(library, modules, key, …)` | the same as a pure function of a library — what the store and the tests use                                                        |
+| `buildResourcesFileSchema(known)`           | the file's strict schema, parameterised on the module and document ids its referential checks need                                 |
 
 **The selection is the prototype's `pickFor`.** What belongs to the open thing
-first, then what belongs to everything, capped at two films and three readings
+first, then what belongs to everything, capped at two videos, two audio pieces and three articles
 ("the drawer is for one thing at a time"); a key with no words of its own reads
-`default`'s and says so (`wordsAreOwn: false`). `pin` puts one film or reading first in its list,
+`default`'s and says so (`wordsAreOwn: false`). `pin` puts one video, audio or article first in its list,
 which is how a suggestion made in conversation opens the drawer on it (t-77).
 
 **Slugs in, ids inside.** The shell asks by module slug (`values`), the library

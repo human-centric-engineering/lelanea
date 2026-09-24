@@ -411,7 +411,7 @@ export function questionsFileFromSet(set: DiscoveryQuestionSet): DiscoveryQuesti
 // Resources
 // ============================================================================
 
-/** The rows a resources file seeds. Films, then readings, each in authored order. */
+/** The rows a resources file seeds. Videos, then audio, then articles, each in authored order. */
 export function resourcesSeedFromFile(file: ResourcesFile): ResourcesSeed {
   return {
     collection: {
@@ -426,8 +426,9 @@ export function resourcesSeedFromFile(file: ResourcesFile): ResourcesSeed {
       },
     },
     resources: [
-      ...file.films.map((film, position) => resourceToRow(film, 'film', position)),
-      ...file.readings.map((reading, position) => resourceToRow(reading, 'reading', position)),
+      ...file.videos.map((video, position) => resourceToRow(video, 'video', position)),
+      ...file.audio.map((piece, position) => resourceToRow(piece, 'audio', position)),
+      ...file.articles.map((article, position) => resourceToRow(article, 'article', position)),
     ],
     words: Object.entries(file.words).map(([key, words]) => wordsToRow(key, words)),
   };
@@ -452,25 +453,33 @@ export function resourcesFileFromLibrary(library: ResourcesLibrary): ResourcesFi
         'Exported from the admin. Retired resources are not in this file: the format cannot say "retired", and they stay in the database so past suggestions still resolve.',
       ],
     },
-    films: library.films.map((film) => ({
-      id: film.id,
-      title: film.title,
-      subtitle: film.subtitle,
-      relatesTo: film.relatesTo,
-      duration: film.duration,
-      href: film.href,
+    videos: library.videos.map((video) => ({
+      id: video.id,
+      title: video.title,
+      subtitle: video.subtitle,
+      relatesTo: video.relatesTo,
+      duration: video.duration,
+      href: video.href,
     })),
-    readings: library.readings.map((reading) => {
+    audio: library.audio.map((piece) => ({
+      id: piece.id,
+      title: piece.title,
+      subtitle: piece.subtitle,
+      relatesTo: piece.relatesTo,
+      duration: piece.duration,
+      href: piece.href,
+    })),
+    articles: library.articles.map((article) => {
       const base = {
-        id: reading.id,
-        title: reading.title,
-        subtitle: reading.subtitle,
-        relatesTo: reading.relatesTo,
-        readingTime: reading.readingTime,
+        id: article.id,
+        title: article.title,
+        subtitle: article.subtitle,
+        relatesTo: article.relatesTo,
+        readingTime: article.readingTime,
       };
-      return 'documentId' in reading
-        ? { ...base, documentId: reading.documentId }
-        : { ...base, href: reading.href };
+      return 'documentId' in article
+        ? { ...base, documentId: article.documentId }
+        : { ...base, href: article.href };
     }),
     words: Object.fromEntries(
       Object.entries(library.words).map(([key, words]) => [

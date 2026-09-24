@@ -1,5 +1,5 @@
 /**
- * The resource library — her films, her reading, and her words on each key —
+ * The resource library — her videos, audio and articles, and her words on each key —
  * loaded into the tables the drawer, the library route and the conversation
  * read, once (f-content-seeds t-87).
  *
@@ -17,10 +17,10 @@
  * `016-journey-structure.ts` gives.
  *
  * **Her list (t-76) is therefore a migration, not an edit to the file.** The
- * file ships with no films and no readings. Once this has written the library,
+ * file ships with no videos and no articles. Once this has written the library,
  * adding them to the file reaches only a database that was never seeded.
  *
- * Runs after 015 and 016: a reading names a document, and a key names a module.
+ * Runs after 015 and 016: an article names a document, and a key names a module.
  */
 
 import type { SeedUnit } from '@/prisma/runner';
@@ -42,7 +42,7 @@ const unit: SeedUnit = {
     }
     logger.info(
       `🎞️  Seeded the resource library at version ${seed.collection.version}: ` +
-        `${result.resources} films and readings, words for ${result.words} keys, each at revision 1`
+        `${result.resources} videos, audio and articles, words for ${result.words} keys, each at revision 1`
     );
   },
 };

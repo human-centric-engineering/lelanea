@@ -41,8 +41,8 @@ import {
 } from '@/lib/app/content/question-view';
 import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
 import {
-  toFilm,
-  toReading,
+  resourceKindOf,
+  toResource,
   toResourcesLibrary,
   type ResourceCollectionRow,
   type ResourceRow,
@@ -236,7 +236,7 @@ export function createFakeResourceStore() {
     getResource: vi.fn(async (id: string) => {
       const row = state?.resources.find((candidate) => candidate.id === id);
       if (!row) return null;
-      return row.kind === 'film' ? toFilm(row) : toReading(row);
+      return { kind: resourceKindOf(row), resource: toResource(row) };
     }),
     selectResourcesFor: vi.fn(async (key: string, options: { pin?: string } = {}) =>
       selectResources(
@@ -257,7 +257,7 @@ export function createFakeResourceStore() {
       state = null;
     },
     /**
-     * Add a film or a reading, as an admin would. `position` defaults to the
+     * Add a video, audio or article, as an admin would. `position` defaults to the
      * end of its kind.
      */
     addResource(row: Omit<ResourceRow, 'revision' | 'position'> & { position?: number }): void {
@@ -300,33 +300,47 @@ export function fakeResourceStore(): FakeResourceStore {
   return resourceInstance;
 }
 
-/** A film row the fake accepts, for tests that need the library to hold one. */
-export function filmRow(
+/** A video row the fake accepts, for tests that need the library to hold one. */
+export function videoRow(
   id: string,
   overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
 ): Omit<ResourceRow, 'revision' | 'position'> {
   return {
     id,
-    kind: 'film',
-    title: `Film ${id}`,
+    kind: 'video',
+    title: `Video ${id}`,
     subtitle: `What ${id} is for`,
     relatesTo: null,
     duration: '6:12',
     readingTime: null,
-    href: 'https://example.com/film',
+    href: 'https://example.com/video',
     documentId: null,
     ...overrides,
   };
 }
 
-/** A reading row that is one of her documents. */
-export function readingRow(
+/** An audio row: a length and a link, as a video has. */
+export function audioRow(
+  id: string,
+  overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
+): Omit<ResourceRow, 'revision' | 'position'> {
+  return {
+    ...videoRow(id),
+    kind: 'audio',
+    title: `Audio ${id}`,
+    href: 'https://example.com/audio',
+    ...overrides,
+  };
+}
+
+/** An article row that is one of her documents. */
+export function articleRow(
   id: string,
   overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
 ): Omit<ResourceRow, 'revision' | 'position'> {
   return {
     id,
-    kind: 'reading',
+    kind: 'article',
     title: `Reading ${id}`,
     subtitle: `What ${id} is for`,
     relatesTo: null,

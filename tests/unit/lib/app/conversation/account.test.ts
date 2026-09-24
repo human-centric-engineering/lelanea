@@ -110,7 +110,7 @@ describe('the parts', () => {
   });
 
   it('does not count the writes, because the frame cannot say how many things were learned', () => {
-    // Three successful `fill_slot` calls can be fewer than three readings — the
+    // Three successful `fill_slot` calls can be fewer than three articles — the
     // model calling the tool twice for one slug inside one attempt is a case
     // `capture.ts` deliberately does not collapse, and a suppressed retry
     // returns a success like any other. "Added 3 things" where the panel shows
@@ -161,7 +161,7 @@ describe('the parts', () => {
         suggestions: [
           {
             id: 'on-stalling',
-            kind: 'film',
+            kind: 'video',
             title: 'On stalling',
             subtitle: 'why',
             length: '5:04',
@@ -173,7 +173,7 @@ describe('the parts', () => {
       {
         key: 'pointed_to',
         line: 'Pointed you to “On stalling”',
-        detail: 'Pointed you to “On stalling” — a film of hers you can open beside this reply.',
+        detail: 'Pointed you to “On stalling” — a video of hers you can open beside this reply.',
       },
     ]);
   });
@@ -183,13 +183,13 @@ describe('the parts', () => {
       input({
         capabilities: ['suggest_resource', 'suggest_resource'],
         suggestions: [
-          { id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' },
-          { id: 'b', kind: 'reading', title: 'B', subtitle: 's', length: '2 min' },
+          { id: 'a', kind: 'video', title: 'A', subtitle: 's', length: '1:00' },
+          { id: 'b', kind: 'article', title: 'B', subtitle: 's', length: '2 min' },
         ],
       })
     );
     expect(parts[0]?.line).toBe('Pointed you to “A” and “B”');
-    expect(parts[0]?.detail).toMatch(/a film and a piece of writing of hers/);
+    expect(parts[0]?.detail).toMatch(/a video and an article of hers/);
   });
 
   it('counts two of a kind as two, not as one', () => {
@@ -197,25 +197,25 @@ describe('the parts', () => {
       input({
         capabilities: ['suggest_resource', 'suggest_resource'],
         suggestions: [
-          { id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' },
-          { id: 'b', kind: 'film', title: 'B', subtitle: 's', length: '2:00' },
+          { id: 'a', kind: 'video', title: 'A', subtitle: 's', length: '1:00' },
+          { id: 'b', kind: 'video', title: 'B', subtitle: 's', length: '2:00' },
         ],
       })
     );
     expect(parts[0]?.detail).toBe(
-      'Pointed you to “A” and “B” — two films of hers you can open beside this reply.'
+      'Pointed you to “A” and “B” — two videos of hers you can open beside this reply.'
     );
-    const readings = accountParts(
+    const articles = accountParts(
       input({
         capabilities: ['suggest_resource'],
         suggestions: [
-          { id: 'a', kind: 'reading', title: 'A', subtitle: 's', length: '1 min' },
-          { id: 'b', kind: 'reading', title: 'B', subtitle: 's', length: '2 min' },
-          { id: 'c', kind: 'film', title: 'C', subtitle: 's', length: '3:00' },
+          { id: 'a', kind: 'article', title: 'A', subtitle: 's', length: '1 min' },
+          { id: 'b', kind: 'article', title: 'B', subtitle: 's', length: '2 min' },
+          { id: 'c', kind: 'video', title: 'C', subtitle: 's', length: '3:00' },
         ],
       })
     );
-    expect(readings[0]?.detail).toMatch(/a film and two pieces of writing of hers/);
+    expect(articles[0]?.detail).toMatch(/a video and two articles of hers/);
   });
 
   it('still says the turn offered something when the resource has since left the library', () => {
@@ -237,7 +237,7 @@ describe('the parts', () => {
     const parts = accountParts(
       input({
         capabilities: ['fill_slot', 'suggest_resource', 'search_knowledge_base'],
-        suggestions: [{ id: 'a', kind: 'film', title: 'A', subtitle: 's', length: '1:00' }],
+        suggestions: [{ id: 'a', kind: 'video', title: 'A', subtitle: 's', length: '1:00' }],
       })
     );
     expect(parts.map((p) => p.key)).toEqual(['looked_up', 'wrote_profile', 'pointed_to']);

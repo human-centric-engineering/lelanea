@@ -271,15 +271,15 @@ clause for the line and a sentence for the detail. `accountLine` joins the
 clauses; `accountDetail` puts one sentence to a line and the figures last.
 Modules instructed (§13) add a source; the row does not change.
 
-| The turn…                             | Line                                               | Detail                                                                 |
-| ------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| called `search_knowledge_base`        | Looked something up in her material                | …and drew on N passages of it. (the citations on the reply)            |
-| called `get_state`                    | Looked at what she already understands about you   | the same                                                               |
-| called `fill_slot`                    | Added something to what she understands about you  | …You can see it, and correct it.                                       |
-| called `suggest_resource` (t-77)      | Pointed you to “<title>”                           | …— a film / a piece of writing of hers you can open beside this reply. |
-| …for an id the library has since lost | Offered something that is no longer in her library | the same                                                               |
-| called a capability with no words yet | Used <slug, as words>                              | the same — named, never hidden                                         |
-| called nothing                        | Nothing was written from this turn                 | the same, as a sentence                                                |
+| The turn…                             | Line                                               | Detail                                                                           |
+| ------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| called `search_knowledge_base`        | Looked something up in her material                | …and drew on N passages of it. (the citations on the reply)                      |
+| called `get_state`                    | Looked at what she already understands about you   | the same                                                                         |
+| called `fill_slot`                    | Added something to what she understands about you  | …You can see it, and correct it.                                                 |
+| called `suggest_resource` (t-77)      | Pointed you to “<title>”                           | …— a video / an audio piece / an article of hers you can open beside this reply. |
+| …for an id the library has since lost | Offered something that is no longer in her library | the same                                                                         |
+| called a capability with no words yet | Used <slug, as words>                              | the same — named, never hidden                                                   |
+| called nothing                        | Nothing was written from this turn                 | the same, as a sentence                                                          |
 
 **The offer itself is a chip under the reply** (`SuggestionChips` in
 `turns.tsx`), before the account row: the library's title, its kind and its

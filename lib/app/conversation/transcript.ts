@@ -103,7 +103,7 @@ export interface TranscriptReplyEntry {
    */
   capabilities: string[];
   /**
-   * What the turn offered the person — Lelañea Fulton's films or writing, by
+   * What the turn offered the person — Lelañea Fulton's videos, audio or articles, by
    * id, resolved against the library from the same traces (t-77). Empty for
    * a turn that offered nothing; the live turn collects the same off the
    * `capability_result` frames.

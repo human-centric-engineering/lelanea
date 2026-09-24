@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 const RAIL_ITEMS: { id: DrawerId; label: string; tip: string; icon: typeof Map }[] = [
   { id: 'map', label: 'Map', tip: 'Your map — the sixteen modules', icon: Map },
-  { id: 'resources', label: 'Resources', tip: 'Resources — films and reading', icon: BookOpen },
+  { id: 'resources', label: 'Resources', tip: 'Resources — videos and articles', icon: BookOpen },
 ];
 
 /**

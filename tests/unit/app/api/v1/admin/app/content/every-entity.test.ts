@@ -406,21 +406,21 @@ describe('questions', () => {
 });
 
 describe('resources', () => {
-  const film = {
-    kind: 'film',
-    title: 'A film',
+  const video = {
+    kind: 'video',
+    title: 'A video',
     subtitle: 'For the start.',
     relatesTo: 'module_01_values',
     duration: '6:12',
     href: 'https://example.com/f',
   };
 
-  it('adds, edits, retires, restores and reorders films, with every refusal named', async () => {
+  it('adds, edits, retires, restores and reorders videos, with every refusal named', async () => {
     expect(
       (
         await call(
           create(
-            req('POST', '/resources/resource', { id: 'f-one', ...film }),
+            req('POST', '/resources/resource', { id: 'f-one', ...video }),
             entity('resources', 'resource')
           )
         )
@@ -430,7 +430,7 @@ describe('resources', () => {
       (
         await call(
           create(
-            req('POST', '/resources/resource', { id: 'f-two', ...film, title: 'Two' }),
+            req('POST', '/resources/resource', { id: 'f-two', ...video, title: 'Two' }),
             entity('resources', 'resource')
           )
         )
@@ -438,7 +438,7 @@ describe('resources', () => {
     ).toBe(201);
     const clash = await call(
       create(
-        req('POST', '/resources/resource', { id: 'f-one', ...film }),
+        req('POST', '/resources/resource', { id: 'f-one', ...video }),
         entity('resources', 'resource')
       )
     );
@@ -447,7 +447,7 @@ describe('resources', () => {
       create(
         req('POST', '/resources/resource', {
           id: 'f-bad',
-          ...film,
+          ...video,
           relatesTo: 'module_99_nowhere',
         }),
         entity('resources', 'resource')
@@ -458,7 +458,7 @@ describe('resources', () => {
     const asReading = await call(
       save(
         req('PUT', '/resources/resource/f-one', {
-          kind: 'reading',
+          kind: 'article',
           title: 'x',
           subtitle: 'y',
           relatesTo: null,
@@ -473,7 +473,7 @@ describe('resources', () => {
 
     await call(
       save(
-        req('PUT', '/resources/resource/f-one', { ...film, title: 'Retitled', revision: 1 }),
+        req('PUT', '/resources/resource/f-one', { ...video, title: 'Retitled', revision: 1 }),
         item('resources', 'resource', 'f-one')
       )
     );
@@ -488,7 +488,7 @@ describe('resources', () => {
     const moved = await call(
       reorder(
         req('PUT', '/resources/order', {
-          kind: 'film',
+          kind: 'video',
           order: [
             { id: 'f-two', revision: 1 },
             { id: 'f-one', revision: 3 },
@@ -508,7 +508,7 @@ describe('resources', () => {
     expect(retire.data).toMatchObject({ retired: true });
     const reused = await call(
       create(
-        req('POST', '/resources/resource', { id: 'f-two', ...film }),
+        req('POST', '/resources/resource', { id: 'f-two', ...video }),
         entity('resources', 'resource')
       )
     );
@@ -777,14 +777,14 @@ describe('imports through the route', () => {
     expect(again.data).toMatchObject({ plan: { writesNothing: true } });
   });
 
-  it('a resources file that adds one film and drops another names both in the audit', async () => {
+  it('a resources file that adds one video and drops another names both in the audit', async () => {
     const { POST: applyImport } =
       await import('@/app/api/v1/admin/app/content/[collection]/import/route');
     await call(
       create(
         req('POST', '/resources/resource', {
           id: 'leaving',
-          kind: 'film',
+          kind: 'video',
           title: 'L',
           subtitle: 'l',
           relatesTo: null,
@@ -798,8 +798,8 @@ describe('imports through the route', () => {
       await import('@/app/api/v1/admin/app/content/[collection]/export/route');
     const file = (await (
       await exportFile(req('GET', '/resources/export'), collectionParams('resources'))
-    ).json()) as { films: Record<string, unknown>[] };
-    file.films = [
+    ).json()) as { videos: Record<string, unknown>[] };
+    file.videos = [
       {
         id: 'arriving',
         title: 'A',

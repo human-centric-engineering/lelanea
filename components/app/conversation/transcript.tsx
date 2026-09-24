@@ -109,7 +109,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
         */}
         {/*
           What the turn offered, before the account that says it did: the chip
-          IS the offer — a film or a piece of Lelañea Fulton's, by id — and the
+          IS the offer — a video, audio piece or article of Lelañea Fulton's, by id — and the
           account row below it is the record.
         */}
         {entry.suggestions.length > 0 ? <SuggestionChips suggestions={entry.suggestions} /> : null}

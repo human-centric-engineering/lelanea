@@ -2,7 +2,7 @@
 
 /**
  * The resource library editor (f-content-seeds t-91): the library's own
- * fields and sign-off, every film and reading (live and retired), reordering,
+ * fields and sign-off, every video and article (live and retired), reordering,
  * adding, and her words per key.
  *
  * What is proved here is what the admin sees and what the browser sends —
@@ -61,10 +61,10 @@ const READERS = ['the resource drawer (/api/v1/app/content/resources)'];
 
 const FILM1: ResourceAdminRow = {
   id: 'the_call',
-  kind: 'film',
+  kind: 'video',
   position: 1,
   title: 'The Call',
-  subtitle: 'A short film on beginnings.',
+  subtitle: 'A short video on beginnings.',
   relatesTo: null,
   duration: '6:12',
   readingTime: null,
@@ -76,7 +76,7 @@ const FILM1: ResourceAdminRow = {
 
 const FILM2: ResourceAdminRow = {
   id: 'second_wind',
-  kind: 'film',
+  kind: 'video',
   position: 2,
   title: 'Second Wind',
   subtitle: 'For when it gets hard.',
@@ -90,10 +90,10 @@ const FILM2: ResourceAdminRow = {
 };
 
 const OLD_FILM: ResourceAdminRow = {
-  id: 'old_film',
-  kind: 'film',
+  id: 'old_video',
+  kind: 'video',
   position: -1,
-  title: 'Old Film',
+  title: 'Old Video',
   subtitle: 'Retired now.',
   relatesTo: 'module_01_a',
   duration: '3:00',
@@ -106,7 +106,7 @@ const OLD_FILM: ResourceAdminRow = {
 
 const READING1: ResourceAdminRow = {
   id: 'her_words',
-  kind: 'reading',
+  kind: 'article',
   position: 1,
   title: 'Her Words',
   subtitle: 'A short read.',
@@ -166,6 +166,11 @@ beforeEach(() => {
   mockRouter.refresh.mockClear();
 });
 
+/** The edit modal for one item, found by the title it is named for. */
+function editor(title: string): ReturnType<typeof within> {
+  return within(screen.getByRole('dialog', { name: title }));
+}
+
 describe('before the seed has run', () => {
   it('says so, and offers nothing to edit', () => {
     render(
@@ -184,7 +189,7 @@ describe('before the seed has run', () => {
     );
 
     expect(screen.getByText(/has not been seeded yet/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Add a film/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add a video/ })).toBeNull();
   });
 });
 
@@ -256,59 +261,58 @@ describe('the library', () => {
   });
 });
 
-describe('the films and readings lists', () => {
+describe('the videos and articles lists', () => {
   it('shows each live one under its heading, and retired ones tucked away, separately', () => {
     render(<ResourcesPanel initialView={VIEW} />);
 
-    expect(screen.getByText('Films (2)')).toBeInTheDocument();
-    expect(screen.getByText('Readings (1)')).toBeInTheDocument();
+    expect(screen.getByText('Videos (2)')).toBeInTheDocument();
+    expect(screen.getByText('Articles (1)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'The Call' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Second Wind' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Her Words' })).toBeInTheDocument();
 
     // Retired ones are inside a details/summary, counted on their own.
-    expect(screen.getByText('Retired films (1)')).toBeInTheDocument();
+    expect(screen.getByText('Retired videos (1)')).toBeInTheDocument();
   });
 });
 
 describe('editing a resource', () => {
-  async function openFilm1(user: ReturnType<typeof userEvent.setup>) {
+  async function openTheCall(user: ReturnType<typeof userEvent.setup>) {
     render(<ResourcesPanel initialView={VIEW} />);
-    const button = screen.getByRole('button', { name: 'The Call' });
-    await user.click(button);
-    return button.closest('li')!;
+    await user.click(screen.getByRole('button', { name: 'The Call' }));
+    return editor('The Call');
   }
 
-  it('saves title, subtitle, relatesTo, length and link for a film', async () => {
+  it('saves title, subtitle, relatesTo, length and link for a video', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: ['title'] }));
-    const row = await openFilm1(user);
+    const dialog = await openTheCall(user);
 
-    const title = within(row).getByLabelText('Title');
+    const title = dialog.getByLabelText('Title');
     await user.clear(title);
     await user.type(title, 'The Call, reworded');
 
-    const subtitle = screen.getByLabelText('What it is for');
+    const subtitle = dialog.getByLabelText('What it is for');
     await user.clear(subtitle);
     await user.type(subtitle, 'A new one-liner.');
 
-    await user.selectOptions(screen.getByLabelText('Belongs to'), 'module_01_a');
+    await user.selectOptions(dialog.getByLabelText('Belongs to'), 'module_01_a');
 
-    const length = screen.getByLabelText('Length (m:ss)');
+    const length = dialog.getByLabelText('Length (m:ss)');
     await user.clear(length);
     await user.type(length, '7:00');
 
-    const href = screen.getByLabelText('Link');
+    const href = dialog.getByLabelText('Link');
     await user.clear(href);
     await user.type(href, 'https://example.com/the-call-2');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(sent().url).toBe(contentItemEndpoint('resources', 'resource', 'the_call'));
     expect(sent().method).toBe('PUT');
     expect(sent().body).toEqual({
       revision: 2,
-      kind: 'film',
+      kind: 'video',
       title: 'The Call, reworded',
       subtitle: 'A new one-liner.',
       relatesTo: 'module_01_a',
@@ -324,9 +328,10 @@ describe('editing a resource', () => {
     fetchMock.mockResolvedValueOnce(ok({ changed: [] }));
     render(<ResourcesPanel initialView={VIEW} />);
     await user.click(screen.getByRole('button', { name: 'Second Wind' }));
+    const dialog = editor('Second Wind');
 
-    await user.selectOptions(screen.getByLabelText('Belongs to'), '');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.selectOptions(dialog.getByLabelText('Belongs to'), '');
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(sent().body).toMatchObject({ relatesTo: null });
   });
@@ -334,9 +339,9 @@ describe('editing a resource', () => {
   it('says plainly when a resource save changed nothing', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: [] }));
-    await openFilm1(user);
+    const dialog = await openTheCall(user);
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText('Nothing had changed.')).toBeInTheDocument();
   });
@@ -344,30 +349,31 @@ describe('editing a resource', () => {
   it('shows the route’s refusal for a resource save', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(refused(409, 'The resource moved under you.'));
-    await openFilm1(user);
+    const dialog = await openTheCall(user);
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The resource moved under you.');
   });
 
-  it('saves a reading that opens one of her documents, with no link field shown', async () => {
+  it('saves an article that opens one of her documents, with no link field shown', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: ['readingTime'] }));
     render(<ResourcesPanel initialView={VIEW} />);
     await user.click(screen.getByRole('button', { name: 'Her Words' }));
+    const dialog = editor('Her Words');
 
-    expect(screen.queryByLabelText('Link')).toBeNull();
-    expect(screen.getByLabelText('Opens her document')).toHaveValue('the_initiation');
+    expect(dialog.queryByLabelText('Link')).toBeNull();
+    expect(dialog.getByLabelText('Opens a document')).toHaveValue('the_initiation');
 
-    const length = screen.getByLabelText('Reading time');
+    const length = dialog.getByLabelText('Reading time');
     await user.clear(length);
     await user.type(length, '9 min');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(sent().body).toEqual({
       revision: 1,
-      kind: 'reading',
+      kind: 'article',
       title: 'Her Words',
       subtitle: 'A short read.',
       relatesTo: null,
@@ -376,21 +382,22 @@ describe('editing a resource', () => {
     });
   });
 
-  it('switching a reading to "none: a link" reveals the link field and saves by href', async () => {
+  it('switching an article to "none: a link" reveals the link field and saves by href', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: ['href'] }));
     render(<ResourcesPanel initialView={VIEW} />);
     await user.click(screen.getByRole('button', { name: 'Her Words' }));
+    const dialog = editor('Her Words');
 
-    await user.selectOptions(screen.getByLabelText('Opens her document'), '');
-    const href = screen.getByLabelText('Link');
+    await user.selectOptions(dialog.getByLabelText('Opens a document'), '');
+    const href = dialog.getByLabelText('Link');
     await user.type(href, 'https://example.com/her-words');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
 
     expect(sent().body).toEqual({
       revision: 1,
-      kind: 'reading',
+      kind: 'article',
       title: 'Her Words',
       subtitle: 'A short read.',
       relatesTo: null,
@@ -422,15 +429,15 @@ describe('retiring and bringing back a resource', () => {
     fetchMock.mockResolvedValueOnce(ok({ changed: [] }));
     render(<ResourcesPanel initialView={VIEW} />);
 
-    const summary = screen.getByText('Retired films (1)');
+    const summary = screen.getByText('Retired videos (1)');
     await user.click(summary);
-    await user.click(screen.getByRole('button', { name: 'Old Film' }));
+    await user.click(screen.getByRole('button', { name: 'Old Video' }));
     await user.click(screen.getByRole('button', { name: 'Bring back' }));
 
-    expect(sent().url).toBe(contentRetiredEndpoint('resources', 'resource', 'old_film'));
+    expect(sent().url).toBe(contentRetiredEndpoint('resources', 'resource', 'old_video'));
     expect(sent().body).toEqual({ retired: false, revision: 4 });
     expect(
-      await screen.findByText(/Brought back "Old Film", at the end of the films\./)
+      await screen.findByText(/Brought back "Old Video", at the end of the videos\./)
     ).toBeInTheDocument();
   });
 
@@ -448,7 +455,7 @@ describe('retiring and bringing back a resource', () => {
 });
 
 describe('reordering', () => {
-  it('moving the second film up sends the swapped order, kind included', async () => {
+  it('moving the second video up sends the swapped order, kind included', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ moved: 2 }));
     render(<ResourcesPanel initialView={VIEW} />);
@@ -458,23 +465,23 @@ describe('reordering', () => {
     expect(sent().url).toBe(contentOrderEndpoint('resources'));
     expect(sent().method).toBe('PUT');
     expect(sent().body).toEqual({
-      kind: 'film',
+      kind: 'video',
       order: [
         { id: 'second_wind', revision: 1 },
         { id: 'the_call', revision: 2 },
       ],
     });
-    expect(await screen.findByText('Saved the new order of films.')).toBeInTheDocument();
+    expect(await screen.findByText('Saved the new order of videos.')).toBeInTheDocument();
   });
 
   it('does not offer reorder arrows on a retired resource', async () => {
     const user = userEvent.setup();
     render(<ResourcesPanel initialView={VIEW} />);
 
-    await user.click(screen.getByText('Retired films (1)'));
+    await user.click(screen.getByText('Retired videos (1)'));
 
-    expect(screen.queryByRole('button', { name: 'Move Old Film up' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Move Old Film down' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move Old Video up' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move Old Video down' })).toBeNull();
   });
 
   it('reports an error from a failed reorder', async () => {
@@ -489,60 +496,60 @@ describe('reordering', () => {
 });
 
 describe('adding a resource', () => {
-  it('adds a film, sending its id and fields', async () => {
+  it('adds a video, sending its id and fields', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_film' }));
+    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_video' }));
     render(<ResourcesPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Add a film' }));
+    await user.click(screen.getByRole('button', { name: 'Add a video' }));
     const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
 
-    await user.type(within(form).getByLabelText('Id'), 'a_new_film');
-    await user.type(within(form).getByLabelText('Title'), 'A New Film');
+    await user.type(within(form).getByLabelText('Id'), 'a_new_video');
+    await user.type(within(form).getByLabelText('Title'), 'A New Video');
     await user.type(within(form).getByLabelText('What it is for'), 'A fresh one.');
     await user.selectOptions(within(form).getByLabelText('Belongs to'), 'journey');
     await user.type(within(form).getByLabelText('Length (m:ss)'), '2:30');
-    await user.type(within(form).getByLabelText('Link'), 'https://example.com/new-film');
+    await user.type(within(form).getByLabelText('Link'), 'https://example.com/new-video');
 
     await user.click(within(form).getByRole('button', { name: 'Add' }));
 
     expect(sent().url).toBe(contentEntityEndpoint('resources', 'resource'));
     expect(sent().method).toBe('POST');
     expect(sent().body).toEqual({
-      id: 'a_new_film',
-      kind: 'film',
-      title: 'A New Film',
+      id: 'a_new_video',
+      kind: 'video',
+      title: 'A New Video',
       subtitle: 'A fresh one.',
       relatesTo: 'journey',
       duration: '2:30',
-      href: 'https://example.com/new-film',
+      href: 'https://example.com/new-video',
     });
     expect(screen.queryByLabelText('Id')).toBeNull();
     expect(
-      await screen.findByText('Added "A New Film" at the end of the films.')
+      await screen.findByText('Added "A New Video" at the end of the videos.')
     ).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
   });
 
-  it('adds a reading by document, with no link field to fill', async () => {
+  it('adds an article by document, with no link field to fill', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_reading' }));
+    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_article' }));
     render(<ResourcesPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Add a reading' }));
+    await user.click(screen.getByRole('button', { name: 'Add an article' }));
     const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
 
-    await user.type(within(form).getByLabelText('Id'), 'a_new_reading');
-    await user.type(within(form).getByLabelText('Title'), 'A New Reading');
+    await user.type(within(form).getByLabelText('Id'), 'a_new_article');
+    await user.type(within(form).getByLabelText('Title'), 'A New Article');
     await user.type(within(form).getByLabelText('What it is for'), 'Worth reading.');
-    await user.selectOptions(within(form).getByLabelText('Opens her document'), 'the_mission');
+    await user.selectOptions(within(form).getByLabelText('Opens a document'), 'the_mission');
     await user.type(within(form).getByLabelText('Reading time'), '5 min');
 
     expect(within(form).queryByLabelText('Link')).toBeNull();
     await user.click(within(form).getByRole('button', { name: 'Add' }));
 
     expect(sent().body).toEqual({
-      id: 'a_new_reading',
-      kind: 'reading',
-      title: 'A New Reading',
+      id: 'a_new_article',
+      kind: 'article',
+      title: 'A New Article',
       subtitle: 'Worth reading.',
       relatesTo: null,
       readingTime: '5 min',
@@ -550,36 +557,36 @@ describe('adding a resource', () => {
     });
   });
 
-  it('adds a reading by link when no document is chosen', async () => {
+  it('adds an article by link when no document is chosen', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_reading' }));
+    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_article' }));
     render(<ResourcesPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Add a reading' }));
+    await user.click(screen.getByRole('button', { name: 'Add an article' }));
     const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
 
-    await user.type(within(form).getByLabelText('Id'), 'a_new_reading');
-    await user.type(within(form).getByLabelText('Title'), 'A New Reading');
+    await user.type(within(form).getByLabelText('Id'), 'a_new_article');
+    await user.type(within(form).getByLabelText('Title'), 'A New Article');
     await user.type(within(form).getByLabelText('What it is for'), 'Worth reading.');
     await user.type(within(form).getByLabelText('Reading time'), '5 min');
-    await user.type(within(form).getByLabelText('Link'), 'https://example.com/new-reading');
+    await user.type(within(form).getByLabelText('Link'), 'https://example.com/new-article');
 
     await user.click(within(form).getByRole('button', { name: 'Add' }));
 
     expect(sent().body).toEqual({
-      id: 'a_new_reading',
-      kind: 'reading',
-      title: 'A New Reading',
+      id: 'a_new_article',
+      kind: 'article',
+      title: 'A New Article',
       subtitle: 'Worth reading.',
       relatesTo: null,
       readingTime: '5 min',
-      href: 'https://example.com/new-reading',
+      href: 'https://example.com/new-article',
     });
   });
 
   it('cancel closes the form without sending anything', async () => {
     const user = userEvent.setup();
     render(<ResourcesPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Add a film' }));
+    await user.click(screen.getByRole('button', { name: 'Add a video' }));
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -591,7 +598,7 @@ describe('adding a resource', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(refused(400, 'That id is already taken.'));
     render(<ResourcesPanel initialView={VIEW} />);
-    await user.click(screen.getByRole('button', { name: 'Add a film' }));
+    await user.click(screen.getByRole('button', { name: 'Add a video' }));
     const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
     await user.type(within(form).getByLabelText('Id'), 'the_call');
 
@@ -602,7 +609,7 @@ describe('adding a resource', () => {
   });
 });
 
-describe('her words, by key', () => {
+describe('words, by key', () => {
   it('saves a quote, paragraphs and source for a non-default key', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: ['quote'] }));

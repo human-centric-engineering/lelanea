@@ -653,8 +653,8 @@ is the specific failure D6 names.
 - **The resources drawer's lists.** The drawer is real from §14 t-75 — it
   follows the open module and shows her words on it from the API — but until her
   list lands (t-76) both `to watch` and `to read` are empty, and each section
-  says so under its eyebrow rather than carrying two plausible films. See
-  [`content.md`](./content.md#resources--her-films-and-reading-and-her-words-on-whatever-is-open).
+  says so under its eyebrow rather than carrying two plausible videos. See
+  [`content.md`](./content.md#resources--her-videos-and-reading-and-her-words-on-whatever-is-open).
 - **A module's real state in the map.** Every row reads `not started ○`, because
   no per-user journey exists. `open` — which the API returns — is a fact about
   the system rather than about the reader, and putting it in the column made all

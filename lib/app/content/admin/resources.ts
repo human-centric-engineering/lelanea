@@ -1,6 +1,6 @@
 /**
  * The resource library, edited in the admin (f-content-seeds t-91): its
- * collection row, every film and reading, and her words by key.
+ * collection row, every video, audio and article, and her words by key.
  *
  * ## Resources are retired, never deleted
  *
@@ -54,9 +54,10 @@ import {
   type ResourcesProvenance,
 } from '@/lib/app/content/resources';
 import {
-  toFilm,
-  toReading,
+  RESOURCE_KINDS,
+  toResource,
   toWords,
+  type ResourceKind,
   type ResourceRow,
   type ResourceWordsRow,
 } from '@/lib/app/content/resource-view';
@@ -120,14 +121,14 @@ export interface ResourcesAdminView {
     provenance: ResourcesProvenance;
     updatedAt: string;
   } | null;
-  /** Films then readings, live ones in drawer order, then the retired. */
+  /** Videos then articles, live ones in drawer order, then the retired. */
   resources: ResourceAdminRow[];
   words: (WordsFields & { key: string; revision: number })[];
   /** What a resource may relate to: a module id, `journey` or `situations`. */
   relatesToOptions: readonly string[];
   /** What a words key may be: a module id or a fixed key. */
   wordsKeyOptions: readonly string[];
-  /** The foundational documents a reading may open. */
+  /** The foundational documents an article may open. */
   documentIds: readonly string[];
   readers: readonly string[];
 }
@@ -182,8 +183,8 @@ function contentFromEdit(edit: ResourceEdit) {
     title: edit.title,
     subtitle: edit.subtitle,
     relatesTo: edit.relatesTo,
-    duration: edit.kind === 'film' ? edit.duration : null,
-    readingTime: edit.kind === 'reading' ? edit.readingTime : null,
+    duration: edit.kind === 'article' ? null : edit.duration,
+    readingTime: edit.kind === 'article' ? edit.readingTime : null,
     href: 'href' in edit ? edit.href : null,
     documentId: 'documentId' in edit ? edit.documentId : null,
   };
@@ -203,6 +204,12 @@ function wordsDiff(before: WordsFields, after: WordsFields) {
   return changedFieldsOf(before, after, WORDS_SNAPSHOT_FIELDS);
 }
 
+/** A stored kind with its article, for a message: "a video", "an audio piece", "an article". */
+function aKind(kind: string): string {
+  if (kind === 'audio') return 'an audio piece';
+  return /^[aeiou]/.test(kind) ? `an ${kind}` : `a ${kind}`;
+}
+
 const RELATES_TO_OPTIONS: readonly string[] = [
   ...JOURNEY_MODULES.map((entry) => entry.id),
   'journey',
@@ -220,8 +227,7 @@ const WORDS_KEY_OPTIONS: readonly string[] = [
 async function assertServable(tx: Tx, id: string, fields: ResourceFields): Promise<void> {
   const asRow: ResourceRow = { id, ...fields, revision: 1 };
   try {
-    if (fields.kind === 'film') toFilm(asRow);
-    else toReading(asRow);
+    toResource(asRow);
   } catch (error) {
     throw new ValidationError(error instanceof Error ? error.message : String(error));
   }
@@ -317,8 +323,9 @@ export async function getResourcesAdminView(): Promise<ResourcesAdminView> {
   const live = resources.filter((row) => !row.retired);
   const retired = resources.filter((row) => row.retired);
   const byKind = (rows: readonly AppResource[]) => [
-    ...rows.filter((row) => row.kind === 'film'),
-    ...rows.filter((row) => row.kind === 'reading'),
+    ...rows.filter((row) => row.kind === 'video'),
+    ...rows.filter((row) => row.kind === 'audio'),
+    ...rows.filter((row) => row.kind === 'article'),
   ];
   return {
     seeded: collection !== null,
@@ -385,7 +392,7 @@ async function writeResource(
     const next = toNext(before);
     if (next.kind !== before.kind) {
       throw new ValidationError(
-        `"${id}" is a ${before.kind}. A film and a reading are offered in different places, so add a new one instead.`
+        `"${id}" is ${aKind(before.kind)}. Videos, audio and articles are offered in different places, so add a new one instead.`
       );
     }
     await assertServable(tx, id, next);
@@ -544,7 +551,7 @@ export async function setResourceRetired(
   });
 }
 
-/** Add a film or a reading at the end of its kind. */
+/** Add a video, audio or article at the end of its kind. */
 export async function createResource(
   id: string,
   edit: ResourceEdit,
@@ -589,7 +596,7 @@ export async function createResource(
 
 /** Put the live resources of one kind in a new order. */
 export async function reorderResources(
-  kind: 'film' | 'reading',
+  kind: ResourceKind,
   order: readonly { id: string; revision: number }[],
   editorId: string
 ): Promise<{ moved: number }> {
@@ -864,7 +871,7 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
   // result re-imports with no position changes.
   const retiredHere = new Set(stored.resources.filter((row) => row.retired).map((row) => row.id));
   const namedRetired = seed.resources.filter((row) => retiredHere.has(row.id)).map((row) => row.id);
-  const liveIncoming = (['film', 'reading'] as const).flatMap((kind) =>
+  const liveIncoming = RESOURCE_KINDS.flatMap((kind) =>
     seed.resources
       .filter((row) => row.kind === kind && !retiredHere.has(row.id))
       .map((row, position) => ({ ...row, position }))
@@ -890,7 +897,7 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
   for (const change of resources.updates) {
     if (change.before && change.after && change.before.kind !== change.after.kind) {
       refusals.push(
-        `"${change.key}" is a ${change.before.kind} here and a ${change.after.kind} in the file. Give the new one its own id.`
+        `"${change.key}" is ${aKind(change.before.kind)} here and ${aKind(change.after.kind)} in the file. Give the new one its own id.`
       );
     }
   }
@@ -941,7 +948,7 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
     : [];
 
   const sections = [
-    toPlanSection('resource', 'Films and readings', resources, 'retire'),
+    toPlanSection('resource', 'Videos, audio and articles', resources, 'retire'),
     toPlanSection('words', 'Her words', words, 'delete'),
   ];
   if (collectionChanged.length > 0 && stored.collection) {

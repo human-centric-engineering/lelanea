@@ -127,9 +127,9 @@ describe('a fresh export, re-imported, plans no writes', () => {
       EDITOR
     );
     await createResource(
-      'film-a',
+      'video-a',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'A',
         subtitle: 'a',
         relatesTo: null,
@@ -139,9 +139,9 @@ describe('a fresh export, re-imported, plans no writes', () => {
       EDITOR
     );
     await createResource(
-      'film-b',
+      'video-b',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'B',
         subtitle: 'b',
         relatesTo: null,
@@ -151,9 +151,9 @@ describe('a fresh export, re-imported, plans no writes', () => {
       EDITOR
     );
     await createResource(
-      'film-c',
+      'video-c',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'C',
         subtitle: 'c',
         relatesTo: null,
@@ -162,7 +162,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
       },
       EDITOR
     );
-    await setResourceRetired('film-a', true, 1, EDITOR);
+    await setResourceRetired('video-a', true, 1, EDITOR);
     await deleteQuestion('q05', 1, EDITOR);
     await createQuestion(
       { text: 'A new one?', inputType: 'long_text', hint: null, conditionalFollowUp: null },
@@ -177,13 +177,15 @@ describe('a fresh export, re-imported, plans no writes', () => {
       const plan = await preview(JSON.parse(JSON.stringify(await exportFile())) as unknown);
       expect(writes(plan)).toEqual([]);
     }
-    // The live films are contiguous from 0, the retired one parked below.
-    const films = db.current!.rows('appResource').map((row) => [row.id, row.position, row.retired]);
-    expect(films).toEqual(
+    // The live videos are contiguous from 0, the retired one parked below.
+    const videos = db
+      .current!.rows('appResource')
+      .map((row) => [row.id, row.position, row.retired]);
+    expect(videos).toEqual(
       expect.arrayContaining([
-        ['film-b', 0, false],
-        ['film-c', 1, false],
-        ['film-a', -1, true],
+        ['video-b', 0, false],
+        ['video-c', 1, false],
+        ['video-a', -1, true],
       ])
     );
   });
@@ -307,7 +309,7 @@ describe('importing', () => {
     await createResource(
       'kept',
       {
-        kind: 'film',
+        kind: 'video',
         title: 'K',
         subtitle: 'k',
         relatesTo: null,

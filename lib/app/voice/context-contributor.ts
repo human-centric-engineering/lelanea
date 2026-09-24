@@ -19,7 +19,7 @@
  * 3. **What she is looking for** — the live slot taxonomy
  *    (`lib/app/slots/vocabulary.ts`), so a capture can name an authored slot
  *    instead of inventing one (f-slots t-72).
- * 4. **What may be offered** — Lelañea Fulton's films and writing
+ * 4. **What may be offered** — Lelañea Fulton's videos, audio and articles
  *    (`lib/app/resources/offering.ts`), so a suggestion names a real id
  *    (f-resources t-77). Empty until her list lands, and then nothing is
  *    offered, which is the truth.

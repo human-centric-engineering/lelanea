@@ -426,7 +426,7 @@ export async function deleteDocument(id: string, editorId: string): Promise<void
       throw guardedRemoval(
         `"${id}"`,
         opening.map((resource) => `the resource "${resource.id}"`),
-        'Point those readings elsewhere first.'
+        'Point those articles elsewhere first.'
       );
     }
     await tx.appFoundationalDocument.delete({ where: { id } });

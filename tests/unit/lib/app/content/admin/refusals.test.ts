@@ -51,8 +51,8 @@ beforeEach(async () => {
   await seed(db.current);
 });
 
-const film = {
-  kind: 'film' as const,
+const video = {
+  kind: 'video' as const,
   title: 'F',
   subtitle: 'f',
   relatesTo: null,
@@ -77,7 +77,7 @@ describe('an item that does not exist', () => {
     ],
     ['a question to delete', () => questions.deleteQuestion('q99', 1, EDITOR)],
     ['a resource', () => resources.listResourceHistory('nope')],
-    ['a resource to save', () => resources.updateResource('nope', film, 1, EDITOR)],
+    ['a resource to save', () => resources.updateResource('nope', video, 1, EDITOR)],
     ['a resource revision', () => resources.restoreResourceRevision('nope', 1, 1, EDITOR)],
     ['a resource to retire', () => resources.setResourceRetired('nope', true, 1, EDITOR)],
     ['words', () => resources.listWordsHistory('nope')],
@@ -153,7 +153,7 @@ describe('the one document delete that is allowed', () => {
     });
   });
 
-  it('refuses a document a reading opens, naming the reading', async () => {
+  it('refuses a document an article opens, naming the article', async () => {
     const file = await documents.exportDocumentsFile();
     file.documents.push({
       id: 'opened',
@@ -169,7 +169,7 @@ describe('the one document delete that is allowed', () => {
     await resources.createResource(
       'reads-it',
       {
-        kind: 'reading',
+        kind: 'article',
         title: 'R',
         subtitle: 'r',
         relatesTo: null,
@@ -260,10 +260,10 @@ describe('imports that are refused', () => {
   });
 
   it('refuses a resource that changes kind, and words that are not hers verbatim', async () => {
-    await resources.createResource('shifty', film, EDITOR);
+    await resources.createResource('shifty', video, EDITOR);
     const file = await resources.exportResourcesFile();
-    file.films = [];
-    file.readings.push({
+    file.videos = [];
+    file.articles.push({
       id: 'shifty',
       title: 'S',
       subtitle: 's',
@@ -274,25 +274,25 @@ describe('imports that are refused', () => {
     file.words.default = { ...file.words.default, quote: 'Not her words at all.' };
 
     const { refusals } = await resources.previewResourcesImport(file);
-    expect(refusals.join(' ')).toContain('"shifty" is a film here and a reading in the file');
+    expect(refusals.join(' ')).toContain('"shifty" is a video here and an article in the file');
     expect(refusals.join(' ')).toContain('The words for "default" are shown as hers');
   });
 
-  it('applies a resources file that adds one film, retires another and drops a key’s words', async () => {
-    await resources.createResource('old-film', film, EDITOR);
+  it('applies a resources file that adds one video, retires another and drops a key’s words', async () => {
+    await resources.createResource('old-video', video, EDITOR);
     const file = await resources.exportResourcesFile();
-    file.films = [{ ...film, id: 'new-film' }].map(({ kind: _kind, ...rest }) => rest);
+    file.videos = [{ ...video, id: 'new-video' }].map(({ kind: _kind, ...rest }) => rest);
     delete file.words.module_01_values;
 
     const plan = await resources.applyResourcesImport(file, EDITOR);
 
     const section = (entity: string) => plan.sections.find((entry) => entry.entity === entity)!;
-    expect(section('resource').creates.map((item) => item.key)).toEqual(['new-film']);
-    expect(section('resource').removals.map((item) => item.key)).toEqual(['old-film']);
+    expect(section('resource').creates.map((item) => item.key)).toEqual(['new-video']);
+    expect(section('resource').removals.map((item) => item.key)).toEqual(['old-video']);
     expect(section('words').removals.map((item) => item.key)).toEqual(['module_01_values']);
     const rows = db.current!.rows('appResource');
-    expect(rows.find((row) => row.id === 'old-film')).toMatchObject({ retired: true });
-    expect(rows.find((row) => row.id === 'new-film')).toMatchObject({
+    expect(rows.find((row) => row.id === 'old-video')).toMatchObject({ retired: true });
+    expect(rows.find((row) => row.id === 'new-video')).toMatchObject({
       retired: false,
       position: 0,
     });

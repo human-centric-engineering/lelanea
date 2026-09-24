@@ -34,7 +34,7 @@ const EXEMPT = new Set([
   'rounded-full', // the avatar disc, the send disc, and the map's status dots
   'rounded-[20px]', // the composer card
   'rounded-[18px]', // the resources panel's words card
-  'rounded-[16px]', // the resources panel's film card — the prototype's `.videocard`
+  'rounded-[16px]', // the resources panel's video card — the prototype's `.videocard`
   'rounded-[14px]', // the resources panel's reading row — the prototype's `.readrow`
   'rounded-[9px]', // the tooltip bubble, which lives in components/app/ui
   'rounded-t-sm', // the ≤900px pane switch's sliding underline — a rule, not a box

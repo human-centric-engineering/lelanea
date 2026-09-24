@@ -21,11 +21,11 @@ export const SUGGEST_RESOURCE_SLUG = 'suggest_resource';
 
 export const resourceSuggestionSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(['film', 'reading']),
+  kind: z.enum(['video', 'audio', 'article']),
   title: z.string().min(1),
   /** What it is for, in her words — the file's `subtitle`. */
   subtitle: z.string().min(1),
-  /** `6:12` for a film, `8 min` for a reading — as the file writes it. */
+  /** `6:12` for a video, `8 min` for an article — as the file writes it. */
   length: z.string().min(1),
 });
 

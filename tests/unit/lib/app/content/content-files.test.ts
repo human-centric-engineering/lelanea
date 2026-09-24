@@ -136,13 +136,13 @@ describe('resources', () => {
     expect(Object.keys(file.words)).toEqual(expect.arrayContaining(['default']));
   });
 
-  it('projects back to exactly the rows it came from, films and readings included', () => {
+  it('projects back to exactly the rows it came from, videos, audio and articles included', () => {
     const withItems = toResourcesLibrary(
       seed.collection,
       [
         {
-          id: 'a-film',
-          kind: 'film',
+          id: 'a-video',
+          kind: 'video',
           position: 0,
           title: 'F',
           subtitle: 'f',
@@ -155,7 +155,7 @@ describe('resources', () => {
         },
         {
           id: 'a-reading',
-          kind: 'reading',
+          kind: 'article',
           position: 0,
           title: 'R',
           subtitle: 'r',
@@ -168,7 +168,7 @@ describe('resources', () => {
         },
         {
           id: 'b-reading',
-          kind: 'reading',
+          kind: 'article',
           position: 1,
           title: 'L',
           subtitle: 'l',
@@ -186,9 +186,9 @@ describe('resources', () => {
     expect(
       back.resources.map((row) => [row.id, row.kind, row.position, row.documentId, row.href])
     ).toEqual([
-      ['a-film', 'film', 0, null, 'https://example.com/f'],
-      ['a-reading', 'reading', 0, 'the_mission', null],
-      ['b-reading', 'reading', 1, null, 'https://example.com/l'],
+      ['a-video', 'video', 0, null, 'https://example.com/f'],
+      ['a-reading', 'article', 0, 'the_mission', null],
+      ['b-reading', 'article', 1, null, 'https://example.com/l'],
     ]);
     expect(resourcesSeedFromFile(file)).toEqual(seed);
   });

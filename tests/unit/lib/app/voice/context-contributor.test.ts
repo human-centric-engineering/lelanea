@@ -388,7 +388,7 @@ describe('the voice context block', () => {
     // placeholder is NOT emitted — the contributor returned a block — and that
     // a sibling composed after the failed read still reaches the prompt.
     fakeVoiceOverlayStore().empty();
-    offering.text = 'Films and writing of Lelañea’s you may offer this person, by id:';
+    offering.text = 'Videos, audio and articles of Lelañea’s you may offer this person, by id:';
 
     const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation, {
       userId: 'user-1',
@@ -731,9 +731,9 @@ describe('what may be offered rides in the block (t-77)', () => {
 
   it('is in the voice block when the library has something, after the register', async () => {
     offering.text =
-      'Films and writing of Lelañea’s you may offer this person, by id:\n\n- on-stalling (film, 5:04): On stalling — why';
+      'Videos, audio and articles of Lelañea’s you may offer this person, by id:\n\n- on-stalling (video, 5:04): On stalling — why';
     const block = await buildContext(VOICE_CONTEXT_TYPE, 'first-meeting', { userId: 'user-1' });
-    expect(block).toContain('- on-stalling (film, 5:04)');
+    expect(block).toContain('- on-stalling (video, 5:04)');
     expect(block.indexOf('Register for this moment')).toBeLessThan(block.indexOf('on-stalling'));
   });
 

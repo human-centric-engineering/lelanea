@@ -113,7 +113,7 @@ export interface ShellLayout {
   chatSlim: boolean;
   drawer: DrawerId | null;
   /**
-   * A resource — a film or a reading — the resources drawer was asked to put
+   * A resource — a video, audio or article — the resources drawer was asked to put
    * first: `openDrawer('resources', { pin })`, and `null` for a plain open. The
    * drawer sends it to the API as `?pin=`; nothing else reads it. Cleared on
    * close and on navigation, so the next open is a plain one and a pin never
@@ -466,7 +466,7 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
     setNavOpenState(false);
     // A pin is for the place the suggestion was made. Carried across a
     // navigation with the drawer open, it led the NEXT module's list with a
-    // film chosen for the last one (`/code-review` round 2).
+    // video chosen for the last one (`/code-review` round 2).
     setDrawerPin(null);
   }, [pathname]);
   // `pathname` covers a navigation, and nothing else does: tapping the item for

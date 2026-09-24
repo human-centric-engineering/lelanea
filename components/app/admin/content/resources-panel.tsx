@@ -2,7 +2,7 @@
 
 /**
  * The resource library, edited (f-content-seeds t-91): the library's own
- * fields and sign-off, every film and reading, and her words per key.
+ * fields and sign-off, every video, audio piece and article, and the words per key.
  *
  * A resource is **retired, never deleted**, and says so on the button: a
  * conversation that suggested it still shows its chip. A retired resource can
@@ -34,8 +34,23 @@ import {
   contentRetiredEndpoint,
 } from '@/lib/app/content/admin/endpoint';
 import type { ResourceAdminRow, ResourcesAdminView } from '@/lib/app/content/admin/resources';
+import { RESOURCE_KINDS, type ResourceKind } from '@/lib/app/content/resource-view';
 
-type Kind = 'film' | 'reading';
+type Kind = ResourceKind;
+
+/** What each kind is called on screen: one, several, and its section heading. */
+const KIND_LABEL: Readonly<
+  Record<Kind, { one: string; many: string; heading: string; add: string }>
+> = {
+  video: { one: 'video', many: 'videos', heading: 'Videos', add: 'Add a video' },
+  audio: { one: 'audio piece', many: 'audio', heading: 'Audio', add: 'Add an audio piece' },
+  article: { one: 'article', many: 'articles', heading: 'Articles', add: 'Add an article' },
+};
+
+/** A stored row's kind; an unknown one is shown as an article, as the read path would refuse it. */
+function kindOf(kind: string): Kind {
+  return RESOURCE_KINDS.find((k) => k === kind) ?? 'article';
+}
 
 /** The rule her words are held to, said where the source is chosen. */
 const VERBATIM_HELP =
@@ -52,10 +67,10 @@ interface ResourceDraft {
   documentId: string;
 }
 
-function draftOf(row?: ResourceAdminRow, kind: Kind = 'film'): ResourceDraft {
+function draftOf(row?: ResourceAdminRow, kind: Kind = 'video'): ResourceDraft {
   return {
     id: row?.id ?? '',
-    kind: row?.kind === 'reading' ? 'reading' : row ? 'film' : kind,
+    kind: row ? kindOf(row.kind) : kind,
     title: row?.title ?? '',
     subtitle: row?.subtitle ?? '',
     relatesTo: row?.relatesTo ?? '',
@@ -67,11 +82,11 @@ function draftOf(row?: ResourceAdminRow, kind: Kind = 'film'): ResourceDraft {
 
 function bodyOf(draft: ResourceDraft) {
   const base = { title: draft.title, subtitle: draft.subtitle, relatesTo: orNull(draft.relatesTo) };
-  if (draft.kind === 'film')
-    return { kind: 'film' as const, ...base, duration: draft.length, href: draft.href };
+  if (draft.kind !== 'article')
+    return { kind: draft.kind, ...base, duration: draft.length, href: draft.href };
   return draft.documentId !== ''
-    ? { kind: 'reading' as const, ...base, readingTime: draft.length, documentId: draft.documentId }
-    : { kind: 'reading' as const, ...base, readingTime: draft.length, href: draft.href };
+    ? { kind: 'article' as const, ...base, readingTime: draft.length, documentId: draft.documentId }
+    : { kind: 'article' as const, ...base, readingTime: draft.length, href: draft.href };
 }
 
 function Picker({
@@ -154,11 +169,11 @@ function ResourceFields({
       </FieldRow>
       <FieldRow
         id={`${id}-length`}
-        label={draft.kind === 'film' ? 'Length (m:ss)' : 'Reading time'}
+        label={draft.kind === 'article' ? 'Reading time' : 'Length (m:ss)'}
         help={
-          draft.kind === 'film'
-            ? 'How long the film runs, as shown: 6:12.'
-            : 'How long it takes to read, as shown: "8 min".'
+          draft.kind === 'article'
+            ? 'How long it takes to read, as shown: "8 min".'
+            : `How long the ${KIND_LABEL[draft.kind].one} runs, as shown: 6:12.`
         }
       >
         <Input
@@ -167,11 +182,11 @@ function ResourceFields({
           onChange={(e) => onChange({ ...draft, length: e.target.value })}
         />
       </FieldRow>
-      {draft.kind === 'reading' && (
+      {draft.kind === 'article' && (
         <FieldRow
           id={`${id}-document`}
-          label="Opens her document"
-          help="A reading is either one of her foundational documents, opened in the app, or a link. Choose a document, or leave this empty and give a link."
+          label="Opens a document"
+          help="An article is either one of the foundational documents, opened in the app, or a link. Choose a document, or leave this empty and give a link."
         >
           <Picker
             id={`${id}-document`}
@@ -182,7 +197,7 @@ function ResourceFields({
           />
         </FieldRow>
       )}
-      {(draft.kind === 'film' || draft.documentId === '') && (
+      {(draft.kind !== 'article' || draft.documentId === '') && (
         <FieldRow id={`${id}-href`} label="Link" help="Where it opens: an http or https address.">
           <Input
             id={`${id}-href`}
@@ -242,7 +257,7 @@ function ResourceRow({
       onSaved(
         retired
           ? `Retired "${row.title}". It is no longer offered or suggested; conversations that already suggested it still show it.`
-          : `Brought back "${row.title}", at the end of the ${row.kind}s.`
+          : `Brought back "${row.title}", at the end of the ${KIND_LABEL[kindOf(row.kind)].many}.`
       );
     } else setNotice({ tone: 'error', text: result.message });
   }
@@ -352,14 +367,14 @@ function AddResource({
     }
     setAdding(false);
     setDraft(draftOf(undefined, kind));
-    onSaved(`Added "${draft.title}" at the end of the ${kind}s.`);
+    onSaved(`Added "${draft.title}" at the end of the ${KIND_LABEL[kind].many}.`);
   }
 
   if (!adding) {
     return (
       <Button type="button" variant="outline" onClick={() => setAdding(true)}>
         <Plus className="mr-1 h-4 w-4" aria-hidden />
-        Add a {kind}
+        {KIND_LABEL[kind].add}
       </Button>
     );
   }
@@ -697,11 +712,10 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
       kind,
       order,
     });
-    if (result.ok) done(`Saved the new order of ${kind}s.`);
+    if (result.ok) done(`Saved the new order of ${KIND_LABEL[kind].many}.`);
     else setNotice({ tone: 'error', text: result.message });
   }
 
-  const kinds: Kind[] = ['film', 'reading'];
   const freeKeys = view.wordsKeyOptions.filter(
     (key) => !view.words.some((words) => words.key === key)
   );
@@ -782,13 +796,13 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
         </Button>
       </section>
 
-      {kinds.map((kind) => {
+      {RESOURCE_KINDS.map((kind) => {
         const live = view.resources.filter((row) => row.kind === kind && !row.retired);
         const retired = view.resources.filter((row) => row.kind === kind && row.retired);
         return (
           <section key={kind} className="space-y-3">
             <h3 className="font-medium">
-              {kind === 'film' ? 'Films' : 'Readings'} ({live.length})
+              {KIND_LABEL[kind].heading} ({live.length})
             </h3>
             <ol className="space-y-2">
               {live.map((row, index) => (
@@ -807,7 +821,7 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
             {retired.length > 0 && (
               <details>
                 <summary className="text-muted-foreground cursor-pointer text-sm">
-                  Retired {kind}s ({retired.length})
+                  Retired {KIND_LABEL[kind].many} ({retired.length})
                 </summary>
                 <ol className="mt-2 space-y-2">
                   {retired.map((row, index) => (
@@ -829,7 +843,7 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
       })}
 
       <section className="space-y-3">
-        <h3 className="font-medium">Her words, by key</h3>
+        <h3 className="font-medium">Words, by key</h3>
         <ol className="space-y-2">
           {view.words.map((words) => (
             <WordsEditor key={`${words.key}@${words.revision}`} words={words} onSaved={done} />

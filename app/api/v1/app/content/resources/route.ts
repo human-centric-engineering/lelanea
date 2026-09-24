@@ -1,7 +1,7 @@
 /**
  * Authored Content — Resources, the library
  *
- * GET /api/v1/app/content/resources — every film and every piece of reading,
+ * GET /api/v1/app/content/resources — every video, audio and article,
  * with what each is for and which module it belongs beside, and her words per
  * key. The whole library, for browsing directly (product description §9:
  * "surfaced by the Curator agent and browsable directly"). What the drawer
@@ -45,8 +45,9 @@ export const GET = withAuth(
     log.info('Resources library served', {
       version: library.collection.version,
       provenance: library.collection.provenance.status,
-      films: library.films.length,
-      readings: library.readings.length,
+      videos: library.videos.length,
+      audio: library.audio.length,
+      articles: library.articles.length,
     });
 
     return successResponse(library, undefined, { headers: { ETag: etag } });
@@ -56,7 +57,7 @@ export const GET = withAuth(
     ownership: {
       decidedBy: 'nothing',
       because:
-        'Serves the published resource library, which is authored content every member shares. There are no per-user rows: every member is offered the same films and reading, and narrowing would have nothing to narrow.',
+        'Serves the published resource library, which is authored content every member shares. There are no per-user rows: every member is offered the same videos, audio and articles, and narrowing would have nothing to narrow.',
     },
   }
 );
