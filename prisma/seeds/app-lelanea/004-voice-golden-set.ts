@@ -8,32 +8,26 @@
  * that make the check possible: an `AiDataset` holding the authored prompts, and
  * an `AiAgent` with no fingerprint at all to ask them of.
  *
- * ## Both rows are pure code projections (`fp4`) — with one exception that matters
+ * ## The prompts are written once per version; the rest is reconciled (`fp4`)
  *
- * The prompts come from `seed-data/drafted/lelanea_voice_golden_set.json` and no operator
- * is meant to edit them in the admin UI. But a dataset case cannot simply be
- * reconciled once it has been used: `AiEvaluationCaseResult.datasetCase` declares
- * no `onDelete`, so Prisma's default `Restrict` applies and deleting a scored
- * case fails with `P2003`. That is the right behaviour — an answer is only
- * readable beside the question that produced it — so the rule here is:
+ * The prompts come from `seed-data/drafted/lelanea_voice_golden_set.json` the
+ * first time an install sees a version, and **after that they are the admin's**
+ * (t-92): the Voice page edits them, so a stored set that differs from the file
+ * is reported and left as it is. A changed file reaches an install that already
+ * has the version only as a NEW version — bump `goldenSet.version` and this unit
+ * creates the dataset beside the old one.
  *
- * - **A version nothing has run yet is reconciled in place.** Fixing a typo in a
- *   prompt on a dev install costs nothing and should cost nothing.
- * - **A version something HAS run is frozen.** The unit refuses, and names the
- *   remedy: bump `goldenSet.version`, which mints a new dataset beside the old
- *   one. The old comparison keeps its questions; the new one gets the new ones.
+ * Before t-92 the unit reconciled a version nothing had run and refused one
+ * something had. The freeze itself is unchanged — an answer is only readable
+ * beside the question that produced it, and `AiEvaluationCaseResult` restricts
+ * deleting a scored case — but it is now enforced where the prompts are edited
+ * (`lib/app/voice/golden-set-editor.ts`), which is also where its remedy is.
  *
- * Silently reconciling the second case would quietly re-caption every historical
- * answer with a question it was never asked.
- *
- * **The freeze is about the CASES, and only the cases.** `contentHash` is
- * `hashDatasetCases(cases)` — it says nothing about the dataset's own name,
- * description or tags, none of which any answer was given. So those are
- * reconciled on the unchanged-cases path as well, whether or not that version has
- * run: editing `dataset.description` in the content file changes the unit's
- * `hashInputs` (so the unit re-runs) but not the content hash, and a unit that
- * took the "already at v…" branch and returned would leave the stale words in the
- * row for good while logging that everything was current.
+ * **The words ABOUT the questions stay the seed's.** The dataset's name,
+ * description and tags are not what any answer was given and nothing in the
+ * admin edits them, so they are reconciled on every run, whether or not the
+ * version has been run: editing `dataset.description` in the file changes the
+ * unit's `hashInputs` (so the unit re-runs) but not the content hash.
  *
  * ## The control agent
  *
@@ -66,7 +60,7 @@
  * @see .context/app/voice.md
  */
 
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
@@ -92,17 +86,6 @@ import { hashDatasetCases } from '@/lib/orchestration/evaluations/datasets/hash'
  * a search tool to every agent on the install.
  */
 export const CONTROL_KNOWLEDGE_ACCESS_MODE = 'restricted';
-
-/**
- * Has anything actually been asked of this dataset yet?
- *
- * One run of any status counts, `failed` included: a failed run still holds
- * `AiEvaluationCaseResult` rows for every case it got through before it stopped,
- * and those are exactly the rows `Restrict` would refuse to orphan.
- */
-async function datasetIsFrozen(prisma: PrismaClient, datasetId: string): Promise<boolean> {
-  return (await prisma.aiEvaluationRun.count({ where: { datasetId } })) > 0;
-}
 
 /** One case row, without the dataset link the two write paths add differently. */
 function toCaseRow(entry: GoldenDatasetCase) {
@@ -152,10 +135,9 @@ const unit: SeedUnit = {
     const cases = projectGoldenSetCases(goldenSet);
 
     // Which version this install treats as current, and the provenance the
-    // voice page shows. Written once and never again (t-88), unlike the
-    // dataset below: the dataset is a pure projection of the authored prompts,
-    // but this row becomes editable in t-92 and an operator who repoints the
-    // install must not have that undone on the next boot.
+    // voice page shows. Written once and never again (t-88): the Voice page
+    // repoints it when it starts a new version (t-92), and that must not be
+    // undone on the next boot.
     const pointer = await seedGoldenSetPointer(buildGoldenSetSeed(goldenSet), prisma);
     logger.info(
       pointer.status === 'skipped'
@@ -244,13 +226,26 @@ const unit: SeedUnit = {
       logger.info(
         `🎧 Created golden set ${datasetId} (${cases.length} prompts, hash ${contentHash.slice(0, 8)})`
       );
-    } else if (existingDataset.contentHash === contentHash) {
-      // The questions are current; the words ABOUT them may not be. Reconciling
-      // them here is safe whether or not the version has run — a name, a
-      // description and a tag list are not what any answer was given.
+    } else {
+      // The prompts are the admin's once the version exists (t-92): the Voice
+      // page edits them, and a seed that reconciled them back to the file would
+      // undo that on the next run. So a stored set that differs from the file
+      // is reported and left — frozen or not — and a changed file reaches an
+      // install as a NEW version (bump `goldenSet.version`), which is created
+      // above like any version this install has not seen.
+      if (existingDataset.contentHash !== contentHash) {
+        logger.info(
+          `⏭  golden set ${datasetId}: the prompts here differ from the file; they are edited on the Voice page, so they are left as they are`
+        );
+      }
+      // The words ABOUT the questions stay the seed's: a name, a description
+      // and a tag list are not what any answer was given, and nothing in the
+      // admin edits them. Reconciled whether or not the version has run.
       const stale = staleDatasetFields(existingDataset);
       if (stale.length === 0) {
-        logger.info(`⏭  golden set already at v${goldenSet.collection.version}`);
+        if (existingDataset.contentHash === contentHash) {
+          logger.info(`⏭  golden set already at v${goldenSet.collection.version}`);
+        }
       } else {
         await prisma.aiDataset.update({
           where: { id: datasetId },
@@ -263,31 +258,6 @@ const unit: SeedUnit = {
         });
         logger.info(`🎧 Corrected golden set ${datasetId}`, { fields: stale });
       }
-    } else if (await datasetIsFrozen(prisma, datasetId)) {
-      // Refuse rather than reconcile. Deleting a scored case would fail with
-      // P2003 anyway; the point of catching it here is to say WHY, and to name
-      // the remedy rather than leaving an operator with a foreign-key error
-      // (`HB10`).
-      logger.error('voice golden set: the authored prompts changed under a version that has run', {
-        version: goldenSet.collection.version,
-        datasetId,
-      });
-      throw new Error(
-        `The prompts in seed-data/drafted/lelanea_voice_golden_set.json have changed, but v${goldenSet.collection.version} has already been run — its answers are only readable beside the questions that produced them. Bump \`goldenSet.version\` in that file: a new version mints a new dataset beside this one and leaves the old comparisons intact.`
-      );
-    } else {
-      // Nothing has been asked of this version yet, so there is no history to
-      // re-caption and fixing a prompt should cost nothing.
-      await prisma.$transaction([
-        prisma.aiDatasetCase.deleteMany({ where: { datasetId } }),
-        prisma.aiDatasetCase.createMany({
-          data: cases.map((entry) => ({ datasetId, ...toCaseRow(entry) })),
-        }),
-        prisma.aiDataset.update({ where: { id: datasetId }, data: datasetProjection }),
-      ]);
-      logger.info(
-        `🎧 Reconciled golden set ${datasetId} (${cases.length} prompts, hash ${contentHash.slice(0, 8)})`
-      );
     }
 
     // ---- The control agent: created once, five columns reconciled forever ---

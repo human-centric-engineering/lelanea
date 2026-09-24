@@ -7,8 +7,8 @@
  *
  * **Operator-owned, and this is the change t-88 makes.** The rule is in
  * `seedVoiceOverlays` (`lib/app/content/voice-overlay-store.ts`): written once
- * and never again, so the first admin edit in t-92 is not undone by the next
- * boot. That is the opposite call from `003-voice-fingerprint`, which
+ * and never again, so an admin edit on the Voice page (t-92) is not undone by
+ * the next boot. That is the opposite call from `003-voice-fingerprint`, which
  * reconciles the always-on core onto the agent profile on every run — and the
  * difference is that the core has no editable surface yet, while these rows
  * are about to get one.

@@ -30,3 +30,10 @@ export function crisisRegionSignOffEndpoint(region: string): string {
 
 /** Where an admin edits them. The nav seam and the page both name it here. */
 export const CRISIS_RESOURCES_PAGE = '/admin/app/safety';
+
+/** The crisis resource as a file, and the import (f-content-seeds t-92). */
+export const CRISIS_FILE_ENDPOINTS = {
+  export: `${CRISIS_RESOURCES_ENDPOINT}/export`,
+  preview: `${CRISIS_RESOURCES_ENDPOINT}/import/preview`,
+  apply: `${CRISIS_RESOURCES_ENDPOINT}/import`,
+} as const;

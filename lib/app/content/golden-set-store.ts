@@ -3,7 +3,8 @@
  * (f-content-seeds t-88).
  *
  * **The one service for `app_voice_golden_set`.** The seed writes through it
- * now, and the admin editor will in t-92.
+ * and the admin editor (`lib/app/voice/golden-set-editor.ts`, t-92) repoints it
+ * when it starts a new version.
  *
  * ## What this row is, and what it deliberately is not
  *
@@ -116,12 +117,10 @@ export type SeedGoldenSetResult = { status: 'seeded' } | { status: 'skipped'; ve
 /**
  * Write the pointer and its first revision, once.
  *
- * **Write-once (`fp4`)**, unlike the dataset beside it, which seed 004
- * reconciles. The difference is deliberate and is the whole reason this row
- * exists separately: a dataset is a pure projection of the authored prompts, so
- * reconciling it cannot lose anyone's work, whereas this row is about to become
- * editable in t-92 and an operator who points the install at a different
- * version must not have that undone on the next boot.
+ * **Write-once (`fp4`)**: an operator who points the install at a different
+ * version from the Voice page (t-92) must not have that undone on the next
+ * boot. Since t-92 the dataset's prompts are written once per version too, and
+ * edited on the same page.
  */
 export async function seedGoldenSetPointer(
   seed: GoldenSetSeed,

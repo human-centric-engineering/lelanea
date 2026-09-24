@@ -450,38 +450,53 @@ describe('a re-run', () => {
 });
 
 describe('the authored prompts changed', () => {
-  /** Make the stored dataset disagree with what the file now projects. */
+  /**
+   * Make the stored dataset disagree with what the file now projects — which,
+   * since t-92, is what an admin edit on the Voice page leaves behind.
+   */
   function driftTheStoredSet(): void {
-    world.datasets[0].contentHash = 'a-hash-from-an-older-file';
+    world.datasets[0].contentHash = 'a-hash-from-an-admin-edit';
   }
 
-  it('reconciles in place while nothing has been asked of the version', async () => {
+  it('leaves the prompts alone while nothing has been asked of the version', async () => {
     await runSeed();
     driftTheStoredSet();
-    world.cases = [];
+    const before = world.cases.length;
+    for (const key of Object.keys(writes) as (keyof typeof writes)[]) writes[key] = 0;
 
     await runSeed();
 
-    expect(writes.caseDeleteMany).toBe(1);
-    expect(writes.caseCreateMany).toBe(1);
-    expect(world.cases).toHaveLength(goldenSet.prompts.length);
-    expect(world.datasets[0]?.contentHash).not.toBe('a-hash-from-an-older-file');
+    // The admin owns them now. Reconciling them back to the file here is what
+    // would undo an edit made on the Voice page.
+    expect(writes.caseDeleteMany).toBe(0);
+    expect(writes.caseCreateMany).toBe(0);
+    expect(world.cases).toHaveLength(before);
+    expect(world.datasets[0]?.contentHash).toBe('a-hash-from-an-admin-edit');
   });
 
-  it('refuses once a run exists, and names the remedy rather than the error', async () => {
+  it('leaves them alone once a run exists too, rather than refusing the whole seed', async () => {
     await runSeed();
     driftTheStoredSet();
-    // One run of ANY status is enough: a failed run still holds result rows for
-    // every case it got through, and those are what `Restrict` refuses to orphan.
     world.runs.push({ id: 'run-1', datasetId });
 
-    await expect(runSeed()).rejects.toThrow(/Bump `goldenSet.version`/);
+    await expect(runSeed()).resolves.toBeUndefined();
 
-    // And it refused BEFORE touching anything — an abort that had already
-    // deleted the cases would have left the install with no golden set and the
-    // history row banked as applied.
     expect(writes.caseDeleteMany).toBe(0);
     expect(world.cases).toHaveLength(goldenSet.prompts.length);
+  });
+
+  it('says it left them, so a skipped reconcile is not read as a seed that did nothing', async () => {
+    await runSeed();
+    driftTheStoredSet();
+    vi.mocked(logger.info).mockClear();
+
+    await runSeed();
+
+    expect(
+      vi
+        .mocked(logger.info)
+        .mock.calls.some(([message]) => String(message).includes('edited on the Voice page'))
+    ).toBe(true);
   });
 });
 
