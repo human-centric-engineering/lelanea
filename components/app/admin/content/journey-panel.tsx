@@ -502,17 +502,29 @@ function ModuleEditor({
   );
 }
 
+function journeyMetaOf(view: JourneyAdminView) {
+  return {
+    title: view.structure?.collection.title ?? '',
+    subtitle: view.structure?.collection.subtitle ?? '',
+    version: view.structure?.collection.version ?? '',
+    locale: view.structure?.collection.locale ?? '',
+    updatedAt: view.updatedAt ?? '',
+  };
+}
+
 export function JourneyPanel({ initialView }: { initialView: JourneyAdminView }) {
   const router = useRouter();
   const [notice, setNotice] = useState<Notice>(null);
   const [open, setOpen] = useState<string | null>(null);
   const structure = initialView.structure;
-  const [meta, setMeta] = useState({
-    title: structure?.collection.title ?? '',
-    subtitle: structure?.collection.subtitle ?? '',
-    version: structure?.collection.version ?? '',
-    locale: structure?.collection.locale ?? '',
-  });
+  // The form holds the lock it was filled at, beside the values. After a
+  // refresh brings a newer collection (an import, another admin), the form is
+  // refilled from it: sending the new lock with values typed over the old one
+  // would pass the check and put the old values back.
+  const [meta, setMeta] = useState(() => journeyMetaOf(initialView));
+  if (initialView.updatedAt && meta.updatedAt !== initialView.updatedAt) {
+    setMeta(journeyMetaOf(initialView));
+  }
 
   function done(message: string) {
     setOpen(null);
@@ -527,15 +539,16 @@ export function JourneyPanel({ initialView }: { initialView: JourneyAdminView })
       </p>
     );
   }
-  const updatedAt = initialView.updatedAt;
-
   async function saveMeta() {
     const result = await send<{ changed: string[] }>(
       'PUT',
       contentItemEndpoint('journey', 'journey', structure!.collection.id),
       {
-        ...meta,
-        updatedAt,
+        title: meta.title,
+        subtitle: meta.subtitle,
+        version: meta.version,
+        locale: meta.locale,
+        updatedAt: meta.updatedAt,
       }
     );
     if (result.ok) done(result.data.changed.length ? 'Saved the journey.' : 'Nothing had changed.');

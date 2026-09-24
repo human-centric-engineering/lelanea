@@ -70,17 +70,21 @@ import {
 } from '@/lib/app/content/admin/keyed-import';
 import { RESOURCE_READERS } from '@/lib/app/content/admin/readers';
 import {
+  type ContentImportPlan,
   guardedRemoval,
+  IMPORT_TX_TIMEOUT_MS,
   importRefused,
   parkingPosition,
   parseContentFile,
+  type RevisionEntry,
   revisionMoved,
+  revisionMovedNow,
   sectionsWriteNothing,
   staleRow,
+  toChanges,
   toHistory,
   toPlanSection,
-  type ContentImportPlan,
-  type RevisionEntry,
+  type Tx,
 } from '@/lib/app/content/admin/shared';
 import type { FieldChanges } from '@/lib/app/content/admin/documents';
 import type {
@@ -89,8 +93,6 @@ import type {
   WordsEdit,
 } from '@/lib/app/content/admin/validation';
 
-const IMPORT_TX_TIMEOUT_MS = 30_000;
-
 /**
  * Every field a resource revision records: the seed's set plus `retired`
  * (t-91). The seed's own list is left as it was, because the t-87 data
@@ -98,8 +100,6 @@ const IMPORT_TX_TIMEOUT_MS = 30_000;
  * together; a retirement is an admin act, so only the admin's list names it.
  */
 const RESOURCE_FIELDS = [...RESOURCE_SNAPSHOT_FIELDS, 'retired'] as const;
-
-type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 
 /** Every field a resource revision snapshots. */
 export type ResourceFields = Omit<ResourceRow, 'id' | 'revision'> & { retired: boolean };
@@ -188,12 +188,6 @@ function contentFromEdit(edit: ResourceEdit) {
     href: 'href' in edit ? edit.href : null,
     documentId: 'documentId' in edit ? edit.documentId : null,
   };
-}
-
-function toChanges<F extends object>(before: F, after: F, changed: readonly (keyof F & string)[]) {
-  return Object.fromEntries(
-    changed.map((field) => [field, { from: before[field], to: after[field] }])
-  );
 }
 
 function resourceDiff(before: ResourceFields, after: ResourceFields) {
@@ -404,7 +398,12 @@ async function writeResource(
       where: { id, revision: revisionRead },
       data: { ...next, revision },
     });
-    if (count === 0) throw revisionMoved(`"${row.title}"`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `"${row.title}"`,
+        revisionRead,
+        tx.appResource.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appResourceRevision.create({
       data: {
         resourceId: id,
@@ -520,6 +519,10 @@ export async function setResourceRetired(
 
     const before = resourceFieldsOf(row);
     if (before.retired === retired) return { changed: [], changes: {}, revision: row.revision };
+    // Bringing one back makes it live again, so it must still be servable: the
+    // module it relates to may have left the journey, or its document gone,
+    // since it was retired.
+    if (!retired) await assertServable(tx, id, before);
 
     const others = await tx.appResource.findMany({ where: { kind: row.kind, NOT: { id } } });
     // Live positions are contiguous from 0, so the count of the other live
@@ -535,7 +538,12 @@ export async function setResourceRetired(
       where: { id, revision: revisionRead },
       data: { retired, position, revision },
     });
-    if (count === 0) throw revisionMoved(`"${row.title}"`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `"${row.title}"`,
+        revisionRead,
+        tx.appResource.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appResourceRevision.create({
       data: {
         resourceId: id,
@@ -670,7 +678,12 @@ async function writeWords(
       where: { key, revision: revisionRead },
       data: { ...next, revision },
     });
-    if (count === 0) throw revisionMoved(`The words for "${key}"`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `The words for "${key}"`,
+        revisionRead,
+        tx.appResourceWords.findUnique({ where: { key }, select: { revision: true } })
+      );
     await tx.appResourceWordsRevision.create({
       data: { wordsKey: key, revision, ...next, changedFields: changed, origin: 'admin', editorId },
     });

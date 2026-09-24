@@ -41,7 +41,7 @@ export const POST = withAdminAuth<{ collection: string; entity: string; id: stri
         entityId: `app_content:${collection}/${entity}:${id}`,
         entityName: id,
         changes: outcome.changes,
-        metadata: { body, ...outcome.result },
+        metadata: { body, ...(outcome.audit ?? outcome.result) },
         clientIp: getClientIP(request),
       });
     }

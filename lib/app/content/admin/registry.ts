@@ -54,6 +54,13 @@ export interface ContentWriteOutcome {
   changes?: Record<string, { from: unknown; to: unknown }>;
   /** Anything else the page should know: a minted version, a revision. */
   result?: Record<string, unknown>;
+  /**
+   * What the audit entry's `metadata` records, when it should not be `result`.
+   * A document's `result` carries the whole saved document back to the editor;
+   * the audit entry already has its old and new blocks in `changes`, so it
+   * records only the revision and any minted version.
+   */
+  audit?: Record<string, unknown>;
 }
 
 interface EntityHandlers {
@@ -128,6 +135,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
             changed: outcome.changed,
             changes: outcome.changes,
             result: { document: outcome.document, mintedVersion: outcome.mintedVersion },
+            audit: { revision: outcome.document.revision, mintedVersion: outcome.mintedVersion },
           };
         },
         history: documents.listDocumentHistory,
@@ -143,6 +151,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
             changed: outcome.changed,
             changes: outcome.changes,
             result: { document: outcome.document, mintedVersion: outcome.mintedVersion },
+            audit: { revision: outcome.document.revision, mintedVersion: outcome.mintedVersion },
           };
         },
         remove: async (id, revision, editorId) => {

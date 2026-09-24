@@ -26,6 +26,24 @@ import type { NextRequest } from 'next/server';
 import { APIError, ConflictError, ErrorCodes, ValidationError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import type { KeyedChange, KeyedPlan } from '@/lib/app/content/admin/keyed-import';
+import type { executeTransaction } from '@/lib/db/utils';
+
+/** A content import's transaction may run past Prisma's 5s default. */
+export const IMPORT_TX_TIMEOUT_MS = 30_000;
+
+/** The transaction client every content service writes through. */
+export type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/** Field by field, what each changed field was and what it became: the audit log's `changes`. */
+export function toChanges<F extends object>(
+  before: F,
+  after: F,
+  changed: readonly (keyof F & string)[]
+): Record<string, { from: unknown; to: unknown }> {
+  return Object.fromEntries(
+    changed.map((field) => [field, { from: before[field], to: after[field] }])
+  );
+}
 
 // ─── Refusals ───────────────────────────────────────────────────────────────
 
@@ -35,6 +53,20 @@ export function revisionMoved(what: string, current: number, read: number): Conf
     `${what} was changed by someone else since you opened it (revision ${read}, now ${current}). Reload and read it again before saving.`,
     { reason: 'revision_moved', currentRevision: current }
   );
+}
+
+/**
+ * The stale-form refusal for a write that lost the race: the conditional
+ * `updateMany` matched nothing because another write landed between this one's
+ * read and its update. The row is read again for the revision it is at now,
+ * rather than guessed as one past the read, so the admin is told the truth.
+ */
+export async function revisionMovedNow(
+  what: string,
+  read: number,
+  now: Promise<{ revision: number } | null>
+): Promise<ConflictError> {
+  return revisionMoved(what, (await now)?.revision ?? read, read);
 }
 
 /** The same refusal for a row locked on `updatedAt`. */

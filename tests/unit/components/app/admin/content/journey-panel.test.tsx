@@ -193,6 +193,34 @@ describe('the journey', () => {
     expect(mockRouter.refresh).toHaveBeenCalled();
   });
 
+  it('refills from a newer journey after a refresh, so a save cannot put old values back', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['locale'] }));
+    const { rerender } = render(<JourneyPanel initialView={VIEW} />);
+
+    const imported = {
+      ...VIEW,
+      structure: {
+        ...STRUCTURE,
+        collection: { ...STRUCTURE.collection, title: 'Imported title' },
+      },
+      updatedAt: '2026-02-02T00:00:00.000Z',
+    };
+    rerender(<JourneyPanel initialView={imported} />);
+    expect(screen.getByLabelText('Title')).toHaveValue('Imported title');
+
+    const locale = screen.getByLabelText('Locale');
+    await user.clear(locale);
+    await user.type(locale, 'en-GB');
+    await user.click(screen.getByRole('button', { name: 'Save journey' }));
+
+    expect(sent().body).toMatchObject({
+      title: 'Imported title',
+      locale: 'en-GB',
+      updatedAt: '2026-02-02T00:00:00.000Z',
+    });
+  });
+
   it('says plainly when nothing changed, rather than implying a new version', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(ok({ changed: [] }));

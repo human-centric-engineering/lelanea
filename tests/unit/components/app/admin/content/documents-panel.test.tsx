@@ -239,6 +239,30 @@ describe('the collection meta', () => {
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it('refills from a newer collection after a refresh, so a save cannot put old values back', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<DocumentsPanel initialView={VIEW} />);
+
+    const imported = {
+      ...VIEW,
+      collection: { ...COLLECTION, locale: 'en-GB', updatedAt: '2026-09-02T00:00:00.000Z' },
+    };
+    rerender(<DocumentsPanel initialView={imported} />);
+    expect(screen.getByLabelText('Locale')).toHaveValue('en-GB');
+
+    await user.clear(screen.getByLabelText('Title'));
+    await user.type(screen.getByLabelText('Title'), 'Renamed collection');
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['title'] }));
+    await user.click(screen.getByRole('button', { name: 'Save collection' }));
+
+    expect(sent().body).toEqual({
+      title: 'Renamed collection',
+      version: '2.0',
+      locale: 'en-GB',
+      updatedAt: '2026-09-02T00:00:00.000Z',
+    });
+  });
+
   it('says plainly when nothing had changed, rather than claiming a save', async () => {
     const user = userEvent.setup();
     render(<DocumentsPanel initialView={VIEW} />);

@@ -59,20 +59,22 @@ import {
 } from '@/lib/app/content/admin/keyed-import';
 import { QUESTION_READERS } from '@/lib/app/content/admin/readers';
 import {
+  type ContentImportPlan,
+  IMPORT_TX_TIMEOUT_MS,
   importRefused,
   parkingPosition,
   parseContentFile,
+  type RevisionEntry,
   revisionMoved,
+  revisionMovedNow,
   sectionsWriteNothing,
+  toChanges,
   toHistory,
   toPlanSection,
-  type ContentImportPlan,
-  type RevisionEntry,
+  type Tx,
 } from '@/lib/app/content/admin/shared';
 import type { FieldChanges } from '@/lib/app/content/admin/documents';
 import type { QuestionEdit, QuestionSetEdit } from '@/lib/app/content/admin/validation';
-
-const IMPORT_TX_TIMEOUT_MS = 30_000;
 
 export type QuestionSetFields = ReturnType<typeof setFieldsOf>;
 export type QuestionFields = ReturnType<typeof questionFieldsOf>;
@@ -126,12 +128,6 @@ function questionFieldsOf(row: Omit<DiscoveryQuestionRow, 'revision'>) {
 
 function toQuestionData(fields: QuestionFields) {
   return { ...fields, conditionalFollowUp: fields.conditionalFollowUp ?? DB_NULL };
-}
-
-function toChanges<F extends object>(before: F, after: F, changed: readonly (keyof F & string)[]) {
-  return Object.fromEntries(
-    changed.map((field) => [field, { from: before[field], to: after[field] }])
-  );
 }
 
 const SET_FIELDS = [...QUESTION_SET_SNAPSHOT_FIELDS, 'moduleId'] as const;
@@ -209,7 +205,12 @@ async function writeSet(
       where: { id, revision: revisionRead },
       data: { ...next, revision },
     });
-    if (count === 0) throw revisionMoved('The question set', revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        'The question set',
+        revisionRead,
+        tx.appQuestionSet.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appQuestionSetRevision.create({
       data: {
         setId: id,
@@ -250,7 +251,12 @@ async function writeQuestion(
       where: { id, revision: revisionRead },
       data: { ...data, revision },
     });
-    if (count === 0) throw revisionMoved(`Question ${row.number}`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `Question ${row.number}`,
+        revisionRead,
+        tx.appDiscoveryQuestion.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appDiscoveryQuestionRevision.create({
       data: {
         questionId: id,
@@ -325,8 +331,6 @@ export async function restoreQuestionRevision(
     editorId
   );
 }
-
-type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 
 /**
  * Give questions new numbers, parking the moving ones first because

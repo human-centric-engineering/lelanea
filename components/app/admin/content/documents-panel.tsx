@@ -386,16 +386,28 @@ function DocumentEditor({
 
 // ─── The collection ─────────────────────────────────────────────────────────
 
+function collectionMetaOf(view: DocumentsAdminView) {
+  return {
+    title: view.collection?.title ?? '',
+    version: view.collection?.version ?? '',
+    locale: view.collection?.locale ?? '',
+    updatedAt: view.collection?.updatedAt ?? '',
+  };
+}
+
 export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminView }) {
   const router = useRouter();
   const view = initialView;
   const [open, setOpen] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const [meta, setMeta] = useState({
-    title: view.collection?.title ?? '',
-    version: view.collection?.version ?? '',
-    locale: view.collection?.locale ?? '',
-  });
+  // The form holds the lock it was filled at, beside the values. After a
+  // refresh brings a newer collection (an import, another admin), the form is
+  // refilled from it: sending the new lock with values typed over the old one
+  // would pass the check and put the old values back.
+  const [meta, setMeta] = useState(() => collectionMetaOf(view));
+  if (view.collection && meta.updatedAt !== view.collection.updatedAt) {
+    setMeta(collectionMetaOf(view));
+  }
 
   function done(message: string) {
     setOpen(null);
@@ -416,7 +428,7 @@ export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminVie
     const result = await send<{ changed: string[] }>(
       'PUT',
       contentItemEndpoint('documents', 'collection', collection.id),
-      { ...meta, updatedAt: collection.updatedAt }
+      { title: meta.title, version: meta.version, locale: meta.locale, updatedAt: meta.updatedAt }
     );
     if (result.ok)
       done(result.data.changed.length ? 'Saved the collection.' : 'Nothing had changed.');

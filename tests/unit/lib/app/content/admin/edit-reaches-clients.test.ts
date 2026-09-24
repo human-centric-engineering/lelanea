@@ -458,7 +458,7 @@ describe('resources', () => {
 
   it('a retired resource leaves the library but still resolves a past suggestion’s chip', async () => {
     await createResource(
-      'the-reading',
+      'the-article',
       {
         kind: 'article',
         title: 'An article',
@@ -471,18 +471,18 @@ describe('resources', () => {
     );
     const provenance = {
       capabilityCalls: [
-        { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'the-reading' } },
+        { slug: SUGGEST_RESOURCE_SLUG, success: true, arguments: { id: 'the-article' } },
       ],
     };
 
-    await setResourceRetired('the-reading', true, 1, EDITOR);
+    await setResourceRetired('the-article', true, 1, EDITOR);
 
     const library = await libraryFromApi();
-    expect(JSON.stringify(library.data)).not.toContain('the-reading');
+    expect(JSON.stringify(library.data)).not.toContain('the-article');
     const chips = suggestionsFromProvenance(provenance, await loadLibraryForChips([provenance]));
-    expect(chips).toEqual([expect.objectContaining({ id: 'the-reading', title: 'An article' })]);
+    expect(chips).toEqual([expect.objectContaining({ id: 'the-article', title: 'An article' })]);
     // Never deleted: the row and its history are both still there.
-    expect(db.current!.rows('appResource').find((row) => row.id === 'the-reading')).toMatchObject({
+    expect(db.current!.rows('appResource').find((row) => row.id === 'the-article')).toMatchObject({
       retired: true,
     });
   });
