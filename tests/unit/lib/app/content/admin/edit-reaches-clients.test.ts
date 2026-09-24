@@ -261,7 +261,7 @@ describe('documents', () => {
 
   it('cannot delete a document a surface renders, and says which surfaces', async () => {
     for (const id of ['the_initiation', 'disclaimer', 'terms_of_use', 'the_mission']) {
-      await expect(deleteDocument(id, EDITOR)).rejects.toMatchObject({
+      await expect(deleteDocument(id, 1, EDITOR)).rejects.toMatchObject({
         status: 409,
         details: { reason: 'has_readers' },
       });

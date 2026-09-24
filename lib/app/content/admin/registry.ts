@@ -145,8 +145,8 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
             result: { document: outcome.document, mintedVersion: outcome.mintedVersion },
           };
         },
-        remove: async (id, _revision, editorId) => {
-          await documents.deleteDocument(id, editorId);
+        remove: async (id, revision, editorId) => {
+          await documents.deleteDocument(id, requireRevision(revision), editorId);
           return { changed: ['deleted'] };
         },
       },

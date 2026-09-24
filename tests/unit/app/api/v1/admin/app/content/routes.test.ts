@@ -291,7 +291,7 @@ describe('items', () => {
 
   it('refuses to delete a document a surface renders, naming the readers, and audits nothing', async () => {
     const response = await removeItem(
-      req('DELETE', '/documents/document/terms_of_use'),
+      req('DELETE', '/documents/document/terms_of_use?revision=1'),
       params({ collection: 'documents', entity: 'document', id: 'terms_of_use' })
     );
     expect(response.status).toBe(409);
@@ -300,6 +300,16 @@ describe('items', () => {
       reason: 'has_readers',
       readers: expect.arrayContaining(['the acknowledgement gate (/app/begin)']),
     });
+    expect(audit.logAdminAction).not.toHaveBeenCalled();
+    expect(db.current!.rows('appFoundationalDocument')).toHaveLength(7);
+  });
+
+  it('refuses a document delete that does not say which revision it read', async () => {
+    const response = await removeItem(
+      req('DELETE', '/documents/document/terms_of_use'),
+      params({ collection: 'documents', entity: 'document', id: 'terms_of_use' })
+    );
+    expect(response.status).toBe(400);
     expect(audit.logAdminAction).not.toHaveBeenCalled();
     expect(db.current!.rows('appFoundationalDocument')).toHaveLength(7);
   });

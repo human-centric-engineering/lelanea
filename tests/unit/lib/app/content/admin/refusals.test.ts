@@ -27,6 +27,7 @@ import { seedFoundationalDocuments } from '@/lib/app/content/document-store';
 import { seedJourneyStructure } from '@/lib/app/content/journey-store';
 import { seedDiscoveryQuestions } from '@/lib/app/content/question-store';
 import { seedResources } from '@/lib/app/content/resource-store';
+import { storedDocumentBlocksSchema } from '@/lib/app/content/schemas';
 import { buildFoundationalSeed } from '@/lib/app/content/seed-input/foundational-seed';
 import { buildJourneySeed } from '@/lib/app/content/seed-input/journey-seed';
 import { buildQuestionSeed } from '@/lib/app/content/seed-input/question-seed';
@@ -60,6 +61,15 @@ const video = {
   href: 'https://example.com/f',
 };
 
+/** The seeded live videos, in reading order. */
+function liveVideoIds(): string[] {
+  return db
+    .current!.rows('appResource')
+    .filter((row) => row.kind === 'video' && !row.retired)
+    .sort((a, b) => (a.position as number) - (b.position as number))
+    .map((row) => row.id as string);
+}
+
 describe('an item that does not exist', () => {
   it.each([
     ['a document', () => documents.listDocumentHistory('nope')],
@@ -89,6 +99,13 @@ describe('an item that does not exist', () => {
 });
 
 describe('a save against a revision that has moved', () => {
+  // The drafted library ships empty, so there is nothing to go stale until
+  // there is something in it. Two, so a reorder has an order to change.
+  beforeEach(async () => {
+    await resources.createResource('first-video', video, EDITOR);
+    await resources.createResource('second-video', { ...video, title: 'G' }, EDITOR);
+  });
+
   it.each([
     ['a tier', () => journey.updateTier('foundations', { label: 'x', intent: 'y' }, 7, EDITOR)],
     [
@@ -103,6 +120,35 @@ describe('a save against a revision that has moved', () => {
     ],
     ['a question delete', () => questions.deleteQuestion('q01', 7, EDITOR)],
     ['words', () => resources.deleteWords('module_01_values', 7)],
+    ['a resource', () => resources.updateResource(liveVideoIds()[0], video, 7, EDITOR)],
+    ['a resource retire', () => resources.setResourceRetired(liveVideoIds()[0], true, 7, EDITOR)],
+    [
+      'a resource reorder',
+      () =>
+        resources.reorderResources(
+          'video',
+          liveVideoIds().map((id) => ({ id, revision: 7 })),
+          EDITOR
+        ),
+    ],
+    [
+      'a words save',
+      async () => {
+        const words = (await resources.getResourcesAdminView()).words.find(
+          (row) => row.key === 'default'
+        )!;
+        return resources.updateWords(
+          'default',
+          {
+            quote: words.quote,
+            paragraphs: [...words.paragraphs],
+            source: { collection: 'foundational_documents', id: words.sourceId },
+          },
+          7,
+          EDITOR
+        );
+      },
+    ],
     [
       'a reorder',
       () =>
@@ -141,14 +187,38 @@ describe('the one document delete that is allowed', () => {
       expect.objectContaining({ key: 'a_new_note' }),
     ]);
 
-    await documents.deleteDocument('a_new_note', EDITOR);
+    // Someone else saved it since this page read revision 1.
+    await documents.updateDocument(
+      'a_new_note',
+      {
+        title: 'A note, edited',
+        subtitle: null,
+        category: 'about',
+        surface: 'about_note',
+        placeholders: [],
+        renderStyle: null,
+        renderNote: null,
+        blocks: storedDocumentBlocksSchema.parse(
+          db.current!.rows('appFoundationalDocument').find((row) => row.id === 'a_new_note')!.blocks
+        ),
+        version: '1.0',
+      },
+      1,
+      EDITOR
+    );
+    await expect(documents.deleteDocument('a_new_note', 1, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'revision_moved', currentRevision: 2 },
+    });
+
+    await documents.deleteDocument('a_new_note', 2, EDITOR);
 
     const positions = db
       .current!.rows('appFoundationalDocument')
       .map((row) => row.position as number)
       .sort((a, b) => a - b);
     expect(positions).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    await expect(documents.deleteDocument('a_new_note', EDITOR)).rejects.toMatchObject({
+    await expect(documents.deleteDocument('a_new_note', 2, EDITOR)).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -179,10 +249,24 @@ describe('the one document delete that is allowed', () => {
       EDITOR
     );
 
-    await expect(documents.deleteDocument('opened', EDITOR)).rejects.toMatchObject({
+    await expect(documents.deleteDocument('opened', 1, EDITOR)).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('reads-it'),
     });
+
+    // An import that drops it is refused the same way, in the preview and the apply.
+    const without = await documents.exportDocumentsFile();
+    without.documents = without.documents.filter((document) => document.id !== 'opened');
+    without.collection.suggestedOrder = without.collection.suggestedOrder.filter(
+      (id) => id !== 'opened'
+    );
+    const preview = await documents.previewDocumentsImport(without);
+    expect(preview.refusals.join(' ')).toContain('the resource "reads-it"');
+    await expect(documents.applyDocumentsImport(without, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'import_refused' },
+    });
+    expect(db.current!.rows('appFoundationalDocument').map((row) => row.id)).toContain('opened');
   });
 });
 

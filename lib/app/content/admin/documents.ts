@@ -402,10 +402,15 @@ export async function restoreDocumentRevision(
 }
 
 /**
- * Delete one document. Refused for every document a surface renders, which
- * today is all seven, and for one a resource opens in the app.
+ * Delete one document, at the revision read. Refused for every document a
+ * surface renders, which today is all seven, and for one a resource opens in
+ * the app.
  */
-export async function deleteDocument(id: string, editorId: string): Promise<void> {
+export async function deleteDocument(
+  id: string,
+  revisionRead: number,
+  editorId: string
+): Promise<void> {
   const readers = DOCUMENT_READERS[id] ?? [];
   if (readers.length > 0) {
     throw guardedRemoval(
@@ -418,6 +423,8 @@ export async function deleteDocument(id: string, editorId: string): Promise<void
   await executeTransaction(async (tx) => {
     const row = await tx.appFoundationalDocument.findUnique({ where: { id } });
     if (!row) throw notFound(id);
+    if (row.revision !== revisionRead)
+      throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
     const opening = await tx.appResource.findMany({
       where: { documentId: id },
       select: { id: true },
@@ -612,6 +619,8 @@ export async function exportDocumentsFile(): Promise<FoundationalDocumentsFile> 
 interface StoredDocuments {
   collection: { id: string; title: string; version: string; locale: string } | null;
   rows: readonly AppFoundationalDocument[];
+  /** Every resource that opens a document, retired ones included: each holds its document. */
+  openedBy: readonly { id: string; documentId: string }[];
 }
 
 interface DocumentsImport {
@@ -710,6 +719,12 @@ export function planDocumentsImport(
         `"${change.key}" is missing from the file, and ${readers.join(', ')} render it, so it cannot be deleted.`
       );
     }
+    const opening = stored.openedBy.filter((resource) => resource.documentId === change.key);
+    if (opening.length > 0) {
+      refusals.push(
+        `"${change.key}" is missing from the file, and ${opening.map((resource) => `the resource "${resource.id}"`).join(', ')} open it, so it cannot be deleted. Point those articles elsewhere first.`
+      );
+    }
   }
 
   const sections = [toPlanSection('document', 'Documents', documents, 'delete')];
@@ -741,11 +756,12 @@ export function planDocumentsImport(
 }
 
 async function readStored(
-  client: Pick<typeof prisma, 'appDocumentCollection' | 'appFoundationalDocument'>
+  client: Pick<typeof prisma, 'appDocumentCollection' | 'appFoundationalDocument' | 'appResource'>
 ): Promise<StoredDocuments> {
-  const [collection, rows] = await Promise.all([
+  const [collection, rows, resources] = await Promise.all([
     client.appDocumentCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } }),
+    client.appResource.findMany({ select: { id: true, documentId: true } }),
   ]);
   return {
     collection: collection && {
@@ -755,6 +771,7 @@ async function readStored(
       locale: collection.locale,
     },
     rows,
+    openedBy: resources.flatMap(({ id, documentId }) => (documentId ? [{ id, documentId }] : [])),
   };
 }
 

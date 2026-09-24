@@ -772,7 +772,10 @@ rewind), and each collection exports and imports as a file.
 - **Ids are never edited.** A document id is its API path and the gate's key, a
   module or tier id is the roster's, a resource id is what past suggestions name.
 - **A document a surface renders is never deleted**: all seven are in
-  `DOCUMENT_READERS`, and the refusal names the surfaces.
+  `DOCUMENT_READERS`, and the refusal names the surfaces. Nor is one a
+  resource opens (retired resources included), whether by a delete or by an
+  import that leaves it out; the refusal names the resources. A delete, like a
+  save, names the revision it read (`?revision=`).
 - **A section key code selects by cannot be removed or renamed** here
   (`SECTION_READERS`); renaming one is a code change to its reader. Any other key
   is free. `tests/unit/lib/app/content/admin/readers.test.ts` scans the code so a
