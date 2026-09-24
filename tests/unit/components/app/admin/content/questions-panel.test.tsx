@@ -346,7 +346,9 @@ describe('removing a question', () => {
     await user.click(screen.getByRole('button', { name: 'Remove question 1' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The question moved under you.');
-    expect(screen.getByRole('button', { name: Q1.text })).toBeInTheDocument();
+    // The editor stays open on the refusal, over the question still in the list.
+    expect(screen.getByRole('dialog', { name: 'Question 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: Q1.text, hidden: true })).toBeInTheDocument();
   });
 });
 

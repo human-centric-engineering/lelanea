@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { orNull, send } from '@/components/app/admin/content/client';
 import {
+  EditDialog,
   FieldRow,
   HistoryButton,
   ImportExportPanel,
@@ -280,9 +281,13 @@ function PhaseEditor({
 
 function ModuleEditor({
   module,
+  open,
+  onOpenChange,
   onSaved,
 }: {
   module: JourneyModuleView;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSaved: (message: string) => void;
 }) {
   const [draft, setDraft] = useState<{
@@ -338,146 +343,162 @@ function ModuleEditor({
   }
 
   return (
-    <div className="space-y-4 pt-3">
-      <div className="grid gap-4 md:grid-cols-2">
-        <FieldRow
-          id={`${id}-title`}
-          label="Title"
-          help="Her title for the module. This is the one place it is written: the drawer, the module page, the home page and the AI all read it from here. (Daybreak keeps its own operator label for the module; that is not hers and is not changed.)"
-        >
-          <Input
-            id={`${id}-title`}
-            value={draft.title}
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-number`}
-          label="Shown as"
-          help="The module's number as it is shown, for example 01. Its real place in the journey is fixed in code."
-        >
-          <Input
-            id={`${id}-number`}
-            value={draft.displayNumber}
-            onChange={(e) => setDraft({ ...draft, displayNumber: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-subtitle`}
-          label="Subtitle"
-          help="Shown under the title. Clear it to remove it."
-        >
-          <Input
-            id={`${id}-subtitle`}
-            value={draft.subtitle}
-            onChange={(e) => setDraft({ ...draft, subtitle: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-chart`}
-          label="Chart title"
-          help="The shorter title the journey chart uses. Clear it to remove it."
-        >
-          <Input
-            id={`${id}-chart`}
-            value={draft.chartTitle}
-            onChange={(e) => setDraft({ ...draft, chartTitle: e.target.value })}
-          />
-        </FieldRow>
-      </div>
-      <div className="space-y-2">
-        <h4 className="text-sm font-medium">Phases</h4>
-        <ol className="space-y-2">
-          {draft.phases.map((phase, index) => (
-            <PhaseEditor
-              key={index}
-              idPrefix={`${id}-phase-${index}`}
-              phase={phase}
-              onChange={(next) =>
-                setDraft({
-                  ...draft,
-                  phases: draft.phases.map((p, at) => (at === index ? next : p)),
-                })
-              }
-              onRemove={() =>
-                setDraft({ ...draft, phases: draft.phases.filter((_, at) => at !== index) })
-              }
+    <EditDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={module.title}
+      description={
+        <span className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{module.tier}</Badge>
+          <span className="text-xs">revision {module.revision}</span>
+        </span>
+      }
+      footer={
+        <>
+          <NoticeLine notice={notice} />
+          <div className="flex gap-2">
+            <Button type="button" onClick={() => void save()}>
+              Save module
+            </Button>
+            <HistoryButton
+              collection="journey"
+              entity="module"
+              id={module.id}
+              label={`"${module.title}"`}
+              revisionRead={module.revision}
+              onRestored={onSaved}
             />
-          ))}
-        </ol>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setDraft({
-              ...draft,
-              phases: [
-                ...draft.phases,
-                {
-                  number: draft.phases.length + 1,
-                  displayNumber: String(draft.phases.length + 1),
-                  title: '',
-                  description: '',
-                  contentRef: null,
-                  proposed: true,
-                  phaseTier: null,
-                  questionCount: null,
-                  personalized: false,
-                  requiresAcknowledgement: false,
-                  produces: null,
-                },
-              ],
-            })
-          }
-        >
-          <Plus className="mr-1 h-4 w-4" aria-hidden />
-          Add a phase
-        </Button>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <FieldRow
-          id={`${id}-tiers`}
-          label="Phase groupings (JSON)"
-          help="How the phases are grouped into orientation, discernment and integration, or null. Each group names phases this module has."
-        >
-          <Textarea
+          </div>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldRow
+            id={`${id}-title`}
+            label="Title"
+            help="Her title for the module. This is the one place it is written: the drawer, the module page, the home page and the AI all read it from here. (Daybreak keeps its own operator label for the module; that is not hers and is not changed.)"
+          >
+            <Input
+              id={`${id}-title`}
+              value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+          </FieldRow>
+          <FieldRow
+            id={`${id}-number`}
+            label="Shown as"
+            help="The module's number as it is shown, for example 01. Its real place in the journey is fixed in code."
+          >
+            <Input
+              id={`${id}-number`}
+              value={draft.displayNumber}
+              onChange={(e) => setDraft({ ...draft, displayNumber: e.target.value })}
+            />
+          </FieldRow>
+          <FieldRow
+            id={`${id}-subtitle`}
+            label="Subtitle"
+            help="Shown under the title. Clear it to remove it."
+          >
+            <Input
+              id={`${id}-subtitle`}
+              value={draft.subtitle}
+              onChange={(e) => setDraft({ ...draft, subtitle: e.target.value })}
+            />
+          </FieldRow>
+          <FieldRow
+            id={`${id}-chart`}
+            label="Chart title"
+            help="The shorter title the journey chart uses. Clear it to remove it."
+          >
+            <Input
+              id={`${id}-chart`}
+              value={draft.chartTitle}
+              onChange={(e) => setDraft({ ...draft, chartTitle: e.target.value })}
+            />
+          </FieldRow>
+        </div>
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium">Phases</h4>
+          <ol className="space-y-2">
+            {draft.phases.map((phase, index) => (
+              <PhaseEditor
+                key={index}
+                idPrefix={`${id}-phase-${index}`}
+                phase={phase}
+                onChange={(next) =>
+                  setDraft({
+                    ...draft,
+                    phases: draft.phases.map((p, at) => (at === index ? next : p)),
+                  })
+                }
+                onRemove={() =>
+                  setDraft({ ...draft, phases: draft.phases.filter((_, at) => at !== index) })
+                }
+              />
+            ))}
+          </ol>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setDraft({
+                ...draft,
+                phases: [
+                  ...draft.phases,
+                  {
+                    number: draft.phases.length + 1,
+                    displayNumber: String(draft.phases.length + 1),
+                    title: '',
+                    description: '',
+                    contentRef: null,
+                    proposed: true,
+                    phaseTier: null,
+                    questionCount: null,
+                    personalized: false,
+                    requiresAcknowledgement: false,
+                    produces: null,
+                  },
+                ],
+              })
+            }
+          >
+            <Plus className="mr-1 h-4 w-4" aria-hidden />
+            Add a phase
+          </Button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldRow
             id={`${id}-tiers`}
-            rows={6}
-            className="font-mono text-xs"
-            value={draft.phaseTiers}
-            onChange={(e) => setDraft({ ...draft, phaseTiers: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-produces`}
-          label="Produces (JSON)"
-          help="What finishing the module leaves the person with, or null."
-        >
-          <Textarea
+            label="Phase groupings (JSON)"
+            help="How the phases are grouped into orientation, discernment and integration, or null. Each group names phases this module has."
+          >
+            <Textarea
+              id={`${id}-tiers`}
+              rows={6}
+              className="font-mono text-xs"
+              value={draft.phaseTiers}
+              onChange={(e) => setDraft({ ...draft, phaseTiers: e.target.value })}
+            />
+          </FieldRow>
+          <FieldRow
             id={`${id}-produces`}
-            rows={6}
-            className="font-mono text-xs"
-            value={draft.produces}
-            onChange={(e) => setDraft({ ...draft, produces: e.target.value })}
-          />
-        </FieldRow>
+            label="Produces (JSON)"
+            help="What finishing the module leaves the person with, or null."
+          >
+            <Textarea
+              id={`${id}-produces`}
+              rows={6}
+              className="font-mono text-xs"
+              value={draft.produces}
+              onChange={(e) => setDraft({ ...draft, produces: e.target.value })}
+            />
+          </FieldRow>
+        </div>
       </div>
-      <NoticeLine notice={notice} />
-      <div className="flex gap-2">
-        <Button type="button" onClick={() => void save()}>
-          Save module
-        </Button>
-        <HistoryButton
-          collection="journey"
-          entity="module"
-          id={module.id}
-          label={`"${module.title}"`}
-          revisionRead={module.revision}
-          onRestored={onSaved}
-        />
-      </div>
-    </div>
+    </EditDialog>
   );
 }
 
@@ -494,6 +515,7 @@ export function JourneyPanel({ initialView }: { initialView: JourneyAdminView })
   });
 
   function done(message: string) {
+    setOpen(null);
     setNotice({ tone: 'ok', text: message });
     router.refresh();
   }
@@ -592,8 +614,8 @@ export function JourneyPanel({ initialView }: { initialView: JourneyAdminView })
                 <button
                   type="button"
                   className="font-medium hover:underline"
-                  aria-expanded={open === module.id}
-                  onClick={() => setOpen(open === module.id ? null : module.id)}
+                  aria-haspopup="dialog"
+                  onClick={() => setOpen(module.id)}
                 >
                   {module.title}
                 </button>
@@ -602,13 +624,13 @@ export function JourneyPanel({ initialView }: { initialView: JourneyAdminView })
                   {module.phases.length} phases · revision {module.revision}
                 </span>
               </div>
-              {open === module.id && (
-                <ModuleEditor
-                  key={`${module.id}@${module.revision}`}
-                  module={module}
-                  onSaved={done}
-                />
-              )}
+              <ModuleEditor
+                key={`${module.id}@${module.revision}`}
+                module={module}
+                open={open === module.id}
+                onOpenChange={(next) => setOpen(next ? module.id : null)}
+                onSaved={done}
+              />
             </li>
           ))}
         </ol>

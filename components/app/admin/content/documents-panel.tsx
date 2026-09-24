@@ -3,7 +3,7 @@
 /**
  * Her foundational documents, edited (f-content-seeds t-91).
  *
- * Each document opens into its fields and its blocks, edited block by block so
+ * Each document opens, in a dialog, into its fields and its blocks, edited block by block so
  * the single-line cadence of the welcome survives: a paragraph is one block and
  * stays one. Three things are said before they happen rather than after:
  *
@@ -16,12 +16,13 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
+import { FieldHelp } from '@/components/ui/field-help';
 import { Button } from '@/components/ui/button';
+import { Tip } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -29,8 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { BlocksEditor } from '@/components/app/admin/content/blocks-editor';
 import { orNull, send } from '@/components/app/admin/content/client';
 import {
+  EditDialog,
   FieldRow,
   HistoryButton,
   ImportExportPanel,
@@ -45,176 +48,7 @@ import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
 
 type Block = StoredDocumentBlock;
 
-const BLOCK_TYPES = ['paragraph', 'heading', 'list'] as const satisfies readonly Block['type'][];
 const CATEGORIES = ['onboarding', 'about', 'legal'] as const;
-
-// ─── Blocks ─────────────────────────────────────────────────────────────────
-
-/** A new block is an empty paragraph in its neighbour's section; retype it after. */
-function newParagraph(section: string | null): Block {
-  return { type: 'paragraph', text: '', section };
-}
-
-function retype(block: Block, type: Block['type']): Block {
-  if (block.type === type) return block;
-  const text = block.type === 'list' ? block.items.join('\n') : block.text;
-  if (type === 'list')
-    return { type, style: 'unordered', items: text.split('\n'), section: block.section };
-  if (type === 'heading') return { type, text, level: 2, section: block.section };
-  return { type, text, section: block.section };
-}
-
-function BlocksEditor({
-  idPrefix,
-  blocks,
-  locked,
-  onChange,
-}: {
-  idPrefix: string;
-  blocks: Block[];
-  locked: ReadonlySet<string>;
-  onChange: (blocks: Block[]) => void;
-}) {
-  const set = (index: number, block: Block) =>
-    onChange(blocks.map((current, at) => (at === index ? block : current)));
-  const move = (index: number, by: -1 | 1) => {
-    const next = [...blocks];
-    const [taken] = next.splice(index, 1);
-    next.splice(index + by, 0, taken);
-    onChange(next);
-  };
-
-  return (
-    <ol className="space-y-2">
-      {blocks.map((block, index) => {
-        const id = `${idPrefix}-block-${index}`;
-        return (
-          <li key={index} className="rounded-md border p-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-8 text-xs">{index + 1}</span>
-              <Select
-                value={block.type}
-                onValueChange={(type) => {
-                  const known = BLOCK_TYPES.find((candidate) => candidate === type);
-                  if (known) set(index, retype(block, known));
-                }}
-              >
-                <SelectTrigger className="h-8 w-32" aria-label={`Block ${index + 1} type`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="paragraph">Paragraph</SelectItem>
-                  <SelectItem value="heading">Heading</SelectItem>
-                  <SelectItem value="list">List</SelectItem>
-                </SelectContent>
-              </Select>
-              {block.type === 'heading' && (
-                <Input
-                  type="number"
-                  min={1}
-                  max={6}
-                  aria-label={`Block ${index + 1} heading level`}
-                  className="h-8 w-20"
-                  value={block.level}
-                  onChange={(event) => {
-                    // A level is 1 to 6. Anything else (an emptied field
-                    // mid-edit) is not taken, rather than snapped to 1, which
-                    // turned backspace-then-"4" into "14".
-                    const level = Number(event.target.value);
-                    if (Number.isInteger(level) && level >= 1 && level <= 6) {
-                      set(index, { ...block, level });
-                    }
-                  }}
-                />
-              )}
-              <Input
-                aria-label={`Block ${index + 1} section key`}
-                placeholder="section key"
-                className="h-8 w-44 font-mono text-xs"
-                value={block.section ?? ''}
-                onChange={(event) =>
-                  set(index, { ...block, section: orNull(event.target.value.trim()) })
-                }
-              />
-              {block.section !== null && locked.has(block.section) && (
-                <Badge variant="outline" title="A page or email selects this section by name">
-                  <Lock className="mr-1 h-3 w-3" aria-hidden />
-                  in use
-                </Badge>
-              )}
-              <div className="ml-auto flex gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Move up"
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Move down"
-                  disabled={index === blocks.length - 1}
-                  onClick={() => move(index, 1)}
-                >
-                  <ArrowDown className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Add a block below"
-                  onClick={() => {
-                    const next = [...blocks];
-                    next.splice(index + 1, 0, newParagraph(block.section));
-                    onChange(next);
-                  }}
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Remove this block"
-                  disabled={blocks.length === 1}
-                  onClick={() => onChange(blocks.filter((_, at) => at !== index))}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                </Button>
-              </div>
-            </div>
-            {block.type === 'list' ? (
-              <Textarea
-                id={id}
-                aria-label={`Block ${index + 1} items, one per line`}
-                className="mt-2"
-                rows={Math.max(2, block.items.length)}
-                value={block.items.join('\n')}
-                onChange={(event) =>
-                  set(index, { ...block, items: event.target.value.split('\n') })
-                }
-              />
-            ) : (
-              <Textarea
-                id={id}
-                aria-label={`Block ${index + 1} text`}
-                className="mt-2"
-                rows={block.type === 'heading' ? 1 : 2}
-                value={block.text}
-                onChange={(event) => set(index, { ...block, text: event.target.value })}
-              />
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 // ─── One document ───────────────────────────────────────────────────────────
 
@@ -246,9 +80,13 @@ function draftOf(document: DocumentAdminRow): Draft {
 
 function DocumentEditor({
   document,
+  open,
+  onOpenChange,
   onSaved,
 }: {
   document: DocumentAdminRow;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSaved: (message: string) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(document));
@@ -256,7 +94,7 @@ function DocumentEditor({
   const [busy, setBusy] = useState(false);
   const id = `document-${document.id}`;
   const locked = useMemo(
-    () => new Set(document.lockedSections.map((entry) => entry.section)),
+    () => new Map(document.lockedSections.map((entry) => [entry.section, entry.readers])),
     [document]
   );
 
@@ -309,189 +147,240 @@ function DocumentEditor({
     setDraft({ ...draft, [key]: value });
 
   return (
-    <div className="space-y-4 pt-3">
-      <div className="grid gap-4 md:grid-cols-2">
-        <FieldRow
-          id={`${id}-title`}
-          label="Title"
-          help="The document's title, as every page and client shows it."
-        >
-          <Input
+    <EditDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={document.title}
+      description={
+        <span className="flex flex-wrap items-center gap-2">
+          <code className="text-xs">{document.id}</code>
+          <Badge variant="outline">{document.category}</Badge>
+          <Badge variant="outline">v{document.version}</Badge>
+          {document.requiresAcknowledgement && <Badge>agreed to at the gate</Badge>}
+          <span className="text-xs">revision {document.revision}</span>
+        </span>
+      }
+      footer={
+        <>
+          {willMint && (
+            <p
+              role="status"
+              className="rounded-md border border-amber-500 p-2 text-sm text-amber-800 dark:text-amber-300"
+            >
+              Saving changes words people have agreed to. It will become version{' '}
+              <strong>{nextAcknowledgementVersion(document.version)}</strong>, and every member will
+              be asked to agree to it again before the app opens.
+            </p>
+          )}
+          <NoticeLine notice={notice} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" disabled={busy} onClick={() => void save()}>
+              Save
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setDraft(draftOf(document))}
+            >
+              Discard changes
+            </Button>
+            <HistoryButton
+              collection="documents"
+              entity="document"
+              id={document.id}
+              label={`"${document.title}"`}
+              revisionRead={document.revision}
+              restoreNote={
+                document.requiresAcknowledgement
+                  ? 'Restoring different words asks everyone to agree again, at a new version.'
+                  : undefined
+              }
+              onRestored={onSaved}
+            />
+          </div>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldRow
             id={`${id}-title`}
-            value={draft.title}
-            onChange={(e) => field('title', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-subtitle`}
-          label="Subtitle"
-          help="Shown under the title. Leave empty for none."
-        >
-          <Input
-            id={`${id}-subtitle`}
-            value={draft.subtitle}
-            onChange={(e) => field('subtitle', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-category`}
-          label="Category"
-          help="Legal documents are never given to the AI to quote; the others are mirrored into its knowledge base."
-        >
-          <Select
-            value={draft.category}
-            onValueChange={(value) => {
-              const known = CATEGORIES.find((candidate) => candidate === value);
-              if (known) field('category', known);
-            }}
+            label="Title"
+            help="The document's title, as every page and client shows it."
           >
-            <SelectTrigger id={`${id}-category`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="onboarding">Onboarding</SelectItem>
-              <SelectItem value="about">About</SelectItem>
-              <SelectItem value="legal">Legal</SelectItem>
-            </SelectContent>
-          </Select>
-        </FieldRow>
-        <FieldRow
-          id={`${id}-surface`}
-          label="Surface"
-          help="Which part of the app shows it, as a name clients can switch on (for example first_run_welcome)."
-        >
-          <Input
+            <Input
+              id={`${id}-title`}
+              value={draft.title}
+              onChange={(e) => field('title', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
+            id={`${id}-subtitle`}
+            label="Subtitle"
+            help="Shown under the title. Leave empty for none."
+          >
+            <Input
+              id={`${id}-subtitle`}
+              value={draft.subtitle}
+              onChange={(e) => field('subtitle', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
+            id={`${id}-category`}
+            label="Category"
+            help="Legal documents are never given to the AI to quote; the others are mirrored into its knowledge base."
+          >
+            <Select
+              value={draft.category}
+              onValueChange={(value) => {
+                const known = CATEGORIES.find((candidate) => candidate === value);
+                if (known) field('category', known);
+              }}
+            >
+              <SelectTrigger id={`${id}-category`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="onboarding">Onboarding</SelectItem>
+                <SelectItem value="about">About</SelectItem>
+                <SelectItem value="legal">Legal</SelectItem>
+              </SelectContent>
+            </Select>
+          </FieldRow>
+          <FieldRow
             id={`${id}-surface`}
-            value={draft.surface}
-            onChange={(e) => field('surface', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-placeholders`}
-          label="Merge fields"
-          help={
-            <>
-              The merge fields the words contain, comma-separated, for example{' '}
-              <code>{'{{first_name}}'}</code>. Emails fill these in.
-            </>
-          }
-        >
-          <Input
+            label="Surface"
+            help="Which part of the app shows it, as a name clients can switch on (for example first_run_welcome)."
+          >
+            <Input
+              id={`${id}-surface`}
+              value={draft.surface}
+              onChange={(e) => field('surface', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
             id={`${id}-placeholders`}
-            value={draft.placeholders}
-            onChange={(e) => field('placeholders', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-version`}
-          label="Version"
-          help={
-            document.requiresAcknowledgement
-              ? 'The version people agree to. Changing the words mints the next one automatically; type a new label here only if you want a different one. Never type an older label back.'
-              : 'A label for this version of the document.'
-          }
-        >
-          <Input
+            label="Merge fields"
+            help={
+              <>
+                The merge fields the words contain, comma-separated, for example{' '}
+                <code>{'{{first_name}}'}</code>. Emails fill these in.
+              </>
+            }
+          >
+            <Input
+              id={`${id}-placeholders`}
+              value={draft.placeholders}
+              onChange={(e) => field('placeholders', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
             id={`${id}-version`}
-            value={draft.version}
-            onChange={(e) => field('version', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-style`}
-          label="Render style"
-          help={
-            <>
-              How the words are laid out. <code>cadence</code> shows each paragraph on its own line,
-              as the welcome is written. Leave empty for ordinary prose.
-            </>
-          }
-        >
-          <Input
+            label="Version"
+            help={
+              document.requiresAcknowledgement
+                ? 'The version people agree to. Changing the words mints the next one automatically; type a new label here only if you want a different one. Never type an older label back.'
+                : 'A label for this version of the document.'
+            }
+          >
+            <Input
+              id={`${id}-version`}
+              value={draft.version}
+              onChange={(e) => field('version', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
             id={`${id}-style`}
-            value={draft.renderStyle}
-            onChange={(e) => field('renderStyle', e.target.value)}
-          />
-        </FieldRow>
-        <FieldRow
-          id={`${id}-note`}
-          label="Render note"
-          help="A note to whoever builds a client, about how to lay this document out. Not shown to members."
-        >
-          <Input
+            label="Render style"
+            help={
+              <>
+                How the words are laid out. <code>cadence</code> shows each paragraph on its own
+                line, as the welcome is written. Leave empty for ordinary prose.
+              </>
+            }
+          >
+            <Input
+              id={`${id}-style`}
+              value={draft.renderStyle}
+              onChange={(e) => field('renderStyle', e.target.value)}
+            />
+          </FieldRow>
+          <FieldRow
             id={`${id}-note`}
-            value={draft.renderNote}
-            onChange={(e) => field('renderNote', e.target.value)}
-          />
-        </FieldRow>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-1">
-          <h4 className="text-sm font-medium">Blocks</h4>
-          <span className="text-muted-foreground text-xs">
-            ({draft.blocks.length}) — one paragraph per block keeps each line on its own.
-          </span>
+            label="Render note"
+            help="A note to whoever builds a client, about how to lay this document out. Not shown to members."
+          >
+            <Input
+              id={`${id}-note`}
+              value={draft.renderNote}
+              onChange={(e) => field('renderNote', e.target.value)}
+            />
+          </FieldRow>
         </div>
-        {document.lockedSections.length > 0 && (
-          <p className="text-muted-foreground text-xs">
-            Sections a page or email selects by name, which must stay:{' '}
-            {document.lockedSections
-              .map((entry) => `${entry.section} (${entry.readers.join(', ')})`)
-              .join('; ')}
-            .
-          </p>
-        )}
-        <BlocksEditor
-          idPrefix={id}
-          blocks={draft.blocks}
-          locked={locked}
-          onChange={(blocks) => field('blocks', blocks)}
-        />
-      </div>
 
-      {willMint && (
-        <p
-          role="status"
-          className="rounded-md border border-amber-500 p-2 text-sm text-amber-800 dark:text-amber-300"
-        >
-          Saving changes words people have agreed to. It will become version{' '}
-          <strong>{nextAcknowledgementVersion(document.version)}</strong>, and every member will be
-          asked to agree to it again before the app opens.
-        </p>
-      )}
-      <NoticeLine notice={notice} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled={busy} onClick={() => void save()}>
-          Save
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={() => setDraft(draftOf(document))}
-        >
-          Discard changes
-        </Button>
-        <HistoryButton
-          collection="documents"
-          entity="document"
-          id={document.id}
-          label={`"${document.title}"`}
-          revisionRead={document.revision}
-          restoreNote={
-            document.requiresAcknowledgement
-              ? 'Restoring different words asks everyone to agree again, at a new version.'
-              : undefined
-          }
-          onRestored={onSaved}
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <h4 className="text-sm font-medium">Blocks</h4>
+            <span className="text-muted-foreground text-xs">
+              ({draft.blocks.length}) — one paragraph per block keeps each line on its own.
+            </span>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Type straight into the text. Enter starts a new paragraph, Shift+Enter breaks a line
+            within one, and Backspace at the start of a paragraph joins it to the one above. The ⋮
+            beside a block changes its type, moves it or removes it.
+          </p>
+          <div className="text-muted-foreground flex items-start gap-1 text-xs">
+            <p>
+              The labelled lines between blocks are <strong>sections</strong>: named passages a page
+              or email can show on its own.
+            </p>
+            <FieldHelp title="Sections" ariaLabel="About sections" contentClassName="w-96">
+              <p>
+                A section is a named run of blocks inside a document. Where a page or email shows
+                only part of a document — the welcome email, the home page cards, the columns on
+                /data — it asks for that passage by its section name, so it always shows the words
+                saved here, with nothing copied into code.
+              </p>
+              <p className="mt-2">
+                The names were set when the content was first loaded, to mark the passages those
+                pages and emails needed. A section marked <strong>in use</strong> is one that
+                something asks for: you can edit its words and add, move or remove blocks inside it,
+                but its name can’t change and it can’t be left empty. Any other section is only a
+                label and can be renamed or removed freely.
+              </p>
+              <p className="mt-2">
+                To rename a section, click its name. To start a new one, open the ⋮ beside the block
+                it should begin at and choose “Start a new section here”; it runs to the next
+                section line. Moving a block up or down across a section line moves it into that
+                section. A section has to be one unbroken run of blocks.
+              </p>
+            </FieldHelp>
+          </div>
+          {document.lockedSections.length > 0 && (
+            <p className="text-muted-foreground text-xs">
+              Sections a page or email selects by name, which must stay:{' '}
+              {document.lockedSections
+                .map((entry) => `${entry.section} (${entry.readers.join(', ')})`)
+                .join('; ')}
+              .
+            </p>
+          )}
+          <BlocksEditor
+            idPrefix={id}
+            blocks={draft.blocks}
+            locked={locked}
+            onChange={(blocks) => field('blocks', blocks)}
+          />
+        </div>
+
+        <ReadersNote
+          readers={document.readers}
+          lead="This document cannot be deleted, only edited, because these show it:"
         />
       </div>
-      <ReadersNote
-        readers={document.readers}
-        lead="This document cannot be deleted, only edited, because these show it:"
-      />
-    </div>
+    </EditDialog>
   );
 }
 
@@ -509,6 +398,7 @@ export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminVie
   });
 
   function done(message: string) {
+    setOpen(null);
     setNotice({ tone: 'ok', text: message });
     router.refresh();
   }
@@ -600,8 +490,8 @@ export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminVie
               <button
                 type="button"
                 className="font-medium hover:underline"
-                aria-expanded={open === document.id}
-                onClick={() => setOpen(open === document.id ? null : document.id)}
+                aria-haspopup="dialog"
+                onClick={() => setOpen(document.id)}
               >
                 {document.title}
               </button>
@@ -611,35 +501,39 @@ export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminVie
               {document.requiresAcknowledgement && <Badge>agreed to at the gate</Badge>}
               <span className="text-muted-foreground text-xs">revision {document.revision}</span>
               <div className="ml-auto flex gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Move ${document.title} up`}
-                  disabled={index === 0}
-                  onClick={() => void move(index, -1)}
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Move ${document.title} down`}
-                  disabled={index === view.documents.length - 1}
-                  onClick={() => void move(index, 1)}
-                >
-                  <ArrowDown className="h-4 w-4" aria-hidden />
-                </Button>
+                <Tip label="Move up the list">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Move ${document.title} up`}
+                    disabled={index === 0}
+                    onClick={() => void move(index, -1)}
+                  >
+                    <ArrowUp className="h-4 w-4" aria-hidden />
+                  </Button>
+                </Tip>
+                <Tip label="Move down the list">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Move ${document.title} down`}
+                    disabled={index === view.documents.length - 1}
+                    onClick={() => void move(index, 1)}
+                  >
+                    <ArrowDown className="h-4 w-4" aria-hidden />
+                  </Button>
+                </Tip>
               </div>
             </div>
-            {open === document.id && (
-              <DocumentEditor
-                key={`${document.id}@${document.revision}`}
-                document={document}
-                onSaved={done}
-              />
-            )}
+            <DocumentEditor
+              key={`${document.id}@${document.revision}`}
+              document={document}
+              open={open === document.id}
+              onOpenChange={(next) => setOpen(next ? document.id : null)}
+              onSaved={done}
+            />
           </li>
         ))}
       </ol>

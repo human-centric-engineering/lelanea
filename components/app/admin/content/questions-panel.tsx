@@ -12,12 +12,14 @@ import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Tip } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { orNull, send } from '@/components/app/admin/content/client';
 import {
+  EditDialog,
   FieldRow,
   HistoryButton,
   ImportExportPanel,
@@ -147,6 +149,11 @@ function QuestionRow({
   const [notice, setNotice] = useState<Notice>(null);
   const id = `question-${question.id}`;
 
+  function saved(message: string) {
+    setOpen(false);
+    onSaved(message);
+  }
+
   async function save() {
     const result = await send<{ changed: string[] }>(
       'PUT',
@@ -157,7 +164,7 @@ function QuestionRow({
       }
     );
     if (result.ok)
-      onSaved(
+      saved(
         result.data.changed.length ? `Saved question ${question.number}.` : 'Nothing had changed.'
       );
     else setNotice({ tone: 'error', text: result.message });
@@ -169,7 +176,7 @@ function QuestionRow({
       `${contentItemEndpoint('questions', 'question', question.id)}?revision=${question.revision}`
     );
     if (result.ok)
-      onSaved(`Removed question ${question.number}. The questions after it moved up one.`);
+      saved(`Removed question ${question.number}. The questions after it moved up one.`);
     else setNotice({ tone: 'error', text: result.message });
   }
 
@@ -180,78 +187,94 @@ function QuestionRow({
         <button
           type="button"
           className="flex-1 text-left text-sm hover:underline"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
         >
           {question.text}
         </button>
         <code className="text-muted-foreground text-xs">{question.id}</code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={`Move question ${question.number} up`}
-          disabled={index === 0}
-          onClick={() => onMove(-1)}
-        >
-          <ArrowUp className="h-4 w-4" aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={`Move question ${question.number} down`}
-          disabled={index === count - 1}
-          onClick={() => onMove(1)}
-        >
-          <ArrowDown className="h-4 w-4" aria-hidden />
-        </Button>
+        <Tip label="Move up the list">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Move question ${question.number} up`}
+            disabled={index === 0}
+            onClick={() => onMove(-1)}
+          >
+            <ArrowUp className="h-4 w-4" aria-hidden />
+          </Button>
+        </Tip>
+        <Tip label="Move down the list">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Move question ${question.number} down`}
+            disabled={index === count - 1}
+            onClick={() => onMove(1)}
+          >
+            <ArrowDown className="h-4 w-4" aria-hidden />
+          </Button>
+        </Tip>
       </div>
-      {open && (
-        <div className="space-y-3 pt-3">
-          <QuestionFields id={id} draft={draft} onChange={setDraft} />
-          <NoticeLine notice={notice} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void save()}>
-              Save question
-            </Button>
-            <HistoryButton
-              collection="questions"
-              entity="question"
-              id={question.id}
-              label={`question ${question.number}`}
-              revisionRead={question.revision}
-              onRestored={onSaved}
-            />
-            {!confirming ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setConfirming(true)}
-                disabled={count <= 1}
-              >
-                <Trash2 className="mr-1 h-4 w-4" aria-hidden />
-                Remove
+      <EditDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`Question ${question.number}`}
+        description={<code className="text-xs">{question.id}</code>}
+        footer={
+          <>
+            <NoticeLine notice={notice} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void save()}>
+                Save question
               </Button>
-            ) : (
-              <span className="flex flex-wrap items-center gap-2 text-sm">
-                Remove it, and its history? Read by {readers.join('; ')}.
-                <Button type="button" variant="destructive" size="sm" onClick={() => void remove()}>
-                  Remove question {question.number}
-                </Button>
+              <HistoryButton
+                collection="questions"
+                entity="question"
+                id={question.id}
+                label={`question ${question.number}`}
+                revisionRead={question.revision}
+                onRestored={saved}
+              />
+              {!confirming ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirming(false)}
+                  variant="ghost"
+                  onClick={() => setConfirming(true)}
+                  disabled={count <= 1}
                 >
-                  Keep it
+                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+                  Remove
                 </Button>
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+              ) : (
+                <span className="flex flex-wrap items-center gap-2 text-sm">
+                  Remove it, and its history? Read by {readers.join('; ')}.
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => void remove()}
+                  >
+                    Remove question {question.number}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirming(false)}
+                  >
+                    Keep it
+                  </Button>
+                </span>
+              )}
+            </div>
+          </>
+        }
+      >
+        <QuestionFields id={id} draft={draft} onChange={setDraft} />
+      </EditDialog>
     </li>
   );
 }

@@ -2,7 +2,7 @@
 
 /**
  * The resource library, edited (f-content-seeds t-91): the library's own
- * fields and sign-off, every video, audio piece and article, and the words per key.
+ * fields and sign-off, every video and article, and the words per key.
  *
  * A resource is **retired, never deleted**, and says so on the button: a
  * conversation that suggested it still shows its chip. A retired resource can
@@ -16,10 +16,12 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tip } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { orNull, send } from '@/components/app/admin/content/client';
 import {
+  EditDialog,
   FieldRow,
   HistoryButton,
   ImportExportPanel,
@@ -230,6 +232,11 @@ function ResourceRow({
   const [notice, setNotice] = useState<Notice>(null);
   const id = `resource-${row.id}`;
 
+  function saved(message: string) {
+    setOpen(false);
+    onSaved(message);
+  }
+
   async function save() {
     const result = await send<{ changed: string[] }>(
       'PUT',
@@ -240,7 +247,7 @@ function ResourceRow({
       }
     );
     if (result.ok)
-      onSaved(result.data.changed.length ? `Saved "${draft.title}".` : 'Nothing had changed.');
+      saved(result.data.changed.length ? `Saved "${draft.title}".` : 'Nothing had changed.');
     else setNotice({ tone: 'error', text: result.message });
   }
 
@@ -254,7 +261,7 @@ function ResourceRow({
       }
     );
     if (result.ok) {
-      onSaved(
+      saved(
         retired
           ? `Retired "${row.title}". It is no longer offered or suggested; conversations that already suggested it still show it.`
           : `Brought back "${row.title}", at the end of the ${KIND_LABEL[kindOf(row.kind)].many}.`
@@ -268,8 +275,8 @@ function ResourceRow({
         <button
           type="button"
           className="font-medium hover:underline"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
         >
           {row.title}
         </button>
@@ -280,64 +287,81 @@ function ResourceRow({
         </span>
         {!row.retired && (
           <div className="ml-auto flex gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={`Move ${row.title} up`}
-              disabled={index === 0}
-              onClick={() => onMove(-1)}
-            >
-              <ArrowUp className="h-4 w-4" aria-hidden />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={`Move ${row.title} down`}
-              disabled={index === count - 1}
-              onClick={() => onMove(1)}
-            >
-              <ArrowDown className="h-4 w-4" aria-hidden />
-            </Button>
+            <Tip label="Move up the list">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Move ${row.title} up`}
+                disabled={index === 0}
+                onClick={() => onMove(-1)}
+              >
+                <ArrowUp className="h-4 w-4" aria-hidden />
+              </Button>
+            </Tip>
+            <Tip label="Move down the list">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Move ${row.title} down`}
+                disabled={index === count - 1}
+                onClick={() => onMove(1)}
+              >
+                <ArrowDown className="h-4 w-4" aria-hidden />
+              </Button>
+            </Tip>
           </div>
         )}
       </div>
-      {open && (
-        <div className="space-y-3 pt-3">
-          <ResourceFields id={id} draft={draft} view={view} onChange={setDraft} />
-          <NoticeLine notice={notice} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void save()}>
-              Save
-            </Button>
-            <HistoryButton
-              collection="resources"
-              entity="resource"
-              id={row.id}
-              label={`"${row.title}"`}
-              revisionRead={row.revision}
-              onRestored={onSaved}
-            />
-            {row.retired ? (
-              <Button type="button" variant="outline" onClick={() => void setRetired(false)}>
-                Bring back
+      <EditDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={row.title}
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            <code className="text-xs">{row.id}</code>
+            {row.retired && <Badge variant="outline">retired</Badge>}
+            <span className="text-xs">revision {row.revision}</span>
+          </span>
+        }
+        footer={
+          <>
+            <NoticeLine notice={notice} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void save()}>
+                Save
               </Button>
-            ) : (
-              <Button type="button" variant="ghost" onClick={() => void setRetired(true)}>
-                <Trash2 className="mr-1 h-4 w-4" aria-hidden />
-                Retire
-              </Button>
+              <HistoryButton
+                collection="resources"
+                entity="resource"
+                id={row.id}
+                label={`"${row.title}"`}
+                revisionRead={row.revision}
+                onRestored={saved}
+              />
+              {row.retired ? (
+                <Button type="button" variant="outline" onClick={() => void setRetired(false)}>
+                  Bring back
+                </Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => void setRetired(true)}>
+                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+                  Retire
+                </Button>
+              )}
+            </div>
+            {!row.retired && (
+              <p className="text-muted-foreground text-xs">
+                Retiring takes it out of the drawer, the list the AI is given and its suggestions.
+                It is never deleted: a conversation that already suggested it keeps its chip.
+              </p>
             )}
-          </div>
-          {!row.retired && (
-            <p className="text-muted-foreground text-xs">
-              Retiring takes it out of the drawer, the list the AI is given and its suggestions. It
-              is never deleted: a conversation that already suggested it keeps its chip.
-            </p>
-          )}
-        </div>
-      )}
+          </>
+        }
+      >
+        <ResourceFields id={id} draft={draft} view={view} onChange={setDraft} />
+      </EditDialog>
     </li>
   );
 }
@@ -418,6 +442,11 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
   const [notice, setNotice] = useState<Notice>(null);
   const id = `words-${words.key}`;
 
+  function saved(message: string) {
+    setOpen(false);
+    onSaved(message);
+  }
+
   const body = () => ({
     quote: draft.quote,
     paragraphs: draft.paragraphs
@@ -434,7 +463,7 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
       { revision: words.revision, ...body() }
     );
     if (result.ok)
-      onSaved(
+      saved(
         result.data.changed.length ? `Saved the words for ${words.key}.` : 'Nothing had changed.'
       );
     else setNotice({ tone: 'error', text: result.message });
@@ -445,7 +474,7 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
       'DELETE',
       `${contentItemEndpoint('resources', 'words', words.key)}?revision=${words.revision}`
     );
-    if (result.ok) onSaved(`Removed the words for ${words.key}. It now shows the default words.`);
+    if (result.ok) saved(`Removed the words for ${words.key}. It now shows the default words.`);
     else setNotice({ tone: 'error', text: result.message });
   }
 
@@ -454,14 +483,48 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
       <button
         type="button"
         className="font-medium hover:underline"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
       >
         {words.key}
       </button>
       <span className="text-muted-foreground ml-2 text-xs">revision {words.revision}</span>
-      {open && (
-        <div className="space-y-3 pt-3">
+      <EditDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`The words for ${words.key}`}
+        description={<span className="text-xs">revision {words.revision}</span>}
+        footer={
+          <>
+            <NoticeLine notice={notice} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void save()}>
+                Save words
+              </Button>
+              <HistoryButton
+                collection="resources"
+                entity="words"
+                id={words.key}
+                label={`the words for ${words.key}`}
+                revisionRead={words.revision}
+                onRestored={saved}
+              />
+              {words.key === 'default' ? (
+                <span className="text-muted-foreground self-center text-xs">
+                  The default words cannot be removed: every key without words of its own shows
+                  them.
+                </span>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => void remove()}>
+                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+                  Remove (falls back to the default)
+                </Button>
+              )}
+            </div>
+          </>
+        }
+      >
+        <div className="space-y-3">
           <FieldRow
             id={`${id}-quote`}
             label="Quote"
@@ -510,32 +573,8 @@ function WordsEditor({ words, onSaved }: { words: WordsRow; onSaved: (message: s
               />
             </FieldRow>
           </div>
-          <NoticeLine notice={notice} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void save()}>
-              Save words
-            </Button>
-            <HistoryButton
-              collection="resources"
-              entity="words"
-              id={words.key}
-              label={`the words for ${words.key}`}
-              revisionRead={words.revision}
-              onRestored={onSaved}
-            />
-            {words.key === 'default' ? (
-              <span className="text-muted-foreground self-center text-xs">
-                The default words cannot be removed: every key without words of its own shows them.
-              </span>
-            ) : (
-              <Button type="button" variant="ghost" onClick={() => void remove()}>
-                <Trash2 className="mr-1 h-4 w-4" aria-hidden />
-                Remove (falls back to the default)
-              </Button>
-            )}
-          </div>
         </div>
-      )}
+      </EditDialog>
     </li>
   );
 }

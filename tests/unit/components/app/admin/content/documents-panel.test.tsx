@@ -14,7 +14,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { DocumentsPanel } from '@/components/app/admin/content/documents-panel';
@@ -55,12 +55,29 @@ function sent(index = 0) {
   };
 }
 
-/** The `li` a block's fields live in, found by its unique type-select label. */
+/** A block's row — its section divider and its words — by its accessible name. */
 function blockRow(index: number): ReturnType<typeof within> {
-  const combobox = screen.getByRole('combobox', { name: `Block ${index + 1} type` });
-  const li = combobox.closest('li');
-  if (!li) throw new Error(`block row ${index} not found`);
-  return within(li);
+  return within(screen.getByRole('listitem', { name: `Block ${index + 1}` }));
+}
+
+/** Opens a block's ⋮. Its contents render in a portal, so query them on `screen`. */
+async function openOptions(user: ReturnType<typeof userEvent.setup>, number: number) {
+  await user.click(screen.getByRole('button', { name: `Block ${number} options` }));
+}
+
+/** Splits block 1, "First line.", after "First": two blocks in `welcome`. */
+async function splitFirstBlock(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(blockRow(0).getByLabelText('Block 1 text'), '{Enter}', {
+    initialSelectionStart: 5,
+    initialSelectionEnd: 5,
+  });
+}
+
+/** A type button inside an open ⋮. */
+function typeButton(number: number, label: 'Paragraph' | 'Heading' | 'List'): HTMLElement {
+  return within(screen.getByRole('group', { name: `Block ${number} type` })).getByRole('button', {
+    name: label,
+  });
 }
 
 const LOCKED: SectionReader = {
@@ -151,14 +168,12 @@ async function openDoc(user: ReturnType<typeof userEvent.setup>, title: string) 
 }
 
 /**
- * The open document's own editor, scoped by its title toggle. "Title" and
- * "Version" are ambiguous against `screen` once a document is open — the
- * collection meta section above carries fields with the same labels.
+ * The open document's own editor: the dialog it opens in, named by its title.
+ * "Title" and "Version" would be ambiguous against the whole container — the
+ * collection meta section carries fields with the same labels.
  */
 function editor(title: string): ReturnType<typeof within> {
-  const li = screen.getByRole('button', { name: title }).closest('li');
-  if (!li) throw new Error(`editor for "${title}" not found`);
-  return within(li);
+  return within(screen.getByRole('dialog', { name: title }));
 }
 
 describe('before the seed has run', () => {
@@ -300,21 +315,33 @@ describe('reordering documents', () => {
 });
 
 describe('opening and closing a document', () => {
-  it('toggles the editor open and shows the loaded fields', async () => {
+  it('opens the editor in a dialog with the loaded fields, and closes it', async () => {
     const user = userEvent.setup();
     render(<DocumentsPanel initialView={VIEW} />);
 
-    const toggle = screen.getByRole('button', { name: 'The Initiation' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByLabelText('Subtitle')).toBeNull();
 
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByLabelText('Subtitle')).toHaveValue('A subtitle.');
+    await user.click(screen.getByRole('button', { name: 'The Initiation' }));
+    const dialog = screen.getByRole('dialog', { name: 'The Initiation' });
+    expect(within(dialog).getByLabelText('Subtitle')).toHaveValue('A subtitle.');
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
 
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByLabelText('Subtitle')).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps an unsaved draft when the dialog is closed and opened again', async () => {
+    const user = userEvent.setup();
+    render(<DocumentsPanel initialView={VIEW} />);
+
+    await user.click(screen.getByRole('button', { name: 'The Initiation' }));
+    await user.clear(editor('The Initiation').getByLabelText('Subtitle'));
+    await user.type(editor('The Initiation').getByLabelText('Subtitle'), 'Half-written');
+    await user.click(editor('The Initiation').getByRole('button', { name: 'Close' }));
+
+    await user.click(screen.getByRole('button', { name: 'The Initiation' }));
+    expect(editor('The Initiation').getByLabelText('Subtitle')).toHaveValue('Half-written');
   });
 });
 
@@ -475,53 +502,64 @@ describe('the acknowledgement warning', () => {
 });
 
 describe('locked sections', () => {
-  it('names every locked section and its readers, and badges the block that carries one', async () => {
+  it('names every locked section and its readers, and badges the section that carries one', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
 
     expect(screen.getByText(/welcome \(the welcome email\)/)).toBeInTheDocument();
+    // The badge sits on the section's divider, above the block that opens it.
+    expect(blockRow(0).getByText('welcome')).toBeInTheDocument();
     expect(blockRow(0).getByText('in use')).toBeInTheDocument();
+    expect(blockRow(1).getByText('no section')).toBeInTheDocument();
     expect(blockRow(1).queryByText('in use')).toBeNull();
   });
 
-  it('says nothing about locked sections for a document with none', async () => {
+  it('says nothing about locked sections for a document with none, and draws no dividers', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Mission');
 
     expect(screen.queryByText(/Sections a page or email selects by name/)).toBeNull();
     expect(blockRow(0).queryByText('in use')).toBeNull();
+    expect(blockRow(0).queryByText('no section')).toBeNull();
   });
 });
 
-describe('the blocks editor', () => {
-  it('adds a paragraph below the current block, inheriting its section', async () => {
+describe('the blocks editor: the ⋮ options', () => {
+  it('adds a paragraph below the current block, inheriting its section, with the caret in it', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
 
     expect(
       screen.getByText('(2) — one paragraph per block keeps each line on its own.')
     ).toBeInTheDocument();
-    await user.click(blockRow(0).getByRole('button', { name: 'Add a block below' }));
+    await openOptions(user, 1);
+    await user.click(screen.getByRole('button', { name: 'Add a block below' }));
 
     expect(
       screen.getByText('(3) — one paragraph per block keeps each line on its own.')
     ).toBeInTheDocument();
-    expect(blockRow(1).getByRole('combobox', { name: 'Block 2 type' })).toHaveTextContent(
-      'Paragraph'
-    );
-    expect(blockRow(1).getByLabelText('Block 2 section key')).toHaveValue('welcome');
+    const added = blockRow(1).getByLabelText('Block 2 text');
+    expect(added).toHaveValue('');
+    expect(added).toHaveFocus();
     // The original second block shifted down to become the third.
     expect(blockRow(2).getByLabelText('Block 3 text')).toHaveValue('Second line.');
+
+    // Same section as block 1, so no section line opens above it.
+    expect(blockRow(1).queryByText('no section')).toBeNull();
+    expect(blockRow(1).queryByText('welcome')).toBeNull();
+    expect(blockRow(2).getByText('no section')).toBeInTheDocument();
   });
 
   it('removes a block, but never the last one', async () => {
     const user = userEvent.setup();
     const unmountMission = await openDoc(user, 'The Mission');
-    expect(blockRow(0).getByRole('button', { name: 'Remove this block' })).toBeDisabled();
+    await openOptions(user, 1);
+    expect(screen.getByRole('button', { name: 'Remove this block' })).toBeDisabled();
     unmountMission();
 
     await openDoc(user, 'The Initiation');
-    await user.click(blockRow(1).getByRole('button', { name: 'Remove this block' }));
+    await openOptions(user, 2);
+    await user.click(screen.getByRole('button', { name: 'Remove this block' }));
 
     expect(
       screen.getByText('(1) — one paragraph per block keeps each line on its own.')
@@ -529,25 +567,195 @@ describe('the blocks editor', () => {
     expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
   });
 
-  it('moves a block up or down, disabled at each boundary', async () => {
+  it('moves a block up or down within its section, disabled at each boundary, and focus follows it', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    // Two blocks in `welcome`: "First" and " line.".
+    await splitFirstBlock(user);
+
+    await openOptions(user, 1);
+    expect(screen.getByRole('button', { name: 'Move up' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Move down' }));
+
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue(' line.');
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('First');
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveFocus();
+
+    await openOptions(user, 3);
+    expect(screen.getByRole('button', { name: 'Move down' })).toBeDisabled();
+  });
+
+  it('moves a block across a section line into that section, in place, rather than over it', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await splitFirstBlock(user);
+
+    // Block 2 (" line.", welcome) moves down across the line into no section.
+    await openOptions(user, 2);
+    await user.click(screen.getByRole('button', { name: 'Move down' }));
+
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue(' line.');
+    expect(blockRow(1).getByText('no section')).toBeInTheDocument();
+
+    // And back up again, into `welcome`.
+    await openOptions(user, 2);
+    await user.click(screen.getByRole('button', { name: 'Move up' }));
+    expect(blockRow(1).queryByText('no section')).toBeNull();
+    expect(blockRow(2).getByText('no section')).toBeInTheDocument();
+
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const body = sent().body as { blocks: { section: string | null }[] };
+    expect(body.blocks.map((block) => block.section)).toEqual(['welcome', 'welcome', null]);
+  });
+
+  it('retypes a block through paragraph → heading → list → paragraph, keeping the words', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await openOptions(user, 1);
+
+    await user.click(typeButton(1, 'Heading'));
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
+    expect(
+      within(screen.getByRole('group', { name: 'Block 1 heading level' })).getByRole('button', {
+        name: 'Level 2',
+      })
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // heading -> list: the single line becomes a single item.
+    await user.click(typeButton(1, 'List'));
+    expect(blockRow(0).getByLabelText('Block 1 item 1')).toHaveValue('First line.');
+    expect(screen.queryByRole('group', { name: 'Block 1 heading level' })).toBeNull();
+
+    // list -> paragraph: items rejoin as the text.
+    await user.click(typeButton(1, 'Paragraph'));
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
+  });
+
+  it('sets a heading level, and saves it', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await openOptions(user, 1);
+    await user.click(typeButton(1, 'Heading'));
+    await user.click(screen.getByRole('button', { name: 'Level 4' }));
+
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const body = sent().body as { blocks: { type: string; level?: number }[] };
+    expect(body.blocks[0]).toMatchObject({ type: 'heading', level: 4 });
+  });
+});
+
+describe('the blocks editor: sections', () => {
+  it('explains what sections are beside the blocks', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
 
-    expect(blockRow(0).getByRole('button', { name: 'Move up' })).toBeDisabled();
-    expect(blockRow(1).getByRole('button', { name: 'Move down' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'About sections' }));
 
-    await user.click(blockRow(0).getByRole('button', { name: 'Move down' }));
-
-    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('Second line.');
-    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('First line.');
-
-    // And back again, with "Move up" on the block that is now first.
-    await user.click(blockRow(1).getByRole('button', { name: 'Move up' }));
-
-    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
-    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('Second line.');
+    expect(await screen.findByText(/set when the content was first loaded/)).toBeInTheDocument();
   });
 
+  it('explains a locked section instead of offering a rename', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+
+    expect(screen.queryByRole('button', { name: 'Rename section welcome' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'About section welcome' }));
+
+    expect(await screen.findByText(/is shown by name on the welcome email/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Section name')).toBeNull();
+  });
+
+  it('names a passage in no section from its line, as a key, and saves every block in it', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+
+    await user.click(screen.getByRole('button', { name: 'Name the passage at block 2' }));
+    await user.type(screen.getByLabelText('Section name'), 'Closing words');
+    expect(screen.getByText('closing_words')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Name it' }));
+
+    expect(blockRow(1).getByText('closing_words')).toBeInTheDocument();
+
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const body = sent().body as { blocks: { section: string | null }[] };
+    expect(body.blocks.map((block) => block.section)).toEqual(['welcome', 'closing_words']);
+  });
+
+  it('refuses a name that is not a key, or that another passage already has', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    // Runs: welcome · no section · tail.
+    await user.type(blockRow(1).getByLabelText('Block 2 text'), '{Enter}Third.');
+    await openOptions(user, 3);
+    await user.click(screen.getByRole('button', { name: 'Start a new section here' }));
+    await user.type(screen.getByLabelText('Section name'), 'tail');
+    await user.click(screen.getByRole('button', { name: 'Start section' }));
+    expect(blockRow(2).getByText('tail')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Rename section tail' }));
+    const name = screen.getByLabelText('Section name');
+    await user.clear(name);
+    await user.type(name, '9lives');
+    expect(screen.getByRole('alert')).toHaveTextContent(/starting with a letter/);
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
+
+    await user.clear(name);
+    await user.type(name, 'welcome');
+    expect(screen.getByRole('alert')).toHaveTextContent(/already called "welcome"/);
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
+  });
+
+  it('lets a passage take the name of the section right beside it, joining the two', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+
+    await user.click(screen.getByRole('button', { name: 'Name the passage at block 2' }));
+    await user.type(screen.getByLabelText('Section name'), 'welcome');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Name it' }));
+
+    expect(blockRow(1).queryByText('no section')).toBeNull();
+  });
+
+  it('starts a new section part-way through a run, taking the rest of the run with it', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await splitFirstBlock(user);
+    await user.type(blockRow(1).getByLabelText('Block 2 text'), '{Enter}More.');
+
+    await openOptions(user, 2);
+    await user.click(screen.getByRole('button', { name: 'Start a new section here' }));
+    await user.type(screen.getByLabelText('Section name'), 'middle{Enter}');
+
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const body = sent().body as { blocks: { section: string | null }[] };
+    expect(body.blocks.map((block) => block.section)).toEqual([
+      'welcome',
+      'middle',
+      'middle',
+      null,
+    ]);
+  });
+
+  it('removes a free section’s name, returning its blocks to no section', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await user.click(screen.getByRole('button', { name: 'Name the passage at block 2' }));
+    await user.type(screen.getByLabelText('Section name'), 'closing{Enter}');
+
+    await user.click(screen.getByRole('button', { name: 'Rename section closing' }));
+    await user.click(screen.getByRole('button', { name: 'Remove the name' }));
+
+    expect(blockRow(1).getByText('no section')).toBeInTheDocument();
+  });
+});
+
+describe('the blocks editor: typing in place', () => {
   it('edits a block’s own text directly', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
@@ -558,76 +766,147 @@ describe('the blocks editor', () => {
     expect(text).toHaveValue('Second line. Appended.');
   });
 
-  it('retypes a block through paragraph → heading → list → paragraph, keeping the words', async () => {
+  it('splits a paragraph at the caret on Enter, into a new paragraph of the same section', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
 
-    // paragraph -> heading
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'Heading' }));
-    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
-    expect(blockRow(0).getByLabelText('Block 1 heading level')).toHaveValue(2);
+    // "First line." — caret after "First".
+    await user.type(blockRow(0).getByLabelText('Block 1 text'), '{Enter}', {
+      initialSelectionStart: 5,
+      initialSelectionEnd: 5,
+    });
 
-    // heading -> list: the single line becomes a single item.
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'List' }));
-    expect(blockRow(0).getByLabelText('Block 1 items, one per line')).toHaveValue('First line.');
-    expect(blockRow(0).queryByLabelText('Block 1 heading level')).toBeNull();
-
-    // list -> paragraph: items rejoin as the text.
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'Paragraph' }));
-    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
-  });
-
-  it('splits a multi-line list into items, and back into one joined paragraph', async () => {
-    const user = userEvent.setup();
-    await openDoc(user, 'The Initiation');
-
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'List' }));
-    const items = blockRow(0).getByLabelText('Block 1 items, one per line');
-    await user.clear(items);
-    await user.type(items, 'One{enter}Two{enter}Three');
-
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'Paragraph' }));
-
-    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('One\nTwo\nThree');
-  });
-
-  it('edits a section key, and saves the block with it', async () => {
-    const user = userEvent.setup();
-    await openDoc(user, 'The Initiation');
-
-    const section = blockRow(1).getByLabelText('Block 2 section key');
-    await user.type(section, 'closing');
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First');
+    const second = blockRow(1).getByLabelText('Block 2 text');
+    expect(second).toHaveValue(' line.');
+    expect(second).toHaveFocus();
+    expect((second as HTMLTextAreaElement).selectionStart).toBe(0);
 
     fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    const body = sent().body as { blocks: { section: string | null }[] };
-    expect(body.blocks[1]).toMatchObject({ section: 'closing' });
+    const body = sent().body as { blocks: { type: string; text: string; section: string }[] };
+    expect(body.blocks.slice(0, 2)).toEqual([
+      { type: 'paragraph', text: 'First', section: 'welcome' },
+      { type: 'paragraph', text: ' line.', section: 'welcome' },
+    ]);
   });
 
-  it('sets a heading level from the number field', async () => {
+  it('breaks a line inside a paragraph on Shift+Enter, without a new block', async () => {
     const user = userEvent.setup();
     await openDoc(user, 'The Initiation');
-    await user.click(blockRow(0).getByRole('combobox', { name: 'Block 1 type' }));
-    await user.click(await screen.findByRole('option', { name: 'Heading' }));
 
-    // `fireEvent`, not `user.clear` + `user.type`: the field falls back to 1 on
-    // an empty value (`Number('') || 1`), so two separate keystroke-driven
-    // events would land on "14", not "4" — this sets it in one change, as a
-    // single paste or a spinner click would.
-    const level = blockRow(0).getByLabelText('Block 1 heading level');
-    fireEvent.change(level, { target: { value: '4' } });
+    await user.type(blockRow(1).getByLabelText('Block 2 text'), '{Shift>}{Enter}{/Shift}More.');
+
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('Second line.\nMore.');
+    expect(
+      screen.getByText('(2) — one paragraph per block keeps each line on its own.')
+    ).toBeInTheDocument();
+  });
+
+  it('joins a paragraph to the one above on Backspace at its start, caret at the join', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await user.type(blockRow(0).getByLabelText('Block 1 text'), '{Enter}', {
+      initialSelectionStart: 5,
+      initialSelectionEnd: 5,
+    });
+
+    await user.type(blockRow(1).getByLabelText('Block 2 text'), '{Backspace}', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: 0,
+    });
+
+    const joined = blockRow(0).getByLabelText('Block 1 text');
+    expect(joined).toHaveValue('First line.');
+    expect(joined).toHaveFocus();
+    expect((joined as HTMLTextAreaElement).selectionStart).toBe(5);
+    expect(
+      screen.getByText('(2) — one paragraph per block keeps each line on its own.')
+    ).toBeInTheDocument();
+  });
+
+  it('does not join across a section boundary', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+
+    // Block 1 is in `welcome`, block 2 in no section.
+    await user.type(blockRow(1).getByLabelText('Block 2 text'), '{Backspace}', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: 0,
+    });
+
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('First line.');
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('Second line.');
+  });
+
+  it('removes an empty paragraph on Backspace, caret to the end of the one above', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await user.type(blockRow(0).getByLabelText('Block 1 text'), '{Enter}');
+    expect(
+      screen.getByText('(3) — one paragraph per block keeps each line on its own.')
+    ).toBeInTheDocument();
+
+    await user.keyboard('{Backspace}');
+
+    expect(
+      screen.getByText('(2) — one paragraph per block keeps each line on its own.')
+    ).toBeInTheDocument();
+    const above = blockRow(0).getByLabelText('Block 1 text');
+    expect(above).toHaveFocus();
+    expect((above as HTMLTextAreaElement).selectionStart).toBe('First line.'.length);
+  });
+
+  it('adds list items on Enter, and leaves the list for a paragraph on Enter in an empty last item', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await openOptions(user, 1);
+    await user.click(typeButton(1, 'List'));
+
+    await user.type(blockRow(0).getByLabelText('Block 1 item 1'), '{Enter}Two{Enter}{Enter}After.');
+
+    expect(blockRow(0).getByLabelText('Block 1 item 1')).toHaveValue('First line.');
+    expect(blockRow(0).getByLabelText('Block 1 item 2')).toHaveValue('Two');
+    expect(blockRow(0).queryByLabelText('Block 1 item 3')).toBeNull();
+    expect(blockRow(1).getByLabelText('Block 2 text')).toHaveValue('After.');
 
     fetchMock.mockResolvedValueOnce(ok({ changed: ['blocks'], mintedVersion: '1.2' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
+    const body = sent().body as { blocks: unknown[] };
+    expect(body.blocks.slice(0, 2)).toEqual([
+      { type: 'list', style: 'unordered', items: ['First line.', 'Two'], section: 'welcome' },
+      { type: 'paragraph', text: 'After.', section: 'welcome' },
+    ]);
+  });
 
-    const body = sent().body as { blocks: { level?: number }[] };
-    expect(body.blocks[0].level).toBe(4);
+  it('joins a list item to the one above on Backspace at its start', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await openOptions(user, 1);
+    await user.click(typeButton(1, 'List'));
+    await user.type(blockRow(0).getByLabelText('Block 1 item 1'), '{Enter}Two');
+
+    await user.type(blockRow(0).getByLabelText('Block 1 item 2'), '{Backspace}', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: 0,
+    });
+
+    expect(blockRow(0).getByLabelText('Block 1 item 1')).toHaveValue('First line.Two');
+    expect(blockRow(0).queryByLabelText('Block 1 item 2')).toBeNull();
+  });
+
+  it('turns a list of one empty item back into a paragraph on Enter', async () => {
+    const user = userEvent.setup();
+    await openDoc(user, 'The Initiation');
+    await openOptions(user, 1);
+    await user.click(typeButton(1, 'List'));
+    const item = blockRow(0).getByLabelText('Block 1 item 1');
+    await user.clear(item);
+
+    await user.type(item, '{Enter}');
+
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveValue('');
+    expect(blockRow(0).getByLabelText('Block 1 text')).toHaveFocus();
   });
 });
 

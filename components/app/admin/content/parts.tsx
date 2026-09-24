@@ -2,8 +2,8 @@
 
 /**
  * The pieces every content panel shares (f-content-seeds t-91): a labelled
- * field with its ⓘ help, the notice line, an item's history with restore, and
- * the export / import panel.
+ * field with its ⓘ help, the notice line, the dialog an item is edited in, an
+ * item's history with restore, and the export / import panel.
  *
  * The history and import pieces are generic on purpose: a revision is the item
  * whole plus which fields changed, and an import plan is the same sections for
@@ -84,6 +84,48 @@ export function ReadersNote({ readers, lead }: { readers: readonly string[]; lea
     <p className="text-muted-foreground text-xs">
       {lead} {readers.join('; ')}.
     </p>
+  );
+}
+
+// ─── The edit dialog ────────────────────────────────────────────────────────
+
+/**
+ * An item opened for editing: its fields scroll, and the footer — the notice
+ * and the Save button — stays in view however long the item is.
+ */
+export function EditDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  footer,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: ReactNode;
+  description?: ReactNode;
+  footer: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[90vh] max-w-5xl flex-col gap-0 p-0"
+        {...(description ? {} : { 'aria-describedby': undefined })}
+      >
+        <DialogHeader className="border-b px-6 py-4 pr-12">
+          <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription asChild>
+              <div>{description}</div>
+            </DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
+        <div className="bg-background space-y-2 border-t px-6 py-3 sm:rounded-b-lg">{footer}</div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
