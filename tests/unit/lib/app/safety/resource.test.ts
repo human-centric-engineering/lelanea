@@ -54,7 +54,7 @@ const SEEDED_COPY = {
   internationalContact: FILE.international.contact,
   internationalUrl: FILE.international.url,
   internationalHours: FILE.international.hours,
-  status: FILE.resources.provenance.status,
+  status: FILE.resources.provenance!.status,
   version: 1,
 };
 
@@ -63,7 +63,7 @@ const SEEDED_REGIONS = FILE.regions.map((r) => ({
   region: r.region,
   emergencyNumber: r.emergencyNumber,
   services: r.services.map((s) => ({ ...s })),
-  status: FILE.resources.provenance.status,
+  status: FILE.resources.provenance!.status,
   version: 1,
 }));
 
@@ -123,7 +123,7 @@ describe('resolveCrisisResource', () => {
   });
 
   it('carries the draft marker while the content awaits sign-off', async () => {
-    expect(getCrisisResources().resources.provenance.status).toBe('draft');
+    expect(getCrisisResources().resources.provenance!.status).toBe('draft');
     expect((await resolveCrisisResource('en-GB', 'soft')).status).toBe('draft');
   });
 
