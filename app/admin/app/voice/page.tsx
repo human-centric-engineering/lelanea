@@ -5,9 +5,18 @@ import { logger } from '@/lib/logging';
 import { VoiceComparisonBoard } from '@/components/app/admin/voice-comparison';
 import { GoldenSetDialog } from '@/components/app/admin/golden-set-dialog';
 import { getGoldenSetAdminView, type GoldenSetAdminView } from '@/lib/app/voice/golden-set-admin';
-import { VOICE_COMPARISON_ENDPOINT, VOICE_PREFLIGHT_ENDPOINT } from '@/lib/app/voice/endpoint';
+import { OverlaysEditor } from '@/components/app/admin/voice/overlays-editor';
+import { GoldenSetEditor } from '@/components/app/admin/voice/golden-set-editor';
+import {
+  GOLDEN_SET_ENDPOINT,
+  VOICE_COMPARISON_ENDPOINT,
+  VOICE_OVERLAYS_ENDPOINT,
+  VOICE_PREFLIGHT_ENDPOINT,
+} from '@/lib/app/voice/endpoint';
 import type { VoicePreflight } from '@/lib/app/voice/preflight';
 import type { VoiceComparisonSummary } from '@/lib/app/voice/comparison-admin';
+import type { OverlaysAdminView } from '@/lib/app/voice/overlays-admin';
+import type { GoldenSetEditorView } from '@/lib/app/voice/golden-set-editor';
 
 export const metadata: Metadata = {
   title: 'Voice',
@@ -87,6 +96,31 @@ async function getGoldenSet(): Promise<GoldenSetAdminView | null> {
 }
 
 /**
+ * One editor's view through the admin API (t-92), or null on any failure. The
+ * section then names the endpoint rather than rendering an editor's "not
+ * seeded" state, which would send an operator to re-run a seed that has run.
+ */
+async function getEditorView<T>(endpoint: string): Promise<T | null> {
+  try {
+    const response = await serverFetch(endpoint);
+    if (!response.ok) return null;
+    const parsed = await parseApiResponse<T>(response);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function LoadFailed({ endpoint }: { endpoint: string }) {
+  return (
+    <p role="alert" className="text-destructive text-sm">
+      This did not load. Reload the page — if it keeps failing, the endpoint <code>{endpoint}</code>{' '}
+      is the thing to check.
+    </p>
+  );
+}
+
+/**
  * No change to the voice ships without being read against the previous one (§05 t-28).
  *
  * A voice fingerprint is tuned by editing prose, and prose edits have no
@@ -100,11 +134,14 @@ async function getGoldenSet(): Promise<GoldenSetAdminView | null> {
  * and carries no Lelañea styling of its own.
  */
 export default async function VoiceComparisonPage() {
-  const [{ comparisons, loadError }, preflight, goldenSet] = await Promise.all([
-    getComparisons(),
-    getPreflight(),
-    getGoldenSet(),
-  ]);
+  const [{ comparisons, loadError }, preflight, goldenSet, overlays, goldenSetEditor] =
+    await Promise.all([
+      getComparisons(),
+      getPreflight(),
+      getGoldenSet(),
+      getEditorView<OverlaysAdminView>(VOICE_OVERLAYS_ENDPOINT),
+      getEditorView<GoldenSetEditorView>(GOLDEN_SET_ENDPOINT),
+    ]);
 
   return (
     <div className="space-y-8">
@@ -144,6 +181,43 @@ export default async function VoiceComparisonPage() {
         initialLoadFailed={loadError}
         preflight={preflight}
       />
+
+      {/* What the test is run against, editable here (t-92): the register each
+          situation calls for, and the questions a run asks. Below the board,
+          because an arriving admin is here to run the test. */}
+      <section aria-labelledby="voice-overlays-heading" className="space-y-3 border-t pt-6">
+        <div className="max-w-2xl space-y-1">
+          <h3 id="voice-overlays-heading" className="text-base font-semibold">
+            Register by situation
+          </h3>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            A short set of lines that shades the always-on voice for one situation, chosen by the
+            situation a turn names. A saved change reaches the next turn that asks for it, within a
+            minute. Any change returns the item to draft until someone signs it off.
+          </p>
+        </div>
+        {overlays ? (
+          <OverlaysEditor initialView={overlays} />
+        ) : (
+          <LoadFailed endpoint={VOICE_OVERLAYS_ENDPOINT} />
+        )}
+      </section>
+
+      <section aria-labelledby="golden-set-heading" className="space-y-3 border-t pt-6">
+        <div className="max-w-2xl space-y-1">
+          <h3 id="golden-set-heading" className="text-base font-semibold">
+            The questions a run asks
+          </h3>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            The fixed prompts every run asks both arms, each with what it is there to test.
+          </p>
+        </div>
+        {goldenSetEditor ? (
+          <GoldenSetEditor initialView={goldenSetEditor} />
+        ) : (
+          <LoadFailed endpoint={GOLDEN_SET_ENDPOINT} />
+        )}
+      </section>
     </div>
   );
 }

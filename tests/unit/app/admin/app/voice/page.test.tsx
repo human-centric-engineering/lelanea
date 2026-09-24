@@ -53,9 +53,26 @@ vi.mock('@/components/app/admin/voice-comparison', () => ({
   ),
 }));
 
+// The two editors (t-92) have their own tests; stubbed so this stays about
+// what the page fetched and handed on.
+vi.mock('@/components/app/admin/voice/overlays-editor', () => ({
+  OverlaysEditor: (props: { initialView: unknown }) => (
+    <div data-testid="overlays-editor" data-view={JSON.stringify(props.initialView)} />
+  ),
+}));
+vi.mock('@/components/app/admin/voice/golden-set-editor', () => ({
+  GoldenSetEditor: (props: { initialView: unknown }) => (
+    <div data-testid="golden-set-editor" data-view={JSON.stringify(props.initialView)} />
+  ),
+}));
+
 import VoiceComparisonPage from '@/app/admin/app/voice/page';
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
-import { VOICE_COMPARISON_ENDPOINT } from '@/lib/app/voice/endpoint';
+import {
+  GOLDEN_SET_ENDPOINT,
+  VOICE_COMPARISON_ENDPOINT,
+  VOICE_OVERLAYS_ENDPOINT,
+} from '@/lib/app/voice/endpoint';
 
 const COMPARISON = {
   id: 'cmu4paqmt0000oc5new0nizu5',
@@ -94,7 +111,11 @@ describe('VoiceComparisonPage', () => {
 
     render(await VoiceComparisonPage());
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/did not load/i);
+    expect(
+      screen
+        .getAllByRole('alert')
+        .some((alert) => /comparisons did not load/i.test(alert.textContent ?? ''))
+    ).toBe(true);
     expect(boardProp('data-comparisons')).toEqual([]);
     expect(boardProp('data-load-failed')).toBe('true');
   });
@@ -118,7 +139,47 @@ describe('VoiceComparisonPage', () => {
 
     render(await VoiceComparisonPage());
 
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
     expect(boardProp('data-load-failed')).toBe('true');
+  });
+});
+
+describe('the editors (t-92)', () => {
+  it('fetches the overlays and the golden set through the API and hands each to its editor', async () => {
+    const views: Record<string, unknown> = {
+      [VOICE_COMPARISON_ENDPOINT]: [],
+      [VOICE_OVERLAYS_ENDPOINT]: { seeded: true, overlays: [{ situation: 'values' }] },
+      [GOLDEN_SET_ENDPOINT]: { seeded: true, prompts: [{ key: 'first-hello' }] },
+    };
+    vi.mocked(serverFetch).mockImplementation(
+      async (endpoint) => ({ ok: true, url: String(endpoint) }) as Response
+    );
+    vi.mocked(parseApiResponse).mockImplementation(
+      async (response) => ({ success: true, data: views[response.url] ?? null }) as never
+    );
+
+    render(await VoiceComparisonPage());
+
+    expect(
+      JSON.parse(screen.getByTestId('overlays-editor').getAttribute('data-view') ?? 'null')
+    ).toEqual(views[VOICE_OVERLAYS_ENDPOINT]);
+    expect(
+      JSON.parse(screen.getByTestId('golden-set-editor').getAttribute('data-view') ?? 'null')
+    ).toEqual(views[GOLDEN_SET_ENDPOINT]);
+  });
+
+  it('names the endpoint when an editor cannot load, rather than showing it as unseeded', async () => {
+    vi.mocked(serverFetch).mockResolvedValue({ ok: false } as Response);
+
+    render(await VoiceComparisonPage());
+
+    expect(screen.queryByTestId('overlays-editor')).toBeNull();
+    expect(screen.queryByTestId('golden-set-editor')).toBeNull();
+    const text = screen
+      .getAllByRole('alert')
+      .map((alert) => alert.textContent)
+      .join(' ');
+    expect(text).toContain(VOICE_OVERLAYS_ENDPOINT);
+    expect(text).toContain(GOLDEN_SET_ENDPOINT);
   });
 });

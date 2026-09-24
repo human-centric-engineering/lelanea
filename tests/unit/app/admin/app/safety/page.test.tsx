@@ -23,6 +23,11 @@ vi.mock('@/components/app/admin/crisis-resources', () => ({
   ),
 }));
 
+// The file round-trip (t-92) has its own tests; stubbed so this stays about the page.
+vi.mock('@/components/app/admin/crisis-file-panel', () => ({
+  CrisisFilePanel: () => <div data-testid="file-panel" />,
+}));
+
 import CrisisResourcesPage from '@/app/admin/app/safety/page';
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
 import { CRISIS_RESOURCES_ENDPOINT } from '@/lib/app/safety/endpoint';
@@ -43,6 +48,20 @@ describe('CrisisResourcesPage', () => {
       initialView: unknown;
     };
     expect(props.initialView).toEqual(VIEW);
+    expect(screen.getByTestId('file-panel')).toBeInTheDocument();
+  });
+
+  it('offers no file import before the tables are seeded', async () => {
+    vi.mocked(serverFetch).mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.mocked(parseApiResponse).mockResolvedValue({
+      success: true,
+      data: { ...VIEW, seeded: false },
+    } as never);
+
+    render(await CrisisResourcesPage());
+
+    expect(screen.getByTestId('panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('file-panel')).toBeNull();
   });
 
   it.each([

@@ -141,21 +141,38 @@ interface RevisionJson {
 }
 
 /**
+ * Where one item's history is read and restored: a content collection's item,
+ * or (t-92) any pair of endpoints that speak the same shapes — the voice
+ * overlays do.
+ */
+type HistorySource =
+  | { collection: ContentCollection; entity: string; id: string; endpoints?: never }
+  | {
+      endpoints: { history: string; restore: string };
+      collection?: never;
+      entity?: never;
+      id?: never;
+    };
+
+function historyEndpoints(source: HistorySource): { history: string; restore: string } {
+  if (source.endpoints) return source.endpoints;
+  return {
+    history: contentHistoryEndpoint(source.collection, source.entity, source.id),
+    restore: contentRestoreEndpoint(source.collection, source.entity, source.id),
+  };
+}
+
+/**
  * Every revision of one item, newest first, each restorable. A restore is a
  * new revision carrying the old words; nothing is rewound.
  */
 export function HistoryButton({
-  collection,
-  entity,
-  id,
   label,
   revisionRead,
   restoreNote,
   onRestored,
-}: {
-  collection: ContentCollection;
-  entity: string;
-  id: string;
+  ...source
+}: HistorySource & {
   label: string;
   revisionRead: number;
   /** What a restore of this item also does, said before it is done. */
@@ -173,7 +190,7 @@ export function HistoryButton({
     setNotice(null);
     const result = await send<{ revisions: RevisionJson[] }>(
       'GET',
-      contentHistoryEndpoint(collection, entity, id)
+      historyEndpoints(source).history
     );
     if (result.ok) setRevisions(result.data.revisions);
     else setNotice({ tone: 'error', text: result.message });
@@ -183,7 +200,7 @@ export function HistoryButton({
     setBusy(true);
     const result = await send<{ changed: string[]; mintedVersion?: string | null }>(
       'POST',
-      contentRestoreEndpoint(collection, entity, id),
+      historyEndpoints(source).restore,
       { revision, revisionRead }
     );
     setBusy(false);
@@ -319,6 +336,16 @@ function PlanView({ plan }: { plan: ContentImportPlan }) {
                 ))
               )}
               {section.unchanged.length > 0 && <li>{section.unchanged.length} unchanged</li>}
+              {section.kept && section.kept.length > 0 && (
+                <li>
+                  Kept, though the file leaves them out:{' '}
+                  {section.kept.map((key) => (
+                    <code key={key} className="mr-1">
+                      {key}
+                    </code>
+                  ))}
+                </li>
+              )}
               {section.skippedRetired.length > 0 && (
                 <li>
                   Left retired (a file cannot bring one back):{' '}
@@ -338,26 +365,52 @@ function PlanView({ plan }: { plan: ContentImportPlan }) {
 }
 
 /**
+ * Where a file is exported and imported: a content collection, or (t-92) the
+ * three endpoints of a keep-by-default round-trip.
+ */
+type FileSource =
+  | { collection: ContentCollection; endpoints?: never }
+  | { endpoints: { export: string; preview: string; apply: string }; collection?: never };
+
+function fileEndpoints(source: FileSource) {
+  if (source.endpoints) return source.endpoints;
+  return {
+    export: contentExportEndpoint(source.collection),
+    preview: contentImportPreviewEndpoint(source.collection),
+    apply: contentImportEndpoint(source.collection),
+  };
+}
+
+/**
  * Download the collection as a file in the seed's shape, or bring a file in:
  * preview first, which writes nothing, then apply, which re-plans against the
  * rows as they stand and shows the plan that ran.
+ *
+ * With `removal` (t-92), the import keeps what the file leaves out unless the
+ * admin ticks the box to remove it. Ticking or unticking drops the preview, so
+ * the plan on screen is always the one apply will run.
  */
 export function ImportExportPanel({
-  collection,
   fileName,
   what,
+  removal,
   onApplied,
-}: {
-  collection: ContentCollection;
+  ...source
+}: FileSource & {
   /** The file the seed reads this collection from, named in the help. */
   fileName: string;
   what: string;
+  /** Offer "also remove what the file leaves out", off by default. `note` is said beside it. */
+  removal?: { note?: string };
   onApplied: (message: string) => void;
 }) {
   const [text, setText] = useState('');
   const [plan, setPlan] = useState<ContentImportPlan | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
+  const [removeAbsent, setRemoveAbsent] = useState(false);
+  const endpoints = fileEndpoints(source);
+  const panelId = `${(source.collection ?? what).replace(/[^a-z0-9]+/gi, '-')}-file`;
 
   function parsed(): unknown {
     try {
@@ -368,9 +421,14 @@ export function ImportExportPanel({
     }
   }
 
+  /** The body both calls send: the flag only where the panel offers it. */
+  function body(file: unknown) {
+    return removal ? { file, removeAbsent } : { file };
+  }
+
   async function exportFile() {
     setNotice(null);
-    const result = await downloadExport(contentExportEndpoint(collection), fileName);
+    const result = await downloadExport(endpoints.export, fileName);
     if (!result.ok) setNotice({ tone: 'error', text: result.message });
   }
 
@@ -384,11 +442,7 @@ export function ImportExportPanel({
     const file = parsed();
     if (file === UNPARSEABLE) return;
     setBusy(true);
-    const result = await send<{ plan: ContentImportPlan }>(
-      'POST',
-      contentImportPreviewEndpoint(collection),
-      { file }
-    );
+    const result = await send<{ plan: ContentImportPlan }>('POST', endpoints.preview, body(file));
     setBusy(false);
     if (result.ok) {
       setPlan(result.data.plan);
@@ -403,11 +457,7 @@ export function ImportExportPanel({
     const file = parsed();
     if (file === UNPARSEABLE) return;
     setBusy(true);
-    const result = await send<{ plan: ContentImportPlan }>(
-      'POST',
-      contentImportEndpoint(collection),
-      { file }
-    );
+    const result = await send<{ plan: ContentImportPlan }>('POST', endpoints.apply, body(file));
     setBusy(false);
     if (!result.ok) {
       setNotice({ tone: 'error', text: result.message });
@@ -423,15 +473,17 @@ export function ImportExportPanel({
   }
 
   return (
-    <section className="space-y-3 rounded-md border p-4" aria-labelledby={`${collection}-file`}>
+    <section className="space-y-3 rounded-md border p-4" aria-labelledby={panelId}>
       <div className="flex flex-wrap items-center gap-2">
-        <h3 id={`${collection}-file`} className="font-medium">
+        <h3 id={panelId} className="font-medium">
           As a file
         </h3>
         <FieldHelp title="Export and import">
           The export is {what} as stored now, in the same shape as <code>{fileName}</code>, so it
-          can be dropped into the seed folder or edited and brought back. Importing treats the file
-          as the whole collection: anything stored and missing from the file is listed for removal.
+          can be dropped into the seed folder or edited and brought back.{' '}
+          {removal
+            ? 'Importing adds and changes what the file says. Anything stored here that the file leaves out is kept, unless you tick the box to remove it.'
+            : 'Importing treats the file as the whole collection: anything stored and missing from the file is listed for removal.'}{' '}
           Preview first; it writes nothing.
         </FieldHelp>
       </div>
@@ -466,6 +518,23 @@ export function ImportExportPanel({
           Apply import
         </Button>
       </div>
+      {removal && (
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={removeAbsent}
+              onChange={(event) => {
+                setRemoveAbsent(event.target.checked);
+                // The plan on screen was made with the other setting.
+                setPlan(null);
+              }}
+            />
+            Also remove what the file leaves out
+          </label>
+          {removal.note && <p className="text-muted-foreground text-xs">{removal.note}</p>}
+        </div>
+      )}
       <NoticeLine notice={notice} />
       {plan && <PlanView plan={plan} />}
     </section>
