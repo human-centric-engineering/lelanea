@@ -256,7 +256,12 @@ function OverlayRow({ row, onDone }: { row: OverlayAdminRow; onDone: (message: s
           Edit
         </Button>
         {row.status === 'draft' && (
-          <Button type="button" variant="outline" size="sm" onClick={() => void signOff()}>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            onClick={() => void signOff()}
+          >
             Sign off
           </Button>
         )}
@@ -433,7 +438,12 @@ function SetFraming({
           Edit
         </Button>
         {set.status === 'draft' && (
-          <Button type="button" variant="outline" size="sm" onClick={() => void signOff()}>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            onClick={() => void signOff()}
+          >
             Sign off
           </Button>
         )}
