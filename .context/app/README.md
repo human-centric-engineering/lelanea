@@ -38,6 +38,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`voice.md`](./voice.md)                       | Voice: the three layers, what each document may be quoted for, and the golden set it is heard through   |
 | [`agent.md`](./agent.md)                       | The one agent: the model she is pinned to, where an admin changes it, no fallback, and her two seats    |
 | [`safety.md`](./safety.md)                     | The crisis path: the two tiers, the context check, the regional resource, the client frame, the record  |
+| [`onboarding.md`](./onboarding.md)             | The first-run sequence: discovery answers as data slots, weights and the Core Set, ids never reused     |
 | [`incident-runbook.md`](./incident-runbook.md) | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock    |
 | [`conversation.md`](./conversation.md)         | The conversation pane: the transcript read back, the event schema, the stream client, the pacing        |
 | [`slots.md`](./slots.md)                       | The slot taxonomy: the six groups, the immutable slug, the version chain, and reading an answer back    |

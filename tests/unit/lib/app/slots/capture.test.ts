@@ -221,6 +221,47 @@ describe('the turn id', () => {
   });
 });
 
+describe('a discovery answer (f-onboarding t-101)', () => {
+  const DISCOVERY = { ...(ARGS as object), slotSlug: 'discovery_q04' } as never;
+
+  it('is refused before the framework writes anything, and names where the reading goes', async () => {
+    const result = await new GuardedFillSlotCapability().execute(DISCOVERY, context());
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: 'discovery_answer_read_only',
+        message: expect.stringContaining('another name'),
+      },
+    });
+    expect(framework).not.toHaveBeenCalled();
+    expect(world.slotWrites).toEqual([]);
+  });
+
+  it('is refused on a dispatch with no turn too, which the retry guard would wave through', async () => {
+    const result = await new GuardedFillSlotCapability().execute(
+      DISCOVERY,
+      context({ costLogMetadata: undefined })
+    );
+
+    expect(result).toMatchObject({ success: false });
+    expect(framework).not.toHaveBeenCalled();
+  });
+
+  it('refuses anything under the reserved prefix, and leaves every other slug to the framework', async () => {
+    await new GuardedFillSlotCapability().execute(
+      { ...(ARGS as object), slotSlug: 'discovery_notes_of_hers' } as never,
+      context()
+    );
+    // A slug merely starting with the word is still refused: the prefix is
+    // reserved in the taxonomy, so no authored slot can carry it.
+    expect(framework).not.toHaveBeenCalled();
+
+    await new GuardedFillSlotCapability().execute(ARGS, context());
+    expect(framework).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('a turn that writes a slot', () => {
   it('writes it, and records that it did', async () => {
     const capability = new GuardedFillSlotCapability();

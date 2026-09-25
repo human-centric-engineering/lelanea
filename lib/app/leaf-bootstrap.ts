@@ -36,7 +36,7 @@ import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { registerGlobalSlotDefinitionProvider } from '@/lib/framework/data-slots';
-import { loadGlobalSlotDefinitions } from '@/lib/app/slots/taxonomy-store';
+import { loadAppGlobalSlotDefinitions } from '@/lib/app/onboarding/discovery-slots';
 
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -78,7 +78,12 @@ export function initLeafApp(): Promise<void> {
   // It is before the module loop for the same reason as the hooks above — with
   // no provider registered the global pass does nothing at all, silently, and
   // the whole taxonomy would be missing with nothing saying so.
-  registerGlobalSlotDefinitionProvider(loadGlobalSlotDefinitions);
+  //
+  // f-onboarding t-101: the provider hands over the taxonomy AND one slot per
+  // discovery question, which is what a person's answers are filed under. See
+  // `lib/app/onboarding/discovery-slots.ts` for why they are a projection of the
+  // questions rather than rows in the taxonomy.
+  registerGlobalSlotDefinitionProvider(loadAppGlobalSlotDefinitions);
 
   // The seventeen modules of the journey, each a real place with an empty
   // interior. `registerModule()` is idempotent by slug, so a hot reload or a

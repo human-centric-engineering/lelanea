@@ -173,7 +173,13 @@ describe('a fresh export, re-imported, plans no writes', () => {
     await setResourceRetired('video-a', true, 1, EDITOR);
     await deleteQuestion('q05', 1, EDITOR);
     await createQuestion(
-      { text: 'A new one?', inputType: 'long_text', hint: null, conditionalFollowUp: null },
+      {
+        text: 'A new one?',
+        inputType: 'long_text',
+        hint: null,
+        conditionalFollowUp: null,
+        weight: 100,
+      },
       EDITOR
     );
 

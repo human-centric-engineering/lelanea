@@ -54,6 +54,12 @@ import {
   SLOT_DATA_TYPE,
   SLOT_SENSITIVITY,
 } from '@/lib/framework/data-slots/vocabulary';
+import {
+  DISCOVERY_SLOT_GROUP,
+  RESERVED_GROUP_MESSAGE,
+  RESERVED_SLUG_MESSAGE,
+  isDiscoverySlotSlug,
+} from '@/lib/app/onboarding/discovery-slot-names';
 
 /**
  * A slug is lower-case letters, digits and underscores, starting with a letter.
@@ -82,6 +88,23 @@ const boundedSlug = (label: string) =>
   slotSlugSchema.max(MAX_SLUG_LENGTH, `${label} is longer than ${MAX_SLUG_LENGTH} characters.`);
 
 /**
+ * A slug the TAXONOMY may use: any slug but one reserved for a discovery answer
+ * (f-onboarding t-101). Applied where an admin or a file writes a taxonomy slot,
+ * and nowhere a slug is only read: a person's notes and the history routes must
+ * still reach a discovery slot.
+ */
+export const authoredSlotSlugSchema = slotSlugSchema.refine(
+  (slug) => !isDiscoverySlotSlug(slug),
+  RESERVED_SLUG_MESSAGE
+);
+
+/** A group key the taxonomy may use: any but the discovery answers' own. */
+export const authoredSlotGroupSchema = slotSlugSchema.refine(
+  (group) => group !== DISCOVERY_SLOT_GROUP,
+  RESERVED_GROUP_MESSAGE
+);
+
+/**
  * Everything about a definition an admin may change after it exists.
  *
  * `dataType` is in here deliberately. Changing it does not invalidate anything
@@ -96,7 +119,10 @@ const boundedSlug = (label: string) =>
  * actions.
  */
 export const slotDefinitionUpdateSchema = z.strictObject({
-  group: boundedSlug('A group key'),
+  group: boundedSlug('A group key').refine(
+    (group) => group !== DISCOVERY_SLOT_GROUP,
+    RESERVED_GROUP_MESSAGE
+  ),
   description: z
     .string()
     .trim()
@@ -117,7 +143,7 @@ export const slotDefinitionUpdateSchema = z.strictObject({
 
 /** Adding a definition: the slug, then everything an edit may change. */
 export const slotDefinitionCreateSchema = slotDefinitionUpdateSchema.extend({
-  slug: boundedSlug('A slug'),
+  slug: boundedSlug('A slug').refine((slug) => !isDiscoverySlotSlug(slug), RESERVED_SLUG_MESSAGE),
 });
 
 /** The version the admin read, sent with every write that changes a row. */

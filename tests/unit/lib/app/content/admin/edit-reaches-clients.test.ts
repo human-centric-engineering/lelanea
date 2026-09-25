@@ -403,6 +403,7 @@ describe('discovery questions', () => {
         inputType: 'long_text',
         hint: null,
         conditionalFollowUp: null,
+        weight: 100,
       },
       question.revision,
       EDITOR

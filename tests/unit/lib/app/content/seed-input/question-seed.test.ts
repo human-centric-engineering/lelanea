@@ -65,6 +65,7 @@ describe('the discovery questions, as seeded and served', () => {
       'inputType',
       'hint',
       'conditionalFollowUp',
+      'weight',
       'revision',
     ];
 
@@ -81,13 +82,21 @@ describe('the discovery questions, as seeded and served', () => {
     expect(questions.find((q) => q.id === 'q01')).not.toHaveProperty('hint');
   });
 
-  it('serves the words exactly as the file has them', () => {
+  it('serves the words exactly as the file has them, each question fully weighted', () => {
     const file = readDiscoveryQuestionsFile();
     const questions = served().questions;
 
     for (const authored of file.questions) {
-      const { revision: _revision, ...question } = questions.find((q) => q.id === authored.id)!;
+      const {
+        revision: _revision,
+        weight,
+        ...question
+      } = questions.find((q) => q.id === authored.id)!;
       expect(question).toEqual(authored);
+      // Her file carries no weight, so every seeded question is in the Core Set
+      // until an admin says otherwise (f-onboarding t-101).
+      expect(authored).not.toHaveProperty('weight');
+      expect(weight).toBe(100);
     }
   });
 
@@ -112,23 +121,50 @@ describe('the discovery questions, as seeded and served', () => {
   });
 });
 
+/**
+ * Columns added after that migration was applied, by
+ * `20261002100000_app_discovery_question_weight` (f-onboarding t-101), with
+ * the database default each was given.
+ *
+ * The t-87 migration cannot be edited: it has run on every database. It still
+ * writes what the seed writes, because each column added since has a default
+ * equal to the value the seed puts there. The first case below proves that, so
+ * a later column whose seed value differs from its default fails here rather
+ * than leaving migrated and seeded databases quietly different.
+ */
+const ADDED_SINCE = {
+  set: { coreOnly: false },
+  question: { weight: 100 },
+} as const;
+
 describe('the data migration', () => {
-  it('writes exactly what the seed builds today', () => {
+  it('writes exactly what the seed builds today, less the columns added since at their defaults', () => {
     const match = /\$t87questions\$([\s\S]*?)\$t87questions\$/.exec(
       readFileSync(MIGRATION, 'utf8')
     );
+    const seed = buildQuestionSeed();
 
+    // The seed writes each later column at its database default...
+    expect(seed.set).toMatchObject(ADDED_SINCE.set);
+    for (const question of seed.questions) expect(question).toMatchObject(ADDED_SINCE.question);
+
+    // ...so the migration, which leaves them to that default, writes the same rows.
+    const { coreOnly: _coreOnly, ...set } = seed.set;
+    const questions = seed.questions.map(({ weight: _weight, ...question }) => question);
     expect(match, 'the migration no longer embeds the questions seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildQuestionSeed());
+    expect(JSON.parse(match![1])).toEqual({ set, questions });
   });
 
-  it('records the same changed fields the service records', async () => {
+  it('records the changed fields the service recorded when it ran', async () => {
     const { QUESTION_SET_SNAPSHOT_FIELDS, QUESTION_SNAPSHOT_FIELDS } =
       await import('@/lib/app/content/question-store');
     const sql = readFileSync(MIGRATION, 'utf8');
+    const since = [...Object.keys(ADDED_SINCE.set), ...Object.keys(ADDED_SINCE.question)];
 
     for (const fields of [QUESTION_SET_SNAPSHOT_FIELDS, QUESTION_SNAPSHOT_FIELDS]) {
-      expect(sql).toContain(`ARRAY[${fields.map((f) => `'${f}'`).join(', ')}]`);
+      const then = fields.filter((field) => !since.includes(field));
+      expect(then.length).toBeLessThan(fields.length);
+      expect(sql).toContain(`ARRAY[${then.map((f) => `'${f}'`).join(', ')}]`);
     }
   });
 });

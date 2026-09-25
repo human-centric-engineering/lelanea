@@ -8,15 +8,25 @@
  * Removing one re-numbers those after it, each as a revision, so the history
  * says when a question moved as well as when it changed.
  *
- * **A question keeps its id.** It is how an answer will be filed once
- * onboarding stores them, so a reworded or moved question keeps its id, and a
- * new one takes the id after the highest (`q31`).
+ * **A question keeps its id, and an id is never given out twice.** A person's
+ * answer is filed under the question's slot, `discovery_<id>`
+ * (`lib/app/onboarding/discovery-slots.ts`, f-onboarding t-101). So a reworded
+ * or moved question keeps its id, and a new one takes the id after the highest
+ * the set has ever used, not just the highest still in it.
  *
- * **Removal is a delete.** Nothing stores a question id yet: the public content
- * API is the only reader (`QUESTION_READERS`), and the editor names it before
- * confirming. The audit entry keeps the removed question's words. **Revisit
- * when** onboarding stores answers by question id: a removed question will then
- * need a tombstone, as a retired resource has.
+ * **Removal is a delete, and the slot is the tombstone.** The row and its
+ * history go, and the audit entry keeps the removed question's words. The
+ * answers do not go: they stay filed under the slot, which the global sync
+ * deactivates when the question drops out of the provider, keeping the last
+ * wording it had. That deactivated slot is what stops the id coming back:
+ * {@link nextQuestionId} counts it, and an import that would re-create it is
+ * refused. Otherwise a new question under a freed id would inherit, as its own
+ * answers, what people wrote to the old one.
+ *
+ * **Every write that changes a question's words, or which questions exist,
+ * ends in a re-sync** of the global slots, reported rather than thrown, for the
+ * reasons `lib/app/slots/definitions-admin.ts` gives (`HB9`, `HB10`). A weight
+ * or a reorder changes no slot, so they do not re-sync.
  *
  * @see lib/app/content/question-store.ts — the read every surface makes
  */
@@ -58,6 +68,7 @@ import {
   type KeyedPlan,
 } from '@/lib/app/content/admin/keyed-import';
 import { QUESTION_READERS } from '@/lib/app/content/admin/readers';
+import { DISCOVERY_SLOT_PREFIX } from '@/lib/app/onboarding/discovery-slot-names';
 import {
   type ContentImportPlan,
   type ImportPlanSection,
@@ -106,6 +117,7 @@ function setFieldsOf(row: Omit<QuestionSetRow, 'id' | 'revision'>) {
     pacing,
     version: row.version,
     locale: row.locale,
+    coreOnly: row.coreOnly,
   };
 }
 
@@ -124,6 +136,7 @@ function questionFieldsOf(row: Omit<DiscoveryQuestionRow, 'revision'>) {
     inputType: view.inputType,
     hint: row.hint,
     conditionalFollowUp: storedFollowUpSchema.parse(row.conditionalFollowUp ?? null),
+    weight: row.weight,
   };
 }
 
@@ -369,14 +382,34 @@ async function applyNumbers(
 }
 
 /**
- * The id after the highest in the set: `q31` after `q30`. A removed question's
- * history goes with it, so an id freed at the end can be taken again; that is
- * harmless while nothing stores a question id (see the file header).
+ * The ids of removed questions: those with a discovery slot and no row. Their
+ * answers are still filed under them, so the id is not free (file header).
+ */
+async function retiredQuestionIds(
+  client: Pick<Tx, 'slotDefinition'>,
+  liveIds: ReadonlySet<string>
+): Promise<Set<string>> {
+  const slots = await client.slotDefinition.findMany({
+    where: { slug: { startsWith: DISCOVERY_SLOT_PREFIX } },
+    select: { slug: true },
+  });
+  return new Set(
+    slots
+      .map((slot) => slot.slug.slice(DISCOVERY_SLOT_PREFIX.length))
+      .filter((id) => !liveIds.has(id))
+  );
+}
+
+/**
+ * The id after the highest the set has ever used: `q31` after `q30`, and after
+ * a removed `q31` too. See the file header for why a freed id is never reused.
  */
 async function nextQuestionId(tx: Tx): Promise<string> {
   const live = await tx.appDiscoveryQuestion.findMany({ select: { id: true } });
-  const highest = live
-    .map((row) => /^q(\d+)$/.exec(row.id)?.[1])
+  const liveIds = new Set(live.map((row) => row.id));
+  const everUsed = [...liveIds, ...(await retiredQuestionIds(tx, liveIds))];
+  const highest = everUsed
+    .map((id) => /^q(\d+)$/.exec(id)?.[1])
     .filter((digits): digits is string => digits !== undefined)
     .reduce((max, digits) => Math.max(max, Number(digits)), 0);
   return `q${String(highest + 1).padStart(2, '0')}`;
@@ -518,6 +551,8 @@ interface StoredQuestions {
   set: AppQuestionSet | null;
   questions: readonly AppDiscoveryQuestion[];
   moduleIds: ReadonlySet<string>;
+  /** Removed questions whose answers are still filed under their id (file header). */
+  retiredIds: ReadonlySet<string>;
 }
 
 interface QuestionsImport {
@@ -554,9 +589,21 @@ export function planQuestionsImport(
       `The file puts the questions in module "${seed.set.moduleId}", which is not on the journey.`
     );
   }
+  for (const question of seed.questions) {
+    if (stored.retiredIds.has(question.id)) {
+      refusals.push(
+        `The file adds question "${question.id}", but that id belonged to a question that was removed, and people's answers to it are still filed under it. Give the new question an id the set has never used.`
+      );
+    }
+  }
 
   const { id: _id, ...setIncoming } = seed.set;
-  const setAfter = setFieldsOf(setIncoming);
+  // The Core Set switch is an admin setting no file carries, so an import
+  // leaves it as it is.
+  const setAfter = {
+    ...setFieldsOf(setIncoming),
+    coreOnly: stored.set?.coreOnly ?? setIncoming.coreOnly,
+  };
   const setChanged = stored.set
     ? changedFieldsOf(setFieldsOf(stored.set), setAfter, SET_FIELDS)
     : [];
@@ -564,6 +611,9 @@ export function planQuestionsImport(
   // Kept ones follow the file's, so the numbering stays 1..n with no gap and
   // no two questions claiming one number.
   const inFile = new Set(seed.questions.map((question) => question.id));
+  // A weight is an admin setting too. Her file carries none, so a question the
+  // file names without one keeps its stored weight rather than being reset.
+  const fileWeights = new Map(file.questions.map((question) => [question.id, question.weight]));
   const kept = removeAbsent ? [] : stored.questions.filter((row) => !inFile.has(row.id));
   const questions = planKeyedImport<Omit<DiscoveryQuestionRow, 'revision'>, QuestionFields>({
     incoming: [
@@ -581,7 +631,8 @@ export function planQuestionsImport(
     diff: (before, after) => changedFieldsOf(before, after, QUESTION_SNAPSHOT_FIELDS),
     allFields: QUESTION_SNAPSHOT_FIELDS,
     toCreate: (question) => questionFieldsOf(question),
-    toUpdate: (_before, question) => questionFieldsOf(question),
+    toUpdate: (before, question) =>
+      questionFieldsOf({ ...question, weight: fileWeights.get(question.id) ?? before.weight }),
     onAbsent: removeAbsent ? () => null : 'keep',
   });
 
@@ -618,7 +669,10 @@ export function planQuestionsImport(
 }
 
 async function readStored(
-  client: Pick<typeof prisma, 'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule'>
+  client: Pick<
+    typeof prisma,
+    'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition'
+  >
 ): Promise<StoredQuestions> {
   const [set, questions, modules] = await Promise.all([
     client.appQuestionSet.findUnique({ where: { id: DISCOVERY_QUESTION_SET_ID } }),
@@ -628,7 +682,12 @@ async function readStored(
     }),
     client.appJourneyModule.findMany({ select: { id: true } }),
   ]);
-  return { set, questions, moduleIds: new Set(modules.map((row) => row.id)) };
+  return {
+    set,
+    questions,
+    moduleIds: new Set(modules.map((row) => row.id)),
+    retiredIds: await retiredQuestionIds(client, new Set(questions.map((row) => row.id))),
+  };
 }
 
 function parseQuestionsFile(raw: unknown): DiscoveryQuestionsFile {

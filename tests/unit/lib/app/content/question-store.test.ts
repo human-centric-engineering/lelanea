@@ -47,7 +47,9 @@ describe('getDiscoveryQuestions', () => {
       preamble: { style: 'italic', text: 'An edited preamble.' },
       revision: 2,
       questions: rows.questions.map((q) =>
-        q.id === 'q05' ? { ...q, text: 'An edited fifth question.', hint: null, revision: 4 } : q
+        q.id === 'q05'
+          ? { ...q, text: 'An edited fifth question.', hint: null, weight: 40, revision: 4 }
+          : q
       ),
     });
 
@@ -60,6 +62,7 @@ describe('getDiscoveryQuestions', () => {
       number: 5,
       text: 'An edited fifth question.',
       inputType: 'long_text',
+      weight: 40,
       revision: 4,
     });
   });

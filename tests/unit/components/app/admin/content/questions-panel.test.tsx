@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { QuestionsPanel } from '@/components/app/admin/content/questions-panel';
@@ -64,6 +64,7 @@ const Q1: DiscoveryQuestionView = {
   text: 'What matters to you right now?',
   inputType: 'long_text',
   hint: 'Take your time.',
+  weight: 100,
   revision: 3,
 };
 
@@ -73,6 +74,7 @@ const Q2: DiscoveryQuestionView = {
   text: 'Have you faced this before?',
   inputType: 'long_text',
   conditionalFollowUp: { ifYes: 'What happened then?', ifNo: 'What holds you back?' },
+  weight: 40,
   revision: 1,
 };
 
@@ -89,6 +91,7 @@ const SET: DiscoveryQuestionSet = {
   },
   preamble: { style: 'note', text: 'Take your time with these.' },
   pacing: { rushDiscouraged: true, allowPartialCompletion: false, note: 'No rush.' },
+  coreOnly: false,
   questions: [Q1, Q2],
 };
 
@@ -148,6 +151,7 @@ describe('the framing', () => {
 
     await user.click(screen.getByLabelText('Discourage rushing'));
     await user.click(screen.getByLabelText('Allow stopping part-way'));
+    await user.click(screen.getByLabelText('Core Set only'));
 
     const pacingNote = screen.getByLabelText('Pacing note');
     await user.clear(pacingNote);
@@ -167,6 +171,7 @@ describe('the framing', () => {
       pacing: { rushDiscouraged: false, allowPartialCompletion: true, note: 'A different note.' },
       version: '1.1',
       locale: 'en-GB',
+      coreOnly: true,
     });
     expect(await screen.findByText('Saved the question set.')).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
@@ -221,8 +226,50 @@ describe('a question without a hint or a branch', () => {
       inputType: 'long_text',
       hint: 'No rush.',
       conditionalFollowUp: null,
+      weight: 100,
     });
     expect(await screen.findByText('Saved question 1.')).toBeInTheDocument();
+  });
+
+  it('sends the weight as a number when it is changed', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'] }));
+    await openQ1(user);
+
+    const weight = screen.getByLabelText('Weight');
+    expect(weight).toHaveValue(100);
+    await user.clear(weight);
+    await user.type(weight, '60');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(sent().body).toMatchObject({ weight: 60 });
+  });
+
+  it('sends a cleared weight as null, so the route refuses it rather than saving 0', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: [] }));
+    await openQ1(user);
+
+    await user.clear(screen.getByLabelText('Weight'));
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(sent().body).toMatchObject({ weight: null });
+  });
+
+  it('warns, rather than reporting a plain save, when the answers’ data slot did not update', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      ok({ changed: ['text'], slotSync: { status: 'failed', message: 'boom' } })
+    );
+    await openQ1(user);
+
+    await user.type(screen.getByLabelText('Question'), ' Still?');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(
+      await screen.findByText(/the AI is still reading the previous wording of this question/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Saved question 1.')).toBeNull();
   });
 
   it('sends null hint when the field is cleared', async () => {
@@ -291,6 +338,16 @@ describe('a question that already branches', () => {
     await user.click(screen.getByRole('button', { name: 'Save question' }));
 
     expect(sent().body).toMatchObject({ conditionalFollowUp: null });
+  });
+});
+
+describe('the weight on each row', () => {
+  it('marks a fully weighted question as Core and shows any other weight', () => {
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    const [first, second] = screen.getAllByRole('listitem');
+    expect(within(first).getByText('Core')).toBeInTheDocument();
+    expect(within(second).getByText('Weight 40')).toBeInTheDocument();
   });
 });
 
@@ -416,6 +473,7 @@ describe('adding a question', () => {
       inputType: 'long_text',
       hint: 'Be honest.',
       conditionalFollowUp: null,
+      weight: 100,
     });
     expect(screen.queryByRole('button', { name: 'Add at the end' })).toBeNull();
     expect(await screen.findByText('Added question 3 (q3).')).toBeInTheDocument();

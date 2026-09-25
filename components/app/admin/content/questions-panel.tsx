@@ -5,6 +5,12 @@
  * and each question. Questions can be added at the end, reworded, moved and
  * removed; numbers stay 1 to N, and a removal re-numbers the rest. A question
  * keeps its id whatever happens to its words or its place.
+ *
+ * f-onboarding t-101: each question has a weight, and the set a Core Set
+ * switch that asks only the fully weighted ones. A person's answers are filed
+ * under the question's id, so rewording a question re-projects the slot they
+ * are filed under (warned here if that fails), and a removed question keeps
+ * its answers and its id is never given out again.
  */
 
 import { useState } from 'react';
@@ -33,7 +39,11 @@ import {
   contentOrderEndpoint,
 } from '@/lib/app/content/admin/endpoint';
 import type { QuestionsAdminView } from '@/lib/app/content/admin/questions';
-import type { DiscoveryQuestionSet, DiscoveryQuestionView } from '@/lib/app/content/question-view';
+import {
+  FULL_WEIGHT,
+  type DiscoveryQuestionSet,
+  type DiscoveryQuestionView,
+} from '@/lib/app/content/question-view';
 
 interface QuestionDraft {
   text: string;
@@ -41,6 +51,8 @@ interface QuestionDraft {
   branches: boolean;
   ifYes: string;
   ifNo: string;
+  /** Kept as typed, so a half-typed number is not snapped back while editing. */
+  weight: string;
 }
 
 function draftOf(question?: DiscoveryQuestionView): QuestionDraft {
@@ -50,7 +62,34 @@ function draftOf(question?: DiscoveryQuestionView): QuestionDraft {
     branches: question?.conditionalFollowUp !== undefined,
     ifYes: question?.conditionalFollowUp?.ifYes ?? '',
     ifNo: question?.conditionalFollowUp?.ifNo ?? '',
+    weight: String(question?.weight ?? FULL_WEIGHT),
   };
+}
+
+/**
+ * The weight as the route reads it. An empty box is sent as `null` rather than
+ * `Number('')`, which is 0, so a cleared field is refused rather than quietly
+ * taking the question out of the Core Set.
+ */
+function weightOf(draft: QuestionDraft): number | null {
+  return draft.weight.trim() === '' ? null : Number(draft.weight);
+}
+
+/** How a save is reported: done, or done with something the admin must act on. */
+type SavedTone = 'ok' | 'warn';
+
+/** What a question write says about the slot its answers are filed under. */
+interface SlotSyncReport {
+  slotSync?: { status: string };
+}
+
+/**
+ * A warning when the write saved but the slot did not follow. Names the remedy
+ * (`HB10`), in the words the slot editor uses for the same failure.
+ */
+function slotSyncWarning(report: SlotSyncReport): string | null {
+  if (report.slotSync === undefined || report.slotSync.status === 'synced') return null;
+  return 'Saved — but the AI is still reading the previous wording of this question: the data slot its answers are filed under did not update. Save again to retry it; a server restart also repairs it.';
 }
 
 function bodyOf(draft: QuestionDraft) {
@@ -59,6 +98,7 @@ function bodyOf(draft: QuestionDraft) {
     inputType: 'long_text' as const,
     hint: orNull(draft.hint),
     conditionalFollowUp: draft.branches ? { ifYes: draft.ifYes, ifNo: draft.ifNo } : null,
+    weight: weightOf(draft),
   };
 }
 
@@ -94,6 +134,23 @@ function QuestionFields({
           id={`${id}-hint`}
           value={draft.hint}
           onChange={(e) => onChange({ ...draft, hint: e.target.value })}
+        />
+      </FieldRow>
+      <FieldRow
+        id={`${id}-weight`}
+        label="Weight"
+        help={`How much this question matters, from 0 to ${FULL_WEIGHT}. Questions at ${FULL_WEIGHT} are the Core Set: when the set is switched to "Core Set only", those are the only ones a person is asked.`}
+      >
+        <Input
+          id={`${id}-weight`}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={FULL_WEIGHT}
+          step={1}
+          className="w-28"
+          value={draft.weight}
+          onChange={(e) => onChange({ ...draft, weight: e.target.value })}
         />
       </FieldRow>
       <div className="flex items-center gap-2 text-sm">
@@ -141,7 +198,7 @@ function QuestionRow({
   count: number;
   readers: readonly string[];
   onMove: (by: -1 | 1) => void;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, tone?: SavedTone) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -149,13 +206,13 @@ function QuestionRow({
   const [notice, setNotice] = useState<Notice>(null);
   const id = `question-${question.id}`;
 
-  function saved(message: string) {
+  function saved(message: string, tone?: SavedTone) {
     setOpen(false);
-    onSaved(message);
+    onSaved(message, tone);
   }
 
   async function save() {
-    const result = await send<{ changed: string[] }>(
+    const result = await send<{ changed: string[] } & SlotSyncReport>(
       'PUT',
       contentItemEndpoint('questions', 'question', question.id),
       {
@@ -163,21 +220,30 @@ function QuestionRow({
         ...bodyOf(draft),
       }
     );
-    if (result.ok)
+    if (!result.ok) {
+      setNotice({ tone: 'error', text: result.message });
+      return;
+    }
+    const warning = slotSyncWarning(result.data);
+    if (warning) saved(warning, 'warn');
+    else
       saved(
         result.data.changed.length ? `Saved question ${question.number}.` : 'Nothing had changed.'
       );
-    else setNotice({ tone: 'error', text: result.message });
   }
 
   async function remove() {
-    const result = await send<{ renumbered: number }>(
+    const result = await send<{ renumbered: number } & SlotSyncReport>(
       'DELETE',
       `${contentItemEndpoint('questions', 'question', question.id)}?revision=${question.revision}`
     );
-    if (result.ok)
-      saved(`Removed question ${question.number}. The questions after it moved up one.`);
-    else setNotice({ tone: 'error', text: result.message });
+    if (!result.ok) {
+      setNotice({ tone: 'error', text: result.message });
+      return;
+    }
+    const warning = slotSyncWarning(result.data);
+    if (warning) saved(warning, 'warn');
+    else saved(`Removed question ${question.number}. The questions after it moved up one.`);
   }
 
   return (
@@ -192,6 +258,9 @@ function QuestionRow({
         >
           {question.text}
         </button>
+        <span className="text-muted-foreground text-xs">
+          {question.weight >= FULL_WEIGHT ? 'Core' : `Weight ${question.weight}`}
+        </span>
         <code className="text-muted-foreground text-xs">{question.id}</code>
         <Tip label="Move up the list">
           <Button
@@ -250,7 +319,8 @@ function QuestionRow({
                 </Button>
               ) : (
                 <span className="flex flex-wrap items-center gap-2 text-sm">
-                  Remove it, and its history? Read by {readers.join('; ')}.
+                  Remove it, and its history? People&apos;s answers to it are kept, and its id is
+                  never used again. Read by {readers.join('; ')}.
                   <Button
                     type="button"
                     variant="destructive"
@@ -298,6 +368,7 @@ function SetEditor({
     pacingNote: set.pacing.note,
     version: set.collection.version,
     locale: set.collection.locale,
+    coreOnly: set.coreOnly,
   });
   const [notice, setNotice] = useState<Notice>(null);
 
@@ -319,6 +390,7 @@ function SetEditor({
         },
         version: draft.version,
         locale: draft.locale,
+        coreOnly: draft.coreOnly,
       }
     );
     if (result.ok)
@@ -431,6 +503,17 @@ function SetEditor({
         </div>
       </div>
       <FieldRow
+        id="set-core-only"
+        label="Core Set only"
+        help={`When on, a person is asked only the questions weighted ${FULL_WEIGHT}. When off, they are asked every question. If it is on and no question is weighted ${FULL_WEIGHT}, every question is asked.`}
+      >
+        <Switch
+          id="set-core-only"
+          checked={draft.coreOnly}
+          onCheckedChange={(coreOnly) => setDraft({ ...draft, coreOnly })}
+        />
+      </FieldRow>
+      <FieldRow
         id="set-pacing"
         label="Pacing note"
         help="Her note on pace, shown with the questions."
@@ -467,8 +550,8 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
   const [newDraft, setNewDraft] = useState(() => draftOf());
   const set = initialView.set;
 
-  function done(message: string) {
-    setNotice({ tone: 'ok', text: message });
+  function done(message: string, tone: SavedTone = 'ok') {
+    setNotice({ tone, text: message });
     router.refresh();
   }
 
@@ -493,7 +576,7 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
   }
 
   async function add() {
-    const result = await send<{ id: string; number: number }>(
+    const result = await send<{ id: string; number: number } & SlotSyncReport>(
       'POST',
       contentEntityEndpoint('questions', 'question'),
       bodyOf(newDraft)
@@ -504,7 +587,9 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
     }
     setAdding(false);
     setNewDraft(draftOf());
-    done(`Added question ${result.data.number} (${result.data.id}).`);
+    const warning = slotSyncWarning(result.data);
+    if (warning) done(warning, 'warn');
+    else done(`Added question ${result.data.number} (${result.data.id}).`);
   }
 
   return (
@@ -551,7 +636,7 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
         fileName="onboarding_discovery_questions.json"
         what="the questions"
         removal={{
-          note: 'A removed question is deleted with its history, and the rest are numbered again.',
+          note: 'A removed question is deleted with its history, and the rest are numbered again. People’s answers to it are kept, and its id is never used again.',
         }}
         onApplied={done}
       />

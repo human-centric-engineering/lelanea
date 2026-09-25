@@ -83,20 +83,32 @@ const MODELS: Record<string, ModelSpec> = {
   },
   appQuestionSet: {
     key: 'id',
-    defaults: () => ({ ...stamped(), revision: 1 }),
+    defaults: () => ({ ...stamped(), revision: 1, coreOnly: false }),
     cascade: [['appQuestionSetRevision', 'setId']],
   },
-  appQuestionSetRevision: revision('setId'),
+  appQuestionSetRevision: {
+    ...revision('setId'),
+    defaults: () => ({ changedAt: new Date(), coreOnly: false }),
+  },
   appDiscoveryQuestion: {
     key: 'id',
     unique: [['setId', 'number']],
-    defaults: () => ({ ...stamped(), revision: 1, hint: null, conditionalFollowUp: null }),
+    defaults: () => ({
+      ...stamped(),
+      revision: 1,
+      hint: null,
+      conditionalFollowUp: null,
+      weight: 100,
+    }),
     cascade: [['appDiscoveryQuestionRevision', 'questionId']],
   },
   appDiscoveryQuestionRevision: {
     ...revision('questionId'),
-    defaults: () => ({ changedAt: new Date(), hint: null, conditionalFollowUp: null }),
+    defaults: () => ({ changedAt: new Date(), hint: null, conditionalFollowUp: null, weight: 100 }),
   },
+  // f-onboarding t-101: Daybreak's slot projection, read by the question editor
+  // to tell a removed question's id from a free one. Tests insert it directly.
+  slotDefinition: { key: 'id', defaults: () => ({ ...stamped(), isActive: true }) },
   appResourceCollection: { key: 'id', defaults: stamped },
   appResource: {
     key: 'id',

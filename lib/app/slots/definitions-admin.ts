@@ -283,7 +283,9 @@ function versionMoved(slug: string, current: number, read: number): ConflictErro
  * Project the edit into `framework_slot_definition`, and report rather than
  * throw. See the file header for why the failure is a return value.
  */
-async function resyncGlobalSlots(context: Record<string, unknown>): Promise<SlotSyncOutcome> {
+export async function resyncGlobalSlots(
+  context: Record<string, unknown>
+): Promise<SlotSyncOutcome> {
   try {
     const result = await syncGlobalSlotDefinitions();
     if (result.status !== 'synced') {

@@ -116,7 +116,13 @@ describe('a save against a revision that has moved', () => {
       () =>
         questions.updateQuestion(
           'q01',
-          { text: 'x?', inputType: 'long_text', hint: null, conditionalFollowUp: null },
+          {
+            text: 'x?',
+            inputType: 'long_text',
+            hint: null,
+            conditionalFollowUp: null,
+            weight: 100,
+          },
           7,
           EDITOR
         ),

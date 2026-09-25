@@ -1168,6 +1168,9 @@ model AppQuestionSet {
   pacing     Json
   version    String
   locale     String
+  /// Ask only the Core Set — the fully weighted questions (f-onboarding t-101).
+  /// An admin setting rather than her words, so no file carries it.
+  coreOnly   Boolean          @default(false)
   revision   Int              @default(1)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -1191,6 +1194,7 @@ model AppQuestionSetRevision {
   pacing        Json
   version       String
   locale        String
+  coreOnly      Boolean                  @default(false)
   changedFields String[]
   origin        AppContentRevisionOrigin
   editorId      String?
@@ -1216,6 +1220,9 @@ model AppDiscoveryQuestion {
   hint                String?
   /// `{ ifYes, ifNo }` where the question branches.
   conditionalFollowUp Json?
+  /// How much the question matters, 0–100 (f-onboarding t-101). 100 is fully
+  /// weighted, and the fully weighted questions are the Core Set.
+  weight              Int            @default(100)
   revision            Int            @default(1)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -1237,6 +1244,7 @@ model AppDiscoveryQuestionRevision {
   inputType           String
   hint                String?
   conditionalFollowUp Json?
+  weight              Int                      @default(100)
   changedFields       String[]
   origin              AppContentRevisionOrigin
   editorId            String?

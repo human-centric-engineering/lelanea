@@ -65,6 +65,7 @@ export const QUESTION_SET_SNAPSHOT_FIELDS = [
   'pacing',
   'version',
   'locale',
+  'coreOnly',
 ] as const;
 
 /** The fields a question revision snapshots. */
@@ -74,6 +75,7 @@ export const QUESTION_SNAPSHOT_FIELDS = [
   'inputType',
   'hint',
   'conditionalFollowUp',
+  'weight',
 ] as const;
 
 export type SeedQuestionsResult =
