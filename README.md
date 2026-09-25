@@ -34,6 +34,16 @@ Brand identity is **not** an environment variable — `NEXT_PUBLIC_APP_NAME` and
 friends were removed in Sunrise 0.11.0 because they are inlined at build time and
 never reached a container build. Lelañea's name lives in `lib/app/leaf-brand.ts`.
 
+## Built with Daybreak, not beside it
+
+Daybreak is the scaffolding Lelañea is built from, not an upstream to work
+around. Its modules, module config, data slots, agent seats, capabilities,
+knowledge scopes, facilitation maps and journeys are integral parts of this app.
+Build each feature out of them, and keep content that belongs to a module in
+that module's area (Framework → Modules). Name the element before designing
+anything:
+[`.context/app/building-with-daybreak.md`](./.context/app/building-with-daybreak.md).
+
 ## Where our code goes
 
 | Our code                                 | Goes in                                                |
