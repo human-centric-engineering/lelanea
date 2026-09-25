@@ -1202,6 +1202,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/slots/taxonomy-store.test.ts',
         // The resource vocabulary guard (24 Sept 2026) — a tree scan.
         'tests/unit/lib/app/resource-vocabulary.test.ts',
+        // f-onboarding t-101 — definitions.ts stays out of the database, an
+        // import-graph walk off disk.
+        'tests/unit/lib/app/modules/client-safe.test.ts',
       ]);
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
         'lib/framework/facilitation/evaluation/conversation.ts',
@@ -1248,6 +1251,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/voice/upload-scope.test.ts',
         'tests/unit/lib/app/slots/taxonomy-store.test.ts',
         'tests/unit/lib/app/resource-vocabulary.test.ts',
+        'tests/unit/lib/app/modules/client-safe.test.ts',
       ]);
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
       // §08 t-56 — the meter's seat-only conversation join, by design.
