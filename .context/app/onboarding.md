@@ -52,6 +52,14 @@ module's name from its row.
   again and runs Daybreak's `syncRegisteredSlotDefinitions()`.
 - The slots are not rows in `app_slot_definition`, which is the global
   taxonomy. A copy there would be a second editable version of the same words.
+- **They are not yet visible in Onboarding's own area.** Daybreak's module
+  page (Framework → Modules → Onboarding) has no tab for a module's data
+  slots, so it shows only the Core Set switch. Until
+  [daybreak#281](https://github.com/human-centric-engineering/daybreak/issues/281)
+  ships, the slots are listed on Framework → Slots with scope
+  `module:onboarding` (its search does not match on scope), and the words are
+  edited in our questions editor. Do not add a tab by editing Daybreak's
+  `module-detail.tsx`; take the tab when it arrives on a sync.
 
 ### Always `sensitive`: the grade that keeps the words
 
