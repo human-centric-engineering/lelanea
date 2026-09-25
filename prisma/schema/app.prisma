@@ -1168,9 +1168,6 @@ model AppQuestionSet {
   pacing     Json
   version    String
   locale     String
-  /// Ask only the Core Set — the fully weighted questions (f-onboarding t-101).
-  /// An admin setting rather than her words, so no file carries it.
-  coreOnly   Boolean          @default(false)
   revision   Int              @default(1)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -1194,7 +1191,6 @@ model AppQuestionSetRevision {
   pacing        Json
   version       String
   locale        String
-  coreOnly      Boolean                  @default(false)
   changedFields String[]
   origin        AppContentRevisionOrigin
   editorId      String?

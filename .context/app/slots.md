@@ -31,12 +31,11 @@ of Daybreak — [`divergences.md`](./divergences.md) Row 22, proposed upstream a
 The framework table carries **no history**, which is why ours does: the editor
 is ours, so the version chain is too.
 
-**The provider hands over one more source: the discovery questions** (f-onboarding
-t-101). Each live question projects to a `discovery_<id>` slot in the
-`discovery` group, graded `sensitive`, which is where a person's answer is
-filed. Those slots are not rows here, and the taxonomy refuses their slug
-prefix and group key. When the taxonomy supplies nothing, the provider holds
-the discovery slots back too, so the fluke rule below still holds. See
+**The discovery questions are not part of the taxonomy** (f-onboarding t-101).
+Each is a slot of the Onboarding module, declared through `registerModule()`
+and scoped `module:onboarding` by Daybreak, not a global slot from this
+provider. The taxonomy refuses their slug prefix (`discovery_`) and group key
+(`discovery`), so no authored slot can take an answer's identity. See
 [`onboarding.md`](./onboarding.md).
 
 ## The shape of a definition

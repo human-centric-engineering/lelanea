@@ -52,8 +52,6 @@ export interface DiscoveryQuestionSet {
   };
   preamble: { style: string; text: string };
   pacing: { rushDiscouraged: boolean; allowPartialCompletion: boolean; note: string };
-  /** Whether only the Core Set is asked (t-101). An admin setting, not her words. */
-  coreOnly: boolean;
   questions: readonly DiscoveryQuestionView[];
 }
 
@@ -92,7 +90,6 @@ export interface QuestionSetRow {
   pacing: unknown;
   version: string;
   locale: string;
-  coreOnly: boolean;
   revision: number;
 }
 
@@ -168,7 +165,6 @@ export function toQuestionSet(
     },
     preamble: preamble.data,
     pacing: pacing.data,
-    coreOnly: set.coreOnly,
     questions,
   };
 }

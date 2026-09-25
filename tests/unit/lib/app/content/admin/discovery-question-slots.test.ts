@@ -5,7 +5,7 @@
  * Each case guards something that would fail silently. A reused id would file a
  * new question's answers together with the old one's, so people's words would
  * read as replies to a question they were never asked. An import that reset
- * weights would quietly empty the Core Set. A reworded question that did not
+ * weights would quietly make every question core. A reworded question that did not
  * re-sync would leave the AI reading the old wording beside every answer.
  *
  * Run against the REAL seeded rows (`content-db-fake.ts`), with the one slot
@@ -29,7 +29,14 @@ vi.mock('@/lib/app/content/knowledge-mirror', () => ({
 }));
 
 const resync = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/app/slots/definitions-admin', () => ({ resyncGlobalSlots: resync }));
+vi.mock('@/lib/app/onboarding/discovery-slots', () => ({ resyncDiscoverySlots: resync }));
+
+// The Core Set switch is the owning module's config, read through Daybreak.
+const readConfig = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/app/onboarding/discovery-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/app/onboarding/discovery-config')>()),
+  readDiscoveryConfig: readConfig,
+}));
 
 import { seedJourneyStructure } from '@/lib/app/content/journey-store';
 import { seedDiscoveryQuestions } from '@/lib/app/content/question-store';
@@ -43,9 +50,7 @@ import {
   getQuestionsAdminView,
   previewQuestionsImport,
   restoreQuestionRevision,
-  restoreQuestionSetRevision,
   updateQuestion,
-  updateQuestionSet,
 } from '@/lib/app/content/admin/questions';
 import { collectionHandlers, entityHandlers } from '@/lib/app/content/admin/registry';
 import {
@@ -64,7 +69,7 @@ const NEW_QUESTION = {
   weight: 100,
 };
 
-/** What the global sync leaves behind for a question: its slot, active or not. */
+/** What the module slot sync leaves behind for a question: its slot, active or not. */
 function slotFor(fake: ContentDbFake, questionId: string, isActive = true) {
   fake.insert('slotDefinition', {
     id: `slot-${questionId}`,
@@ -85,6 +90,7 @@ async function exported(): Promise<DiscoveryQuestionsFile> {
 beforeEach(async () => {
   vi.clearAllMocks();
   resync.mockResolvedValue({ status: 'synced' });
+  readConfig.mockResolvedValue({ coreSetOnly: false });
   db.current = createContentDbFake();
   const client = db.current.client as unknown as PrismaClient;
   await seedJourneyStructure(buildJourneySeed(), client);
@@ -169,36 +175,7 @@ describe('the weight and the Core Set switch', () => {
     expect(revisions.at(-1)).toMatchObject({ weight: 40, changedFields: ['weight'] });
   });
 
-  it('switching the Core Set on is a set revision', async () => {
-    const result = await switchCoreSetOn();
-
-    expect(result.changed).toEqual(['coreOnly']);
-    expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
-  });
-
-  async function switchCoreSetOn() {
-    const view = (await getQuestionsAdminView()).set!;
-    const { collection, preamble, pacing } = view;
-
-    return updateQuestionSet(
-      collection.id,
-      {
-        title: collection.title,
-        chartTitle: collection.chartTitle,
-        moduleId: collection.module,
-        phase: collection.phase,
-        preamble,
-        pacing,
-        version: collection.version,
-        locale: collection.locale,
-        coreOnly: true,
-      },
-      collection.revision,
-      EDITOR
-    );
-  }
-
-  it('an import of her file, which carries no weights, keeps the stored weights and switch', async () => {
+  it('an import of her file, which carries no weights, keeps the stored weights', async () => {
     const q02 = await questionView('q02');
     await updateQuestion(
       'q02',
@@ -206,7 +183,6 @@ describe('the weight and the Core Set switch', () => {
       q02.revision,
       EDITOR
     );
-    await switchCoreSetOn();
     const file = await exported();
     for (const question of file.questions) delete question.weight;
 
@@ -215,7 +191,6 @@ describe('the weight and the Core Set switch', () => {
     expect(plan.writesNothing).toBe(true);
     await applyQuestionsImport(file, false, EDITOR);
     expect((await questionView('q02')).weight).toBe(40);
-    expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
   });
 
   it('restoring an old wording brings back the words and keeps the weight', async () => {
@@ -241,41 +216,6 @@ describe('the weight and the Core Set switch', () => {
 
     expect(result.changed).toEqual(['text']);
     expect(await questionView('q07')).toMatchObject({ text: q07.text, weight: 40 });
-  });
-
-  it('restoring an old framing keeps the Core Set switch on', async () => {
-    await switchCoreSetOn();
-    const view = (await getQuestionsAdminView()).set!;
-    await updateQuestionSet(
-      view.collection.id,
-      {
-        title: view.collection.title,
-        chartTitle: view.collection.chartTitle,
-        moduleId: view.collection.module,
-        phase: view.collection.phase,
-        preamble: { ...view.preamble, text: 'A new preamble.' },
-        pacing: view.pacing,
-        version: view.collection.version,
-        locale: view.collection.locale,
-        coreOnly: true,
-      },
-      view.collection.revision,
-      EDITOR
-    );
-    const edited = (await getQuestionsAdminView()).set!;
-
-    // Revision 1 is the seed: the original preamble, with the switch off.
-    const result = await restoreQuestionSetRevision(
-      edited.collection.id,
-      1,
-      edited.collection.revision,
-      EDITOR
-    );
-
-    expect(result.changed).toEqual(['preamble']);
-    const after = (await getQuestionsAdminView()).set!;
-    expect(after.preamble.text).toBe(view.preamble.text);
-    expect(after.coreOnly).toBe(true);
   });
 
   it('an import whose file names a weight applies it', async () => {
@@ -324,7 +264,7 @@ describe('what the edit routes accept', () => {
     expect(questionCreateSchema.parse({ ...withoutWeight, weight: 30 }).weight).toBe(30);
   });
 
-  it('a set save must say whether the Core Set is on', () => {
+  it('a set save cannot carry the Core Set switch: it is the owning module’s config', () => {
     const body = {
       title: 'T',
       chartTitle: 'C',
@@ -337,8 +277,19 @@ describe('what the edit routes accept', () => {
       revision: 1,
     };
 
-    expect(questionSetSaveSchema.safeParse(body).success).toBe(false);
-    expect(questionSetSaveSchema.safeParse({ ...body, coreOnly: false }).success).toBe(true);
+    expect(questionSetSaveSchema.safeParse(body).success).toBe(true);
+    expect(questionSetSaveSchema.safeParse({ ...body, coreOnly: true }).success).toBe(false);
+  });
+
+  it('the admin view names the module the questions belong to, and its switch', async () => {
+    readConfig.mockResolvedValue({ coreSetOnly: true });
+
+    expect((await getQuestionsAdminView()).module).toEqual({
+      slug: 'onboarding',
+      name: 'Onboarding',
+      coreSetOnly: true,
+    });
+    expect(readConfig).toHaveBeenCalledWith('onboarding');
   });
 });
 

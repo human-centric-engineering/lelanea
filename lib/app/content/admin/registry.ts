@@ -46,7 +46,7 @@ import {
 } from '@/lib/app/content/admin/validation';
 import { CONTENT_COLLECTIONS, type ContentCollection } from '@/lib/app/content/admin/endpoint';
 import { RESOURCE_KINDS } from '@/lib/app/content/resource-view';
-import { resyncGlobalSlots } from '@/lib/app/slots/definitions-admin';
+import { resyncDiscoverySlots as resyncOnboardingSlots } from '@/lib/app/onboarding/discovery-slots';
 
 /**
  * Re-project the discovery slots after a question write (f-onboarding t-101;
@@ -60,7 +60,7 @@ import { resyncGlobalSlots } from '@/lib/app/slots/definitions-admin';
  * costs one read.
  */
 function resyncDiscoverySlots(questionId: string | null) {
-  return resyncGlobalSlots({ source: 'discovery-questions', questionId });
+  return resyncOnboardingSlots({ source: 'discovery-questions', questionId });
 }
 
 /** What a save, restore or removal reports back and the audit log records. */
@@ -236,7 +236,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
     apply: async (raw, removeAbsent, editorId) => {
       const plan = await questions.applyQuestionsImport(raw, removeAbsent, editorId);
       // The plan has nowhere to carry the outcome, so a failed re-sync here is
-      // logged by `resyncGlobalSlots` and repaired by the next question save,
+      // logged by `resyncDiscoverySlots` and repaired by the next question save,
       // import or boot.
       await resyncDiscoverySlots(null);
       return plan;

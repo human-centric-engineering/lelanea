@@ -6,17 +6,19 @@
  * removed; numbers stay 1 to N, and a removal re-numbers the rest. A question
  * keeps its id whatever happens to its words or its place.
  *
- * f-onboarding t-101: each question has a weight, and the set a Core Set
- * switch that asks only the fully weighted ones. A person's answers are filed
- * under the question's id, so rewording a question re-projects the slot they
- * are filed under (warned here if that fails), and a removed question keeps
- * its answers and its id is never given out again.
+ * f-onboarding t-101: each question has a weight, and the fully weighted ones
+ * are core: always asked, never skippable. The Core Set switch is the owning
+ * module's config, reported here and set on the module's page. A person's
+ * answers are filed under the question's id, so rewording a question
+ * re-projects the slot they are filed under (warned here if that fails), and a
+ * removed question keeps its answers and its id is never given out again.
  *
  * The weight is also a slider on each row, saved when it is let go of, so the
  * Core Set can be tuned across the whole list without opening each question.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
@@ -43,7 +45,7 @@ import {
   contentItemEndpoint,
   contentOrderEndpoint,
 } from '@/lib/app/content/admin/endpoint';
-import type { QuestionsAdminView } from '@/lib/app/content/admin/questions';
+import type { QuestionsAdminView, QuestionsOwningModule } from '@/lib/app/content/admin/questions';
 import {
   FULL_WEIGHT,
   type DiscoveryQuestionSet,
@@ -145,7 +147,7 @@ function QuestionFields({
       <FieldRow
         id={`${id}-weight`}
         label="Weight"
-        help={`How much this question matters, from 0 to ${FULL_WEIGHT}. Questions at ${FULL_WEIGHT} are the Core Set: when the set is switched to "Core Set only", those are the only ones a person is asked.`}
+        help={`How much this question matters, from 0 to ${FULL_WEIGHT}. A question at ${FULL_WEIGHT} is core: it is always asked and cannot be skipped. When the module's "Core Set only" is on, the core questions are the only ones asked.`}
       >
         <Input
           id={`${id}-weight`}
@@ -558,7 +560,6 @@ function SetEditor({
     pacingNote: set.pacing.note,
     version: set.collection.version,
     locale: set.collection.locale,
-    coreOnly: set.coreOnly,
   });
   const [notice, setNotice] = useState<Notice>(null);
 
@@ -580,7 +581,6 @@ function SetEditor({
         },
         version: draft.version,
         locale: draft.locale,
-        coreOnly: draft.coreOnly,
       }
     );
     if (result.ok)
@@ -693,17 +693,6 @@ function SetEditor({
         </div>
       </div>
       <FieldRow
-        id="set-core-only"
-        label="Core Set only"
-        help={`When on, a person is asked only the questions weighted ${FULL_WEIGHT}. When off, they are asked every question. If it is on and no question is weighted ${FULL_WEIGHT}, every question is asked.`}
-      >
-        <Switch
-          id="set-core-only"
-          checked={draft.coreOnly}
-          onCheckedChange={(coreOnly) => setDraft({ ...draft, coreOnly })}
-        />
-      </FieldRow>
-      <FieldRow
         id="set-pacing"
         label="Pacing note"
         help="Her note on pace, shown with the questions."
@@ -729,6 +718,32 @@ function SetEditor({
           onRestored={onSaved}
         />
       </div>
+    </section>
+  );
+}
+
+/**
+ * Where the questions belong (t-101). They are the slots of the module that
+ * asks them, and the Core Set switch is that module's own config, so it is set
+ * on the module's Config tab and only reported here.
+ */
+function OwningModuleNote({ module }: { module: QuestionsOwningModule }) {
+  return (
+    <section className="space-y-1 rounded-md border p-4 text-sm">
+      <h3 className="font-medium">Asked in the {module.name} module</h3>
+      <p className="text-muted-foreground">
+        Each question is a data slot of the {module.name} module, and a person’s answer is filed
+        under it. <strong>Core Set only</strong> is{' '}
+        <strong>{module.coreSetOnly ? 'on' : 'off'}</strong>:{' '}
+        {module.coreSetOnly
+          ? `a person is asked only the questions weighted ${FULL_WEIGHT}.`
+          : 'a person is asked every question.'}{' '}
+        A question weighted {FULL_WEIGHT} is core: it is always asked and cannot be skipped.{' '}
+        <Link href={`/admin/framework/modules/${module.slug}`} className="underline">
+          Change it in the module’s settings
+        </Link>
+        .
+      </p>
     </section>
   );
 }
@@ -786,6 +801,7 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
     <div className="space-y-6">
       <NoticeLine notice={notice} />
       <ReadersNote readers={initialView.readers} lead="Read today by" />
+      {initialView.module && <OwningModuleNote module={initialView.module} />}
       <SetEditor key={`set@${set.collection.revision}`} set={set} onSaved={done} />
       <section className="space-y-3">
         <h3 className="font-medium">The questions ({questions.length})</h3>

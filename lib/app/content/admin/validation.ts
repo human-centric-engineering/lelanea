@@ -158,8 +158,6 @@ export const questionSetEditSchema = z.strictObject({
   pacing: storedPacingSchema,
   version: versionLabel,
   locale: line('A locale', 35),
-  /** Ask only the fully weighted questions (f-onboarding t-101). */
-  coreOnly: z.boolean(),
 });
 export const questionSetSaveSchema = questionSetEditSchema.extend({ revision });
 

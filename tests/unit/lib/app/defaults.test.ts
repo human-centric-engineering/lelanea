@@ -84,6 +84,9 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
  */
 vi.mock('@/lib/db/client', () => ({
   prisma: {
+    // The leaf boot reads the discovery questions for Onboarding's slots
+    // (t-101); none here, so the module declares none.
+    appQuestionSet: { findUnique: vi.fn(async () => null) },
     appWaitlistEntry: {
       findMany: vi.fn(async () => []),
       // The user-created row below dispatches through the real seam; a null

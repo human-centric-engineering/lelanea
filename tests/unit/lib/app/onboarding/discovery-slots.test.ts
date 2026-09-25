@@ -1,15 +1,17 @@
 /**
- * The discovery questions as data slots (f-onboarding t-101).
+ * The discovery questions as the data slots of the module that asks them
+ * (f-onboarding t-101).
  *
- * What reaches Daybreak's global slot sync (and from there the admin slot
- * browser, `get_state` and the person's own panel), and which questions a
- * person is asked under the Core Set switch.
+ * What the module hands Daybreak through `registerModule()` (and from there the
+ * slot sync, the admin slot browser, `get_state` and the person's own panel),
+ * and which questions a person is asked under the module's Core Set switch.
  *
  * Two cases here would be silent in production if wrong. A projection graded
  * `special_category` would throw every answer away at the write (masking runs
- * before storage), and nothing would error. And a provider that appended the
- * discovery slots to an EMPTY taxonomy would turn Daybreak's "empty means a
- * fluke, retire nothing" into "retire every taxonomy slot".
+ * before storage), and nothing would error. And registering the module without
+ * its slots after a failed read would have Daybreak's module pass retire every
+ * discovery slot, so a failed read declares the slots as last synced instead:
+ * it cannot throw, because boot must never reject.
  *
  * @see lib/app/onboarding/discovery-slots.ts
  */
@@ -17,14 +19,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  appDiscoveryQuestion: { findMany: vi.fn() },
+  appQuestionSet: { findUnique: vi.fn() },
   slotValue: { findMany: vi.fn(), count: vi.fn() },
   slotDefinition: { findMany: vi.fn() },
 }));
 vi.mock('@/lib/db/client', () => ({ prisma: prismaMock }));
 
-const loadTaxonomy = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/app/slots/taxonomy-store', () => ({ loadGlobalSlotDefinitions: loadTaxonomy }));
+const getStructure = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/app/content/journey-store', () => ({ getJourneyStructure: getStructure }));
+
+const getConfigForm = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/framework/modules/config', () => ({ getModuleConfigForm: getConfigForm }));
+
+const syncSlots = vi.hoisted(() => vi.fn());
+const listSlots = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/framework/data-slots', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/framework/data-slots')>()),
+  syncRegisteredSlotDefinitions: syncSlots,
+  listSlotDefinitions: listSlots,
+}));
 
 const getQuestions = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/app/content/question-store', () => ({
@@ -37,10 +50,17 @@ vi.mock('@/lib/logging', () => ({ logger: loggerMock }));
 
 import {
   getDiscoverySet,
-  loadAppGlobalSlotDefinitions,
-  loadDiscoverySlotDefinitions,
+  loadDiscoveryModuleSlots,
+  registerJourneyModules,
+  resyncDiscoverySlots,
   toDiscoverySlotDefinition,
 } from '@/lib/app/onboarding/discovery-slots';
+import {
+  __resetModuleRegistryForTests,
+  getRegisteredModule,
+  getRegisteredModules,
+} from '@/lib/framework/modules/registry';
+import { describeConfigSchema } from '@/lib/framework/modules/config/schema-descriptors';
 import {
   DISCOVERY_SLOT_GROUP,
   discoverySlotSlug,
@@ -55,7 +75,7 @@ function question(id: string, number: number, weight = 100): DiscoveryQuestionVi
   return { id, number, text: `Question ${id}?`, inputType: 'long_text', weight, revision: 1 };
 }
 
-function set(questions: DiscoveryQuestionView[], coreOnly = false): DiscoveryQuestionSet {
+function set(questions: DiscoveryQuestionView[]): DiscoveryQuestionSet {
   return {
     collection: {
       id: 'onboarding_discovery_questions',
@@ -69,19 +89,20 @@ function set(questions: DiscoveryQuestionView[], coreOnly = false): DiscoveryQue
     },
     preamble: { style: 'italic', text: 'Not to be rushed.' },
     pacing: { rushDiscouraged: true, allowPartialCompletion: true, note: 'Resumable.' },
-    coreOnly,
     questions,
   };
 }
 
-const TAXONOMY_SLOT = {
-  slug: 'aspirations',
-  group: 'the_person',
-  description: 'What they hope for.',
-};
+/** The module's stored config, as Daybreak's reader hands it back. */
+function storedConfig(values: unknown) {
+  getConfigForm.mockResolvedValue({ registered: true, descriptors: [], values });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetModuleRegistryForTests();
+  getStructure.mockRejectedValue(new Error('not needed here'));
+  storedConfig({});
 });
 
 describe('the slot a question projects to', () => {
@@ -161,42 +182,155 @@ describe('where an answer goes once it is written', () => {
   });
 });
 
-describe('the global slot provider', () => {
-  it('hands over the taxonomy, then one slot per live question', async () => {
-    loadTaxonomy.mockResolvedValue([TAXONOMY_SLOT]);
-    prismaMock.appDiscoveryQuestion.findMany.mockResolvedValue([
+describe('the module that asks them declares them', () => {
+  const ONBOARDING_SET = {
+    moduleId: 'module_00_onboarding',
+    questions: [
       { id: 'q01', text: 'First?' },
       { id: 'q02', text: 'Second?' },
-    ]);
+    ],
+  };
 
-    const definitions = await loadAppGlobalSlotDefinitions();
+  it('reads the module the set names, and one slot per live question', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
 
-    expect(definitions.map((definition) => definition.slug)).toEqual([
-      'aspirations',
+    const discovery = await loadDiscoveryModuleSlots();
+
+    expect(discovery?.moduleId).toBe('module_00_onboarding');
+    expect(discovery?.slotDefinitions.map((definition) => definition.slug)).toEqual([
       'discovery_q01',
       'discovery_q02',
     ]);
-    expect(prismaMock.appDiscoveryQuestion.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { setId: 'onboarding_discovery_questions' } })
+    expect(prismaMock.appQuestionSet.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'onboarding_discovery_questions' } })
     );
   });
 
-  it('hands over nothing at all when the taxonomy supplies nothing, so the sync retires nothing', async () => {
-    loadTaxonomy.mockResolvedValue([]);
-    prismaMock.appDiscoveryQuestion.findMany.mockResolvedValue([{ id: 'q01', text: 'First?' }]);
+  it('declares nothing when the questions are not in the database', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(null);
 
-    await expect(loadAppGlobalSlotDefinitions()).resolves.toEqual([]);
+    await expect(loadDiscoveryModuleSlots()).resolves.toBeNull();
+  });
+
+  it('registers Onboarding with the slots and the Core Set switch, and no other module with either', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+
+    await registerJourneyModules();
+
+    const onboarding = getRegisteredModule('onboarding');
+    expect(onboarding?.slotDefinitions?.map((definition) => definition.slug)).toEqual([
+      'discovery_q01',
+      'discovery_q02',
+    ]);
+    expect(describeConfigSchema(onboarding!.configSchema)).toEqual([
+      expect.objectContaining({ key: 'coreSetOnly', type: 'boolean', default: false }),
+    ]);
+    const others = getRegisteredModules().filter((other) => other.slug !== 'onboarding');
+    expect(others.length).toBeGreaterThan(0);
+    for (const other of others) {
+      expect(other.slotDefinitions).toBeUndefined();
+      expect(describeConfigSchema(other.configSchema)).toEqual([]);
+    }
+  });
+
+  it('follows the set to another module when the set names one', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue({
+      ...ONBOARDING_SET,
+      moduleId: 'module_01_values',
+    });
+
+    await registerJourneyModules();
+
+    expect(getRegisteredModule('values')?.slotDefinitions).toHaveLength(2);
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toBeUndefined();
+  });
+
+  it('still declares the slots when only the module names could not be read', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+
+    await registerJourneyModules();
+
+    expect(getRegisteredModule('onboarding')?.name).toBe('Onboarding');
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toHaveLength(2);
     expect(loggerMock.warn).toHaveBeenCalledWith(
-      expect.stringContaining('discovery slots are held back')
+      expect.stringContaining('module names could not be read'),
+      expect.anything()
     );
-    // Not even read: nothing it returned could be used.
-    expect(prismaMock.appDiscoveryQuestion.findMany).not.toHaveBeenCalled();
   });
 
-  it('projects no discovery slots when the questions are not in the database', async () => {
-    prismaMock.appDiscoveryQuestion.findMany.mockResolvedValue([]);
+  /** A slot row as Daybreak stores it, for the last-synced fallback. */
+  function row(slug: string, description: string, overrides: Record<string, unknown> = {}) {
+    return { slug, description, scope: 'module:onboarding', isActive: true, ...overrides };
+  }
 
-    await expect(loadDiscoverySlotDefinitions()).resolves.toEqual([]);
+  it('declares the slots as Daybreak last synced them when the questions cannot be read', async () => {
+    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    listSlots.mockResolvedValue([
+      row('aspirations', 'A taxonomy slot.', { scope: 'global' }),
+      row('discovery_q01', 'First?'),
+      row('discovery_q02', 'Second?'),
+      row('discovery_q03', 'Removed?', { isActive: false }),
+    ]);
+
+    await expect(registerJourneyModules()).resolves.toBe('last-synced');
+
+    // Exactly what the questions would have declared, so the sync changes nothing.
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toEqual([
+      toDiscoverySlotDefinition({ id: 'q01', text: 'First?' }),
+      toDiscoverySlotDefinition({ id: 'q02', text: 'Second?' }),
+    ]);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('declaring the slots as last synced'),
+      expect.anything()
+    );
+  });
+
+  it('registers every module, without the slots, when neither read works, and never throws', async () => {
+    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    listSlots.mockRejectedValue(new Error('connection lost'));
+
+    await expect(registerJourneyModules()).resolves.toBe('none');
+
+    expect(getRegisteredModules()).toHaveLength(17);
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toBeUndefined();
+    // The switch still has its schema, so the Config tab and the stored value stay valid.
+    expect(describeConfigSchema(getRegisteredModule('onboarding')!.configSchema)).toHaveLength(1);
+  });
+
+  it('re-registers and runs Daybreak’s slot sync after a question write', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    syncSlots.mockResolvedValue(undefined);
+
+    await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
+      status: 'synced',
+    });
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toHaveLength(2);
+    expect(syncSlots).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a sync that throws', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    syncSlots.mockRejectedValue(new Error('deadlock'));
+
+    await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
+      status: 'failed',
+      message: 'deadlock',
+    });
+  });
+
+  it('reports, never throws, when the questions cannot be read, and syncs nothing', async () => {
+    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    listSlots.mockResolvedValue([row('discovery_q01', 'First?')]);
+
+    await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
+      status: 'failed',
+      message: 'the discovery questions could not be read',
+    });
+    expect(syncSlots).not.toHaveBeenCalled();
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('slots did not follow'),
+      expect.objectContaining({ questionId: 'q01' })
+    );
   });
 });
 
@@ -204,20 +338,23 @@ describe('which questions a person is asked', () => {
   const questions = [question('q01', 1, 100), question('q02', 2, 40), question('q03', 3, 100)];
 
   it('asks every question, with the slot each is filed under, when the Core Set is off', async () => {
-    getQuestions.mockResolvedValue(set(questions, false));
+    getQuestions.mockResolvedValue(set(questions));
+    storedConfig({ coreSetOnly: false });
 
     const asked = await getDiscoverySet();
 
     expect(asked.coreOnly).toBe(false);
-    expect(asked.questions.map((q) => [q.id, q.slotSlug])).toEqual([
-      ['q01', 'discovery_q01'],
-      ['q02', 'discovery_q02'],
-      ['q03', 'discovery_q03'],
+    expect(asked.questions.map((q) => [q.id, q.slotSlug, q.core])).toEqual([
+      ['q01', 'discovery_q01', true],
+      ['q02', 'discovery_q02', false],
+      ['q03', 'discovery_q03', true],
     ]);
+    expect(getConfigForm).toHaveBeenCalledWith('onboarding');
   });
 
   it('asks only the fully weighted questions when the Core Set is on, keeping their numbers', async () => {
-    getQuestions.mockResolvedValue(set(questions, true));
+    getQuestions.mockResolvedValue(set(questions));
+    storedConfig({ coreSetOnly: true });
 
     const asked = await getDiscoverySet();
 
@@ -229,13 +366,51 @@ describe('which questions a person is asked', () => {
   });
 
   it('asks every question, and says why, when the Core Set is on but nothing is fully weighted', async () => {
-    getQuestions.mockResolvedValue(set([question('q01', 1, 90), question('q02', 2, 40)], true));
+    getQuestions.mockResolvedValue(set([question('q01', 1, 90), question('q02', 2, 40)]));
+    storedConfig({ coreSetOnly: true });
 
     const asked = await getDiscoverySet();
 
     expect(asked.questions.map((q) => q.id)).toEqual(['q01', 'q02']);
     expect(loggerMock.error).toHaveBeenCalledWith(
       expect.stringContaining('no question is fully weighted')
+    );
+  });
+
+  it('asks every question when the module has never saved its config', async () => {
+    getQuestions.mockResolvedValue(set(questions));
+    storedConfig({});
+
+    const asked = await getDiscoverySet();
+
+    expect(asked.coreOnly).toBe(false);
+    expect(asked.questions).toHaveLength(3);
+  });
+
+  it('asks every question, and says why, when the stored config is not one it can read', async () => {
+    getQuestions.mockResolvedValue(set(questions));
+    storedConfig({ coreSetOnly: 'yes' });
+
+    const asked = await getDiscoverySet();
+
+    expect(asked.questions).toHaveLength(3);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('stored module config is invalid'),
+      expect.objectContaining({ moduleSlug: 'onboarding' })
+    );
+  });
+
+  it('asks every question, and says why, when the module config cannot be read', async () => {
+    getQuestions.mockResolvedValue(set(questions));
+    getConfigForm.mockRejectedValue(new Error('Module "onboarding" not found'));
+
+    const asked = await getDiscoverySet();
+
+    expect(asked.coreOnly).toBe(false);
+    expect(asked.questions).toHaveLength(3);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('could not be read'),
+      expect.objectContaining({ moduleSlug: 'onboarding' })
     );
   });
 

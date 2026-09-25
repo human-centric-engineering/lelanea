@@ -65,7 +65,6 @@ export const QUESTION_SET_SNAPSHOT_FIELDS = [
   'pacing',
   'version',
   'locale',
-  'coreOnly',
 ] as const;
 
 /** The fields a question revision snapshots. */

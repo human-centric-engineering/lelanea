@@ -83,13 +83,10 @@ const MODELS: Record<string, ModelSpec> = {
   },
   appQuestionSet: {
     key: 'id',
-    defaults: () => ({ ...stamped(), revision: 1, coreOnly: false }),
+    defaults: () => ({ ...stamped(), revision: 1 }),
     cascade: [['appQuestionSetRevision', 'setId']],
   },
-  appQuestionSetRevision: {
-    ...revision('setId'),
-    defaults: () => ({ changedAt: new Date(), coreOnly: false }),
-  },
+  appQuestionSetRevision: revision('setId'),
   appDiscoveryQuestion: {
     key: 'id',
     unique: [['setId', 'number']],

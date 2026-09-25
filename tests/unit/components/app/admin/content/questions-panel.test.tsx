@@ -91,11 +91,15 @@ const SET: DiscoveryQuestionSet = {
   },
   preamble: { style: 'note', text: 'Take your time with these.' },
   pacing: { rushDiscouraged: true, allowPartialCompletion: false, note: 'No rush.' },
-  coreOnly: false,
   questions: [Q1, Q2],
 };
 
-const VIEW: QuestionsAdminView = { seeded: true, set: SET, readers: READERS };
+const VIEW: QuestionsAdminView = {
+  seeded: true,
+  set: SET,
+  readers: READERS,
+  module: { slug: 'onboarding', name: 'Onboarding', coreSetOnly: false },
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -104,7 +108,9 @@ beforeEach(() => {
 
 describe('before the seed has run', () => {
   it('says so, and offers nothing to edit', () => {
-    render(<QuestionsPanel initialView={{ seeded: false, set: null, readers: [] }} />);
+    render(
+      <QuestionsPanel initialView={{ seeded: false, set: null, readers: [], module: null }} />
+    );
 
     expect(screen.getByText(/have not been seeded yet/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add a question' })).toBeNull();
@@ -151,7 +157,6 @@ describe('the framing', () => {
 
     await user.click(screen.getByLabelText('Discourage rushing'));
     await user.click(screen.getByLabelText('Allow stopping part-way'));
-    await user.click(screen.getByLabelText('Core Set only'));
 
     const pacingNote = screen.getByLabelText('Pacing note');
     await user.clear(pacingNote);
@@ -171,7 +176,6 @@ describe('the framing', () => {
       pacing: { rushDiscouraged: false, allowPartialCompletion: true, note: 'A different note.' },
       version: '1.1',
       locale: 'en-GB',
-      coreOnly: true,
     });
     expect(await screen.findByText('Saved the question set.')).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
@@ -195,6 +199,37 @@ describe('the framing', () => {
     await user.click(screen.getByRole('button', { name: 'Save framing' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The set moved under you.');
+  });
+});
+
+describe('the module the questions belong to', () => {
+  it('names it, says the Core Set is off, and links to where it is changed', () => {
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    const note = screen.getByRole('heading', {
+      name: 'Asked in the Onboarding module',
+    }).parentElement!;
+    expect(note).toHaveTextContent('Core Set only is off: a person is asked every question.');
+    expect(
+      within(note).getByRole('link', { name: 'Change it in the module’s settings' })
+    ).toHaveAttribute('href', '/admin/framework/modules/onboarding');
+    // The switch is the module's config, so the framing form has none.
+    expect(screen.queryByLabelText('Core Set only')).toBeNull();
+  });
+
+  it('says so when the Core Set is on', () => {
+    render(
+      <QuestionsPanel
+        initialView={{
+          ...VIEW,
+          module: { slug: 'onboarding', name: 'Onboarding', coreSetOnly: true },
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(/a person is asked only the questions weighted 100/)
+    ).toBeInTheDocument();
   });
 });
 

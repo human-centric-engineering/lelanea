@@ -1,20 +1,19 @@
--- f-onboarding t-101: each discovery question carries a weight, and the set a
--- Core Set switch. Both are admin settings rather than her words, so they
--- live on the rows and their revisions, never in the authored file.
+-- f-onboarding t-101: each discovery question carries a weight. It is an admin
+-- setting rather than her words, so it lives on the rows and their revisions,
+-- never in the authored file. The Onboarding module's slots take it as their
+-- `priorityWeight`. The Core Set switch is not here: it is the Onboarding
+-- module's own config (`framework_module.config`), which needs no migration.
 --
--- Every existing question starts fully weighted (100), and the switch starts
--- off. With every question fully weighted, switching the Core Set on changes
--- nothing until an admin lowers some weights, which is the point: which
--- questions are core is the owner's call, not a default.
+-- Every existing question starts fully weighted (100), so switching the Core
+-- Set on changes nothing until an admin lowers some weights, which is the
+-- point: which questions are core is the owner's call, not a default.
 --
 -- Hand-written and applied with `db:migrate:deploy` (idea #34: `migrate dev`
--- refuses this repo's history). Four `ADD COLUMN`s with defaults; nothing is
+-- refuses this repo's history). Two `ADD COLUMN`s with defaults; nothing is
 -- dropped, so there is no spurious drop to strip (`B13`).
 
 ALTER TABLE "app_discovery_question" ADD COLUMN "weight" INTEGER NOT NULL DEFAULT 100;
 ALTER TABLE "app_discovery_question_revision" ADD COLUMN "weight" INTEGER NOT NULL DEFAULT 100;
-ALTER TABLE "app_question_set" ADD COLUMN "coreOnly" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "app_question_set_revision" ADD COLUMN "coreOnly" BOOLEAN NOT NULL DEFAULT false;
 
 -- She reads a person's discovery answers back through `get_state`, like any
 -- other open slot (owner ruling at claim: the questions behave as data slots).

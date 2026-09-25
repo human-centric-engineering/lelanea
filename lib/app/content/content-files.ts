@@ -421,8 +421,6 @@ export function questionSeedFromFile(file: DiscoveryQuestionsFile): QuestionSeed
       },
       version: file.content.version,
       locale: file.content.locale,
-      // An admin setting, never in a file. A fresh set asks every question.
-      coreOnly: false,
     },
     questions: file.questions.map((question) => ({
       id: question.id,

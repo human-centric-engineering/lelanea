@@ -133,7 +133,6 @@ describe('the discovery questions, as seeded and served', () => {
  * than leaving migrated and seeded databases quietly different.
  */
 const ADDED_SINCE = {
-  set: { coreOnly: false },
   question: { weight: 100 },
 } as const;
 
@@ -145,11 +144,10 @@ describe('the data migration', () => {
     const seed = buildQuestionSeed();
 
     // The seed writes each later column at its database default...
-    expect(seed.set).toMatchObject(ADDED_SINCE.set);
     for (const question of seed.questions) expect(question).toMatchObject(ADDED_SINCE.question);
 
     // ...so the migration, which leaves them to that default, writes the same rows.
-    const { coreOnly: _coreOnly, ...set } = seed.set;
+    const set = seed.set;
     const questions = seed.questions.map(({ weight: _weight, ...question }) => question);
     expect(match, 'the migration no longer embeds the questions seed JSON').not.toBeNull();
     expect(JSON.parse(match![1])).toEqual({ set, questions });
@@ -159,12 +157,12 @@ describe('the data migration', () => {
     const { QUESTION_SET_SNAPSHOT_FIELDS, QUESTION_SNAPSHOT_FIELDS } =
       await import('@/lib/app/content/question-store');
     const sql = readFileSync(MIGRATION, 'utf8');
-    const since = [...Object.keys(ADDED_SINCE.set), ...Object.keys(ADDED_SINCE.question)];
+    const since: readonly string[] = Object.keys(ADDED_SINCE.question);
 
-    for (const fields of [QUESTION_SET_SNAPSHOT_FIELDS, QUESTION_SNAPSHOT_FIELDS]) {
-      const then = fields.filter((field) => !since.includes(field));
-      expect(then.length).toBeLessThan(fields.length);
-      expect(sql).toContain(`ARRAY[${then.map((f) => `'${f}'`).join(', ')}]`);
-    }
+    // The set has gained no column since; the question has gained its weight.
+    expect(sql).toContain(`ARRAY[${QUESTION_SET_SNAPSHOT_FIELDS.map((f) => `'${f}'`).join(', ')}]`);
+    const then = QUESTION_SNAPSHOT_FIELDS.filter((field) => !since.includes(field));
+    expect(then.length).toBeLessThan(QUESTION_SNAPSHOT_FIELDS.length);
+    expect(sql).toContain(`ARRAY[${then.map((f) => `'${f}'`).join(', ')}]`);
   });
 });

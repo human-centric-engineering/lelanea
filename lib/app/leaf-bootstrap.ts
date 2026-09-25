@@ -20,23 +20,25 @@
  * **A throw here skips the framework module sync**, deliberately — see the
  * comment on the `await initLeafApp()` call in `bootstrap.ts`. Everything
  * registered from this function is therefore a pure, synchronous registration:
- * no I/O, no database, no network. **One step reads the database, and it cannot
- * throw** (t-87): the modules are registered from the code roster first, then
- * renamed from their `app_journey_module` rows, and a failed read is logged and
- * leaves the roster's registration standing. See the module loop below.
+ * no I/O, no database, no network. **One step reads the database**: the
+ * modules are registered from the code roster first, then again from their
+ * rows (t-87) with the discovery questions as Onboarding's slots (t-101).
+ * **Neither read can throw.** A failed read of the module names leaves the
+ * roster's names; a failed read of the questions declares the slots as
+ * Daybreak last synced them, so the sync does not retire them. See
+ * `registerJourneyModules()`.
  */
 
-import { logger } from '@/lib/logging';
 import { registerModule } from '@/lib/framework/modules/registry';
 import { getModuleDefinitions } from '@/lib/app/modules/definitions';
-import { getJourneyStructure } from '@/lib/app/content/journey-store';
+import { registerJourneyModules } from '@/lib/app/onboarding/discovery-slots';
 import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
 import { registerFacilitationTurnHook } from '@/lib/framework/facilitation/agents/turn-hook';
 import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { registerGlobalSlotDefinitionProvider } from '@/lib/framework/data-slots';
-import { loadAppGlobalSlotDefinitions } from '@/lib/app/onboarding/discovery-slots';
+import { loadGlobalSlotDefinitions } from '@/lib/app/slots/taxonomy-store';
 
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -78,12 +80,7 @@ export function initLeafApp(): Promise<void> {
   // It is before the module loop for the same reason as the hooks above — with
   // no provider registered the global pass does nothing at all, silently, and
   // the whole taxonomy would be missing with nothing saying so.
-  //
-  // f-onboarding t-101: the provider hands over the taxonomy AND one slot per
-  // discovery question, which is what a person's answers are filed under. See
-  // `lib/app/onboarding/discovery-slots.ts` for why they are a projection of the
-  // questions rather than rows in the taxonomy.
-  registerGlobalSlotDefinitionProvider(loadAppGlobalSlotDefinitions);
+  registerGlobalSlotDefinitionProvider(loadGlobalSlotDefinitions);
 
   // The seventeen modules of the journey, each a real place with an empty
   // interior. `registerModule()` is idempotent by slug, so a hot reload or a
@@ -98,30 +95,15 @@ export function initLeafApp(): Promise<void> {
     registerModule(definition);
   }
 
-  // Then with her words (t-87). A module's title is owned by its
-  // `app_journey_module` row, and the definition's name is derived from it, so
-  // the agent's module context and the map-node embeddings say what the drawer
-  // says. It is the same slugs again, so this replaces each definition in place.
-  // Not awaited as a throw: a database that cannot be read at startup leaves
-  // the roster's names, which are spelled from the slug, and says so. The sync
-  // still runs, and the next boot that can read the rows renames them in the
-  // registry. It does NOT rename `framework_module.name`: the framework writes
-  // that column only when it creates the row. So a first boot of a new
-  // environment that fails this read keeps the slug-spelled names there, as
-  // Daybreak's admin display label, until an operator renames them. Nothing of
-  // hers reads that column (see `.context/app/journey.md`, "Who owns what").
-  return registerModuleTexts();
-}
-
-async function registerModuleTexts(): Promise<void> {
-  try {
-    const structure = await getJourneyStructure();
-    for (const definition of getModuleDefinitions(structure)) {
-      registerModule(definition);
-    }
-  } catch (err) {
-    logger.warn('initLeafApp: module names could not be read; registered from the roster', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+  // Then with her words (t-87), and with the discovery questions as the
+  // slots of the module that asks them (t-101). A module's title is owned by
+  // its `app_journey_module` row, and the definition's name is derived from
+  // it, so the agent's module context and the map-node embeddings say what the
+  // drawer says. It is the same slugs again, so this replaces each definition
+  // in place. A database that cannot give the names leaves the roster's, spelled
+  // from the slug, and says so. It does NOT rename `framework_module.name`: the
+  // framework writes that column only when it creates the row (see
+  // `.context/app/journey.md`, "Who owns what"). A failed read of the questions
+  // declares the slots as last synced: see `registerJourneyModules()`.
+  return registerJourneyModules().then(() => undefined);
 }

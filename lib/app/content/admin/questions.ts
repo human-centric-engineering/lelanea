@@ -16,22 +16,26 @@
  *
  * **Removal is a delete, and the slot is the tombstone.** The row and its
  * history go, and the audit entry keeps the removed question's words. The
- * answers do not go: they stay filed under the slot, which the global sync
- * deactivates when the question drops out of the provider, keeping the last
- * wording it had. That deactivated slot is what stops the id coming back:
+ * answers do not go: they stay filed under the slot, which Daybreak's module
+ * slot sync deactivates when the question drops out of the owning module's
+ * `slotDefinitions`, keeping the last wording it had. That deactivated slot is what stops the id coming back:
  * {@link nextQuestionId} counts it, and an import that would re-create it is
  * refused. Otherwise a new question under a freed id would inherit, as its own
  * answers, what people wrote to the old one.
  *
  * **Every save, restore, add, removal and import ends in a re-sync** of the
- * global slots (`registry.ts`), reported rather than thrown, for the reasons
- * `lib/app/slots/definitions-admin.ts` gives (`HB9`, `HB10`). It runs even when
+ * owning module's slots (`registry.ts`, `resyncDiscoverySlots`), reported
+ * rather than thrown, for the reasons `lib/app/slots/definitions-admin.ts`
+ * gives (`HB9`, `HB10`). It runs even when
  * nothing changed, so saving any question again is a real retry. A reorder
  * changes no slot and does not re-sync.
  *
  * @see lib/app/content/question-store.ts — the read every surface makes
  */
 
+import { getRegisteredModule } from '@/lib/framework/modules/registry';
+import { fallbackModuleName, moduleSlugFromId } from '@/lib/app/modules/definitions';
+import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config';
 import type {
   AppDiscoveryQuestion,
   AppDiscoveryQuestionRevision,
@@ -92,10 +96,22 @@ import type { QuestionEdit, QuestionSetEdit } from '@/lib/app/content/admin/vali
 export type QuestionSetFields = ReturnType<typeof setFieldsOf>;
 export type QuestionFields = ReturnType<typeof questionFieldsOf>;
 
+/**
+ * The module that owns the questions (t-101): where its Core Set switch is
+ * set, on the module's Config tab, and what it says now.
+ */
+export interface QuestionsOwningModule {
+  slug: string;
+  name: string;
+  coreSetOnly: boolean;
+}
+
 export interface QuestionsAdminView {
   seeded: boolean;
   set: DiscoveryQuestionSet | null;
   readers: readonly string[];
+  /** `null` when the set is not seeded. */
+  module: QuestionsOwningModule | null;
 }
 
 export interface QuestionWriteResult {
@@ -118,7 +134,6 @@ function setFieldsOf(row: Omit<QuestionSetRow, 'id' | 'revision'>) {
     pacing,
     version: row.version,
     locale: row.locale,
-    coreOnly: row.coreOnly,
   };
 }
 
@@ -149,15 +164,23 @@ const SET_FIELDS = [...QUESTION_SET_SNAPSHOT_FIELDS, 'moduleId'] as const;
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
+async function owningModuleOf(moduleId: string): Promise<QuestionsOwningModule> {
+  const slug = moduleSlugFromId(moduleId);
+  const { coreSetOnly } = await readDiscoveryConfig(slug);
+  return { slug, name: getRegisteredModule(slug)?.name ?? fallbackModuleName(slug), coreSetOnly };
+}
+
 export async function getQuestionsAdminView(): Promise<QuestionsAdminView> {
   const exists = await prisma.appQuestionSet.findUnique({
     where: { id: DISCOVERY_QUESTION_SET_ID },
     select: { id: true },
   });
+  const set = exists ? await getDiscoveryQuestions() : null;
   return {
     seeded: exists !== null,
-    set: exists ? await getDiscoveryQuestions() : null,
+    set,
     readers: QUESTION_READERS,
+    module: set ? await owningModuleOf(set.collection.module) : null,
   };
 }
 
@@ -320,11 +343,9 @@ export async function restoreQuestionSetRevision(
   });
   if (!past) throw new NotFoundError(`The question set has no revision ${revision}.`);
   // The module it belongs to is not in the snapshot, so it stays where it is.
-  // The Core Set switch is an admin setting, not framing: restoring an old
-  // preamble must not switch it off (every revision before t-101 says `false`).
   return writeSet(
     id,
-    (before) => setFieldsOf({ ...past, moduleId: before.moduleId, coreOnly: before.coreOnly }),
+    (before) => setFieldsOf({ ...past, moduleId: before.moduleId }),
     revisionRead,
     editorId
   );
@@ -629,12 +650,7 @@ export function planQuestionsImport(
   }
 
   const { id: _id, ...setIncoming } = seed.set;
-  // The Core Set switch is an admin setting no file carries, so an import
-  // leaves it as it is.
-  const setAfter = {
-    ...setFieldsOf(setIncoming),
-    coreOnly: stored.set?.coreOnly ?? setIncoming.coreOnly,
-  };
+  const setAfter = setFieldsOf(setIncoming);
   const setChanged = stored.set
     ? changedFieldsOf(setFieldsOf(stored.set), setAfter, SET_FIELDS)
     : [];
