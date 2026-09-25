@@ -406,13 +406,23 @@ async function retiredQuestionIds(
   client: Pick<Tx, 'slotDefinition' | 'slotValue'>,
   liveIds: ReadonlySet<string>
 ): Promise<Set<string>> {
-  const where = { slotSlug: { startsWith: DISCOVERY_SLOT_PREFIX } };
   const [slots, answered] = await Promise.all([
     client.slotDefinition.findMany({
       where: { slug: { startsWith: DISCOVERY_SLOT_PREFIX } },
       select: { slug: true },
     }),
-    client.slotValue.findMany({ where, select: { slotSlug: true }, distinct: ['slotSlug'] }),
+    // `groupBy`, not `findMany({ distinct })`: this repo does not enable
+    // Prisma's `nativeDistinct`, so `distinct` would load every answer ever
+    // given, every version of it, and de-duplicate in memory, inside the
+    // transaction a question add holds. `groupBy` de-duplicates in the
+    // database and returns one row per slug. There is no index on `slotSlug`
+    // to make the scan cheaper, and none is added here: the table is
+    // Daybreak's, and a leaf index on it is what the next generated migration
+    // would drop (`B13`). It runs on an admin's add or import, not per turn.
+    client.slotValue.groupBy({
+      by: ['slotSlug'],
+      where: { slotSlug: { startsWith: DISCOVERY_SLOT_PREFIX } },
+    }),
   ]);
   return new Set(
     [...slots.map((slot) => slot.slug), ...answered.map((value) => value.slotSlug)]

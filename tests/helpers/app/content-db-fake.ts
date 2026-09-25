@@ -337,6 +337,15 @@ export function createContentDbFake() {
         return structuredClone(row);
       },
       count: async (args: { where?: Where } = {}) => find(args.where).length,
+      // `by` alone, no aggregates: one row per distinct combination.
+      groupBy: async (args: { by: string[]; where?: Where }) => {
+        const seen = new Map<string, Row>();
+        for (const row of find(args.where)) {
+          const group = Object.fromEntries(args.by.map((field) => [field, row[field]]));
+          seen.set(JSON.stringify(group), group);
+        }
+        return [...seen.values()];
+      },
       create: async (args: { data: Row }) => {
         const row: Row = { ...(spec.defaults?.() ?? {}) };
         if (spec.key === 'id' && args.data.id === undefined) row.id = `fake-${++sequence}`;
