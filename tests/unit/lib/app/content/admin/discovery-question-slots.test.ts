@@ -42,6 +42,8 @@ import {
   exportQuestionsFile,
   getQuestionsAdminView,
   previewQuestionsImport,
+  restoreQuestionRevision,
+  restoreQuestionSetRevision,
   updateQuestion,
   updateQuestionSet,
 } from '@/lib/app/content/admin/questions';
@@ -198,6 +200,66 @@ describe('the weight and the Core Set switch', () => {
     await applyQuestionsImport(file, false, EDITOR);
     expect((await questionView('q02')).weight).toBe(40);
     expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
+  });
+
+  it('restoring an old wording brings back the words and keeps the weight', async () => {
+    const q07 = await questionView('q07');
+    // Reword it, then take it out of the Core Set.
+    await updateQuestion(
+      'q07',
+      { ...NEW_QUESTION, text: 'Reworded?', hint: q07.hint ?? null, weight: 100 },
+      q07.revision,
+      EDITOR
+    );
+    const reworded = await questionView('q07');
+    await updateQuestion(
+      'q07',
+      { ...NEW_QUESTION, text: reworded.text, hint: reworded.hint ?? null, weight: 40 },
+      reworded.revision,
+      EDITOR
+    );
+    const lowered = await questionView('q07');
+
+    // Revision 1 is the seed: the original words, at weight 100.
+    const result = await restoreQuestionRevision('q07', 1, lowered.revision, EDITOR);
+
+    expect(result.changed).toEqual(['text']);
+    expect(await questionView('q07')).toMatchObject({ text: q07.text, weight: 40 });
+  });
+
+  it('restoring an old framing keeps the Core Set switch on', async () => {
+    await switchCoreSetOn();
+    const view = (await getQuestionsAdminView()).set!;
+    await updateQuestionSet(
+      view.collection.id,
+      {
+        title: view.collection.title,
+        chartTitle: view.collection.chartTitle,
+        moduleId: view.collection.module,
+        phase: view.collection.phase,
+        preamble: { ...view.preamble, text: 'A new preamble.' },
+        pacing: view.pacing,
+        version: view.collection.version,
+        locale: view.collection.locale,
+        coreOnly: true,
+      },
+      view.collection.revision,
+      EDITOR
+    );
+    const edited = (await getQuestionsAdminView()).set!;
+
+    // Revision 1 is the seed: the original preamble, with the switch off.
+    const result = await restoreQuestionSetRevision(
+      edited.collection.id,
+      1,
+      edited.collection.revision,
+      EDITOR
+    );
+
+    expect(result.changed).toEqual(['preamble']);
+    const after = (await getQuestionsAdminView()).set!;
+    expect(after.preamble.text).toBe(view.preamble.text);
+    expect(after.coreOnly).toBe(true);
   });
 
   it('an import whose file names a weight applies it', async () => {

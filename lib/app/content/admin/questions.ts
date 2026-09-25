@@ -319,15 +319,21 @@ export async function restoreQuestionSetRevision(
   });
   if (!past) throw new NotFoundError(`The question set has no revision ${revision}.`);
   // The module it belongs to is not in the snapshot, so it stays where it is.
+  // The Core Set switch is an admin setting, not framing: restoring an old
+  // preamble must not switch it off (every revision before t-101 says `false`).
   return writeSet(
     id,
-    (before) => setFieldsOf({ ...past, moduleId: before.moduleId }),
+    (before) => setFieldsOf({ ...past, moduleId: before.moduleId, coreOnly: before.coreOnly }),
     revisionRead,
     editorId
   );
 }
 
-/** Restore a question's words. Its number stays: moving is a reorder. */
+/**
+ * Restore a question's words. Its number stays: moving is a reorder. Its weight
+ * stays too: it is an admin setting, and a restore of old wording must not put
+ * a question back into the Core Set (every revision before t-101 says 100).
+ */
 export async function restoreQuestionRevision(
   id: string,
   revision: number,
@@ -340,7 +346,11 @@ export async function restoreQuestionRevision(
   if (!past) throw new NotFoundError(`Question "${id}" has no revision ${revision}.`);
   return writeQuestion(
     id,
-    (before) => ({ ...questionFieldsOf({ ...past, id }), number: before.number }),
+    (before) => ({
+      ...questionFieldsOf({ ...past, id }),
+      number: before.number,
+      weight: before.weight,
+    }),
     revisionRead,
     editorId
   );

@@ -104,8 +104,11 @@ export async function loadDiscoverySlotDefinitions(): Promise<SlotDefinitionInpu
  * empty, and the sync would read it as "retire every taxonomy slot". So when the
  * taxonomy contributes nothing, neither does anything else, and the fluke rule
  * holds exactly as it did before this existed. The cost is that the discovery
- * slots are not projected on a database with no taxonomy, which the seed order
- * (011 before 017) already rules out.
+ * slots are not projected on a database with no taxonomy. In practice there is
+ * always one before any sync that could see the questions: the questions reach
+ * every database through data migration
+ * `20260928100100_app_journey_questions_resources_data`, before any seed runs,
+ * so seed 011's sync already projects them alongside the taxonomy it seeds.
  */
 export async function loadAppGlobalSlotDefinitions(): Promise<SlotDefinitionInput[]> {
   const taxonomy = await loadGlobalSlotDefinitions();

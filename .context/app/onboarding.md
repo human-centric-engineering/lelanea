@@ -96,7 +96,9 @@ Core Set. The set's **Core Set only** switch asks only those.
   question.
 - **Neither is in her file.** They are admin settings. An import of a file with
   no `weight` keeps the stored weights and the switch; a file that names a
-  weight applies it. An export carries the weights.
+  weight applies it. An export carries the weights. Restoring an old wording
+  or framing from history keeps the current weight and switch, as it keeps the
+  number.
 - The slot's `priorityWeight` stays 0. That column sequences her targeted
   capture, and she never captures an answer.
 
