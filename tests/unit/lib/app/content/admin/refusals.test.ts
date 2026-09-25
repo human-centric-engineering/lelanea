@@ -187,7 +187,7 @@ describe('the one document delete that is allowed', () => {
       blocks: [{ type: 'paragraph', text: 'Hers.', section: null }],
     });
     file.collection.suggestedOrder.splice(2, 0, 'a_new_note');
-    const plan = await documents.applyDocumentsImport(file, EDITOR);
+    const plan = await documents.applyDocumentsImport(file, false, EDITOR);
     expect(plan.sections.find((section) => section.entity === 'document')?.creates).toEqual([
       expect.objectContaining({ key: 'a_new_note' }),
     ]);
@@ -240,7 +240,7 @@ describe('the one document delete that is allowed', () => {
       blocks: [{ type: 'paragraph', text: 'x', section: null }],
     });
     file.collection.suggestedOrder.push('opened');
-    await documents.applyDocumentsImport(file, EDITOR);
+    await documents.applyDocumentsImport(file, false, EDITOR);
     await resources.createResource(
       'reads-it',
       {
@@ -259,15 +259,15 @@ describe('the one document delete that is allowed', () => {
       message: expect.stringContaining('reads-it'),
     });
 
-    // An import that drops it is refused the same way, in the preview and the apply.
+    // A removal import that drops it is refused the same way, in the preview and the apply.
     const without = await documents.exportDocumentsFile();
     without.documents = without.documents.filter((document) => document.id !== 'opened');
     without.collection.suggestedOrder = without.collection.suggestedOrder.filter(
       (id) => id !== 'opened'
     );
-    const preview = await documents.previewDocumentsImport(without);
+    const preview = await documents.previewDocumentsImport(without, true);
     expect(preview.refusals.join(' ')).toContain('the resource "reads-it"');
-    await expect(documents.applyDocumentsImport(without, EDITOR)).rejects.toMatchObject({
+    await expect(documents.applyDocumentsImport(without, true, EDITOR)).rejects.toMatchObject({
       status: 409,
       details: { reason: 'import_refused' },
     });
@@ -286,7 +286,7 @@ describe('the one document delete that is allowed', () => {
       blocks: [{ type: 'paragraph', text: 'Her words, verbatim.', section: null }],
     });
     file.collection.suggestedOrder.push('cited');
-    await documents.applyDocumentsImport(file, EDITOR);
+    await documents.applyDocumentsImport(file, false, EDITOR);
     const view = await resources.getResourcesAdminView();
     const key = view.wordsKeyOptions.find((option) => !view.words.some((w) => w.key === option))!;
     await resources.createWords(
@@ -312,9 +312,9 @@ describe('the one document delete that is allowed', () => {
     without.collection.suggestedOrder = without.collection.suggestedOrder.filter(
       (id) => id !== 'cited'
     );
-    const preview = await documents.previewDocumentsImport(without);
+    const preview = await documents.previewDocumentsImport(without, true);
     expect(preview.refusals.join(' ')).toContain(`the words for "${key}"`);
-    await expect(documents.applyDocumentsImport(without, EDITOR)).rejects.toMatchObject({
+    await expect(documents.applyDocumentsImport(without, true, EDITOR)).rejects.toMatchObject({
       status: 409,
       details: { reason: 'import_refused' },
     });
@@ -360,15 +360,15 @@ describe('imports that are refused', () => {
       db.current.client as unknown as PrismaClient
     );
 
-    expect((await journey.previewJourneyImport(files.journey)).refusals.join(' ')).toContain(
+    expect((await journey.previewJourneyImport(files.journey, false)).refusals.join(' ')).toContain(
       'not been seeded'
     );
-    expect((await questions.previewQuestionsImport(files.questions)).refusals.join(' ')).toContain(
-      'not been seeded'
-    );
-    expect((await resources.previewResourcesImport(files.resources)).refusals.join(' ')).toContain(
-      'not been seeded'
-    );
+    expect(
+      (await questions.previewQuestionsImport(files.questions, false)).refusals.join(' ')
+    ).toContain('not been seeded');
+    expect(
+      (await resources.previewResourcesImport(files.resources, false)).refusals.join(' ')
+    ).toContain('not been seeded');
     await expect(journey.exportJourneyFile()).rejects.toMatchObject({
       details: { reason: 'nothing_to_export' },
     });
@@ -397,7 +397,7 @@ describe('imports that are refused', () => {
     const terms = file.documents.find((document) => document.id === 'terms_of_use')!;
     delete terms.requiresAcknowledgement;
 
-    const { refusals } = await documents.previewDocumentsImport(file);
+    const { refusals } = await documents.previewDocumentsImport(file, false);
     expect(refusals.join(' ')).toContain('"someone_elses"');
     expect(refusals.join(' ')).toContain('"new_terms" is new and asks to be acknowledged');
     expect(refusals.join(' ')).toContain('"terms_of_use" changes whether it must be acknowledged');
@@ -406,14 +406,14 @@ describe('imports that are refused', () => {
   it('refuses a journey file for another app, and a questions file for a module not on the journey', async () => {
     const journeyFile = await journey.exportJourneyFile();
     journeyFile.app.name = 'Elsewhere';
-    expect((await journey.previewJourneyImport(journeyFile)).refusals.join(' ')).toContain(
+    expect((await journey.previewJourneyImport(journeyFile, false)).refusals.join(' ')).toContain(
       '"Elsewhere"'
     );
 
     const questionsFile = await questions.exportQuestionsFile();
     questionsFile.content.module = 'module_99_nowhere';
     questionsFile.content.id = 'other_set';
-    const { refusals } = await questions.previewQuestionsImport(questionsFile);
+    const { refusals } = await questions.previewQuestionsImport(questionsFile, false);
     expect(refusals.join(' ')).toContain('module_99_nowhere');
     expect(refusals.join(' ')).toContain('"other_set"');
   });
@@ -432,18 +432,18 @@ describe('imports that are refused', () => {
     });
     file.words.default = { ...file.words.default, quote: 'Not her words at all.' };
 
-    const { refusals } = await resources.previewResourcesImport(file);
+    const { refusals } = await resources.previewResourcesImport(file, false);
     expect(refusals.join(' ')).toContain('"shifty" is a video here and an article in the file');
     expect(refusals.join(' ')).toContain('The words for "default" are shown as hers');
   });
 
-  it('applies a resources file that adds one video, retires another and drops a key’s words', async () => {
+  it('applies a removal import that adds one video, retires another and drops a key’s words', async () => {
     await resources.createResource('old-video', video, EDITOR);
     const file = await resources.exportResourcesFile();
     file.videos = [{ ...video, id: 'new-video' }].map(({ kind: _kind, ...rest }) => rest);
     delete file.words.module_01_values;
 
-    const plan = await resources.applyResourcesImport(file, EDITOR);
+    const plan = await resources.applyResourcesImport(file, true, EDITOR);
 
     const section = (entity: string) => plan.sections.find((entry) => entry.entity === entity)!;
     expect(section('resource').creates.map((item) => item.key)).toEqual(['new-video']);
@@ -455,7 +455,7 @@ describe('imports that are refused', () => {
       retired: false,
       position: 0,
     });
-    expect((await resources.previewResourcesImport(file)).writesNothing).toBe(true);
+    expect((await resources.previewResourcesImport(file, true)).writesNothing).toBe(true);
   });
 });
 
@@ -519,7 +519,7 @@ describe('the journey’s structure is the roster’s', () => {
     const file = await journey.exportJourneyFile();
     file.modules[1].number = 42;
 
-    const plan = await journey.previewJourneyImport(file);
+    const plan = await journey.previewJourneyImport(file, false);
 
     expect(plan.refusals.join(' ')).toContain('lib/app/journey/roster.ts');
     expect(plan.writesNothing).toBe(true);

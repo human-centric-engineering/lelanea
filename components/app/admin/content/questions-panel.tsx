@@ -550,6 +550,9 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
         collection="questions"
         fileName="onboarding_discovery_questions.json"
         what="the questions"
+        removal={{
+          note: 'A removed question is deleted with its history, and the rest are numbered again.',
+        }}
         onApplied={done}
       />
     </div>

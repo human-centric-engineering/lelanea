@@ -76,6 +76,7 @@ import {
 } from '@/lib/app/content/admin/readers';
 import {
   type ContentImportPlan,
+  type ImportPlanSection,
   guardedRemoval,
   IMPORT_TX_TIMEOUT_MS,
   importRefused,
@@ -622,6 +623,9 @@ export async function exportDocumentsFile(): Promise<FoundationalDocumentsFile> 
 /** The `sourceCollection` of words that cite one of these documents. */
 const WORDS_DOCUMENT_SOURCE = 'foundational_documents';
 
+/** A guarded removal's other way out: only a removal import removes (t-100). */
+const KEEP_INSTEAD = ' Or import without removing what the file leaves out, and it is kept.';
+
 interface StoredDocuments {
   collection: { id: string; title: string; version: string; locale: string } | null;
   rows: readonly AppFoundationalDocument[];
@@ -642,14 +646,15 @@ interface DocumentsImport {
  * What a documents file would do to these rows. Pure: the preview returns it,
  * and apply computes it again inside its transaction.
  *
- * The file is the whole collection, so a stored document it omits is a
- * deletion, which is refused for any document a surface renders. Section keys
- * and acknowledgement versions are checked as the editor checks them; see the
- * file header.
+ * A stored document the file leaves out is kept, after the file's own in its
+ * stored order (t-100). With `removeAbsent` it is deleted instead, which is
+ * refused for any document something reads. Section keys and acknowledgement
+ * versions are checked as the editor checks them; see the file header.
  */
 export function planDocumentsImport(
   file: FoundationalDocumentsFile,
-  stored: StoredDocuments
+  stored: StoredDocuments,
+  removeAbsent: boolean
 ): DocumentsImport {
   const seed = foundationalSeedFromFile(file);
   const refusals: string[] = [];
@@ -677,8 +682,18 @@ export function planDocumentsImport(
       ])
     : [];
 
+  // Kept ones follow the file's, so the order stays contiguous and no two
+  // documents are left claiming one place.
+  const inFile = new Set(seed.documents.map((document) => document.id));
+  const kept = removeAbsent ? [] : stored.rows.filter((row) => !inFile.has(row.id));
   const documents = planKeyedImport<DocumentSeed, DocumentFields>({
-    incoming: seed.documents.map((document) => ({ key: document.id, value: document })),
+    incoming: [
+      ...seed.documents.map((document) => ({ key: document.id, value: document })),
+      ...kept.map((row, index) => ({
+        key: row.id,
+        value: { id: row.id, ...fieldsOf(row), position: seed.documents.length + index },
+      })),
+    ],
     stored: stored.rows.map((row) => ({
       key: row.id,
       fields: fieldsOf(row),
@@ -688,7 +703,7 @@ export function planDocumentsImport(
     allFields: DOCUMENT_SNAPSHOT_FIELDS,
     toCreate: ({ id: _id, ...fields }) => fields,
     toUpdate: (_before, { id: _id, ...fields }) => fields,
-    onAbsent: () => null,
+    onAbsent: removeAbsent ? () => null : 'keep',
   });
 
   for (const change of documents.creates) {
@@ -724,24 +739,29 @@ export function planDocumentsImport(
     const readers = DOCUMENT_READERS[change.key] ?? [];
     if (readers.length > 0) {
       refusals.push(
-        `"${change.key}" is missing from the file, and ${readers.join(', ')} render it, so it cannot be deleted.`
+        `"${change.key}" is missing from the file, and ${readers.join(', ')} render it, so it cannot be deleted.${KEEP_INSTEAD}`
       );
     }
     const opening = stored.openedBy.filter((resource) => resource.documentId === change.key);
     if (opening.length > 0) {
       refusals.push(
-        `"${change.key}" is missing from the file, and ${opening.map((resource) => `the resource "${resource.id}"`).join(', ')} open it, so it cannot be deleted. Point those articles elsewhere first.`
+        `"${change.key}" is missing from the file, and ${opening.map((resource) => `the resource "${resource.id}"`).join(', ')} open it, so it cannot be deleted. Point those articles elsewhere first.${KEEP_INSTEAD}`
       );
     }
     const citing = stored.citedBy.filter((words) => words.documentId === change.key);
     if (citing.length > 0) {
       refusals.push(
-        `"${change.key}" is missing from the file, and ${citing.map((words) => `the words for "${words.key}"`).join(', ')} cite it, so it cannot be deleted. Cite another document in those words first.`
+        `"${change.key}" is missing from the file, and ${citing.map((words) => `the words for "${words.key}"`).join(', ')} cite it, so it cannot be deleted. Cite another document in those words first.${KEEP_INSTEAD}`
       );
     }
   }
 
-  const sections = [toPlanSection('document', 'Documents', documents, 'delete')];
+  const sections: ImportPlanSection[] = [
+    {
+      ...toPlanSection('document', 'Documents', documents, 'delete'),
+      kept: kept.map((row) => row.id),
+    },
+  ];
   const writesCollection = collectionChanged.length > 0;
   if (writesCollection) {
     sections.unshift({
@@ -802,8 +822,11 @@ function parseDocumentsFile(raw: unknown): FoundationalDocumentsFile {
 }
 
 /** What a documents file would do, without doing it. */
-export async function previewDocumentsImport(raw: unknown): Promise<ContentImportPlan> {
-  return planDocumentsImport(parseDocumentsFile(raw), await readStored(prisma)).plan;
+export async function previewDocumentsImport(
+  raw: unknown,
+  removeAbsent: boolean
+): Promise<ContentImportPlan> {
+  return planDocumentsImport(parseDocumentsFile(raw), await readStored(prisma), removeAbsent).plan;
 }
 
 /**
@@ -813,6 +836,7 @@ export async function previewDocumentsImport(raw: unknown): Promise<ContentImpor
  */
 export async function applyDocumentsImport(
   raw: unknown,
+  removeAbsent: boolean,
   editorId: string
 ): Promise<ContentImportPlan> {
   const file = parseDocumentsFile(raw);
@@ -820,7 +844,7 @@ export async function applyDocumentsImport(
   const plan = await executeTransaction(
     async (tx) => {
       const stored = await readStored(tx);
-      const planned = planDocumentsImport(file, stored);
+      const planned = planDocumentsImport(file, stored, removeAbsent);
       if (planned.plan.refusals.length > 0) throw importRefused('documents', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;
 

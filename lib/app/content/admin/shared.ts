@@ -188,8 +188,8 @@ export interface ImportPlanSection {
   skippedRetired: string[];
   /**
    * Stored and live, absent from the file, and left alone because the import
-   * was not asked to remove (t-92). Absent on the t-91 collections, which
-   * remove what a file omits until t-100 gives them the same choice.
+   * was not asked to remove (t-92, t-100). Absent on a section for a single
+   * row, such as a collection's own framing, which a file always carries.
    */
   kept?: string[];
 }
@@ -283,12 +283,11 @@ export function parseContentFile<T>(schema: z.ZodType<T>, raw: unknown, what: st
  */
 export const MAX_IMPORT_BYTES = 1_000_000;
 
-const importBodySchema = z.strictObject({ file: z.unknown() });
-
 /**
- * A keep-by-default import's body (t-92): the file, and whether to also remove
- * what the file leaves out. Off unless asked for, and sent with the preview and
- * the apply alike, so what was previewed is what applies.
+ * An import's body: the file, and whether to also remove what the file leaves
+ * out. Off unless asked for (t-92, and the content collections from t-100),
+ * and sent with the preview and the apply alike, so what was previewed is what
+ * applies.
  */
 const importRequestSchema = z.strictObject({
   file: z.unknown(),
@@ -305,14 +304,6 @@ const importRequestSchema = z.strictObject({
  * is the client's claim.
  *
  * @throws APIError 413 `FILE_TOO_LARGE`, or ValidationError on bad JSON or shape.
- */
-export async function readImportBody(request: NextRequest): Promise<{ file: unknown }> {
-  return readCappedJson(request, importBodySchema);
-}
-
-/**
- * The same, for an import that keeps what a file omits unless told otherwise
- * (the voice overlays, the golden set and the crisis resources, t-92).
  */
 export async function readImportRequest(
   request: NextRequest

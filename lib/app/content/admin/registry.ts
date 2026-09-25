@@ -78,8 +78,9 @@ interface EntityHandlers {
 interface CollectionHandlers {
   view(): Promise<unknown>;
   exportFile(): Promise<{ file: unknown; filename: string }>;
-  preview(raw: unknown): Promise<ContentImportPlan>;
-  apply(raw: unknown, editorId: string): Promise<ContentImportPlan>;
+  /** `removeAbsent`: also remove what the file leaves out. Otherwise it is kept (t-100). */
+  preview(raw: unknown, removeAbsent: boolean): Promise<ContentImportPlan>;
+  apply(raw: unknown, removeAbsent: boolean, editorId: string): Promise<ContentImportPlan>;
   reorder?(body: unknown, editorId: string): Promise<{ moved: number }>;
   entities: Readonly<Record<string, EntityHandlers>>;
 }

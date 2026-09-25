@@ -554,6 +554,9 @@ export function DocumentsPanel({ initialView }: { initialView: DocumentsAdminVie
         collection="documents"
         fileName="lelanea_foundational_documents.json"
         what="the documents"
+        removal={{
+          note: 'A removed document is deleted with its history. One that a page shows, a resource opens or her words cite is refused; the preview says which.',
+        }}
         onApplied={done}
       />
     </div>

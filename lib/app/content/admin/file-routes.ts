@@ -5,8 +5,8 @@
  * The voice overlays, the golden set and the crisis resources each expose the
  * same three, with the same body cap, the same audit shape and the same
  * `removeAbsent` flag, so each route file is one line naming its service. The
- * t-91 collections keep their own `[collection]` routes, which remove what a
- * file omits until t-100 gives them the same choice.
+ * t-91 collections keep their own `[collection]` routes, which read the same
+ * body and the same flag (t-100).
  *
  * Rate limiting: the `admin` section tier from `proxy.ts`. A repeated apply is a
  * no-op and records no audit entry.

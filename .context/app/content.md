@@ -801,10 +801,19 @@ rewind), and each collection exports and imports as a file.
 source metadata a row does not hold (`sourceFile`, `reviewNotes`, her `app` and
 `creator` blocks…) is left out, and the schemas make it optional for that
 reason. A documents export carries every block's section key and every
-document's own version, so it seeds exactly what it came from. **Import**
-treats a file as the whole collection: preview (writes nothing), then apply,
-which re-plans inside its transaction and refuses the whole file if any change
-is guarded. Bodies over 1 MB are refused 413 before they are parsed. Imported
+document's own version, so it seeds exactly what it came from. **Import** is
+preview (writes nothing), then apply, which re-plans inside its transaction and
+refuses the whole file if any change is guarded. It **keeps what the file
+leaves out** unless the admin ticks "Also remove what the file leaves out"
+(t-100, the owner's ruling of 24 September 2026, the same shape t-92 gave the
+voice and crisis imports). The flag travels with the preview and the apply, so
+what was previewed is what applies. A kept item moves after the file's own, in
+its stored order, so positions stay contiguous. With the box ticked, a document
+is deleted (refused while anything reads it), a question is deleted, a
+resource retires and a words key is deleted, as before. The journey cannot lose
+anything: a file may leave tiers and modules out, and they are kept, but it
+cannot move, add or renumber one, and with the box ticked a file missing any
+of the roster is refused. Bodies over 1 MB are refused 413 before they are parsed. Imported
 rows are `origin: admin` revisions. A fresh export re-imported plans nothing,
 pinned per collection in `tests/unit/lib/app/content/admin/round-trip.test.ts`.
 

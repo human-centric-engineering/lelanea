@@ -60,6 +60,7 @@ import {
 import { QUESTION_READERS } from '@/lib/app/content/admin/readers';
 import {
   type ContentImportPlan,
+  type ImportPlanSection,
   IMPORT_TX_TIMEOUT_MS,
   importRefused,
   parkingPosition,
@@ -528,12 +529,14 @@ interface QuestionsImport {
 }
 
 /**
- * What a discovery questions file would do. Pure. The file is the whole set,
- * so a stored question it omits is removed; the preview names each one.
+ * What a discovery questions file would do. Pure. A stored question the file
+ * leaves out is kept, numbered after the file's own in its stored order
+ * (t-100); with `removeAbsent` it is removed instead. The preview names each.
  */
 export function planQuestionsImport(
   file: DiscoveryQuestionsFile,
-  stored: StoredQuestions
+  stored: StoredQuestions,
+  removeAbsent: boolean
 ): QuestionsImport {
   const seed = questionSeedFromFile(file);
   const refusals: string[] = [];
@@ -558,8 +561,18 @@ export function planQuestionsImport(
     ? changedFieldsOf(setFieldsOf(stored.set), setAfter, SET_FIELDS)
     : [];
 
+  // Kept ones follow the file's, so the numbering stays 1..n with no gap and
+  // no two questions claiming one number.
+  const inFile = new Set(seed.questions.map((question) => question.id));
+  const kept = removeAbsent ? [] : stored.questions.filter((row) => !inFile.has(row.id));
   const questions = planKeyedImport<Omit<DiscoveryQuestionRow, 'revision'>, QuestionFields>({
-    incoming: seed.questions.map((question) => ({ key: question.id, value: question })),
+    incoming: [
+      ...seed.questions.map((question) => ({ key: question.id, value: question })),
+      ...kept.map((row, index) => ({
+        key: row.id,
+        value: { ...row, number: seed.questions.length + index + 1 },
+      })),
+    ],
     stored: stored.questions.map((row) => ({
       key: row.id,
       fields: questionFieldsOf(row),
@@ -569,10 +582,15 @@ export function planQuestionsImport(
     allFields: QUESTION_SNAPSHOT_FIELDS,
     toCreate: (question) => questionFieldsOf(question),
     toUpdate: (_before, question) => questionFieldsOf(question),
-    onAbsent: () => null,
+    onAbsent: removeAbsent ? () => null : 'keep',
   });
 
-  const sections = [toPlanSection('question', 'Questions', questions, 'delete')];
+  const sections: ImportPlanSection[] = [
+    {
+      ...toPlanSection('question', 'Questions', questions, 'delete'),
+      kept: kept.map((row) => row.id),
+    },
+  ];
   if (setChanged.length > 0 && stored.set) {
     sections.unshift({
       entity: 'set',
@@ -617,20 +635,24 @@ function parseQuestionsFile(raw: unknown): DiscoveryQuestionsFile {
   return parseContentFile(discoveryQuestionsFileSchema, raw, 'discovery questions');
 }
 
-export async function previewQuestionsImport(raw: unknown): Promise<ContentImportPlan> {
-  return planQuestionsImport(parseQuestionsFile(raw), await readStored(prisma)).plan;
+export async function previewQuestionsImport(
+  raw: unknown,
+  removeAbsent: boolean
+): Promise<ContentImportPlan> {
+  return planQuestionsImport(parseQuestionsFile(raw), await readStored(prisma), removeAbsent).plan;
 }
 
 /** Apply a discovery questions file. Re-planned in the transaction; idempotent. */
 export async function applyQuestionsImport(
   raw: unknown,
+  removeAbsent: boolean,
   editorId: string
 ): Promise<ContentImportPlan> {
   const file = parseQuestionsFile(raw);
   return executeTransaction(
     async (tx) => {
       const stored = await readStored(tx);
-      const planned = planQuestionsImport(file, stored);
+      const planned = planQuestionsImport(file, stored, removeAbsent);
       if (planned.plan.refusals.length > 0)
         throw importRefused('discovery questions', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;

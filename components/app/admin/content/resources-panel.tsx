@@ -907,6 +907,9 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
         collection="resources"
         fileName="lelanea_resources.json"
         what="the library"
+        removal={{
+          note: 'A removed video, audio or article is retired, not deleted, and can be brought back from its row. Removed words are deleted with their history.',
+        }}
         onApplied={done}
       />
     </div>

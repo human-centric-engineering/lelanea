@@ -244,12 +244,52 @@ function toModuleRow(entry: JourneyModule): Omit<JourneyModuleRow, 'revision'> {
 }
 
 /**
+ * Throw unless every tier and module the file has is the roster's, in the
+ * roster's place: the same order for a tier, the same number and tier for a
+ * module. Unlike {@link assertRosterMatchesFile} the file may leave some out.
+ *
+ * What the admin import checks when it keeps what a file omits (t-100): a file
+ * still cannot move, add or renumber anything, because the roster owns the
+ * structure, but it need not repeat the parts it does not change.
+ */
+export function assertFileWithinRoster(file: JourneyStructureFile): void {
+  const problems: string[] = [];
+  const rosterTiers = new Set(JOURNEY_TIERS.map((tier) => `${tier.id}@${tier.order}`));
+  for (const tier of file.tiers) {
+    if (!rosterTiers.has(`${tier.id}@${tier.order}`)) {
+      problems.push(`the roster has no tier "${tier.id}" at order ${tier.order}`);
+    }
+  }
+  const rosterModules = new Set(JOURNEY_MODULES.map((m) => `${m.id}#${m.number}:${m.tier}`));
+  for (const entry of file.modules) {
+    if (!rosterModules.has(`${entry.id}#${entry.number}:${entry.tier}`)) {
+      problems.push(
+        `the roster has no module "${entry.id}" numbered ${entry.number} in tier "${entry.tier}"`
+      );
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `The journey roster (lib/app/journey/roster.ts) and the module structure file ` +
+        `disagree: ${problems.join('; ')}`
+    );
+  }
+}
+
+/**
  * The rows a module structure file seeds, in roster order.
+ *
+ * With `partial` (the admin import keeping what a file omits, t-100), the file
+ * may leave tiers and modules out, and only the ones it has are returned.
  *
  * @throws when the file and the roster disagree about structure.
  */
-export function journeySeedFromFile(file: JourneyStructureFile): JourneySeed {
-  assertRosterMatchesFile(file);
+export function journeySeedFromFile(
+  file: JourneyStructureFile,
+  { partial = false }: { partial?: boolean } = {}
+): JourneySeed {
+  if (partial) assertFileWithinRoster(file);
+  else assertRosterMatchesFile(file);
   const tiersById = new Map(file.tiers.map((tier) => [tier.id, tier]));
   const modulesById = new Map(file.modules.map((entry) => [entry.id, entry]));
 
@@ -261,13 +301,16 @@ export function journeySeedFromFile(file: JourneyStructureFile): JourneySeed {
       version: file.app.version,
       locale: file.app.locale,
     },
-    // Non-null: `assertRosterMatchesFile` has just proved every roster id is in
-    // the file.
-    tiers: JOURNEY_TIERS.map((rosterTier) => {
-      const tier = tiersById.get(rosterTier.id)!;
-      return { id: tier.id, label: tier.label, intent: tier.intent };
+    // In roster order. Whole, every roster id is in the file (just proved);
+    // partial, the ones it leaves out are skipped.
+    tiers: JOURNEY_TIERS.flatMap((rosterTier) => {
+      const tier = tiersById.get(rosterTier.id);
+      return tier ? [{ id: tier.id, label: tier.label, intent: tier.intent }] : [];
     }),
-    modules: JOURNEY_MODULES.map((rosterModule) => toModuleRow(modulesById.get(rosterModule.id)!)),
+    modules: JOURNEY_MODULES.flatMap((rosterModule) => {
+      const entry = modulesById.get(rosterModule.id);
+      return entry ? [toModuleRow(entry)] : [];
+    }),
   };
 }
 

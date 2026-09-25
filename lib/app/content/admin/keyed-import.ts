@@ -23,9 +23,10 @@
  *   reported (`skippedRetired`) and left alone. Restoring is its own act.
  * - **What happens to a stored key the file does not mention is the caller's
  *   call**, because the reason differs. The slot taxonomy is a set an admin may
- *   upload part of (`merge`), so absence means "leave it". A content file is the
- *   whole collection in the seed's shape, so absence means "remove it", and the
- *   caller refuses the plan where a removal is guarded.
+ *   upload part of (`merge`), so absence means "leave it". A content file keeps
+ *   what it omits too, unless the admin asks for removal (t-100); then absence
+ *   means "remove it", and the caller refuses the plan where a removal is
+ *   guarded.
  *
  * What the caller supplies: how an incoming entry becomes a row's fields on a
  * create and on an update, and what a removal leaves (`null` for a delete, the

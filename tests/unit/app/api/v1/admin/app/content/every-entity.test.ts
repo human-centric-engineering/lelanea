@@ -777,7 +777,7 @@ describe('imports through the route', () => {
     expect(again.data).toMatchObject({ plan: { writesNothing: true } });
   });
 
-  it('a resources file that adds one video and drops another names both in the audit', async () => {
+  it('a removal import that adds one video and drops another names both in the audit', async () => {
     const { POST: applyImport } =
       await import('@/app/api/v1/admin/app/content/[collection]/import/route');
     await call(
@@ -812,12 +812,16 @@ describe('imports through the route', () => {
     audit.logAdminAction.mockClear();
 
     await call(
-      applyImport(req('POST', '/resources/import', { file }), collectionParams('resources'))
+      applyImport(
+        req('POST', '/resources/import', { file, removeAbsent: true }),
+        collectionParams('resources')
+      )
     );
 
     expect(audit.logAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: {
+          removeAbsent: true,
           sections: expect.arrayContaining([
             expect.objectContaining({
               entity: 'resource',
