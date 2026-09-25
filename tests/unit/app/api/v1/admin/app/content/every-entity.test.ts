@@ -301,6 +301,7 @@ describe('questions', () => {
       pacing: set.pacing,
       version: set.collection.version,
       locale: set.collection.locale,
+      coreOnly: set.coreOnly,
       revision: set.collection.revision,
     };
     const saved = await call(
@@ -376,6 +377,7 @@ describe('questions', () => {
           inputType: 'long_text',
           hint: null,
           conditionalFollowUp: null,
+          weight: q01.weight,
           revision: q01.revision,
         }),
         item('questions', 'question', 'q01')
