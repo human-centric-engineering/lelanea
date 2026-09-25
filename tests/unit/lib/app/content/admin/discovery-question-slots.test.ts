@@ -152,10 +152,17 @@ describe('the weight and the Core Set switch', () => {
   });
 
   it('switching the Core Set on is a set revision', async () => {
+    const result = await switchCoreSetOn();
+
+    expect(result.changed).toEqual(['coreOnly']);
+    expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
+  });
+
+  async function switchCoreSetOn() {
     const view = (await getQuestionsAdminView()).set!;
     const { collection, preamble, pacing } = view;
 
-    const result = await updateQuestionSet(
+    return updateQuestionSet(
       collection.id,
       {
         title: collection.title,
@@ -171,10 +178,7 @@ describe('the weight and the Core Set switch', () => {
       collection.revision,
       EDITOR
     );
-
-    expect(result.changed).toEqual(['coreOnly']);
-    expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
-  });
+  }
 
   it('an import of her file, which carries no weights, keeps the stored weights and switch', async () => {
     const q02 = await questionView('q02');
@@ -184,6 +188,7 @@ describe('the weight and the Core Set switch', () => {
       q02.revision,
       EDITOR
     );
+    await switchCoreSetOn();
     const file = await exported();
     for (const question of file.questions) delete question.weight;
 
@@ -192,6 +197,7 @@ describe('the weight and the Core Set switch', () => {
     expect(plan.writesNothing).toBe(true);
     await applyQuestionsImport(file, false, EDITOR);
     expect((await questionView('q02')).weight).toBe(40);
+    expect((await getQuestionsAdminView()).set!.coreOnly).toBe(true);
   });
 
   it('an import whose file names a weight applies it', async () => {
