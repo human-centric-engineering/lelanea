@@ -37,7 +37,7 @@ vi.mock('@/lib/db/client', async () => {
           internationalContact: file.international.contact,
           internationalUrl: file.international.url,
           internationalHours: file.international.hours,
-          status: file.resources.provenance.status,
+          status: file.resources.provenance!.status,
           signedOffAt: null,
           version: 1,
         })
@@ -50,7 +50,7 @@ vi.mock('@/lib/db/client', async () => {
             region: r.region,
             emergencyNumber: r.emergencyNumber,
             services: r.services.map((s) => ({ ...s })),
-            status: file.resources.provenance.status,
+            status: file.resources.provenance!.status,
             signedOffAt: null,
             version: 1,
           }))

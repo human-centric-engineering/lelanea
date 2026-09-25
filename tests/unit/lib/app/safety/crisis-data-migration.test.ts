@@ -79,7 +79,7 @@ describe('the crisis data migration', () => {
   });
 
   it('carries the provenance status the file declares, rather than assuming one', () => {
-    expect(embedded().status).toBe(getCrisisResources().resources.provenance.status);
+    expect(embedded().status).toBe(getCrisisResources().resources.provenance!.status);
   });
 
   it('inserts only into empty tables, so an admin edit survives a re-deploy', () => {

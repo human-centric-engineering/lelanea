@@ -154,7 +154,7 @@ describe('resources', () => {
           revision: 1,
         },
         {
-          id: 'a-reading',
+          id: 'a-article',
           kind: 'article',
           position: 0,
           title: 'R',
@@ -167,7 +167,7 @@ describe('resources', () => {
           revision: 1,
         },
         {
-          id: 'b-reading',
+          id: 'b-article',
           kind: 'article',
           position: 1,
           title: 'L',
@@ -187,8 +187,8 @@ describe('resources', () => {
       back.resources.map((row) => [row.id, row.kind, row.position, row.documentId, row.href])
     ).toEqual([
       ['a-video', 'video', 0, null, 'https://example.com/f'],
-      ['a-reading', 'article', 0, 'the_mission', null],
-      ['b-reading', 'article', 1, null, 'https://example.com/l'],
+      ['a-article', 'article', 0, 'the_mission', null],
+      ['b-article', 'article', 1, null, 'https://example.com/l'],
     ]);
     expect(resourcesSeedFromFile(file)).toEqual(seed);
   });

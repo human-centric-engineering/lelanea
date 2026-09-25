@@ -4,8 +4,8 @@
  * `PUT { order: [{ id, revision }] }` — every item once, each with the
  * revision the admin read, so a reorder against a list someone has since
  * changed is refused. Documents set their reading order, questions their
- * numbers, and resources (with `kind`) the drawer's order for videos or
- * articles. Each item that moves gets a revision.
+ * numbers, and resources (with `kind`) the drawer's order for videos,
+ * audio or articles. Each item that moves gets a revision.
  *
  * Rate limiting: the `admin` section tier from `proxy.ts`.
  */

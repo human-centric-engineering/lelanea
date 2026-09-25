@@ -642,7 +642,7 @@ export const voiceFingerprintFileSchema = z.strictObject({
  * ever send, and the failure would be a silent fall back to core-only rather
  * than an error.
  */
-const voiceSituationSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
+export const voiceSituationSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
   message: 'situation must be a lowercase hyphenated key — it arrives as a request contextId',
 });
 
@@ -674,14 +674,16 @@ export const voiceOverlaysFileSchema = z
       layer: z.literal('overlays'),
       version: fingerprintVersionSchema,
       locale: z.string().min(1),
-      textFormat: z.string().min(1),
+      // Working notes about the drafted file, not stored: optional so an admin
+      // export (t-92) can leave them out rather than invent them.
+      textFormat: z.string().min(1).optional(),
       provenance: z.strictObject({
         status: z.literal('drafted_from_corpus'),
         awaitingSignOffFrom: z.string().min(1),
         note: z.string().min(1),
       }),
-      sourceFiles: z.array(z.string().min(1)),
-      notes: z.array(z.string().min(1)),
+      sourceFiles: z.array(z.string().min(1)).optional(),
+      notes: z.array(z.string().min(1)).optional(),
     }),
     overlays: z
       .array(
@@ -726,12 +728,14 @@ export const voiceOverlaysFileSchema = z
       heading: z.string().min(1),
       lines: voiceLinesSchema,
     }),
-    reviewNotes: z.array(
-      z.strictObject({
-        scope: z.string().min(1),
-        note: z.string().min(1),
-      })
-    ),
+    reviewNotes: z
+      .array(
+        z.strictObject({
+          scope: z.string().min(1),
+          note: z.string().min(1),
+        })
+      )
+      .optional(),
   })
   .superRefine((file, ctx) => {
     // Two overlays on one situation is not a validation nicety: selection is a
@@ -812,7 +816,9 @@ export const voiceGoldenSetFileSchema = z
         awaitingSignOffFrom: z.string().min(1),
         note: z.string().min(1),
       }),
-      notes: z.array(z.string().min(1)),
+      // Working notes, not stored: optional so an admin export (t-92) can
+      // leave them out rather than invent them.
+      notes: z.array(z.string().min(1)).optional(),
     }),
     dataset: z.strictObject({
       name: z.string().min(1),
@@ -847,12 +853,14 @@ export const voiceGoldenSetFileSchema = z
         })
       )
       .min(1),
-    reviewNotes: z.array(
-      z.strictObject({
-        scope: z.string().min(1),
-        note: z.string().min(1),
-      })
-    ),
+    reviewNotes: z
+      .array(
+        z.strictObject({
+          scope: z.string().min(1),
+          note: z.string().min(1),
+        })
+      )
+      .optional(),
   })
   .superRefine((file, ctx) => {
     // A duplicate key is a parse error for the same reason a duplicate overlay

@@ -39,6 +39,10 @@ interface ModelSpec {
   cascade?: [string, string][];
   /** Rows elsewhere that forbid deleting this one: [model, foreign key column]. */
   restrict?: [string, string][];
+  /** Relations a `create` may nest (`{ cases: { create: [...] } }`): field → [model, foreign key column]. */
+  nested?: Record<string, [string, string]>;
+  /** Relations an `include` may load: field → [model, foreign key column]. */
+  includes?: Record<string, [string, string]>;
 }
 
 const revision = (parent: string): ModelSpec => ({
@@ -121,6 +125,53 @@ const MODELS: Record<string, ModelSpec> = {
   appResourceWordsRevision: revision('wordsKey'),
   appAcknowledgement: { key: 'id', defaults: () => ({ acknowledgedAt: new Date() }) },
   user: { key: 'id' },
+
+  // f-content-seeds t-92: her register, the golden set and the crisis resource.
+  appVoiceOverlaySet: {
+    key: 'id',
+    defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
+    cascade: [
+      ['appVoiceOverlay', 'setId'],
+      ['appVoiceOverlaySetRevision', 'setId'],
+    ],
+    includes: { overlays: ['appVoiceOverlay', 'setId'] },
+  },
+  appVoiceOverlaySetRevision: revision('setId'),
+  appVoiceOverlay: {
+    key: 'situation',
+    unique: [['setId', 'position']],
+    defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
+    cascade: [['appVoiceOverlayRevision', 'situation']],
+  },
+  appVoiceOverlayRevision: revision('situation'),
+  appVoiceGoldenSet: {
+    key: 'id',
+    defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
+    cascade: [['appVoiceGoldenSetRevision', 'setId']],
+  },
+  appVoiceGoldenSetRevision: revision('setId'),
+  aiDataset: {
+    key: 'id',
+    defaults: () => ({ ...stamped(), userId: null, tags: [], caseCount: 0, source: 'upload' }),
+    cascade: [['aiDatasetCase', 'datasetId']],
+    restrict: [['aiEvaluationRun', 'datasetId']],
+    nested: { cases: ['aiDatasetCase', 'datasetId'] },
+  },
+  aiDatasetCase: {
+    key: 'id',
+    unique: [['datasetId', 'position']],
+    defaults: () => ({ expectedOutput: null, referenceCitations: null, metadata: null }),
+  },
+  aiEvaluationRun: { key: 'id', defaults: stamped },
+  aiAgent: { key: 'id', unique: [['slug']], defaults: stamped },
+  appCrisisCopy: {
+    key: 'slug',
+    defaults: () => ({ ...stamped(), status: 'draft', version: 1, signedOffAt: null }),
+  },
+  appCrisisRegion: {
+    key: 'region',
+    defaults: () => ({ ...stamped(), status: 'draft', version: 1, signedOffAt: null }),
+  },
 };
 
 let sequence = 0;
@@ -213,6 +264,17 @@ export function createContentDbFake() {
   function apply(row: Row, data: Row) {
     for (const [field, value] of Object.entries(data)) {
       if (value === undefined) continue;
+      // `{ increment: 1 }`, as the crisis editor bumps a version.
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        'increment' in value &&
+        Object.keys(value).length === 1
+      ) {
+        row[field] = (row[field] as number) + (value as { increment: number }).increment;
+        continue;
+      }
       row[field] = normalise(value);
     }
   }
@@ -224,6 +286,17 @@ export function createContentDbFake() {
 
     const withInclude = (row: Row | null, include?: Record<string, unknown>) => {
       if (!row || !include) return row;
+      for (const [field, [other, column]] of Object.entries(spec.includes ?? {})) {
+        if (!include[field]) continue;
+        const nested = include[field] as { orderBy?: unknown };
+        return {
+          ...row,
+          [field]: sortRows(
+            tables[other].filter((child) => child[column] === row[spec.key]),
+            nested.orderBy
+          ).map((child) => structuredClone(child)),
+        };
+      }
       if (model === 'appQuestionSet' && include.questions) {
         const nested = include.questions as { orderBy?: unknown };
         return {
@@ -253,9 +326,27 @@ export function createContentDbFake() {
       create: async (args: { data: Row }) => {
         const row: Row = { ...(spec.defaults?.() ?? {}) };
         if (spec.key === 'id' && args.data.id === undefined) row.id = `fake-${++sequence}`;
-        apply(row, args.data);
+        const { ...data } = args.data;
+        const children: [string, string, Row[]][] = [];
+        for (const [field, [other, column]] of Object.entries(spec.nested ?? {})) {
+          const relation = data[field] as { create?: Row[] } | undefined;
+          if (relation?.create) children.push([other, column, relation.create]);
+          delete data[field];
+        }
+        apply(row, data);
         checkUnique(model, row);
         rows().push(row);
+        for (const [other, column, creates] of children) {
+          for (const child of creates) {
+            const created: Row = {
+              ...(MODELS[other].defaults?.() ?? {}),
+              id: `fake-${++sequence}`,
+            };
+            apply(created, { ...child, [column]: row[spec.key] });
+            checkUnique(other, created);
+            tables[other].push(created);
+          }
+        }
         return structuredClone(row);
       },
       createMany: async (args: { data: Row[] }) => {

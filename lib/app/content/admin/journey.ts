@@ -68,20 +68,21 @@ import {
   type KeyedPlan,
 } from '@/lib/app/content/admin/keyed-import';
 import {
+  type ContentImportPlan,
+  IMPORT_TX_TIMEOUT_MS,
   importRefused,
   parseContentFile,
+  type RevisionEntry,
   revisionMoved,
+  revisionMovedNow,
   sectionsWriteNothing,
   staleRow,
+  toChanges,
   toHistory,
   toPlanSection,
-  type ContentImportPlan,
-  type RevisionEntry,
 } from '@/lib/app/content/admin/shared';
 import type { FieldChanges } from '@/lib/app/content/admin/documents';
 import type { JourneyEdit, ModuleEdit, TierEdit } from '@/lib/app/content/admin/validation';
-
-const IMPORT_TX_TIMEOUT_MS = 30_000;
 
 export type TierFields = Omit<JourneyTierRow, 'id' | 'revision'>;
 export type ModuleFields = ReturnType<typeof moduleFieldsOf>;
@@ -119,12 +120,6 @@ function moduleFieldsOf(row: Omit<JourneyModuleRow, 'revision'>) {
     phaseTiers,
     produces,
   };
-}
-
-function toChanges<F extends object>(before: F, after: F, changed: readonly (keyof F & string)[]) {
-  return Object.fromEntries(
-    changed.map((field) => [field, { from: before[field], to: after[field] }])
-  );
 }
 
 /**
@@ -208,7 +203,12 @@ async function writeTier(
       where: { id, revision: revisionRead },
       data: { ...next, revision },
     });
-    if (count === 0) throw revisionMoved(`The tier "${row.label}"`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `The tier "${row.label}"`,
+        revisionRead,
+        tx.appJourneyTier.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appJourneyTierRevision.create({
       data: { tierId: id, revision, ...next, changedFields: changed, origin: 'admin', editorId },
     });
@@ -245,7 +245,12 @@ async function writeModule(
       where: { id, revision: revisionRead },
       data: { ...data, revision },
     });
-    if (count === 0) throw revisionMoved(`"${row.title}"`, revision, revisionRead);
+    if (count === 0)
+      throw await revisionMovedNow(
+        `"${row.title}"`,
+        revisionRead,
+        tx.appJourneyModule.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appJourneyModuleRevision.create({
       data: { moduleId: id, revision, ...data, changedFields: changed, origin: 'admin', editorId },
     });

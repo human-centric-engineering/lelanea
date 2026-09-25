@@ -53,6 +53,8 @@ import { buildJourneySeed } from '@/lib/app/content/seed-input/journey-seed';
 import { buildQuestionSeed } from '@/lib/app/content/seed-input/question-seed';
 import { buildResourcesSeed } from '@/lib/app/content/seed-input/resources-seed';
 import { MAX_IMPORT_BYTES } from '@/lib/app/content/admin/shared';
+import { createResource } from '@/lib/app/content/admin/resources';
+import type { DocumentsAdminView } from '@/lib/app/content/admin/documents';
 
 const BASE = 'https://lelanea.com/api/v1/admin/app/content';
 
@@ -330,6 +332,79 @@ describe('items', () => {
     expect(audit.logAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'app_content.questions.question.remove' })
     );
+  });
+
+  it('audits a document save with its revision, not the whole document again', async () => {
+    const view = (
+      await envelope(
+        await getCollection(req('GET', '/documents'), params({ collection: 'documents' }))
+      )
+    ).data as unknown as DocumentsAdminView;
+    const mission = view.documents.find((document) => document.id === 'the_mission')!;
+    const {
+      id: _id,
+      position: _p,
+      readers: _r,
+      lockedSections: _l,
+      sections: _s,
+      blockCount: _b,
+      revision,
+      requiresAcknowledgement: _a,
+      locale: _loc,
+      ...fields
+    } = mission;
+
+    const response = await saveItem(
+      req('PUT', '/documents/document/the_mission', { ...fields, title: 'Edited', revision }),
+      params({ collection: 'documents', entity: 'document', id: 'the_mission' })
+    );
+
+    // The editor still gets the saved document back…
+    expect((await envelope(response)).data).toMatchObject({
+      changed: ['title'],
+      document: expect.objectContaining({ id: 'the_mission', title: 'Edited' }),
+    });
+    // …but the audit row records what changed and the revision it made, once.
+    expect(audit.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'app_content.documents.document.update',
+        changes: { title: expect.objectContaining({ to: 'Edited' }) },
+        metadata: { revision: revision + 1, mintedVersion: null },
+      })
+    );
+  });
+
+  it('audits retiring a resource, and not removing one already retired', async () => {
+    await createResource(
+      'a-video',
+      {
+        kind: 'video',
+        title: 'A video',
+        subtitle: 'One.',
+        relatesTo: null,
+        duration: '1:00',
+        href: 'https://example.com/a',
+      },
+      'editor'
+    );
+    const first = await removeItem(
+      req('DELETE', '/resources/resource/a-video?revision=1'),
+      params({ collection: 'resources', entity: 'resource', id: 'a-video' })
+    );
+    expect(first.status).toBe(200);
+    expect(audit.logAdminAction).toHaveBeenCalledTimes(1);
+    expect(audit.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'app_content.resources.resource.remove' })
+    );
+
+    // A retry, or a second click: the resource is already retired, so nothing
+    // changes, and the audit log must not show a removal that did not happen.
+    const again = await removeItem(
+      req('DELETE', '/resources/resource/a-video?revision=2'),
+      params({ collection: 'resources', entity: 'resource', id: 'a-video' })
+    );
+    expect(again.status).toBe(200);
+    expect(audit.logAdminAction).toHaveBeenCalledTimes(1);
   });
 
   it('404s a module delete: the roster owns structure', async () => {

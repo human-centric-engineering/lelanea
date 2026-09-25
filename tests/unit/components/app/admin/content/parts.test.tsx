@@ -159,7 +159,9 @@ describe('HistoryButton', () => {
     },
   ];
 
-  function renderIt(props: Partial<Parameters<typeof HistoryButton>[0]> = {}) {
+  function renderIt(
+    props: Partial<Extract<Parameters<typeof HistoryButton>[0], { collection: string }>> = {}
+  ) {
     const onRestored = vi.fn();
     render(
       <HistoryButton

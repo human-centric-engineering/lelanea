@@ -25,54 +25,17 @@
  * @see .context/app/safety.md
  */
 
-import { z } from 'zod';
-
 import rawCrisisResources from '@/seed-data/drafted/lelanea_crisis_resources.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
+import {
+  crisisResourcesFileSchema,
+  type CrisisResourcesFile,
+} from '@/lib/validations/app-crisis-resources';
 
-const serviceSchema = z.strictObject({
-  name: z.string().trim().min(1),
-  /** What the person does: "Call 116 123", "Text SHOUT to 85258". */
-  contact: z.string().trim().min(1),
-  hours: z.string().trim().min(1),
-});
-
-export const crisisResourcesFileSchema = z.strictObject({
-  resources: z.strictObject({
-    id: z.literal('lelanea_crisis_resources'),
-    title: z.string().min(1),
-    version: z.string().regex(/^\d+\.\d+$/),
-    locale: z.string().min(1),
-    provenance: z.strictObject({
-      status: z.enum(['draft', 'signed_off']),
-      awaitingSignOffFrom: z.string().min(1),
-      note: z.string().min(1),
-    }),
-    notes: z.array(z.string().min(1)),
-  }),
-  copy: z.strictObject({
-    hardIntro: z.string().trim().min(1),
-    softIntro: z.string().trim().min(1),
-    emergency: z.string().trim().min(1),
-    keptMessage: z.string().trim().min(1),
-  }),
-  international: serviceSchema.extend({ url: z.url() }),
-  regions: z
-    .array(
-      z.strictObject({
-        /** ISO 3166-1 alpha-2, upper case — compared against a locale's region subtag. */
-        region: z.string().regex(/^[A-Z]{2}$/),
-        emergencyNumber: z.string().trim().min(1),
-        services: z.array(serviceSchema).min(1),
-      })
-    )
-    .min(1)
-    .refine((regions) => new Set(regions.map((r) => r.region)).size === regions.length, {
-      message: 'each region may appear once',
-    }),
-});
-
-export type CrisisResourcesFile = z.infer<typeof crisisResourcesFileSchema>;
+// The schema moved to `lib/validations/app-crisis-resources.ts` in t-92, because
+// the admin import reads the same file shape and is reached by a request.
+// Re-exported so the seed and its tests keep importing it from here.
+export { crisisResourcesFileSchema, type CrisisResourcesFile };
 
 let parsed: CrisisResourcesFile | null = null;
 

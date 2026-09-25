@@ -44,7 +44,9 @@ const unit: SeedUnit = {
     }
 
     const file = getCrisisResources();
-    const status = file.resources.provenance.status;
+    // Absent from an admin export, which leaves the provenance out (t-92): a
+    // file with no claim to a sign-off seeds as a draft.
+    const status = file.resources.provenance?.status ?? 'draft';
     const signedOffAt = status === 'signed_off' ? new Date() : null;
 
     await prisma.$transaction([

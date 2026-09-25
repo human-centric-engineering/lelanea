@@ -91,3 +91,73 @@ export type CrisisService = z.infer<typeof crisisServiceSchema>;
 export type CrisisRegionCreate = z.infer<typeof crisisRegionCreateSchema>;
 export type CrisisRegionUpdate = z.infer<typeof crisisRegionUpdateSchema>;
 export type CrisisCopyUpdate = z.infer<typeof crisisCopyUpdateSchema>;
+
+// ─── The file ───────────────────────────────────────────────────────────────
+
+/** The one identity a crisis resources file may carry. */
+export const CRISIS_RESOURCES_FILE_ID = 'lelanea_crisis_resources';
+
+/**
+ * The crisis resources as a file: what the seed reads from
+ * `seed-data/drafted/lelanea_crisis_resources.json`, what the admin export
+ * writes and what its import reads (f-content-seeds t-92).
+ *
+ * Here rather than beside the seed's loader, because the import is reached by a
+ * request and nothing a request reaches may import `lib/app/content/seed-input/`
+ * (t-89). Built from the write schemas above, so a file can only put into the
+ * tables what an admin could have typed there, and nothing the read path
+ * (`contentFromRows`) would then refuse to serve.
+ *
+ * **Only `resources.id` is required of the header.** The title, version, locale,
+ * notes and provenance are about the drafted file and are not stored, so an
+ * export leaves them out rather than invent them. The provenance's `status` is
+ * read by the seed alone, as this environment's first write; an import never
+ * carries a sign-off across (`lib/app/safety/resources-admin.ts`).
+ */
+export const crisisResourcesFileSchema = z.strictObject({
+  resources: z.strictObject({
+    id: z.literal(CRISIS_RESOURCES_FILE_ID),
+    title: z.string().min(1).optional(),
+    version: z
+      .string()
+      .regex(/^\d+\.\d+$/)
+      .optional(),
+    locale: z.string().min(1).optional(),
+    provenance: z
+      .strictObject({
+        status: z.enum(['draft', 'signed_off']),
+        awaitingSignOffFrom: z.string().min(1),
+        note: z.string().min(1),
+      })
+      .optional(),
+    notes: z.array(z.string().min(1)).optional(),
+  }),
+  copy: crisisCopyUpdateSchema.pick({
+    hardIntro: true,
+    softIntro: true,
+    emergency: true,
+    keptMessage: true,
+  }),
+  international: z.strictObject({
+    name: crisisCopyUpdateSchema.shape.internationalName,
+    contact: crisisCopyUpdateSchema.shape.internationalContact,
+    url: crisisCopyUpdateSchema.shape.internationalUrl,
+    hours: crisisCopyUpdateSchema.shape.internationalHours,
+  }),
+  regions: z
+    .array(
+      z.strictObject({
+        // Upper case as written, not transformed: a file is the stored shape, and
+        // a lower-case code in one would be a different key from the stored row.
+        region: z.string().regex(/^[A-Z]{2}$/, 'A region is a two-letter upper-case code.'),
+        emergencyNumber: crisisRegionCreateSchema.shape.emergencyNumber,
+        services: crisisServicesSchema,
+      })
+    )
+    .min(1)
+    .refine((regions) => new Set(regions.map((r) => r.region)).size === regions.length, {
+      message: 'each region may appear once',
+    }),
+});
+
+export type CrisisResourcesFile = z.infer<typeof crisisResourcesFileSchema>;

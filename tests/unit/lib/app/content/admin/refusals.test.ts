@@ -61,7 +61,10 @@ const video = {
   href: 'https://example.com/f',
 };
 
-/** The seeded live videos, in reading order. */
+/**
+ * The live videos, in drawer order. The drafted library ships empty, so these
+ * are the ones a test added.
+ */
 function liveVideoIds(): string[] {
   return db
     .current!.rows('appResource')
@@ -137,6 +140,8 @@ describe('a save against a revision that has moved', () => {
         const words = (await resources.getResourcesAdminView()).words.find(
           (row) => row.key === 'default'
         )!;
+        // A valid edit, so the refusal below is the lock's and nothing else's.
+        expect(words.sourceCollection).toBe('foundational_documents');
         return resources.updateWords(
           'default',
           {
@@ -267,6 +272,76 @@ describe('the one document delete that is allowed', () => {
       details: { reason: 'import_refused' },
     });
     expect(db.current!.rows('appFoundationalDocument').map((row) => row.id)).toContain('opened');
+  });
+
+  it('refuses a document a key’s words cite, naming the key', async () => {
+    const file = await documents.exportDocumentsFile();
+    file.documents.push({
+      id: 'cited',
+      title: 'C',
+      subtitle: null,
+      category: 'about',
+      surface: 's',
+      version: '1.0',
+      blocks: [{ type: 'paragraph', text: 'Her words, verbatim.', section: null }],
+    });
+    file.collection.suggestedOrder.push('cited');
+    await documents.applyDocumentsImport(file, EDITOR);
+    const view = await resources.getResourcesAdminView();
+    const key = view.wordsKeyOptions.find((option) => !view.words.some((w) => w.key === option))!;
+    await resources.createWords(
+      key,
+      {
+        quote: 'Her words, verbatim.',
+        paragraphs: ['Her words, verbatim.'],
+        source: { collection: 'foundational_documents', id: 'cited' },
+      },
+      EDITOR
+    );
+
+    // Nothing renders it and no resource opens it, but deleting it would leave
+    // words citing a document that is not there — and the library unable to
+    // export, import or save them.
+    await expect(documents.deleteDocument('cited', 1, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining(`the words for "${key}"`),
+    });
+
+    const without = await documents.exportDocumentsFile();
+    without.documents = without.documents.filter((document) => document.id !== 'cited');
+    without.collection.suggestedOrder = without.collection.suggestedOrder.filter(
+      (id) => id !== 'cited'
+    );
+    const preview = await documents.previewDocumentsImport(without);
+    expect(preview.refusals.join(' ')).toContain(`the words for "${key}"`);
+    await expect(documents.applyDocumentsImport(without, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'import_refused' },
+    });
+    expect(db.current!.rows('appFoundationalDocument').map((row) => row.id)).toContain('cited');
+  });
+});
+
+describe('bringing a resource back', () => {
+  it('is refused when it would no longer be servable, and changes nothing', async () => {
+    await resources.createResource(
+      'for-a-module',
+      { ...video, relatesTo: 'module_01_values' },
+      EDITOR
+    );
+    await resources.setResourceRetired('for-a-module', true, 1, EDITOR);
+    // Retired while it related to a module that has since left the journey.
+    // The roster is code, so stand in for that change on the row itself.
+    await (db.current!.client as unknown as PrismaClient).appResource.update({
+      where: { id: 'for-a-module' },
+      data: { relatesTo: 'module_99_gone' },
+    });
+
+    const before = db.current!.fingerprint();
+    await expect(
+      resources.setResourceRetired('for-a-module', false, 2, EDITOR)
+    ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('module_99_gone') });
+    expect(db.current!.fingerprint()).toBe(before);
   });
 });
 

@@ -3,7 +3,8 @@
  * (f-content-seeds t-88).
  *
  * **The one service for `app_voice_overlay_set` and `app_voice_overlay`.** The
- * seed writes through it now, and the admin editor will in t-92.
+ * seed writes through it, and the admin editor writes the same tables
+ * (`lib/app/voice/overlays-admin.ts`, t-92).
  * `lib/app/voice/overlays.ts` selects from it by situation and
  * `lib/app/voice/context-contributor.ts` composes the block that reaches a
  * prompt.

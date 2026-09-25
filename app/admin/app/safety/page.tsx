@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
 import { CrisisResourcesPanel } from '@/components/app/admin/crisis-resources';
+import { CrisisFilePanel } from '@/components/app/admin/crisis-file-panel';
 import { CRISIS_RESOURCES_ENDPOINT } from '@/lib/app/safety/endpoint';
 import type { CrisisAdminView } from '@/lib/app/safety/crisis-admin';
 
@@ -57,7 +58,18 @@ export default async function CrisisResourcesPage() {
           <code>{CRISIS_RESOURCES_ENDPOINT}</code> is the thing to check.
         </p>
       ) : (
-        <CrisisResourcesPanel initialView={view} />
+        <>
+          {/* Keyed on every stored version, so an import applied below remounts
+              the editor with the rows as they now stand (t-92). */}
+          <CrisisResourcesPanel
+            key={[
+              view.copy?.version ?? 0,
+              ...view.regions.map((row) => `${row.region}@${row.version}`),
+            ].join('|')}
+            initialView={view}
+          />
+          {view.seeded && <CrisisFilePanel />}
+        </>
       )}
     </div>
   );

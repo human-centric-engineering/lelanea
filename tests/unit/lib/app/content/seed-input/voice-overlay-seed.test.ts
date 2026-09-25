@@ -126,7 +126,7 @@ describe('what the seed builds', () => {
     // `reviewNotes`, `sourceFiles`, `notes` and `textFormat` are notes ABOUT
     // the words rather than the words, and none of them is a column.
     const serialised = JSON.stringify(seed);
-    for (const note of readVoiceOverlaysFile().reviewNotes) {
+    for (const note of readVoiceOverlaysFile().reviewNotes!) {
       expect(serialised).not.toContain(note);
     }
   });

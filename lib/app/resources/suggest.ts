@@ -1,6 +1,6 @@
 /**
- * `suggest_resource` — the agent hands a person one of Lelañea Fulton's videos
- * or articles, in conversation (f-resources t-77; product description
+ * `suggest_resource` — the agent hands a person one of Lelañea Fulton's videos,
+ * audio or articles, in conversation (f-resources t-77; product description
  * §5 the Curator, §9 Resources).
  *
  * ## What it does, and what it deliberately cannot

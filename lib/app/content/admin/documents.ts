@@ -75,25 +75,28 @@ import {
   type SectionReader,
 } from '@/lib/app/content/admin/readers';
 import {
+  type ContentImportPlan,
   guardedRemoval,
+  IMPORT_TX_TIMEOUT_MS,
   importRefused,
   nextAcknowledgementVersion,
   parkingPosition,
   parseContentFile,
+  type RevisionEntry,
   revisionMoved,
+  revisionMovedNow,
   sectionsWriteNothing,
   staleRow,
+  toChanges,
   toHistory,
   toPlanSection,
-  type ContentImportPlan,
-  type RevisionEntry,
+  type Tx,
 } from '@/lib/app/content/admin/shared';
 import type { DocumentEdit, DocumentCollectionEdit } from '@/lib/app/content/admin/validation';
 
 const categorySchema = z.enum(['onboarding', 'about', 'legal']);
 
 /** A bulk apply writes a handful of rows; generous against a slow database. */
-const IMPORT_TX_TIMEOUT_MS = 30_000;
 
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 
@@ -159,16 +162,6 @@ function toAdminRow(row: AppFoundationalDocument): DocumentAdminRow {
 
 function diff(before: DocumentFields, after: DocumentFields): DocumentField[] {
   return changedFieldsOf(before, after, DOCUMENT_SNAPSHOT_FIELDS);
-}
-
-function toChanges(
-  before: DocumentFields,
-  after: DocumentFields,
-  changed: readonly DocumentField[]
-) {
-  return Object.fromEntries(
-    changed.map((field) => [field, { from: before[field], to: after[field] }])
-  );
 }
 
 /** The fields a change to which asks people to agree again. */
@@ -305,13 +298,12 @@ async function writeDocument(
       where: { id, revision: revisionRead },
       data: { ...next, revision },
     });
-    if (count === 0) {
-      const now = await tx.appFoundationalDocument.findUnique({
-        where: { id },
-        select: { revision: true },
-      });
-      throw revisionMoved(`"${row.title}"`, now?.revision ?? revisionRead, revisionRead);
-    }
+    if (count === 0)
+      throw await revisionMovedNow(
+        `"${row.title}"`,
+        revisionRead,
+        tx.appFoundationalDocument.findUnique({ where: { id }, select: { revision: true } })
+      );
     await tx.appFoundationalDocumentRevision.create({
       data: {
         documentId: id,
@@ -403,8 +395,10 @@ export async function restoreDocumentRevision(
 
 /**
  * Delete one document, at the revision read. Refused for every document a
- * surface renders, which today is all seven, and for one a resource opens in
- * the app.
+ * surface renders, which today is all seven, for one a resource opens in the
+ * app, and for one a key's words cite as their source (`sourceId` holds no
+ * foreign key, so nothing else would stop it — and words citing a missing
+ * document leave the library unable to export, import or save them).
  */
 export async function deleteDocument(
   id: string,
@@ -436,6 +430,17 @@ export async function deleteDocument(
         'Point those articles elsewhere first.'
       );
     }
+    const citing = await tx.appResourceWords.findMany({
+      where: { sourceCollection: WORDS_DOCUMENT_SOURCE, sourceId: id },
+      select: { key: true },
+    });
+    if (citing.length > 0) {
+      throw guardedRemoval(
+        `"${id}"`,
+        citing.map((words) => `the words for "${words.key}"`),
+        'Cite another document in those words first.'
+      );
+    }
     await tx.appFoundationalDocument.delete({ where: { id } });
     // Keep reading positions contiguous: an export numbers from its list.
     const rest = await tx.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } });
@@ -443,8 +448,6 @@ export async function deleteDocument(
   });
   await syncKnowledgeMirror();
 }
-
-type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 
 /**
  * Move documents to new reading positions, parking first so no two share a
@@ -616,11 +619,16 @@ export async function exportDocumentsFile(): Promise<FoundationalDocumentsFile> 
 
 // ─── Import ─────────────────────────────────────────────────────────────────
 
+/** The `sourceCollection` of words that cite one of these documents. */
+const WORDS_DOCUMENT_SOURCE = 'foundational_documents';
+
 interface StoredDocuments {
   collection: { id: string; title: string; version: string; locale: string } | null;
   rows: readonly AppFoundationalDocument[];
   /** Every resource that opens a document, retired ones included: each holds its document. */
   openedBy: readonly { id: string; documentId: string }[];
+  /** Every key whose words cite a foundational document as their source. */
+  citedBy: readonly { key: string; documentId: string }[];
 }
 
 interface DocumentsImport {
@@ -725,6 +733,12 @@ export function planDocumentsImport(
         `"${change.key}" is missing from the file, and ${opening.map((resource) => `the resource "${resource.id}"`).join(', ')} open it, so it cannot be deleted. Point those articles elsewhere first.`
       );
     }
+    const citing = stored.citedBy.filter((words) => words.documentId === change.key);
+    if (citing.length > 0) {
+      refusals.push(
+        `"${change.key}" is missing from the file, and ${citing.map((words) => `the words for "${words.key}"`).join(', ')} cite it, so it cannot be deleted. Cite another document in those words first.`
+      );
+    }
   }
 
   const sections = [toPlanSection('document', 'Documents', documents, 'delete')];
@@ -756,12 +770,19 @@ export function planDocumentsImport(
 }
 
 async function readStored(
-  client: Pick<typeof prisma, 'appDocumentCollection' | 'appFoundationalDocument' | 'appResource'>
+  client: Pick<
+    typeof prisma,
+    'appDocumentCollection' | 'appFoundationalDocument' | 'appResource' | 'appResourceWords'
+  >
 ): Promise<StoredDocuments> {
-  const [collection, rows, resources] = await Promise.all([
+  const [collection, rows, resources, words] = await Promise.all([
     client.appDocumentCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } }),
     client.appResource.findMany({ select: { id: true, documentId: true } }),
+    client.appResourceWords.findMany({
+      where: { sourceCollection: WORDS_DOCUMENT_SOURCE },
+      select: { key: true, sourceId: true },
+    }),
   ]);
   return {
     collection: collection && {
@@ -772,6 +793,7 @@ async function readStored(
     },
     rows,
     openedBy: resources.flatMap(({ id, documentId }) => (documentId ? [{ id, documentId }] : [])),
+    citedBy: words.map(({ key, sourceId }) => ({ key, documentId: sourceId })),
   };
 }
 

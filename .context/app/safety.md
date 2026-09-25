@@ -213,6 +213,31 @@ the wording **and a check that every number still answers.**
 | `POST /api/v1/admin/app/safety/resources/regions`                  | add a region, as a draft           |
 | `PUT/DELETE /api/v1/admin/app/safety/resources/regions/:region`    | edit / stop listing a region       |
 | `POST /api/v1/admin/app/safety/resources/regions/:region/sign-off` | sign a region off at `{ version }` |
+| `GET /api/v1/admin/app/safety/resources/export`                    | the tables as the seed's file      |
+| `POST /api/v1/admin/app/safety/resources/import/preview`           | what a file would do; writes none  |
+| `POST /api/v1/admin/app/safety/resources/import`                   | apply a file                       |
+
+### As a file (t-92)
+
+A signed-off set moves between environments as a file rather than by retyping
+it (`lib/app/safety/resources-admin.ts`). The export is the seed's shape, with
+only `resources.id` in the header: the title, version, notes and provenance
+describe the drafted file, are not stored, and are left out rather than
+invented. `crisisResourcesFileSchema` now lives in
+`lib/validations/app-crisis-resources.ts`, built from the write schemas, so a
+file cannot store anything a crisis turn would refuse to serve.
+
+- **Nothing signed off crosses.** Every row an import creates or changes arrives
+  as `draft` with its version bumped, whatever the file's `provenance` says; the
+  import never reads it. Signing off is an act on this environment's rows,
+  having read them here. A row the file leaves exactly as it is keeps its
+  status.
+- **It keeps what the file leaves out** unless the admin ticks "also remove"
+  (the owner's ruling, 2026-09-24). Removal matters most here: regions keep no
+  history, so a removed one can only be typed in again. The audit entry
+  (`app_crisis_resources.import`) records every key created, changed, removed or
+  kept, and the removed regions' numbers.
+- A fresh export re-imported plans no writes.
 
 ### Which region
 

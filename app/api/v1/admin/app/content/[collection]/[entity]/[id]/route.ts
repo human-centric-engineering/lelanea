@@ -54,7 +54,7 @@ export const PUT = withAdminAuth<Params>(async (request: NextRequest, session, {
       entityId: `app_content:${collection}/${entity}:${id}`,
       entityName: id,
       changes: outcome.changes,
-      metadata: outcome.result,
+      metadata: outcome.audit ?? outcome.result,
       clientIp: getClientIP(request),
     });
   }
@@ -76,16 +76,20 @@ export const DELETE = withAdminAuth<Params>(async (request: NextRequest, session
   }
   const outcome = await handlers.remove(id, revision, session.user.id);
 
-  log.info('Content item removed', { collection, entity, id });
-  logAdminAction({
-    userId: session.user.id,
-    action: `app_content.${collection}.${entity}.remove`,
-    entityType: 'settings',
-    entityId: `app_content:${collection}/${entity}:${id}`,
-    entityName: id,
-    changes: outcome.changes,
-    metadata: outcome.result,
-    clientIp: getClientIP(request),
-  });
+  log.info('Content item removed', { collection, entity, id, changed: outcome.changed });
+  // Removing a resource retires it, and retiring one already retired changes
+  // nothing — so, like every other write here, that is not audited.
+  if (outcome.changed.length > 0) {
+    logAdminAction({
+      userId: session.user.id,
+      action: `app_content.${collection}.${entity}.remove`,
+      entityType: 'settings',
+      entityId: `app_content:${collection}/${entity}:${id}`,
+      entityName: id,
+      changes: outcome.changes,
+      metadata: outcome.audit ?? outcome.result,
+      clientIp: getClientIP(request),
+    });
+  }
   return successResponse({ removed: id, ...outcome.result });
 });

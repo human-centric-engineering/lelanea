@@ -26,6 +26,24 @@ import type { NextRequest } from 'next/server';
 import { APIError, ConflictError, ErrorCodes, ValidationError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import type { KeyedChange, KeyedPlan } from '@/lib/app/content/admin/keyed-import';
+import type { executeTransaction } from '@/lib/db/utils';
+
+/** A content import's transaction may run past Prisma's 5s default. */
+export const IMPORT_TX_TIMEOUT_MS = 30_000;
+
+/** The transaction client every content service writes through. */
+export type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/** Field by field, what each changed field was and what it became: the audit log's `changes`. */
+export function toChanges<F extends object>(
+  before: F,
+  after: F,
+  changed: readonly (keyof F & string)[]
+): Record<string, { from: unknown; to: unknown }> {
+  return Object.fromEntries(
+    changed.map((field) => [field, { from: before[field], to: after[field] }])
+  );
+}
 
 // ─── Refusals ───────────────────────────────────────────────────────────────
 
@@ -35,6 +53,20 @@ export function revisionMoved(what: string, current: number, read: number): Conf
     `${what} was changed by someone else since you opened it (revision ${read}, now ${current}). Reload and read it again before saving.`,
     { reason: 'revision_moved', currentRevision: current }
   );
+}
+
+/**
+ * The stale-form refusal for a write that lost the race: the conditional
+ * `updateMany` matched nothing because another write landed between this one's
+ * read and its update. The row is read again for the revision it is at now,
+ * rather than guessed as one past the read, so the admin is told the truth.
+ */
+export async function revisionMovedNow(
+  what: string,
+  read: number,
+  now: Promise<{ revision: number } | null>
+): Promise<ConflictError> {
+  return revisionMoved(what, (await now)?.revision ?? read, read);
 }
 
 /** The same refusal for a row locked on `updatedAt`. */
@@ -154,6 +186,12 @@ export interface ImportPlanSection {
   removalKind: 'delete' | 'retire';
   unchanged: string[];
   skippedRetired: string[];
+  /**
+   * Stored and live, absent from the file, and left alone because the import
+   * was not asked to remove (t-92). Absent on the t-91 collections, which
+   * remove what a file omits until t-100 gives them the same choice.
+   */
+  kept?: string[];
 }
 
 /**
@@ -175,7 +213,9 @@ export function toPlanSection<F>(
   entity: string,
   label: string,
   plan: KeyedPlan<F>,
-  removalKind: ImportPlanSection['removalKind']
+  removalKind: ImportPlanSection['removalKind'],
+  /** Report what the file omits and the plan keeps. Set by a keep-by-default import. */
+  reportKept = false
 ): ImportPlanSection {
   const item = (change: KeyedChange<F>): ImportPlanItem => ({
     key: change.key,
@@ -190,6 +230,13 @@ export function toPlanSection<F>(
     removalKind,
     unchanged: plan.unchanged,
     skippedRetired: plan.skippedRetired,
+    ...(reportKept
+      ? {
+          kept: plan.absentFromFile.filter(
+            (key) => !plan.removals.some((change) => change.key === key)
+          ),
+        }
+      : {}),
   };
 }
 
@@ -239,6 +286,16 @@ export const MAX_IMPORT_BYTES = 1_000_000;
 const importBodySchema = z.strictObject({ file: z.unknown() });
 
 /**
+ * A keep-by-default import's body (t-92): the file, and whether to also remove
+ * what the file leaves out. Off unless asked for, and sent with the preview and
+ * the apply alike, so what was previewed is what applies.
+ */
+const importRequestSchema = z.strictObject({
+  file: z.unknown(),
+  removeAbsent: z.boolean().optional().default(false),
+});
+
+/**
  * Read an import body, refusing an oversize one before parsing it.
  *
  * The platform has no body ceiling for JSON routes (`lib/api/multipart-guard.ts`
@@ -250,6 +307,20 @@ const importBodySchema = z.strictObject({ file: z.unknown() });
  * @throws APIError 413 `FILE_TOO_LARGE`, or ValidationError on bad JSON or shape.
  */
 export async function readImportBody(request: NextRequest): Promise<{ file: unknown }> {
+  return readCappedJson(request, importBodySchema);
+}
+
+/**
+ * The same, for an import that keeps what a file omits unless told otherwise
+ * (the voice overlays, the golden set and the crisis resources, t-92).
+ */
+export async function readImportRequest(
+  request: NextRequest
+): Promise<{ file: unknown; removeAbsent: boolean }> {
+  return readCappedJson(request, importRequestSchema);
+}
+
+async function readCappedJson<T>(request: NextRequest, schema: z.ZodType<T>): Promise<T> {
   const tooLarge = () =>
     new APIError(
       `That file is larger than ${MAX_IMPORT_BYTES / 1_000_000} MB. A content file is tens of kilobytes; check it is the right file.`,
@@ -270,7 +341,7 @@ export async function readImportBody(request: NextRequest): Promise<{ file: unkn
   } catch {
     throw new ValidationError('Invalid JSON in request body');
   }
-  const parsed = importBodySchema.safeParse(body);
+  const parsed = schema.safeParse(body);
   if (!parsed.success) {
     throw new ValidationError('Invalid request body', {
       errors: parsed.error.issues.map((issue) => ({

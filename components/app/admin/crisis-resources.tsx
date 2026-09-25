@@ -374,7 +374,7 @@ function CopyForm({ copy, onSaved }: { copy: CopyJson; onSaved: (copy: CopyJson)
           {copy.status === 'draft' && (
             <Button
               type="button"
-              variant="outline"
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               disabled={busy || dirty}
               onClick={() => void signOff()}
               title={
@@ -473,7 +473,12 @@ function RegionCard({
             Edit
           </Button>
           {region.status === 'draft' && !region.malformed && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => void signOff()}>
+            <Button
+              size="sm"
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+              disabled={busy}
+              onClick={() => void signOff()}
+            >
               Sign off v{region.version}
             </Button>
           )}

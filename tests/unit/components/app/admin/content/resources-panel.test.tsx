@@ -59,7 +59,7 @@ function sent(index = 0) {
 
 const READERS = ['the resource drawer (/api/v1/app/content/resources)'];
 
-const FILM1: ResourceAdminRow = {
+const VIDEO1: ResourceAdminRow = {
   id: 'the_call',
   kind: 'video',
   position: 1,
@@ -74,7 +74,7 @@ const FILM1: ResourceAdminRow = {
   revision: 2,
 };
 
-const FILM2: ResourceAdminRow = {
+const VIDEO2: ResourceAdminRow = {
   id: 'second_wind',
   kind: 'video',
   position: 2,
@@ -89,7 +89,7 @@ const FILM2: ResourceAdminRow = {
   revision: 1,
 };
 
-const OLD_FILM: ResourceAdminRow = {
+const OLD_VIDEO: ResourceAdminRow = {
   id: 'old_video',
   kind: 'video',
   position: -1,
@@ -104,7 +104,7 @@ const OLD_FILM: ResourceAdminRow = {
   revision: 4,
 };
 
-const READING1: ResourceAdminRow = {
+const ARTICLE1: ResourceAdminRow = {
   id: 'her_words',
   kind: 'article',
   position: 1,
@@ -153,7 +153,7 @@ const COLLECTION = {
 const VIEW: ResourcesAdminView = {
   seeded: true,
   collection: COLLECTION,
-  resources: [FILM1, FILM2, OLD_FILM, READING1],
+  resources: [VIDEO1, VIDEO2, OLD_VIDEO, ARTICLE1],
   words: [WORDS_DEFAULT, WORDS_MODULE],
   relatesToOptions: ['module_01_a', 'journey', 'situations'],
   wordsKeyOptions: ['default', 'module_01_a', 'module_02_b', 'journey', 'situations'],
@@ -238,6 +238,35 @@ describe('the library', () => {
     });
     expect(await screen.findByText('Saved the library.')).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
+  });
+
+  it('refills from a newer library after a refresh, so a save cannot put old values back', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['locale'] }));
+    const { rerender } = render(<ResourcesPanel initialView={VIEW} />);
+
+    // An import retitled the library; the refresh brings the new row and lock.
+    const imported = {
+      ...VIEW,
+      collection: {
+        ...COLLECTION,
+        title: 'Imported title',
+        updatedAt: '2026-02-02T00:00:00.000Z',
+      },
+    };
+    rerender(<ResourcesPanel initialView={imported} />);
+    expect(screen.getByLabelText('Title')).toHaveValue('Imported title');
+
+    const locale = screen.getByLabelText('Locale');
+    await user.clear(locale);
+    await user.type(locale, 'en-GB');
+    await user.click(screen.getByRole('button', { name: 'Save library' }));
+
+    expect(sent().body).toMatchObject({
+      title: 'Imported title',
+      locale: 'en-GB',
+      updatedAt: '2026-02-02T00:00:00.000Z',
+    });
   });
 
   it('says plainly when nothing changed', async () => {

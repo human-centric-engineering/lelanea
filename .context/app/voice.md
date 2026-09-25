@@ -336,8 +336,8 @@ rows.
 
 **Seeded once, and operator-owned (`fp4`).**
 `prisma/seeds/app-lelanea/019-voice-overlays.ts` writes through the store only
-while the set row is absent, so the first admin edit in t-92 is not undone by the
-next boot. That is the opposite call from `003-voice-fingerprint`, which
+while the set row is absent, so an admin's edit on the Voice page (t-92, below)
+is not undone by the next boot. That is the opposite call from `003-voice-fingerprint`, which
 reconciles the always-on core onto the agent profile on every run — and the
 difference is only that the core has no editable surface yet.
 
@@ -362,6 +362,39 @@ and a second copy is the thing that drifts.
 crisis copy and for the same reason: a second source that answers when the first
 cannot is a second thing to keep signed off, and it is the one nobody looks at.
 See [`safety.md`](./safety.md#the-resource).
+
+### Edited on the Voice page (t-92)
+
+`/admin/app/voice` edits the overlays below the comparison board, through
+`lib/app/voice/overlays-admin.ts` and the routes under
+`/api/v1/admin/app/voice/overlays/**` (`withAdminAuth`, every write audited with
+its before and after).
+
+- **Each overlay** — label, `when`, heading, lines, `exemplarQuery` — and **the
+  set's two general blocks** (`coreOnly`, `exemplars`) are saved against the
+  revision the admin read; a stale form is refused 409. A save is what the next
+  turn reads, within `buildContext`'s 60s block cache.
+- **Sign-off** works as the crisis copy's does: any change to the words returns
+  the item to `draft`; a sign-off names the revision it read and is itself a
+  revision (`changedFields: ['status']`), so the history says who signed what
+  off. A move in the order is not a change to the words and keeps a sign-off.
+- **History and restore** read the revision tables; a restore saves the old words
+  as a new revision, in `draft`.
+- **Adding a situation is adding a row.** It goes at the end, as a draft, and a
+  turn asking for its key gets it from then on.
+- **Deleting one names what selects it first** (`overlaySelectors()`: the seats
+  in `SEAT_SITUATIONS`, and the admin chat). It is not refused — a context whose
+  situation is gone falls back to `coreOnly`, the safe direction — but the last
+  overlay is, because the file cannot hold a set with none. The gap in the order
+  closes; the audit entry keeps the removed words and the selectors.
+- **Export and import** use the seed's own file shape (the working notes are
+  optional in `voiceOverlaysFileSchema` so an export leaves them out). An import
+  **keeps what the file leaves out** unless the admin ticks "also remove"; the
+  preview and the apply carry the same flag (`readImportRequest`). Imported
+  changes to the words return an overlay to `draft`.
+
+The always-on core is **not** edited here: it is the prompt, and editing it is
+the voice workshop's job (§7.3).
 
 ### An unseeded overlay database does not fail a turn
 
@@ -605,8 +638,8 @@ discovery questions, the values work, and something painful surfacing. **Adding
 a fifth is a row.** Editing the file reaches only a database that was never
 seeded, so a fifth situation that existing environments must have ships as an
 `app_…` migration beside the file edit — the standing rule in
-[`database-changes.md`](./database-changes.md) — until the t-92 editor makes it
-an admin's act. There is still no TypeScript list of situations to fall out of
+[`database-changes.md`](./database-changes.md) — or is added on the Voice page
+(t-92), which is the usual way now. There is still no TypeScript list of situations to fall out of
 step with the table. A duplicate is refused three times over: the file's schema,
 the table's primary key, and `toVoiceOverlays()` on the way out.
 
@@ -751,11 +784,17 @@ dataset, which is correct rather than a gap.
 
 **The dataset id carries the version** — `lelanea-voice-golden-set-v1.1` (v1.0 before t-60 added the refusal cases) — because
 a case cannot be deleted once a run has scored it: `AiEvaluationCaseResult
-.datasetCase` declares no `onDelete`, so Prisma's default `Restrict` applies. So
-`004-voice-golden-set.ts` reconciles a version nothing has run yet, and
-**refuses** one something has, naming the remedy: bump `goldenSet.version`, which
-mints a new dataset beside the old one. Reconciling instead would re-caption every
-historical answer with a question it was never asked.
+.datasetCase` declares no `onDelete`, so Prisma's default `Restrict` applies.
+**A version something has run is frozen** — rewording one of its prompts would
+re-caption every stored answer with a question it was never asked.
+
+Since t-92 the freeze is enforced where the prompts are edited, on the Voice
+page (below), and `004-voice-golden-set.ts` creates a version's dataset **once**
+and then leaves its prompts to the admin: a stored set that differs from the
+file is logged and left, frozen or not. A changed file reaches an install that
+already has the version only as a new version (bump `goldenSet.version`). The
+dataset's name, description and tags are still reconciled on every run — no
+answer was given against them, and nothing in the admin edits them.
 
 ### Which version is current is a row, and only that (t-88)
 
@@ -785,11 +824,9 @@ the file. Three callers resolve the dataset id from it — `preflight.ts`,
 `comparison.ts` and `golden-set-admin.ts` — so none of them reads the authored
 file any more.
 
-**Written once, unlike the dataset beside it**, and the asymmetry is deliberate:
-a dataset is a pure projection of the authored prompts, so reconciling it cannot
-lose anyone's work, whereas this row becomes editable in t-92 and an operator who
-repoints the install at another version must not have that undone on the next
-boot. `20260929100300_app_voice_golden_set` creates the tables and
+**Written once**, like the dataset's prompts since t-92: an operator who
+repoints the install at another version (the Voice page's "Start a new version")
+must not have that undone on the next boot. `20260929100300_app_voice_golden_set` creates the tables and
 `20260929100400_app_voice_golden_set_data` inserts the row in every environment;
 `golden-set-seed.test.ts` pins the literal against `buildGoldenSetSeed()`.
 
@@ -805,6 +842,31 @@ the set has not been seeded and names `npm run db:seed`. Letting it throw
 rendered `app/admin/error.tsx` over the whole surface — so a first deploy lost the
 comparison board, the preflight and the run button, and the operator was shown
 no page in the one state whose remedy that page would have named.
+
+### Edited on the Voice page (t-92)
+
+`lib/app/voice/golden-set-editor.ts`, under `/api/v1/admin/app/voice/golden-set/**`,
+edits the current version's prompts — the prompt, its kind of moment, and what it
+tests (`probe`) — adds and removes them, and round-trips the seed's file.
+
+- **The lock is the dataset's `contentHash`.** A case has no revision column, and
+  the hash is exactly "the prompts as the admin read them". Every write rewrites
+  the cases in the seed's exact shape (0-based positions, metadata
+  `{ key, kind, probe }`) and re-pins `contentHash` and `caseCount`, because a
+  comparison records the hash it asked and the evaluation worker re-hashes on
+  claim.
+- **A frozen version refuses every edit with the reason** (409
+  `golden_set_frozen`, with the run count) rather than failing on save, and the
+  page says so before anyone tries. **"Start a new version"** is the remedy
+  (`HB10`, owner's ruling 2026-09-24): it copies the prompts into the next
+  version's dataset, named the way the seed names one, and repoints the install.
+  The old version, its cases and its comparisons are untouched.
+- **Every kind of moment keeps a prompt.** An edit or removal that would leave a
+  kind uncovered is refused, the file schema's own rule.
+- **An import applies to the current version only.** It keeps prompts the file
+  leaves out unless asked to remove them, and refuses a file that changes the
+  dataset's words or the control agent — both are the seed's, reconciled on every
+  run, so an edit here would be undone.
 
 **`projectGoldenSetCases()` no longer defaults to the authored set.** Its one
 production caller is seed 004, where reading seed material is the point; the

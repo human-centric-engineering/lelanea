@@ -696,18 +696,30 @@ function AddWords({
   );
 }
 
-export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminView }) {
-  const router = useRouter();
-  const view = initialView;
-  const [notice, setNotice] = useState<Notice>(null);
-  const [meta, setMeta] = useState({
+function libraryMetaOf(view: ResourcesAdminView) {
+  return {
     title: view.collection?.title ?? '',
     version: view.collection?.version ?? '',
     locale: view.collection?.locale ?? '',
     status: view.collection?.provenance.status ?? 'draft',
     awaitingSignOffFrom: view.collection?.provenance.awaitingSignOffFrom ?? '',
     note: view.collection?.provenance.note ?? '',
-  });
+    updatedAt: view.collection?.updatedAt ?? '',
+  };
+}
+
+export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminView }) {
+  const router = useRouter();
+  const view = initialView;
+  const [notice, setNotice] = useState<Notice>(null);
+  // The form holds the lock it was filled at, beside the values. After a
+  // refresh brings a newer collection (an import, another admin), the form is
+  // refilled from it: sending the new lock with values typed over the old one
+  // would pass the check and put the old values back.
+  const [meta, setMeta] = useState(() => libraryMetaOf(view));
+  if (view.collection && meta.updatedAt !== view.collection.updatedAt) {
+    setMeta(libraryMetaOf(view));
+  }
 
   function done(message: string) {
     setNotice({ tone: 'ok', text: message });
@@ -736,7 +748,7 @@ export function ResourcesPanel({ initialView }: { initialView: ResourcesAdminVie
           awaitingSignOffFrom: meta.awaitingSignOffFrom,
           note: meta.note,
         },
-        updatedAt: collection.updatedAt,
+        updatedAt: meta.updatedAt,
       }
     );
     if (result.ok) done(result.data.changed.length ? 'Saved the library.' : 'Nothing had changed.');
