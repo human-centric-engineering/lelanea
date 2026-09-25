@@ -36,7 +36,11 @@
 > (Framework → Modules → the module): that is what modules are for. A parallel
 > `app_…` table, an app-only admin page, or a seam carried around Daybreak for
 > something one of its elements already models is the anti-pattern. When an
-> element does not fit, raise it with the owner and Daybreak first. See
+> element does not fit, raise it with the owner and Daybreak first. **Extend
+> Daybreak; never edit its files:** register modules, slots and config through
+> its public API from our own files, call its services, fill its `leaf-*`
+> seams. A missing extension point is an issue on `daybreak`, not an edit, and
+> a new divergence needs the owner's explicit ruling. See
 > [`.context/app/building-with-daybreak.md`](./.context/app/building-with-daybreak.md).
 >
 > ### Three tiers

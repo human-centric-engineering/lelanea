@@ -32,6 +32,26 @@ area** (Framework → Modules → the module). That is the purpose of having
 modules. The discovery questions belong to Onboarding, so an admin finds them
 there.
 
+## Extend Daybreak; never edit its files
+
+Owner ruling, 25 September 2026. Every Daybreak file we edit becomes a conflict
+on the next sync, so we **extend** Daybreak and never change it. A feature
+reaches its elements through Daybreak's public API, called from our own files:
+
+- **Register**, don't modify: `registerModule()` with a module's
+  `slotDefinitions`, `configSchema`, `agentRoles` and `capabilities`, from
+  `lib/app/leaf-bootstrap.ts` and `lib/app/modules/definitions.ts`.
+- **Call** Daybreak's services and readers (its slot sync, its module config
+  reader, its knowledge grants); don't copy or patch them.
+- **Fill the `leaf-*` seams** Daybreak provides for boot, nav, export, brand,
+  drift and CI (the banner's roster).
+
+If a feature needs something Daybreak does not expose, that is an issue on
+`daybreak` (after the ownership check in the banner), not an edit. The rows in
+`divergences.md` are the existing exceptions, each with a deletion trigger. A
+new one needs the owner's explicit ruling, and it is never the recommended
+option.
+
 ## When the element does not fit
 
 Say so, to the owner, before building anything, and name what Daybreak lacks.

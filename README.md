@@ -44,6 +44,12 @@ that module's area (Framework → Modules). Name the element before designing
 anything:
 [`.context/app/building-with-daybreak.md`](./.context/app/building-with-daybreak.md).
 
+**Extend Daybreak; never edit its files.** Every Daybreak file we change is a
+conflict on the next sync. Register modules, slots and config through its
+public API from our own files, call its services, and fill its `leaf-*`
+seams. If Daybreak lacks an extension point, file an issue on `daybreak`
+rather than editing it.
+
 ## Where our code goes
 
 | Our code                                 | Goes in                                                |
