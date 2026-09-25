@@ -1,7 +1,9 @@
 /**
  * Apply a content file (f-content-seeds t-91).
  *
- * `POST { file }` → the plan that ran. The service re-plans inside its
+ * `POST { file, removeAbsent? }` → the plan that ran. What the file leaves out
+ * is kept unless `removeAbsent` is true (t-100), and the flag is sent with the
+ * preview too, so what was previewed is what applies. The service re-plans inside its
  * transaction against the rows as they stand and refuses (409
  * `import_refused`, the refusals listed) if that plan carries any, so an edit
  * made between the preview and this call is reconciled as it actually is.
@@ -22,7 +24,7 @@ import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { withAdminAuth } from '@/lib/auth/guards';
 import { collectionHandlers } from '@/lib/app/content/admin/registry';
-import { readImportBody } from '@/lib/app/content/admin/shared';
+import { readImportRequest } from '@/lib/app/content/admin/shared';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
 import { getClientIP } from '@/lib/security/ip';
 
@@ -31,10 +33,14 @@ export const POST = withAdminAuth<{ collection: string }>(
     const log = await getRouteLogger(request);
     const { collection } = await params;
     const handlers = collectionHandlers(collection);
-    const { file } = await readImportBody(request);
-    const plan = await handlers.apply(file, session.user.id);
+    const { file, removeAbsent } = await readImportRequest(request);
+    const plan = await handlers.apply(file, removeAbsent, session.user.id);
 
-    log.info('Content import applied', { collection, writesNothing: plan.writesNothing });
+    log.info('Content import applied', {
+      collection,
+      removeAbsent,
+      writesNothing: plan.writesNothing,
+    });
 
     if (!plan.writesNothing) {
       logAdminAction({
@@ -43,6 +49,7 @@ export const POST = withAdminAuth<{ collection: string }>(
         entityType: 'settings',
         entityId: `app_content:${collection}`,
         metadata: {
+          removeAbsent,
           sections: plan.sections.map((section) => ({
             entity: section.entity,
             created: section.creates.map((item) => item.key),
@@ -50,6 +57,7 @@ export const POST = withAdminAuth<{ collection: string }>(
             removed: section.removals.map((item) => item.key),
             removalKind: section.removalKind,
             skippedRetired: section.skippedRetired,
+            kept: section.kept ?? [],
           })),
         },
         clientIp: getClientIP(request),

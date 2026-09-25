@@ -393,18 +393,21 @@ interface JourneyImport {
 /**
  * What a module structure file would do to these rows. Pure.
  *
- * Structure must match the roster exactly, so there are only updates: every
- * tier and module in the file is one the roster has, and every one the roster
- * has is in the file.
+ * The roster owns structure, so there are only updates: every tier and module
+ * in the file is one the roster has, in its roster place. A tier or module the
+ * file leaves out is kept as it stands (t-100). Nothing on the journey can be
+ * removed, so `removeAbsent` asks for the file to be whole, and a file that is
+ * not is refused, as it was before imports kept what a file omits.
  */
 export function planJourneyImport(
   file: JourneyStructureFile,
-  stored: StoredJourney
+  stored: StoredJourney,
+  removeAbsent: boolean
 ): JourneyImport {
   const refusals: string[] = [];
   let seed: ReturnType<typeof journeySeedFromFile> | null = null;
   try {
-    seed = journeySeedFromFile(file);
+    seed = journeySeedFromFile(file, { partial: !removeAbsent });
   } catch (error) {
     refusals.push(error instanceof Error ? error.message : String(error));
   }
@@ -485,8 +488,8 @@ export function planJourneyImport(
       : [];
 
   const sections = [
-    toPlanSection('tier', 'Tiers', tiers, 'delete'),
-    toPlanSection('module', 'Modules', modules, 'delete'),
+    toPlanSection('tier', 'Tiers', tiers, 'delete', true),
+    toPlanSection('module', 'Modules', modules, 'delete', true),
   ];
   if (journeyChanged.length > 0 && stored.journey) {
     sections.unshift({
@@ -538,20 +541,24 @@ function parseJourneyFile(raw: unknown): JourneyStructureFile {
   return parseContentFile(journeyStructureFileSchema, raw, 'module structure');
 }
 
-export async function previewJourneyImport(raw: unknown): Promise<ContentImportPlan> {
-  return planJourneyImport(parseJourneyFile(raw), await readStored(prisma)).plan;
+export async function previewJourneyImport(
+  raw: unknown,
+  removeAbsent: boolean
+): Promise<ContentImportPlan> {
+  return planJourneyImport(parseJourneyFile(raw), await readStored(prisma), removeAbsent).plan;
 }
 
 /** Apply a module structure file. Re-planned in the transaction; idempotent. */
 export async function applyJourneyImport(
   raw: unknown,
+  removeAbsent: boolean,
   editorId: string
 ): Promise<ContentImportPlan> {
   const file = parseJourneyFile(raw);
   const plan = await executeTransaction(
     async (tx) => {
       const stored = await readStored(tx);
-      const planned = planJourneyImport(file, stored);
+      const planned = planJourneyImport(file, stored, removeAbsent);
       if (planned.plan.refusals.length > 0)
         throw importRefused('module structure', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;

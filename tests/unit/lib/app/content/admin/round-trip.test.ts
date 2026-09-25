@@ -100,21 +100,29 @@ beforeEach(async () => {
 
 describe('a fresh export, re-imported, plans no writes', () => {
   // Each against the seed, with the population asserted, so "no writes" is
-  // not the empty plan of an empty file.
+  // not the empty plan of an empty file. With removal asked for and without
+  // (t-100): a whole file leaves nothing out, so the flag changes nothing.
   it.each([
-    ['documents', exportDocumentsFile, previewDocumentsImport, 7],
-    ['journey', exportJourneyFile, previewJourneyImport, 5 + 17],
-    ['questions', exportQuestionsFile, previewQuestionsImport, 30],
-    ['resources', exportResourcesFile, previewResourcesImport, 2],
-  ] as const)('%s', async (_name, exportFile, preview, population) => {
-    const file = JSON.parse(JSON.stringify(await exportFile())) as unknown;
-    const plan = await preview(file);
+    ['documents', exportDocumentsFile, previewDocumentsImport, 7, false],
+    ['documents', exportDocumentsFile, previewDocumentsImport, 7, true],
+    ['journey', exportJourneyFile, previewJourneyImport, 5 + 17, false],
+    ['journey', exportJourneyFile, previewJourneyImport, 5 + 17, true],
+    ['questions', exportQuestionsFile, previewQuestionsImport, 30, false],
+    ['questions', exportQuestionsFile, previewQuestionsImport, 30, true],
+    ['resources', exportResourcesFile, previewResourcesImport, 2, false],
+    ['resources', exportResourcesFile, previewResourcesImport, 2, true],
+  ] as const)(
+    '%s, removing what it leaves out: %s',
+    async (_name, exportFile, preview, population, removeAbsent) => {
+      const file = JSON.parse(JSON.stringify(await exportFile())) as unknown;
+      const plan = await preview(file, removeAbsent);
 
-    expect(plan.refusals).toEqual([]);
-    expect(writes(plan)).toEqual([]);
-    expect(plan.writesNothing).toBe(true);
-    expect(unchangedCount(plan)).toBe(population);
-  });
+      expect(plan.refusals).toEqual([]);
+      expect(writes(plan)).toEqual([]);
+      expect(plan.writesNothing).toBe(true);
+      expect(unchangedCount(plan)).toBe(population);
+    }
+  );
 
   it('still plans nothing after reorders, retirements, removals and additions', async () => {
     const documents = db
@@ -174,8 +182,13 @@ describe('a fresh export, re-imported, plans no writes', () => {
       [exportQuestionsFile, previewQuestionsImport],
       [exportResourcesFile, previewResourcesImport],
     ] as const) {
-      const plan = await preview(JSON.parse(JSON.stringify(await exportFile())) as unknown);
-      expect(writes(plan)).toEqual([]);
+      for (const removeAbsent of [false, true]) {
+        const plan = await preview(
+          JSON.parse(JSON.stringify(await exportFile())) as unknown,
+          removeAbsent
+        );
+        expect(writes(plan)).toEqual([]);
+      }
     }
     // The live videos are contiguous from 0, the retired one parked below.
     const videos = db
@@ -224,11 +237,11 @@ describe('importing', () => {
     mission.title = 'The Mission, imported';
     const before = db.current!.fingerprint();
 
-    const preview = await previewDocumentsImport(file);
+    const preview = await previewDocumentsImport(file, false);
     expect(writes(preview)).toEqual(['update document:the_mission title']);
     expect(db.current!.fingerprint()).toBe(before);
 
-    const applied = await applyDocumentsImport(file, EDITOR);
+    const applied = await applyDocumentsImport(file, false, EDITOR);
     expect(writes(applied)).toEqual(['update document:the_mission title']);
     const revisions = db
       .current!.rows('appFoundationalDocumentRevision')
@@ -240,12 +253,12 @@ describe('importing', () => {
       title: 'The Mission, imported',
     });
 
-    const again = await applyDocumentsImport(file, EDITOR);
+    const again = await applyDocumentsImport(file, false, EDITOR);
     expect(again.writesNothing).toBe(true);
     expect(db.current!.rows('appFoundationalDocumentRevision')).toHaveLength(revisions.length + 6);
   });
 
-  it('refuses a file that drops a document a surface renders, and writes nothing', async () => {
+  it('refuses a removal import that drops a document a surface renders, and writes nothing', async () => {
     const file = await exportDocumentsFile();
     file.documents = file.documents.filter((document) => document.id !== 'the_mission');
     file.collection.suggestedOrder = file.collection.suggestedOrder.filter(
@@ -253,9 +266,9 @@ describe('importing', () => {
     );
     const before = db.current!.fingerprint();
 
-    const plan = await previewDocumentsImport(file);
+    const plan = await previewDocumentsImport(file, true);
     expect(plan.refusals.join(' ')).toContain('"the_mission" is missing from the file');
-    await expect(applyDocumentsImport(file, EDITOR)).rejects.toMatchObject({
+    await expect(applyDocumentsImport(file, true, EDITOR)).rejects.toMatchObject({
       status: 409,
       details: { reason: 'import_refused' },
     });
@@ -267,35 +280,37 @@ describe('importing', () => {
     const terms = file.documents.find((document) => document.id === 'terms_of_use')!;
     terms.title = 'Terms, reworded';
 
-    expect((await previewDocumentsImport(file)).refusals.join(' ')).toContain('"version" to "1.2"');
+    expect((await previewDocumentsImport(file, false)).refusals.join(' ')).toContain(
+      '"version" to "1.2"'
+    );
 
     terms.version = '1.2';
-    const plan = await applyDocumentsImport(file, EDITOR);
+    const plan = await applyDocumentsImport(file, false, EDITOR);
     expect(writes(plan)).toEqual(['update document:terms_of_use title,version']);
   });
 
   it('refuses her original file, which carries no section keys, naming the surfaces', async () => {
     const { readFoundationalDocumentsFile } =
       await import('@/lib/app/content/seed-input/foundational-seed');
-    const plan = await previewDocumentsImport(readFoundationalDocumentsFile());
+    const plan = await previewDocumentsImport(readFoundationalDocumentsFile(), false);
     expect(plan.refusals.join(' ')).toContain('the welcome email');
   });
 
   it('refuses a file that is not a documents file, with each problem named', async () => {
-    await expect(previewDocumentsImport({ collection: {} })).rejects.toMatchObject({
+    await expect(previewDocumentsImport({ collection: {} }, false)).rejects.toMatchObject({
       status: 400,
       details: { errors: expect.arrayContaining([expect.objectContaining({ path: 'documents' })]) },
     });
   });
 
-  it('a questions file without a question removes it and closes the gap', async () => {
+  it('a removal import of a questions file without a question removes it and closes the gap', async () => {
     const file = await exportQuestionsFile();
     file.questions = file.questions
       .filter((question) => question.id !== 'q02')
       .map((question, index) => ({ ...question, number: index + 1 }));
     file.content.questionCount = file.questions.length;
 
-    const plan = await applyQuestionsImport(file, EDITOR);
+    const plan = await applyQuestionsImport(file, true, EDITOR);
 
     expect(writes(plan)).toContain('remove question:q02');
     const numbers = db
@@ -321,7 +336,7 @@ describe('importing', () => {
     const withKept = await exportResourcesFile();
     await setResourceRetired('kept', true, 1, EDITOR);
 
-    const plan = await applyResourcesImport(withKept, EDITOR);
+    const plan = await applyResourcesImport(withKept, false, EDITOR);
 
     expect(plan.sections.find((section) => section.entity === 'resource')?.skippedRetired).toEqual([
       'kept',
@@ -331,7 +346,7 @@ describe('importing', () => {
     });
   });
 
-  it('a module structure file whose structure differs from the roster is refused', async () => {
+  it('a removal import of a module structure file missing a roster module is refused', async () => {
     const file = await exportJourneyFile();
     file.modules = file.modules.slice(0, -1);
     file.tiers = file.tiers.map((tier) => ({
@@ -339,6 +354,6 @@ describe('importing', () => {
       modules: tier.modules.filter((id) => file.modules.some((m) => m.id === id)),
     }));
 
-    await expect(applyJourneyImport(file, EDITOR)).rejects.toMatchObject({ status: 409 });
+    await expect(applyJourneyImport(file, true, EDITOR)).rejects.toMatchObject({ status: 409 });
   });
 });

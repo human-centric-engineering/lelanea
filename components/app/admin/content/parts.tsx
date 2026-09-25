@@ -366,7 +366,7 @@ function PlanView({ plan }: { plan: ContentImportPlan }) {
 
 /**
  * Where a file is exported and imported: a content collection, or (t-92) the
- * three endpoints of a keep-by-default round-trip.
+ * three endpoints of a round-trip of its own.
  */
 type FileSource =
   | { collection: ContentCollection; endpoints?: never }
@@ -386,9 +386,10 @@ function fileEndpoints(source: FileSource) {
  * preview first, which writes nothing, then apply, which re-plans against the
  * rows as they stand and shows the plan that ran.
  *
- * With `removal` (t-92), the import keeps what the file leaves out unless the
- * admin ticks the box to remove it. Ticking or unticking drops the preview, so
- * the plan on screen is always the one apply will run.
+ * Every import keeps what the file leaves out (t-92, t-100). With `removal`,
+ * the admin may tick a box to remove it instead; ticking or unticking drops the
+ * preview, so the plan on screen is always the one apply will run. Without it
+ * (the journey, which cannot lose anything) there is no box.
  */
 export function ImportExportPanel({
   fileName,
@@ -421,9 +422,9 @@ export function ImportExportPanel({
     }
   }
 
-  /** The body both calls send: the flag only where the panel offers it. */
+  /** The body both calls send. Without the box, never a removal. */
   function body(file: unknown) {
-    return removal ? { file, removeAbsent } : { file };
+    return { file, removeAbsent: removal ? removeAbsent : false };
   }
 
   async function exportFile() {
@@ -480,11 +481,10 @@ export function ImportExportPanel({
         </h3>
         <FieldHelp title="Export and import">
           The export is {what} as stored now, in the same shape as <code>{fileName}</code>, so it
-          can be dropped into the seed folder or edited and brought back.{' '}
-          {removal
-            ? 'Importing adds and changes what the file says. Anything stored here that the file leaves out is kept, unless you tick the box to remove it.'
-            : 'Importing treats the file as the whole collection: anything stored and missing from the file is listed for removal.'}{' '}
-          Preview first; it writes nothing.
+          can be dropped into the seed folder or edited and brought back. Importing adds and changes
+          what the file says. Anything stored here that the file leaves out is kept
+          {removal ? ', unless you tick the box to remove it' : ''}. Preview first; it writes
+          nothing.
         </FieldHelp>
       </div>
       <div className="flex flex-wrap items-center gap-2">

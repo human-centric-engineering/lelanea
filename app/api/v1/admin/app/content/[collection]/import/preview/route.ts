@@ -1,8 +1,10 @@
 /**
  * What a content file would do, without doing it (f-content-seeds t-91).
  *
- * `POST { file }` → the plan: what would be created, changed and removed (or
- * retired), what is unchanged, and any refusal that would stop the apply.
+ * `POST { file, removeAbsent? }` → the plan: what would be created, changed and
+ * removed (or retired), what is unchanged, what the file leaves out and is kept
+ * (all of it, unless `removeAbsent` is true; t-100), and any refusal that would
+ * stop the apply.
  * Reads the stored rows and writes nothing.
  *
  * Its own route rather than a flag on the apply, as the slot preview is: a
@@ -22,18 +24,19 @@ import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { withAdminAuth } from '@/lib/auth/guards';
 import { collectionHandlers } from '@/lib/app/content/admin/registry';
-import { readImportBody } from '@/lib/app/content/admin/shared';
+import { readImportRequest } from '@/lib/app/content/admin/shared';
 
 export const POST = withAdminAuth<{ collection: string }>(
   async (request: NextRequest, _session, { params }) => {
     const log = await getRouteLogger(request);
     const { collection } = await params;
     const handlers = collectionHandlers(collection);
-    const { file } = await readImportBody(request);
-    const plan = await handlers.preview(file);
+    const { file, removeAbsent } = await readImportRequest(request);
+    const plan = await handlers.preview(file, removeAbsent);
 
     log.info('Content import previewed', {
       collection,
+      removeAbsent,
       writesNothing: plan.writesNothing,
       refusals: plan.refusals.length,
     });

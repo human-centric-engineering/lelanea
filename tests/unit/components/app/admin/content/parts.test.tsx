@@ -359,18 +359,88 @@ describe('ImportExportPanel', () => {
     ],
   };
 
-  function renderPanel() {
+  function renderPanel(removal?: { note?: string }) {
     const onApplied = vi.fn();
     render(
       <ImportExportPanel
         collection="documents"
         fileName="lelanea_foundational_documents.json"
         what="the documents"
+        removal={removal}
         onApplied={onApplied}
       />
     );
     return { onApplied };
   }
+
+  // t-100: an import keeps what a file leaves out; removing is asked for.
+  describe('removing what the file leaves out', () => {
+    async function choose(user: ReturnType<typeof userEvent.setup>) {
+      await user.upload(
+        screen.getByLabelText('Choose a file to import'),
+        new File(['{"documents":[]}'], 'documents.json', { type: 'application/json' })
+      );
+    }
+
+    it('is off by default, and ticking it drops the preview and sends it with both calls', async () => {
+      const user = userEvent.setup();
+      renderPanel({ note: 'A removed document is deleted with its history.' });
+      const box = screen.getByRole('checkbox', { name: 'Also remove what the file leaves out' });
+      expect(box).not.toBeChecked();
+      expect(screen.getByText('A removed document is deleted with its history.')).toBeVisible();
+      await choose(user);
+
+      fetchMock.mockResolvedValueOnce(ok({ plan: CHANGE_PLAN }));
+      await user.click(screen.getByRole('button', { name: 'Preview import' }));
+      expect(sent().body).toEqual({ file: { documents: [] }, removeAbsent: false });
+      expect(await screen.findByText('Documents')).toBeInTheDocument();
+
+      // The plan on screen was made without removal, so it cannot be applied now.
+      await user.click(box);
+      expect(screen.queryByText('Documents')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Apply import' })).toBeDisabled();
+
+      fetchMock.mockResolvedValueOnce(ok({ plan: CHANGE_PLAN }));
+      await user.click(screen.getByRole('button', { name: 'Preview import' }));
+      expect(sent(1).body).toEqual({ file: { documents: [] }, removeAbsent: true });
+      expect(await screen.findByText('Documents')).toBeInTheDocument();
+
+      fetchMock.mockResolvedValueOnce(ok({ plan: CHANGE_PLAN }));
+      await user.click(screen.getByRole('button', { name: 'Apply import' }));
+      expect(sent(2).url).toBe(contentImportEndpoint('documents'));
+      expect(sent(2).body).toEqual({ file: { documents: [] }, removeAbsent: true });
+    });
+
+    it('has no box where nothing can be removed, and never asks for a removal', async () => {
+      const user = userEvent.setup();
+      renderPanel();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      await choose(user);
+
+      fetchMock.mockResolvedValueOnce(ok({ plan: CHANGE_PLAN }));
+      await user.click(screen.getByRole('button', { name: 'Preview import' }));
+      expect(sent().body).toEqual({ file: { documents: [] }, removeAbsent: false });
+    });
+
+    it('lists what the file leaves out as kept', async () => {
+      const user = userEvent.setup();
+      renderPanel({});
+      await choose(user);
+      fetchMock.mockResolvedValueOnce(
+        ok({
+          plan: {
+            ...CHANGE_PLAN,
+            sections: [{ ...CHANGE_PLAN.sections[0], kept: ['the_mission'] }],
+          },
+        })
+      );
+      await user.click(screen.getByRole('button', { name: 'Preview import' }));
+
+      expect(await screen.findByText(/Kept, though the file leaves them out/)).toHaveTextContent(
+        'the_mission'
+      );
+    });
+  });
 
   it('fetches the export and hands it to the browser under the server-given name', async () => {
     const user = userEvent.setup();
@@ -429,7 +499,7 @@ describe('ImportExportPanel', () => {
 
     expect(sent().url).toBe(contentImportPreviewEndpoint('documents'));
     expect(sent().method).toBe('POST');
-    expect(sent().body).toEqual({ file: { documents: [] } });
+    expect(sent().body).toEqual({ file: { documents: [] }, removeAbsent: false });
     expect(await screen.findByText('Documents')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Apply import' })).toBeEnabled();
   });

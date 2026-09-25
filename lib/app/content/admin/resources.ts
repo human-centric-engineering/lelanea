@@ -71,6 +71,7 @@ import {
 import { RESOURCE_READERS } from '@/lib/app/content/admin/readers';
 import {
   type ContentImportPlan,
+  type ImportPlanSection,
   guardedRemoval,
   IMPORT_TX_TIMEOUT_MS,
   importRefused,
@@ -868,11 +869,18 @@ interface ResourcesImport {
 }
 
 /**
- * What a resources file would do. Pure. The file is the whole live library: a
- * live resource it omits is retired (never deleted), a retired one it names is
- * left retired, and a words key it omits is removed.
+ * What a resources file would do. Pure. A live resource the file leaves out is
+ * kept, after the file's own of its kind in their stored order, and so is a
+ * words key it leaves out (t-100). With `removeAbsent` the file is the whole
+ * live library instead: a live resource it omits is retired (never deleted),
+ * and a words key it omits is removed. A retired one it names is left retired
+ * either way.
  */
-export function planResourcesImport(file: ResourcesFile, stored: StoredResources): ResourcesImport {
+export function planResourcesImport(
+  file: ResourcesFile,
+  stored: StoredResources,
+  removeAbsent: boolean
+): ResourcesImport {
   const seed = resourcesSeedFromFile(file);
   const refusals: string[] = [];
   if (!stored.collection)
@@ -884,10 +892,17 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
   // result re-imports with no position changes.
   const retiredHere = new Set(stored.resources.filter((row) => row.retired).map((row) => row.id));
   const namedRetired = seed.resources.filter((row) => retiredHere.has(row.id)).map((row) => row.id);
+  // A kept resource follows the file's own of its kind, so each kind's order
+  // stays contiguous from zero and no two resources claim one place.
+  const inFile = new Set(seed.resources.map((row) => row.id));
+  const kept = removeAbsent
+    ? []
+    : stored.resources.filter((row) => !row.retired && !inFile.has(row.id));
   const liveIncoming = RESOURCE_KINDS.flatMap((kind) =>
-    seed.resources
-      .filter((row) => row.kind === kind && !retiredHere.has(row.id))
-      .map((row, position) => ({ ...row, position }))
+    [
+      ...seed.resources.filter((row) => row.kind === kind && !retiredHere.has(row.id)),
+      ...kept.filter((row) => row.kind === kind),
+    ].map((row, position) => ({ ...row, position }))
   );
 
   // Retired rows park below zero, one below another, in the order they retire.
@@ -904,7 +919,9 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
     allFields: RESOURCE_FIELDS,
     toCreate: (row) => resourceFieldsOf({ ...row, retired: false }),
     toUpdate: (_before, row) => resourceFieldsOf({ ...row, retired: false }),
-    onAbsent: (before) => ({ ...before, retired: true, position: --retiredBelow }),
+    onAbsent: removeAbsent
+      ? (before) => ({ ...before, retired: true, position: --retiredBelow })
+      : 'keep',
   });
   resources.skippedRetired.push(...namedRetired);
   for (const change of resources.updates) {
@@ -926,7 +943,7 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
     allFields: WORDS_SNAPSHOT_FIELDS,
     toCreate: (row) => wordsFieldsOf(row),
     toUpdate: (_before, row) => wordsFieldsOf(row),
-    onAbsent: () => null,
+    onAbsent: removeAbsent ? () => null : 'keep',
   });
   const documentsById = new Map(stored.documents.map((document) => [document.id, document]));
   for (const change of [...words.creates, ...words.updates]) {
@@ -960,9 +977,12 @@ export function planResourcesImport(file: ResourcesFile, stored: StoredResources
       )
     : [];
 
-  const sections = [
-    toPlanSection('resource', 'Videos, audio and articles', resources, 'retire'),
-    toPlanSection('words', 'Her words', words, 'delete'),
+  const sections: ImportPlanSection[] = [
+    {
+      ...toPlanSection('resource', 'Videos, audio and articles', resources, 'retire'),
+      kept: kept.map((row) => row.id),
+    },
+    toPlanSection('words', 'Her words', words, 'delete', true),
   ];
   if (collectionChanged.length > 0 && stored.collection) {
     sections.unshift({
@@ -1009,20 +1029,25 @@ async function parseResourcesFile(raw: unknown): Promise<ResourcesFile> {
   return parseContentFile(await resourcesFileSchema(), raw, 'resources');
 }
 
-export async function previewResourcesImport(raw: unknown): Promise<ContentImportPlan> {
-  return planResourcesImport(await parseResourcesFile(raw), await readStored(prisma)).plan;
+export async function previewResourcesImport(
+  raw: unknown,
+  removeAbsent: boolean
+): Promise<ContentImportPlan> {
+  return planResourcesImport(await parseResourcesFile(raw), await readStored(prisma), removeAbsent)
+    .plan;
 }
 
 /** Apply a resources file. Re-planned in the transaction; idempotent. */
 export async function applyResourcesImport(
   raw: unknown,
+  removeAbsent: boolean,
   editorId: string
 ): Promise<ContentImportPlan> {
   const file = await parseResourcesFile(raw);
   return executeTransaction(
     async (tx) => {
       const stored = await readStored(tx);
-      const planned = planResourcesImport(file, stored);
+      const planned = planResourcesImport(file, stored, removeAbsent);
       if (planned.plan.refusals.length > 0) throw importRefused('resources', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;
       const collectionId = stored.collection!.id;

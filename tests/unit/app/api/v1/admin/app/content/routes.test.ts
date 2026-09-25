@@ -184,9 +184,60 @@ describe('import', () => {
       expect.objectContaining({
         action: 'app_content.questions.import',
         userId: mockAdminUser().user.id,
-        metadata: { sections: [expect.objectContaining({ entity: 'question', updated: ['q01'] })] },
+        metadata: {
+          removeAbsent: false,
+          sections: [expect.objectContaining({ entity: 'question', updated: ['q01'] })],
+        },
       })
     );
+  });
+
+  // t-100: the flag reaches the service, and a missing flag is a keep.
+  it('keeps what a file leaves out unless removeAbsent is sent, and audits which it was', async () => {
+    const file = (await exported('questions')) as {
+      content: { questionCount: number };
+      questions: { id: string; number: number }[];
+    };
+    file.questions = file.questions
+      .filter((question) => question.id !== 'q02')
+      .map((question, index) => ({ ...question, number: index + 1 }));
+    file.content.questionCount = file.questions.length;
+
+    const kept = await envelope(
+      await previewImport(
+        req('POST', '/questions/import/preview', { file }),
+        params({ collection: 'questions' })
+      )
+    );
+    expect(kept.data).toMatchObject({
+      plan: { sections: [expect.objectContaining({ removals: [], kept: ['q02'] })] },
+    });
+
+    const response = await applyImport(
+      req('POST', '/questions/import', { file, removeAbsent: true }),
+      params({ collection: 'questions' })
+    );
+    expect(response.status).toBe(200);
+    expect(db.current!.rows('appDiscoveryQuestion').map((row) => row.id)).not.toContain('q02');
+    expect(audit.logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          removeAbsent: true,
+          sections: [expect.objectContaining({ entity: 'question', removed: ['q02'] })],
+        }),
+      })
+    );
+  });
+
+  it('refuses a removeAbsent that is not a boolean', async () => {
+    const response = await previewImport(
+      req('POST', '/questions/import/preview', {
+        file: await exported('questions'),
+        removeAbsent: 'yes',
+      }),
+      params({ collection: 'questions' })
+    );
+    expect(response.status).toBe(400);
   });
 
   it('refuses an oversize file with 413 FILE_TOO_LARGE before reading it', async () => {
