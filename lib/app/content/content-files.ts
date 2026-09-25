@@ -254,6 +254,16 @@ function toModuleRow(entry: JourneyModule): Omit<JourneyModuleRow, 'revision'> {
  */
 export function assertFileWithinRoster(file: JourneyStructureFile): void {
   const problems: string[] = [];
+  // The whole-file check catches a repeat by comparing to the roster's list;
+  // a part file has no list to compare to, so it looks for one itself.
+  const lists: [string, string[]][] = [
+    ['tier', file.tiers.map((tier) => tier.id)],
+    ['module', file.modules.map((entry) => entry.id)],
+  ];
+  for (const [what, list] of lists) {
+    const repeated = [...new Set(list.filter((id, index) => list.indexOf(id) !== index))];
+    for (const id of repeated) problems.push(`the file lists ${what} "${id}" more than once`);
+  }
   const rosterTiers = new Set(JOURNEY_TIERS.map((tier) => `${tier.id}@${tier.order}`));
   for (const tier of file.tiers) {
     if (!rosterTiers.has(`${tier.id}@${tier.order}`)) {

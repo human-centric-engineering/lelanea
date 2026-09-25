@@ -195,6 +195,15 @@ describe('journey', () => {
     expect(db.current!.fingerprint()).toBe(before);
   });
 
+  it('refuses a part file that lists a module twice', async () => {
+    const { file } = await withoutLastModule();
+    file.modules.push({ ...file.modules[1], title: 'A second copy' });
+
+    expect((await journey.previewJourneyImport(file, false)).refusals.join(' ')).toContain(
+      `lists module "${file.modules[1].id}" more than once`
+    );
+  });
+
   it('refuses a part file that moves a module, flag or not', async () => {
     const { file } = await withoutLastModule();
     file.modules[0].number = 99;
