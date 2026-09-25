@@ -89,6 +89,11 @@ its own.
 Each question has a weight from 0 to 100. The fully weighted ones (100) are the
 Core Set. The set's **Core Set only** switch asks only those.
 
+- **The weight is a slider on each question's row**, saved about half a second
+  after it is let go of, so the Core Set can be tuned down the whole list without
+  opening each question. Saves go one at a time, because each needs the
+  question's current revision. A value let go of during a save is sent once the
+  page has refreshed. The dialog keeps its number field, for a new question.
 - **Every question starts at 100 and the switch starts off.** Which questions
   are core is the owner's call, so turning the switch on changes nothing until an
   admin lowers some weights.

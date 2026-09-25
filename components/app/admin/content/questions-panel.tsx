@@ -11,10 +11,14 @@
  * under the question's id, so rewording a question re-projects the slot they
  * are filed under (warned here if that fails), and a removed question keeps
  * its answers and its id is never given out again.
+ *
+ * The weight is also a slider on each row, saved when it is let go of, so the
+ * Core Set can be tuned across the whole list without opening each question.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as SliderPrimitive from '@radix-ui/react-slider';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { orNull, send } from '@/components/app/admin/content/client';
+import { useTimeout } from '@/lib/hooks/use-timeout';
 import {
   EditDialog,
   FieldRow,
@@ -186,22 +191,176 @@ function QuestionFields({
   );
 }
 
-function QuestionRow({
+/** How long after the slider is let go of before its weight is saved. */
+const WEIGHT_AUTOSAVE_MS = 600;
+
+/** What the row's weight slider says about its last save. */
+type WeightStatus =
+  | { state: 'idle' }
+  | { state: 'saving' }
+  | { state: 'saved' }
+  | { state: 'error'; message: string };
+
+function weightLabel(weight: number): string {
+  return weight >= FULL_WEIGHT ? 'Core' : String(weight);
+}
+
+/**
+ * The weight, as a slider on the row, saved when it is let go of. Saves are
+ * debounced, so a run of arrow-key presses is one save, and one at a time: the
+ * PUT needs the question's revision, which only moves when the page refreshes
+ * after a save. A value let go of meanwhile waits for that revision, then saves.
+ */
+function WeightSlider({
   question,
-  index,
+  onSaved,
+  onWarn,
+}: {
+  question: DiscoveryQuestionView;
+  onSaved: () => void;
+  onWarn: (message: string) => void;
+}) {
+  const [weight, setWeight] = useState(question.weight);
+  const [shownWeight, setShownWeight] = useState(question.weight);
+  const [status, setStatus] = useState<WeightStatus>({ state: 'idle' });
+  /** The slider holds a value not yet saved: moved, waiting, or on its way. */
+  const [unsaved, setUnsaved] = useState(false);
+  const latest = useRef(question);
+  const inFlight = useRef(false);
+  const queued = useRef<number | null>(null);
+  const generation = useRef(0);
+  /** A value let go of whose debounce has not fired yet. */
+  const awaiting = useRef(false);
+  const later = useTimeout();
+
+  // A refresh brought a weight saved elsewhere (the dialog, a restore, an
+  // import): show it, unless the slider holds a value of its own not yet saved.
+  if (question.weight !== shownWeight) {
+    setShownWeight(question.weight);
+    if (!unsaved) setWeight(question.weight);
+  }
+
+  async function save(value: number) {
+    const current = latest.current;
+    if (value === current.weight) {
+      setUnsaved(false);
+      setStatus({ state: 'idle' });
+      return;
+    }
+    inFlight.current = true;
+    setStatus({ state: 'saving' });
+    const result = await send<{ changed: string[] } & SlotSyncReport>(
+      'PUT',
+      contentItemEndpoint('questions', 'question', current.id),
+      { revision: current.revision, ...bodyOf(draftOf(current)), weight: value }
+    );
+    if (!result.ok) {
+      inFlight.current = false;
+      queued.current = null;
+      setUnsaved(false);
+      setStatus({ state: 'error', message: result.message });
+      return;
+    }
+    // Stays in flight until the refresh brings the new revision (below). A
+    // value let go of meanwhile is still unsaved, so the refresh must not
+    // snap the slider back to this save's value.
+    setUnsaved(queued.current !== null || awaiting.current);
+    setStatus({ state: 'saved' });
+    const warning = slotSyncWarning(result.data);
+    if (warning) onWarn(warning);
+    else onSaved();
+  }
+
+  // The refresh after a save has landed: the revision moved, so a value let go
+  // of while that save was in flight can be sent against it.
+  useEffect(() => {
+    latest.current = question;
+    if (!inFlight.current) return;
+    inFlight.current = false;
+    const next = queued.current;
+    queued.current = null;
+    if (next !== null) void save(next);
+    // `save` reads everything it needs through refs; the revision is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question.revision]);
+
+  function commit(value: number) {
+    const mine = ++generation.current;
+    awaiting.current = true;
+    later(() => {
+      if (mine !== generation.current) return;
+      awaiting.current = false;
+      if (inFlight.current) queued.current = value;
+      else void save(value);
+    }, WEIGHT_AUTOSAVE_MS);
+  }
+
+  const label = `Weight of question ${question.number}`;
+  return (
+    <div className="flex w-44 shrink-0 flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <SliderPrimitive.Root
+          className="relative flex w-28 touch-none items-center select-none"
+          min={0}
+          max={FULL_WEIGHT}
+          step={1}
+          value={[weight]}
+          onValueChange={([value]) => {
+            if (value === undefined) return;
+            setWeight(value);
+            setUnsaved(true);
+            setStatus({ state: 'idle' });
+          }}
+          onValueCommit={([value]) => {
+            if (value !== undefined) commit(value);
+          }}
+        >
+          <SliderPrimitive.Track className="bg-primary/20 relative h-1.5 w-full grow overflow-hidden rounded-full">
+            <SliderPrimitive.Range className="bg-primary absolute h-full" />
+          </SliderPrimitive.Track>
+          <SliderPrimitive.Thumb
+            aria-label={label}
+            aria-valuetext={weight >= FULL_WEIGHT ? `${weight}, Core Set` : String(weight)}
+            className="border-primary/50 bg-background focus-visible:ring-ring block h-4 w-4 rounded-full border shadow transition-colors focus-visible:ring-1 focus-visible:outline-none"
+          />
+        </SliderPrimitive.Root>
+        <span className="text-muted-foreground w-10 text-xs tabular-nums">
+          {weightLabel(weight)}
+        </span>
+      </div>
+      <span
+        aria-live="polite"
+        className={
+          status.state === 'error' ? 'text-destructive text-xs' : 'text-muted-foreground text-xs'
+        }
+      >
+        {status.state === 'saving' && 'Saving…'}
+        {status.state === 'saved' && 'Saved'}
+        {status.state === 'error' && `Not saved: ${status.message}`}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The question's edit dialog. Keyed by the question's revision where it is
+ * used, so a save anywhere re-reads the draft from the stored question.
+ */
+function QuestionDialog({
+  question,
   count,
   readers,
-  onMove,
+  open,
+  setOpen,
   onSaved,
 }: {
   question: DiscoveryQuestionView;
-  index: number;
   count: number;
   readers: readonly string[];
-  onMove: (by: -1 | 1) => void;
+  open: boolean;
+  setOpen: (open: boolean) => void;
   onSaved: (message: string, tone?: SavedTone) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState(() => draftOf(question));
   const [notice, setNotice] = useState<Notice>(null);
@@ -248,6 +407,83 @@ function QuestionRow({
   }
 
   return (
+    <EditDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={`Question ${question.number}`}
+      description={<code className="text-xs">{question.id}</code>}
+      footer={
+        <>
+          <NoticeLine notice={notice} />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => void save()}>
+              Save question
+            </Button>
+            <HistoryButton
+              collection="questions"
+              entity="question"
+              id={question.id}
+              label={`question ${question.number}`}
+              revisionRead={question.revision}
+              onRestored={saved}
+            />
+            {!confirming ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setConfirming(true)}
+                disabled={count <= 1}
+              >
+                <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+                Remove
+              </Button>
+            ) : (
+              <span className="flex flex-wrap items-center gap-2 text-sm">
+                Remove it, and its history? People&apos;s answers to it are kept, and its id is
+                never used again. Read by {readers.join('; ')}.
+                <Button type="button" variant="destructive" size="sm" onClick={() => void remove()}>
+                  Remove question {question.number}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirming(false)}
+                >
+                  Keep it
+                </Button>
+              </span>
+            )}
+          </div>
+        </>
+      }
+    >
+      <QuestionFields id={id} draft={draft} onChange={setDraft} />
+    </EditDialog>
+  );
+}
+
+function QuestionRow({
+  question,
+  index,
+  count,
+  readers,
+  onMove,
+  onSaved,
+  onRefresh,
+}: {
+  question: DiscoveryQuestionView;
+  index: number;
+  count: number;
+  readers: readonly string[];
+  onMove: (by: -1 | 1) => void;
+  onSaved: (message: string, tone?: SavedTone) => void;
+  /** Re-read the page after a save that needs no notice. */
+  onRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
     <li className="rounded-md border p-3">
       <div className="flex items-start gap-2">
         <span className="text-muted-foreground w-8 text-sm">{question.number}</span>
@@ -259,9 +495,11 @@ function QuestionRow({
         >
           {question.text}
         </button>
-        <span className="text-muted-foreground text-xs">
-          {question.weight >= FULL_WEIGHT ? 'Core' : `Weight ${question.weight}`}
-        </span>
+        <WeightSlider
+          question={question}
+          onSaved={onRefresh}
+          onWarn={(message) => onSaved(message, 'warn')}
+        />
         <code className="text-muted-foreground text-xs">{question.id}</code>
         <Tip label="Move up the list">
           <Button
@@ -288,64 +526,15 @@ function QuestionRow({
           </Button>
         </Tip>
       </div>
-      <EditDialog
+      <QuestionDialog
+        key={question.revision}
+        question={question}
+        count={count}
+        readers={readers}
         open={open}
-        onOpenChange={setOpen}
-        title={`Question ${question.number}`}
-        description={<code className="text-xs">{question.id}</code>}
-        footer={
-          <>
-            <NoticeLine notice={notice} />
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void save()}>
-                Save question
-              </Button>
-              <HistoryButton
-                collection="questions"
-                entity="question"
-                id={question.id}
-                label={`question ${question.number}`}
-                revisionRead={question.revision}
-                onRestored={saved}
-              />
-              {!confirming ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setConfirming(true)}
-                  disabled={count <= 1}
-                >
-                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
-                  Remove
-                </Button>
-              ) : (
-                <span className="flex flex-wrap items-center gap-2 text-sm">
-                  Remove it, and its history? People&apos;s answers to it are kept, and its id is
-                  never used again. Read by {readers.join('; ')}.
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => void remove()}
-                  >
-                    Remove question {question.number}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setConfirming(false)}
-                  >
-                    Keep it
-                  </Button>
-                </span>
-              )}
-            </div>
-          </>
-        }
-      >
-        <QuestionFields id={id} draft={draft} onChange={setDraft} />
-      </EditDialog>
+        setOpen={setOpen}
+        onSaved={onSaved}
+      />
     </li>
   );
 }
@@ -603,13 +792,14 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
         <ol className="space-y-2">
           {questions.map((question, index) => (
             <QuestionRow
-              key={`${question.id}@${question.revision}`}
+              key={question.id}
               question={question}
               index={index}
               count={questions.length}
               readers={initialView.readers}
               onMove={(by) => void move(index, by)}
               onSaved={done}
+              onRefresh={() => router.refresh()}
             />
           ))}
         </ol>

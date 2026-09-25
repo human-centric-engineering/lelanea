@@ -11,7 +11,7 @@
  * @see components/app/admin/content/questions-panel.tsx
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -340,12 +340,135 @@ describe('a question that already branches', () => {
 });
 
 describe('the weight on each row', () => {
-  it('marks a fully weighted question as Core and shows any other weight', () => {
+  function slider(number: number) {
+    return screen.getByRole('slider', { name: `Weight of question ${number}` });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setup() {
+    return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  }
+
+  it('marks a fully weighted question as Core and shows any other weight on its slider', () => {
     render(<QuestionsPanel initialView={VIEW} />);
 
     const [first, second] = screen.getAllByRole('listitem');
     expect(within(first).getByText('Core')).toBeInTheDocument();
-    expect(within(second).getByText('Weight 40')).toBeInTheDocument();
+    expect(within(second).getByText('40')).toBeInTheDocument();
+    expect(slider(1)).toHaveAttribute('aria-valuenow', '100');
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '40');
+  });
+
+  it('saves the new weight once it is let go of, with the question as stored and its revision', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent()).toEqual({
+      url: contentItemEndpoint('questions', 'question', 'q2'),
+      method: 'PUT',
+      body: {
+        revision: 1,
+        text: Q2.text,
+        inputType: 'long_text',
+        hint: null,
+        conditionalFollowUp: Q2.conditionalFollowUp,
+        weight: 41,
+      },
+    });
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+    expect(slider(2)).toHaveFocus();
+  });
+
+  it('sends a run of key presses as one save, of the last value', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(1).focus();
+    await user.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent().body).toMatchObject({ revision: 3, weight: 97 });
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('97');
+  });
+
+  it('holds a value let go of during a save until the refresh brings the new revision', async () => {
+    const user = setup();
+    fetchMock
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }))
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowRight}');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Let go again before the page has refreshed: the stored revision is still 1.
+    await user.keyboard('{ArrowRight}');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '42');
+
+    const saved = { ...Q2, weight: 41, revision: 2 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, saved] } }} />);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(sent(1).body).toMatchObject({ revision: 2, weight: 42 });
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '42');
+  });
+
+  it('shows a weight saved elsewhere once the page refreshes', () => {
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+
+    const moved = { ...Q2, weight: 70, revision: 2 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, moved] } }} />);
+
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '70');
+  });
+
+  it('says on the row when the save was refused, and does not refresh', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(refused(409, 'Someone else changed this question.'));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(
+      await screen.findByText('Not saved: Someone else changed this question.')
+    ).toBeInTheDocument();
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
+  });
+
+  it('warns on the page when the weight saved but the data slots did not update', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'failed' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(
+      await screen.findByText(/the data slots the AI files answers under/)
+    ).toBeInTheDocument();
   });
 });
 
@@ -403,7 +526,7 @@ describe('removing a question', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The question moved under you.');
     // The editor stays open on the refusal, over the question still in the list.
     expect(screen.getByRole('dialog', { name: 'Question 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: Q1.text, hidden: true })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem', { hidden: true })[0]).toHaveTextContent(Q1.text);
   });
 });
 
