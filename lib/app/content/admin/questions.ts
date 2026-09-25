@@ -35,7 +35,7 @@
 
 import { getRegisteredModule } from '@/lib/framework/modules/registry';
 import { fallbackModuleName, moduleSlugFromId } from '@/lib/app/modules/definitions';
-import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config';
+import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config-store';
 import type {
   AppDiscoveryQuestion,
   AppDiscoveryQuestionRevision,

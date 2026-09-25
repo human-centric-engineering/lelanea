@@ -33,8 +33,7 @@ vi.mock('@/lib/app/onboarding/discovery-slots', () => ({ resyncDiscoverySlots: r
 
 // The Core Set switch is the owning module's config, read through Daybreak.
 const readConfig = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/app/onboarding/discovery-config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/app/onboarding/discovery-config')>()),
+vi.mock('@/lib/app/onboarding/discovery-config-store', () => ({
   readDiscoveryConfig: readConfig,
 }));
 

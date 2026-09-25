@@ -8,12 +8,14 @@
  * against this schema, and keeps every version on its Versions tab. We read it
  * through Daybreak's config reader and never write it ourselves
  * (`.context/app/building-with-daybreak.md`).
+ *
+ * **Pure: no database, no server import.** `lib/app/modules/definitions.ts`
+ * imports this, and client components reach that file (`moduleSlugFromId`).
+ * The reader is `discovery-config-store.ts`, which is server-only. Guarded by
+ * `tests/unit/lib/app/modules/client-safe.test.ts`.
  */
 
 import { z } from 'zod';
-
-import { logger } from '@/lib/logging';
-import { getModuleConfigForm } from '@/lib/framework/modules/config';
 
 /**
  * The module the questions belong to when the set cannot be read. The set
@@ -36,29 +38,3 @@ export const discoveryConfigSchema = z.strictObject({
 });
 
 export type DiscoveryConfig = z.infer<typeof discoveryConfigSchema>;
-
-const DEFAULT_CONFIG: DiscoveryConfig = { coreSetOnly: false };
-
-/**
- * The switch as the module stores it. Every question is asked when it cannot
- * be read, which is the default and the safe direction: a person asked too
- * much is better than one whose onboarding asks nothing. Logged, so the
- * fallback is never silent.
- */
-export async function readDiscoveryConfig(moduleSlug: string): Promise<DiscoveryConfig> {
-  try {
-    const form = await getModuleConfigForm(moduleSlug);
-    const parsed = discoveryConfigSchema.safeParse(form.values ?? {});
-    if (parsed.success) return parsed.data;
-    logger.error('readDiscoveryConfig: stored module config is invalid; asking every question', {
-      moduleSlug,
-      issues: parsed.error.issues.map((issue) => issue.message),
-    });
-  } catch (err) {
-    logger.error('readDiscoveryConfig: module config could not be read; asking every question', {
-      moduleSlug,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-  return DEFAULT_CONFIG;
-}

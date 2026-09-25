@@ -67,7 +67,7 @@ import {
   type DiscoveryModuleSlots,
 } from '@/lib/app/modules/definitions';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
-import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config';
+import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config-store';
 import {
   DISCOVERY_SLOT_GROUP,
   DISCOVERY_SLOT_PREFIX,
