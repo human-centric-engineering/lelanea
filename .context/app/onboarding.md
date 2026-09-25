@@ -77,6 +77,9 @@ An answer is filed under its question's id. So:
 - That deactivated slot is the tombstone. `nextQuestionId()` counts it, so a new
   question takes the id after the highest ever used. An import that would
   re-create it is refused, naming the id.
+- Answers filed under a slug count too, with or without a slot. A question
+  added while the sync was failing can be answered and then removed before any
+  sync projects its slot; its answers still hold the id.
 
 Without that, a new question under a freed id would inherit the old answers as
 its own.
@@ -102,17 +105,20 @@ Core Set. The set's **Core Set only** switch asks only those.
 - The slot's `priorityWeight` stays 0. That column sequences her targeted
   capture, and she never captures an answer.
 
-## Every question write that changes a slot re-syncs
+## Every question write re-syncs the slots
 
-Rewording, restoring a wording, adding, removing and a writing import each end
-in `resyncGlobalSlots()` (`lib/app/content/admin/registry.ts`). A failure is
-reported, not thrown, as the slot editor does: the page warns that the AI is
-still reading the previous wording, and names the remedy. A weight or a reorder
-changes no slot and does not re-sync.
+Every question save, restore, add, removal and import ends in
+`resyncGlobalSlots()` (`lib/app/content/admin/registry.ts`), **including one
+that changed nothing**. That makes the page's remedy real: when a sync fails,
+the page warns that the AI is still reading the questions as they were, and
+says to open any question and save it. That save retries the sync. The pass is
+idempotent, so an unneeded run writes nothing. A reorder changes no slot and
+does not re-sync.
 
-Two paths only log a failure: an import and a history restore. The import has
-nowhere to carry the outcome, and the history dialog is shared by every content
-collection. The next save or boot repairs either.
+A failure on a save, add or removal is reported on the page, as the slot editor
+does. An import and a history restore only log it: the import has nowhere to
+carry the outcome, and the history dialog is shared by every content
+collection. The next question save, import or boot repairs either.
 
 ## Anti-patterns
 

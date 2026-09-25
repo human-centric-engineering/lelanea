@@ -125,6 +125,22 @@ describe('a question id is never given out twice', () => {
     await expect(applyQuestionsImport(file, false, EDITOR)).rejects.toThrow(/q30/);
   });
 
+  it('an id with answers but no slot yet is not given out either', async () => {
+    // A question added while the sync was failing: answered, then removed,
+    // before any sync projected its slot. The answers are the only trace.
+    const q30 = await questionView('q30');
+    await deleteQuestion('q30', q30.revision, EDITOR);
+    db.current!.insert('slotValue', {
+      id: 'answer-1',
+      userId: 'someone',
+      slotSlug: 'discovery_q30',
+      version: 1,
+      value: 'Their words.',
+    });
+
+    await expect(createQuestion(NEW_QUESTION, EDITOR)).resolves.toMatchObject({ id: 'q31' });
+  });
+
   it('a live question with a slot is not mistaken for a removed one', async () => {
     slotFor(db.current!, 'q01');
     slotFor(db.current!, 'q02');
@@ -344,22 +360,18 @@ describe('a question write re-projects the slot its answers are filed under', ()
     expect(outcome.audit).toEqual({ revision: q01.revision + 1 });
   });
 
-  it('a weight-only save changes no slot, so it does not re-sync', async () => {
+  it('a save that changes nothing still re-syncs, so saving again is a real retry', async () => {
     const q01 = await questionView('q01');
 
-    await question.save(
+    const outcome = await question.save(
       'q01',
-      {
-        ...NEW_QUESTION,
-        text: q01.text,
-        hint: q01.hint ?? null,
-        weight: 10,
-        revision: q01.revision,
-      },
+      { ...NEW_QUESTION, text: q01.text, hint: q01.hint ?? null, revision: q01.revision },
       EDITOR
     );
 
-    expect(resync).not.toHaveBeenCalled();
+    expect(outcome.changed).toEqual([]);
+    expect(resync).toHaveBeenCalledTimes(1);
+    expect(outcome.result).toMatchObject({ slotSync: { status: 'synced' } });
   });
 
   it('a failed sync is reported on a save that did commit', async () => {
@@ -384,15 +396,13 @@ describe('a question write re-projects the slot its answers are filed under', ()
     expect(resync).toHaveBeenCalledTimes(2);
   });
 
-  it('an import that writes re-syncs; one that writes nothing does not', async () => {
+  it('an import re-syncs, even one that writes nothing, so re-applying a file is a retry', async () => {
     const handlers = collectionHandlers('questions');
     const file = await exported();
 
-    await handlers.apply(file, false, EDITOR);
-    expect(resync).not.toHaveBeenCalled();
+    const plan = await handlers.apply(file, false, EDITOR);
 
-    file.questions[0].text = 'Reworded in a file?';
-    await handlers.apply(file, false, EDITOR);
+    expect(plan.writesNothing).toBe(true);
     expect(resync).toHaveBeenCalledTimes(1);
   });
 });

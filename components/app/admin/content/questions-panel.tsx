@@ -84,12 +84,13 @@ interface SlotSyncReport {
 }
 
 /**
- * A warning when the write saved but the slot did not follow. Names the remedy
- * (`HB10`), in the words the slot editor uses for the same failure.
+ * A warning when the write saved but the data slots did not follow. Names a
+ * remedy that works after any question write, an add or a removal included
+ * (`HB10`): every question save re-syncs, even one that changes nothing.
  */
 function slotSyncWarning(report: SlotSyncReport): string | null {
   if (report.slotSync === undefined || report.slotSync.status === 'synced') return null;
-  return 'Saved — but the AI is still reading the previous wording of this question: the data slot its answers are filed under did not update. Save again to retry it; a server restart also repairs it.';
+  return 'Saved — but the data slots the AI files answers under did not update, so it is still reading the questions as they were. Open any question and save it to retry; a server restart also repairs it.';
 }
 
 function bodyOf(draft: QuestionDraft) {

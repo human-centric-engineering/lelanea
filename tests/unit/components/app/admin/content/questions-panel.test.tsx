@@ -256,7 +256,7 @@ describe('a question without a hint or a branch', () => {
     expect(sent().body).toMatchObject({ weight: null });
   });
 
-  it('warns, rather than reporting a plain save, when the answers’ data slot did not update', async () => {
+  it('warns, rather than reporting a plain save, when the data slots did not update', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(
       ok({ changed: ['text'], slotSync: { status: 'failed', message: 'boom' } })
@@ -266,9 +266,7 @@ describe('a question without a hint or a branch', () => {
     await user.type(screen.getByLabelText('Question'), ' Still?');
     await user.click(screen.getByRole('button', { name: 'Save question' }));
 
-    expect(
-      await screen.findByText(/the AI is still reading the previous wording of this question/)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Open any question and save it to retry/)).toBeInTheDocument();
     expect(screen.queryByText('Saved question 1.')).toBeNull();
   });
 

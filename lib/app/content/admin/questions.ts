@@ -23,10 +23,11 @@
  * refused. Otherwise a new question under a freed id would inherit, as its own
  * answers, what people wrote to the old one.
  *
- * **Every write that changes a question's words, or which questions exist,
- * ends in a re-sync** of the global slots, reported rather than thrown, for the
- * reasons `lib/app/slots/definitions-admin.ts` gives (`HB9`, `HB10`). A weight
- * or a reorder changes no slot, so they do not re-sync.
+ * **Every save, restore, add, removal and import ends in a re-sync** of the
+ * global slots (`registry.ts`), reported rather than thrown, for the reasons
+ * `lib/app/slots/definitions-admin.ts` gives (`HB9`, `HB10`). It runs even when
+ * nothing changed, so saving any question again is a real retry. A reorder
+ * changes no slot and does not re-sync.
  *
  * @see lib/app/content/question-store.ts — the read every surface makes
  */
@@ -392,20 +393,30 @@ async function applyNumbers(
 }
 
 /**
- * The ids of removed questions: those with a discovery slot and no row. Their
- * answers are still filed under them, so the id is not free (file header).
+ * The ids of removed questions: those with no row but a discovery slot, or
+ * answers filed under one. Either way the id is not free (file header).
+ *
+ * **Both, not just the slot.** The slot is the usual tombstone, but it exists
+ * only once a sync has projected it. A question added while the sync was
+ * failing can be answered and then removed before any sync succeeds, leaving
+ * answers under a slug with no definition. Counting the answers too is what
+ * keeps that id from being handed out.
  */
 async function retiredQuestionIds(
-  client: Pick<Tx, 'slotDefinition'>,
+  client: Pick<Tx, 'slotDefinition' | 'slotValue'>,
   liveIds: ReadonlySet<string>
 ): Promise<Set<string>> {
-  const slots = await client.slotDefinition.findMany({
-    where: { slug: { startsWith: DISCOVERY_SLOT_PREFIX } },
-    select: { slug: true },
-  });
+  const where = { slotSlug: { startsWith: DISCOVERY_SLOT_PREFIX } };
+  const [slots, answered] = await Promise.all([
+    client.slotDefinition.findMany({
+      where: { slug: { startsWith: DISCOVERY_SLOT_PREFIX } },
+      select: { slug: true },
+    }),
+    client.slotValue.findMany({ where, select: { slotSlug: true }, distinct: ['slotSlug'] }),
+  ]);
   return new Set(
-    slots
-      .map((slot) => slot.slug.slice(DISCOVERY_SLOT_PREFIX.length))
+    [...slots.map((slot) => slot.slug), ...answered.map((value) => value.slotSlug)]
+      .map((slug) => slug.slice(DISCOVERY_SLOT_PREFIX.length))
       .filter((id) => !liveIds.has(id))
   );
 }
@@ -681,7 +692,7 @@ export function planQuestionsImport(
 async function readStored(
   client: Pick<
     typeof prisma,
-    'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition'
+    'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition' | 'slotValue'
   >
 ): Promise<StoredQuestions> {
   const [set, questions, modules] = await Promise.all([

@@ -109,6 +109,8 @@ const MODELS: Record<string, ModelSpec> = {
   // f-onboarding t-101: Daybreak's slot projection, read by the question editor
   // to tell a removed question's id from a free one. Tests insert it directly.
   slotDefinition: { key: 'id', defaults: () => ({ ...stamped(), isActive: true }) },
+  // And the answers filed under a slot, which also mark an id as used.
+  slotValue: { key: 'id' },
   appResourceCollection: { key: 'id', defaults: stamped },
   appResource: {
     key: 'id',

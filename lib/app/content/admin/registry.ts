@@ -49,17 +49,18 @@ import { RESOURCE_KINDS } from '@/lib/app/content/resource-view';
 import { resyncGlobalSlots } from '@/lib/app/slots/definitions-admin';
 
 /**
- * Re-project the discovery slots after a question write that changed what they
- * say or which exist (f-onboarding t-101; `lib/app/content/admin/questions.ts`).
- * Reported, never thrown: the write has committed either way.
+ * Re-project the discovery slots after a question write (f-onboarding t-101;
+ * `lib/app/content/admin/questions.ts`). Reported, never thrown: the write has
+ * committed either way.
+ *
+ * **Run on every save, restore and import, including one that changed nothing.**
+ * That is what makes the remedy the page offers after a failed sync real
+ * (`HB10`): saving any question again retries it. The pass is idempotent and
+ * writes nothing when the projection is already current, so an unneeded run
+ * costs one read.
  */
 function resyncDiscoverySlots(questionId: string | null) {
   return resyncGlobalSlots({ source: 'discovery-questions', questionId });
-}
-
-/** Whether a question save changed its slot's words. */
-function changedSlotWords(changed: readonly string[]): boolean {
-  return changed.includes('text');
 }
 
 /** What a save, restore or removal reports back and the audit log records. */
@@ -235,8 +236,9 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
     apply: async (raw, removeAbsent, editorId) => {
       const plan = await questions.applyQuestionsImport(raw, removeAbsent, editorId);
       // The plan has nowhere to carry the outcome, so a failed re-sync here is
-      // logged by `resyncGlobalSlots` and repaired by the next save or boot.
-      if (!plan.writesNothing) await resyncDiscoverySlots(null);
+      // logged by `resyncGlobalSlots` and repaired by the next question save,
+      // import or boot.
+      await resyncDiscoverySlots(null);
       return plan;
     },
     reorder: (body, editorId) =>
@@ -266,9 +268,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
         save: async (id, body, editorId) => {
           const { revision, ...edit } = parse(questionSaveSchema, body);
           const outcome = await questions.updateQuestion(id, edit, revision, editorId);
-          const slotSync = changedSlotWords(outcome.changed)
-            ? await resyncDiscoverySlots(id)
-            : undefined;
+          const slotSync = await resyncDiscoverySlots(id);
           return {
             ...outcome,
             result: { revision: outcome.revision, slotSync },
@@ -284,9 +284,7 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
             revisionRead,
             editorId
           );
-          const slotSync = changedSlotWords(outcome.changed)
-            ? await resyncDiscoverySlots(id)
-            : undefined;
+          const slotSync = await resyncDiscoverySlots(id);
           return {
             ...outcome,
             result: { revision: outcome.revision, slotSync },
