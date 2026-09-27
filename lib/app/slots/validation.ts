@@ -87,22 +87,24 @@ export const MAX_DESCRIPTION_LENGTH = 1200;
 const boundedSlug = (label: string) =>
   slotSlugSchema.max(MAX_SLUG_LENGTH, `${label} is longer than ${MAX_SLUG_LENGTH} characters.`);
 
+/** Refuses a slug reserved for a discovery answer (f-onboarding t-101). */
+const notReservedSlug = (schema: z.ZodString) =>
+  schema.refine((slug) => !isDiscoverySlotSlug(slug), RESERVED_SLUG_MESSAGE);
+
+/** Refuses the discovery answers' own group key. */
+const notReservedGroup = (schema: z.ZodString) =>
+  schema.refine((group) => group !== DISCOVERY_SLOT_GROUP, RESERVED_GROUP_MESSAGE);
+
 /**
  * A slug the TAXONOMY may use: any slug but one reserved for a discovery answer
  * (f-onboarding t-101). Applied where an admin or a file writes a taxonomy slot,
  * and nowhere a slug is only read: a person's notes and the history routes must
  * still reach a discovery slot.
  */
-export const authoredSlotSlugSchema = slotSlugSchema.refine(
-  (slug) => !isDiscoverySlotSlug(slug),
-  RESERVED_SLUG_MESSAGE
-);
+export const authoredSlotSlugSchema = notReservedSlug(slotSlugSchema);
 
 /** A group key the taxonomy may use: any but the discovery answers' own. */
-export const authoredSlotGroupSchema = slotSlugSchema.refine(
-  (group) => group !== DISCOVERY_SLOT_GROUP,
-  RESERVED_GROUP_MESSAGE
-);
+export const authoredSlotGroupSchema = notReservedGroup(slotSlugSchema);
 
 /**
  * Everything about a definition an admin may change after it exists.
@@ -119,10 +121,7 @@ export const authoredSlotGroupSchema = slotSlugSchema.refine(
  * actions.
  */
 export const slotDefinitionUpdateSchema = z.strictObject({
-  group: boundedSlug('A group key').refine(
-    (group) => group !== DISCOVERY_SLOT_GROUP,
-    RESERVED_GROUP_MESSAGE
-  ),
+  group: notReservedGroup(boundedSlug('A group key')),
   description: z
     .string()
     .trim()
@@ -143,7 +142,7 @@ export const slotDefinitionUpdateSchema = z.strictObject({
 
 /** Adding a definition: the slug, then everything an edit may change. */
 export const slotDefinitionCreateSchema = slotDefinitionUpdateSchema.extend({
-  slug: boundedSlug('A slug').refine((slug) => !isDiscoverySlotSlug(slug), RESERVED_SLUG_MESSAGE),
+  slug: notReservedSlug(boundedSlug('A slug')),
 });
 
 /** The version the admin read, sent with every write that changes a row. */

@@ -44,10 +44,13 @@ the one place an admin edits a question's words, the way t-87 builds each
 module's name from its row.
 
 - **At boot**, `initLeafApp()` registers the modules from the roster, then
-  again with their names and the questions. **A failed read of the questions
-  throws**, which skips that boot's framework sync: registering Onboarding
-  without its slots would have the module pass retire every one of them. A
-  failed read of the names only logs, and the roster's names stand.
+  again with their names and the questions. **Registration never throws**
+  (Daybreak's boot contract). A failed read of the questions is logged, and
+  the slots are declared as Daybreak last synced them: registering Onboarding
+  without its slots would have the module pass retire every one of them. Only
+  when that read fails too does the module register without them. A failed
+  read of the names only logs, and the names already registered stand (at
+  boot, the roster's).
 - **After a question write**, `resyncDiscoverySlots()` registers the modules
   again and runs Daybreak's `syncRegisteredSlotDefinitions()`.
 - The slots are not rows in `app_slot_definition`, which is the global
@@ -123,7 +126,11 @@ editor reports its state and links there.
   after it is let go of, so the core questions can be chosen down the whole
   list without opening each. Saves go one at a time, because each needs the
   question's current revision. A value let go of during a save is sent once the
-  page has refreshed. The dialog keeps its number field, for a new question.
+  page has refreshed. A refused save says so on the row, shows the stored
+  weight again and re-reads the page, so the next attempt carries the current
+  revision. The dialog keeps its number field, for a new question. An open
+  dialog saves against the revision it opened at, so a slider save landing
+  meanwhile makes its save conflict rather than be silently undone.
 - **Every question starts at 100 and the switch starts off.** Which questions
   are core is the owner's call, so turning the switch on changes nothing until an
   admin lowers some weights.
@@ -153,9 +160,18 @@ Every question save, restore, add, removal and import ends in
 the page warns that the AI is still reading the questions as they were, and
 says to open any question and save it. That save retries the sync. The pass is
 idempotent, so an unneeded run writes nothing. A reorder changes no slot and
-does not re-sync.
+does not re-sync. **A save of the question set re-syncs too**: the set names
+the module that declares the slots and holds the Core Set switch, so moving
+it to another module moves both.
 
-A failure on a save, add or removal is reported on the page, as the slot editor
+**Re-syncs run one at a time.** The module registry is process-global, so two
+overlapping writes could each register and the older snapshot be the one
+synced while the newer write reported success. `resyncDiscoverySlots()` queues
+them, the way Daybreak queues its own global slot sync. A re-sync whose read
+of the module names fails keeps the names already registered, so a save
+never undoes the names boot read.
+
+A failure on a save (a question's or the set's), add or removal is reported on the page, as the slot editor
 does. An import and a history restore only log it: the import has nowhere to
 carry the outcome, and the history dialog is shared by every content
 collection. The next question save, import or boot repairs either.

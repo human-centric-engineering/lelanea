@@ -59,6 +59,7 @@ import {
   __resetModuleRegistryForTests,
   getRegisteredModule,
   getRegisteredModules,
+  registerModule,
 } from '@/lib/framework/modules/registry';
 import { describeConfigSchema } from '@/lib/framework/modules/config/schema-descriptors';
 import {
@@ -245,6 +246,25 @@ describe('the module that asks them declares them', () => {
     expect(getRegisteredModule('onboarding')?.slotDefinitions).toBeUndefined();
   });
 
+  it('keeps the names already registered when a later read of them fails', async () => {
+    await registerJourneyModules();
+    registerModule({
+      ...getRegisteredModule('onboarding')!,
+      name: 'Onboarding, as she titled it',
+      description: 'Read from its row at boot.',
+    });
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+
+    await registerJourneyModules();
+
+    expect(getRegisteredModule('onboarding')).toMatchObject({
+      name: 'Onboarding, as she titled it',
+      description: 'Read from its row at boot.',
+    });
+    // The slots still follow the questions.
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toHaveLength(2);
+  });
+
   it('still declares the slots when only the module names could not be read', async () => {
     prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
 
@@ -308,6 +328,42 @@ describe('the module that asks them declares them', () => {
     expect(syncSlots).toHaveBeenCalledTimes(1);
   });
 
+  it('runs overlapping re-syncs one at a time, so the newer questions are the ones synced', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    let releaseFirst!: () => void;
+    syncSlots
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValue(undefined);
+
+    const first = resyncDiscoverySlots({ questionId: 'q01' });
+    const second = resyncDiscoverySlots({ questionId: 'q02' });
+    await vi.waitFor(() => expect(syncSlots).toHaveBeenCalledTimes(1));
+
+    // The second has not read or registered anything while the first syncs.
+    expect(prismaMock.appQuestionSet.findUnique).toHaveBeenCalledTimes(1);
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue({
+      ...ONBOARDING_SET,
+      questions: [...ONBOARDING_SET.questions, { id: 'q03', text: 'Third?' }],
+    });
+    releaseFirst();
+
+    await expect(first).resolves.toEqual({ status: 'synced' });
+    await expect(second).resolves.toEqual({ status: 'synced' });
+    expect(syncSlots).toHaveBeenCalledTimes(2);
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toHaveLength(3);
+  });
+
+  it('a failed re-sync does not stall the ones queued behind it', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    syncSlots.mockRejectedValueOnce(new Error('deadlock')).mockResolvedValue(undefined);
+
+    const first = resyncDiscoverySlots({ questionId: 'q01' });
+    const second = resyncDiscoverySlots({ questionId: 'q02' });
+
+    await expect(first).resolves.toEqual({ status: 'failed', message: 'deadlock' });
+    await expect(second).resolves.toEqual({ status: 'synced' });
+  });
+
   it('reports a sync that throws', async () => {
     prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
     syncSlots.mockRejectedValue(new Error('deadlock'));
@@ -316,6 +372,37 @@ describe('the module that asks them declares them', () => {
       status: 'failed',
       message: 'deadlock',
     });
+  });
+
+  it('reports a sync that throws something other than an Error with a message of its own', async () => {
+    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    syncSlots.mockRejectedValue('deadlock');
+
+    await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
+      status: 'failed',
+      message: 'the slot sync failed',
+    });
+  });
+
+  it('logs reads that throw something other than an Error as strings', async () => {
+    getStructure.mockRejectedValue('names gone');
+    prismaMock.appQuestionSet.findUnique.mockRejectedValue('questions gone');
+    listSlots.mockRejectedValue('slots gone');
+
+    await expect(registerJourneyModules()).resolves.toBe('none');
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.stringContaining('module names could not be read'),
+      { error: 'names gone' }
+    );
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('declaring the slots as last synced'),
+      { error: 'questions gone' }
+    );
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.stringContaining('could not be read either'),
+      { error: 'slots gone' }
+    );
   });
 
   it('reports, never throws, when the questions cannot be read, and syncs nothing', async () => {

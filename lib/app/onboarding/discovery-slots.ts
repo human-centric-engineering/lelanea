@@ -46,7 +46,7 @@
 
 import { logger } from '@/lib/logging';
 import { prisma } from '@/lib/db/client';
-import { registerModule } from '@/lib/framework/modules/registry';
+import { getRegisteredModule, registerModule } from '@/lib/framework/modules/registry';
 import {
   SLOT_DATA_TYPE,
   SLOT_MODE,
@@ -159,8 +159,9 @@ export type DiscoverySource = 'questions' | 'last-synced' | 'none';
  * into instrumentation (`tests/integration/lib/framework/boot.test.ts`).
  *
  * Each read that fails is logged and has a fallback:
- * - **The journey text** falls back to the roster's names, spelled from the
- *   slug. That is cosmetic.
+ * - **The journey text** keeps the names already registered, so a failed read
+ *   on a question save does not undo boot's; at boot those are the roster's,
+ *   spelled from the slug. That is cosmetic.
  * - **The discovery questions** fall back to the slots Daybreak last synced,
  *   so the module declares what it declared before. Registering Onboarding
  *   with no slots would have Daybreak's module pass retire every one of them.
@@ -205,7 +206,10 @@ export async function registerJourneyModules(): Promise<DiscoverySource> {
   }
 
   for (const definition of getModuleDefinitions(structure, discovery ?? undefined)) {
-    registerModule(definition);
+    const current = structure ? undefined : getRegisteredModule(definition.slug);
+    registerModule(
+      current ? { ...definition, name: current.name, description: current.description } : definition
+    );
   }
   return source;
 }
@@ -213,16 +217,33 @@ export async function registerJourneyModules(): Promise<DiscoverySource> {
 /** What a question write says about the slots its answers are filed under. */
 export type DiscoverySlotSyncOutcome = { status: 'synced' } | { status: 'failed'; message: string };
 
+/** The tail of the re-sync queue; see `resyncDiscoverySlots`. */
+let resyncQueue: Promise<void> = Promise.resolve();
+
 /**
  * Re-project the discovery slots after a question write: register the modules
  * again with the questions as they now are, then run Daybreak's slot sync.
  * Reported, never thrown: the write has committed either way.
  *
  * The sync is idempotent, so a run with nothing to change writes nothing.
+ *
+ * **One at a time, in this process.** The module registry is process-global,
+ * so two overlapping writes could each register, and the older snapshot land
+ * last and be the one synced while the newer write reports `synced`. Queued
+ * the way Daybreak queues its own global slot sync.
  */
-export async function resyncDiscoverySlots(
+export function resyncDiscoverySlots(
   context: Record<string, unknown>
 ): Promise<DiscoverySlotSyncOutcome> {
+  const run = resyncQueue.then(() => resyncNow(context));
+  resyncQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function resyncNow(context: Record<string, unknown>): Promise<DiscoverySlotSyncOutcome> {
   try {
     // Not from the questions means this write did not reach the slots: sync
     // nothing, and say so, rather than re-declare what was already there.

@@ -1,7 +1,8 @@
 -- f-onboarding t-101: each discovery question carries a weight. It is an admin
 -- setting rather than her words, so it lives on the rows and their revisions,
--- never in the authored file. The Onboarding module's slots take it as their
--- `priorityWeight`. The Core Set switch is not here: it is the Onboarding
+-- never in the authored file. A question weighted 100 is core. It is not the
+-- slot's `priorityWeight`, which stays 0: that is Daybreak's sequencing field.
+-- The Core Set switch is not here: it is the Onboarding
 -- module's own config (`framework_module.config`), which needs no migration.
 --
 -- Every existing question starts fully weighted (100), so switching the Core

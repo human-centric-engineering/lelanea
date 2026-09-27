@@ -226,9 +226,11 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
     // on every path, and answered so she still speaks (`answering()`): the
     // message tells her where the reading belongs instead.
     if (isDiscoverySlotSlug(args.slotSlug)) {
-      return this.error(
-        'That is one of the person’s own discovery answers, and only they write those. Record what you understood under another name instead.',
-        'discovery_answer_read_only'
+      return answering(
+        this.error(
+          'That is one of the person’s own discovery answers, and only they write those. Record what you understood under another name instead.',
+          'discovery_answer_read_only'
+        )
       );
     }
 

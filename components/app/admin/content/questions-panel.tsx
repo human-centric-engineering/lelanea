@@ -24,6 +24,7 @@ import * as SliderPrimitive from '@radix-ui/react-slider';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { FieldHelp } from '@/components/ui/field-help';
 import { Tip } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -215,11 +216,12 @@ function weightLabel(weight: number): string {
  */
 function WeightSlider({
   question,
-  onSaved,
+  onRefresh,
   onWarn,
 }: {
   question: DiscoveryQuestionView;
-  onSaved: () => void;
+  /** Re-read the page: after a save, and after a refusal, for a fresh revision. */
+  onRefresh: () => void;
   onWarn: (message: string) => void;
 }) {
   const [weight, setWeight] = useState(question.weight);
@@ -259,8 +261,13 @@ function WeightSlider({
     if (!result.ok) {
       inFlight.current = false;
       queued.current = null;
+      // Show what is stored, not the refused value, and re-read the page so
+      // the next attempt carries the current revision (a 409 otherwise
+      // repeats on every drag until a reload).
       setUnsaved(false);
+      setWeight(current.weight);
       setStatus({ state: 'error', message: result.message });
+      onRefresh();
       return;
     }
     // Stays in flight until the refresh brings the new revision (below). A
@@ -270,7 +277,7 @@ function WeightSlider({
     setStatus({ state: 'saved' });
     const warning = slotSyncWarning(result.data);
     if (warning) onWarn(warning);
-    else onSaved();
+    else onRefresh();
   }
 
   // The refresh after a save has landed: the revision moved, so a value let go
@@ -365,6 +372,10 @@ function QuestionDialog({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState(() => draftOf(question));
+  // The revision the draft was read at. A save that lands while the dialog is
+  // open (the row's slider) then conflicts, rather than this draft's weight
+  // silently undoing it.
+  const [revision] = useState(question.revision);
   const [notice, setNotice] = useState<Notice>(null);
   const id = `question-${question.id}`;
 
@@ -378,7 +389,7 @@ function QuestionDialog({
       'PUT',
       contentItemEndpoint('questions', 'question', question.id),
       {
-        revision: question.revision,
+        revision,
         ...bodyOf(draft),
       }
     );
@@ -397,7 +408,7 @@ function QuestionDialog({
   async function remove() {
     const result = await send<{ renumbered: number } & SlotSyncReport>(
       'DELETE',
-      `${contentItemEndpoint('questions', 'question', question.id)}?revision=${question.revision}`
+      `${contentItemEndpoint('questions', 'question', question.id)}?revision=${revision}`
     );
     if (!result.ok) {
       setNotice({ tone: 'error', text: result.message });
@@ -499,7 +510,7 @@ function QuestionRow({
         </button>
         <WeightSlider
           question={question}
-          onSaved={onRefresh}
+          onRefresh={onRefresh}
           onWarn={(message) => onSaved(message, 'warn')}
         />
         <code className="text-muted-foreground text-xs">{question.id}</code>
@@ -528,8 +539,10 @@ function QuestionRow({
           </Button>
         </Tip>
       </div>
+      {/* Fresh from the stored question each time it opens, and never
+          remounted while open, so a save landing then keeps the typed draft. */}
       <QuestionDialog
-        key={question.revision}
+        key={open ? 'open' : `closed@${question.revision}`}
         question={question}
         count={count}
         readers={readers}
@@ -546,7 +559,7 @@ function SetEditor({
   onSaved,
 }: {
   set: DiscoveryQuestionSet;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, tone?: SavedTone) => void;
 }) {
   const [draft, setDraft] = useState({
     title: set.collection.title,
@@ -564,7 +577,7 @@ function SetEditor({
   const [notice, setNotice] = useState<Notice>(null);
 
   async function save() {
-    const result = await send<{ changed: string[] }>(
+    const result = await send<{ changed: string[] } & SlotSyncReport>(
       'PUT',
       contentItemEndpoint('questions', 'set', set.collection.id),
       {
@@ -583,9 +596,13 @@ function SetEditor({
         locale: draft.locale,
       }
     );
-    if (result.ok)
-      onSaved(result.data.changed.length ? 'Saved the question set.' : 'Nothing had changed.');
-    else setNotice({ tone: 'error', text: result.message });
+    if (!result.ok) {
+      setNotice({ tone: 'error', text: result.message });
+      return;
+    }
+    const warning = slotSyncWarning(result.data);
+    if (warning) onSaved(warning, 'warn');
+    else onSaved(result.data.changed.length ? 'Saved the question set.' : 'Nothing had changed.');
   }
 
   return (
@@ -804,7 +821,18 @@ export function QuestionsPanel({ initialView }: { initialView: QuestionsAdminVie
       {initialView.module && <OwningModuleNote module={initialView.module} />}
       <SetEditor key={`set@${set.collection.revision}`} set={set} onSaved={done} />
       <section className="space-y-3">
-        <h3 className="font-medium">The questions ({questions.length})</h3>
+        <h3 className="flex items-center gap-1 font-medium">
+          The questions ({questions.length})
+          <FieldHelp title="The weight on each row">
+            <p>
+              The slider sets how much a question matters, from 0 to {FULL_WEIGHT}. A question at{' '}
+              {FULL_WEIGHT} is core: it is always asked and cannot be skipped. When the
+              module&rsquo;s &ldquo;Core Set only&rdquo; is on, the core questions are the only ones
+              asked.
+            </p>
+            <p className="mt-2">It saves on its own shortly after you let go.</p>
+          </FieldHelp>
+        </h3>
         <ol className="space-y-2">
           {questions.map((question, index) => (
             <QuestionRow

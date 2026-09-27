@@ -233,6 +233,29 @@ describe('the module the questions belong to', () => {
   });
 });
 
+describe('a save landing while the question is open', () => {
+  it('keeps what was typed, and saves against the revision it was opened at', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(refused(409, 'Someone else changed this question.'));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+    await user.click(screen.getByRole('button', { name: Q1.text }));
+    await user.type(screen.getByLabelText('Question'), ' Still?');
+
+    // The row's slider saved meanwhile, and the page refreshed with its revision.
+    const slid = { ...Q1, weight: 60, revision: 4 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [slid, Q2] } }} />);
+
+    expect(screen.getByLabelText('Question')).toHaveValue(`${Q1.text} Still?`);
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    // Its draft still says weight 100: against the old revision it conflicts,
+    // rather than silently undoing the slider's 60.
+    expect(sent().body).toMatchObject({ revision: 3, weight: 100 });
+    expect(await screen.findByText('Someone else changed this question.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Question')).toHaveValue(`${Q1.text} Still?`);
+  });
+});
+
 describe('a question without a hint or a branch', () => {
   async function openQ1(user: ReturnType<typeof userEvent.setup>) {
     render(<QuestionsPanel initialView={VIEW} />);
@@ -477,10 +500,12 @@ describe('the weight on each row', () => {
     expect(slider(2)).toHaveAttribute('aria-valuenow', '70');
   });
 
-  it('says on the row when the save was refused, and does not refresh', async () => {
+  it('says on the row when the save was refused, shows the stored weight, and re-reads the page', async () => {
     const user = setup();
-    fetchMock.mockResolvedValueOnce(refused(409, 'Someone else changed this question.'));
-    render(<QuestionsPanel initialView={VIEW} />);
+    fetchMock
+      .mockResolvedValueOnce(refused(409, 'Someone else changed this question.'))
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
 
     slider(2).focus();
     await user.keyboard('{ArrowLeft}');
@@ -489,7 +514,19 @@ describe('the weight on each row', () => {
     expect(
       await screen.findByText('Not saved: Someone else changed this question.')
     ).toBeInTheDocument();
-    expect(mockRouter.refresh).not.toHaveBeenCalled();
+    // Not left showing a value that was never stored.
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '40');
+    expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+
+    // The refresh brings the revision the other edit left, so the next save is not refused again.
+    const current = { ...Q2, revision: 2 };
+    rerender(
+      <QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, current] } }} />
+    );
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(sent(1).body).toMatchObject({ revision: 2, weight: 39 });
   });
 
   it('warns on the page when the weight saved but the data slots did not update', async () => {

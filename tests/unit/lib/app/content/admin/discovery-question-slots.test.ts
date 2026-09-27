@@ -355,4 +355,29 @@ describe('a question write re-projects the slot its answers are filed under', ()
     expect(plan.writesNothing).toBe(true);
     expect(resync).toHaveBeenCalledTimes(1);
   });
+
+  it('a set save that moves the questions to another module re-syncs, and says how it went', async () => {
+    resync.mockResolvedValue({ status: 'failed', message: 'the sync threw' });
+    const set = (await getQuestionsAdminView()).set!;
+
+    const outcome = await entityHandlers('questions', 'set').save(
+      set.collection.id,
+      {
+        revision: set.collection.revision,
+        title: set.collection.title,
+        chartTitle: set.collection.chartTitle,
+        moduleId: 'module_01_values',
+        phase: set.collection.phase,
+        preamble: set.preamble,
+        pacing: set.pacing,
+        version: set.collection.version,
+        locale: set.collection.locale,
+      },
+      EDITOR
+    );
+
+    expect(outcome.changed).toContain('moduleId');
+    expect(resync).toHaveBeenCalledTimes(1);
+    expect(outcome.result).toMatchObject({ slotSync: { status: 'failed' } });
+  });
 });

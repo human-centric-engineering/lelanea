@@ -234,6 +234,8 @@ describe('a discovery answer (f-onboarding t-101)', () => {
         message: expect.stringContaining('another name'),
       },
     });
+    // Answered, like every other return, so she still speaks after it.
+    expect(result).not.toHaveProperty('skipFollowup');
     expect(framework).not.toHaveBeenCalled();
     expect(world.slotWrites).toEqual([]);
   });

@@ -249,7 +249,14 @@ const REGISTRY: Readonly<Record<ContentCollection, CollectionHandlers>> = {
         save: async (id, body, editorId) => {
           const { revision, ...edit } = parse(questionSetSaveSchema, body);
           const outcome = await questions.updateQuestionSet(id, edit, revision, editorId);
-          return { ...outcome, result: { revision: outcome.revision } };
+          // The set names the module that declares the slots and holds the Core
+          // Set switch, so a save that moves it must move them too.
+          const slotSync = await resyncDiscoverySlots(null);
+          return {
+            ...outcome,
+            result: { revision: outcome.revision, slotSync },
+            audit: { revision: outcome.revision },
+          };
         },
         history: questions.listQuestionSetHistory,
         restore: async (id, body, editorId) => {
