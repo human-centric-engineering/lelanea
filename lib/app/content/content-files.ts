@@ -48,7 +48,11 @@ import {
   type JourneySeed,
   type JourneyStructure,
 } from '@/lib/app/content/journey-view';
-import type { DiscoveryQuestionSet, QuestionSeed } from '@/lib/app/content/question-view';
+import {
+  FULL_WEIGHT,
+  type DiscoveryQuestionSet,
+  type QuestionSeed,
+} from '@/lib/app/content/question-view';
 import { resourceToRow, wordsToRow, type ResourcesSeed } from '@/lib/app/content/resource-view';
 import type { ResourcesFile, ResourcesLibrary } from '@/lib/app/content/resources';
 import { JOURNEY_MODULES, JOURNEY_TIERS } from '@/lib/app/journey/roster';
@@ -427,6 +431,9 @@ export function questionSeedFromFile(file: DiscoveryQuestionsFile): QuestionSeed
       conditionalFollowUp: question.conditionalFollowUp
         ? { ifYes: question.conditionalFollowUp.ifYes, ifNo: question.conditionalFollowUp.ifNo }
         : null,
+      // Her file carries no weight, so a seeded question is fully weighted.
+      // An import keeps a stored weight the file omits: see `planQuestionsImport`.
+      weight: question.weight ?? FULL_WEIGHT,
     })),
   };
 }
@@ -455,6 +462,7 @@ export function questionsFileFromSet(set: DiscoveryQuestionSet): DiscoveryQuesti
       ...(question.conditionalFollowUp !== undefined && {
         conditionalFollowUp: { ...question.conditionalFollowUp },
       }),
+      weight: question.weight,
     })),
     reviewNotes: [],
   };

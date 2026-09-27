@@ -32,6 +32,7 @@
 import rawSlotTaxonomy from '@/seed-data/drafted/lelanea_slot_taxonomy.json';
 import { deepFreezeParsed } from '@/lib/app/content/deep-freeze';
 import { slotTaxonomyFileSchema, type SlotTaxonomyFile } from '@/lib/app/slots/taxonomy-file';
+import { DISCOVERY_SLOT_GROUP } from '@/lib/app/onboarding/discovery-slot-names';
 
 let parsed: SlotTaxonomyFile | null = null;
 
@@ -75,7 +76,14 @@ export function readableSlotGroups(): string[] {
   const hidden = new Set(
     file.slots.filter((slot) => slot.visibility === 'hidden').map((slot) => slot.group)
   );
-  return file.groups.map((group) => group.key).filter((key) => !hidden.has(key));
+  // The discovery answers are their own group, projected from the questions
+  // rather than authored here (f-onboarding t-101), and she reads them back like
+  // any open slot. Existing grants get it from migration
+  // `20261002100000_app_discovery_question_weight`.
+  return [
+    ...file.groups.map((group) => group.key).filter((key) => !hidden.has(key)),
+    DISCOVERY_SLOT_GROUP,
+  ];
 }
 
 /**

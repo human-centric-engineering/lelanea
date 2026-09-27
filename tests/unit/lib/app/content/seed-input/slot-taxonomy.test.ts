@@ -122,18 +122,20 @@ describe('the bundled taxonomy', () => {
     }
   });
 
-  it('offers her back every group but the hidden one', () => {
+  it('offers her back every group but the hidden one, and the discovery answers', () => {
     // Derived, never typed out — the point being that marking a slot hidden is
     // the whole act. Both directions, so a derivation that returned everything
-    // (or nothing) fails.
+    // (or nothing) fails. `discovery` is not in the file: the answers are
+    // projected from the questions (f-onboarding t-101), and she reads them back.
     const groups = readableSlotGroups();
     expect(groups).not.toContain('development');
     expect(new Set(groups)).toEqual(
-      new Set(
-        getSlotTaxonomy()
+      new Set([
+        ...getSlotTaxonomy()
           .groups.map((g) => g.key)
-          .filter((key) => key !== 'development')
-      )
+          .filter((key) => key !== 'development'),
+        'discovery',
+      ])
     );
   });
 

@@ -25,6 +25,24 @@
 > — read it before your first change. [`CUSTOMIZATION.md`](./CUSTOMIZATION.md)
 > describes the platform underneath and still applies.
 >
+> ### Daybreak is the scaffolding: build Lelañea out of its elements
+>
+> Owner ruling, 25 Sept 2026. Daybreak is not an upstream to route around; it is
+> what this app is made of. Its **modules, module config, data slots, agent
+> seats, capabilities, knowledge scopes, facilitation maps and journeys** are
+> integral parts of Lelañea, used the way Daybreak's ethos dictates. Before
+> designing a feature, name the Daybreak element each part of it is. **Content
+> that belongs to a module is owned by that module and visible in its area**
+> (Framework → Modules → the module): that is what modules are for. A parallel
+> `app_…` table, an app-only admin page, or a seam carried around Daybreak for
+> something one of its elements already models is the anti-pattern. When an
+> element does not fit, raise it with the owner and Daybreak first. **Extend
+> Daybreak; never edit its files:** register modules, slots and config through
+> its public API from our own files, call its services, fill its `leaf-*`
+> seams. A missing extension point is an issue on `daybreak`, not an edit, and
+> a new divergence needs the owner's explicit ruling. See
+> [`.context/app/building-with-daybreak.md`](./.context/app/building-with-daybreak.md).
+>
 > ### Three tiers
 >
 > ```

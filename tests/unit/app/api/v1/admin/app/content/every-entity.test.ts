@@ -376,6 +376,7 @@ describe('questions', () => {
           inputType: 'long_text',
           hint: null,
           conditionalFollowUp: null,
+          weight: q01.weight,
           revision: q01.revision,
         }),
         item('questions', 'question', 'q01')

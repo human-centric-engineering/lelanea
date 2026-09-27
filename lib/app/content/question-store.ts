@@ -74,6 +74,7 @@ export const QUESTION_SNAPSHOT_FIELDS = [
   'inputType',
   'hint',
   'conditionalFollowUp',
+  'weight',
 ] as const;
 
 export type SeedQuestionsResult =

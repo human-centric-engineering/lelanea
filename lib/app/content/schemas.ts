@@ -343,6 +343,12 @@ export const discoveryQuestionSchema = z.strictObject({
       ifNo: z.string().min(1),
     })
     .optional(),
+  /**
+   * 0–100; 100 is fully weighted, which puts the question in the Core Set
+   * (f-onboarding t-101). An admin setting, not her words: her file carries
+   * none, and a file without it leaves a stored weight as it is on import.
+   */
+  weight: z.number().int().min(0).max(100).optional(),
 });
 
 const discoveryQuestionsFileBase = z.strictObject({

@@ -8,19 +8,34 @@
  * Removing one re-numbers those after it, each as a revision, so the history
  * says when a question moved as well as when it changed.
  *
- * **A question keeps its id.** It is how an answer will be filed once
- * onboarding stores them, so a reworded or moved question keeps its id, and a
- * new one takes the id after the highest (`q31`).
+ * **A question keeps its id, and an id is never given out twice.** A person's
+ * answer is filed under the question's slot, `discovery_<id>`
+ * (`lib/app/onboarding/discovery-slots.ts`, f-onboarding t-101). So a reworded
+ * or moved question keeps its id, and a new one takes the id after the highest
+ * the set has ever used, not just the highest still in it.
  *
- * **Removal is a delete.** Nothing stores a question id yet: the public content
- * API is the only reader (`QUESTION_READERS`), and the editor names it before
- * confirming. The audit entry keeps the removed question's words. **Revisit
- * when** onboarding stores answers by question id: a removed question will then
- * need a tombstone, as a retired resource has.
+ * **Removal is a delete, and the slot is the tombstone.** The row and its
+ * history go, and the audit entry keeps the removed question's words. The
+ * answers do not go: they stay filed under the slot, which Daybreak's module
+ * slot sync deactivates when the question drops out of the owning module's
+ * `slotDefinitions`, keeping the last wording it had. That deactivated slot is what stops the id coming back:
+ * {@link nextQuestionId} counts it, and an import that would re-create it is
+ * refused. Otherwise a new question under a freed id would inherit, as its own
+ * answers, what people wrote to the old one.
+ *
+ * **Every save, restore, add, removal and import ends in a re-sync** of the
+ * owning module's slots (`registry.ts`, `resyncDiscoverySlots`), reported
+ * rather than thrown, for the reasons `lib/app/slots/definitions-admin.ts`
+ * gives (`HB9`, `HB10`). It runs even when
+ * nothing changed, so saving any question again is a real retry. A reorder
+ * changes no slot and does not re-sync.
  *
  * @see lib/app/content/question-store.ts — the read every surface makes
  */
 
+import { getRegisteredModule } from '@/lib/framework/modules/registry';
+import { fallbackModuleName, moduleSlugFromId } from '@/lib/app/modules/definitions';
+import { readDiscoveryConfig } from '@/lib/app/onboarding/discovery-config-store';
 import type {
   AppDiscoveryQuestion,
   AppDiscoveryQuestionRevision,
@@ -58,6 +73,7 @@ import {
   type KeyedPlan,
 } from '@/lib/app/content/admin/keyed-import';
 import { QUESTION_READERS } from '@/lib/app/content/admin/readers';
+import { DISCOVERY_SLOT_PREFIX } from '@/lib/app/onboarding/discovery-slot-names';
 import {
   type ContentImportPlan,
   type ImportPlanSection,
@@ -80,10 +96,22 @@ import type { QuestionEdit, QuestionSetEdit } from '@/lib/app/content/admin/vali
 export type QuestionSetFields = ReturnType<typeof setFieldsOf>;
 export type QuestionFields = ReturnType<typeof questionFieldsOf>;
 
+/**
+ * The module that owns the questions (t-101): where its Core Set switch is
+ * set, on the module's Config tab, and what it says now.
+ */
+export interface QuestionsOwningModule {
+  slug: string;
+  name: string;
+  coreSetOnly: boolean;
+}
+
 export interface QuestionsAdminView {
   seeded: boolean;
   set: DiscoveryQuestionSet | null;
   readers: readonly string[];
+  /** `null` when the set is not seeded. */
+  module: QuestionsOwningModule | null;
 }
 
 export interface QuestionWriteResult {
@@ -124,6 +152,7 @@ function questionFieldsOf(row: Omit<DiscoveryQuestionRow, 'revision'>) {
     inputType: view.inputType,
     hint: row.hint,
     conditionalFollowUp: storedFollowUpSchema.parse(row.conditionalFollowUp ?? null),
+    weight: row.weight,
   };
 }
 
@@ -135,15 +164,23 @@ const SET_FIELDS = [...QUESTION_SET_SNAPSHOT_FIELDS, 'moduleId'] as const;
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
+async function owningModuleOf(moduleId: string): Promise<QuestionsOwningModule> {
+  const slug = moduleSlugFromId(moduleId);
+  const { coreSetOnly } = await readDiscoveryConfig(slug);
+  return { slug, name: getRegisteredModule(slug)?.name ?? fallbackModuleName(slug), coreSetOnly };
+}
+
 export async function getQuestionsAdminView(): Promise<QuestionsAdminView> {
   const exists = await prisma.appQuestionSet.findUnique({
     where: { id: DISCOVERY_QUESTION_SET_ID },
     select: { id: true },
   });
+  const set = exists ? await getDiscoveryQuestions() : null;
   return {
     seeded: exists !== null,
-    set: exists ? await getDiscoveryQuestions() : null,
+    set,
     readers: QUESTION_READERS,
+    module: set ? await owningModuleOf(set.collection.module) : null,
   };
 }
 
@@ -314,7 +351,11 @@ export async function restoreQuestionSetRevision(
   );
 }
 
-/** Restore a question's words. Its number stays: moving is a reorder. */
+/**
+ * Restore a question's words. Its number stays: moving is a reorder. Its weight
+ * stays too: it is an admin setting, and a restore of old wording must not put
+ * a question back into the Core Set (every revision before t-101 says 100).
+ */
 export async function restoreQuestionRevision(
   id: string,
   revision: number,
@@ -327,7 +368,11 @@ export async function restoreQuestionRevision(
   if (!past) throw new NotFoundError(`Question "${id}" has no revision ${revision}.`);
   return writeQuestion(
     id,
-    (before) => ({ ...questionFieldsOf({ ...past, id }), number: before.number }),
+    (before) => ({
+      ...questionFieldsOf({ ...past, id }),
+      number: before.number,
+      weight: before.weight,
+    }),
     revisionRead,
     editorId
   );
@@ -369,14 +414,54 @@ async function applyNumbers(
 }
 
 /**
- * The id after the highest in the set: `q31` after `q30`. A removed question's
- * history goes with it, so an id freed at the end can be taken again; that is
- * harmless while nothing stores a question id (see the file header).
+ * The ids of removed questions: those with no row but a discovery slot, or
+ * answers filed under one. Either way the id is not free (file header).
+ *
+ * **Both, not just the slot.** The slot is the usual tombstone, but it exists
+ * only once a sync has projected it. A question added while the sync was
+ * failing can be answered and then removed before any sync succeeds, leaving
+ * answers under a slug with no definition. Counting the answers too is what
+ * keeps that id from being handed out.
+ */
+async function retiredQuestionIds(
+  client: Pick<Tx, 'slotDefinition' | 'slotValue'>,
+  liveIds: ReadonlySet<string>
+): Promise<Set<string>> {
+  const [slots, answered] = await Promise.all([
+    client.slotDefinition.findMany({
+      where: { slug: { startsWith: DISCOVERY_SLOT_PREFIX } },
+      select: { slug: true },
+    }),
+    // `groupBy`, not `findMany({ distinct })`: this repo does not enable
+    // Prisma's `nativeDistinct`, so `distinct` would load every answer ever
+    // given, every version of it, and de-duplicate in memory, inside the
+    // transaction a question add holds. `groupBy` de-duplicates in the
+    // database and returns one row per slug. There is no index on `slotSlug`
+    // to make the scan cheaper, and none is added here: the table is
+    // Daybreak's, and a leaf index on it is what the next generated migration
+    // would drop (`B13`). It runs on an admin's add or import, not per turn.
+    client.slotValue.groupBy({
+      by: ['slotSlug'],
+      where: { slotSlug: { startsWith: DISCOVERY_SLOT_PREFIX } },
+    }),
+  ]);
+  return new Set(
+    [...slots.map((slot) => slot.slug), ...answered.map((value) => value.slotSlug)]
+      .map((slug) => slug.slice(DISCOVERY_SLOT_PREFIX.length))
+      .filter((id) => !liveIds.has(id))
+  );
+}
+
+/**
+ * The id after the highest the set has ever used: `q31` after `q30`, and after
+ * a removed `q31` too. See the file header for why a freed id is never reused.
  */
 async function nextQuestionId(tx: Tx): Promise<string> {
   const live = await tx.appDiscoveryQuestion.findMany({ select: { id: true } });
-  const highest = live
-    .map((row) => /^q(\d+)$/.exec(row.id)?.[1])
+  const liveIds = new Set(live.map((row) => row.id));
+  const everUsed = [...liveIds, ...(await retiredQuestionIds(tx, liveIds))];
+  const highest = everUsed
+    .map((id) => /^q(\d+)$/.exec(id)?.[1])
     .filter((digits): digits is string => digits !== undefined)
     .reduce((max, digits) => Math.max(max, Number(digits)), 0);
   return `q${String(highest + 1).padStart(2, '0')}`;
@@ -518,6 +603,8 @@ interface StoredQuestions {
   set: AppQuestionSet | null;
   questions: readonly AppDiscoveryQuestion[];
   moduleIds: ReadonlySet<string>;
+  /** Removed questions whose answers are still filed under their id (file header). */
+  retiredIds: ReadonlySet<string>;
 }
 
 interface QuestionsImport {
@@ -554,6 +641,13 @@ export function planQuestionsImport(
       `The file puts the questions in module "${seed.set.moduleId}", which is not on the journey.`
     );
   }
+  for (const question of seed.questions) {
+    if (stored.retiredIds.has(question.id)) {
+      refusals.push(
+        `The file adds question "${question.id}", but that id belonged to a question that was removed, and people's answers to it are still filed under it. Give the new question an id the set has never used.`
+      );
+    }
+  }
 
   const { id: _id, ...setIncoming } = seed.set;
   const setAfter = setFieldsOf(setIncoming);
@@ -564,6 +658,9 @@ export function planQuestionsImport(
   // Kept ones follow the file's, so the numbering stays 1..n with no gap and
   // no two questions claiming one number.
   const inFile = new Set(seed.questions.map((question) => question.id));
+  // A weight is an admin setting too. Her file carries none, so a question the
+  // file names without one keeps its stored weight rather than being reset.
+  const fileWeights = new Map(file.questions.map((question) => [question.id, question.weight]));
   const kept = removeAbsent ? [] : stored.questions.filter((row) => !inFile.has(row.id));
   const questions = planKeyedImport<Omit<DiscoveryQuestionRow, 'revision'>, QuestionFields>({
     incoming: [
@@ -581,7 +678,8 @@ export function planQuestionsImport(
     diff: (before, after) => changedFieldsOf(before, after, QUESTION_SNAPSHOT_FIELDS),
     allFields: QUESTION_SNAPSHOT_FIELDS,
     toCreate: (question) => questionFieldsOf(question),
-    toUpdate: (_before, question) => questionFieldsOf(question),
+    toUpdate: (before, question) =>
+      questionFieldsOf({ ...question, weight: fileWeights.get(question.id) ?? before.weight }),
     onAbsent: removeAbsent ? () => null : 'keep',
   });
 
@@ -618,7 +716,10 @@ export function planQuestionsImport(
 }
 
 async function readStored(
-  client: Pick<typeof prisma, 'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule'>
+  client: Pick<
+    typeof prisma,
+    'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition' | 'slotValue'
+  >
 ): Promise<StoredQuestions> {
   const [set, questions, modules] = await Promise.all([
     client.appQuestionSet.findUnique({ where: { id: DISCOVERY_QUESTION_SET_ID } }),
@@ -628,7 +729,12 @@ async function readStored(
     }),
     client.appJourneyModule.findMany({ select: { id: true } }),
   ]);
-  return { set, questions, moduleIds: new Set(modules.map((row) => row.id)) };
+  return {
+    set,
+    questions,
+    moduleIds: new Set(modules.map((row) => row.id)),
+    retiredIds: await retiredQuestionIds(client, new Set(questions.map((row) => row.id))),
+  };
 }
 
 function parseQuestionsFile(raw: unknown): DiscoveryQuestionsFile {

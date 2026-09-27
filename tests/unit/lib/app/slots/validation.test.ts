@@ -24,6 +24,7 @@ import {
   slotDefinitionActiveSchema,
   slotDefinitionCreateSchema,
   slotDefinitionSaveSchema,
+  slotDefinitionUpdateSchema,
   slotSlugSchema,
   slotTaxonomyUploadSchema,
 } from '@/lib/app/slots/validation';
@@ -50,6 +51,30 @@ describe('a slug', () => {
     ['nothing at all', ''],
   ])('refuses %s', (_label, slug) => {
     expect(slotSlugSchema.safeParse(slug).success).toBe(false);
+  });
+});
+
+describe('the names the discovery answers hold (f-onboarding t-101)', () => {
+  it('refuses a new taxonomy slot whose slug a discovery answer could take', () => {
+    const result = slotDefinitionCreateSchema.safeParse({ slug: 'discovery_q31', ...AUTHORED });
+
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('discovery questions');
+  });
+
+  it('refuses the discovery group for a taxonomy slot, on a create and on an edit', () => {
+    expect(
+      slotDefinitionCreateSchema.safeParse({ slug: 'life_work', ...AUTHORED, group: 'discovery' })
+        .success
+    ).toBe(false);
+    expect(slotDefinitionUpdateSchema.safeParse({ ...AUTHORED, group: 'discovery' }).success).toBe(
+      false
+    );
+  });
+
+  it('still reads a discovery slug where one is only looked up', () => {
+    // A person's notes and the history routes use the bare slug rule.
+    expect(slotSlugSchema.safeParse('discovery_q01').success).toBe(true);
   });
 });
 

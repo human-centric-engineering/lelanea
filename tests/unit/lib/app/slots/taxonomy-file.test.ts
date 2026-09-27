@@ -99,6 +99,18 @@ describe('a malformed taxonomy fails, naming the fault', () => {
     expect(failure(file)).toContain('lower-case letters, digits and underscores');
   });
 
+  it('rejects a slot slug reserved for a discovery answer (f-onboarding t-101)', () => {
+    const file = draft();
+    (file.slots as Array<Record<string, unknown>>)[0].slug = 'discovery_q01';
+    expect(failure(file)).toContain('discovery questions');
+  });
+
+  it('rejects the discovery answers’ group key', () => {
+    const file = draft();
+    (file.groups as Array<Record<string, unknown>>)[0].key = 'discovery';
+    expect(failure(file)).toContain('discovery questions');
+  });
+
   it('rejects an unknown key rather than dropping it', () => {
     // `strictObject`, like every other authored file: a field somebody added to
     // the JSON and nothing reads is a mistake, not something to ignore.

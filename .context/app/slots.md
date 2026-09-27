@@ -31,6 +31,13 @@ of Daybreak — [`divergences.md`](./divergences.md) Row 22, proposed upstream a
 The framework table carries **no history**, which is why ours does: the editor
 is ours, so the version chain is too.
 
+**The discovery questions are not part of the taxonomy** (f-onboarding t-101).
+Each is a slot of the Onboarding module, declared through `registerModule()`
+and scoped `module:onboarding` by Daybreak, not a global slot from this
+provider. The taxonomy refuses their slug prefix (`discovery_`) and group key
+(`discovery`), so no authored slot can take an answer's identity. See
+[`onboarding.md`](./onboarding.md).
+
 ## The shape of a definition
 
 Eight authored fields, listed once in `SLOT_DEFINITION_FIELDS`

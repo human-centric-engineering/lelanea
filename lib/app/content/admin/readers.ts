@@ -127,6 +127,7 @@ export const JOURNEY_READERS: readonly string[] = [
 /** What reads the discovery questions. */
 export const QUESTION_READERS: readonly string[] = [
   'the public content API (/api/v1/app/content/discovery-questions)',
+  'the discovery slots answers are filed under (one per question; a removed question keeps its answers)',
 ];
 
 /** What reads the resource library. */

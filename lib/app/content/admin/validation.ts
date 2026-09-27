@@ -28,6 +28,7 @@ import {
   storedProducesSchema,
 } from '@/lib/app/content/journey-view';
 import {
+  FULL_WEIGHT,
   storedFollowUpSchema,
   storedPacingSchema,
   storedPreambleSchema,
@@ -160,17 +161,32 @@ export const questionSetEditSchema = z.strictObject({
 });
 export const questionSetSaveSchema = questionSetEditSchema.extend({ revision });
 
-/** One question. `inputType` has one value today, and is kept so the row says it. */
+/** 0–100, whole numbers. 100 puts the question in the Core Set (t-101). */
+const questionWeight = z
+  .number()
+  .int('A weight is a whole number.')
+  .min(0, 'A weight is 0 or more.')
+  .max(FULL_WEIGHT, `A weight is at most ${FULL_WEIGHT}.`);
+
+/**
+ * One question. `inputType` has one value today, and is kept so the row says it.
+ *
+ * `weight` is required on a save, not defaulted: a form that forgot to send it
+ * would otherwise put every question it saved back to fully weighted.
+ */
 export const questionEditSchema = z.strictObject({
   text: prose('A question'),
   inputType: z.literal('long_text'),
   hint: optionalLine('A hint', 2000),
   conditionalFollowUp: storedFollowUpSchema,
+  weight: questionWeight,
 });
 export const questionSaveSchema = questionEditSchema.extend({ revision });
 
-/** A new question goes at the end, with the next free id. */
-export const questionCreateSchema = questionEditSchema;
+/** A new question goes at the end, with the next free id, fully weighted unless it says. */
+export const questionCreateSchema = questionEditSchema.extend({
+  weight: questionWeight.default(FULL_WEIGHT),
+});
 
 // ─── Resources ──────────────────────────────────────────────────────────────
 

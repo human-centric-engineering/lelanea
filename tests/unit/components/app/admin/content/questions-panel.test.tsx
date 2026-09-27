@@ -11,8 +11,8 @@
  * @see components/app/admin/content/questions-panel.tsx
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { QuestionsPanel } from '@/components/app/admin/content/questions-panel';
@@ -64,6 +64,7 @@ const Q1: DiscoveryQuestionView = {
   text: 'What matters to you right now?',
   inputType: 'long_text',
   hint: 'Take your time.',
+  weight: 100,
   revision: 3,
 };
 
@@ -73,6 +74,7 @@ const Q2: DiscoveryQuestionView = {
   text: 'Have you faced this before?',
   inputType: 'long_text',
   conditionalFollowUp: { ifYes: 'What happened then?', ifNo: 'What holds you back?' },
+  weight: 40,
   revision: 1,
 };
 
@@ -92,7 +94,12 @@ const SET: DiscoveryQuestionSet = {
   questions: [Q1, Q2],
 };
 
-const VIEW: QuestionsAdminView = { seeded: true, set: SET, readers: READERS };
+const VIEW: QuestionsAdminView = {
+  seeded: true,
+  set: SET,
+  readers: READERS,
+  module: { slug: 'onboarding', name: 'Onboarding', coreSetOnly: false },
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -101,7 +108,9 @@ beforeEach(() => {
 
 describe('before the seed has run', () => {
   it('says so, and offers nothing to edit', () => {
-    render(<QuestionsPanel initialView={{ seeded: false, set: null, readers: [] }} />);
+    render(
+      <QuestionsPanel initialView={{ seeded: false, set: null, readers: [], module: null }} />
+    );
 
     expect(screen.getByText(/have not been seeded yet/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add a question' })).toBeNull();
@@ -193,6 +202,60 @@ describe('the framing', () => {
   });
 });
 
+describe('the module the questions belong to', () => {
+  it('names it, says the Core Set is off, and links to where it is changed', () => {
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    const note = screen.getByRole('heading', {
+      name: 'Asked in the Onboarding module',
+    }).parentElement!;
+    expect(note).toHaveTextContent('Core Set only is off: a person is asked every question.');
+    expect(
+      within(note).getByRole('link', { name: 'Change it in the module’s settings' })
+    ).toHaveAttribute('href', '/admin/framework/modules/onboarding');
+    // The switch is the module's config, so the framing form has none.
+    expect(screen.queryByLabelText('Core Set only')).toBeNull();
+  });
+
+  it('says so when the Core Set is on', () => {
+    render(
+      <QuestionsPanel
+        initialView={{
+          ...VIEW,
+          module: { slug: 'onboarding', name: 'Onboarding', coreSetOnly: true },
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(/a person is asked only the questions weighted 100/)
+    ).toBeInTheDocument();
+  });
+});
+
+describe('a save landing while the question is open', () => {
+  it('keeps what was typed, and saves against the revision it was opened at', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(refused(409, 'Someone else changed this question.'));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+    await user.click(screen.getByRole('button', { name: Q1.text }));
+    await user.type(screen.getByLabelText('Question'), ' Still?');
+
+    // The row's slider saved meanwhile, and the page refreshed with its revision.
+    const slid = { ...Q1, weight: 60, revision: 4 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [slid, Q2] } }} />);
+
+    expect(screen.getByLabelText('Question')).toHaveValue(`${Q1.text} Still?`);
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    // Its draft still says weight 100: against the old revision it conflicts,
+    // rather than silently undoing the slider's 60.
+    expect(sent().body).toMatchObject({ revision: 3, weight: 100 });
+    expect(await screen.findByText('Someone else changed this question.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Question')).toHaveValue(`${Q1.text} Still?`);
+  });
+});
+
 describe('a question without a hint or a branch', () => {
   async function openQ1(user: ReturnType<typeof userEvent.setup>) {
     render(<QuestionsPanel initialView={VIEW} />);
@@ -221,8 +284,48 @@ describe('a question without a hint or a branch', () => {
       inputType: 'long_text',
       hint: 'No rush.',
       conditionalFollowUp: null,
+      weight: 100,
     });
     expect(await screen.findByText('Saved question 1.')).toBeInTheDocument();
+  });
+
+  it('sends the weight as a number when it is changed', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'] }));
+    await openQ1(user);
+
+    const weight = screen.getByLabelText('Weight');
+    expect(weight).toHaveValue(100);
+    await user.clear(weight);
+    await user.type(weight, '60');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(sent().body).toMatchObject({ weight: 60 });
+  });
+
+  it('sends a cleared weight as null, so the route refuses it rather than saving 0', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: [] }));
+    await openQ1(user);
+
+    await user.clear(screen.getByLabelText('Weight'));
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(sent().body).toMatchObject({ weight: null });
+  });
+
+  it('warns, rather than reporting a plain save, when the data slots did not update', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      ok({ changed: ['text'], slotSync: { status: 'failed', message: 'boom' } })
+    );
+    await openQ1(user);
+
+    await user.type(screen.getByLabelText('Question'), ' Still?');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(await screen.findByText(/Open any question and save it to retry/)).toBeInTheDocument();
+    expect(screen.queryByText('Saved question 1.')).toBeNull();
   });
 
   it('sends null hint when the field is cleared', async () => {
@@ -294,6 +397,153 @@ describe('a question that already branches', () => {
   });
 });
 
+describe('the weight on each row', () => {
+  function slider(number: number) {
+    return screen.getByRole('slider', { name: `Weight of question ${number}` });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setup() {
+    return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  }
+
+  it('marks a fully weighted question as Core and shows any other weight on its slider', () => {
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    const [first, second] = screen.getAllByRole('listitem');
+    expect(within(first).getByText('Core')).toBeInTheDocument();
+    expect(within(second).getByText('40')).toBeInTheDocument();
+    expect(slider(1)).toHaveAttribute('aria-valuenow', '100');
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '40');
+  });
+
+  it('saves the new weight once it is let go of, with the question as stored and its revision', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent()).toEqual({
+      url: contentItemEndpoint('questions', 'question', 'q2'),
+      method: 'PUT',
+      body: {
+        revision: 1,
+        text: Q2.text,
+        inputType: 'long_text',
+        hint: null,
+        conditionalFollowUp: Q2.conditionalFollowUp,
+        weight: 41,
+      },
+    });
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+    expect(slider(2)).toHaveFocus();
+  });
+
+  it('sends a run of key presses as one save, of the last value', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(1).focus();
+    await user.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent().body).toMatchObject({ revision: 3, weight: 97 });
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('97');
+  });
+
+  it('holds a value let go of during a save until the refresh brings the new revision', async () => {
+    const user = setup();
+    fetchMock
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }))
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowRight}');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Let go again before the page has refreshed: the stored revision is still 1.
+    await user.keyboard('{ArrowRight}');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '42');
+
+    const saved = { ...Q2, weight: 41, revision: 2 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, saved] } }} />);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(sent(1).body).toMatchObject({ revision: 2, weight: 42 });
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '42');
+  });
+
+  it('shows a weight saved elsewhere once the page refreshes', () => {
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+
+    const moved = { ...Q2, weight: 70, revision: 2 };
+    rerender(<QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, moved] } }} />);
+
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '70');
+  });
+
+  it('says on the row when the save was refused, shows the stored weight, and re-reads the page', async () => {
+    const user = setup();
+    fetchMock
+      .mockResolvedValueOnce(refused(409, 'Someone else changed this question.'))
+      .mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'synced' } }));
+    const { rerender } = render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(
+      await screen.findByText('Not saved: Someone else changed this question.')
+    ).toBeInTheDocument();
+    // Not left showing a value that was never stored.
+    expect(slider(2)).toHaveAttribute('aria-valuenow', '40');
+    expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+
+    // The refresh brings the revision the other edit left, so the next save is not refused again.
+    const current = { ...Q2, revision: 2 };
+    rerender(
+      <QuestionsPanel initialView={{ ...VIEW, set: { ...SET, questions: [Q1, current] } }} />
+    );
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(sent(1).body).toMatchObject({ revision: 2, weight: 39 });
+  });
+
+  it('warns on the page when the weight saved but the data slots did not update', async () => {
+    const user = setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['weight'], slotSync: { status: 'failed' } }));
+    render(<QuestionsPanel initialView={VIEW} />);
+
+    slider(2).focus();
+    await user.keyboard('{ArrowLeft}');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(
+      await screen.findByText(/the data slots the AI files answers under/)
+    ).toBeInTheDocument();
+  });
+});
+
 describe('removing a question', () => {
   it('confirms first, naming the readers, before sending the delete', async () => {
     const user = userEvent.setup();
@@ -348,7 +598,7 @@ describe('removing a question', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The question moved under you.');
     // The editor stays open on the refusal, over the question still in the list.
     expect(screen.getByRole('dialog', { name: 'Question 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: Q1.text, hidden: true })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem', { hidden: true })[0]).toHaveTextContent(Q1.text);
   });
 });
 
@@ -416,6 +666,7 @@ describe('adding a question', () => {
       inputType: 'long_text',
       hint: 'Be honest.',
       conditionalFollowUp: null,
+      weight: 100,
     });
     expect(screen.queryByRole('button', { name: 'Add at the end' })).toBeNull();
     expect(await screen.findByText('Added question 3 (q3).')).toBeInTheDocument();

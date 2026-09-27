@@ -191,6 +191,15 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'reintroduces a word in a comment, a doc or a new component reaches it ' +
       'through no module graph.',
   },
+  {
+    path: 'tests/unit/lib/app/modules/client-safe.test.ts',
+    reason:
+      'fails when lib/app/modules/definitions.ts, which client components ' +
+      'import, reaches the database client at runtime: pg in the browser ' +
+      'bundle breaks every admin content page. It reads the import graph off ' +
+      'disk rather than importing it, so a branch that adds a server import ' +
+      'anywhere down that graph reaches it through no module graph. t-101.',
+  },
 ];
 
 /**

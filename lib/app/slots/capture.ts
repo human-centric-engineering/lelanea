@@ -86,6 +86,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logging';
 import { prisma } from '@/lib/db/client';
 import { FillSlotCapability } from '@/lib/framework/data-slots/capabilities/fill-slot';
+import { isDiscoverySlotSlug } from '@/lib/app/onboarding/discovery-slot-names';
 import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
 
 /** The framework's own argument and result types, which it does not export. */
@@ -218,6 +219,21 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
   }
 
   async execute(args: FillSlotArgs, context: CapabilityContext): Promise<FillSlotResult> {
+    // A discovery answer is the person's own words, written by the onboarding
+    // surface (f-onboarding t-101). A reading of hers appended to that slot
+    // would become its newest version and stand in for what they wrote, so she
+    // may read these slots and never write one. Refused before the turn guard,
+    // on every path, and answered so she still speaks (`answering()`): the
+    // message tells her where the reading belongs instead.
+    if (isDiscoverySlotSlug(args.slotSlug)) {
+      return answering(
+        this.error(
+          'That is one of the person’s own discovery answers, and only they write those. Record what you understood under another name instead.',
+          'discovery_answer_read_only'
+        )
+      );
+    }
+
     const turnId = turnIdFrom(context);
     if (turnId === null || context.userId === null) {
       // No turn to be the second attempt of. See "What is deliberately NOT

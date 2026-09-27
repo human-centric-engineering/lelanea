@@ -29,6 +29,12 @@
  * single place that rule lives; the map definition and the journey API use it to
  * keep node keys equal to module slugs.
  *
+ * **The module that asks the discovery questions owns them** (f-onboarding
+ * t-101; `.context/app/building-with-daybreak.md`). Its definition declares one
+ * data slot per question (`slotDefinitions`, scoped `module:<slug>` by
+ * Daybreak) and the Core Set switch as its config (`configSchema`). The other
+ * modules keep an empty interior until they are written.
+ *
  * @see lib/app/journey/roster.ts — which modules exist
  * @see lib/app/content/journey-store.ts — `getJourneyStructure()`, their words
  * @see lib/framework/modules/definition.ts — the shape being filled
@@ -38,6 +44,22 @@ import { z } from 'zod';
 import type { ModuleDefinition } from '@/lib/framework/modules/definition';
 import type { JourneyStructure } from '@/lib/app/content/journey-view';
 import { JOURNEY_MODULES, type RosterModule } from '@/lib/app/journey/roster';
+import {
+  DISCOVERY_DEFAULT_MODULE_ID,
+  discoveryConfigSchema,
+} from '@/lib/app/onboarding/discovery-config';
+import type { SlotDefinitionInput } from '@/lib/framework/data-slots';
+
+/**
+ * The discovery questions as their module declares them: the module the set
+ * names, and one slot per question. Absent when the set could not be read, in
+ * which case the default module still carries the config schema, so its
+ * Config tab and stored switch stay valid.
+ */
+export interface DiscoveryModuleSlots {
+  moduleId: string;
+  slotDefinitions: SlotDefinitionInput[];
+}
 
 /** How many modules the journey has. Pinned by tests against the roster. */
 export const LELANEA_MODULE_COUNT = 17;
@@ -96,6 +118,24 @@ function toDefinition(slug: string, name: string, description: string): ModuleDe
   };
 }
 
+/**
+ * The discovery questions' interior on the module that asks them: their slots
+ * and the Core Set switch. Any other module is returned as it was.
+ */
+function withDiscovery(
+  moduleId: string,
+  definition: ModuleDefinition,
+  discovery: DiscoveryModuleSlots | undefined
+): ModuleDefinition {
+  const owner = discovery?.moduleId ?? DISCOVERY_DEFAULT_MODULE_ID;
+  if (moduleId !== owner) return definition;
+  return {
+    ...definition,
+    configSchema: discoveryConfigSchema,
+    ...(discovery ? { slotDefinitions: discovery.slotDefinitions } : {}),
+  };
+}
+
 function fromRoster(module: RosterModule): ModuleDefinition {
   const slug = moduleSlugFromId(module.id);
   return toDefinition(slug, fallbackModuleName(slug), `Module ${module.number} of the journey.`);
@@ -109,20 +149,26 @@ function fromRoster(module: RosterModule): ModuleDefinition {
  * With no `structure`, from the roster alone: every slug, each named from its
  * slug. With the journey read from the database, each named and described by
  * its rows. The slugs and their order are the roster's either way, so the two
- * registrations cover exactly the same modules.
+ * registrations cover exactly the same modules. `discovery` gives the module
+ * that asks the discovery questions its slots; without it, that module has
+ * the config schema and no slots.
  */
-export function getModuleDefinitions(structure?: JourneyStructure): readonly ModuleDefinition[] {
-  if (!structure) return JOURNEY_MODULES.map(fromRoster);
-
-  const tiersById = new Map(structure.tiers.map((tier) => [tier.id, tier]));
-  const modulesById = new Map(structure.modules.map((module) => [module.id, module]));
+export function getModuleDefinitions(
+  structure?: JourneyStructure,
+  discovery?: DiscoveryModuleSlots
+): readonly ModuleDefinition[] {
+  const tiersById = new Map(structure?.tiers.map((tier) => [tier.id, tier]));
+  const modulesById = new Map(structure?.modules.map((module) => [module.id, module]));
   return JOURNEY_MODULES.map((rosterModule) => {
     const entry = modulesById.get(rosterModule.id);
     const tier = tiersById.get(rosterModule.tier);
-    // `toJourneyStructure` builds both lists from the roster and throws on a
-    // missing row, so these are present; the fallback is for a caller that
-    // hands in a structure built some other way.
-    if (!entry || !tier) return fromRoster(rosterModule);
-    return toDefinition(moduleSlugFromId(entry.id), entry.title, describe(entry, tier));
+    // With a structure, `toJourneyStructure` builds both lists from the roster
+    // and throws on a missing row, so these are present; the fallback is for no
+    // structure, or one built some other way.
+    const definition =
+      entry && tier
+        ? toDefinition(moduleSlugFromId(entry.id), entry.title, describe(entry, tier))
+        : fromRoster(rosterModule);
+    return withDiscovery(rosterModule.id, definition, discovery);
   });
 }

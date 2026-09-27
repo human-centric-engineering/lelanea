@@ -258,14 +258,14 @@ the rows the moment it migrates. The files only seed them.
 | Questions   | `app_question_set`, `app_discovery_question` (+ revisions)                    | `question-store.ts`          | `017-discovery-questions.ts` |
 | Resources   | `app_resource_collection`, `app_resource`, `app_resource_words` (+ revisions) | `resource-store.ts`          | `018-resources.ts`           |
 
-| Function                                                            | Returns                                                                          |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster    |
-| `getDiscoveryQuestions()`                                           | the thirty onboarding questions, the preamble and the pacing                     |
-| `getResourcesLibrary()`                                             | collection + provenance, every video, audio piece and article, every key's words |
-| `getResource(id)`                                                   | one video, audio or article, or `null` — the suggestion tool's per-call lookup   |
-| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key           |
-| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                                 |
+| Function                                                            | Returns                                                                                                          |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `getJourneyStructure()`                                             | five tiers, seventeen modules, their phases — the rows joined with the roster                                    |
+| `getDiscoveryQuestions()`                                           | the onboarding questions, each with its weight, the preamble and the pacing ([`onboarding.md`](./onboarding.md)) |
+| `getResourcesLibrary()`                                             | collection + provenance, every video, audio piece and article, every key's words                                 |
+| `getResource(id)`                                                   | one video, audio or article, or `null` — the suggestion tool's per-call lookup                                   |
+| `selectResourcesFor(key, { pin? })`                                 | what the drawer shows for one open thing, or `null` for an unknown key                                           |
+| `seedJourneyStructure` · `seedDiscoveryQuestions` · `seedResources` | write everything and each v1 revision — **once**                                                                 |
 
 All async, read per request with no cache, and an unseeded database throws
 `ContentNotSeededError`, as the documents' do. Each has a pure `*-view.ts` that

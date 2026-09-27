@@ -37,7 +37,7 @@ import {
   SLOT_DATA_TYPE,
   SLOT_SENSITIVITY,
 } from '@/lib/framework/data-slots/vocabulary';
-import { slotSlugSchema } from '@/lib/app/slots/validation';
+import { authoredSlotGroupSchema, authoredSlotSlugSchema } from '@/lib/app/slots/validation';
 
 /**
  * A slug is lower-case, digits and underscores. Immutable once seeded — it is
@@ -49,12 +49,10 @@ import { slotSlugSchema } from '@/lib/app/slots/validation';
  * drift apart. (That module's own header records why it is not under
  * `lib/validations/`, which is where this pointer used to send you.)
  */
-const slugSchema = slotSlugSchema;
-
 const slotSchema = z.strictObject({
-  slug: slugSchema,
+  slug: authoredSlotSlugSchema,
   /** Must be one of the keys declared in `groups` — checked below, across the file. */
-  group: slugSchema,
+  group: authoredSlotGroupSchema,
   description: z.string().trim().min(1),
   visibility: z.enum(SLOT_VISIBILITY),
   mode: z.enum(SLOT_MODE),
@@ -64,7 +62,7 @@ const slotSchema = z.strictObject({
 });
 
 const groupSchema = z.strictObject({
-  key: slugSchema,
+  key: authoredSlotGroupSchema,
   title: z.string().trim().min(1),
   description: z.string().trim().min(1),
 });

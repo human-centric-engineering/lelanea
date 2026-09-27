@@ -20,6 +20,12 @@ import type { ContentCollectionMeta } from '@/lib/app/content/document-view';
 // Served shape
 // ============================================================================
 
+/**
+ * The weight that puts a question in the Core Set (f-onboarding t-101). Weights
+ * run 0–100, and a question is core only at the top of the scale.
+ */
+export const FULL_WEIGHT = 100;
+
 /** One discovery question, as served. `hint` and `conditionalFollowUp` are omitted where absent. */
 export interface DiscoveryQuestionView {
   id: string;
@@ -28,6 +34,8 @@ export interface DiscoveryQuestionView {
   inputType: 'long_text';
   hint?: string;
   conditionalFollowUp?: { ifYes: string; ifNo: string };
+  /** 0–100. The fully weighted questions are the Core Set (t-101). */
+  weight: number;
   /** Counts every write to the question. */
   revision: number;
 }
@@ -92,6 +100,7 @@ export interface DiscoveryQuestionRow {
   inputType: string;
   hint: string | null;
   conditionalFollowUp: unknown;
+  weight: number;
   revision: number;
 }
 
@@ -113,6 +122,7 @@ export function toQuestionView(row: DiscoveryQuestionRow): DiscoveryQuestionView
     inputType: inputType.data,
     ...(row.hint !== null && { hint: row.hint }),
     ...(followUp.data !== null && { conditionalFollowUp: followUp.data }),
+    weight: row.weight,
     revision: row.revision,
   };
 }

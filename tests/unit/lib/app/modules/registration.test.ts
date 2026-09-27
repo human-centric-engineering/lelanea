@@ -27,11 +27,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // `leaf-bootstrap` also registers the waitlist erasure hook, whose module
 // imports the Prisma client; stub it so the real seam is exercised without a
 // database (the same stub `defaults.test.ts` uses).
+// It also reads the discovery questions, which become Onboarding's slots
+// (t-101); the set is absent unless a case supplies it.
+const findQuestionSet = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appWaitlistEntry: { findMany: vi.fn(async () => []) } },
+  prisma: {
+    appWaitlistEntry: { findMany: vi.fn(async () => []) },
+    appQuestionSet: { findUnique: findQuestionSet },
+  },
 }));
 
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
+import { getRegisteredModule } from '@/lib/framework/modules/registry';
 import { getModuleDefinitions, LELANEA_MODULE_COUNT } from '@/lib/app/modules/definitions';
 import {
   getRegisteredModules,
@@ -40,6 +47,7 @@ import {
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 
 beforeEach(() => {
+  findQuestionSet.mockReset().mockResolvedValue(null);
   __resetModuleRegistryForTests();
   __resetErasureCleanupHooksForTests();
 });
@@ -63,5 +71,20 @@ describe('initLeafApp registers the journey modules', () => {
     await initLeafApp();
 
     expect(getRegisteredModules()).toHaveLength(LELANEA_MODULE_COUNT);
+  });
+
+  it('gives the module the questions belong to their slots, through the real boot', async () => {
+    findQuestionSet.mockResolvedValue({
+      moduleId: 'module_00_onboarding',
+      questions: [{ id: 'q01', text: 'First?' }],
+    });
+
+    await initLeafApp();
+
+    expect(getRegisteredModule('onboarding')?.slotDefinitions).toEqual([
+      expect.objectContaining({ slug: 'discovery_q01', description: 'First?' }),
+    ]);
+    const withSlots = getRegisteredModules().filter((m) => m.slotDefinitions !== undefined);
+    expect(withSlots.map((m) => m.slug)).toEqual(['onboarding']);
   });
 });
