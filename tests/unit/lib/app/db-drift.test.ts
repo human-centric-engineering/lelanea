@@ -40,6 +40,7 @@ vi.mock('@/lib/db/client', () => ({
 
 import { registerAppDriftProbes } from '@/lib/app/db-drift';
 import { getAppDriftProbes, resetAppDriftProbes } from '@/lib/db/drift-probes';
+import { APP_ORG_OWNED_TABLES } from '@/lib/app/leaf-db-drift';
 
 describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
   beforeEach(() => {
@@ -303,47 +304,29 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
 
   /**
    * t-115 — every `app_*` table with `orgId` refuses a row with no org, by a
-   * CHECK Prisma cannot model. One probe reads the whole schema, so a new
-   * table whose migration forgot the CHECK fails without joining a list.
+   * CHECK Prisma cannot model. That the list matches the schema is
+   * `org-id-check-roster.test.ts`; this is that each listed table is probed.
    */
-  describe('the orgId CHECK probe', () => {
-    const probe = () =>
-      getAppDriftProbes().find((p) => p.name.includes('_orgId_not_null on every app_* table'));
+  it('registers an orgId CHECK probe for every listed table', () => {
+    registerAppDriftProbes();
+    const checked = getAppDriftProbes()
+      .filter((p) => p.kind === 'CHECK constraint' && p.name.includes('_orgId_not_null'))
+      .map((p) => p.table);
 
-    it('is registered', () => {
-      registerAppDriftProbes();
-      expect(probe()?.kind).toBe('CHECK constraint');
-    });
+    expect(checked).toEqual([...APP_ORG_OWNED_TABLES]);
+  });
 
-    it('passes when every app_* table with orgId has its CHECK', async () => {
-      queryRaw.mockResolvedValueOnce([
-        { table_name: 'app_acknowledgement', has_check: true },
-        { table_name: 'app_turn', has_check: true },
-      ]);
-      registerAppDriftProbes();
+  it('passes on the CHECK the migration writes, and FAILS when it is gone', async () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find(
+      (p) => p.table === 'app_turn' && p.kind === 'CHECK constraint'
+    );
 
-      await expect(probe()?.probe()).resolves.toEqual({ ok: true });
-    });
+    queryRaw.mockResolvedValueOnce([{ def: 'CHECK (("orgId" IS NOT NULL))' }]);
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
 
-    it('FAILS naming each table without one', async () => {
-      queryRaw.mockResolvedValueOnce([
-        { table_name: 'app_acknowledgement', has_check: true },
-        { table_name: 'app_new_thing', has_check: false },
-      ]);
-      registerAppDriftProbes();
-
-      await expect(probe()?.probe()).resolves.toEqual({
-        ok: false,
-        note: 'no orgId CHECK on: app_new_thing',
-      });
-    });
-
-    it('FAILS rather than passing vacuously when it finds no app_* table at all', async () => {
-      queryRaw.mockResolvedValueOnce([]);
-      registerAppDriftProbes();
-
-      await expect(probe()?.probe()).resolves.toMatchObject({ ok: false });
-    });
+    queryRaw.mockResolvedValueOnce([]);
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
   it('keeps the framework probes when the leaf registers its own', () => {

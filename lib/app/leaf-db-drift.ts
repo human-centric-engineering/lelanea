@@ -11,45 +11,58 @@
  * applied to the local database by the time you read the generated SQL.
  */
 
-import { prisma } from '@/lib/db/client';
-import { registerAppDriftProbe, constraintExists, type Probe } from '@/lib/db/drift-probes';
+import { registerAppDriftProbe, constraintExists } from '@/lib/db/drift-probes';
 
 /**
- * t-115. Every `app_*` table with an `orgId` column carries
- * `<table>_orgId_not_null`, `CHECK ("orgId" IS NOT NULL)`.
+ * t-115. Every `app_*` table with an `orgId` column: each carries
+ * `<table>_orgId_not_null`, `CHECK ("orgId" IS NOT NULL)`
+ * (`20261004100300_app_org_id_required`).
  *
- * One probe over the whole schema rather than one per table, and derived from
- * the database itself: a new `app_*` table whose migration forgot the CHECK
- * fails here without anyone adding it to a list. Refuses to pass vacuously:
- * finding no `app_*` table with `orgId` at all is a failure, not a clean run.
+ * Written out rather than derived, so registering the probes needs neither a
+ * Prisma runtime model nor a raw query. The list cannot fall behind the schema
+ * unnoticed: `tests/unit/lib/app/org-id-check-roster.test.ts`, always-run,
+ * fails until a new `app_*` model with `orgId` is added here, and the drift
+ * check then fails until its migration adds the CHECK.
  */
-export const everyAppRowNamesItsOrg: Probe = async () => {
-  const rows = await prisma.$queryRaw<Array<{ table_name: string; has_check: boolean }>>`
-    SELECT c.table_name,
-           EXISTS (
-             SELECT 1
-             FROM pg_constraint k
-             JOIN pg_class t ON t.oid = k.conrelid
-             WHERE t.relname = c.table_name
-               AND k.contype = 'c'
-               AND k.conname = c.table_name || '_orgId_not_null'
-               AND pg_get_constraintdef(k.oid) LIKE '%"orgId" IS NOT NULL%'
-           ) AS has_check
-    FROM information_schema.columns c
-    WHERE c.table_schema = current_schema()
-      AND c.table_name LIKE 'app\\_%'
-      AND c.column_name = 'orgId'
-    ORDER BY c.table_name
-  `;
-  if (rows.length === 0) {
-    return { ok: false, note: 'found no app_* table with an orgId column' };
-  }
-  const missing = rows.filter((row) => !row.has_check).map((row) => row.table_name);
-  if (missing.length > 0) {
-    return { ok: false, note: `no orgId CHECK on: ${missing.join(', ')}` };
-  }
-  return { ok: true };
-};
+export const APP_ORG_OWNED_TABLES = [
+  'app_acknowledgement',
+  'app_agent_settings',
+  'app_crisis_copy',
+  'app_crisis_region',
+  'app_discovery_question',
+  'app_discovery_question_revision',
+  'app_document_collection',
+  'app_foundational_document',
+  'app_foundational_document_revision',
+  'app_journey',
+  'app_journey_module',
+  'app_journey_module_revision',
+  'app_journey_tier',
+  'app_journey_tier_revision',
+  'app_knowledge_designation',
+  'app_question_set',
+  'app_question_set_revision',
+  'app_resource',
+  'app_resource_collection',
+  'app_resource_revision',
+  'app_resource_words',
+  'app_resource_words_revision',
+  'app_safety_event',
+  'app_slot_definition',
+  'app_slot_definition_revision',
+  'app_turn',
+  'app_turn_slot_write',
+  'app_user_budget',
+  'app_voice_comparison',
+  'app_voice_comparison_arm',
+  'app_voice_golden_set',
+  'app_voice_golden_set_revision',
+  'app_voice_overlay',
+  'app_voice_overlay_revision',
+  'app_voice_overlay_set',
+  'app_voice_overlay_set_revision',
+  'app_waitlist_entry',
+] as const;
 
 export function registerLeafDriftProbes(): void {
   registerAppDriftProbe({
@@ -229,14 +242,15 @@ export function registerLeafDriftProbes(): void {
     });
   }
 
-  // t-115. Every app_* table refuses a row with no org
-  // (`20261004100300_app_org_id_required`). A CHECK, because Prisma cannot
-  // model one, so `migrate dev` would drop it. A row with no org would be
-  // seen by no org and caught by no per-org key.
-  registerAppDriftProbe({
-    name: '<table>_orgId_not_null on every app_* table (every row names its org)',
-    kind: 'CHECK constraint',
-    table: 'app_*',
-    probe: everyAppRowNamesItsOrg,
-  });
+  // t-115. Every app_* table refuses a row with no org. A CHECK, because
+  // Prisma cannot model one, so `migrate dev` would drop it. A row with no org
+  // would be seen by no org and caught by no per-org key.
+  for (const table of APP_ORG_OWNED_TABLES) {
+    registerAppDriftProbe({
+      name: `${table}_orgId_not_null (every row names its org)`,
+      kind: 'CHECK constraint',
+      table,
+      probe: constraintExists(`${table}_orgId_not_null`, '"orgId" IS NOT NULL'),
+    });
+  }
 }

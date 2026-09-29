@@ -200,6 +200,15 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'disk rather than importing it, so a branch that adds a server import ' +
       'anywhere down that graph reaches it through no module graph. t-101.',
   },
+  {
+    path: 'tests/unit/lib/app/org-id-check-roster.test.ts',
+    reason:
+      'fails when an app_* model with orgId is missing from ' +
+      'APP_ORG_OWNED_TABLES, whose CHECK the drift check probes: a table ' +
+      'without it accepts rows no org can see and no per-org key catches ' +
+      '(t-115). It reads prisma/schema off disk, so the branch that adds a ' +
+      'model reaches it through no module graph.',
+  },
 ];
 
 /**
