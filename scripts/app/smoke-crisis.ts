@@ -141,11 +141,11 @@ async function main(): Promise<void> {
       await crisisSeed.run({ prisma, logger });
       console.log('  (seeded this database from the bundled file first — what db:seed does)');
     }
-    const original = await prisma.appCrisisRegion.findUnique({ where: { region: 'GB' } });
+    const original = await prisma.appCrisisRegion.findFirst({ where: { region: 'GB' } });
     check(original !== null, 'GB is listed in the tables');
     restoreGb = () =>
       prisma.appCrisisRegion.update({
-        where: { region: 'GB' },
+        where: { id: original!.id },
         data: {
           emergencyNumber: original!.emergencyNumber,
           services: original!.services ?? [],
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
         },
       });
     await prisma.appCrisisRegion.update({
-      where: { region: 'GB' },
+      where: { id: original!.id },
       data: { services: [EDITED_SERVICE], status: 'draft', version: { increment: 1 } },
     });
     // What an admin write does in the instance that served it; any other

@@ -224,6 +224,54 @@ describe('saves', () => {
   });
 });
 
+// t-114: the set and each overlay are found by their name first, and their
+// revisions by the generated id that read returns. These are the paths where
+// the name finds nothing.
+describe('history and restore, when the name finds nothing', () => {
+  it('lists the set history, and none on a database that was never seeded', async () => {
+    expect((await overlays.listOverlaySetHistory()).map((entry) => entry.revision)).toEqual([1]);
+
+    db.current = createContentDbFake();
+    expect(await overlays.listOverlaySetHistory()).toEqual([]);
+  });
+
+  it('lists one overlay history, and refuses a situation nobody holds', async () => {
+    expect((await overlays.listOverlayHistory('discovery')).map((entry) => entry.revision)).toEqual(
+      [1]
+    );
+    await expect(overlays.listOverlayHistory('nowhere')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('refuses to restore a revision the set or an overlay never had', async () => {
+    await expect(overlays.restoreOverlaySetRevision(99, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(overlays.restoreOverlayRevision('discovery', 99, 1, EDITOR)).rejects.toMatchObject(
+      { status: 404 }
+    );
+    await expect(overlays.restoreOverlayRevision('nowhere', 1, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('refuses the set revision on a database that was never seeded', async () => {
+    db.current = createContentDbFake();
+    await expect(overlays.restoreOverlaySetRevision(1, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('plans an import into a database that was never seeded as a refusal, writing nothing', async () => {
+    const file = await overlays.exportOverlaysFile();
+    db.current = createContentDbFake();
+
+    const preview = await overlays.previewOverlaysImport(file, false);
+
+    expect(preview.refusals.length).toBeGreaterThan(0);
+    expect(db.current.rows('appVoiceOverlaySet')).toEqual([]);
+  });
+});
+
 describe('deleting a situation', () => {
   it('names the seat that selects it, and closes the gap in the order', async () => {
     const { revision } = await editOf('first-meeting');

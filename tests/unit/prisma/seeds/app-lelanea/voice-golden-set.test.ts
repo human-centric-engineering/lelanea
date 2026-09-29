@@ -85,7 +85,9 @@ interface FakeAgent {
 
 /** The `app_voice_golden_set` row — the pointer and its provenance (t-88). */
 interface FakeGoldenSetPointer {
+  /** Generated since t-114; the authored name is `slug`. */
   id: string;
+  slug: string;
   title: string;
   version: string;
   locale: string;
@@ -98,7 +100,9 @@ interface FakeGoldenSetPointer {
 
 /** One snapshot in `app_voice_golden_set_revision`. */
 interface FakeGoldenSetRevision {
+  /** The pointer's generated id, with its authored name kept in `setSlug`. */
   setId: string;
+  setSlug: string;
   revision: number;
   title: string;
   version: string;
@@ -249,14 +253,14 @@ const prisma = {
   // own two tables rather than a facet of `aiDataset`, because the platform's
   // model has nowhere to hold "which version" or the provenance block.
   appVoiceGoldenSet: {
-    findUnique: vi.fn(
-      async ({ where }: { where: { id: string } }) =>
-        (world.goldenSet && world.goldenSet.id === where.id ? world.goldenSet : null) ?? null
+    findFirst: vi.fn(
+      async ({ where }: { where: { slug: string } }) =>
+        (world.goldenSet && world.goldenSet.slug === where.slug ? world.goldenSet : null) ?? null
     ),
-    create: vi.fn(async ({ data }: { data: FakeGoldenSetPointer }) => {
+    create: vi.fn(async ({ data }: { data: Omit<FakeGoldenSetPointer, 'id'> }) => {
       writes.pointerCreate += 1;
-      world.goldenSet = { ...data };
-      return world.goldenSet;
+      world.goldenSet = { ...data, id: `golden-set-${(nextId += 1)}` };
+      return { id: world.goldenSet.id };
     }),
   },
   appVoiceGoldenSetRevision: {
@@ -266,9 +270,12 @@ const prisma = {
       return data;
     }),
   },
-  // The seed's reconcile path batches its three writes. The fake runs them in
-  // order, which is what the real client does too.
-  $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+  // The pointer and its first revision are written in one interactive
+  // transaction (the revision needs the pointer's generated id). The fake hands
+  // the callback these same delegates.
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
+    fn(prisma)
+  ),
 };
 
 import { logger } from '@/lib/logging';
@@ -369,7 +376,7 @@ describe('a fresh install', () => {
     await runSeed();
 
     expect(pointer()).toMatchObject({
-      id: VOICE_GOLDEN_SET_ID,
+      slug: VOICE_GOLDEN_SET_ID,
       version: goldenSet.collection.version,
       status: 'draft',
       revision: 1,
@@ -378,7 +385,9 @@ describe('a fresh install', () => {
     // t-92's editor reads this table, not just the pointer's current row.
     expect(world.goldenSetRevisions).toHaveLength(1);
     expect(world.goldenSetRevisions[0]).toMatchObject({
-      setId: VOICE_GOLDEN_SET_ID,
+      // By the pointer's generated id, not its name.
+      setId: pointer().id,
+      setSlug: VOICE_GOLDEN_SET_ID,
       revision: 1,
       version: goldenSet.collection.version,
       status: 'draft',

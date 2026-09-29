@@ -152,6 +152,7 @@ const MODELS: Record<string, ModelSpec> = {
   // f-content-seeds t-92: her register, the golden set and the crisis resource.
   appVoiceOverlaySet: {
     key: 'id',
+    ...named,
     defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
     cascade: [
       ['appVoiceOverlay', 'setId'],
@@ -161,14 +162,19 @@ const MODELS: Record<string, ModelSpec> = {
   },
   appVoiceOverlaySetRevision: revision('setId'),
   appVoiceOverlay: {
-    key: 'situation',
-    unique: [['setId', 'position']],
+    key: 'id',
+    unique: [
+      ['orgId', 'situation'],
+      ['setId', 'position'],
+    ],
+    compound: { orgId_situation: ['orgId', 'situation'] },
     defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
-    cascade: [['appVoiceOverlayRevision', 'situation']],
+    cascade: [['appVoiceOverlayRevision', 'overlayId']],
   },
-  appVoiceOverlayRevision: revision('situation'),
+  appVoiceOverlayRevision: revision('overlayId'),
   appVoiceGoldenSet: {
     key: 'id',
+    ...named,
     defaults: () => ({ ...stamped(), revision: 1, status: 'draft', signedOffAt: null }),
     cascade: [['appVoiceGoldenSetRevision', 'setId']],
   },
@@ -203,8 +209,18 @@ const MODELS: Record<string, ModelSpec> = {
     }),
   },
   appCrisisRegion: {
-    key: 'region',
-    defaults: () => ({ ...stamped(), status: 'draft', version: 1, signedOffAt: null }),
+    key: 'id',
+    unique: [['orgId', 'region']],
+    compound: { orgId_region: ['orgId', 'region'] },
+    // The org the tenancy client stamps at single, as on the crisis copy above:
+    // the import writes a region by `orgId_region` with `requireOrgId()`.
+    defaults: () => ({
+      ...stamped(),
+      orgId: 'install',
+      status: 'draft',
+      version: 1,
+      signedOffAt: null,
+    }),
   },
 };
 

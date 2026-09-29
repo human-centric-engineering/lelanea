@@ -164,7 +164,7 @@ async function requireSeeded(): Promise<AppCrisisCopy> {
 }
 
 async function requireRegion(region: string): Promise<AppCrisisRegion> {
-  const row = await prisma.appCrisisRegion.findUnique({ where: { region } });
+  const row = await prisma.appCrisisRegion.findFirst({ where: { region } });
   if (!row) throw new NotFoundError(`No crisis resource is listed for ${region}`);
   return row;
 }
@@ -306,7 +306,7 @@ export async function updateCrisisRegion(
   if (Object.keys(changes).length === 0) return { region: toRegionRow(before), changes };
 
   const { count } = await prisma.appCrisisRegion.updateMany({
-    where: { region, version: versionRead },
+    where: { id: before.id, version: versionRead },
     data: {
       emergencyNumber: update.emergencyNumber,
       services: update.services,
@@ -337,7 +337,7 @@ export async function signOffCrisisRegion(
     );
   }
   const { count } = await prisma.appCrisisRegion.updateMany({
-    where: { region, version },
+    where: { id: before.id, version },
     data: { status: 'signed_off', signedOffAt: new Date() },
   });
   if (count === 0) throw versionMoved(`${region}`, before.version, version);
@@ -355,7 +355,7 @@ export async function removeCrisisRegion(region: string): Promise<CrisisRegionRo
   await requireSeeded();
   const before = await requireRegion(region);
   // `deleteMany`, so a second admin removing it at the same moment is a 404, not a 500.
-  const { count } = await prisma.appCrisisRegion.deleteMany({ where: { region } });
+  const { count } = await prisma.appCrisisRegion.deleteMany({ where: { id: before.id } });
   if (count === 0) throw new NotFoundError(`No crisis resource is listed for ${region}`);
   invalidateCrisisContentCache();
   return toRegionRow(before);

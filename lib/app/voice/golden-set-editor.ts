@@ -205,7 +205,9 @@ function assertCoverage(prompts: readonly GoldenPrompt[]): void {
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
 async function readCurrent(client: Client) {
-  const pointer = await client.appVoiceGoldenSet.findUnique({ where: { id: VOICE_GOLDEN_SET_ID } });
+  const pointer = await client.appVoiceGoldenSet.findFirst({
+    where: { slug: VOICE_GOLDEN_SET_ID },
+  });
   if (!pointer) return null;
   const datasetId = goldenSetDatasetId(pointer.version);
   const [dataset, cases, runCount] = await Promise.all([
@@ -447,13 +449,14 @@ export async function startNewGoldenSetVersion(
 
     const revision = pointer.revision + 1;
     const { count } = await tx.appVoiceGoldenSet.updateMany({
-      where: { id: VOICE_GOLDEN_SET_ID, revision: revisionRead },
+      where: { id: pointer.id, revision: revisionRead },
       data: { version, status: 'draft', signedOffAt: null, revision },
     });
     if (count === 0) throw revisionMoved('The golden set', revision, revisionRead);
     await tx.appVoiceGoldenSetRevision.create({
       data: {
-        setId: VOICE_GOLDEN_SET_ID,
+        setSlug: pointer.slug,
+        setId: pointer.id,
         revision,
         title: pointer.title,
         version,
@@ -494,7 +497,7 @@ export async function exportGoldenSetFile(): Promise<VoiceGoldenSetFile> {
   const { pointer, dataset } = current;
   const file = {
     goldenSet: {
-      id: pointer.id,
+      id: pointer.slug,
       title: pointer.title,
       layer: 'golden-set',
       version: pointer.version,
@@ -568,9 +571,9 @@ export function planGoldenSetImport(
   if (!current?.dataset) {
     refusals.push('The golden set has not been seeded, so there is nothing to import into.');
   } else {
-    if (file.goldenSet.id !== current.pointer.id) {
+    if (file.goldenSet.id !== current.pointer.slug) {
       refusals.push(
-        `This file is for the set "${file.goldenSet.id}", and this install holds "${current.pointer.id}".`
+        `This file is for the set "${file.goldenSet.id}", and this install holds "${current.pointer.slug}".`
       );
     }
     if (file.goldenSet.version !== current.pointer.version) {
@@ -677,7 +680,7 @@ export function planGoldenSetImport(
       entity: 'set',
       label: 'The set’s title and provenance',
       creates: [],
-      updates: [{ key: current.pointer.id, changedFields: pointerChanged }],
+      updates: [{ key: current.pointer.slug, changedFields: pointerChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -757,12 +760,13 @@ export async function applyGoldenSetImport(
           provenance: file.goldenSet.provenance,
         };
         await tx.appVoiceGoldenSet.update({
-          where: { id: VOICE_GOLDEN_SET_ID },
+          where: { id: current.pointer.id },
           data: { ...words, status: 'draft', signedOffAt: null, revision },
         });
         await tx.appVoiceGoldenSetRevision.create({
           data: {
-            setId: VOICE_GOLDEN_SET_ID,
+            setSlug: current.pointer.slug,
+            setId: current.pointer.id,
             revision,
             ...words,
             status: 'draft',

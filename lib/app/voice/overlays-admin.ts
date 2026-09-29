@@ -74,6 +74,7 @@ import {
   type ImportPlanSection,
   type RevisionEntry,
 } from '@/lib/app/content/admin/shared';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 import { SEAT_SITUATIONS } from '@/lib/app/voice/context-contributor';
 import type {
   OverlayCreate,
@@ -128,6 +129,7 @@ interface Signed {
 }
 
 export interface OverlaySetAdminRow extends OverlaySetWords, Signed {
+  /** The set's authored name (its `slug`), as the file carries it. */
   id: string;
 }
 
@@ -232,7 +234,7 @@ function describeUnservable(err: unknown): string {
 
 function toSetAdminRow(row: AppVoiceOverlaySet): OverlaySetAdminRow {
   return {
-    id: row.id,
+    id: row.slug,
     ...setWordsOf(row),
     status: statusOf(row.status),
     signedOffAt: row.signedOffAt,
@@ -267,8 +269,8 @@ function notSeeded(): ConflictError {
 
 /** The set and its overlays as stored, for the Voice page. */
 export async function getOverlaysAdminView(): Promise<OverlaysAdminView> {
-  const set = await prisma.appVoiceOverlaySet.findUnique({
-    where: { id: VOICE_OVERLAY_SET_ID },
+  const set = await prisma.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
     include: { overlays: { orderBy: { position: 'asc' } } },
   });
   if (!set) return { seeded: false, unservable: null, set: null, overlays: [] };
@@ -294,8 +296,14 @@ export async function getOverlaysAdminView(): Promise<OverlaysAdminView> {
 export async function listOverlaySetHistory(): Promise<
   RevisionEntry<OverlaySetWords & { status: VoiceContentStatus }>[]
 > {
+  const set = await prisma.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
+    select: { id: true },
+  });
+  // Not seeded: no set, so no history, as before the set had a generated id.
+  if (!set) return [];
   const revisions = await prisma.appVoiceOverlaySetRevision.findMany({
-    where: { setId: VOICE_OVERLAY_SET_ID },
+    where: { setId: set.id },
     orderBy: { revision: 'desc' },
   });
   return toHistory(revisions, (row) => ({ ...setWordsOf(row), status: statusOf(row.status) }));
@@ -305,14 +313,15 @@ export async function listOverlaySetHistory(): Promise<
 export async function listOverlayHistory(
   situation: string
 ): Promise<RevisionEntry<OverlayWords & { status: VoiceContentStatus }>[]> {
-  const [overlay, revisions] = await Promise.all([
-    prisma.appVoiceOverlay.findUnique({ where: { situation }, select: { situation: true } }),
-    prisma.appVoiceOverlayRevision.findMany({
-      where: { situation },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const overlay = await prisma.appVoiceOverlay.findFirst({
+    where: { situation },
+    select: { id: true },
+  });
   if (!overlay) throw new NotFoundError(`There is no overlay for the situation "${situation}".`);
+  const revisions = await prisma.appVoiceOverlayRevision.findMany({
+    where: { overlayId: overlay.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row) => ({ ...overlayWordsOf(row), status: statusOf(row.status) }));
 }
 
@@ -324,7 +333,7 @@ async function writeSet(
   editorId: string
 ): Promise<VoiceWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appVoiceOverlaySet.findUnique({ where: { id: VOICE_OVERLAY_SET_ID } });
+    const row = await tx.appVoiceOverlaySet.findFirst({ where: { slug: VOICE_OVERLAY_SET_ID } });
     if (!row) throw notSeeded();
     if (row.revision !== revisionRead)
       throw revisionMoved('The overlay set', row.revision, revisionRead);
@@ -337,13 +346,14 @@ async function writeSet(
 
     const revision = row.revision + 1;
     const { count } = await tx.appVoiceOverlaySet.updateMany({
-      where: { id: VOICE_OVERLAY_SET_ID, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, status: 'draft', signedOffAt: null, revision },
     });
     if (count === 0) throw revisionMoved('The overlay set', revision, revisionRead);
     await tx.appVoiceOverlaySetRevision.create({
       data: {
-        setId: VOICE_OVERLAY_SET_ID,
+        setSlug: row.slug,
+        setId: row.id,
         revision,
         ...next,
         status: 'draft',
@@ -371,9 +381,15 @@ export async function restoreOverlaySetRevision(
   revisionRead: number,
   editorId: string
 ): Promise<VoiceWriteResult> {
-  const past = await prisma.appVoiceOverlaySetRevision.findUnique({
-    where: { setId_revision: { setId: VOICE_OVERLAY_SET_ID, revision } },
+  const set = await prisma.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
+    select: { id: true },
   });
+  const past = set
+    ? await prisma.appVoiceOverlaySetRevision.findUnique({
+        where: { setId_revision: { setId: set.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The overlay set has no revision ${revision}.`);
   return writeSet(() => setWordsOf(past), revisionRead, editorId);
 }
@@ -384,7 +400,7 @@ export async function signOffOverlaySet(
   editorId: string
 ): Promise<VoiceWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appVoiceOverlaySet.findUnique({ where: { id: VOICE_OVERLAY_SET_ID } });
+    const row = await tx.appVoiceOverlaySet.findFirst({ where: { slug: VOICE_OVERLAY_SET_ID } });
     if (!row) throw notSeeded();
     if (row.revision !== revisionRead)
       throw revisionMoved('The overlay set', row.revision, revisionRead);
@@ -394,13 +410,14 @@ export async function signOffOverlaySet(
     const words = setWordsOf(row);
     const revision = row.revision + 1;
     const { count } = await tx.appVoiceOverlaySet.updateMany({
-      where: { id: VOICE_OVERLAY_SET_ID, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { status: 'signed_off', signedOffAt: new Date(), revision },
     });
     if (count === 0) throw revisionMoved('The overlay set', revision, revisionRead);
     await tx.appVoiceOverlaySetRevision.create({
       data: {
-        setId: VOICE_OVERLAY_SET_ID,
+        setSlug: row.slug,
+        setId: row.id,
         revision,
         ...words,
         status: 'signed_off',
@@ -421,7 +438,7 @@ export async function signOffOverlaySet(
 // ─── One overlay ────────────────────────────────────────────────────────────
 
 async function requireOverlay(tx: Tx, situation: string, revisionRead: number) {
-  const row = await tx.appVoiceOverlay.findUnique({ where: { situation } });
+  const row = await tx.appVoiceOverlay.findFirst({ where: { situation } });
   if (!row) throw new NotFoundError(`There is no overlay for the situation "${situation}".`);
   if (row.revision !== revisionRead)
     throw revisionMoved(`The "${row.label}" overlay`, row.revision, revisionRead);
@@ -444,13 +461,14 @@ async function writeOverlay(
 
     const revision = row.revision + 1;
     const { count } = await tx.appVoiceOverlay.updateMany({
-      where: { situation, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, status: 'draft', signedOffAt: null, revision },
     });
     if (count === 0) throw revisionMoved(`The "${row.label}" overlay`, revision, revisionRead);
     await tx.appVoiceOverlayRevision.create({
       data: {
         situation,
+        overlayId: row.id,
         revision,
         ...next,
         status: 'draft',
@@ -496,9 +514,15 @@ export async function restoreOverlayRevision(
   revisionRead: number,
   editorId: string
 ): Promise<VoiceWriteResult> {
-  const past = await prisma.appVoiceOverlayRevision.findUnique({
-    where: { situation_revision: { situation, revision } },
+  const overlay = await prisma.appVoiceOverlay.findFirst({
+    where: { situation },
+    select: { id: true },
   });
+  const past = overlay
+    ? await prisma.appVoiceOverlayRevision.findUnique({
+        where: { overlayId_revision: { overlayId: overlay.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The "${situation}" overlay has no revision ${revision}.`);
   return writeOverlay(
     situation,
@@ -521,13 +545,14 @@ export async function signOffOverlay(
 
     const revision = row.revision + 1;
     const { count } = await tx.appVoiceOverlay.updateMany({
-      where: { situation, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { status: 'signed_off', signedOffAt: new Date(), revision },
     });
     if (count === 0) throw revisionMoved(`The "${row.label}" overlay`, revision, revisionRead);
     await tx.appVoiceOverlayRevision.create({
       data: {
         situation,
+        overlayId: row.id,
         revision,
         ...overlayWordsOf(row),
         status: 'signed_off',
@@ -553,12 +578,12 @@ export async function createOverlay(
   const { situation, ...edit } = create;
   try {
     return await executeTransaction(async (tx) => {
-      const set = await tx.appVoiceOverlaySet.findUnique({
-        where: { id: VOICE_OVERLAY_SET_ID },
-        select: { id: true },
+      const set = await tx.appVoiceOverlaySet.findFirst({
+        where: { slug: VOICE_OVERLAY_SET_ID },
+        select: { id: true, slug: true },
       });
       if (!set) throw notSeeded();
-      const taken = await tx.appVoiceOverlay.findUnique({
+      const taken = await tx.appVoiceOverlay.findFirst({
         where: { situation },
         select: { situation: true },
       });
@@ -570,12 +595,21 @@ export async function createOverlay(
         select: { position: true },
       });
       const words = wordsFromEdit(edit, (last?.position ?? 0) + 1);
-      await tx.appVoiceOverlay.create({
-        data: { situation, setId: set.id, ...words, status: 'draft', revision: 1 },
+      const created = await tx.appVoiceOverlay.create({
+        data: {
+          situation,
+          setSlug: set.slug,
+          setId: set.id,
+          ...words,
+          status: 'draft',
+          revision: 1,
+        },
+        select: { id: true },
       });
       await tx.appVoiceOverlayRevision.create({
         data: {
           situation,
+          overlayId: created.id,
           revision: 1,
           ...words,
           status: 'draft',
@@ -605,9 +639,9 @@ function situationTaken(situation: string): ConflictError {
  * `(setId, position)` is unique, and record each move as a revision that keeps
  * the overlay's sign-off.
  */
-async function renumber(tx: Tx, editorId: string): Promise<number> {
+async function renumber(tx: Tx, setId: string, editorId: string): Promise<number> {
   const rows = await tx.appVoiceOverlay.findMany({
-    where: { setId: VOICE_OVERLAY_SET_ID },
+    where: { setId },
     orderBy: { position: 'asc' },
   });
   const moving = rows
@@ -615,19 +649,20 @@ async function renumber(tx: Tx, editorId: string): Promise<number> {
     .filter(({ row, position }) => row.position !== position);
   for (const [index, { row }] of moving.entries()) {
     await tx.appVoiceOverlay.update({
-      where: { situation: row.situation },
+      where: { id: row.id },
       data: { position: parkingPosition(index) },
     });
   }
   for (const { row, position } of moving) {
     const revision = row.revision + 1;
     await tx.appVoiceOverlay.update({
-      where: { situation: row.situation },
+      where: { id: row.id },
       data: { position, revision },
     });
     await tx.appVoiceOverlayRevision.create({
       data: {
         situation: row.situation,
+        overlayId: row.id,
         revision,
         ...overlayWordsOf({ ...row, position }),
         status: statusOf(row.status),
@@ -659,8 +694,8 @@ export async function deleteOverlay(
         { reason: 'last_overlay' }
       );
     }
-    await tx.appVoiceOverlay.delete({ where: { situation } });
-    const renumbered = await renumber(tx, editorId);
+    await tx.appVoiceOverlay.delete({ where: { id: row.id } });
+    const renumbered = await renumber(tx, row.setId, editorId);
     return { removed: overlayWordsOf(row), selectedBy: overlaySelectors(situation), renumbered };
   });
 }
@@ -678,8 +713,8 @@ export function overlaysExportFilename(now: Date): string {
  * out, so an export is always a file the import and the seed will take.
  */
 export async function exportOverlaysFile(): Promise<VoiceOverlaysFile> {
-  const set = await prisma.appVoiceOverlaySet.findUnique({
-    where: { id: VOICE_OVERLAY_SET_ID },
+  const set = await prisma.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
     include: { overlays: { orderBy: { position: 'asc' } } },
   });
   if (!set) {
@@ -701,7 +736,7 @@ export async function exportOverlaysFile(): Promise<VoiceOverlaysFile> {
   }
   const file = {
     fingerprint: {
-      id: set.id,
+      id: set.slug,
       title: words.title,
       layer: 'overlays',
       version: words.version,
@@ -764,9 +799,9 @@ export function planOverlaysImport(
   const refusals: string[] = [];
   if (!stored.set) {
     refusals.push('The voice overlays have not been seeded, so there is nothing to import into.');
-  } else if (file.fingerprint.id !== stored.set.id) {
+  } else if (file.fingerprint.id !== stored.set.slug) {
     refusals.push(
-      `This file is for the set "${file.fingerprint.id}", and this database holds "${stored.set.id}".`
+      `This file is for the set "${file.fingerprint.id}", and this database holds "${stored.set.slug}".`
     );
   }
 
@@ -834,7 +869,7 @@ export function planOverlaysImport(
       entity: 'set',
       label: 'The set’s framing',
       creates: [],
-      updates: [{ key: stored.set.id, changedFields: setChanged }],
+      updates: [{ key: stored.set.slug, changedFields: setChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -856,13 +891,14 @@ export function planOverlaysImport(
 }
 
 async function readStored(client: Pick<typeof prisma, 'appVoiceOverlaySet' | 'appVoiceOverlay'>) {
-  const [set, overlays] = await Promise.all([
-    client.appVoiceOverlaySet.findUnique({ where: { id: VOICE_OVERLAY_SET_ID } }),
-    client.appVoiceOverlay.findMany({
-      where: { setId: VOICE_OVERLAY_SET_ID },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+  const set = await client.appVoiceOverlaySet.findFirst({ where: { slug: VOICE_OVERLAY_SET_ID } });
+  // The overlays are the set's children, so they are read by its generated id.
+  const overlays = set
+    ? await client.appVoiceOverlay.findMany({
+        where: { setId: set.id },
+        orderBy: { position: 'asc' },
+      })
+    : [];
   return { set, overlays };
 }
 
@@ -903,6 +939,7 @@ export async function applyOverlaysImport(
         });
         await tx.appVoiceOverlaySetRevision.create({
           data: {
+            setSlug: stored.set.slug,
             setId: stored.set.id,
             revision,
             ...planned.setAfter,
@@ -917,32 +954,42 @@ export async function applyOverlaysImport(
         });
       }
 
+      // Refused above when the set is missing; this narrows it for the writes.
+      const set = stored.set;
+      if (!set) throw notSeeded();
       const statusBefore = new Map(stored.overlays.map((row) => [row.situation, row.status]));
+      const overlayId = idsBySlug(
+        stored.overlays.map((row) => ({ id: row.id, slug: row.situation })),
+        'voice overlay'
+      );
       for (const change of planned.overlays.removals) {
-        await tx.appVoiceOverlay.delete({ where: { situation: change.key } });
+        await tx.appVoiceOverlay.delete({ where: { id: overlayId(change.key) } });
       }
       const moving = planned.overlays.updates.filter((change) =>
         change.changedFields.includes('position')
       );
       for (const [index, change] of moving.entries()) {
         await tx.appVoiceOverlay.update({
-          where: { situation: change.key },
+          where: { id: overlayId(change.key) },
           data: { position: parkingPosition(index) },
         });
       }
       for (const change of planned.overlays.creates) {
-        await tx.appVoiceOverlay.create({
+        const created = await tx.appVoiceOverlay.create({
           data: {
             situation: change.key,
-            setId: VOICE_OVERLAY_SET_ID,
+            setSlug: set.slug,
+            setId: set.id,
             ...change.after!,
             status: 'draft',
             revision: 1,
           },
+          select: { id: true },
         });
         await tx.appVoiceOverlayRevision.create({
           data: {
             situation: change.key,
+            overlayId: created.id,
             revision: 1,
             ...change.after!,
             status: 'draft',
@@ -957,7 +1004,7 @@ export async function applyOverlaysImport(
         const before = statusOf(statusBefore.get(change.key) ?? 'draft');
         const status = wordsChanged(change.changedFields) ? 'draft' : before;
         await tx.appVoiceOverlay.update({
-          where: { situation: change.key },
+          where: { id: overlayId(change.key) },
           data: {
             ...change.after!,
             status,
@@ -968,6 +1015,7 @@ export async function applyOverlaysImport(
         await tx.appVoiceOverlayRevision.create({
           data: {
             situation: change.key,
+            overlayId: overlayId(change.key),
             revision: change.revision,
             ...change.after!,
             status,

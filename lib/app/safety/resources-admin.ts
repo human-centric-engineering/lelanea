@@ -296,7 +296,9 @@ export async function applyCrisisImport(
       }
       for (const change of planned.regions.removals) {
         removed[change.key] = change.before!;
-        await tx.appCrisisRegion.delete({ where: { region: change.key } });
+        await tx.appCrisisRegion.delete({
+          where: { orgId_region: { orgId: requireOrgId(), region: change.key } },
+        });
       }
       for (const change of planned.regions.creates) {
         await tx.appCrisisRegion.create({
@@ -310,7 +312,7 @@ export async function applyCrisisImport(
       }
       for (const change of planned.regions.updates) {
         await tx.appCrisisRegion.update({
-          where: { region: change.key },
+          where: { orgId_region: { orgId: requireOrgId(), region: change.key } },
           data: {
             emergencyNumber: change.after!.emergencyNumber,
             services: change.after!.services as CrisisService[],

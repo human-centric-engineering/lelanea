@@ -117,7 +117,7 @@ export interface EffectiveCeiling {
  */
 export async function getEffectiveMonthlyCeiling(userId: string): Promise<EffectiveCeiling> {
   const [override, settings] = await Promise.all([
-    prisma.appUserBudget.findUnique({
+    prisma.appUserBudget.findFirst({
       where: { userId },
       select: { monthlyCeilingUsd: true },
     }),
@@ -284,7 +284,7 @@ export async function setUserBudget(
 
   try {
     await prisma.appUserBudget.upsert({
-      where: { userId },
+      where: { orgId_userId: { orgId: requireOrgId(), userId } },
       create: { userId, monthlyCeilingUsd },
       update: { monthlyCeilingUsd },
     });

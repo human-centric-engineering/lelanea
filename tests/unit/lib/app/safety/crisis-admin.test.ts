@@ -16,7 +16,7 @@ const db = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   region: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -74,6 +74,7 @@ const {
 } = COPY;
 const SAMARITANS = { name: 'Samaritans', contact: 'Call 116 123', hours: '24 hours a day' };
 const GB = {
+  id: 'region-gb',
   region: 'GB',
   emergencyNumber: '999',
   services: [SAMARITANS],
@@ -115,7 +116,7 @@ beforeEach(() => {
   copyRow = { ...COPY };
   gbRow = { ...GB };
   db.copy.findFirst.mockImplementation(async () => copyRow);
-  db.region.findUnique.mockImplementation(async () => gbRow);
+  db.region.findFirst.mockImplementation(async () => gbRow);
   db.region.findMany.mockImplementation(async () => (gbRow ? [gbRow] : []));
   db.copy.updateMany.mockImplementation(
     conditional(
@@ -217,8 +218,10 @@ describe('updateCrisisRegion', () => {
       2
     );
 
+    // Read by name (unique per org, not alone), written by the held row's id.
+    expect(db.region.findFirst).toHaveBeenCalledWith({ where: { region: 'GB' } });
     expect(db.region.updateMany).toHaveBeenCalledWith({
-      where: { region: 'GB', version: 2 },
+      where: { id: 'region-gb', version: 2 },
       data: expect.objectContaining({ services: edited, status: 'draft', signedOffAt: null }),
     });
     expect(region).toMatchObject({ status: 'draft', version: 3 });
@@ -282,6 +285,17 @@ describe('sign-off', () => {
     expect(db.invalidate).toHaveBeenCalledTimes(1);
   });
 
+  it('signs off the region version the admin read, by the row it read', async () => {
+    gbRow = { ...GB, status: 'draft', signedOffAt: null };
+    const row = await signOffCrisisRegion('GB', 2);
+    expect(db.region.updateMany).toHaveBeenCalledWith({
+      where: { id: 'region-gb', version: 2 },
+      data: { status: 'signed_off', signedOffAt: expect.any(Date) },
+    });
+    expect(row).toMatchObject({ region: 'GB', status: 'signed_off', version: 2 });
+    expect(db.invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses 409 when the version moved since it was read', async () => {
     await expect(signOffCrisisCopy(2)).rejects.toMatchObject({
       status: 409,
@@ -334,7 +348,7 @@ describe('removeCrisisRegion', () => {
   it('deletes the row and returns what it held, for the audit log', async () => {
     db.region.deleteMany.mockResolvedValue({ count: 1 });
     const removed = await removeCrisisRegion('GB');
-    expect(db.region.deleteMany).toHaveBeenCalledWith({ where: { region: 'GB' } });
+    expect(db.region.deleteMany).toHaveBeenCalledWith({ where: { id: 'region-gb' } });
     expect(removed).toMatchObject({ region: 'GB', emergencyNumber: '999' });
     expect(db.invalidate).toHaveBeenCalledTimes(1);
   });

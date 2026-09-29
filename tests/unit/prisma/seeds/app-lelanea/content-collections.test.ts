@@ -474,7 +474,7 @@ describe('019-voice-overlays', () => {
 
     expect(db.tables.appVoiceOverlaySet).toHaveLength(1);
     expect(db.tables.appVoiceOverlaySet[0]).toMatchObject({
-      id: seed.set.id,
+      slug: seed.set.slug,
       version: seed.set.version,
       status: 'draft',
       revision: 1,
@@ -482,6 +482,11 @@ describe('019-voice-overlays', () => {
     expect(db.tables.appVoiceOverlay.map((row) => row.situation)).toEqual(
       seed.overlays.map((overlay) => overlay.situation)
     );
+    // Children point at the set's generated id (t-114), its name kept beside.
+    const setId = db.tables.appVoiceOverlaySet[0].id;
+    for (const row of [...db.tables.appVoiceOverlay, ...db.tables.appVoiceOverlaySetRevision]) {
+      expect(row).toMatchObject({ setId, setSlug: seed.set.slug });
+    }
     // fp6: the file is non-empty, so the comparison above is not vacuous.
     expect(seed.overlays.length).toBeGreaterThan(0);
     expect(db.tables.appVoiceOverlaySetRevision).toHaveLength(1);

@@ -274,7 +274,7 @@ vi.mock('@/lib/db/client', () => {
         })),
       },
       appUserBudget: {
-        findUnique: vi.fn(async ({ where }: { where: { userId: string } }) =>
+        findFirst: vi.fn(async ({ where }: { where: { userId: string } }) =>
           db.budgets.has(where.userId) ? { monthlyCeilingUsd: db.budgets.get(where.userId) } : null
         ),
       },

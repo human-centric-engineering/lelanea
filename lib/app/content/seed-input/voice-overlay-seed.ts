@@ -47,13 +47,13 @@ export function buildVoiceOverlaySeed(
     set: {
       // The reader's constant, NOT `file.fingerprint.id`, which the schema
       // allows to be any lowercase slug. `seedVoiceOverlays` keys its
-      // write-once check off `seed.set.id` rather than the table being empty,
+      // write-once check off `seed.set.slug` rather than the table being empty,
       // so taking the id from the file meant renaming `fingerprint.id` seeded a
       // SECOND set row, logged "Seeded 4 voice overlays", and left every turn
       // throwing `ContentNotSeededError` against an id nothing had written.
       // `buildGoldenSetSeed` pins its id for the same reason; the equality is
       // pinned in `voice-overlay-seed.test.ts` (found by /code-review).
-      id: VOICE_OVERLAY_SET_ID,
+      slug: VOICE_OVERLAY_SET_ID,
       title: file.fingerprint.title,
       version: file.fingerprint.version,
       locale: file.fingerprint.locale,

@@ -40,7 +40,7 @@ function overlayRow(overrides: Partial<VoiceOverlayRow> = {}): VoiceOverlayRow {
 
 function setRow(overrides: Partial<VoiceOverlaySetRow> = {}): VoiceOverlaySetRow {
   return {
-    id: 'lelanea_voice_fingerprint_overlays',
+    slug: 'lelanea_voice_fingerprint_overlays',
     title: "Her fingerprint's overlays",
     version: '1.0',
     locale: 'en-US',
