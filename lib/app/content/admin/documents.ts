@@ -244,14 +244,15 @@ function snapshotOf(row: AppFoundationalDocumentRevision): DocumentFields {
 
 /** Every revision of one document, newest first. */
 export async function listDocumentHistory(id: string): Promise<RevisionEntry<DocumentFields>[]> {
-  const [document, revisions] = await Promise.all([
-    prisma.appFoundationalDocument.findFirst({ where: { slug: id }, select: { slug: true } }),
-    prisma.appFoundationalDocumentRevision.findMany({
-      where: { documentSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const document = await prisma.appFoundationalDocument.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
   if (!document) throw notFound(id);
+  const revisions = await prisma.appFoundationalDocumentRevision.findMany({
+    where: { documentId: document.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, snapshotOf);
 }
 
@@ -297,7 +298,7 @@ async function writeDocument(
 
     const revision = row.revision + 1;
     const { count } = await tx.appFoundationalDocument.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, revision },
     });
     if (count === 0)
@@ -376,9 +377,15 @@ export async function restoreDocumentRevision(
   revisionRead: number,
   editorId: string
 ): Promise<DocumentWriteResult> {
-  const past = await prisma.appFoundationalDocumentRevision.findFirst({
-    where: { documentSlug: id, revision },
+  const document = await prisma.appFoundationalDocument.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = document
+    ? await prisma.appFoundationalDocumentRevision.findUnique({
+        where: { documentId_revision: { documentId: document.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`"${id}" has no revision ${revision}.`);
   const snapshot = snapshotOf(past);
 
@@ -423,7 +430,7 @@ export async function deleteDocument(
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
     const opening = await tx.appResource.findMany({
-      where: { documentSlug: id },
+      where: { documentId: row.id },
       select: { slug: true },
     });
     if (opening.length > 0) {
@@ -550,7 +557,7 @@ export async function updateDocumentCollection(
     if (changed.length === 0) return { changed, changes: {} };
 
     const { count } = await tx.appDocumentCollection.updateMany({
-      where: { slug: collection.slug, updatedAt: collection.updatedAt },
+      where: { id: collection.id, updatedAt: collection.updatedAt },
       data: edit,
     });
     if (count === 0) throw staleRow('The collection');

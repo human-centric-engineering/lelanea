@@ -155,26 +155,25 @@ export async function getJourneyAdminView(): Promise<JourneyAdminView> {
 }
 
 export async function listTierHistory(id: string): Promise<RevisionEntry<TierFields>[]> {
-  const [tier, revisions] = await Promise.all([
-    prisma.appJourneyTier.findFirst({ where: { slug: id }, select: { slug: true } }),
-    prisma.appJourneyTierRevision.findMany({
-      where: { tierSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const tier = await prisma.appJourneyTier.findFirst({ where: { slug: id }, select: { id: true } });
   if (!tier) throw new NotFoundError(`There is no journey tier "${id}".`);
+  const revisions = await prisma.appJourneyTierRevision.findMany({
+    where: { tierId: tier.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppJourneyTierRevision) => tierFieldsOf(row));
 }
 
 export async function listModuleHistory(id: string): Promise<RevisionEntry<ModuleFields>[]> {
-  const [module, revisions] = await Promise.all([
-    prisma.appJourneyModule.findFirst({ where: { slug: id }, select: { slug: true } }),
-    prisma.appJourneyModuleRevision.findMany({
-      where: { moduleSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
-  if (!module) throw new NotFoundError(`There is no journey module "${id}".`);
+  const moduleRow = await prisma.appJourneyModule.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
+  if (!moduleRow) throw new NotFoundError(`There is no journey module "${id}".`);
+  const revisions = await prisma.appJourneyModuleRevision.findMany({
+    where: { moduleId: moduleRow.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppJourneyModuleRevision) =>
     moduleFieldsOf({ ...row, slug: row.moduleSlug })
   );
@@ -201,7 +200,7 @@ async function writeTier(
 
     const revision = row.revision + 1;
     const { count } = await tx.appJourneyTier.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, revision },
     });
     if (count === 0)
@@ -251,7 +250,7 @@ async function writeModule(
     const revision = row.revision + 1;
     const data = toModuleData(next);
     const { count } = await tx.appJourneyModule.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...data, revision },
     });
     if (count === 0)
@@ -318,9 +317,12 @@ export async function restoreTierRevision(
   revisionRead: number,
   editorId: string
 ): Promise<JourneyWriteResult> {
-  const past = await prisma.appJourneyTierRevision.findFirst({
-    where: { tierSlug: id, revision },
-  });
+  const tier = await prisma.appJourneyTier.findFirst({ where: { slug: id }, select: { id: true } });
+  const past = tier
+    ? await prisma.appJourneyTierRevision.findUnique({
+        where: { tierId_revision: { tierId: tier.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The tier "${id}" has no revision ${revision}.`);
   return writeTier(id, () => tierFieldsOf(past), revisionRead, editorId);
 }
@@ -331,9 +333,15 @@ export async function restoreModuleRevision(
   revisionRead: number,
   editorId: string
 ): Promise<JourneyWriteResult> {
-  const past = await prisma.appJourneyModuleRevision.findFirst({
-    where: { moduleSlug: id, revision },
+  const moduleRow = await prisma.appJourneyModule.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = moduleRow
+    ? await prisma.appJourneyModuleRevision.findUnique({
+        where: { moduleId_revision: { moduleId: moduleRow.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The module "${id}" has no revision ${revision}.`);
   return writeModule(id, () => moduleFieldsOf({ ...past, slug: id }), revisionRead, editorId);
 }
@@ -357,7 +365,7 @@ export async function updateJourney(
     const changed = changedFieldsOf(before, edit, ['title', 'subtitle', 'version', 'locale']);
     if (changed.length === 0) return { changed, changes: {} };
     const { count } = await tx.appJourney.updateMany({
-      where: { slug: journey.slug, updatedAt: journey.updatedAt },
+      where: { id: journey.id, updatedAt: journey.updatedAt },
       data: edit,
     });
     if (count === 0) throw staleRow('The journey');

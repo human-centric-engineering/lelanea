@@ -359,26 +359,25 @@ export async function getResourcesAdminView(): Promise<ResourcesAdminView> {
 }
 
 export async function listResourceHistory(id: string): Promise<RevisionEntry<ResourceFields>[]> {
-  const [resource, revisions] = await Promise.all([
-    prisma.appResource.findFirst({ where: { slug: id }, select: { slug: true } }),
-    prisma.appResourceRevision.findMany({
-      where: { resourceSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const resource = await prisma.appResource.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
   if (!resource) throw new NotFoundError(`There is no resource "${id}".`);
+  const revisions = await prisma.appResourceRevision.findMany({
+    where: { resourceId: resource.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppResourceRevision) => resourceFieldsOf({ ...row, slug: id }));
 }
 
 export async function listWordsHistory(key: string): Promise<RevisionEntry<WordsFields>[]> {
-  const [words, revisions] = await Promise.all([
-    prisma.appResourceWords.findFirst({ where: { key }, select: { key: true } }),
-    prisma.appResourceWordsRevision.findMany({
-      where: { wordsKey: key },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const words = await prisma.appResourceWords.findFirst({ where: { key }, select: { id: true } });
   if (!words) throw new NotFoundError(`There are no words for "${key}".`);
+  const revisions = await prisma.appResourceWordsRevision.findMany({
+    where: { wordsId: words.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppResourceWordsRevision) => wordsFieldsOf(row));
 }
 
@@ -409,7 +408,7 @@ async function writeResource(
 
     const revision = row.revision + 1;
     const { count } = await tx.appResource.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...resourceColumnsOf(next), documentId, revision },
     });
     if (count === 0)
@@ -455,9 +454,15 @@ export async function restoreResourceRevision(
   revisionRead: number,
   editorId: string
 ): Promise<ResourceWriteResult> {
-  const past = await prisma.appResourceRevision.findFirst({
-    where: { resourceSlug: id, revision },
+  const resource = await prisma.appResource.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = resource
+    ? await prisma.appResourceRevision.findUnique({
+        where: { resourceId_revision: { resourceId: resource.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The resource "${id}" has no revision ${revision}.`);
   return writeResource(
     id,
@@ -483,11 +488,11 @@ export async function restoreResourceRevision(
 async function compactKind(
   tx: Tx,
   kind: string,
-  excluding: string,
+  excludingId: string,
   editorId: string
 ): Promise<void> {
   const live = await tx.appResource.findMany({
-    where: { kind, retired: false, NOT: { slug: excluding } },
+    where: { kind, retired: false, NOT: { id: excludingId } },
     orderBy: { position: 'asc' },
   });
   const moving = live.filter((row, index) => row.position !== index);
@@ -540,7 +545,9 @@ export async function setResourceRetired(
     // since it was retired.
     if (!retired) await assertServable(tx, id, before);
 
-    const others = await tx.appResource.findMany({ where: { kind: row.kind, NOT: { slug: id } } });
+    const others = await tx.appResource.findMany({
+      where: { kind: row.kind, NOT: { id: row.id } },
+    });
     // Live positions are contiguous from 0, so the count of the other live
     // ones is the free place at the end.
     const position = retired
@@ -551,7 +558,7 @@ export async function setResourceRetired(
     const revision = row.revision + 1;
 
     const { count } = await tx.appResource.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { retired, position, revision },
     });
     if (count === 0)
@@ -571,7 +578,7 @@ export async function setResourceRetired(
         editorId,
       },
     });
-    if (retired) await compactKind(tx, row.kind, id, editorId);
+    if (retired) await compactKind(tx, row.kind, row.id, editorId);
     return { changed, changes: toChanges(before, next, changed), revision };
   });
 }
@@ -707,7 +714,7 @@ async function writeWords(
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
     const revision = row.revision + 1;
     const { count } = await tx.appResourceWords.updateMany({
-      where: { key, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, revision },
     });
     if (count === 0)
@@ -746,9 +753,12 @@ export async function restoreWordsRevision(
   revisionRead: number,
   editorId: string
 ): Promise<ResourceWriteResult> {
-  const past = await prisma.appResourceWordsRevision.findFirst({
-    where: { wordsKey: key, revision },
-  });
+  const words = await prisma.appResourceWords.findFirst({ where: { key }, select: { id: true } });
+  const past = words
+    ? await prisma.appResourceWordsRevision.findUnique({
+        where: { wordsId_revision: { wordsId: words.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The words for "${key}" have no revision ${revision}.`);
   return writeWords(key, () => wordsFieldsOf(past), revisionRead, editorId);
 }
@@ -840,7 +850,7 @@ export async function updateResourceCollection(
     const changed = changedFieldsOf(before, edit, ['title', 'version', 'locale', 'provenance']);
     if (changed.length === 0) return { changed, changes: {} };
     const { count } = await tx.appResourceCollection.updateMany({
-      where: { slug: collection.slug, updatedAt: collection.updatedAt },
+      where: { id: collection.id, updatedAt: collection.updatedAt },
       data: edit,
     });
     if (count === 0) throw staleRow('The library');
@@ -1105,8 +1115,16 @@ export async function applyResourcesImport(
       const collectionSlug = stored.collection!.slug;
       const collectionId = stored.collection!.id;
       const documentId = idsBySlug(stored.documents, 'foundational document');
-      const documentIdOf = (fields: ResourceFields) =>
-        fields.documentId === null ? null : documentId(fields.documentId);
+      // The file was checked against the documents before this transaction
+      // opened; one deleted since is the file's problem, not a server fault.
+      const documentIdOf = (fields: ResourceFields) => {
+        if (fields.documentId === null) return null;
+        try {
+          return documentId(fields.documentId);
+        } catch (error) {
+          throw new ValidationError(error instanceof Error ? error.message : String(error));
+        }
+      };
       const storedResourceId = idsBySlug(stored.resources, 'resource');
       const storedWords = stored.words.map(({ id, key }) => ({ id, slug: key }));
       const storedWordsId = idsBySlug(storedWords, 'resource words');

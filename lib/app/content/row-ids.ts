@@ -11,7 +11,14 @@ export function idsBySlug(
   rows: readonly { id: string; slug: string }[],
   what: string
 ): (slug: string) => string {
-  const ids = new Map(rows.map((row) => [row.slug, row.id]));
+  const ids = new Map<string, string>();
+  for (const row of rows) {
+    // Two rows under one name means the rows came from more than one org, or
+    // the caller read wider than it wrote. Keeping either would link a child
+    // to a parent chosen by row order.
+    if (ids.has(row.slug)) throw new Error(`More than one ${what} is named "${row.slug}"`);
+    ids.set(row.slug, row.id);
+  }
   return (slug) => {
     const id = ids.get(slug);
     // Throwing keeps a write from pointing a child at nothing, which the

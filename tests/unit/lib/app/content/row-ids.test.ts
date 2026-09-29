@@ -19,6 +19,18 @@ describe('idsBySlug', () => {
     expect(idOf('module_02_body')).toBe('cgenerated2');
   });
 
+  it('refuses rows that name one parent twice, rather than picking by order', () => {
+    expect(() =>
+      idsBySlug(
+        [
+          { id: 'cinstall', slug: 'the_mission' },
+          { id: 'cother', slug: 'the_mission' },
+        ],
+        'foundational document'
+      )
+    ).toThrow('More than one foundational document is named "the_mission"');
+  });
+
   it('refuses a name with no row, naming what was looked for', () => {
     expect(() => idOf('module_99_missing')).toThrow(
       'There is no journey module "module_99_missing"'

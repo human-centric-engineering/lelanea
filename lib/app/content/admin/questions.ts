@@ -196,28 +196,30 @@ export async function getQuestionsAdminView(): Promise<QuestionsAdminView> {
 export async function listQuestionSetHistory(
   id: string
 ): Promise<RevisionEntry<Omit<QuestionSetFields, 'moduleId'>>[]> {
-  const [set, revisions] = await Promise.all([
-    prisma.appQuestionSet.findFirst({ where: { slug: id }, select: { moduleSlug: true } }),
-    prisma.appQuestionSetRevision.findMany({
-      where: { setSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const set = await prisma.appQuestionSet.findFirst({
+    where: { slug: id },
+    select: { id: true, moduleSlug: true },
+  });
   if (!set) throw new NotFoundError(`There is no question set "${id}".`);
+  const revisions = await prisma.appQuestionSetRevision.findMany({
+    where: { setId: set.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppQuestionSetRevision) =>
     setSnapshotOf(setFieldsOf({ ...row, moduleSlug: set.moduleSlug }))
   );
 }
 
 export async function listQuestionHistory(id: string): Promise<RevisionEntry<QuestionFields>[]> {
-  const [question, revisions] = await Promise.all([
-    prisma.appDiscoveryQuestion.findFirst({ where: { slug: id }, select: { slug: true } }),
-    prisma.appDiscoveryQuestionRevision.findMany({
-      where: { questionSlug: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const question = await prisma.appDiscoveryQuestion.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
   if (!question) throw new NotFoundError(`There is no discovery question "${id}".`);
+  const revisions = await prisma.appDiscoveryQuestionRevision.findMany({
+    where: { questionId: question.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppDiscoveryQuestionRevision) =>
     questionFieldsOf({ ...row, slug: id })
   );
@@ -254,7 +256,7 @@ async function writeSet(
 
     const revision = row.revision + 1;
     const { count } = await tx.appQuestionSet.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...toSetData(next, moduleRowId), revision },
     });
     if (count === 0)
@@ -301,7 +303,7 @@ async function writeQuestion(
     const revision = row.revision + 1;
     const data = toQuestionData(next);
     const { count } = await tx.appDiscoveryQuestion.updateMany({
-      where: { slug: id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...data, revision },
     });
     if (count === 0)
@@ -354,9 +356,12 @@ export async function restoreQuestionSetRevision(
   revisionRead: number,
   editorId: string
 ): Promise<QuestionWriteResult> {
-  const past = await prisma.appQuestionSetRevision.findFirst({
-    where: { setSlug: id, revision },
-  });
+  const set = await prisma.appQuestionSet.findFirst({ where: { slug: id }, select: { id: true } });
+  const past = set
+    ? await prisma.appQuestionSetRevision.findUnique({
+        where: { setId_revision: { setId: set.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The question set has no revision ${revision}.`);
   // The module it belongs to is not in the snapshot, so it stays where it is.
   return writeSet(
@@ -378,9 +383,15 @@ export async function restoreQuestionRevision(
   revisionRead: number,
   editorId: string
 ): Promise<QuestionWriteResult> {
-  const past = await prisma.appDiscoveryQuestionRevision.findFirst({
-    where: { questionSlug: id, revision },
+  const question = await prisma.appDiscoveryQuestion.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = question
+    ? await prisma.appDiscoveryQuestionRevision.findUnique({
+        where: { questionId_revision: { questionId: question.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`Question "${id}" has no revision ${revision}.`);
   return writeQuestion(
     id,
@@ -495,7 +506,7 @@ export async function createQuestion(
       select: { id: true, slug: true },
     });
     if (!set) throw new NotFoundError('The discovery questions have not been seeded yet.');
-    const count = await tx.appDiscoveryQuestion.count({ where: { setSlug: set.slug } });
+    const count = await tx.appDiscoveryQuestion.count({ where: { setId: set.id } });
     const id = await nextQuestionId(tx);
     const fields = { ...edit, number: count + 1 };
     questionFieldsOf({ slug: id, ...fields });
@@ -533,7 +544,7 @@ export async function deleteQuestion(
     if (!row) throw new NotFoundError(`There is no discovery question "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`Question ${row.number}`, row.revision, revisionRead);
-    const remaining = await tx.appDiscoveryQuestion.count({ where: { setSlug: row.setSlug } });
+    const remaining = await tx.appDiscoveryQuestion.count({ where: { setId: row.setId } });
     if (remaining <= 1) {
       throw new ConflictError(
         'The set must keep at least one question; the file format cannot hold an empty set.',
@@ -544,7 +555,7 @@ export async function deleteQuestion(
     }
     await tx.appDiscoveryQuestion.delete({ where: { id: row.id } });
     const rest = await tx.appDiscoveryQuestion.findMany({
-      where: { setSlug: row.setSlug },
+      where: { setId: row.setId },
       orderBy: { number: 'asc' },
     });
     const renumbered = await applyNumbers(
@@ -563,10 +574,17 @@ export async function reorderQuestions(
   editorId: string
 ): Promise<{ moved: number }> {
   return executeTransaction(async (tx) => {
-    const rows = await tx.appDiscoveryQuestion.findMany({
-      where: { setSlug: DISCOVERY_QUESTION_SET_ID },
-      orderBy: { number: 'asc' },
+    const set = await tx.appQuestionSet.findFirst({
+      where: { slug: DISCOVERY_QUESTION_SET_ID },
+      select: { id: true },
     });
+    // No set means no questions: every question row belongs to one.
+    const rows = set
+      ? await tx.appDiscoveryQuestion.findMany({
+          where: { setId: set.id },
+          orderBy: { number: 'asc' },
+        })
+      : [];
     const byId = new Map(rows.map((row) => [row.slug, row]));
     if (
       order.length !== rows.length ||
@@ -742,14 +760,17 @@ async function readStored(
     'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition' | 'slotValue'
   >
 ): Promise<StoredQuestions> {
-  const [set, questions, modules] = await Promise.all([
+  const [set, modules] = await Promise.all([
     client.appQuestionSet.findFirst({ where: { slug: DISCOVERY_QUESTION_SET_ID } }),
-    client.appDiscoveryQuestion.findMany({
-      where: { setSlug: DISCOVERY_QUESTION_SET_ID },
-      orderBy: { number: 'asc' },
-    }),
     client.appJourneyModule.findMany({ select: { slug: true } }),
   ]);
+  // No set means no questions: every question row belongs to one.
+  const questions = set
+    ? await client.appDiscoveryQuestion.findMany({
+        where: { setId: set.id },
+        orderBy: { number: 'asc' },
+      })
+    : [];
   return {
     set,
     questions,

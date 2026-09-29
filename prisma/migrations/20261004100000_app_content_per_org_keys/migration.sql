@@ -131,7 +131,8 @@ UPDATE "app_resource_collection" SET "id" = 'c' || replace(gen_random_uuid()::te
 UPDATE "app_resource" SET "id" = 'c' || replace(gen_random_uuid()::text, '-', '');
 
 -- 4. Resource words: keyed by `key`, so they gain an id and their revisions
--- a `wordsId`, backfilled from the key within the same org.
+-- a `wordsId`, backfilled from the key. The key was the primary key, so it
+-- alone finds the parent; matching the org too could only drop a match.
 ALTER TABLE "app_resource_words" ADD COLUMN "id" TEXT;
 UPDATE "app_resource_words" SET "id" = 'c' || replace(gen_random_uuid()::text, '-', '');
 ALTER TABLE "app_resource_words" ALTER COLUMN "id" SET NOT NULL;
@@ -140,7 +141,7 @@ ALTER TABLE "app_resource_words_revision" ADD COLUMN "wordsId" TEXT;
 UPDATE "app_resource_words_revision" r
    SET "wordsId" = w."id"
   FROM "app_resource_words" w
- WHERE w."key" = r."wordsKey" AND w."orgId" IS NOT DISTINCT FROM r."orgId";
+ WHERE w."key" = r."wordsKey";
 ALTER TABLE "app_resource_words_revision" ALTER COLUMN "wordsId" SET NOT NULL;
 
 ALTER TABLE "app_resource_words_revision" DROP CONSTRAINT "app_resource_words_revision_wordsKey_fkey";
