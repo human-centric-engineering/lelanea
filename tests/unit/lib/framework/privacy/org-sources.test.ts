@@ -16,6 +16,14 @@
  * the framework's entries by core's own coverage guard,
  * `tests/unit/lib/privacy/org-sources.test.ts`, which reads through these getters.
  *
+ * FORK NOTE (LELAÑEA, t-112) — this reads the real `lib/app/leaf-data-export.ts`
+ * ---------------------------------------------------------------------------
+ * It has to: the bridge appends the leaf's `leafOrgSources()` after the
+ * framework's, so once a leaf fills that seam the "appends after core's" case
+ * can only hold by naming the leaf's sources too. Expect core's, then the
+ * framework's, then exactly yours; pin your own list there rather than
+ * deleting the case (`.context/app/divergences.md` Row 12).
+ *
  * @see lib/privacy/org-sources.ts — the seam
  * @see lib/framework/privacy/org-sources.ts — the framework's contribution
  */
