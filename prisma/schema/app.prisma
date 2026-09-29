@@ -106,6 +106,11 @@ model AppWaitlistEntry {
   /// alone when someone joins — and the Art. 15 export discloses which.
   joinedAt          DateTime?
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@index([userId])
   @@index([createdAt])
   /// NO index on `removedAt`, deliberately. The hot predicate is `removedAt IS
@@ -165,7 +170,12 @@ model AppAcknowledgement {
   /// Server-set at insert; the client never supplies it.
   acknowledgedAt  DateTime               @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([userId, kind, documentVersion])
+  @@index([orgId])
   @@index([userId])
   @@map("app_acknowledgement")
 }
@@ -224,6 +234,11 @@ model AppKnowledgeDesignation {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_knowledge_designation")
 }
 
@@ -268,6 +283,11 @@ model AppVoiceComparison {
 
   arms AppVoiceComparisonArm[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@index([createdAt])
   @@map("app_voice_comparison")
 }
@@ -341,7 +361,13 @@ model AppVoiceComparisonArm {
 
   /// One row per arm per comparison — a second `bare` row would mean two runs
   /// claiming to be the same control, and the surface would pick one silently.
+
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([comparisonId, arm])
+  @@index([orgId])
   @@index([comparisonId])
   @@map("app_voice_comparison_arm")
 }
@@ -370,7 +396,8 @@ model AppVoiceComparisonArm {
 model AppAgentSettings {
   /// Always `global`. A string key rather than a bare boolean so the singleton is
   /// addressable by name, the way `AiOrchestrationSettings` is.
-  slug                     String   @id @default("global")
+  id                       String   @id @default(cuid())
+  slug                     String   @default("global")
   /// How long a turn may go without its first words before the app says so.
   firstWordsDeadlineMs     Int
   /// How long a whole turn may run before it is ended.
@@ -381,6 +408,12 @@ model AppAgentSettings {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, slug])
+  @@index([orgId])
   @@map("app_agent_settings")
 }
 
@@ -404,6 +437,11 @@ model AppUserBudget {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_user_budget")
 }
 
@@ -509,7 +547,12 @@ model AppTurn {
   /// Which slots this turn has already written — the retry guard (t-72).
   slotWrites AppTurnSlotWrite[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([userId, turnId])
+  @@index([orgId])
   @@index([userId, startedAt])
   @@index([conversationId])
   /// The status read: the most recent turn anyone finished (§08 t-55).
@@ -560,7 +603,12 @@ model AppTurnSlotWrite {
   minted    Boolean
   writtenAt DateTime @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([turnId, slotSlug])
+  @@index([orgId])
   @@map("app_turn_slot_write")
 }
 
@@ -638,6 +686,11 @@ model AppSafetyEvent {
   guardOutcome   String?
   createdAt      DateTime                @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("app_safety_event")
@@ -670,7 +723,8 @@ enum AppCrisisContentStatus {
 /// `lib/app/leaf-data-export.ts`.
 model AppCrisisCopy {
   /// Always `global`. See `AppAgentSettings.slug` for why a string key.
-  slug                 String                 @id @default("global")
+  id                   String                 @id @default(cuid())
+  slug                 String                 @default("global")
   hardIntro            String
   softIntro            String
   /// "…call your local emergency number now." A known region's number is appended.
@@ -689,6 +743,12 @@ model AppCrisisCopy {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, slug])
+  @@index([orgId])
   @@map("app_crisis_copy")
 }
 
@@ -714,6 +774,11 @@ model AppCrisisRegion {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_crisis_region")
 }
 
@@ -761,7 +826,8 @@ enum AppSlotRevisionOrigin {
 /// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
 model AppSlotDefinition {
   /// Stable identity, immutable. Matches `framework_slot_value.slotSlug`.
-  slug           String   @id
+  id             String   @id @default(cuid())
+  slug           String
   /// Thematic cluster — `life_areas`, `the_person`, `external_conditions`,
   /// `preferences`, `development`, or a module's own output.
   group          String
@@ -790,6 +856,12 @@ model AppSlotDefinition {
 
   revisions AppSlotDefinitionRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, slug])
+  @@index([orgId])
   @@index([isActive, group])
   @@map("app_slot_definition")
 }
@@ -821,7 +893,8 @@ model AppSlotDefinition {
 model AppSlotDefinitionRevision {
   id             String                @id @default(cuid())
   slotSlug       String
-  definition     AppSlotDefinition     @relation(fields: [slotSlug], references: [slug], onDelete: Cascade)
+  definitionId   String
+  definition     AppSlotDefinition     @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   /// The version this revision produced. 1 is the creation.
   version        Int
   /// The definition's fields as they stood at this version.
@@ -843,7 +916,12 @@ model AppSlotDefinitionRevision {
   editorId       String?
   changedAt      DateTime              @default(now())
 
-  @@unique([slotSlug, version])
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, version])
+  @@index([orgId])
   /// The "wording at time T" read: newest revision for a slug at or before T.
   @@index([slotSlug, changedAt])
   @@index([editorId])
@@ -889,6 +967,11 @@ model AppDocumentCollection {
 
   documents AppFoundationalDocument[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_document_collection")
 }
 
@@ -951,7 +1034,12 @@ model AppFoundationalDocument {
   /// Resources that are this document, read in the app (t-87).
   resources AppResource[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([collectionId, position])
+  @@index([orgId])
   @@map("app_foundational_document")
 }
 
@@ -1000,7 +1088,12 @@ model AppFoundationalDocumentRevision {
   editorId                String?
   changedAt               DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([documentId, revision])
+  @@index([orgId])
   /// The "document as it stood at time T" read.
   @@index([documentId, changedAt])
   @@index([editorId])
@@ -1045,6 +1138,11 @@ model AppJourney {
   tiers   AppJourneyTier[]
   modules AppJourneyModule[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_journey")
 }
 
@@ -1064,6 +1162,11 @@ model AppJourneyTier {
 
   revisions AppJourneyTierRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_journey_tier")
 }
 
@@ -1084,7 +1187,12 @@ model AppJourneyTierRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([tierId, revision])
+  @@index([orgId])
   @@index([tierId, changedAt])
   @@index([editorId])
   @@map("app_journey_tier_revision")
@@ -1122,6 +1230,11 @@ model AppJourneyModule {
   revisions    AppJourneyModuleRevision[]
   questionSets AppQuestionSet[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_journey_module")
 }
 
@@ -1143,7 +1256,12 @@ model AppJourneyModuleRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([moduleId, revision])
+  @@index([orgId])
   @@index([moduleId, changedAt])
   @@index([editorId])
   @@map("app_journey_module_revision")
@@ -1175,6 +1293,11 @@ model AppQuestionSet {
   questions AppDiscoveryQuestion[]
   revisions AppQuestionSetRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_question_set")
 }
 
@@ -1196,7 +1319,12 @@ model AppQuestionSetRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([setId, revision])
+  @@index([orgId])
   @@index([setId, changedAt])
   @@index([editorId])
   @@map("app_question_set_revision")
@@ -1225,7 +1353,12 @@ model AppDiscoveryQuestion {
 
   revisions AppDiscoveryQuestionRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([setId, number])
+  @@index([orgId])
   @@map("app_discovery_question")
 }
 
@@ -1246,7 +1379,12 @@ model AppDiscoveryQuestionRevision {
   editorId            String?
   changedAt           DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([questionId, revision])
+  @@index([orgId])
   @@index([questionId, changedAt])
   @@index([editorId])
   @@map("app_discovery_question_revision")
@@ -1269,6 +1407,11 @@ model AppResourceCollection {
   resources AppResource[]
   words     AppResourceWords[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_resource_collection")
 }
 
@@ -1314,7 +1457,12 @@ model AppResource {
 
   revisions AppResourceRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([collectionId, kind, position])
+  @@index([orgId])
   @@map("app_resource")
 }
 
@@ -1339,7 +1487,12 @@ model AppResourceRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([resourceId, revision])
+  @@index([orgId])
   @@index([resourceId, changedAt])
   @@index([editorId])
   @@map("app_resource_revision")
@@ -1366,6 +1519,11 @@ model AppResourceWords {
 
   revisions AppResourceWordsRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_resource_words")
 }
 
@@ -1384,7 +1542,12 @@ model AppResourceWordsRevision {
   editorId         String?
   changedAt        DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([wordsKey, revision])
+  @@index([orgId])
   @@index([wordsKey, changedAt])
   @@index([editorId])
   @@map("app_resource_words_revision")
@@ -1440,6 +1603,11 @@ model AppVoiceOverlaySet {
   overlays  AppVoiceOverlay[]
   revisions AppVoiceOverlaySetRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_voice_overlay_set")
 }
 
@@ -1461,7 +1629,12 @@ model AppVoiceOverlaySetRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([setId, revision])
+  @@index([orgId])
   @@index([setId, changedAt])
   @@index([editorId])
   @@map("app_voice_overlay_set_revision")
@@ -1501,7 +1674,12 @@ model AppVoiceOverlay {
 
   revisions AppVoiceOverlayRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([setId, position])
+  @@index([orgId])
   @@map("app_voice_overlay")
 }
 
@@ -1523,7 +1701,12 @@ model AppVoiceOverlayRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([situation, revision])
+  @@index([orgId])
   @@index([situation, changedAt])
   @@index([editorId])
   @@map("app_voice_overlay_revision")
@@ -1564,6 +1747,11 @@ model AppVoiceGoldenSet {
 
   revisions AppVoiceGoldenSetRevision[]
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
   @@map("app_voice_golden_set")
 }
 
@@ -1583,7 +1771,12 @@ model AppVoiceGoldenSetRevision {
   editorId      String?
   changedAt     DateTime                 @default(now())
 
+  /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@unique([setId, revision])
+  @@index([orgId])
   @@index([setId, changedAt])
   @@index([editorId])
   @@map("app_voice_golden_set_revision")

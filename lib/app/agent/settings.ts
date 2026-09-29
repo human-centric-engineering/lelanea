@@ -42,6 +42,7 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import type { AgentSettingsUpdate, UserBudgetQuery } from '@/lib/validations/app-agent-settings';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /** The singleton's key. */
 export const AGENT_SETTINGS_SLUG = 'global';
@@ -70,7 +71,7 @@ export interface AgentSettings {
 
 /** The singleton as it stands. One primary-key read, every call. */
 export async function getAgentSettings(): Promise<AgentSettings> {
-  const row = await prisma.appAgentSettings.findUnique({
+  const row = await prisma.appAgentSettings.findFirst({
     where: { slug: AGENT_SETTINGS_SLUG },
     select: {
       firstWordsDeadlineMs: true,
@@ -169,7 +170,7 @@ export async function getEffectiveMonthlyCeilings(
  */
 export async function updateAgentSettings(update: AgentSettingsUpdate): Promise<AgentSettings> {
   return prisma.appAgentSettings.upsert({
-    where: { slug: AGENT_SETTINGS_SLUG },
+    where: { orgId_slug: { orgId: requireOrgId(), slug: AGENT_SETTINGS_SLUG } },
     create: { slug: AGENT_SETTINGS_SLUG, ...update },
     update,
     select: {

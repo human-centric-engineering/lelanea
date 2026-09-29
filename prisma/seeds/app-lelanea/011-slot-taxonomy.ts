@@ -108,8 +108,10 @@ const unit: SeedUnit = {
       const file = getSlotTaxonomy();
       const now = new Date();
 
-      await prisma.$transaction([
-        prisma.appSlotDefinition.createMany({
+      // Interactive rather than a batch: revisions point at their definition by
+      // id (t-112), and the ids exist only once the definitions are written.
+      await prisma.$transaction(async (tx) => {
+        await tx.appSlotDefinition.createMany({
           data: file.slots.map((slot) => ({
             slug: slot.slug,
             group: slot.group,
@@ -125,9 +127,12 @@ const unit: SeedUnit = {
             updatedAt: now,
           })),
           skipDuplicates: true,
-        }),
-        prisma.appSlotDefinitionRevision.createMany({
+        });
+        const ids = await tx.appSlotDefinition.findMany({ select: { id: true, slug: true } });
+        const idBySlug = new Map(ids.map((row) => [row.slug, row.id]));
+        await tx.appSlotDefinitionRevision.createMany({
           data: file.slots.map((slot) => ({
+            definitionId: idBySlug.get(slot.slug) ?? missingId(slot.slug),
             slotSlug: slot.slug,
             version: 1,
             group: slot.group,
@@ -148,8 +153,8 @@ const unit: SeedUnit = {
             changedAt: now,
           })),
           skipDuplicates: true,
-        }),
-      ]);
+        });
+      });
 
       wroteDefinitions = file.slots.length > 0;
       const hidden = file.slots.filter((s) => s.visibility === 'hidden').length;
@@ -193,3 +198,8 @@ const unit: SeedUnit = {
 };
 
 export default unit;
+
+/** A slug this seed just wrote always has an id; not finding one is a bug. */
+function missingId(slug: string): never {
+  throw new Error(`Slot definition "${slug}" was written but has no id`);
+}

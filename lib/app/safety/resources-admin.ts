@@ -59,6 +59,7 @@ import {
   type ContentImportPlan,
   type ImportPlanSection,
 } from '@/lib/app/content/admin/shared';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 const COPY_FIELDS = [
   'hardIntro',
@@ -120,7 +121,7 @@ export function crisisExportFilename(now: Date): string {
  */
 export async function exportCrisisFile(): Promise<CrisisResourcesFile> {
   const [copy, regions] = await Promise.all([
-    prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
+    prisma.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } }),
     prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
   if (!copy) {
@@ -246,7 +247,7 @@ async function readStored(
   client: Pick<typeof prisma, 'appCrisisCopy' | 'appCrisisRegion'>
 ): Promise<StoredCrisis> {
   const [copy, regions] = await Promise.all([
-    client.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
+    client.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } }),
     client.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
   return { copy, regions };
@@ -284,7 +285,7 @@ export async function applyCrisisImport(
 
       if (planned.copyChanged.length > 0) {
         await tx.appCrisisCopy.update({
-          where: { slug: CRISIS_COPY_SLUG },
+          where: { orgId_slug: { orgId: requireOrgId(), slug: CRISIS_COPY_SLUG } },
           data: {
             ...planned.copyAfter,
             status: 'draft',

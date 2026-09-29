@@ -110,6 +110,49 @@ model Org {
   frameworkModuleWorkflowBindings    ModuleWorkflowBinding[]
   frameworkModuleAgentBindings       ModuleAgentBinding[]
 
+  // LELAÑEA "keep mine" (t-112): back-relations for our 37 tenant-owned app_*
+  // models, below Daybreak's block as its recipe asks. Prisma relations are
+  // two-sided, so a leaf cannot add them without editing this Sunrise model
+  // (sunrise#859). On a sync that conflicts here: keep upstream's lines, the
+  // DAYBREAK block AND this one. Ledgered in .context/app/divergences.md.
+  appWaitlistEntries               AppWaitlistEntry[]
+  appAcknowledgements              AppAcknowledgement[]
+  appKnowledgeDesignations         AppKnowledgeDesignation[]
+  appVoiceComparisons              AppVoiceComparison[]
+  appVoiceComparisonArms           AppVoiceComparisonArm[]
+  appAgentSettingsRows             AppAgentSettings[]
+  appUserBudgets                   AppUserBudget[]
+  appTurns                         AppTurn[]
+  appTurnSlotWrites                AppTurnSlotWrite[]
+  appSafetyEvents                  AppSafetyEvent[]
+  appCrisisCopies                  AppCrisisCopy[]
+  appCrisisRegions                 AppCrisisRegion[]
+  appSlotDefinitions               AppSlotDefinition[]
+  appSlotDefinitionRevisions       AppSlotDefinitionRevision[]
+  appDocumentCollections           AppDocumentCollection[]
+  appFoundationalDocuments         AppFoundationalDocument[]
+  appFoundationalDocumentRevisions AppFoundationalDocumentRevision[]
+  appJourneys                      AppJourney[]
+  appJourneyTiers                  AppJourneyTier[]
+  appJourneyTierRevisions          AppJourneyTierRevision[]
+  appJourneyModules                AppJourneyModule[]
+  appJourneyModuleRevisions        AppJourneyModuleRevision[]
+  appQuestionSets                  AppQuestionSet[]
+  appQuestionSetRevisions          AppQuestionSetRevision[]
+  appDiscoveryQuestions            AppDiscoveryQuestion[]
+  appDiscoveryQuestionRevisions    AppDiscoveryQuestionRevision[]
+  appResourceCollections           AppResourceCollection[]
+  appResources                     AppResource[]
+  appResourceRevisions             AppResourceRevision[]
+  appResourceWordsRows             AppResourceWords[]
+  appResourceWordsRevisions        AppResourceWordsRevision[]
+  appVoiceOverlaySets              AppVoiceOverlaySet[]
+  appVoiceOverlaySetRevisions      AppVoiceOverlaySetRevision[]
+  appVoiceOverlays                 AppVoiceOverlay[]
+  appVoiceOverlayRevisions         AppVoiceOverlayRevision[]
+  appVoiceGoldenSets               AppVoiceGoldenSet[]
+  appVoiceGoldenSetRevisions       AppVoiceGoldenSetRevision[]
+
   @@map("org")
 }
 
