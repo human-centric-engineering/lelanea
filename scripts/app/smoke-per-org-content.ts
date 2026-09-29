@@ -1,5 +1,6 @@
 /**
- * Smoke: a second org holds the same content names as the install org (t-113).
+ * Smoke: a second org holds the same content names as the install org (t-113,
+ * t-114).
  *
  * **Why this exists rather than another unit test.** The per-org keys are
  * database constraints (`@@unique([orgId, slug])`), and the org every read and
@@ -9,17 +10,19 @@
  *
  * Flow:
  *   1. Create a throwaway org.
- *   2. In it, run the four content seeds from the same content files the
- *      install org was seeded from. Assert each one **seeds** rather than
- *      skipping: the write-once marker is per org, and the same document,
- *      journey, tier, module, question set, question and words names are
- *      accepted beside the install org's.
+ *   2. In it, run the content, voice overlay, golden set and crisis seeds from
+ *      the same files the install org was seeded from. Assert each one
+ *      **seeds** rather than skipping: the write-once marker is per org, and
+ *      the same document, journey, tier, module, question, words, overlay
+ *      situation, golden set and region names are accepted beside the
+ *      install org's.
  *   3. Assert both orgs read the same names, from different rows.
  *   4. Edit a tier's label and add an article opening a document, in the new
  *      org. Assert the install org's tier is unchanged, and the article points
- *      at the new org's copy of the document, not the install org's. Then
- *      assert every generated-id link in the ten tables, in either org, points
- *      at a parent in its own org.
+ *      at the new org's copy of the document, not the install org's. Give a
+ *      person a budget in the new org, and assert the install org's budgets
+ *      are unchanged. Then assert every generated-id link, in either org,
+ *      points at a parent in its own org.
  *   5. Erase the org through `eraseOrg`, the platform's path, and assert
  *      nothing of it is left.
  *
@@ -53,6 +56,12 @@ import { seedResources } from '@/lib/app/content/resource-store';
 import { updateTier } from '@/lib/app/content/admin/journey';
 import { createResource } from '@/lib/app/content/admin/resources';
 import { resourceEditSchema } from '@/lib/app/content/admin/validation';
+import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
+import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
+import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
+import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
+import { setUserBudget } from '@/lib/app/agent/settings';
+import crisisResources from '@/prisma/seeds/app-lelanea/010-crisis-resources';
 
 const PROBE_ARTICLE = 't113-smoke-article';
 
@@ -63,14 +72,19 @@ function check(condition: boolean, message: string): void {
 
 /** Row ids and names of the content tables, as one org sees them. */
 async function snapshot() {
-  const [documents, tiers, modules, questions, words] = await Promise.all([
-    prisma.appFoundationalDocument.findMany({ select: { id: true, slug: true } }),
-    prisma.appJourneyTier.findMany({ select: { id: true, slug: true, label: true } }),
-    prisma.appJourneyModule.findMany({ select: { id: true, slug: true } }),
-    prisma.appDiscoveryQuestion.findMany({ select: { id: true, slug: true } }),
-    prisma.appResourceWords.findMany({ select: { id: true, key: true } }),
-  ]);
-  return { documents, tiers, modules, questions, words };
+  const [documents, tiers, modules, questions, words, overlays, goldenSets, regions, budgets] =
+    await Promise.all([
+      prisma.appFoundationalDocument.findMany({ select: { id: true, slug: true } }),
+      prisma.appJourneyTier.findMany({ select: { id: true, slug: true, label: true } }),
+      prisma.appJourneyModule.findMany({ select: { id: true, slug: true } }),
+      prisma.appDiscoveryQuestion.findMany({ select: { id: true, slug: true } }),
+      prisma.appResourceWords.findMany({ select: { id: true, key: true } }),
+      prisma.appVoiceOverlay.findMany({ select: { id: true, situation: true } }),
+      prisma.appVoiceGoldenSet.findMany({ select: { id: true, slug: true } }),
+      prisma.appCrisisRegion.findMany({ select: { id: true, region: true } }),
+      prisma.appUserBudget.findMany({ select: { userId: true, monthlyCeilingUsd: true } }),
+    ]);
+  return { documents, tiers, modules, questions, words, overlays, goldenSets, regions, budgets };
 }
 
 const names = (rows: readonly { slug: string }[]) => rows.map((row) => row.slug).sort();
@@ -98,11 +112,16 @@ async function main(): Promise<void> {
         await seedJourneyStructure(buildJourneySeed()),
         await seedDiscoveryQuestions(buildQuestionSeed()),
         await seedResources(buildResourcesSeed()),
+        await seedVoiceOverlays(buildVoiceOverlaySeed()),
+        await seedGoldenSetPointer(buildGoldenSetSeed()),
       ];
       check(
         results.every((result) => result.status === 'seeded'),
         'every content seed wrote into the new org rather than skipping'
       );
+      // Its marker is the crisis copy (t-112), so it writes only if the new
+      // org has none: the region count below says whether it did.
+      await crisisResources.run({ prisma, logger });
 
       const mine = await snapshot();
       check(
@@ -111,11 +130,24 @@ async function main(): Promise<void> {
           JSON.stringify(names(mine.questions)) === JSON.stringify(names(install.questions)),
         'the new org holds the same document, module and question names'
       );
+      const sorted = (values: string[]) => JSON.stringify([...values].sort());
+      check(
+        sorted(mine.overlays.map((row) => row.situation)) ===
+          sorted(install.overlays.map((row) => row.situation)) &&
+          sorted(mine.goldenSets.map((row) => row.slug)) ===
+            sorted(install.goldenSets.map((row) => row.slug)) &&
+          sorted(mine.regions.map((row) => row.region)) ===
+            sorted(install.regions.map((row) => row.region)),
+        'and the same voice overlay situations, golden set and crisis regions'
+      );
       check(
         disjoint(ids(mine.modules), ids(install.modules)) &&
           disjoint(ids(mine.documents), ids(install.documents)) &&
           disjoint(ids(mine.questions), ids(install.questions)) &&
-          disjoint(ids(mine.words), ids(install.words)),
+          disjoint(ids(mine.words), ids(install.words)) &&
+          disjoint(ids(mine.overlays), ids(install.overlays)) &&
+          disjoint(ids(mine.goldenSets), ids(install.goldenSets)) &&
+          disjoint(ids(mine.regions), ids(install.regions)),
         'from rows of its own'
       );
 
@@ -163,6 +195,14 @@ async function main(): Promise<void> {
         article?.documentId === document.id && article.documentSlug === document.slug,
         `the article opens the new org's "${document.slug}", not the install org's`
       );
+      const ceiling = 1234.5;
+      const budget = await setUserBudget(editor.id, ceiling);
+      const mineBudget = await prisma.appUserBudget.findFirst({ where: { userId: editor.id } });
+      check(
+        budget !== null && mineBudget?.monthlyCeilingUsd === ceiling,
+        'the new org holds its own budget for a person the install org also knows'
+      );
+
       const strays = await runAsSystem('smoke: cross-org children', async () => {
         const org = { select: { orgId: true } } as const;
         const differ = (
@@ -215,6 +255,18 @@ async function main(): Promise<void> {
           prisma.appResourceWordsRevision
             .findMany({ select: { orgId: true, words: org } })
             .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.words })))),
+          prisma.appVoiceOverlay
+            .findMany({ select: { orgId: true, set: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.set })))),
+          prisma.appVoiceOverlayRevision
+            .findMany({ select: { orgId: true, overlay: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.overlay })))),
+          prisma.appVoiceOverlaySetRevision
+            .findMany({ select: { orgId: true, set: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.set })))),
+          prisma.appVoiceGoldenSetRevision
+            .findMany({ select: { orgId: true, set: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.set })))),
         ]);
         return counts.reduce((sum, n) => sum + n, 0);
       });
@@ -231,6 +283,12 @@ async function main(): Promise<void> {
       bySlug(after.tiers) === bySlug(install.tiers),
       "the new org's tier edit left the install org's tiers as they were"
     );
+    const byUser = (rows: readonly { userId: string; monthlyCeilingUsd: number }[]) =>
+      JSON.stringify([...rows].sort((x, y) => x.userId.localeCompare(y.userId)));
+    check(
+      byUser(after.budgets) === byUser(install.budgets),
+      "and its budget left the install org's budgets as they were"
+    );
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
   }
@@ -242,6 +300,9 @@ async function main(): Promise<void> {
       prisma.appFoundationalDocument.count({ where: { orgId: org.id } }),
       prisma.appResource.count({ where: { orgId: org.id } }),
       prisma.appDiscoveryQuestionRevision.count({ where: { orgId: org.id } }),
+      prisma.appVoiceOverlay.count({ where: { orgId: org.id } }),
+      prisma.appCrisisRegion.count({ where: { orgId: org.id } }),
+      prisma.appUserBudget.count({ where: { orgId: org.id } }),
     ])
   );
   if (failure) throw failure;
