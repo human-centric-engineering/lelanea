@@ -16,11 +16,9 @@
 -- new indexes build over the same rows. Hand-written, not `migrate diff`
 -- output (B13).
 
--- The index builds read every row. On a database where `db:tenancy:enable`
--- has run (FORCE ROW LEVEL SECURITY) a NOBYPASSRLS owner would otherwise see
--- none of them (.context/tenancy/isolation.md). Transaction-local: Prisma runs
--- the file as one transaction.
-SELECT set_config('app.bypass_rls', 'on', true);
+-- No `app.bypass_rls` here, unlike t-113 and t-114: this file reads and
+-- writes no rows. Row security never applies to an index build or to a unique
+-- check, which is why the old install-wide keys collided across orgs at all.
 
 -- app_acknowledgement
 DROP INDEX "app_acknowledgement_userId_kind_documentVersion_key";
