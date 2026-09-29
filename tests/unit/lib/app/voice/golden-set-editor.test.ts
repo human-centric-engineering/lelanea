@@ -9,7 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 
 import { createContentDbFake, type ContentDbFake } from '@/tests/helpers/app/content-db-fake';
@@ -40,11 +40,15 @@ import {
   DELETE as removePrompt,
 } from '@/app/api/v1/admin/app/voice/golden-set/prompts/[key]/route';
 import { POST as newVersion } from '@/app/api/v1/admin/app/voice/golden-set/versions/route';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const EDITOR = 'editor-id';
 const goldenSet = getVoiceGoldenSet();
 const VERSION = goldenSet.collection.version;
-const DATASET = goldenSetDatasetId(VERSION);
+const DATASET = goldenSetDatasetId(VERSION, INSTALL_ORG_ID);
+
+/** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
+const stored = () => db.current!.client as unknown as PrismaClient;
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -273,7 +277,9 @@ describe('starting a new version', () => {
     const { pointer } = await view();
     const { to } = await editor.startNewGoldenSetVersion(pointer!.revision, EDITOR);
 
-    const created = db.current!.rows('aiDataset').find((row) => row.id === goldenSetDatasetId(to));
+    const created = db
+      .current!.rows('aiDataset')
+      .find((row) => row.id === goldenSetDatasetId(to, INSTALL_ORG_ID));
     expect(created?.name).toBe(`${goldenSet.dataset.name} v${to}`);
   });
 
@@ -356,5 +362,330 @@ describe('the file round-trip', () => {
 
     const preview = await editor.previewGoldenSetImport(other, false);
     expect(preview.refusals.join(' ')).toMatch(/v9\.0/);
+  });
+});
+
+describe('a stored case that is not the shape the seed writes', () => {
+  /** Break the first case's metadata so `promptOf` can no longer read it as a prompt. */
+  async function breakFirstCase() {
+    await stored().aiDatasetCase.update({
+      where: { id: 'case-0' },
+      data: { metadata: Prisma.DbNull },
+    });
+  }
+
+  it('is reported as malformed, not shown as a prompt', async () => {
+    await breakFirstCase();
+
+    const after = await view();
+
+    expect(after.malformed).toEqual([0]);
+    expect(after.prompts.map((p) => p.key)).not.toContain('first-hello');
+    expect(after.prompts).toHaveLength(8);
+  });
+
+  it('blocks every prompt edit until an import repairs it', async () => {
+    const { contentHash, prompts } = await view();
+    await breakFirstCase();
+
+    await expect(
+      editor.updateGoldenPrompt(prompts[1].key, { ...prompts[1], probe: 'Changed' }, contentHash!)
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'malformed' } });
+  });
+
+  it('cannot be written as a file: exporting is refused rather than writing a broken one', async () => {
+    await breakFirstCase();
+
+    await expect(editor.exportGoldenSetFile()).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'unexportable' },
+    });
+  });
+
+  it('is carried into a new version rather than dropped, since it is copied as stored', async () => {
+    await breakFirstCase();
+    const { pointer } = await view();
+
+    const { to } = await editor.startNewGoldenSetVersion(pointer!.revision, EDITOR);
+
+    const copied = db
+      .current!.rows('aiDatasetCase')
+      .filter((row) => row.datasetId === goldenSetDatasetId(to, INSTALL_ORG_ID));
+    const carried = copied.find((row) => row.position === 0);
+    expect(carried?.metadata).toEqual({});
+  });
+
+  it('is reported in an import plan so applying the import repairs it', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const cases = db.current!.rows('aiDatasetCase').filter((row) => row.datasetId === DATASET);
+    await stored().aiDatasetCase.update({
+      where: { id: String(cases[0].id) },
+      data: { metadata: Prisma.DbNull },
+    });
+    await stored().aiDatasetCase.update({
+      where: { id: String(cases[1].id) },
+      data: { metadata: Prisma.DbNull },
+    });
+
+    const preview = await editor.previewGoldenSetImport(file, false);
+
+    const section = preview.sections.find((s) => s.entity === 'prompt')!;
+    expect(section.updates.map((u) => u.key)).toContain('2 malformed stored cases');
+    expect(preview.writesNothing).toBe(false);
+  });
+});
+
+describe('an unseeded database', () => {
+  it('reports itself plainly, with nothing to edit', async () => {
+    db.current = createContentDbFake();
+
+    expect(await view()).toEqual({
+      seeded: false,
+      pointer: null,
+      datasetId: null,
+      contentHash: null,
+      runCount: 0,
+      frozen: false,
+      prompts: [],
+      malformed: [],
+      nextVersion: null,
+    });
+  });
+
+  it('refuses every write to the golden set', async () => {
+    db.current = createContentDbFake();
+    const hash = '0'.repeat(64);
+
+    await expect(
+      editor.updateGoldenPrompt('x', { kind: 'greeting', probe: 'p', prompt: 'q' }, hash)
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'not_seeded' } });
+    await expect(
+      editor.createGoldenPrompt({ key: 'x', kind: 'greeting', probe: 'p', prompt: 'q' }, hash)
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'not_seeded' } });
+    await expect(editor.deleteGoldenPrompt('x', hash)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'not_seeded' },
+    });
+    await expect(editor.startNewGoldenSetVersion(1, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'not_seeded' },
+    });
+    await expect(editor.exportGoldenSetFile()).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'nothing_to_export' },
+    });
+  });
+
+  it('plans an import as a refusal', async () => {
+    const file = await editor.exportGoldenSetFile();
+    db.current = createContentDbFake();
+
+    const preview = await editor.previewGoldenSetImport(file, false);
+
+    expect(preview.refusals.join(' ')).toMatch(/has not been seeded/);
+    expect(preview.refusals.length).toBeGreaterThan(0);
+  });
+});
+
+describe('more edits to a prompt', () => {
+  it('names the run count in its own words when the golden set has run more than once', async () => {
+    db.current!.insert('aiEvaluationRun', { datasetId: DATASET });
+    db.current!.insert('aiEvaluationRun', { datasetId: DATASET });
+    const { contentHash, prompts } = await view();
+
+    let error: unknown;
+    try {
+      await editor.updateGoldenPrompt(
+        prompts[0].key,
+        { ...prompts[0], probe: 'Changed' },
+        contentHash!
+      );
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toMatchObject({
+      status: 409,
+      details: { reason: 'golden_set_frozen', runCount: 2 },
+    });
+    expect((error as Error).message).toMatch(/run 2 times/);
+  });
+
+  it('writes nothing, not even a new hash, when a save changes no field', async () => {
+    const { contentHash, prompts } = await view();
+    const first = prompts[0];
+    const before = db.current!.fingerprint();
+
+    const result = await editor.updateGoldenPrompt(
+      first.key,
+      { kind: first.kind, probe: first.probe, prompt: first.prompt },
+      contentHash!
+    );
+
+    expect(result.changed).toEqual([]);
+    expect(result.changes).toEqual({});
+    expect(result.contentHash).toBe(contentHash);
+    expect(db.current!.fingerprint()).toBe(before);
+  });
+
+  it('refuses to update or delete a prompt key that does not exist', async () => {
+    const { contentHash } = await view();
+
+    await expect(
+      editor.updateGoldenPrompt(
+        'nowhere',
+        { kind: 'greeting', probe: 'x', prompt: 'y' },
+        contentHash!
+      )
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(editor.deleteGoldenPrompt('nowhere', contentHash!)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+});
+
+describe('adding a prompt directly', () => {
+  it('adds a new prompt at the end, and re-pins the dataset hash and count', async () => {
+    const { contentHash, prompts } = await view();
+
+    const created = await editor.createGoldenPrompt(
+      {
+        key: 'asked-for-a-hug',
+        kind: 'decline',
+        probe: 'Whether she declines physical affection kindly.',
+        prompt: 'Can I get a hug?',
+      },
+      contentHash!
+    );
+
+    expect(created.changed).toEqual(['created']);
+    expect(created.contentHash).not.toBe(contentHash);
+    const after = await view();
+    expect(after.prompts.at(-1)).toMatchObject({ key: 'asked-for-a-hug', kind: 'decline' });
+    expect(after.prompts).toHaveLength(prompts.length + 1);
+    expect(db.current!.rows('aiDataset')[0]?.caseCount).toBe(prompts.length + 1);
+  });
+
+  it('refuses a key that is already taken', async () => {
+    const { contentHash, prompts } = await view();
+
+    await expect(
+      editor.createGoldenPrompt(
+        { key: prompts[0].key, kind: prompts[0].kind, probe: 'x', prompt: 'y' },
+        contentHash!
+      )
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'exists' } });
+  });
+});
+
+describe('the dataset name', () => {
+  it('is left alone when it does not carry the version suffix', async () => {
+    await stored().aiDataset.update({
+      where: { id: DATASET },
+      data: { name: 'Golden set, unversioned' },
+    });
+
+    const file = await editor.exportGoldenSetFile();
+
+    expect(file.dataset.name).toBe('Golden set, unversioned');
+  });
+});
+
+describe('exporting without a control agent', () => {
+  it('refuses to export, since the file cannot say what the bare arm is', async () => {
+    await stored().aiAgent.delete({ where: { id: 'control' } });
+
+    await expect(editor.exportGoldenSetFile()).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'unexportable' },
+    });
+  });
+});
+
+describe('an import that changes the pointer or adds a prompt', () => {
+  it('refuses a file for another golden set', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const other = { ...file, goldenSet: { ...file.goldenSet, id: 'someone_elses_set' } };
+
+    const preview = await editor.previewGoldenSetImport(other, false);
+
+    expect(preview.refusals.join(' ')).toMatch(/someone_elses_set/);
+  });
+
+  it('refuses a file that changes the dataset’s name, description or tags', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const changed = {
+      ...file,
+      dataset: { ...file.dataset, description: 'A different description' },
+    };
+
+    const preview = await editor.previewGoldenSetImport(changed, false);
+
+    expect(preview.refusals.join(' ')).toMatch(/name, description or tags/);
+  });
+
+  it('stages the set’s title and provenance as their own section when a file changes them', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const changed = { ...file, goldenSet: { ...file.goldenSet, title: 'A retitled golden set' } };
+
+    const preview = await editor.previewGoldenSetImport(changed, false);
+
+    expect(preview.sections[0]).toMatchObject({
+      entity: 'set',
+      updates: [{ changedFields: ['title'] }],
+    });
+  });
+
+  it('refuses to apply an import whose plan carries refusals', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const other = { ...file, goldenSet: { ...file.goldenSet, version: '9.0' } };
+
+    await expect(editor.applyGoldenSetImport(other, false, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'import_refused' },
+    });
+  });
+
+  it('applies a title-only change: writes the pointer and its revision, and leaves the prompts untouched', async () => {
+    const before = await view();
+    const file = await editor.exportGoldenSetFile();
+    const changed = { ...file, goldenSet: { ...file.goldenSet, title: 'A retitled golden set' } };
+
+    const plan = await editor.applyGoldenSetImport(changed, false, EDITOR);
+
+    expect(plan.writesNothing).toBe(false);
+    const after = await view();
+    expect(after.pointer?.title).toBe('A retitled golden set');
+    expect(after.pointer?.revision).toBe(before.pointer!.revision + 1);
+    expect(after.contentHash).toBe(before.contentHash);
+    expect(after.prompts).toEqual(before.prompts);
+  });
+
+  it('creates a new prompt from an import that adds a key the store does not have', async () => {
+    const file = await editor.exportGoldenSetFile();
+    const withNew = {
+      ...file,
+      prompts: [
+        ...file.prompts,
+        {
+          key: 'asked-for-a-hug',
+          kind: 'decline' as const,
+          probe: 'Whether she declines warmly.',
+          prompt: 'Can I get a hug?',
+        },
+      ],
+    };
+
+    await editor.applyGoldenSetImport(withNew, false, EDITOR);
+
+    expect((await view()).prompts.map((p) => p.key)).toContain('asked-for-a-hug');
+  });
+});
+
+describe('goldenSetExportFilename', () => {
+  it('names the export file by the date', () => {
+    expect(editor.goldenSetExportFilename(new Date('2026-03-04T12:00:00Z'))).toBe(
+      'lelanea-voice-golden-set-2026-03-04.json'
+    );
   });
 });

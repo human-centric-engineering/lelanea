@@ -431,8 +431,10 @@ model AppAgentSettings {
 /// `lib/app/leaf-db-drift.ts`. Declared as a subject-data source in
 /// `lib/app/leaf-data-export.ts`.
 model AppUserBudget {
-  /// Hand-written FK → `user`. See the note above. One override per person.
-  userId            String   @id
+  id                String   @id @default(cuid())
+  /// Hand-written FK → `user`. See the note above. One override per person per
+  /// org (t-114): unique with `orgId`, so a person in two orgs has one in each.
+  userId            String
   monthlyCeilingUsd Float
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -441,6 +443,9 @@ model AppUserBudget {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, userId])
+  /// A person's budgets across orgs, and the user FK's cascade on erasure.
+  @@index([userId])
   @@index([orgId])
   @@map("app_user_budget")
 }
@@ -765,7 +770,8 @@ model AppCrisisCopy {
 /// Draft/sign-off and version exactly as on `AppCrisisCopy`. Holds nothing about
 /// anyone; an EXCLUSION in `lib/app/leaf-data-export.ts`.
 model AppCrisisRegion {
-  region          String                 @id
+  id              String                 @id @default(cuid())
+  region          String
   emergencyNumber String
   services        Json
   status          AppCrisisContentStatus @default(draft)
@@ -778,6 +784,7 @@ model AppCrisisRegion {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, region])
   @@index([orgId])
   @@map("app_crisis_region")
 }
@@ -1619,8 +1626,9 @@ enum AppVoiceContentStatus {
 /// branches on; the two answer different questions and neither is derived from
 /// the other.
 model AppVoiceOverlaySet {
+  id          String                @id @default(cuid())
   /// Stable identity, as authored: `lelanea_voice_fingerprint_overlays`.
-  id          String                @id
+  slug        String
   title       String
   version     String
   locale      String
@@ -1643,6 +1651,7 @@ model AppVoiceOverlaySet {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_voice_overlay_set")
 }
@@ -1650,6 +1659,7 @@ model AppVoiceOverlaySet {
 /// One revision of the set's framing, whole (t-88).
 model AppVoiceOverlaySetRevision {
   id            String                   @id @default(cuid())
+  setSlug       String
   setId         String
   set           AppVoiceOverlaySet       @relation(fields: [setId], references: [id], onDelete: Cascade)
   revision      Int
@@ -1688,8 +1698,10 @@ model AppVoiceOverlaySetRevision {
 /// to a reviewer and emitted to no prompt. It is named for what it is here
 /// because `when` is a reserved word in SQL.
 model AppVoiceOverlay {
+  id            String                @id @default(cuid())
   /// The authored situation key, e.g. `first-meeting`.
-  situation     String                @id
+  situation     String
+  setSlug       String
   setId         String
   set           AppVoiceOverlaySet    @relation(fields: [setId], references: [id], onDelete: Cascade)
   /// 1-based, and the order they were authored in.
@@ -1715,6 +1727,7 @@ model AppVoiceOverlay {
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([setId, position])
+  @@unique([orgId, situation])
   @@index([orgId])
   @@map("app_voice_overlay")
 }
@@ -1723,7 +1736,8 @@ model AppVoiceOverlay {
 model AppVoiceOverlayRevision {
   id            String                   @id @default(cuid())
   situation     String
-  overlay       AppVoiceOverlay          @relation(fields: [situation], references: [situation], onDelete: Cascade)
+  overlayId     String
+  overlay       AppVoiceOverlay          @relation(fields: [overlayId], references: [id], onDelete: Cascade)
   revision      Int
   position      Int
   label         String
@@ -1741,9 +1755,9 @@ model AppVoiceOverlayRevision {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([situation, revision])
+  @@unique([overlayId, revision])
   @@index([orgId])
-  @@index([situation, changedAt])
+  @@index([overlayId, changedAt])
   @@index([editorId])
   @@map("app_voice_overlay_revision")
 }
@@ -1767,8 +1781,9 @@ model AppVoiceOverlayRevision {
 /// `status` column beside it is the operator's sign-off; the two answer
 /// different questions, exactly as on `app_voice_overlay_set`.
 model AppVoiceGoldenSet {
+  id          String                @id @default(cuid())
   /// Stable identity, as authored: `lelanea_voice_golden_set`.
-  id          String                @id
+  slug        String
   title       String
   /// The authored version, and the suffix of the dataset id it points at.
   version     String
@@ -1787,6 +1802,7 @@ model AppVoiceGoldenSet {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_voice_golden_set")
 }
@@ -1794,6 +1810,7 @@ model AppVoiceGoldenSet {
 /// One revision of the golden set's pointer and provenance, whole (t-88).
 model AppVoiceGoldenSetRevision {
   id            String                   @id @default(cuid())
+  setSlug       String
   setId         String
   set           AppVoiceGoldenSet        @relation(fields: [setId], references: [id], onDelete: Cascade)
   revision      Int

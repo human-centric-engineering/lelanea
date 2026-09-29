@@ -50,6 +50,7 @@ import type { AppCrisisCopy, AppCrisisRegion } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { requireOrgId } from '@/lib/tenancy/context';
 import {
   crisisCopyUpdateSchema,
   crisisServicesSchema,
@@ -143,7 +144,11 @@ async function readFromDatabase(): Promise<CrisisContent | null> {
   return copy ? contentFromRows(copy, regions) : null;
 }
 
-let cached: { content: CrisisContent; expiresAt: number } | null = null;
+/**
+ * One answer per org (t-114): the copy and regions are org-owned, so one org's
+ * helplines must never be served from another's cached read.
+ */
+const cached = new Map<string, { content: CrisisContent; expiresAt: number }>();
 /**
  * Bumped by every invalidation. A read that started before an admin write must
  * not cache what it read once it finishes, or the pre-edit words would be
@@ -153,12 +158,16 @@ let generation = 0;
 
 /** Drop the cached answer. Every admin write calls this after it commits. */
 export function invalidateCrisisContentCache(): void {
-  cached = null;
+  // Every org's, not just the writer's: a write is rare, and a missed org
+  // would keep serving words an admin has changed.
+  cached.clear();
   generation += 1;
 }
 
-function cache(content: CrisisContent, readGeneration: number, now: number): void {
-  if (readGeneration === generation) cached = { content, expiresAt: now + CRISIS_CACHE_TTL_MS };
+function cache(orgId: string, content: CrisisContent, readGeneration: number, now: number): void {
+  if (readGeneration === generation) {
+    cached.set(orgId, { content, expiresAt: now + CRISIS_CACHE_TTL_MS });
+  }
 }
 
 /**
@@ -173,11 +182,13 @@ function cache(content: CrisisContent, readGeneration: number, now: number): voi
  */
 export async function loadCrisisContent(): Promise<CrisisContent> {
   const now = Date.now();
-  if (cached && cached.expiresAt > now) return cached.content;
-
+  let orgId: string;
   const readGeneration = generation;
   let stored: CrisisContent | null;
   try {
+    orgId = requireOrgId();
+    const hit = cached.get(orgId);
+    if (hit && hit.expiresAt > now) return hit.content;
     stored = await readFromDatabase();
   } catch (err) {
     // Logged here as well as rethrown: the caller turns this into a failed
@@ -197,6 +208,6 @@ export async function loadCrisisContent(): Promise<CrisisContent> {
     );
   }
 
-  cache(stored, readGeneration, now);
+  cache(orgId, stored, readGeneration, now);
   return stored;
 }

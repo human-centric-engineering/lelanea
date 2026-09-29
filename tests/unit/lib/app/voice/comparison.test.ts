@@ -172,6 +172,7 @@ import {
 } from '@/lib/app/voice/fingerprint';
 import { isCorpusAgent } from '@/lib/app/voice/corpus-access';
 import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 /** The world the seeds are supposed to leave behind. */
 function seedWorld(): void {
@@ -236,7 +237,7 @@ function seedWorld(): void {
 
   world.datasets = [
     {
-      id: goldenSetDatasetId(goldenSet.collection.version),
+      id: goldenSetDatasetId(goldenSet.collection.version, INSTALL_ORG_ID),
       contentHash: 'hash-of-the-authored-prompts',
       caseCount: goldenSet.prompts.length,
     },

@@ -14,10 +14,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const db = vi.hoisted(() => ({ findCopy: vi.fn(), findRegions: vi.fn() }));
+/** The org a request entered; the cache is keyed by it (t-114). */
+const tenant = vi.hoisted(() => ({ orgId: 'install' }));
 
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/tenancy/context', () => ({ requireOrgId: () => tenant.orgId }));
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appCrisisCopy: { findFirst: db.findCopy },
@@ -50,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   invalidateCrisisContentCache();
+  tenant.orgId = 'install';
   db.findCopy.mockResolvedValue(COPY);
   db.findRegions.mockResolvedValue([]);
 });
@@ -65,6 +69,27 @@ describe('loadCrisisContent', () => {
     vi.advanceTimersByTime(CRISIS_CACHE_TTL_MS + 1);
     await loadCrisisContent();
     expect(db.findCopy).toHaveBeenCalledTimes(2);
+  });
+
+  // t-114: the copy and regions are per org, so one org's cached helplines
+  // must never answer another org's crisis turn.
+  it("keeps each org's answer to itself, and one admin write drops every org's", async () => {
+    expect((await loadCrisisContent()).copy.hardIntro).toBe('Hard.');
+
+    tenant.orgId = 'org-b';
+    db.findCopy.mockResolvedValue({ ...COPY, hardIntro: 'Org B.' });
+    expect((await loadCrisisContent()).copy.hardIntro).toBe('Org B.');
+    expect(db.findCopy).toHaveBeenCalledTimes(2);
+
+    tenant.orgId = 'install';
+    expect((await loadCrisisContent()).copy.hardIntro).toBe('Hard.');
+    expect(db.findCopy).toHaveBeenCalledTimes(2);
+
+    invalidateCrisisContentCache();
+    await loadCrisisContent();
+    tenant.orgId = 'org-b';
+    await loadCrisisContent();
+    expect(db.findCopy).toHaveBeenCalledTimes(4);
   });
 
   it('reads again at once after an admin write invalidates it', async () => {

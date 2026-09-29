@@ -26,6 +26,7 @@ interface SettingsRow {
   updatedAt: Date;
 }
 interface BudgetRow {
+  id: string;
   userId: string;
   monthlyCeilingUsd: number;
   createdAt: Date;
@@ -57,8 +58,9 @@ vi.mock('@/lib/logging', () => ({
 }));
 
 /**
- * The upsert is keyed on the per-org unique (`orgId_slug`), whose org comes
- * from the tenant context. Pinned to the install org so the write has one.
+ * Both upserts are keyed on a per-org unique (`orgId_slug`, `orgId_userId`),
+ * whose org comes from the tenant context. Pinned to the install org so the
+ * writes have one.
  */
 vi.mock('@/lib/tenancy/context', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/tenancy/context')>()),
@@ -103,7 +105,7 @@ vi.mock('@/lib/db/client', () => ({
       ),
     },
     appUserBudget: {
-      findUnique: vi.fn(
+      findFirst: vi.fn(
         async ({
           where,
           select,
@@ -138,16 +140,17 @@ vi.mock('@/lib/db/client', () => ({
           create,
           update,
         }: {
-          where: { userId: string };
+          where: { orgId_userId: { orgId: string; userId: string } };
           create: { userId: string; monthlyCeilingUsd: number };
           update: { monthlyCeilingUsd: number };
         }) => {
-          const existing = db.budgets.get(where.userId);
+          const { userId } = where.orgId_userId;
+          const existing = db.budgets.get(userId);
           const now = new Date();
           const row: BudgetRow = existing
             ? { ...existing, ...update, updatedAt: now }
-            : { ...create, createdAt: now, updatedAt: now };
-          db.budgets.set(where.userId, row);
+            : { id: `budget-${userId}`, ...create, createdAt: now, updatedAt: now };
+          db.budgets.set(userId, row);
           return row;
         }
       ),
@@ -186,6 +189,7 @@ vi.mock('@/lib/db/client', () => ({
 }));
 
 import { prisma } from '@/lib/db/client';
+import { runAsOrg, runAsSystem } from '@/lib/tenancy/context';
 import {
   DEFAULT_AGENT_SETTINGS,
   clearUserBudget,
@@ -313,7 +317,30 @@ describe('read per request', () => {
     await getAgentDeadlines();
     await getEffectiveMonthlyCeiling(ADA);
     expect(prisma.appAgentSettings.findFirst).toHaveBeenCalledTimes(3);
-    expect(prisma.appUserBudget.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.appUserBudget.findFirst).toHaveBeenCalledTimes(1);
+  });
+});
+
+// t-114: a person has a budget per org. The ceiling read names the org the
+// request entered; in a system scope there is none, and it must still read the
+// person's override rather than throw, because its caller lets a turn through
+// when the check fails.
+describe('which org a ceiling comes from', () => {
+  it('reads the override in the org the request entered', async () => {
+    await runAsOrg('corg-b', () => getEffectiveMonthlyCeiling(ADA));
+    expect(prisma.appUserBudget.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { orgId: 'corg-b', userId: ADA } })
+    );
+  });
+
+  it('still reads the person’s override in a system scope, never failing open', async () => {
+    await setUserBudget(ADA, 3);
+    await expect(
+      runAsSystem('test: a turn with no org', () => getEffectiveMonthlyCeiling(ADA))
+    ).resolves.toEqual({ ceilingUsd: 3, source: 'override' });
+    expect(prisma.appUserBudget.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { userId: ADA } })
+    );
   });
 });
 
@@ -333,12 +360,12 @@ describe('several people’s limits at once (t-97)', () => {
 
   it('reads overrides once for the whole list, never per person', async () => {
     vi.mocked(prisma.appUserBudget.findMany).mockClear();
-    vi.mocked(prisma.appUserBudget.findUnique).mockClear();
+    vi.mocked(prisma.appUserBudget.findFirst).mockClear();
 
     await getEffectiveMonthlyCeilings([ADA, BO]);
 
     expect(prisma.appUserBudget.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.appUserBudget.findUnique).not.toHaveBeenCalled();
+    expect(prisma.appUserBudget.findFirst).not.toHaveBeenCalled();
   });
 
   it('keeps an override of zero as an answer', async () => {
@@ -357,6 +384,10 @@ describe('several people’s limits at once (t-97)', () => {
 describe('a person’s own limit', () => {
   it('beats the default', async () => {
     await setUserBudget(ADA, 12.5);
+    // One override per person per org: the write is keyed on the per-org unique.
+    expect(prisma.appUserBudget.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { orgId_userId: { orgId: 'install', userId: ADA } } })
+    );
     await expect(getEffectiveMonthlyCeiling(ADA)).resolves.toEqual({
       ceilingUsd: 12.5,
       source: 'override',

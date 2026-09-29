@@ -19,8 +19,8 @@
  * Every resolver goes to the database on every call (`B9`). A value captured
  * when the module loaded would make a change in the admin take effect at the
  * next deploy — the exact shape the ruling rejected — and on a serverless host
- * would take effect in some instances and not others. Two indexed primary-key
- * reads per turn is the price, and it is small beside the model call.
+ * would take effect in some instances and not others. Two indexed reads per
+ * turn is the price, and it is small beside the model call.
  *
  * ## Who writes what (`fp4`)
  *
@@ -42,7 +42,7 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import type { AgentSettingsUpdate, UserBudgetQuery } from '@/lib/validations/app-agent-settings';
-import { requireOrgId } from '@/lib/tenancy/context';
+import { getTenantContext, requireOrgId } from '@/lib/tenancy/context';
 
 /** The singleton's key. */
 export const AGENT_SETTINGS_SLUG = 'global';
@@ -110,15 +110,31 @@ export interface EffectiveCeiling {
 }
 
 /**
- * What one person may spend this month: their override, else the default.
+ * What one person may spend this month: their override in the org the request
+ * entered, else the default.
+ *
+ * The org is named rather than left to the row-security policies (t-114): a
+ * person in two orgs has a budget in each, and a ceiling is a spending limit,
+ * so it must come from this org's row wherever the policies are not enforcing.
  *
  * Both reads go out together; the default is read even when an override exists,
- * because one round trip for two primary-key lookups costs no more than one.
+ * because one round trip for two indexed lookups costs no more than one.
  */
+/**
+ * The org a budget read is scoped to: the one the request entered, or none in a
+ * system scope. The ceiling read must never throw for want of an org — its
+ * caller lets a turn through when the check fails, which would leave the limit
+ * unenforced — so with no org it reads the person's overrides as before.
+ */
+function budgetOrg(): { orgId?: string } {
+  const orgId = getTenantContext()?.orgId;
+  return orgId ? { orgId } : {};
+}
+
 export async function getEffectiveMonthlyCeiling(userId: string): Promise<EffectiveCeiling> {
   const [override, settings] = await Promise.all([
-    prisma.appUserBudget.findUnique({
-      where: { userId },
+    prisma.appUserBudget.findFirst({
+      where: { ...budgetOrg(), userId },
       select: { monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -142,7 +158,7 @@ export async function getEffectiveMonthlyCeilings(
   if (userIds.length === 0) return new Map();
   const [overrides, settings] = await Promise.all([
     prisma.appUserBudget.findMany({
-      where: { userId: { in: [...userIds] } },
+      where: { ...budgetOrg(), userId: { in: [...userIds] } },
       select: { userId: true, monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -219,7 +235,10 @@ export async function listUserBudgets(query: UserBudgetQuery): Promise<{
     // The override table is small by construction — a row exists only where an
     // admin chose one — so reading its keys first is cheaper than anything that
     // would page through users looking for them.
-    const overridden = await prisma.appUserBudget.findMany({ select: { userId: true } });
+    const overridden = await prisma.appUserBudget.findMany({
+      where: { orgId: requireOrgId() },
+      select: { userId: true },
+    });
     where.id = { in: overridden.map((row) => row.userId) };
   }
 
@@ -236,7 +255,7 @@ export async function listUserBudgets(query: UserBudgetQuery): Promise<{
   ]);
 
   const overrides = await prisma.appUserBudget.findMany({
-    where: { userId: { in: users.map((user) => user.id) } },
+    where: { orgId: requireOrgId(), userId: { in: users.map((user) => user.id) } },
     select: { userId: true, monthlyCeilingUsd: true },
   });
   const overrideByUser = new Map(overrides.map((row) => [row.userId, row.monthlyCeilingUsd]));
@@ -284,7 +303,7 @@ export async function setUserBudget(
 
   try {
     await prisma.appUserBudget.upsert({
-      where: { userId },
+      where: { orgId_userId: { orgId: requireOrgId(), userId } },
       create: { userId, monthlyCeilingUsd },
       update: { monthlyCeilingUsd },
     });
@@ -316,14 +335,18 @@ export async function clearUserBudget(
   const user = await findUser(userId);
   if (!user) return null;
 
-  const { count } = await prisma.appUserBudget.deleteMany({ where: { userId } });
+  // This org's override only: the person's budget in any other org stands.
+  const { count } = await prisma.appUserBudget.deleteMany({
+    where: { orgId: requireOrgId(), userId },
+  });
 
   const settings = await getAgentSettings();
   return { row: toRow(user, null, settings.defaultMonthlyCeilingUsd), cleared: count > 0 };
 }
 
 /**
- * The Art. 15 collector's read: this person's override, if they have one.
+ * The Art. 15 collector's read: this person's overrides, one per org they
+ * hold one in (t-114), as far as the export's own org scope reaches.
  *
  * An array, always — empty when the default applies — because a declared
  * section must be present in what the leaf collector returns.

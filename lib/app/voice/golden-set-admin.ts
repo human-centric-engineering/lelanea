@@ -19,6 +19,7 @@ import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
 import { getGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { goldenSetDatasetId, VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /** The golden set as `/admin/app/voice` renders it. */
 export interface GoldenSetAdminView {
@@ -57,7 +58,7 @@ export async function getGoldenSetAdminView(
 
   const [cases, control] = await Promise.all([
     client.aiDatasetCase.findMany({
-      where: { datasetId: goldenSetDatasetId(pointer.version) },
+      where: { datasetId: goldenSetDatasetId(pointer.version, requireOrgId()) },
       orderBy: { position: 'asc' },
       select: { position: true, input: true, metadata: true },
     }),

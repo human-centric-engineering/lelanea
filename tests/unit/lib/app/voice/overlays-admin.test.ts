@@ -38,6 +38,9 @@ import type { OverlayEdit } from '@/lib/validations/app-voice-content';
 
 const EDITOR = 'editor-id';
 
+/** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
+const stored = () => db.current!.client as unknown as PrismaClient;
+
 beforeEach(async () => {
   db.current = createContentDbFake();
   await seedVoiceOverlays(buildVoiceOverlaySeed(), db.current.client as unknown as PrismaClient);
@@ -224,6 +227,54 @@ describe('saves', () => {
   });
 });
 
+// t-114: the set and each overlay are found by their name first, and their
+// revisions by the generated id that read returns. These are the paths where
+// the name finds nothing.
+describe('history and restore, when the name finds nothing', () => {
+  it('lists the set history, and none on a database that was never seeded', async () => {
+    expect((await overlays.listOverlaySetHistory()).map((entry) => entry.revision)).toEqual([1]);
+
+    db.current = createContentDbFake();
+    expect(await overlays.listOverlaySetHistory()).toEqual([]);
+  });
+
+  it('lists one overlay history, and refuses a situation nobody holds', async () => {
+    expect((await overlays.listOverlayHistory('discovery')).map((entry) => entry.revision)).toEqual(
+      [1]
+    );
+    await expect(overlays.listOverlayHistory('nowhere')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('refuses to restore a revision the set or an overlay never had', async () => {
+    await expect(overlays.restoreOverlaySetRevision(99, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(overlays.restoreOverlayRevision('discovery', 99, 1, EDITOR)).rejects.toMatchObject(
+      { status: 404 }
+    );
+    await expect(overlays.restoreOverlayRevision('nowhere', 1, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('refuses the set revision on a database that was never seeded', async () => {
+    db.current = createContentDbFake();
+    await expect(overlays.restoreOverlaySetRevision(1, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('plans an import into a database that was never seeded as a refusal, writing nothing', async () => {
+    const file = await overlays.exportOverlaysFile();
+    db.current = createContentDbFake();
+
+    const preview = await overlays.previewOverlaysImport(file, false);
+
+    expect(preview.refusals.length).toBeGreaterThan(0);
+    expect(db.current.rows('appVoiceOverlaySet')).toEqual([]);
+  });
+});
+
 describe('deleting a situation', () => {
   it('names the seat that selects it, and closes the gap in the order', async () => {
     const { revision } = await editOf('first-meeting');
@@ -358,5 +409,330 @@ describe('the file round-trip', () => {
       details: { reason: 'import_refused' },
     });
     expect(db.current!.fingerprint()).toBe(before);
+  });
+});
+
+describe('an unseeded database', () => {
+  it('reports itself plainly, with nothing to edit', async () => {
+    db.current = createContentDbFake();
+
+    expect(await overlays.getOverlaysAdminView()).toEqual({
+      seeded: false,
+      unservable: null,
+      set: null,
+      overlays: [],
+    });
+  });
+
+  it('refuses to save, sign off, or add to the set', async () => {
+    db.current = createContentDbFake();
+    const blank = {
+      exemplars: {
+        heading: 'h',
+        originLabel: 'o',
+        lines: ['l'],
+        noneFoundNote: 'n',
+        unavailableNote: 'u',
+      },
+      coreOnly: { heading: 'h', lines: ['l'] },
+    };
+
+    await expect(overlays.updateOverlaySet(blank, 1, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'not_seeded' },
+    });
+    await expect(overlays.signOffOverlaySet(1, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'not_seeded' },
+    });
+    await expect(
+      overlays.createOverlay(
+        {
+          situation: 'grief',
+          label: 'Grief',
+          when: 'w',
+          heading: 'h',
+          lines: ['l'],
+          exemplarQuery: 'q',
+        },
+        EDITOR
+      )
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'not_seeded' } });
+    await expect(overlays.exportOverlaysFile()).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'nothing_to_export' },
+    });
+  });
+});
+
+describe('a stored row the schemas no longer accept', () => {
+  it('marks the set unservable and its fields unreadable, but still lists the overlays', async () => {
+    const setRow = db.current!.rows('appVoiceOverlaySet')[0];
+    await stored().appVoiceOverlaySet.update({
+      where: { id: String(setRow.id) },
+      data: { coreOnly: { heading: '', lines: ['x'] } },
+    });
+
+    const view = await overlays.getOverlaysAdminView();
+
+    expect(view.seeded).toBe(true);
+    expect(view.unservable).toMatch(/failed validation on read/);
+    expect(view.set).toBeNull();
+    expect(view.overlays).toHaveLength(4);
+  });
+
+  it('refuses to export overlays when a stored row no longer fits the file schema', async () => {
+    const overlayRow = db.current!.rows('appVoiceOverlay')[0];
+    await stored().appVoiceOverlay.update({
+      where: { id: String(overlayRow.id) },
+      data: { label: '' },
+    });
+
+    await expect(overlays.exportOverlaysFile()).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'unexportable' },
+    });
+  });
+
+  it('plans a wholesale replace of the set’s framing when its stored JSON no longer parses', async () => {
+    const file = await overlays.exportOverlaysFile();
+    const setRow = db.current!.rows('appVoiceOverlaySet')[0];
+    await stored().appVoiceOverlaySet.update({
+      where: { id: String(setRow.id) },
+      data: { coreOnly: { heading: '', lines: ['x'] } },
+    });
+
+    const preview = await overlays.previewOverlaysImport(file, false);
+
+    const section = preview.sections.find((s) => s.entity === 'set')!;
+    expect(section.updates[0].changedFields).toEqual([
+      'title',
+      'version',
+      'locale',
+      'provenance',
+      'exemplars',
+      'coreOnly',
+    ]);
+  });
+});
+
+describe('the set’s framing, on its own', () => {
+  it('refuses a save against a revision that has moved', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.updateOverlaySet(
+      { exemplars: set.exemplars, coreOnly: { heading: 'First', lines: ['First'] } },
+      set.revision,
+      EDITOR
+    );
+
+    await expect(
+      overlays.updateOverlaySet(
+        { exemplars: set.exemplars, coreOnly: { heading: 'Second', lines: ['Second'] } },
+        set.revision,
+        EDITOR
+      )
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'revision_moved' } });
+  });
+
+  it('writes nothing when nothing changed', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    const before = db.current!.fingerprint();
+
+    const outcome = await overlays.updateOverlaySet(
+      { exemplars: set.exemplars, coreOnly: set.coreOnly },
+      set.revision,
+      EDITOR
+    );
+
+    expect(outcome.changed).toEqual([]);
+    expect(db.current!.fingerprint()).toBe(before);
+  });
+
+  it('restores an earlier revision as a new one, in draft', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.updateOverlaySet(
+      { exemplars: set.exemplars, coreOnly: { heading: 'Changed heading', lines: ['Changed'] } },
+      set.revision,
+      EDITOR
+    );
+
+    const outcome = await overlays.restoreOverlaySetRevision(1, set.revision + 1, EDITOR);
+
+    expect(outcome).toMatchObject({ status: 'draft', revision: set.revision + 2 });
+    const after = (await overlays.getOverlaysAdminView()).set!;
+    expect(after.coreOnly).toEqual(set.coreOnly);
+  });
+
+  it('refuses to sign off against a revision that has moved', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.updateOverlaySet(
+      { exemplars: set.exemplars, coreOnly: { heading: 'Changed', lines: ['Changed'] } },
+      set.revision,
+      EDITOR
+    );
+
+    await expect(overlays.signOffOverlaySet(set.revision, EDITOR)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'revision_moved' },
+    });
+  });
+
+  it('signing off twice is a no-op the second time', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    const first = await overlays.signOffOverlaySet(set.revision, EDITOR);
+
+    const second = await overlays.signOffOverlaySet(first.revision, EDITOR);
+
+    expect(second).toMatchObject({ changed: [], status: 'signed_off', revision: first.revision });
+    expect(await overlays.listOverlaySetHistory()).toHaveLength(2);
+  });
+});
+
+describe('one overlay, edge cases', () => {
+  it('refuses to update, sign off, or delete a situation nobody holds', async () => {
+    const { edit } = await editOf('values');
+
+    await expect(overlays.updateOverlay('nowhere', edit, 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(overlays.signOffOverlay('nowhere', 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(overlays.deleteOverlay('nowhere', 1, EDITOR)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('signing one overlay off twice is a no-op the second time', async () => {
+    const { revision } = await editOf('values');
+    const first = await overlays.signOffOverlay('values', revision, EDITOR);
+
+    const second = await overlays.signOffOverlay('values', first.revision, EDITOR);
+
+    expect(second).toMatchObject({ changed: [], status: 'signed_off', revision: first.revision });
+  });
+});
+
+describe('adding a situation directly', () => {
+  it('positions the first overlay at 1 when the set has none yet', async () => {
+    await stored().appVoiceOverlay.deleteMany({ where: {} });
+
+    const created = await overlays.createOverlay(
+      {
+        situation: 'first-ever',
+        label: 'First ever',
+        when: 'w',
+        heading: 'h',
+        lines: ['l'],
+        exemplarQuery: 'q',
+      },
+      EDITOR
+    );
+
+    expect(created).toEqual({ situation: 'first-ever', position: 1 });
+  });
+
+  it('treats a duplicate insert that slips past the check as the situation being taken', async () => {
+    interface CreateDelegate {
+      create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+    }
+    const overlayTable = db.current!.client.appVoiceOverlay as CreateDelegate;
+    const createSpy = vi
+      .spyOn(overlayTable, 'create')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+      );
+
+    await expect(
+      overlays.createOverlay(
+        {
+          situation: 'brand-new',
+          label: 'L',
+          when: 'w',
+          heading: 'h',
+          lines: ['l'],
+          exemplarQuery: 'q',
+        },
+        EDITOR
+      )
+    ).rejects.toMatchObject({ status: 409, details: { reason: 'exists' } });
+
+    createSpy.mockRestore();
+  });
+});
+
+describe('a set-level change through the file round-trip', () => {
+  it('previews a set-level change as its own section', async () => {
+    const file = await overlays.exportOverlaysFile();
+    const changed = { ...file, fingerprint: { ...file.fingerprint, title: 'A retitled set' } };
+
+    const preview = await overlays.previewOverlaysImport(changed, false);
+
+    expect(preview.sections.find((s) => s.entity === 'set')).toMatchObject({
+      updates: [{ changedFields: ['title'] }],
+    });
+  });
+
+  it('applies a set-level change: writes the pointer and its revision', async () => {
+    const before = (await overlays.getOverlaysAdminView()).set!;
+    const file = await overlays.exportOverlaysFile();
+    const changed = { ...file, fingerprint: { ...file.fingerprint, title: 'A retitled set' } };
+
+    await overlays.applyOverlaysImport(changed, false, EDITOR);
+
+    const after = (await overlays.getOverlaysAdminView()).set!;
+    expect(after).toMatchObject({
+      title: 'A retitled set',
+      revision: before.revision + 1,
+      status: 'draft',
+    });
+    const [latest] = await overlays.listOverlaySetHistory();
+    expect(latest.changedFields).toEqual(['title']);
+  });
+
+  it('appends a status flip to the history when a set-level import lands on a signed-off set', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.signOffOverlaySet(set.revision, EDITOR);
+    const file = await overlays.exportOverlaysFile();
+    const changed = { ...file, fingerprint: { ...file.fingerprint, title: 'A retitled set' } };
+
+    await overlays.applyOverlaysImport(changed, false, EDITOR);
+
+    expect((await overlays.getOverlaysAdminView()).set!.status).toBe('draft');
+    const [latest] = await overlays.listOverlaySetHistory();
+    expect(latest.changedFields).toEqual(['title', 'status']);
+  });
+
+  it('creates a new overlay from an import that adds a situation the store does not have', async () => {
+    const file = await overlays.exportOverlaysFile();
+    const withNew = {
+      ...file,
+      overlays: [
+        ...file.overlays,
+        {
+          situation: 'grief',
+          label: 'Grief',
+          when: 'Someone has lost someone.',
+          heading: 'Register for this moment — grief',
+          lines: ['Stay.'],
+          exemplarQuery: 'loss, grief',
+        },
+      ],
+    };
+
+    await overlays.applyOverlaysImport(withNew, false, EDITOR);
+
+    const created = (await overlays.getOverlaysAdminView()).overlays.find(
+      (o) => o.situation === 'grief'
+    );
+    expect(created).toMatchObject({ status: 'draft', revision: 1, position: 5 });
+  });
+});
+
+describe('overlaysExportFilename', () => {
+  it('names the export file by the date', () => {
+    expect(overlays.overlaysExportFilename(new Date('2026-03-04T12:00:00Z'))).toBe(
+      'lelanea-voice-overlays-2026-03-04.json'
+    );
   });
 });

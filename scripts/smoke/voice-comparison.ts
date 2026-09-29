@@ -56,6 +56,7 @@ import {
 } from '@/lib/app/voice/golden-set';
 import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { serviceAccountWhere } from '@/lib/auth/account';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 async function dbReachable(): Promise<boolean> {
   try {
@@ -86,7 +87,7 @@ async function main(): Promise<void> {
     );
 
     // ---- The dataset the seed left behind --------------------------------
-    const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+    const datasetId = goldenSetDatasetId(goldenSet.collection.version, requireOrgId());
     const dataset = await prisma.aiDataset.findUnique({
       where: { id: datasetId },
       select: { id: true, caseCount: true, contentHash: true },

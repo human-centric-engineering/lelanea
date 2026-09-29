@@ -140,7 +140,7 @@ export const storedCoreOnlySchema = z.strictObject({ heading: nonEmpty, lines: b
 // ============================================================================
 
 export interface VoiceOverlaySetRow {
-  id: string;
+  slug: string;
   title: string;
   version: string;
   locale: string;
@@ -204,21 +204,21 @@ export function toVoiceOverlays(
   const coreOnly = storedCoreOnlySchema.safeParse(set.coreOnly);
   const status = statusSchema.safeParse(set.status);
   if (!provenance.success || !exemplars.success || !coreOnly.success || !status.success) {
-    throw new Error(`Voice overlay set "${set.id}" failed validation on read`);
+    throw new Error(`Voice overlay set "${set.slug}" failed validation on read`);
   }
 
   const overlays = [...overlayRows].sort((a, b) => a.position - b.position).map(toVoiceOverlay);
   const seen = new Set<string>();
   for (const overlay of overlays) {
     if (seen.has(overlay.situation)) {
-      throw new Error(`Voice overlay set "${set.id}": "${overlay.situation}" is listed twice`);
+      throw new Error(`Voice overlay set "${set.slug}": "${overlay.situation}" is listed twice`);
     }
     seen.add(overlay.situation);
   }
 
   return {
     collection: {
-      id: set.id,
+      id: set.slug,
       title: set.title,
       version: set.version,
       locale: set.locale,

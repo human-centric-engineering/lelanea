@@ -37,6 +37,7 @@ import {
   type VoiceOverlays,
 } from '@/lib/app/content/voice-overlay-view';
 import type { VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-view';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 /**
  * The one set there is, re-exported so this module stays its import path.
@@ -62,8 +63,8 @@ export { VOICE_OVERLAY_SET_ID };
  * @throws ContentNotSeededError when the seed has not run.
  */
 export async function getVoiceOverlays(): Promise<VoiceOverlays> {
-  const set = await defaultClient.appVoiceOverlaySet.findUnique({
-    where: { id: VOICE_OVERLAY_SET_ID },
+  const set = await defaultClient.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
     include: { overlays: { orderBy: { position: 'asc' } } },
   });
   if (!set) {
@@ -116,19 +117,19 @@ export async function seedVoiceOverlays(
   seed: VoiceOverlaySeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedVoiceOverlaysResult> {
-  const existing = await client.appVoiceOverlaySet.findUnique({
-    where: { id: seed.set.id },
+  const existing = await client.appVoiceOverlaySet.findFirst({
+    where: { slug: seed.set.slug },
     select: { id: true },
   });
   if (existing) {
     return {
       status: 'skipped',
-      overlays: await client.appVoiceOverlay.count({ where: { setId: seed.set.id } }),
+      overlays: await client.appVoiceOverlay.count({ where: { setId: existing.id } }),
     };
   }
 
   const now = new Date();
-  const { id: setId, ...setText } = seed.set;
+  const { slug: setSlug, ...setText } = seed.set;
   // Validated again at the write, not just when the seed was built.
   const framing = {
     ...setText,
@@ -138,40 +139,57 @@ export async function seedVoiceOverlays(
   };
   const provenance = { origin: 'seed' as const, editorId: null, changedAt: now };
 
-  await client.$transaction([
-    client.appVoiceOverlaySet.create({
-      data: { id: setId, ...framing, status: 'draft', revision: 1, createdAt: now, updatedAt: now },
-    }),
-    client.appVoiceOverlay.createMany({
-      data: seed.overlays.map((overlay) => ({
-        ...overlay,
-        setId,
-        status: 'draft' as const,
+  await client.$transaction(async (tx) => {
+    const set = await tx.appVoiceOverlaySet.create({
+      data: {
+        slug: setSlug,
+        ...framing,
+        status: 'draft',
         revision: 1,
         createdAt: now,
         updatedAt: now,
-      })),
-    }),
-    client.appVoiceOverlaySetRevision.create({
+      },
+      select: { id: true },
+    });
+    const overlayId = idsBySlug(
+      (
+        await tx.appVoiceOverlay.createManyAndReturn({
+          data: seed.overlays.map((overlay) => ({
+            ...overlay,
+            setSlug,
+            setId: set.id,
+            status: 'draft' as const,
+            revision: 1,
+            createdAt: now,
+            updatedAt: now,
+          })),
+          select: { id: true, situation: true },
+        })
+      ).map(({ id, situation }) => ({ id, slug: situation })),
+      'voice overlay'
+    );
+    await tx.appVoiceOverlaySetRevision.create({
       data: {
-        setId,
+        setSlug,
+        setId: set.id,
         revision: 1,
         ...framing,
         status: 'draft',
         changedFields: [...VOICE_OVERLAY_SET_SNAPSHOT_FIELDS],
         ...provenance,
       },
-    }),
-    client.appVoiceOverlayRevision.createMany({
+    });
+    await tx.appVoiceOverlayRevision.createMany({
       data: seed.overlays.map((overlay) => ({
         ...overlay,
+        overlayId: overlayId(overlay.situation),
         revision: 1,
         status: 'draft' as const,
         changedFields: [...VOICE_OVERLAY_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-  ]);
+    });
+  });
 
   return { status: 'seeded', overlays: seed.overlays.length };
 }

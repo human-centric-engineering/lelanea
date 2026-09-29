@@ -10,7 +10,7 @@
  *
  * It holds the POINTER and the PROVENANCE, and nothing else (`fp4`). The
  * prompts are `AiDatasetCase` rows under
- * `goldenSetDatasetId(version)`; the control's system instructions are columns
+ * `goldenSetDatasetId(version, orgId)`; the control's system instructions are columns
  * on the control agent. Both are written by
  * `prisma/seeds/app-lelanea/004-voice-golden-set.ts` and both are already read
  * back from the database by `comparison-admin.ts`. Copying either into a table
@@ -46,7 +46,7 @@ export const VOICE_GOLDEN_SET_ID = 'lelanea_voice_golden_set';
 export interface VoiceGoldenSetPointer {
   id: string;
   title: string;
-  /** The authored version. `goldenSetDatasetId(version)` is the dataset it names. */
+  /** The authored version. `goldenSetDatasetId(version, orgId)` is the dataset it names. */
   version: string;
   locale: string;
   provenance: VoiceProvenance;
@@ -74,8 +74,8 @@ const statusSchema = z.enum(['draft', 'signed_off']);
 export async function getGoldenSetPointer(
   client: TenancyClient = defaultClient
 ): Promise<VoiceGoldenSetPointer> {
-  const row = await client.appVoiceGoldenSet.findUnique({
-    where: { id: VOICE_GOLDEN_SET_ID },
+  const row = await client.appVoiceGoldenSet.findFirst({
+    where: { slug: VOICE_GOLDEN_SET_ID },
   });
   if (!row) {
     throw new ContentNotSeededError(
@@ -86,10 +86,10 @@ export async function getGoldenSetPointer(
   const provenance = storedProvenanceSchema.safeParse(row.provenance);
   const status = statusSchema.safeParse(row.status);
   if (!provenance.success || !status.success) {
-    throw new Error(`Golden set "${row.id}" failed validation on read`);
+    throw new Error(`Golden set "${row.slug}" failed validation on read`);
   }
   return {
-    id: row.id,
+    id: row.slug,
     title: row.title,
     version: row.version,
     locale: row.locale,
@@ -126,8 +126,8 @@ export async function seedGoldenSetPointer(
   seed: GoldenSetSeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedGoldenSetResult> {
-  const existing = await client.appVoiceGoldenSet.findUnique({
-    where: { id: seed.id },
+  const existing = await client.appVoiceGoldenSet.findFirst({
+    where: { slug: seed.id },
     select: { version: true },
   });
   if (existing) return { status: 'skipped', version: existing.version };
@@ -136,13 +136,15 @@ export async function seedGoldenSetPointer(
   const { id, ...text } = seed;
   const framing = { ...text, provenance: storedProvenanceSchema.parse(text.provenance) };
 
-  await client.$transaction([
-    client.appVoiceGoldenSet.create({
-      data: { id, ...framing, status: 'draft', revision: 1, createdAt: now, updatedAt: now },
-    }),
-    client.appVoiceGoldenSetRevision.create({
+  await client.$transaction(async (tx) => {
+    const set = await tx.appVoiceGoldenSet.create({
+      data: { slug: id, ...framing, status: 'draft', revision: 1, createdAt: now, updatedAt: now },
+      select: { id: true },
+    });
+    await tx.appVoiceGoldenSetRevision.create({
       data: {
-        setId: id,
+        setSlug: id,
+        setId: set.id,
         revision: 1,
         ...framing,
         status: 'draft',
@@ -151,8 +153,8 @@ export async function seedGoldenSetPointer(
         editorId: null,
         changedAt: now,
       },
-    }),
-  ]);
+    });
+  });
 
   return { status: 'seeded' };
 }

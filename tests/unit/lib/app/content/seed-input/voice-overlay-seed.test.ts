@@ -26,8 +26,12 @@ import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';
 
-function migrationSql(): string {
-  return readFileSync(path.join(process.cwd(), MIGRATION), 'utf8');
+/** t-114: moved the set's authored name from `id` into `slug`. */
+const PER_ORG_KEYS_MIGRATION =
+  'prisma/migrations/20261004100100_app_voice_crisis_budget_per_org_keys/migration.sql';
+
+function migrationSql(file: string = MIGRATION): string {
+  return readFileSync(path.join(process.cwd(), file), 'utf8');
 }
 
 describe('the authored overlays', () => {
@@ -79,7 +83,7 @@ describe('what the seed builds', () => {
     // lowercase slug — and `seedVoiceOverlays` keys write-once off
     // `seed.set.id`, not an empty table. So a rename in the file seeded a
     // second, unreadable set row and reported success while every turn threw.
-    expect(seed.set.id).toBe(VOICE_OVERLAY_SET_ID);
+    expect(seed.set.slug).toBe(VOICE_OVERLAY_SET_ID);
 
     // Proved against a file whose `fingerprint.id` is something else, so this
     // cannot pass by the two merely agreeing today.
@@ -87,7 +91,7 @@ describe('what the seed builds', () => {
       ...readVoiceOverlaysFile(),
       fingerprint: { ...readVoiceOverlaysFile().fingerprint, id: 'renamed_by_an_editor' },
     });
-    expect(renamed.set.id).toBe(VOICE_OVERLAY_SET_ID);
+    expect(renamed.set.slug).toBe(VOICE_OVERLAY_SET_ID);
   });
 
   it("carries the file's `when` across as the reviewer note", () => {
@@ -142,7 +146,20 @@ describe('the data migration', () => {
     const match = /\$t88overlays\$([\s\S]*?)\$t88overlays\$/.exec(migrationSql());
 
     expect(match, 'the migration no longer embeds the overlay seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildVoiceOverlaySeed());
+    // The t-88 migration wrote the set's name into `id`; t-114 carried it into
+    // `slug` (and gave the row a generated id). So what the seed builds today
+    // is the embedded JSON with that one key moved, and nothing else changed.
+    const embedded = JSON.parse(match![1]) as {
+      set: Record<string, unknown> & { id: string };
+      overlays: unknown[];
+    };
+    const { id: authoredName, ...setText } = embedded.set;
+    expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual(
+      buildVoiceOverlaySeed()
+    );
+    expect(migrationSql(PER_ORG_KEYS_MIGRATION)).toContain(
+      'UPDATE "app_voice_overlay_set" SET "slug" = "id";'
+    );
   });
 
   it('records the same changed fields the service records', async () => {

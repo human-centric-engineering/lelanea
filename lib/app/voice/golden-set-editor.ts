@@ -6,7 +6,7 @@
  * ## Where the words live
  *
  * The prompts are the platform's `AiDatasetCase` rows under
- * `goldenSetDatasetId(pointer.version)`, with `key`, `kind` and `probe` in each
+ * `goldenSetDatasetId(pointer.version, orgId)`, with `key`, `kind` and `probe` in each
  * case's `metadata` — the shape seed 004 writes, kept exactly so the dataset's
  * `contentHash` means the same thing whoever wrote it. Every write here
  * recomputes that hash and the case count, because a comparison records the
@@ -74,6 +74,7 @@ import {
 import { goldenSetDatasetId, VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
 import { hashDatasetCases } from '@/lib/orchestration/evaluations/datasets/hash';
 import type { GoldenPromptEdit } from '@/lib/validations/app-voice-content';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 type Client = Pick<
@@ -205,9 +206,11 @@ function assertCoverage(prompts: readonly GoldenPrompt[]): void {
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
 async function readCurrent(client: Client) {
-  const pointer = await client.appVoiceGoldenSet.findUnique({ where: { id: VOICE_GOLDEN_SET_ID } });
+  const pointer = await client.appVoiceGoldenSet.findFirst({
+    where: { slug: VOICE_GOLDEN_SET_ID },
+  });
   if (!pointer) return null;
-  const datasetId = goldenSetDatasetId(pointer.version);
+  const datasetId = goldenSetDatasetId(pointer.version, requireOrgId());
   const [dataset, cases, runCount] = await Promise.all([
     client.aiDataset.findUnique({ where: { id: datasetId } }),
     client.aiDatasetCase.findMany({
@@ -245,11 +248,12 @@ export async function getGoldenSetEditorView(): Promise<GoldenSetEditorView> {
     if (prompt) prompts.push(prompt);
     else malformed.push(row.position);
   }
+  const prefix = goldenSetDatasetId('', requireOrgId());
   const versions = await prisma.aiDataset.findMany({
-    where: { id: { startsWith: goldenSetDatasetId('') } },
+    where: { id: { startsWith: prefix } },
     select: { id: true },
   });
-  const taken = new Set(versions.map((row) => row.id.slice(goldenSetDatasetId('').length)));
+  const taken = new Set(versions.map((row) => row.id.slice(prefix.length)));
   return {
     seeded: dataset !== null,
     pointer: {
@@ -412,7 +416,7 @@ export async function startNewGoldenSetVersion(
     if (pointer.revision !== revisionRead)
       throw revisionMoved('The golden set', pointer.revision, revisionRead);
 
-    const prefix = goldenSetDatasetId('');
+    const prefix = goldenSetDatasetId('', requireOrgId());
     const existing = await tx.aiDataset.findMany({
       where: { id: { startsWith: prefix } },
       select: { id: true },
@@ -421,7 +425,7 @@ export async function startNewGoldenSetVersion(
       pointer.version,
       new Set(existing.map((row) => row.id.slice(prefix.length)))
     );
-    const datasetId = goldenSetDatasetId(version);
+    const datasetId = goldenSetDatasetId(version, requireOrgId());
 
     // Copied as stored, so a case this editor could not parse is carried over
     // rather than dropped: the new version asks exactly what the old one did.
@@ -447,13 +451,14 @@ export async function startNewGoldenSetVersion(
 
     const revision = pointer.revision + 1;
     const { count } = await tx.appVoiceGoldenSet.updateMany({
-      where: { id: VOICE_GOLDEN_SET_ID, revision: revisionRead },
+      where: { id: pointer.id, revision: revisionRead },
       data: { version, status: 'draft', signedOffAt: null, revision },
     });
     if (count === 0) throw revisionMoved('The golden set', revision, revisionRead);
     await tx.appVoiceGoldenSetRevision.create({
       data: {
-        setId: VOICE_GOLDEN_SET_ID,
+        setSlug: pointer.slug,
+        setId: pointer.id,
         revision,
         title: pointer.title,
         version,
@@ -494,7 +499,7 @@ export async function exportGoldenSetFile(): Promise<VoiceGoldenSetFile> {
   const { pointer, dataset } = current;
   const file = {
     goldenSet: {
-      id: pointer.id,
+      id: pointer.slug,
       title: pointer.title,
       layer: 'golden-set',
       version: pointer.version,
@@ -568,9 +573,9 @@ export function planGoldenSetImport(
   if (!current?.dataset) {
     refusals.push('The golden set has not been seeded, so there is nothing to import into.');
   } else {
-    if (file.goldenSet.id !== current.pointer.id) {
+    if (file.goldenSet.id !== current.pointer.slug) {
       refusals.push(
-        `This file is for the set "${file.goldenSet.id}", and this install holds "${current.pointer.id}".`
+        `This file is for the set "${file.goldenSet.id}", and this install holds "${current.pointer.slug}".`
       );
     }
     if (file.goldenSet.version !== current.pointer.version) {
@@ -677,7 +682,7 @@ export function planGoldenSetImport(
       entity: 'set',
       label: 'The set’s title and provenance',
       creates: [],
-      updates: [{ key: current.pointer.id, changedFields: pointerChanged }],
+      updates: [{ key: current.pointer.slug, changedFields: pointerChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -757,12 +762,13 @@ export async function applyGoldenSetImport(
           provenance: file.goldenSet.provenance,
         };
         await tx.appVoiceGoldenSet.update({
-          where: { id: VOICE_GOLDEN_SET_ID },
+          where: { id: current.pointer.id },
           data: { ...words, status: 'draft', signedOffAt: null, revision },
         });
         await tx.appVoiceGoldenSetRevision.create({
           data: {
-            setId: VOICE_GOLDEN_SET_ID,
+            setSlug: current.pointer.slug,
+            setId: current.pointer.id,
             revision,
             ...words,
             status: 'draft',
