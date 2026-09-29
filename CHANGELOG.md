@@ -16,6 +16,265 @@ release process.
 
 ## [Unreleased]
 
+### Added
+
+- **Every install has an org, and every user belongs to one** (multi-tenancy
+  §106, first task). Two published model interfaces in a new
+  `prisma/schema/tenancy.prisma`: `Org` (`slug`, `name`, `status`
+  `ACTIVE|SUSPENDED`, `settings`) and `OrgMembership` (`role`
+  `OWNER|ADMIN|MEMBER`, unique on `(orgId, userId)`, both FKs cascade), with
+  the client-safe vocabulary in `lib/tenancy/roles.ts` (`ORG_ROLES`,
+  `orgAdministers()`) and the install org's fixed identity in
+  `lib/tenancy/constants.ts` (`INSTALL_ORG_ID`). One migration,
+  `20260917120000_org_identity`, creates the tables, inserts the install org,
+  makes every existing user a member — a real platform admin as `OWNER`,
+  everyone else (the SERVICE config-owner included) as `MEMBER` — and adds a
+  nullable, backfilled `orgId` to `AiApiKey`, `AiAgentEmbedToken`,
+  `AiAgentInviteToken` and `McpApiKey` (an `admin`-scoped API key stays
+  `NULL`: it is a platform credential) plus `Session.activeOrgId`, wired by
+  the next bullet.
+  `userCreateAfterHook` gives every later user a membership (non-blocking,
+  logged at error on failure; the session path self-heals it in t-670), and
+  the `001-system-owner` seed gives the config-owner one on a fresh install.
+  `OrgMembership` is an `export` source and `Org` an `attribution` source in
+  `SUBJECT_DATA_SOURCES`; `npm run smoke:tenancy` proves the invariant against
+  a real database. Behaviour at `TENANCY_MODE=single` is unchanged (the
+  third bullet below says how the guards and the policy read these rows
+  without changing a single-tenant answer). Fork note: the role-literal guard
+  (`tests/unit/auth-role-literals.test.ts`) now also polices `'OWNER'` /
+  `'MEMBER'` outside `lib/tenancy/roles.ts`; the org-role enum is closed —
+  product tiers belong beneath the org, on your side of the FK. Guide:
+  [`.context/tenancy/identity.md`](./.context/tenancy/identity.md).
+- **A session knows which org it acts in, a user can switch between theirs,
+  and an invitation can name one** (multi-tenancy §106, second task).
+  `Session.activeOrgId` is now a better-auth session `additionalField`
+  (`input: false` — server-written only; the public `/update-session`
+  refuses it) chosen by a new `sessionCreateBeforeHook` at every sign-in: the
+  user's only org, else the install org if they belong to it, else the most
+  recently joined — and a user with **no membership at all** is given the
+  install-org default right there (the self-heal t-669 promised). It reaches
+  `AuthSession.session` (`lib/auth/guards.ts`, optional so hand-built
+  sessions still compile), the inferred server type, and `useSession()` on the
+  client. New endpoint `POST /api/v1/orgs/switch` `{ orgId }` (`API.ORGS.SWITCH`)
+  verifies membership, writes the row and re-issues the cookie cache; API-key
+  callers are refused. `invitationMetadataSchema` gains optional `orgId` /
+  `orgRole` and `POST /api/v1/users/invite` accepts both (the org must exist
+  and be active; the authorization policy is asked `canAdminister` about it —
+  platform admins only today, since `withAdminAuth` admits nobody else). The membership a new user
+  gets is one function, `membershipForNewUser(user, invitation)` in
+  `lib/tenancy/membership.ts`: the install org by the role rule on the role
+  the invitation **grants** (so an invited platform ADMIN now owns the install
+  org — the gap t-669 documented), or the named org with its `orgRole`, where
+  **the first member of a new org is its `OWNER`**. `runInvitedSignup` takes
+  the invitation as a second argument. `@better-auth/core` moves from
+  devDependencies to dependencies (same exact pin): the hooks share the
+  membership through its request state (`lib/auth/pending-signup.ts`).
+  Behaviour at `TENANCY_MODE=single` is unchanged: with one org and no
+  invitation metadata every session flow writes the same rows plus one
+  populated column, and every pending invitation round-trips as before.
+- **A request knows which org it is acting for, and the admin decision can
+  read it** (multi-tenancy §106, third task — the gating PR for the phase).
+  Three additions to the public surface:
+  - **The tenant context** — `lib/tenancy/context.ts`: `getTenantContext()`,
+    `requireTenantContext()` (throws at `multi` when nothing entered a
+    context; answers the install org, marked `implicit`, at `single`),
+    `runAsOrg(orgId, fn)`, `runAsSystem(reason, fn)` (logged) and
+    `forEachOrg(fn)` (one scope per active org, sequential; uncalled in core
+    until §108). Both guards enter it for every request they admit — from
+    `session.activeOrgId`, the API key's org, or the resolver header below —
+    verifying membership and org status wherever a non-install org is named
+    (a refusal is a 403 that names nothing), and run the handler inside it.
+    The guard-less webhook trigger enters its key's org the same way. An
+    `admin`-scoped key is a platform credential and enters none.
+    `getRequestContext()` / `getFullContext()` now carry `orgId` (a new
+    `LogContext` field) inside a scope.
+  - **A new fork seam**, `lib/app/tenant-resolver.ts` →
+    `registerAppTenantResolver()`, wired by `proxy.ts` at module scope, and a
+    new request-header contract: the proxy writes `x-sunrise-org` from the
+    fork's resolver (`registerTenantResolver()` in `lib/tenancy/resolver.ts`,
+    Web-standard only) and **strips any inbound copy** when there is no
+    answer — the proxy is the header's sole writer, the visitor-id shape.
+    Ships empty; `defaults.test.ts` and `fork-init-seams.test.ts` (registrar
+    count 3→4, `proxy.ts` a consumer) enforce it.
+  - **The policy reads the org.** `AuthorizationPrincipal` gains `orgId?` /
+    `orgRole?` (filled by the guard — told, not sniffed) and the guards pass
+    `{ org }` as `scope`. `DEFAULT_AUTHORIZATION_POLICY.canAdminister` grants
+    an org `OWNER`/`ADMIN` a resource that carries **their** org, and
+    `canRead`'s `'unattributed'` arm admits them to the `this-row` of one —
+    answered before the once-per-kind diagnostic. A `null` resource, or one
+    without an `orgId`, still grants nothing (platform-ops surfaces stay
+    platform-only); the capability question stays platform-only until §107
+    scopes ownerless reads by org. `resolveApiKey()` returns the key's
+    `orgId` and `ownerAccountType` (optional in the type — a test double
+    built before the org axis still compiles).
+
+  Behaviour at `TENANCY_MODE=single` is unchanged, by construction and by
+  sweep: the install org is entered with **no membership read** (its role is
+  the platform role projected by the same rule the migration and the signup
+  hook apply), no core route that predates the next bullet names an
+  org-carrying resource so the org arm cannot fire on any of them, and
+  `authorization-org.test.ts` asserts every principal × every question those
+  routes can ask answers identically with and without org facts, on both
+  policies. Fork note: a policy that compares `resource.orgId ===
+  viewer.orgId` must guard the resource side — both `undefined` compares
+  equal. Guide: [`.context/tenancy/context.md`](./.context/tenancy/context.md).
+- **An org can be created, suspended, exported and erased, and its members
+  managed, without touching its members' other orgs** (multi-tenancy §106,
+  fourth task). Two documented API surfaces and two privacy entry points:
+  - **The org API** ([`.context/api/org-endpoints.md`](./.context/api/org-endpoints.md)).
+    Member view, `withAuth`: `GET /api/v1/orgs` (my memberships, marks the
+    active one; like the switch it does **not** enter the session's org, so a
+    member of a suspended org can still find the way out), `GET
+    /api/v1/orgs/[id]` (any member), `GET/POST /api/v1/orgs/[id]/members` and
+    `PATCH/DELETE /api/v1/orgs/[id]/members/[userId]` — admitted by the
+    policy's org arm (the org's own `OWNER`/`ADMIN` **while acting in it**, or
+    a platform admin; no role check in the routes), mutations browser-session
+    only. Platform view, `withAdminAuth`: `GET/POST /api/v1/admin/orgs`,
+    `GET/PATCH/DELETE /api/v1/admin/orgs/[id]` (rename, re-slug, suspend,
+    reinstate; erase), `GET /api/v1/admin/orgs/[id]/export`. Constants under
+    `API.ORGS` / `API.ADMIN`. The rules live once, in `lib/tenancy/lifecycle.ts`,
+    and every refusal carries a `code`: the install org can be renamed but
+    never suspended, re-slugged or deleted (`INSTALL_ORG_IMMUTABLE`); an org
+    keeps at least one `OWNER` (`LAST_OWNER`); only an OWNER — or a platform
+    admin — may grant `OWNER`, change an OWNER's role or remove an OWNER
+    (`OWNER_STANDING`, so an ADMIN cannot take the org from their appointer);
+    the install org's memberships follow the platform role and cannot be
+    edited or removed through the members API (`INSTALL_ORG_MEMBERSHIP`);
+    removing a member revokes their sessions acting in that org
+    (`revokeUserSessions` gains an optional `activeOrgId` filter) and keeps
+    the rest.
+  - **The org arm is a session grant.** `DEFAULT_AUTHORIZATION_POLICY`'s
+    org arm now refuses an `api-key` principal outright (t-671 admitted a
+    key by the org role the entry projected onto it — at `single` that is
+    the key OWNER's platform role, so a `chat` key minted by a platform admin
+    would have read the install org's roster). A key's standing is its
+    scopes; an `admin` key administers as before.
+  - **The ruling on role drift (a):** the install org's `OWNER` set now
+    _follows_ the platform-admin set — `PATCH /api/v1/users/[id]` with a
+    `role` upserts the install-org membership to the rule's answer in the
+    same transaction (`syncInstallMembershipRole`), so a demoted admin no
+    longer keeps `OWNER`.
+  - **`exportOrgData()`** (`lib/privacy/export-org.ts`) and the org manifest
+    `ORG_DATA_SOURCES` / `ORG_EXCLUDED_SOURCES` (`lib/privacy/org-sources.ts`):
+    the roster with member id/name/email, pending invitations into the org
+    (tokens omitted), and the four credential kinds as attribution (hashes and
+    scopes omitted). **Every model carrying an `orgId` column must be declared
+    there** — `tests/unit/lib/privacy/org-sources.test.ts` parses the schema
+    and fails until it is, the subject manifest's guard for an org subject;
+    row isolation will meet it on every model it adds `orgId` to. Guide:
+    [`.context/privacy/org-export.md`](./.context/privacy/org-export.md).
+  - **`eraseOrg()`** (`lib/privacy/erase-org.ts`): one transaction deleting
+    the pending invitations into the org, clearing `Session.activeOrgId` on
+    every session still pointing at it, and the org row (memberships and
+    credentials cascade). **Users are never deleted**; the install org is
+    refused. Guide: [`.context/privacy/org-erasure.md`](./.context/privacy/org-erasure.md).
+
+  Also: `ORG_STATUSES` / `OrgStatus` join `lib/tenancy/roles.ts`;
+  `ORG_ID_SHAPE` is exported from `lib/tenancy/resolver.ts` and shared with
+  the new `orgIdSchema`; `INVITATION_IDENTIFIER_PREFIX` is exported from
+  `lib/utils/invitation-token.ts`. `npm run smoke:tenancy` now walks the whole
+  lifecycle against a real database. Behaviour at `TENANCY_MODE=single` is
+  unchanged: no existing endpoint changes its answer, and on the install org
+  the org arm admits exactly the platform admins the platform check already
+  admitted, because the install-org role is the platform role's projection and
+  is now kept so.
+- **A credential remembers the org it was minted in, and acts only there**
+  (multi-tenancy §106, fifth and last task). The four long-lived credentials
+  — API keys, embed tokens, agent invite tokens, MCP keys — gained an `orgId`
+  column in 0.12.0 that nothing wrote at mint; under tenancy each was a
+  credential that worked everywhere. Now every mint writes the org the
+  request was acting in (`orgForMint()` in `lib/tenancy/entry.ts`, one read
+  of the tenant context, never a body field) and every resolution enters it:
+  `resolveEmbedToken` and `authenticateMcpRequest` apply the read rule
+  themselves (`resolveCredentialOrg()`, the org's status read with the row —
+  **a suspended org's embed tokens and MCP keys are refused**, no extra
+  query) and the six guard-less handlers under `app/api/v1/embed/**` and
+  `app/api/v1/mcp` run inside `runAsOrg(orgId, …)` with `source:
+  'embed-token' | 'mcp-key'`; an API key enters through the guards as
+  before. An agent invite token is a gate the session passes through, not a
+  credential that acts: new module `lib/orchestration/invite-tokens.ts`
+  (`resolveInviteToken()`, `consumeInviteToken()`, `InviteTokenOutcome`) is
+  the one implementation `POST /api/v1/chat/stream` and
+  `POST /api/v1/chat/agents/[slug]/validate-token` share, comparing the
+  token's org with the org the guard entered — a token from another org
+  reads as one that does not exist. `orgOfColumn()` names the null-column
+  rule once (install org at `single`, no org at `multi`). One data migration,
+  `20260918120000_credential_org_backfill`, re-runs the identity migration's
+  four backfill `UPDATE`s verbatim (a test holds them byte-equal) so the
+  credentials minted between 0.12.0 and this release — `orgId = NULL`, read
+  as the install org at `single`, refused at `multi` — are bound before any
+  install switches modes; from here no mint writes a null org. Guides:
+  [`.context/tenancy/identity.md`](./.context/tenancy/identity.md#credentials)
+  and the org-binding sections of
+  [`api-keys.md`](./.context/orchestration/api-keys.md#org-binding-106),
+  [`embed.md`](./.context/orchestration/embed.md#org-binding-106),
+  [`agent-visibility.md`](./.context/orchestration/agent-visibility.md#org-binding-106)
+  and [`mcp.md`](./.context/orchestration/mcp.md#api-key-lifecycle).
+
+### Changed
+
+- **Credential response shapes and resolver contexts carry `orgId`** (§106,
+  with the bullet above). `POST`/`GET /api/v1/user/api-keys` (`null` for an
+  `admin` key), `POST`/`GET …/agents/[id]/invite-tokens`, `POST`/`GET
+  /api/v1/admin/orchestration/mcp/keys` and `POST …/mcp/keys/[id]/rotate`
+  return the org each credential is bound to (the embed-token create already
+  returned the whole row; its `orgId` is now written). `EmbedContext`
+  (`lib/embed/auth.ts`) and `McpAuthContext` (`types/mcp.ts`) gain a
+  required, non-null `orgId` — a fork constructing either by hand adds the
+  field; both resolvers now return `null` for a credential whose org is
+  suspended or, at `multi`, unbound. Two rules on `admin`-scoped API keys
+  are now enforced rather than documented: `POST /api/v1/user/api-keys`
+  stores an `admin` key with no org and refuses `admin` asked for while
+  acting in any org but the install org (`400`, naming no org), and
+  both guards refuse an API key that carries both `admin` and an org —
+  `withAdminAuth` at its scope floor (any org-bound key, whatever its
+  scopes), `withAuth` through `enterApiKeyOrg` (new refusal
+  `bound-admin-key`) — so such a row is admitted nowhere;
+  `lib/app/authorization.ts` says the rule now holds. And at `multi` a
+  request acting in no org — an `admin` key — passes no invite-only gate:
+  the token admits members of its org, and the refusal is logged with its
+  own reason (`no-request-org`). Behaviour at `TENANCY_MODE=single` is
+  unchanged for every honest row: an unbound or install-org credential
+  resolves to the install org exactly as before.
+
+## [0.12.1] — 2026-09-17
+
+> **Alpha release.** Eighteenth tagged Sunrise release. **PATCH bump** — one
+> security fix and nothing else, cut from `main` at #804 so that it carries
+> exactly that change. **Every fork should take it**: on any install with
+> `SIGNUP_MODE=open` (the default), a sign-up request could choose its own
+> platform role, and a signed-in user could promote themselves through
+> `update-user`. The sign-up path was verified live before the fix. Until you
+> have merged it, look for `user` rows with `role = 'ADMIN'` you did not
+> create. The merge is one `input: false` line plus its comment block in
+> `lib/auth/config.ts`, a test, and a matching note in
+> `.context/auth/overview.md` — no migration, no dependency change, no
+> public-surface addition.
+
+### Security
+
+- **A sign-up request can no longer choose its own role.** The `role` field on
+  better-auth's user model was declared without `input: false`, and better-auth
+  passes every declared additional field through from the request body unless a
+  field says so — so on any install with `SIGNUP_MODE=open` (the default), an
+  unauthenticated `POST /api/auth/sign-up/email` carrying `"role": "ADMIN"`
+  created a platform admin, and any signed-in user could promote themselves
+  the same way through `POST /api/auth/update-user`. The sign-up path was
+  verified live before the fix; the update path is the same parser
+  (`update-user.mjs:54`). The field is now `input: false`: on sign-up a body
+  value is replaced by the default, on update a non-empty value is a `400 FIELD_NOT_ALLOWED`
+  (Sunrise's only `updateUser` caller sends `{ image }` alone). The first-human
+  bootstrap and invitation promotions are unaffected — they happen in the
+  database hooks, which run after the input parse and whose return wins — as are
+  `accept-invite` and the admin user PATCH, which write with Prisma directly.
+  `tests/unit/lib/auth/config-role-input.test.ts` runs better-auth's own parser
+  over the real options, with a control that removes the guard. **Every fork
+  should take this release**; until then, check `user` rows with `role = 'ADMIN'`
+  you did not create. Fork note: better-auth merges a plugin's `schema.user.fields`
+  over `additionalFields`, so a fork enabling a plugin that declares `role`
+  (better-auth's `admin` plugin does) must set `input: false` on the plugin's
+  field too.
+
 ## [0.12.0] — 2026-09-16
 
 > **Alpha release.** Seventeenth tagged Sunrise release. **MINOR bump** — the
@@ -6083,7 +6342,8 @@ Sunrise safe to fork and to merge upstream releases into.
 
 ---
 
-[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/human-centric-engineering/sunrise/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/human-centric-engineering/sunrise/compare/v0.11.0...v0.11.1

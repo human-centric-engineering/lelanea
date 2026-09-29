@@ -100,11 +100,6 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 2,
     why: 'knowledge-graph adjacency aggregation',
   },
-  {
-    file: 'app/api/v1/chat/stream/route.ts',
-    calls: 1,
-    why: 'conversation-context vector lookup on the hot path',
-  },
   // LELAÑEA — the meter (§08 t-56). A leaf edit to a test Daybreak carries from
   // Sunrise, for the reason the DAYBREAK block below gives: no seam (Sunrise
   // #799). Ledger: .context/app/divergences.md Row 19.
@@ -148,6 +143,11 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     file: 'lib/orchestration/chat/message-embedder.ts',
     calls: 2,
     why: 'message-embedding vector INSERT/UPDATE (Prisma cannot write vector columns)',
+  },
+  {
+    file: 'lib/orchestration/invite-tokens.ts',
+    calls: 1,
+    why: 'atomic invite-token use_count increment guarded by max_uses — the TOCTOU guard the read-then-write cannot give (moved here from app/api/v1/chat/stream/route.ts in §106 t-673)',
   },
   {
     file: 'lib/orchestration/knowledge/document-manager.ts',
