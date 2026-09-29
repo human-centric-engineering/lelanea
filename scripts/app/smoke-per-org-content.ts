@@ -35,6 +35,7 @@
  * failed assertion, after erasing the org.
  */
 import { prisma } from '@/lib/db/client';
+import { PLATFORM_ADMIN_ROLE } from '@/lib/auth/roles';
 import { logger } from '@/lib/logging';
 import { runAsOrg, runAsSystem } from '@/lib/tenancy/context';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
@@ -77,7 +78,7 @@ const disjoint = (a: Set<string>, b: Set<string>) => [...a].every((id) => !b.has
 
 async function main(): Promise<void> {
   const editor = await runAsSystem('smoke: find an editor', () =>
-    prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true } })
+    prisma.user.findFirst({ where: { role: PLATFORM_ADMIN_ROLE }, select: { id: true } })
   );
   if (!editor) throw new Error('No admin user to attribute the edits to. Run `npm run db:seed`.');
 
