@@ -42,7 +42,7 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import type { AgentSettingsUpdate, UserBudgetQuery } from '@/lib/validations/app-agent-settings';
-import { requireOrgId } from '@/lib/tenancy/context';
+import { getTenantContext, requireOrgId } from '@/lib/tenancy/context';
 
 /** The singleton's key. */
 export const AGENT_SETTINGS_SLUG = 'global';
@@ -120,10 +120,21 @@ export interface EffectiveCeiling {
  * Both reads go out together; the default is read even when an override exists,
  * because one round trip for two indexed lookups costs no more than one.
  */
+/**
+ * The org a budget read is scoped to: the one the request entered, or none in a
+ * system scope. The ceiling read must never throw for want of an org — its
+ * caller lets a turn through when the check fails, which would leave the limit
+ * unenforced — so with no org it reads the person's overrides as before.
+ */
+function budgetOrg(): { orgId?: string } {
+  const orgId = getTenantContext()?.orgId;
+  return orgId ? { orgId } : {};
+}
+
 export async function getEffectiveMonthlyCeiling(userId: string): Promise<EffectiveCeiling> {
   const [override, settings] = await Promise.all([
     prisma.appUserBudget.findFirst({
-      where: { orgId: requireOrgId(), userId },
+      where: { ...budgetOrg(), userId },
       select: { monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -147,7 +158,7 @@ export async function getEffectiveMonthlyCeilings(
   if (userIds.length === 0) return new Map();
   const [overrides, settings] = await Promise.all([
     prisma.appUserBudget.findMany({
-      where: { orgId: requireOrgId(), userId: { in: [...userIds] } },
+      where: { ...budgetOrg(), userId: { in: [...userIds] } },
       select: { userId: true, monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -224,7 +235,10 @@ export async function listUserBudgets(query: UserBudgetQuery): Promise<{
     // The override table is small by construction — a row exists only where an
     // admin chose one — so reading its keys first is cheaper than anything that
     // would page through users looking for them.
-    const overridden = await prisma.appUserBudget.findMany({ select: { userId: true } });
+    const overridden = await prisma.appUserBudget.findMany({
+      where: { orgId: requireOrgId() },
+      select: { userId: true },
+    });
     where.id = { in: overridden.map((row) => row.userId) };
   }
 
@@ -241,7 +255,7 @@ export async function listUserBudgets(query: UserBudgetQuery): Promise<{
   ]);
 
   const overrides = await prisma.appUserBudget.findMany({
-    where: { userId: { in: users.map((user) => user.id) } },
+    where: { orgId: requireOrgId(), userId: { in: users.map((user) => user.id) } },
     select: { userId: true, monthlyCeilingUsd: true },
   });
   const overrideByUser = new Map(overrides.map((row) => [row.userId, row.monthlyCeilingUsd]));

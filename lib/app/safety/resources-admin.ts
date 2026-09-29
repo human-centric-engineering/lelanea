@@ -60,6 +60,7 @@ import {
   type ImportPlanSection,
 } from '@/lib/app/content/admin/shared';
 import { requireOrgId } from '@/lib/tenancy/context';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 const COPY_FIELDS = [
   'hardIntro',
@@ -282,6 +283,12 @@ export async function applyCrisisImport(
         throw importRefused('crisis resources', planned.plan.refusals);
       const removed: Record<string, RegionFields> = {};
       if (planned.plan.writesNothing) return { plan: planned.plan, removed };
+      // By the stored row's id, as the crisis admin writes (t-114): the plan was
+      // made from exactly these rows.
+      const regionId = idsBySlug(
+        stored.regions.map((row) => ({ id: row.id, slug: row.region })),
+        'crisis region'
+      );
 
       if (planned.copyChanged.length > 0) {
         await tx.appCrisisCopy.update({
@@ -297,7 +304,7 @@ export async function applyCrisisImport(
       for (const change of planned.regions.removals) {
         removed[change.key] = change.before!;
         await tx.appCrisisRegion.delete({
-          where: { orgId_region: { orgId: requireOrgId(), region: change.key } },
+          where: { id: regionId(change.key) },
         });
       }
       for (const change of planned.regions.creates) {
@@ -312,7 +319,7 @@ export async function applyCrisisImport(
       }
       for (const change of planned.regions.updates) {
         await tx.appCrisisRegion.update({
-          where: { orgId_region: { orgId: requireOrgId(), region: change.key } },
+          where: { id: regionId(change.key) },
           data: {
             emergencyNumber: change.after!.emergencyNumber,
             services: change.after!.services as CrisisService[],

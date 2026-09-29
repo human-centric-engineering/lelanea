@@ -10,7 +10,7 @@
  *
  * It holds the POINTER and the PROVENANCE, and nothing else (`fp4`). The
  * prompts are `AiDatasetCase` rows under
- * `goldenSetDatasetId(version)`; the control's system instructions are columns
+ * `goldenSetDatasetId(version, orgId)`; the control's system instructions are columns
  * on the control agent. Both are written by
  * `prisma/seeds/app-lelanea/004-voice-golden-set.ts` and both are already read
  * back from the database by `comparison-admin.ts`. Copying either into a table
@@ -46,7 +46,7 @@ export const VOICE_GOLDEN_SET_ID = 'lelanea_voice_golden_set';
 export interface VoiceGoldenSetPointer {
   id: string;
   title: string;
-  /** The authored version. `goldenSetDatasetId(version)` is the dataset it names. */
+  /** The authored version. `goldenSetDatasetId(version, orgId)` is the dataset it names. */
   version: string;
   locale: string;
   provenance: VoiceProvenance;

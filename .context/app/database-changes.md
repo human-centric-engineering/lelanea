@@ -103,9 +103,9 @@ migrations dated 2026-10-03 are the worked example.
   `situation`, a crisis `region`, a budget's `userId`. The ten content tables
   moved in t-113 (`20261004100000_app_content_per_org_keys`), and the voice,
   crisis and budget tables in t-114 (`20261004100100_app_voice_crisis_budget_per_org_keys`),
-  so every `app_*` table is now keyed per org. The API, the content files and
-  the `changedFields` stored in revisions still say `id`, `documentId`,
-  `moduleId`: only the Prisma layer uses the new names.
+  so every table keyed by a name is now keyed per org. The API, the content
+  files and the `changedFields` stored in revisions still say `id`,
+  `documentId`, `moduleId`: only the Prisma layer uses the new names.
   - **Write both columns of a child.** A child needs its parent's generated
     id, so a write that creates both reads the parents back
     (`createManyAndReturn`) and looks each id up with `idsBySlug`
@@ -115,8 +115,13 @@ migrations dated 2026-10-03 are the worked example.
   - **Prove it at `multi`.** At `single` nothing shows two orgs apart, so
     `npm run smoke:app-per-org-content` runs against a throwaway database with
     the policies enabled (its docblock has the steps).
-  - `app_knowledge_designation` is keyed by a knowledge-document id, which is
-    already per org, so it needed nothing.
+- **Two unique keys are still install-wide, and must become per-org before
+  anyone enables `multi`** (t-116). `app_acknowledgement` is unique on
+  `(userId, kind, documentVersion)`: at `multi` a person who accepted a
+  document in one org could never record it in another, because the insert
+  collides with a row the second org cannot see. `app_knowledge_designation`
+  has a unique `sourceKey`, so a second org's knowledge mirror would collide
+  with the first's. At `single`, with one org, neither matters.
 
 ### A generated id must be the shape its readers expect
 

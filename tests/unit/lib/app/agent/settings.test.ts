@@ -189,6 +189,7 @@ vi.mock('@/lib/db/client', () => ({
 }));
 
 import { prisma } from '@/lib/db/client';
+import { runAsOrg, runAsSystem } from '@/lib/tenancy/context';
 import {
   DEFAULT_AGENT_SETTINGS,
   clearUserBudget,
@@ -317,6 +318,29 @@ describe('read per request', () => {
     await getEffectiveMonthlyCeiling(ADA);
     expect(prisma.appAgentSettings.findFirst).toHaveBeenCalledTimes(3);
     expect(prisma.appUserBudget.findFirst).toHaveBeenCalledTimes(1);
+  });
+});
+
+// t-114: a person has a budget per org. The ceiling read names the org the
+// request entered; in a system scope there is none, and it must still read the
+// person's override rather than throw, because its caller lets a turn through
+// when the check fails.
+describe('which org a ceiling comes from', () => {
+  it('reads the override in the org the request entered', async () => {
+    await runAsOrg('corg-b', () => getEffectiveMonthlyCeiling(ADA));
+    expect(prisma.appUserBudget.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { orgId: 'corg-b', userId: ADA } })
+    );
+  });
+
+  it('still reads the person’s override in a system scope, never failing open', async () => {
+    await setUserBudget(ADA, 3);
+    await expect(
+      runAsSystem('test: a turn with no org', () => getEffectiveMonthlyCeiling(ADA))
+    ).resolves.toEqual({ ceilingUsd: 3, source: 'override' });
+    expect(prisma.appUserBudget.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { userId: ADA } })
+    );
   });
 });
 

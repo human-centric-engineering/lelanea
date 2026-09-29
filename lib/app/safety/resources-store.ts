@@ -182,13 +182,13 @@ function cache(orgId: string, content: CrisisContent, readGeneration: number, no
  */
 export async function loadCrisisContent(): Promise<CrisisContent> {
   const now = Date.now();
-  const orgId = requireOrgId();
-  const hit = cached.get(orgId);
-  if (hit && hit.expiresAt > now) return hit.content;
-
+  let orgId: string;
   const readGeneration = generation;
   let stored: CrisisContent | null;
   try {
+    orgId = requireOrgId();
+    const hit = cached.get(orgId);
+    if (hit && hit.expiresAt > now) return hit.content;
     stored = await readFromDatabase();
   } catch (err) {
     // Logged here as well as rethrown: the caller turns this into a failed
