@@ -1,0 +1,57 @@
+-- t-115: every app_* row must name its org.
+--
+-- Every tenant-owned app_* table carries a nullable `orgId` (t-112, following
+-- Sunrise, whose own tables leave NOT NULL to a later stage). The tenancy
+-- extension stamps it on every create, so nothing writes a row without one
+-- today. But a row with no org would belong to nobody: no org's screens would
+-- show it, and no per-org unique key would catch it, because Postgres treats
+-- two NULLs as different. A person's acceptance of the terms could then be
+-- stored twice. The owner's ruling: the database refuses such a row, so the
+-- fault shows the day it is introduced.
+--
+-- A CHECK rather than NOT NULL, so Prisma's types (and every create in the
+-- leaf) are unchanged: Prisma cannot model a CHECK, which is why each one is
+-- pinned by a drift probe in lib/app/leaf-db-drift.ts, derived from the
+-- tenant-owned roster so a new table without one fails `db:drift-check`.
+--
+-- Validation reads every row, and row security never applies to it, so no
+-- bypass is needed. Every existing row already has an org (t-112's backfill).
+-- Hand-written, not `migrate diff` output (B13).
+
+ALTER TABLE "app_acknowledgement" ADD CONSTRAINT "app_acknowledgement_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_agent_settings" ADD CONSTRAINT "app_agent_settings_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_crisis_copy" ADD CONSTRAINT "app_crisis_copy_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_crisis_region" ADD CONSTRAINT "app_crisis_region_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_discovery_question" ADD CONSTRAINT "app_discovery_question_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_discovery_question_revision" ADD CONSTRAINT "app_discovery_question_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_document_collection" ADD CONSTRAINT "app_document_collection_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_foundational_document" ADD CONSTRAINT "app_foundational_document_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_foundational_document_revision" ADD CONSTRAINT "app_foundational_document_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_journey" ADD CONSTRAINT "app_journey_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_journey_module" ADD CONSTRAINT "app_journey_module_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_journey_module_revision" ADD CONSTRAINT "app_journey_module_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_journey_tier" ADD CONSTRAINT "app_journey_tier_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_journey_tier_revision" ADD CONSTRAINT "app_journey_tier_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_knowledge_designation" ADD CONSTRAINT "app_knowledge_designation_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_question_set" ADD CONSTRAINT "app_question_set_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_question_set_revision" ADD CONSTRAINT "app_question_set_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_resource" ADD CONSTRAINT "app_resource_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_resource_collection" ADD CONSTRAINT "app_resource_collection_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_resource_revision" ADD CONSTRAINT "app_resource_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_resource_words" ADD CONSTRAINT "app_resource_words_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_resource_words_revision" ADD CONSTRAINT "app_resource_words_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_safety_event" ADD CONSTRAINT "app_safety_event_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_slot_definition" ADD CONSTRAINT "app_slot_definition_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_slot_definition_revision" ADD CONSTRAINT "app_slot_definition_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_turn" ADD CONSTRAINT "app_turn_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_turn_slot_write" ADD CONSTRAINT "app_turn_slot_write_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_user_budget" ADD CONSTRAINT "app_user_budget_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_comparison" ADD CONSTRAINT "app_voice_comparison_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_comparison_arm" ADD CONSTRAINT "app_voice_comparison_arm_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_golden_set" ADD CONSTRAINT "app_voice_golden_set_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_golden_set_revision" ADD CONSTRAINT "app_voice_golden_set_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_overlay" ADD CONSTRAINT "app_voice_overlay_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_overlay_revision" ADD CONSTRAINT "app_voice_overlay_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_overlay_set" ADD CONSTRAINT "app_voice_overlay_set_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_voice_overlay_set_revision" ADD CONSTRAINT "app_voice_overlay_set_revision_orgId_not_null" CHECK ("orgId" IS NOT NULL);
+ALTER TABLE "app_waitlist_entry" ADD CONSTRAINT "app_waitlist_entry_orgId_not_null" CHECK ("orgId" IS NOT NULL);

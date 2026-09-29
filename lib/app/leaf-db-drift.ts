@@ -11,7 +11,9 @@
  * applied to the local database by the time you read the generated SQL.
  */
 
+import { prisma } from '@/lib/db/client';
 import { registerAppDriftProbe, constraintExists } from '@/lib/db/drift-probes';
+import { tenantOwnedModels } from '@/lib/tenancy/classification';
 
 export function registerLeafDriftProbes(): void {
   registerAppDriftProbe({
@@ -188,6 +190,22 @@ export function registerLeafDriftProbes(): void {
       kind: 'FK constraint',
       table,
       probe: constraintExists(`${table}_editorId_fkey`, 'ON DELETE SET NULL'),
+    });
+  }
+
+  // t-115. Every tenant-owned app_* table refuses a row with no org
+  // (`20261004100300_app_org_id_required`). A CHECK, because Prisma cannot
+  // model one, so `migrate dev` would drop it. Derived from the tenant-owned
+  // roster rather than listed, so a new app_* table that forgets the CHECK
+  // fails here instead of accepting rows no org can see or any per-org key
+  // can catch.
+  for (const table of tenantOwnedModels(prisma).values()) {
+    if (!table.startsWith('app_')) continue;
+    registerAppDriftProbe({
+      name: `${table}_orgId_not_null (every row names its org)`,
+      kind: 'CHECK constraint',
+      table,
+      probe: constraintExists(`${table}_orgId_not_null`, '"orgId" IS NOT NULL'),
     });
   }
 }
