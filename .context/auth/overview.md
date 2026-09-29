@@ -107,6 +107,10 @@ export const auth = betterAuth({
         type: 'string',
         defaultValue: 'USER',
         required: false,
+        // Never client-settable: without this, a sign-up body could carry
+        // `role: 'ADMIN'`. The bootstrap and invitation promotions happen in
+        // the database hooks, which run after the input parse and are unaffected.
+        input: false,
       },
     },
   },
@@ -191,7 +195,8 @@ databaseHooks: {
       },
 
       /**
-       * after hook - Sets preferences, detects password invitations, sends welcome email
+       * after hook - Makes the user a member of the install org, sets
+       * preferences, detects password invitations, sends welcome email
        *
        * Triggered after a new user is created via:
        * - Email/password signup
@@ -247,7 +252,7 @@ databaseHooks: {
 **Key behaviors:**
 
 - `before` hook: Validates data, applies invitation role, deletes invitation token — can reject user creation by throwing an error
-- `after` hook: Non-blocking operations (errors logged, not thrown); does NOT handle OAuth invitation tokens
+- `after` hook: Non-blocking operations (errors logged, not thrown) — the install-org membership first (§106, see [`.context/tenancy/identity.md`](../tenancy/identity.md)), then preferences, invitation detection, welcome email; does NOT handle OAuth invitation tokens
 - OAuth state: Passed via `additionalData` parameter in OAuth flow
 - Invitation token deletion: Happens in the `before` hook (before user creation) to prevent race conditions from concurrent OAuth signups
 

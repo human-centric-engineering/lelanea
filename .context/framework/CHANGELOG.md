@@ -25,6 +25,81 @@ process.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-24
+
+> **Fifth tagged Daybreak release: Sunrise 0.13.0, stage 1 of 2.** Daybreak takes
+> Sunrise commit `7d511506`, the end of multi-tenancy §106 (org identity),
+> in one merge ([#275](https://github.com/human-centric-engineering/daybreak/pull/275)).
+> That commit also carries **Sunrise 0.12.1, a security fix: take this release
+> promptly** (see Security).
+>
+> **Sunrise asks forks to adopt 0.13.0 in two stages, deploying each, and Daybreak
+> gives each stage its own release.** This is stage 1. Stage 2 (Sunrise `v0.13.0`:
+> row isolation, tenant-aware jobs, and Daybreak's framework tables becoming
+> tenant-owned) will ship as **0.6.0**. **Merge 0.5.0, run `db:migrate:deploy`,
+> deploy it, and only then merge 0.6.0.** Merging both and deploying once runs
+> every migration in one go and gives up the staging. The step that makes staging
+> worth it is the second one: a 38-table `orgId` backfill.
+>
+> **What stage 1 is.** The rest is in [`../../CHANGELOG.md`](../../CHANGELOG.md)
+> `[0.13.0]`, §106 entries. Every install gets an org (`Org` / `OrgMembership`, the
+> install org, `id = 'install'`) and every user belongs to one. A session knows
+> which org it is acting in (`Session.activeOrgId`, `POST /api/v1/orgs/switch`).
+> Both guards enter a tenant context for every request. Credentials are bound to
+> the org they were minted in. There is an org API, and org export and erasure.
+> Two migrations: `20260917120000_org_identity` and
+> `20260918120000_credential_org_backfill`. **`TENANCY_MODE=single` stays the
+> default and behaves the same.**
+>
+> **Daybreak's framework tables are untouched in this release.** Stage 1 adds
+> `orgId` only to the four credential tables (API keys, embed tokens, invite
+> tokens, MCP keys), alongside the new `OrgMembership` table and
+> `Session.activeOrgId`. So no tenancy guard names any of Daybreak's `framework_*`
+> models yet. 0.6.0 makes them tenant-owned.
+
+### Security
+
+- **A sign-up request can no longer choose its own platform role** (Sunrise
+  0.12.1). better-auth's `role` field had been declared without `input: false`. On
+  any install with `SIGNUP_MODE=open`, which is the default, an unauthenticated
+  `POST /api/auth/sign-up/email` carrying `"role": "ADMIN"` created a platform
+  admin, and any signed-in user could promote themselves through `update-user`.
+  **Every leaf on Daybreak ≤ 0.4.0 is exposed until it merges this release.** Until
+  then, look for `user` rows with `role = 'ADMIN'` that you did not create.
+
+### ⚠️ Changed — action required for existing leaf forks
+
+These are Sunrise's §106 changes, not Daybreak's, but a leaf meets them through this
+release. Only the first announces itself; check the others.
+
+- **Anything of yours that builds an `EmbedContext` or `McpAuthContext` by hand
+  must now supply `orgId`.** The type-check finds it.
+- **Your own `runInvitedSignup(fn)` calls must pass the invitation as a second
+  argument** (`runInvitedSignup(fn, invitationMetadata)`). **Nothing finds this
+  one:** the argument defaults to `null`, so a one-argument call still compiles
+  and still passes the `invite_only` gate. The new user's org membership is then
+  decided without the invitation, so an invited platform admin joins the install
+  org as `MEMBER` rather than `OWNER`. Daybreak has no call sites of its own; the
+  platform's accept-invite route already passes it.
+- **The role-literal guard (`tests/unit/auth-role-literals.test.ts`) now also
+  polices `'OWNER'` and `'MEMBER'`** outside `lib/tenancy/roles.ts`. Import
+  `ORG_ROLES` rather than writing the literal. Product tiers belong beneath the org,
+  on your side of the foreign key, not as a fourth org role.
+- **If you filled `lib/app/authorization.ts` and your policy compares
+  `resource.orgId === viewer.orgId`, guard the resource side.** Two `undefined`s
+  compare equal. Sunrise's edit to that file is docblock-only, so keep your code and
+  take the comment.
+
+### Added
+
+- **A new seam reserved for the leaf: `lib/app/tenant-resolver.ts`**
+  (`registerAppTenantResolver()`), wired by `proxy.ts`. It lets the proxy decide
+  which org a request is for, from a subdomain, header or path, and write
+  `x-sunrise-org`. **Daybreak keeps it empty**, because which org a request belongs
+  to is your product's decision, not the framework's. Fill it directly; there is no
+  bridge. `tests/unit/lib/app/defaults.test.ts` gains a row asserting it ships
+  empty; pin that row rather than deleting it if you fill the seam.
+
 ## [0.4.0] — 2026-09-16
 
 > **Fourth tagged Daybreak release — the Sunrise 0.12.0 sync.** Daybreak moves from

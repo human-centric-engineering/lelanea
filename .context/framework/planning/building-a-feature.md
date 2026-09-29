@@ -7,9 +7,12 @@ parent: plan.md
 # Building a Daybreak feature — the flow
 
 > **Who this is for:** anyone (and any AI agent) picking up a feature from the
-> [board](./plan.md#features-epic-framework-v1). [`plan.md`](./plan.md) gives the
-> _structure_ — the levels (task / feature / phase), the board, the status vocabulary,
-> how to claim. **This doc is the _execution rhythm_** that goes with it, distilled from
+> **HCE Hub** (Daybreak project, slug `daybreak` — the pointer block is in
+> [`CLAUDE.md`](../../../CLAUDE.md)). Since 2026-09-18 the Hub is the board and the system
+> of record: claim / plan / start / complete / ship are Hub tool calls, and the process rules
+> are served from `hub://process/core` and `hub://process/sunrise-fork`. The old markdown
+> board in [`plan.md`](./plan.md) is frozen history — never edit it to claim or track work.
+> **This doc is the _execution rhythm_** that goes with the Hub, distilled from
 > building `f-bootstrap` and `f-module-core` so a new contributor doesn't repeat the
 > learning curve. The best worked example to copy is
 > [`f-module-core.md`](./f-module-core.md) (the detailed plan) plus its three PRs (#10/#11/#12).
@@ -18,12 +21,13 @@ parent: plan.md
 
 **Claim + plan first → build each task through the gate loop → close out the feature.**
 Never skip the plan. Never push to `main`. Fix review findings before merging. When a
-feature merges, reconcile the board so the next person sees the truth.
+feature merges, ship it in the Hub so the next person sees the truth.
 
 ## 1. Claim + plan first (don't jump to code)
 
-1. **Claim it on the board.** In [`plan.md`](./plan.md), put your name in the feature's
-   **Owner** cell and set **Status → `in flight`**. One owner per feature.
+1. **Claim it in the Hub.** `claim_feature` (after `next_task` / `get_feature` to see what's
+   open). One owner per feature. _Do not_ edit `plan.md`'s Owner / Status columns — that
+   board is frozen.
 2. **Write the feature's detailed plan** at `.context/framework/planning/<feature>.md`,
    following the shape of [`f-module-core.md`](./f-module-core.md):
    - **Intent** — what and why (the binding _how_ is in
@@ -43,13 +47,12 @@ feature merges, reconcile the board so the next person sees the truth.
 3. **Present the plan to the feature owner before building** — especially task sizing and any
    genuine design/forkability decisions. Planning is collaborative; surface the choices, don't
    pre-commit.
-4. **Push the claim + plan as a standalone docs PR _before_ starting any task work.** The board
-   claim (Owner + `in flight` in [`plan.md`](./plan.md)) and the new `<feature>.md` go up together as
-   one docs-only PR, which merges before t-1 begins. This is what makes the board a real
-   coordination surface once more than one person is building: a claim nobody can see doesn't stop
-   two owners starting the same feature. (Docs-only, so it skips `/security-review` and
-   `/code-review` — see step 3 of close-out.) _Earlier features folded the plan into t-1's PR; with
-   the board live and multiple builders, claim-first is the standard._
+4. **Record the plan in the Hub, then push the `<feature>.md` as a standalone docs PR _before_
+   starting any task work.** `plan_feature` / `create_task` put the tasks and their done-whens
+   on the Hub (that is the claim everyone can see); the new `<feature>.md` goes up as a
+   docs-only PR that merges before t-1 begins. (Docs-only, so it skips `/security-review` and
+   `/code-review` — see step 3 of close-out.) _Pre-Hub, the claim was a `plan.md` edit in the
+   same PR; that column is now frozen._
 
 ## 2. Build each task — the gate loop
 
@@ -77,8 +80,8 @@ human-centric-engineering/daybreak …`. Bare `gh` targets the **Sunrise upstrea
 4. **Fix confirmed findings as a transparent follow-up commit** (don't force-push over the
    reviewed commit — the review's effect should be visible in history). Document findings you
    accept or refute, and why.
-5. **The owner merges.** When the PR merges, flip its row on the board to `done #<PR>`. Do
-   **not** track an "in-PR" status — one transition, nothing to forget.
+5. **The owner merges.** `set_pr` on the task when the PR opens; `complete_task` when it
+   merges. Do **not** track an "in-PR" status anywhere else — one transition, nothing to forget.
 
 Every task inherits the repo rules in [`CLAUDE.md`](../../CLAUDE.md): `logger` not `console`;
 the `@/` alias, never relative imports; validate external input with Zod; a new `User` relation
@@ -88,13 +91,14 @@ limiter for a plain read). The **boundary** is enforced by ESLint + CI — build
 
 ## 3. Close out the feature
 
-When the **last task merges**, the feature is shipped — reconcile everything so the board
+When the **last task merges**, the feature is shipped — reconcile everything so the Hub
 tells the truth (a merge changes what's claimable):
 
-- Flip the feature to **`shipped`** on the board (Owner section header, the features table, and
-  the Project-status line), and flip its **dependents** from `blocked → X` to **`available` ▲**.
+- `ship_feature` in the Hub with a closing summary; the Hub unblocks dependents itself. Record
+  any decisions that haven't been recorded yet with `record_decision` (most should already be
+  there — a decision is recorded when it stops moving, not at ship).
 - In the feature's own doc, set frontmatter `status: shipped` and its `t-N` rows to `done`.
-- Add a line to plan.md's **Work-completed log**.
+- Do **not** touch `plan.md` — its board and work-completed log are frozen at the Hub import.
 - **Append this feature's execution lessons** to [`planning-retro.md`](./planning-retro.md) §B
   (feature-plan authoring) or §A (overall-plan authoring). That file is how the process
   improves — if you learned something the hard way, write it down so the next feature doesn't.
@@ -117,7 +121,8 @@ to `main` — but they skip `/security-review` and `/code-review`.
 
 ## Reference
 
-- [`plan.md`](./plan.md) — the board, the working model, how to claim.
+- The **HCE Hub** (Daybreak project) — the board, the working model, how to claim; pointer block in [`CLAUDE.md`](../../../CLAUDE.md).
+- [`plan.md`](./plan.md) — the pre-Hub board, frozen 2026-09-18; history only.
 - [`f-module-core.md`](./f-module-core.md) — the worked example to copy (detailed plan → 3 PRs).
 - [`planning-retro.md`](./planning-retro.md) — process lessons (read §A/§B before planning; add to them after).
 - [`framework-architecture.md`](./framework-architecture.md) — the spec + binding decisions (Appendix A).

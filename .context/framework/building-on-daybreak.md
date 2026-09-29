@@ -266,6 +266,13 @@ npm run db:migrate:deploy    # apply (dev: db:migrate:dev)
 npm run db:drift-check
 ```
 
+**A staged Sunrise release arrives as one Daybreak release per stage.** When Sunrise
+asks forks to adopt a release in stages, deploying each (0.13.0 was the first: org
+identity, then a 38-table `orgId` backfill), Daybreak cuts a release for each stage:
+0.5.0 then 0.6.0 for Sunrise 0.13.0. Merge the first tag, run the commands above,
+**deploy**, and only then merge the next. Merging both and deploying once runs every
+migration in one go, and the staging buys you nothing.
+
 **Tags are prefixed `daybreak-v`.** A bare `vX.Y.Z` in this repo is a **Sunrise** tag
 — they share a namespace, so the prefix is what tells them apart.
 

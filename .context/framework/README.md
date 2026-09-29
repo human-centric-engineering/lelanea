@@ -114,7 +114,8 @@ reserves for its own forks.**
 - `lib/app/*` **leaf** scaffolds (`capabilities.ts`, `context-contributors.ts`,
   `knowledge-access-contributors.ts`, `guard-floor-contributors.ts`,
   `guard-event-contributors.ts`, `modules.ts`, `leaf-bootstrap.ts`,
-  `leaf-admin-nav.ts`, `leaf-data-export.ts`, …) — Sunrise ships these empty;
+  `leaf-admin-nav.ts`, `leaf-data-export.ts`, `tenant-resolver.ts`, …) — Sunrise
+  ships these empty;
   Daybreak keeps them empty
   (and may add new empty framework-concept scaffolds like `lib/app/modules.ts`)
   for the **leaf app** to fill. Daybreak filling one would collide with the

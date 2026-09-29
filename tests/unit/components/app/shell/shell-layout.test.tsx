@@ -44,6 +44,8 @@ const session = vi.hoisted(() => ({
       role: string;
       image?: string | null;
     };
+    /** The org the session is acting in (Sunrise §106); `null` means the install org. */
+    session: { activeOrgId: string | null };
   } | null,
 }));
 
@@ -153,6 +155,7 @@ afterEach(() => {
 beforeEach(() => {
   flag.enabled = false;
   session.current = {
+    session: { activeOrgId: null },
     user: {
       id: 'u1',
       name: 'Maya Reyes',
@@ -192,6 +195,7 @@ describe('the shell layout serves the product', () => {
 
   it('falls back to the email when the account has no name', async () => {
     session.current = {
+      session: { activeOrgId: null },
       user: { id: 'u1', name: null, email: 'zoe@example.com', emailVerified: true, role: 'USER' },
     };
     await renderLayout();
@@ -200,6 +204,7 @@ describe('the shell layout serves the product', () => {
 
   it('hands the nav the session’s picture', async () => {
     session.current = {
+      session: { activeOrgId: null },
       user: {
         id: 'u1',
         name: 'Maya Reyes',
@@ -226,6 +231,7 @@ describe('the shell layout serves the product', () => {
     // the one test that proves the value actually crosses from the session to
     // the menu; `account-menu.test.tsx` only proves what the menu does with it.
     session.current = {
+      session: { activeOrgId: null },
       user: {
         id: 'u1',
         name: 'Maya Reyes',
@@ -281,6 +287,7 @@ describe('maintenance mode reaches the shell', () => {
   it('still lets an admin through, as on every other layout', async () => {
     flag.enabled = true;
     session.current = {
+      session: { activeOrgId: null },
       user: {
         id: 'a1',
         name: 'Ada Admin',

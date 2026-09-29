@@ -109,6 +109,8 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
+import { registerAppTenantResolver } from '@/lib/app/tenant-resolver';
+import { hasTenantResolver } from '@/lib/tenancy/resolver';
 import { initAppCapabilities } from '@/lib/app/capabilities';
 import { initAppContextContributors } from '@/lib/app/context-contributors';
 import {
@@ -319,6 +321,15 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       registerAppRateLimits();
       // No app rules → the effective policy is the base policy BY IDENTITY.
       expect(getEffectiveRateLimitPolicy()).toBe(RATE_LIMIT_POLICY);
+    },
+  },
+  {
+    seam: 'lib/app/tenant-resolver.ts',
+    risk: 'a stray resolver would pick an org for every request on every install',
+    assert: () => {
+      registerAppTenantResolver();
+      // No resolver → the proxy strips the org header on every request.
+      expect(hasTenantResolver()).toBe(false);
     },
   },
   {
