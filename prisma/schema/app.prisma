@@ -174,7 +174,8 @@ model AppAcknowledgement {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, kind, documentVersion])
+  /// Per org (t-116): a person in two orgs acknowledges in each.
+  @@unique([orgId, userId, kind, documentVersion])
   @@index([orgId])
   @@index([userId])
   @@map("app_acknowledgement")
@@ -230,7 +231,7 @@ model AppKnowledgeDesignation {
   /// document mirrors, so an edit re-ingests the same document and a removed row
   /// deletes it. Null on everything an admin uploaded, which the mirror never
   /// touches. See `lib/app/content/knowledge-mirror.ts`.
-  sourceKey    String?  @unique
+  sourceKey    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -238,6 +239,8 @@ model AppKnowledgeDesignation {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  /// Per org (t-116): each org mirrors the same documents under the same keys.
+  @@unique([orgId, sourceKey])
   @@index([orgId])
   @@map("app_knowledge_designation")
 }

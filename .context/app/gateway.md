@@ -75,10 +75,12 @@ new version. The revision history is how to see what was in force on a given
 day.
 
 **Insert-only.** No `updatedAt`; nothing updates or deletes a row except
-erasure. `@@unique([userId, kind, documentVersion])` is what makes a repeat
-idempotent — `recordAcknowledgement` inserts first and answers a `P2002` with
-the existing row and its _original_ `acknowledgedAt`, because the record is of
-the first time they agreed to this version, not the latest click.
+erasure. `@@unique([orgId, userId, kind, documentVersion])` is what makes a
+repeat idempotent — `recordAcknowledgement` inserts first and answers a `P2002`
+with the current org's existing row and its _original_ `acknowledgedAt`,
+because the record is of the first time they agreed to this version, not the
+latest click. The key is per org (t-116): a person who joins a second org
+accepts its documents there, and confirms their age there too.
 
 **The mapping is explicit, and pinned both ways.** `DOCUMENT_FOR_KIND` names the
 document behind each document kind (the kind is a database enum, so it cannot

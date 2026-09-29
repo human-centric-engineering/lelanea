@@ -115,13 +115,20 @@ migrations dated 2026-10-03 are the worked example.
   - **Prove it at `multi`.** At `single` nothing shows two orgs apart, so
     `npm run smoke:app-per-org-content` runs against a throwaway database with
     the policies enabled (its docblock has the steps).
-- **Two unique keys are still install-wide, and must become per-org before
-  anyone enables `multi`** (t-116). `app_acknowledgement` is unique on
-  `(userId, kind, documentVersion)`: at `multi` a person who accepted a
-  document in one org could never record it in another, because the insert
-  collides with a row the second org cannot see. `app_knowledge_designation`
-  has a unique `sourceKey`, so a second org's knowledge mirror would collide
-  with the first's. At `single`, with one org, neither matters.
+- **Other unique keys include `orgId` too** (t-116,
+  `20261004100200_app_acknowledgement_designation_per_org_uniques`).
+  `app_acknowledgement` is unique on `(orgId, userId, kind, documentVersion)`,
+  so a person accepts a document in each org they join, and the repeat read
+  in `recordAcknowledgement` is keyed by `requireOrgId()`. That includes
+  `age_18`: a second org asks again, because each org keeps its own record
+  and cannot read another's.
+  `app_knowledge_designation` is unique on `(orgId, sourceKey)`, so each org's
+  knowledge mirror can hold `foundational:the_mission` for itself. The key is
+  all this changed: the mirror cron runs with no org, which reconciles the
+  install org at `single` and fails at `multi`, so there only a documents
+  write in an org reconciles that org's mirror. A new unique
+  key on an `app_*` table starts with `orgId`, or it fails the second org at
+  `multi`.
 
 ### A generated id must be the shape its readers expect
 

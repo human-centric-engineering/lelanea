@@ -50,6 +50,8 @@ import {
   recordAcknowledgement,
 } from '@/lib/app/gateway/acknowledgements';
 import { listFoundationalDocuments } from '@/lib/app/content/document-store';
+import { runAsOrg, runAsSystem } from '@/lib/tenancy/context';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 import { fakeDocumentStore, seededCollection } from '@/tests/helpers/app/foundational-documents';
 
 /** The version the seed gives both documents — read, not written down. */
@@ -240,7 +242,12 @@ describe('recordAcknowledgement', () => {
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { userId: 'user-1', kind: 'terms', documentVersion: COLLECTION_VERSION },
+        data: {
+          orgId: INSTALL_ORG_ID,
+          userId: 'user-1',
+          kind: 'terms',
+          documentVersion: COLLECTION_VERSION,
+        },
       })
     );
     expect(result).toEqual({
@@ -262,7 +269,12 @@ describe('recordAcknowledgement', () => {
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { userId: 'user-1', kind: 'age_18', documentVersion: AGE_18_VERSION },
+        data: {
+          orgId: INSTALL_ORG_ID,
+          userId: 'user-1',
+          kind: 'age_18',
+          documentVersion: AGE_18_VERSION,
+        },
       })
     );
   });
@@ -277,14 +289,16 @@ describe('recordAcknowledgement', () => {
       acknowledgedAt: first,
     });
 
-    const result = await recordAcknowledgement('user-1', 'terms');
+    const result = await runAsOrg('org-b', () => recordAcknowledgement('user-1', 'terms'));
 
     expect(result.created).toBe(false);
     expect(result.row.acknowledgedAt).toEqual(first);
+    // The row that collided is the current org's, so the read is keyed by it.
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId_kind_documentVersion: {
+          orgId_userId_kind_documentVersion: {
+            orgId: 'org-b',
             userId: 'user-1',
             kind: 'terms',
             documentVersion: COLLECTION_VERSION,
@@ -292,6 +306,13 @@ describe('recordAcknowledgement', () => {
         },
       })
     );
+  });
+
+  it('refuses a system scope before writing, since its row would carry no org', async () => {
+    await expect(
+      runAsSystem('test: no org', () => recordAcknowledgement('user-1', 'terms'))
+    ).rejects.toThrow(/No org in the tenant context/);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('lets every other database failure through', async () => {
@@ -305,7 +326,9 @@ describe('recordAcknowledgement', () => {
     create.mockRejectedValue({ code: 'P2002' });
     findUnique.mockResolvedValue(null);
 
-    await expect(recordAcknowledgement('user-1', 'terms')).rejects.toThrow(/vanished/);
+    await expect(runAsOrg('org-b', () => recordAcknowledgement('user-1', 'terms'))).rejects.toThrow(
+      /vanished/
+    );
   });
 });
 

@@ -40,6 +40,7 @@
 import type { AppAcknowledgement } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { requireOrgId } from '@/lib/tenancy/context';
 import { isRecord } from '@/lib/utils';
 import {
   getFoundationalDocument,
@@ -200,9 +201,9 @@ export interface RecordAcknowledgementResult {
 
 /**
  * Whether a rejected write is the unique-index violation on
- * `(userId, kind, documentVersion)` — the same person, the same kind, the same
- * version, from last week or from a double-click a millisecond ago. Every other
- * code is a real failure and belongs to the caller.
+ * `(orgId, userId, kind, documentVersion)` — the same person, in the same org,
+ * the same kind, the same version, from last week or from a double-click a
+ * millisecond ago. Every other code is a real failure and belongs to the caller.
  */
 function isUniqueViolation(error: unknown): boolean {
   return isRecord(error) && error.code === 'P2002';
@@ -225,12 +226,17 @@ export async function recordAcknowledgement(
   userId: string,
   kind: AcknowledgementKind
 ): Promise<RecordAcknowledgementResult> {
+  // Resolved first (t-116): the key is per org, so the insert and the repeat
+  // read name the same one explicitly, and a system scope, which would write a
+  // row with no org that no key constrains, is refused before anything is
+  // written. The tenancy extension never overwrites an explicit org.
+  const orgId = requireOrgId();
   const documentVersion = (await getRequiredVersions())[kind];
   const select = { id: true, kind: true, documentVersion: true, acknowledgedAt: true } as const;
 
   try {
     const row = await prisma.appAcknowledgement.create({
-      data: { userId, kind, documentVersion },
+      data: { orgId, userId, kind, documentVersion },
       select,
     });
     logger.info('Acknowledgement recorded', { userId, kind, documentVersion });
@@ -240,7 +246,7 @@ export async function recordAcknowledgement(
   }
 
   const row = await prisma.appAcknowledgement.findUnique({
-    where: { userId_kind_documentVersion: { userId, kind, documentVersion } },
+    where: { orgId_userId_kind_documentVersion: { orgId, userId, kind, documentVersion } },
     select,
   });
   // The unique violation says the row exists, so `null` here means it was
