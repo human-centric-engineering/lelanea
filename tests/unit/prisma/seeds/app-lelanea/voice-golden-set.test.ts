@@ -285,6 +285,7 @@ import unit, {
 import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { VOICE_CONTROL_AGENT_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { VOICE_GOLDEN_SET_ID } from '@/lib/app/content/golden-set-store';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 function ctx() {
   return { prisma: prisma as never, logger: logger as never };
@@ -295,7 +296,7 @@ async function runSeed(): Promise<void> {
 }
 
 const goldenSet = getVoiceGoldenSet();
-const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+const datasetId = goldenSetDatasetId(goldenSet.collection.version, INSTALL_ORG_ID);
 
 function control(): FakeAgent {
   const agent = world.agents.find((candidate) => candidate.slug === VOICE_CONTROL_AGENT_SLUG);

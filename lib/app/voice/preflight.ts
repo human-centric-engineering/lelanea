@@ -43,6 +43,7 @@ import { resolveVoiceArms } from '@/lib/app/voice/comparison';
 import { getGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { BRAND_VOICE_JUDGE_SLUG, goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { estimateEvaluationRunCost } from '@/lib/orchestration/cost-estimation/evaluation-cost';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /** What one arm would run on, for the operator rather than for the queue. */
 export interface VoicePreflightArm {
@@ -88,7 +89,7 @@ export interface VoicePreflight {
  */
 export async function getVoicePreflight(userId: string): Promise<VoicePreflight> {
   const pointer = await getGoldenSetPointer();
-  const datasetId = goldenSetDatasetId(pointer.version);
+  const datasetId = goldenSetDatasetId(pointer.version, requireOrgId());
 
   const [arms, dataset] = await Promise.all([
     resolveVoiceArms().catch(() => []),

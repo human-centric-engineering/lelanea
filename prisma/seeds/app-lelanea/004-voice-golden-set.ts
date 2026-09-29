@@ -74,6 +74,7 @@ import {
   type GoldenDatasetCase,
 } from '@/lib/app/voice/golden-set';
 import { hashDatasetCases } from '@/lib/orchestration/evaluations/datasets/hash';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /**
  * The mode the control carries, as a constant rather than a literal at the write
@@ -166,7 +167,7 @@ const unit: SeedUnit = {
     }
 
     // ---- The dataset: one per authored version ------------------------------
-    const datasetId = goldenSetDatasetId(goldenSet.collection.version);
+    const datasetId = goldenSetDatasetId(goldenSet.collection.version, requireOrgId());
     const contentHash = hashDatasetCases(cases);
     const datasetProjection = {
       name: `${goldenSet.dataset.name} v${goldenSet.collection.version}`,

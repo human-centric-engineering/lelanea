@@ -14,7 +14,6 @@
 
 import type { VoiceGoldenPrompt, VoiceGoldenSet } from '@/lib/app/content';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
-import { requireOrgId } from '@/lib/tenancy/context';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 /**
@@ -38,7 +37,7 @@ import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
  *
  * It is not a cuid, and nothing requires it to be.
  */
-export function goldenSetDatasetId(version: string, orgId: string = requireOrgId()): string {
+export function goldenSetDatasetId(version: string, orgId: string): string {
   // `ai_dataset.id` is unique across the install, while the golden set is per
   // org (t-114). The install org keeps the id it has always had, so existing
   // datasets and the comparisons that name them are untouched; any other org's

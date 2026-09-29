@@ -6,7 +6,7 @@
  * ## Where the words live
  *
  * The prompts are the platform's `AiDatasetCase` rows under
- * `goldenSetDatasetId(pointer.version)`, with `key`, `kind` and `probe` in each
+ * `goldenSetDatasetId(pointer.version, orgId)`, with `key`, `kind` and `probe` in each
  * case's `metadata` — the shape seed 004 writes, kept exactly so the dataset's
  * `contentHash` means the same thing whoever wrote it. Every write here
  * recomputes that hash and the case count, because a comparison records the
@@ -74,6 +74,7 @@ import {
 import { goldenSetDatasetId, VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
 import { hashDatasetCases } from '@/lib/orchestration/evaluations/datasets/hash';
 import type { GoldenPromptEdit } from '@/lib/validations/app-voice-content';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
 type Client = Pick<
@@ -209,7 +210,7 @@ async function readCurrent(client: Client) {
     where: { slug: VOICE_GOLDEN_SET_ID },
   });
   if (!pointer) return null;
-  const datasetId = goldenSetDatasetId(pointer.version);
+  const datasetId = goldenSetDatasetId(pointer.version, requireOrgId());
   const [dataset, cases, runCount] = await Promise.all([
     client.aiDataset.findUnique({ where: { id: datasetId } }),
     client.aiDatasetCase.findMany({
@@ -247,11 +248,12 @@ export async function getGoldenSetEditorView(): Promise<GoldenSetEditorView> {
     if (prompt) prompts.push(prompt);
     else malformed.push(row.position);
   }
+  const prefix = goldenSetDatasetId('', requireOrgId());
   const versions = await prisma.aiDataset.findMany({
-    where: { id: { startsWith: goldenSetDatasetId('') } },
+    where: { id: { startsWith: prefix } },
     select: { id: true },
   });
-  const taken = new Set(versions.map((row) => row.id.slice(goldenSetDatasetId('').length)));
+  const taken = new Set(versions.map((row) => row.id.slice(prefix.length)));
   return {
     seeded: dataset !== null,
     pointer: {
@@ -414,7 +416,7 @@ export async function startNewGoldenSetVersion(
     if (pointer.revision !== revisionRead)
       throw revisionMoved('The golden set', pointer.revision, revisionRead);
 
-    const prefix = goldenSetDatasetId('');
+    const prefix = goldenSetDatasetId('', requireOrgId());
     const existing = await tx.aiDataset.findMany({
       where: { id: { startsWith: prefix } },
       select: { id: true },
@@ -423,7 +425,7 @@ export async function startNewGoldenSetVersion(
       pointer.version,
       new Set(existing.map((row) => row.id.slice(prefix.length)))
     );
-    const datasetId = goldenSetDatasetId(version);
+    const datasetId = goldenSetDatasetId(version, requireOrgId());
 
     // Copied as stored, so a case this editor could not parse is carried over
     // rather than dropped: the new version asks exactly what the old one did.

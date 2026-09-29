@@ -26,6 +26,7 @@ import { getGoldenSetAdminView } from '@/lib/app/voice/golden-set-admin';
 import { getGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { goldenSetDatasetId, VOICE_CONTROL_AGENT_SLUG } from '@/lib/app/voice/golden-set';
 import type { VoiceGoldenSetPointer } from '@/lib/app/content/golden-set-store';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 function pointer(overrides: Partial<VoiceGoldenSetPointer> = {}): VoiceGoldenSetPointer {
   return {
@@ -101,7 +102,7 @@ describe('getGoldenSetAdminView', () => {
       },
     ]);
     expect(client.aiDatasetCase.findMany).toHaveBeenCalledWith({
-      where: { datasetId: goldenSetDatasetId('1.2') },
+      where: { datasetId: goldenSetDatasetId('1.2', INSTALL_ORG_ID) },
       orderBy: { position: 'asc' },
       select: { position: true, input: true, metadata: true },
     });

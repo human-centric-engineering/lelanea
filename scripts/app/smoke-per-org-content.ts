@@ -104,12 +104,24 @@ async function main(): Promise<void> {
   if (!editor) throw new Error('No admin user to attribute the edits to. Run `npm run db:seed`.');
 
   // The same person holds a budget in the install org first, so the new org's
-  // budget below can only land beside it if the key is (orgId, userId).
-  const priorInstallBudget = await runAsOrg(INSTALL_ORG_ID, async () => {
-    const prior = await prisma.appUserBudget.findFirst({ where: { userId: editor.id } });
-    await setUserBudget(editor.id, INSTALL_CEILING);
-    return prior;
-  });
+  // budget below can only land beside it if the key is (orgId, userId). It is
+  // put back in `finally`, whatever fails in between.
+  const priorInstallBudget = await runAsOrg(INSTALL_ORG_ID, () =>
+    prisma.appUserBudget.findFirst({ where: { orgId: INSTALL_ORG_ID, userId: editor.id } })
+  );
+  try {
+    await runAsOrg(INSTALL_ORG_ID, () => setUserBudget(editor.id, INSTALL_CEILING));
+    await checkTwoOrgs(editor.id);
+  } finally {
+    await runAsOrg(INSTALL_ORG_ID, async () => {
+      if (priorInstallBudget) await setUserBudget(editor.id, priorInstallBudget.monthlyCeilingUsd);
+      else await clearUserBudget(editor.id);
+    });
+  }
+}
+
+/** Steps 1–5 of the module docblock, for one editor. */
+async function checkTwoOrgs(editorId: string): Promise<void> {
   const install = await runAsOrg(INSTALL_ORG_ID, snapshot);
   check(install.modules.length > 0, 'the install org is seeded');
 
@@ -195,7 +207,7 @@ async function main(): Promise<void> {
         tier.slug,
         { label: `${tier.label} (smoke)`, intent: tierRow.intent },
         tierRow.revision,
-        editor.id
+        editorId
       );
 
       const document = mine.documents[0];
@@ -210,7 +222,7 @@ async function main(): Promise<void> {
           readingTime: '3 min',
           documentId: document.slug,
         }),
-        editor.id
+        editorId
       );
       const article = await prisma.appResource.findFirst({
         where: { slug: PROBE_ARTICLE },
@@ -220,11 +232,11 @@ async function main(): Promise<void> {
         article?.documentId === document.id && article.documentSlug === document.slug,
         `the article opens the new org's "${document.slug}", not the install org's`
       );
-      const budget = await setUserBudget(editor.id, NEW_ORG_CEILING);
-      const mineBudget = await prisma.appUserBudget.findFirst({ where: { userId: editor.id } });
+      const budget = await setUserBudget(editorId, NEW_ORG_CEILING);
+      const mineBudget = await prisma.appUserBudget.findFirst({ where: { userId: editorId } });
       const everyBudget = await runAsSystem('smoke: one person, two orgs', () =>
         prisma.appUserBudget.findMany({
-          where: { userId: editor.id },
+          where: { userId: editorId },
           select: { orgId: true, monthlyCeilingUsd: true },
         })
       );
@@ -330,12 +342,7 @@ async function main(): Promise<void> {
     failure = error instanceof Error ? error : new Error(String(error));
   }
 
-  await eraseOrg({ orgId: org.id, actorUserId: editor.id });
-  // Leave the install org's budget for this person as the smoke found it.
-  await runAsOrg(INSTALL_ORG_ID, async () => {
-    if (priorInstallBudget) await setUserBudget(editor.id, priorInstallBudget.monthlyCeilingUsd);
-    else await clearUserBudget(editor.id);
-  });
+  await eraseOrg({ orgId: org.id, actorUserId: editorId });
   const left = await runAsSystem('smoke: anything left', () =>
     Promise.all([
       prisma.appJourneyModule.count({ where: { orgId: org.id } }),

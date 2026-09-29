@@ -94,6 +94,7 @@ import {
   type FieldMode,
 } from '@/lib/orchestration/agents/resolve-effective-prompt';
 import { noteMaintenanceWork } from '@/lib/orchestration/maintenance/idle-gate';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /** One arm, composed and ready to be queued. */
 export interface ResolvedVoiceArm {
@@ -365,7 +366,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
   // first. A version bump that has not been seeded yet lands here as a missing
   // dataset, which is the honest failure — the alternative is silently running
   // the previous version's questions and filing the answers under the new one.
-  const datasetId = goldenSetDatasetId(pointer.version);
+  const datasetId = goldenSetDatasetId(pointer.version, requireOrgId());
   const dataset = await prisma.aiDataset.findUnique({
     where: { id: datasetId },
     select: { id: true, name: true, contentHash: true, caseCount: true },

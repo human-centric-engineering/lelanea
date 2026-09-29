@@ -40,11 +40,12 @@ import {
   DELETE as removePrompt,
 } from '@/app/api/v1/admin/app/voice/golden-set/prompts/[key]/route';
 import { POST as newVersion } from '@/app/api/v1/admin/app/voice/golden-set/versions/route';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const EDITOR = 'editor-id';
 const goldenSet = getVoiceGoldenSet();
 const VERSION = goldenSet.collection.version;
-const DATASET = goldenSetDatasetId(VERSION);
+const DATASET = goldenSetDatasetId(VERSION, INSTALL_ORG_ID);
 
 /** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
 const stored = () => db.current!.client as unknown as PrismaClient;
@@ -276,7 +277,9 @@ describe('starting a new version', () => {
     const { pointer } = await view();
     const { to } = await editor.startNewGoldenSetVersion(pointer!.revision, EDITOR);
 
-    const created = db.current!.rows('aiDataset').find((row) => row.id === goldenSetDatasetId(to));
+    const created = db
+      .current!.rows('aiDataset')
+      .find((row) => row.id === goldenSetDatasetId(to, INSTALL_ORG_ID));
     expect(created?.name).toBe(`${goldenSet.dataset.name} v${to}`);
   });
 
@@ -407,7 +410,7 @@ describe('a stored case that is not the shape the seed writes', () => {
 
     const copied = db
       .current!.rows('aiDatasetCase')
-      .filter((row) => row.datasetId === goldenSetDatasetId(to));
+      .filter((row) => row.datasetId === goldenSetDatasetId(to, INSTALL_ORG_ID));
     const carried = copied.find((row) => row.position === 0);
     expect(carried?.metadata).toEqual({});
   });

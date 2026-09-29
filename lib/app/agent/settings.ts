@@ -110,7 +110,12 @@ export interface EffectiveCeiling {
 }
 
 /**
- * What one person may spend this month: their override, else the default.
+ * What one person may spend this month: their override in the org the request
+ * entered, else the default.
+ *
+ * The org is named rather than left to the row-security policies (t-114): a
+ * person in two orgs has a budget in each, and a ceiling is a spending limit,
+ * so it must come from this org's row wherever the policies are not enforcing.
  *
  * Both reads go out together; the default is read even when an override exists,
  * because one round trip for two indexed lookups costs no more than one.
@@ -118,7 +123,7 @@ export interface EffectiveCeiling {
 export async function getEffectiveMonthlyCeiling(userId: string): Promise<EffectiveCeiling> {
   const [override, settings] = await Promise.all([
     prisma.appUserBudget.findFirst({
-      where: { userId },
+      where: { orgId: requireOrgId(), userId },
       select: { monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -142,7 +147,7 @@ export async function getEffectiveMonthlyCeilings(
   if (userIds.length === 0) return new Map();
   const [overrides, settings] = await Promise.all([
     prisma.appUserBudget.findMany({
-      where: { userId: { in: [...userIds] } },
+      where: { orgId: requireOrgId(), userId: { in: [...userIds] } },
       select: { userId: true, monthlyCeilingUsd: true },
     }),
     getAgentSettings(),
@@ -316,14 +321,18 @@ export async function clearUserBudget(
   const user = await findUser(userId);
   if (!user) return null;
 
-  const { count } = await prisma.appUserBudget.deleteMany({ where: { userId } });
+  // This org's override only: the person's budget in any other org stands.
+  const { count } = await prisma.appUserBudget.deleteMany({
+    where: { orgId: requireOrgId(), userId },
+  });
 
   const settings = await getAgentSettings();
   return { row: toRow(user, null, settings.defaultMonthlyCeilingUsd), cleared: count > 0 };
 }
 
 /**
- * The Art. 15 collector's read: this person's override, if they have one.
+ * The Art. 15 collector's read: this person's overrides, one per org they
+ * hold one in (t-114), as far as the export's own org scope reaches.
  *
  * An array, always — empty when the default applies — because a declared
  * section must be present in what the leaf collector returns.

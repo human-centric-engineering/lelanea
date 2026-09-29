@@ -24,6 +24,7 @@ import { describe, it, expect } from 'vitest';
 import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
 import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { goldenSetDatasetId } from '@/lib/app/voice/golden-set';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const MIGRATION = 'prisma/migrations/20260929100400_app_voice_golden_set_data/migration.sql';
 
@@ -39,7 +40,7 @@ describe('what the seed builds', () => {
     expect(seed.version).toBe(authored.collection.version);
     // The whole reason the row exists: `version` is not decoration, it is the
     // suffix of the id every reader resolves the dataset by.
-    expect(goldenSetDatasetId(seed.version)).toContain(seed.version);
+    expect(goldenSetDatasetId(seed.version, INSTALL_ORG_ID)).toContain(seed.version);
   });
 
   it('carries the provenance the voice page shows, whole', () => {

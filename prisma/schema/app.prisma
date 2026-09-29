@@ -432,7 +432,8 @@ model AppAgentSettings {
 /// `lib/app/leaf-data-export.ts`.
 model AppUserBudget {
   id                String   @id @default(cuid())
-  /// Hand-written FK → `user`. See the note above. One override per person.
+  /// Hand-written FK → `user`. See the note above. One override per person per
+  /// org (t-114): unique with `orgId`, so a person in two orgs has one in each.
   userId            String
   monthlyCeilingUsd Float
   createdAt         DateTime @default(now())
