@@ -11,8 +11,10 @@
 --
 -- A CHECK rather than NOT NULL, so Prisma's types (and every create in the
 -- leaf) are unchanged: Prisma cannot model a CHECK, which is why each one is
--- pinned by a drift probe in lib/app/leaf-db-drift.ts, derived from the
--- tenant-owned roster so a new table without one fails `db:drift-check`.
+-- pinned by a drift probe over APP_ORG_OWNED_TABLES in
+-- lib/app/leaf-db-drift.ts. An always-run test pins that list to the
+-- schema's tenant-owned app_* tables, so a new one fails until it is listed,
+-- and `db:drift-check` then fails until its migration adds the CHECK.
 --
 -- Validation reads every row, and row security never applies to it, so no
 -- bypass is needed. Every existing row already has an org (t-112's backfill).

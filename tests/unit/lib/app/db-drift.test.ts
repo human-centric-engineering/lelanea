@@ -324,6 +324,8 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
 
     queryRaw.mockResolvedValueOnce([{ def: 'CHECK (("orgId" IS NOT NULL))' }]);
     await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+    // It asks for the name the migration writes, not a near miss.
+    expect(queryRaw.mock.calls[0]).toContain('app_turn_orgId_not_null');
 
     queryRaw.mockResolvedValueOnce([]);
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });

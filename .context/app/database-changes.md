@@ -137,8 +137,11 @@ migrations dated 2026-10-03 are the worked example.
   different. The tenancy client stamps every create, and only a create under
   `runAsSystem` goes unstamped, so a system-scope write to an `app_*` table
   now fails loudly. Prisma cannot model a CHECK, so each is pinned by a drift
-  probe derived from the tenant-owned roster (`lib/app/leaf-db-drift.ts`): a
-  new `app_*` table fails `db:drift-check` until its migration adds one.
+  probe over `APP_ORG_OWNED_TABLES` (`lib/app/leaf-db-drift.ts`). That list
+  is written out, and `tests/unit/lib/app/org-id-check-roster.test.ts`
+  (always-run) pins it to the tenant-owned roster: a new `app_*` model fails
+  there until it is listed, then `db:drift-check` fails until its migration
+  adds the CHECK. Adding a model means both.
 - **Lookups rely on the policies, not on an explicit org** (t-115, the
   owner's ruling). Leaf code reads by name inside an org, as Sunrise and
   Daybreak do, and names the org explicitly only where Prisma needs it: a
