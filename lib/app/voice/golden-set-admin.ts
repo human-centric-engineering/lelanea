@@ -13,7 +13,7 @@
  * @see lib/app/content/golden-set-store.ts — the pointer row
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { z } from 'zod';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
@@ -51,7 +51,7 @@ const caseMetadataSchema = z.object({
  * @throws ContentNotSeededError when the pointer or the dataset is absent.
  */
 export async function getGoldenSetAdminView(
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<GoldenSetAdminView> {
   const pointer = await getGoldenSetPointer(client);
 
@@ -61,7 +61,7 @@ export async function getGoldenSetAdminView(
       orderBy: { position: 'asc' },
       select: { position: true, input: true, metadata: true },
     }),
-    client.aiAgent.findUnique({
+    client.aiAgent.findFirst({
       where: { slug: VOICE_CONTROL_AGENT_SLUG },
       select: { systemInstructions: true },
     }),

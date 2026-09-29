@@ -261,7 +261,7 @@ const unit: SeedUnit = {
     }
 
     // ---- The control agent: created once, five columns reconciled forever ---
-    const existingControl = await prisma.aiAgent.findUnique({
+    const existingControl = await prisma.aiAgent.findFirst({
       where: { slug: VOICE_CONTROL_AGENT_SLUG },
       select: {
         id: true,

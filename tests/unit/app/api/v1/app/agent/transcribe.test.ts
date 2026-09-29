@@ -117,7 +117,7 @@ describe('POST — a clip, transcribed', () => {
     );
     assertNoAudioPersistence(vi.mocked(logCost), 'logCost');
     const writes = Object.entries(prisma).flatMap(([model, delegate]) =>
-      Object.keys(delegate as Record<string, unknown>)
+      Object.keys(delegate)
         .filter((m) => /create|update|upsert|delete/.test(m))
         .map((m) => `${model}.${m}`)
     );

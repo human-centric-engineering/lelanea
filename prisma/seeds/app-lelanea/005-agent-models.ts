@@ -124,7 +124,8 @@
  * @see .context/app/agent.md
  */
 
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
@@ -177,7 +178,7 @@ type AgentWithGrants = Prisma.AiAgentGetPayload<{ include: typeof AGENT_INCLUDE 
  * route does for a legacy agent, so the change is a change FROM something.
  */
 async function writeBinding(
-  prisma: PrismaClient,
+  prisma: TenancyClient,
   agent: AgentWithGrants,
   binding: { provider: string; model: string },
   changeSummary: string,

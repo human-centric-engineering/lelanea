@@ -71,7 +71,8 @@
  * @see .context/app/voice.md
  */
 
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 
 import { prisma } from '@/lib/db/client';
 import { ValidationError } from '@/lib/api/errors';
@@ -109,7 +110,7 @@ export interface ResolvedVoiceArm {
   binding: { provider: string; model: string; temperature: number };
 }
 
-type PrismaLike = PrismaClient | Prisma.TransactionClient;
+type PrismaLike = TenancyClient | Prisma.TransactionClient;
 
 /** Everything an arm needs, in one query per agent. */
 export const AGENT_SELECT = {
@@ -377,7 +378,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
     );
   }
 
-  const judge = await prisma.aiAgent.findUnique({
+  const judge = await prisma.aiAgent.findFirst({
     where: { slug: BRAND_VOICE_JUDGE_SLUG },
     select: { kind: true, isActive: true },
   });
