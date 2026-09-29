@@ -9,7 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 
 import { createContentDbFake, type ContentDbFake } from '@/tests/helpers/app/content-db-fake';
@@ -45,6 +45,9 @@ const EDITOR = 'editor-id';
 const goldenSet = getVoiceGoldenSet();
 const VERSION = goldenSet.collection.version;
 const DATASET = goldenSetDatasetId(VERSION);
+
+/** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
+const stored = () => db.current!.client as unknown as PrismaClient;
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -362,9 +365,9 @@ describe('the file round-trip', () => {
 describe('a stored case that is not the shape the seed writes', () => {
   /** Break the first case's metadata so `promptOf` can no longer read it as a prompt. */
   async function breakFirstCase() {
-    await db.current!.client.aiDatasetCase.update({
+    await stored().aiDatasetCase.update({
       where: { id: 'case-0' },
-      data: { metadata: null },
+      data: { metadata: Prisma.DbNull },
     });
   }
 
@@ -412,13 +415,13 @@ describe('a stored case that is not the shape the seed writes', () => {
   it('is reported in an import plan so applying the import repairs it', async () => {
     const file = await editor.exportGoldenSetFile();
     const cases = db.current!.rows('aiDatasetCase').filter((row) => row.datasetId === DATASET);
-    await db.current!.client.aiDatasetCase.update({
-      where: { id: cases[0].id },
-      data: { metadata: null },
+    await stored().aiDatasetCase.update({
+      where: { id: String(cases[0].id) },
+      data: { metadata: Prisma.DbNull },
     });
-    await db.current!.client.aiDatasetCase.update({
-      where: { id: cases[1].id },
-      data: { metadata: null },
+    await stored().aiDatasetCase.update({
+      where: { id: String(cases[1].id) },
+      data: { metadata: Prisma.DbNull },
     });
 
     const preview = await editor.previewGoldenSetImport(file, false);
@@ -574,7 +577,7 @@ describe('adding a prompt directly', () => {
 
 describe('the dataset name', () => {
   it('is left alone when it does not carry the version suffix', async () => {
-    await db.current!.client.aiDataset.update({
+    await stored().aiDataset.update({
       where: { id: DATASET },
       data: { name: 'Golden set, unversioned' },
     });
@@ -587,7 +590,7 @@ describe('the dataset name', () => {
 
 describe('exporting without a control agent', () => {
   it('refuses to export, since the file cannot say what the bare arm is', async () => {
-    await db.current!.client.aiAgent.delete({ where: { id: 'control' } });
+    await stored().aiAgent.delete({ where: { id: 'control' } });
 
     await expect(editor.exportGoldenSetFile()).rejects.toMatchObject({
       status: 409,

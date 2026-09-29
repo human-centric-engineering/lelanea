@@ -38,6 +38,9 @@ import type { OverlayEdit } from '@/lib/validations/app-voice-content';
 
 const EDITOR = 'editor-id';
 
+/** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
+const stored = () => db.current!.client as unknown as PrismaClient;
+
 beforeEach(async () => {
   db.current = createContentDbFake();
   await seedVoiceOverlays(buildVoiceOverlaySeed(), db.current.client as unknown as PrismaClient);
@@ -465,8 +468,8 @@ describe('an unseeded database', () => {
 describe('a stored row the schemas no longer accept', () => {
   it('marks the set unservable and its fields unreadable, but still lists the overlays', async () => {
     const setRow = db.current!.rows('appVoiceOverlaySet')[0];
-    await db.current!.client.appVoiceOverlaySet.update({
-      where: { id: setRow.id },
+    await stored().appVoiceOverlaySet.update({
+      where: { id: String(setRow.id) },
       data: { coreOnly: { heading: '', lines: ['x'] } },
     });
 
@@ -480,8 +483,8 @@ describe('a stored row the schemas no longer accept', () => {
 
   it('refuses to export overlays when a stored row no longer fits the file schema', async () => {
     const overlayRow = db.current!.rows('appVoiceOverlay')[0];
-    await db.current!.client.appVoiceOverlay.update({
-      where: { id: overlayRow.id },
+    await stored().appVoiceOverlay.update({
+      where: { id: String(overlayRow.id) },
       data: { label: '' },
     });
 
@@ -494,8 +497,8 @@ describe('a stored row the schemas no longer accept', () => {
   it('plans a wholesale replace of the set’s framing when its stored JSON no longer parses', async () => {
     const file = await overlays.exportOverlaysFile();
     const setRow = db.current!.rows('appVoiceOverlaySet')[0];
-    await db.current!.client.appVoiceOverlaySet.update({
-      where: { id: setRow.id },
+    await stored().appVoiceOverlaySet.update({
+      where: { id: String(setRow.id) },
       data: { coreOnly: { heading: '', lines: ['x'] } },
     });
 
@@ -612,7 +615,7 @@ describe('one overlay, edge cases', () => {
 
 describe('adding a situation directly', () => {
   it('positions the first overlay at 1 when the set has none yet', async () => {
-    await db.current!.client.appVoiceOverlay.deleteMany({ where: {} });
+    await stored().appVoiceOverlay.deleteMany({ where: {} });
 
     const created = await overlays.createOverlay(
       {
