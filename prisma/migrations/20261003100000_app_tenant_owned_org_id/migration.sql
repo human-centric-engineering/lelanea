@@ -16,10 +16,11 @@
 -- definition by slug; they now point by `definitionId`, backfilled from the
 -- slug, and keep `slotSlug` as a plain column.
 --
--- Owner ruling (29 Sept 2026): the other 17 tables keyed by an authored name
--- (module and collection ids, situations, region codes, words keys) keep
--- install-wide keys for now. Harmless at TENANCY_MODE=single; they must become
--- per-org before anyone enables `multi` (divergences.md, and a Hub task).
+-- Owner ruling (29 Sept 2026): the 14 tables keyed by an authored name
+-- (module and collection ids, situations, region codes, words keys) and
+-- app_user_budget (keyed by user id) keep install-wide keys for now. Harmless
+-- at TENANCY_MODE=single; they must become per-org before anyone enables
+-- `multi` (.context/app/database-changes.md, and a Hub task).
 --
 -- Generated ids use the cuid-shaped expression, never a bare UUID: see the
 -- t-93 note in .context/app/database-changes.md.

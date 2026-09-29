@@ -74,3 +74,40 @@ on every run (agent grants, capability rows), and the environment's
 deploy runs `db:seed`. Even then, remember production only runs it when
 someone does. If the change must land without anyone remembering, it is a
 migration.
+
+## Tenancy: every table belongs to an org
+
+Since Daybreak 0.6.0 (t-112), every `app_*` table carries `orgId`, backfilled
+to the install org (`'install'`), with a dormant `org_isolation` policy and a
+place in `leafOrgSources()` (`lib/app/leaf-data-export.ts`). A new model does
+the same, or Sunrise's `model-classification`, `policy-coverage` and
+`org-sources` guards fail naming it. The recipe is Daybreak's
+(`.context/framework/building-on-daybreak.md`, "Tenancy"), and our two
+migrations dated 2026-10-03 are the worked example.
+
+- **You rarely write `orgId` yourself.** The tenancy client stamps it on
+  every create and scopes every read to the current org. What changes is how
+  you look a row up by a per-org key: a read is `findFirst({ where: { slug } })`,
+  and a write keyed on it uses `orgId_slug: { orgId: requireOrgId(), slug }`.
+  Scripts run outside a request, so they enter the install org with
+  `runAsOrg(INSTALL_ORG_ID, main, { source: 'job' })`.
+- **Some tables keep install-wide keys, on purpose (owner ruling,
+  29 Sept 2026).** Fourteen are keyed by an authored name: the document,
+  journey, resource and question-set collections, foundational documents,
+  tiers, modules, discovery questions, resources, words keys, the voice
+  overlay set and its situations, the golden set, and crisis region codes.
+  `app_user_budget` is keyed by user id, so a person in two orgs would share
+  one limit. At `TENANCY_MODE=single` none of that matters. **All fifteen
+  must become per-org before anyone enables `multi`.** (`app_knowledge_designation`
+  is keyed by a knowledge-document id, which is already per org, so it needs
+  nothing.) The three tables whose key was a `slug` (`app_agent_settings`,
+  `app_crisis_copy`, `app_slot_definition`) already are.
+
+### A generated id must be the shape its readers expect
+
+A migration that writes an id needs to know whether anything addresses that
+row by id. `ai_capability.id` is a path parameter, and every admin route
+validates it with `cuidSchema`, so a bare `gen_random_uuid()::text` would
+create a row no admin page can open (t-93). **The column type does not decide
+the id format; the table does.** When in doubt, use the cuid-shaped
+`'c' || replace(gen_random_uuid()::text, '-', '')`.
