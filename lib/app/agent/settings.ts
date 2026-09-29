@@ -69,7 +69,7 @@ export interface AgentSettings {
   updatedAt: Date | null;
 }
 
-/** The singleton as it stands. One primary-key read, every call. */
+/** The singleton as it stands. One read by its per-org slug, every call. */
 export async function getAgentSettings(): Promise<AgentSettings> {
   const row = await prisma.appAgentSettings.findFirst({
     where: { slug: AGENT_SETTINGS_SLUG },

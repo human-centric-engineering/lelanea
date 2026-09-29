@@ -759,10 +759,11 @@ const ORG_SOURCES: OrgDataSource[] = [
 
 /**
  * Declare this leaf app's `orgId`-carrying models for an ORG's data export — the
- * org-subject twin of {@link initLeafSubjectSources}. Ships empty.
+ * org-subject twin of {@link initLeafSubjectSources}. Daybreak ships it empty;
+ * t-112 fills it with all 37 of ours (`ORG_SOURCES` above).
  *
- * If you add `orgId` to a model of your own (making it tenant-owned under
- * Sunrise §107), `tests/unit/lib/privacy/org-sources.test.ts` names it until it
+ * A new model of ours carries `orgId` like the rest (tenant-owned under Sunrise
+ * §107), so `tests/unit/lib/privacy/org-sources.test.ts` names it until it
  * appears here: as a source (an `export` fetch scoped by `orgId`, full rows,
  * `omit` for any secret) or as an exclusion with the reason the reader is shown.
  * Pulled lazily by `lib/app/data-export.ts` on every read — nothing to register.
