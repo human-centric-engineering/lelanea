@@ -50,7 +50,7 @@ import {
   recordAcknowledgement,
 } from '@/lib/app/gateway/acknowledgements';
 import { listFoundationalDocuments } from '@/lib/app/content/document-store';
-import { runAsOrg } from '@/lib/tenancy/context';
+import { runAsOrg, runAsSystem } from '@/lib/tenancy/context';
 import { fakeDocumentStore, seededCollection } from '@/tests/helpers/app/foundational-documents';
 
 /** The version the seed gives both documents — read, not written down. */
@@ -295,6 +295,13 @@ describe('recordAcknowledgement', () => {
         },
       })
     );
+  });
+
+  it('refuses a system scope before writing, since its row would carry no org', async () => {
+    await expect(
+      runAsSystem('test: no org', () => recordAcknowledgement('user-1', 'terms'))
+    ).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('lets every other database failure through', async () => {

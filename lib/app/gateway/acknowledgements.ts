@@ -226,6 +226,10 @@ export async function recordAcknowledgement(
   userId: string,
   kind: AcknowledgementKind
 ): Promise<RecordAcknowledgementResult> {
+  // Resolved first (t-116): the key is per org, so the insert and the repeat
+  // read must be in the same one, and a system scope, which would write a row
+  // with no org that no key constrains, is refused before anything is written.
+  const orgId = requireOrgId();
   const documentVersion = (await getRequiredVersions())[kind];
   const select = { id: true, kind: true, documentVersion: true, acknowledgedAt: true } as const;
 
@@ -240,12 +244,8 @@ export async function recordAcknowledgement(
     if (!isUniqueViolation(error)) throw error;
   }
 
-  // The key is per org (t-116): the row that collided is this org's, the one
-  // the insert was stamped with.
   const row = await prisma.appAcknowledgement.findUnique({
-    where: {
-      orgId_userId_kind_documentVersion: { orgId: requireOrgId(), userId, kind, documentVersion },
-    },
+    where: { orgId_userId_kind_documentVersion: { orgId, userId, kind, documentVersion } },
     select,
   });
   // The unique violation says the row exists, so `null` here means it was
