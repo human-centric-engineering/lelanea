@@ -300,10 +300,12 @@ validated on the way out (`storedExemplarsSchema`, `storedCoreOnlySchema` in
 out of half a block, because a partial `exemplars` loses `originLabel`, which is
 the load-bearing string of the whole feature.
 
-**The overlay's primary key is the situation**, because that key is also the
+**An overlay is named by its situation**, because that name is also the
 `contextId` a chat request carries; there is no second identifier to keep in step
-with it. A duplicate is impossible at the row level, still rejected by the file's
-schema, and still thrown on by `toVoiceOverlays()` — a lookup takes the first
+with it. Since t-114 the row's `id` is generated and `situation` is unique per
+org, so each org can hold its own `first-meeting`. A duplicate within an org is
+impossible at the row level, still rejected by the file's schema, and still
+thrown on by `toVoiceOverlays()` — a lookup takes the first
 match, so the second overlay's lines would ship nowhere and nothing would say so.
 
 **`when` is stored as the column `reviewerNote`**, `when` being reserved in SQL.
@@ -641,7 +643,7 @@ seeded, so a fifth situation that existing environments must have ships as an
 [`database-changes.md`](./database-changes.md) — or is added on the Voice page
 (t-92), which is the usual way now. There is still no TypeScript list of situations to fall out of
 step with the table. A duplicate is refused three times over: the file's schema,
-the table's primary key, and `toVoiceOverlays()` on the way out.
+the table's per-org unique key, and `toVoiceOverlays()` on the way out.
 
 An overlay **shades** the core; it never softens it and never restates it.
 Anything true of every turn belongs in the core file.

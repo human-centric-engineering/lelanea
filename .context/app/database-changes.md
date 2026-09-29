@@ -96,25 +96,27 @@ migrations dated 2026-10-03 are the worked example.
   the install org with `runAsOrg(INSTALL_ORG_ID, main, { source: 'job' })`.
 - **Authored names are per org, beside a generated id.** Every table keyed by
   a name follows `app_slot_definition` (t-112): a generated `id` primary key,
-  the name in `slug` (resource words: `key`) with `@@unique([orgId, slug])`,
-  and children pointing at the parent's generated id while keeping its name
-  in a plain `…Slug` column (`journeySlug` beside `journeyId`). The ten content
-  tables moved in t-113, in `20261004100000_app_content_per_org_keys`. The
-  API, the content files and the `changedFields` stored in revisions still
-  say `id`, `documentId`, `moduleId`: only the Prisma layer uses the new names.
+  the name in `slug` with `@@unique([orgId, slug])`, and children pointing at
+  the parent's generated id while keeping its name in a plain `…Slug` column
+  (`journeySlug` beside `journeyId`). A table whose key already had its own
+  name keeps it, unique per org: resource words' `key`, an overlay's
+  `situation`, a crisis `region`, a budget's `userId`. The ten content tables
+  moved in t-113 (`20261004100000_app_content_per_org_keys`), and the voice,
+  crisis and budget tables in t-114 (`20261004100100_app_voice_crisis_budget_per_org_keys`),
+  so every `app_*` table is now keyed per org. The API, the content files and
+  the `changedFields` stored in revisions still say `id`, `documentId`,
+  `moduleId`: only the Prisma layer uses the new names.
   - **Write both columns of a child.** A child needs its parent's generated
     id, so a write that creates both reads the parents back
     (`createManyAndReturn`) and looks each id up with `idsBySlug`
     (`lib/app/content/row-ids.ts`), inside one interactive transaction.
+  - **A budget is per person per org.** `app_user_budget` is unique on
+    `(orgId, userId)`, so a person in two orgs has a limit in each.
   - **Prove it at `multi`.** At `single` nothing shows two orgs apart, so
     `npm run smoke:app-per-org-content` runs against a throwaway database with
     the policies enabled (its docblock has the steps).
-- **Five tables keep install-wide keys until t-114:** the voice overlay set
-  and its situations, the golden set, crisis region codes, and
-  `app_user_budget`, keyed by user id, so a person in two orgs would share one
-  limit. At `single` none of that matters; **they must become per-org before
-  anyone enables `multi`.** (`app_knowledge_designation` is keyed by a
-  knowledge-document id, which is already per org, so it needs nothing.)
+  - `app_knowledge_designation` is keyed by a knowledge-document id, which is
+    already per org, so it needed nothing.
 
 ### A generated id must be the shape its readers expect
 
