@@ -617,7 +617,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // source or as an exclusion with a reason, and nothing else is.
       const org = leafOrgSources();
       expect(
-        [...org.sources.map((entry) => entry.model), ...org.excluded.map((entry) => entry.model)].sort()
+        [
+          ...org.sources.map((entry) => entry.model),
+          ...org.excluded.map((entry) => entry.model),
+        ].sort()
       ).toEqual(appModels);
       __resetAppSubjectSourceRegistryForTests();
       initLeafSubjectSources();
