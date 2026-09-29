@@ -10,6 +10,12 @@
  * The rule restated from core (`ownedBy()`): at `TENANCY_MODE=single` a row
  * with no org is the install org's, so the install org's export carries it;
  * any other org, and every org at `multi`, matches strictly.
+ *
+ * FORK NOTE — this reads the real `lib/app/leaf-data-export.ts`, not a mock.
+ * It has to: the seam's own sources are the thing under test, so a mock would
+ * assert the mock. It is Lelañea's seam and Lelañea's test; a fork of Lelañea
+ * that changes `leafOrgSources()` updates the count of 37 and the model named
+ * in the single-source cases here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
