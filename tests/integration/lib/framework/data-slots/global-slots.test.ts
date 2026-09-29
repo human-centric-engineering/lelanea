@@ -57,9 +57,10 @@ const { prismaFake, store, writes } = vi.hoisted(() => {
         }
         return { count: args.data.length };
       },
-      update: async (args: { where: { slug: string }; data: Partial<SlotDefinition> }) => {
-        const r = store.get(args.where.slug);
-        if (!r) throw new Error(`no slot ${args.where.slug}`);
+      // By `id`, as the reconcile writes it now that slugs are unique per org (t-112).
+      update: async (args: { where: { id: string }; data: Partial<SlotDefinition> }) => {
+        const r = [...store.values()].find((row) => row.id === args.where.id);
+        if (!r) throw new Error(`no slot ${args.where.id}`);
         Object.assign(r, args.data);
         writes.count++;
         return { ...r };

@@ -175,9 +175,20 @@ const MODELS: Record<string, ModelSpec> = {
   },
   aiEvaluationRun: { key: 'id', defaults: stamped },
   aiAgent: { key: 'id', unique: [['slug']], defaults: stamped },
+  // t-112: a generated id, and the slug unique per org. The real tenancy
+  // client stamps `orgId` on create; the fake's default stands in for it.
   appCrisisCopy: {
-    key: 'slug',
-    defaults: () => ({ ...stamped(), status: 'draft', version: 1, signedOffAt: null }),
+    key: 'id',
+    unique: [['orgId', 'slug']],
+    compound: { orgId_slug: ['orgId', 'slug'] },
+    defaults: () => ({
+      ...stamped(),
+      orgId: 'install',
+      slug: 'global',
+      status: 'draft',
+      version: 1,
+      signedOffAt: null,
+    }),
   },
   appCrisisRegion: {
     key: 'region',

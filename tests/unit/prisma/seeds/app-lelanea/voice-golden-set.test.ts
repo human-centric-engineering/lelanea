@@ -207,7 +207,7 @@ const prisma = {
     ),
   },
   aiAgent: {
-    findUnique: vi.fn(
+    findFirst: vi.fn(
       async ({ where }: { where: { slug: string } }) =>
         world.agents.find((agent) => agent.slug === where.slug) ?? null
     ),

@@ -127,7 +127,7 @@ vi.mock('@/lib/db/client', () => {
         findMany: vi.fn(async ({ where }: { where: { slug: { in: string[] } } }) =>
           world.agents.filter((agent) => where.slug.in.includes(agent.slug))
         ),
-        findUnique: vi.fn(
+        findFirst: vi.fn(
           async ({ where }: { where: { slug: string } }) =>
             world.agents.find((agent) => agent.slug === where.slug) ?? null
         ),

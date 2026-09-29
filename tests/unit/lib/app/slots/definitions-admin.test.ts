@@ -27,8 +27,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-type Row = Record<string, unknown> & { slug: string; version: number };
-type Revision = Record<string, unknown> & { slotSlug: string; version: number };
+type Row = Record<string, unknown> & { id: string; orgId: string; slug: string; version: number };
+type Revision = Record<string, unknown> & {
+  definitionId: string;
+  slotSlug: string;
+  version: number;
+};
+
+/** The org every write here runs as; `requireOrgId()` is pinned to it below. */
+const ORG = vi.hoisted(() => 'org-1');
+
+/** What a create hands the client: the database and the tenancy client fill the rest. */
+type NewRow = Record<string, unknown> & { slug: string; version: number };
 
 const store = vi.hoisted(() => ({
   definitions: [] as Row[],
@@ -40,6 +50,15 @@ const store = vi.hoisted(() => ({
 const sync = vi.hoisted(() => vi.fn());
 
 const db = vi.hoisted(() => {
+  // Generated, and deliberately NOT derived from the slug, so a write that
+  // passed a slug where the id belongs would find no row (t-112).
+  let nextId = 0;
+  const newId = () => `def-${++nextId}`;
+
+  /** Prisma's per-org compound key: resolves to a row only for the same org. */
+  const byOrgSlug = (key: { orgId: string; slug: string }) =>
+    store.definitions.find((r) => r.orgId === key.orgId && r.slug === key.slug);
+
   const byOrder = (rows: Row[]) =>
     [...rows].sort((a, b) =>
       a.group === b.group
@@ -48,41 +67,56 @@ const db = vi.hoisted(() => {
     );
 
   const definition = {
-    // `where` is honoured for `isActive` and nothing else — it is the only
-    // predicate either reader uses, and it is load-bearing: the provider's whole
-    // retirement mechanism is `where: { isActive: true }`, so a fake that
-    // ignored it would pass the test that proves a retired slug is withheld.
-    findMany: vi.fn(async ({ where }: { where?: { isActive?: boolean } } = {}) =>
-      byOrder(
-        where?.isActive === undefined
-          ? store.definitions
-          : store.definitions.filter((row) => row.isActive === where.isActive)
-      )
+    // `where` is honoured for `isActive` and `slug: { in }` and nothing else —
+    // the only predicates the readers use. `isActive` is load-bearing: the
+    // provider's whole retirement mechanism is `where: { isActive: true }`, so a
+    // fake that ignored it would pass the test that proves a retired slug is
+    // withheld. `slug: { in }` is the upload's read-back of the ids it just made.
+    findMany: vi.fn(
+      async ({ where }: { where?: { isActive?: boolean; slug?: { in: string[] } } } = {}) =>
+        byOrder(
+          store.definitions.filter(
+            (row) =>
+              (where?.isActive === undefined || row.isActive === where.isActive) &&
+              (where?.slug === undefined || where.slug.in.includes(row.slug))
+          )
+        )
     ),
-    findUnique: vi.fn(
+    findFirst: vi.fn(
       async ({ where }: { where: { slug: string } }) =>
         store.definitions.find((row) => row.slug === where.slug) ?? null
     ),
-    findUniqueOrThrow: vi.fn(async ({ where }: { where: { slug: string } }) => {
+    findFirstOrThrow: vi.fn(async ({ where }: { where: { slug: string } }) => {
       const row = store.definitions.find((r) => r.slug === where.slug);
       if (!row) throw new Error(`no definition ${where.slug}`);
       return row;
     }),
-    create: vi.fn(async ({ data }: { data: Row }) => {
-      const row = { createdAt: NOW, updatedAt: NOW, ...data };
+    // The tenancy client stamps `orgId` on every create; the fake does the same.
+    create: vi.fn(async ({ data }: { data: NewRow }) => {
+      const row = { id: newId(), orgId: ORG, createdAt: NOW, updatedAt: NOW, ...data };
       store.definitions.push(row);
       return row;
     }),
-    createMany: vi.fn(async ({ data }: { data: Row[] }) => {
-      for (const row of data) store.definitions.push({ createdAt: NOW, updatedAt: NOW, ...row });
+    createMany: vi.fn(async ({ data }: { data: NewRow[] }) => {
+      for (const row of data) {
+        store.definitions.push({ id: newId(), orgId: ORG, createdAt: NOW, updatedAt: NOW, ...row });
+      }
       return { count: data.length };
     }),
-    update: vi.fn(async ({ where, data }: { where: { slug: string }; data: Partial<Row> }) => {
-      const row = store.definitions.find((r) => r.slug === where.slug);
-      if (!row) throw new Error(`no definition ${where.slug}`);
-      Object.assign(row, data, { updatedAt: NOW });
-      return row;
-    }),
+    update: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { orgId_slug: { orgId: string; slug: string } };
+        data: Partial<Row>;
+      }) => {
+        const row = byOrgSlug(where.orgId_slug);
+        if (!row) throw new Error(`no definition ${JSON.stringify(where)}`);
+        Object.assign(row, data, { updatedAt: NOW });
+        return row;
+      }
+    ),
     // The lock's second layer: applies only where the version still matches.
     updateMany: vi.fn(
       async ({
@@ -108,13 +142,36 @@ const db = vi.hoisted(() => {
         .filter((r) => r.slotSlug === where.slotSlug)
         .sort((a, b) => b.version - a.version)
     ),
-    create: vi.fn(async ({ data }: { data: Revision }) => {
-      const row = { id: `rev-${store.revisions.length + 1}`, changedAt: NOW, ...data };
-      store.revisions.push(row);
-      return row;
-    }),
+    // Connects by the per-org key, as Prisma does: a key naming no row throws,
+    // and the stored revision carries the id it resolved to.
+    create: vi.fn(
+      async ({
+        data: { definition, ...data },
+      }: {
+        data: Record<string, unknown> & {
+          slotSlug: string;
+          version: number;
+          definition: { connect: { orgId_slug: { orgId: string; slug: string } } };
+        };
+      }) => {
+        const parent = byOrgSlug(definition.connect.orgId_slug);
+        if (!parent) throw new Error(`no definition to connect ${JSON.stringify(definition)}`);
+        const row = {
+          id: `rev-${store.revisions.length + 1}`,
+          changedAt: NOW,
+          definitionId: parent.id,
+          ...data,
+        };
+        store.revisions.push(row);
+        return row;
+      }
+    ),
+    // The foreign key: a `definitionId` naming no definition is refused.
     createMany: vi.fn(async ({ data }: { data: Revision[] }) => {
       for (const row of data) {
+        if (!store.definitions.some((d) => d.id === row.definitionId)) {
+          throw new Error(`foreign key: no definition ${row.definitionId}`);
+        }
         store.revisions.push({ id: `rev-${store.revisions.length + 1}`, changedAt: NOW, ...row });
       }
       return { count: data.length };
@@ -142,6 +199,14 @@ vi.mock('@/lib/db/utils', () => ({
   // "throw to roll the revision back" path is exercised — what it cannot prove
   // is the rollback itself, which is Postgres's.
   executeTransaction: async <T>(callback: (tx: typeof db) => Promise<T>) => callback(db),
+}));
+/**
+ * Writes keyed on a slug use the per-org unique (`orgId_slug`), whose org
+ * comes from the tenant context. Pinned so the writes have one.
+ */
+vi.mock('@/lib/tenancy/context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tenancy/context')>()),
+  requireOrgId: vi.fn(() => ORG),
 }));
 vi.mock('@/lib/framework/data-slots', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/framework/data-slots')>()),
@@ -190,6 +255,8 @@ const UPDATE = {
 
 function seedDefinition(slug: string, overrides: Partial<Row> = {}): Row {
   const row: Row = {
+    id: `def-seeded-${slug}`,
+    orgId: ORG,
     slug,
     ...FIELDS,
     version: 1,
@@ -302,6 +369,8 @@ describe('adding a definition', () => {
       version: 1,
       origin: 'admin',
       editorId: ADMIN,
+      // Connected by the per-org key to the row just created (t-112).
+      definitionId: store.definitions.find((d) => d.slug === 'life_work')?.id,
     });
     // Against nothing, everything is new — so the history view reads v1 as the
     // creation rather than as a change to eight things at once.
@@ -492,11 +561,12 @@ describe('retiring and restoring', () => {
 
 describe('the history view', () => {
   it('reads newest first and names the admin who made each edit', async () => {
-    seedDefinition('life_work', { version: 1 });
+    const lifeWork = seedDefinition('life_work', { version: 1 });
     store.users.push({ id: ADMIN, email: 'admin@example.com' });
     await updateSlotDefinition('life_work', { ...UPDATE, description: 'Reworded.' }, 1, ADMIN);
     store.revisions.unshift({
       id: 'rev-seed',
+      definitionId: lifeWork.id,
       slotSlug: 'life_work',
       version: 1,
       ...FIELDS,
@@ -624,6 +694,10 @@ describe('uploading a taxonomy file', () => {
       version: 2,
       origin: 'admin',
     });
+    // Revisions point at their definition by id (t-112): the one for this slug,
+    // not merely one that exists.
+    const lifeWork = store.definitions.find((d) => d.slug === 'life_work');
+    expect(store.revisions[0]?.definitionId).toBe(lifeWork?.id);
   });
 
   it('refuses a file that is not a taxonomy, writing nothing', async () => {

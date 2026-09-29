@@ -127,9 +127,15 @@ vi.mock('@/lib/db/client', () => ({
       ),
     },
     aiAgent: {
+      // By slug, which is unique per org now, so the seed reads it with
+      // `findFirst`; by id, which is still unique, as the platform's resolver does.
+      findFirst: vi.fn(
+        async ({ where }: { where: { slug: string } }) =>
+          world.agents.find((agent) => agent.slug === where.slug) ?? null
+      ),
       findUnique: vi.fn(
-        async ({ where }: { where: { slug?: string; id?: string } }) =>
-          world.agents.find((agent) => agent.slug === where.slug || agent.id === where.id) ?? null
+        async ({ where }: { where: { id: string } }) =>
+          world.agents.find((agent) => agent.id === where.id) ?? null
       ),
       // The three inheritable columns default to NULL in the schema, so a seed
       // that omits them must land NULL here — not `undefined`, which would make

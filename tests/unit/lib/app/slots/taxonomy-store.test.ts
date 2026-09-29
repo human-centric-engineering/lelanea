@@ -238,10 +238,20 @@ describe('SLOT_DEFINITION_FIELDS', () => {
     const model = /model AppSlotDefinition \{([\s\S]*?)\n\}/.exec(schema)?.[1];
     expect(model, 'AppSlotDefinition not found in app.prisma').toBeDefined();
 
-    // Everything the model declares, minus the four this constant deliberately
-    // excludes: `slug` is the identity and never changes, `version` is derived
-    // from the history, and the two timestamps are the database's.
-    const NOT_AUTHORED = new Set(['slug', 'version', 'createdAt', 'updatedAt', 'revisions']);
+    // Everything the model declares, minus what this constant deliberately
+    // excludes: `id` and `slug` are the identity and never change, `version` is
+    // derived from the history, the two timestamps are the database's, and
+    // `orgId`/`org` are the tenancy client's stamp (t-112), not wording.
+    const NOT_AUTHORED = new Set([
+      'id',
+      'slug',
+      'version',
+      'createdAt',
+      'updatedAt',
+      'revisions',
+      'orgId',
+      'org',
+    ]);
     const columns = [...(model ?? '').matchAll(/^\s{2}(\w+)\s+\S/gm)]
       .map((m) => m[1])
       .filter((name) => !NOT_AUTHORED.has(name));

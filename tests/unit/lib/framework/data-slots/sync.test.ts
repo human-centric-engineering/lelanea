@@ -416,7 +416,7 @@ describe('syncGlobalSlotDefinitions', () => {
     await syncGlobalSlotDefinitions();
 
     expect(txMock.slotDefinition.update).toHaveBeenCalledWith({
-      where: { slug: 'relationship' },
+      where: { id: 'slot_relationship' },
       data: expect.objectContaining({ description: 'Reworded', scope: 'global', isActive: true }),
     });
   });
@@ -455,7 +455,7 @@ describe('syncGlobalSlotDefinitions', () => {
     const result = await syncGlobalSlotDefinitions();
 
     expect(txMock.slotDefinition.update).toHaveBeenCalledWith({
-      where: { slug: 'relationship' },
+      where: { id: 'slot_relationship' },
       data: expect.objectContaining({ scope: 'global', isActive: true }),
     });
     expect(result).toMatchObject({ skipped: [], updated: 1 });

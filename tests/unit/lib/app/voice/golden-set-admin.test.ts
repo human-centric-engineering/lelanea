@@ -55,7 +55,7 @@ function stubClient(
 ) {
   return {
     aiDatasetCase: { findMany: vi.fn(async () => options.cases ?? []) },
-    aiAgent: { findUnique: vi.fn(async () => options.control ?? null) },
+    aiAgent: { findFirst: vi.fn(async () => options.control ?? null) },
   } as unknown as PrismaClient;
 }
 
@@ -105,7 +105,7 @@ describe('getGoldenSetAdminView', () => {
       orderBy: { position: 'asc' },
       select: { position: true, input: true, metadata: true },
     });
-    expect(client.aiAgent.findUnique).toHaveBeenCalledWith({
+    expect(client.aiAgent.findFirst).toHaveBeenCalledWith({
       where: { slug: VOICE_CONTROL_AGENT_SLUG },
       select: { systemInstructions: true },
     });
