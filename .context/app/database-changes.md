@@ -124,8 +124,9 @@ migrations dated 2026-10-03 are the worked example.
   and cannot read another's.
   `app_knowledge_designation` is unique on `(orgId, sourceKey)`, so each org's
   knowledge mirror can hold `foundational:the_mission` for itself. The key is
-  all this changed: the mirror cron still runs with no org, so only a
-  documents write in an org reconciles that org's mirror. A new unique
+  all this changed: the mirror cron runs with no org, which reconciles the
+  install org at `single` and fails at `multi`, so there only a documents
+  write in an org reconciles that org's mirror. A new unique
   key on an `app_*` table starts with `orgId`, or it fails the second org at
   `multi`.
 
