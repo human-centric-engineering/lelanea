@@ -44,7 +44,10 @@ const at = <T extends object>(rows: readonly T[]) => rows.map((row) => ({ ...row
 
 describe('foundational documents', () => {
   const seed = buildFoundationalSeed();
-  const details = at(seed.documents).map((row) => toDocumentDetail(row));
+  // The seed names a document by `id`; its row holds that name as `slug` (t-113).
+  const details = at(seed.documents).map(({ id, ...row }) =>
+    toDocumentDetail({ slug: id, ...row })
+  );
   const file = foundationalFileFromRows(seed.collection, details);
 
   it('exports a file the seed’s schema accepts, with every block keyed', () => {
@@ -141,7 +144,7 @@ describe('resources', () => {
       seed.collection,
       [
         {
-          id: 'a-video',
+          slug: 'a-video',
           kind: 'video',
           position: 0,
           title: 'F',
@@ -150,11 +153,11 @@ describe('resources', () => {
           duration: '1:00',
           readingTime: null,
           href: 'https://example.com/f',
-          documentId: null,
+          documentSlug: null,
           revision: 1,
         },
         {
-          id: 'a-article',
+          slug: 'a-article',
           kind: 'article',
           position: 0,
           title: 'R',
@@ -163,11 +166,11 @@ describe('resources', () => {
           duration: null,
           readingTime: '3 min',
           href: null,
-          documentId: 'the_mission',
+          documentSlug: 'the_mission',
           revision: 1,
         },
         {
-          id: 'b-article',
+          slug: 'b-article',
           kind: 'article',
           position: 1,
           title: 'L',
@@ -176,7 +179,7 @@ describe('resources', () => {
           duration: null,
           readingTime: '4 min',
           href: 'https://example.com/l',
-          documentId: null,
+          documentSlug: null,
           revision: 1,
         },
       ],
@@ -184,7 +187,7 @@ describe('resources', () => {
     );
     const back = resourcesSeedFromFile(resourcesFileFromLibrary(withItems));
     expect(
-      back.resources.map((row) => [row.id, row.kind, row.position, row.documentId, row.href])
+      back.resources.map((row) => [row.slug, row.kind, row.position, row.documentSlug, row.href])
     ).toEqual([
       ['a-video', 'video', 0, null, 'https://example.com/f'],
       ['a-article', 'article', 0, 'the_mission', null],

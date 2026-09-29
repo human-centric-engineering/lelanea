@@ -33,7 +33,7 @@ const findQuestionSet = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appWaitlistEntry: { findMany: vi.fn(async () => []) },
-    appQuestionSet: { findUnique: findQuestionSet },
+    appQuestionSet: { findFirst: findQuestionSet },
   },
 }));
 
@@ -75,11 +75,16 @@ describe('initLeafApp registers the journey modules', () => {
 
   it('gives the module the questions belong to their slots, through the real boot', async () => {
     findQuestionSet.mockResolvedValue({
-      moduleId: 'module_00_onboarding',
-      questions: [{ id: 'q01', text: 'First?' }],
+      moduleSlug: 'module_00_onboarding',
+      questions: [{ slug: 'q01', text: 'First?' }],
     });
 
     await initLeafApp();
+
+    // The set is found by its authored name, not its generated id (t-113).
+    expect(findQuestionSet).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'onboarding_discovery_questions' } })
+    );
 
     expect(getRegisteredModule('onboarding')?.slotDefinitions).toEqual([
       expect.objectContaining({ slug: 'discovery_q01', description: 'First?' }),

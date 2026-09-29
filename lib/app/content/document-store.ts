@@ -45,6 +45,7 @@ import {
   type FoundationalDocumentIndex,
 } from '@/lib/app/content/document-view';
 import type { FoundationalSeed } from '@/lib/app/content/document-view';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 export {
   ContentNotSeededError,
@@ -65,11 +66,12 @@ export {
  */
 export async function getFoundationalCollectionMeta(): Promise<ContentCollectionMeta> {
   const collection = await defaultClient.appDocumentCollection.findFirst({
-    select: { id: true, title: true, version: true, locale: true },
+    select: { slug: true, title: true, version: true, locale: true },
     orderBy: { createdAt: 'asc' },
   });
   if (!collection) throw new ContentNotSeededError();
-  return collection;
+  const { slug, ...meta } = collection;
+  return { id: slug, ...meta };
 }
 
 /**
@@ -95,7 +97,7 @@ export async function listFoundationalDocuments(): Promise<FoundationalDocumentI
 export async function getFoundationalDocument(
   id: string
 ): Promise<FoundationalDocumentDetail | null> {
-  const row = await defaultClient.appFoundationalDocument.findUnique({ where: { id } });
+  const row = await defaultClient.appFoundationalDocument.findFirst({ where: { slug: id } });
   return row ? toDocumentDetail(row) : null;
 }
 
@@ -143,7 +145,7 @@ export async function seedFoundationalDocuments(
   seed: FoundationalSeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedDocumentsResult> {
-  const existing = await client.appDocumentCollection.findFirst({ select: { id: true } });
+  const existing = await client.appDocumentCollection.findFirst({ select: { slug: true } });
   if (existing) {
     return { status: 'skipped', documents: await client.appFoundationalDocument.count() };
   }
@@ -166,23 +168,37 @@ export async function seedFoundationalDocuments(
     locale: document.locale,
   }));
 
-  await client.$transaction([
-    client.appDocumentCollection.create({
-      data: { ...seed.collection, createdAt: now, updatedAt: now },
-    }),
-    client.appFoundationalDocument.createMany({
-      data: seed.documents.map((document, index) => ({
-        id: document.id,
-        collectionId: seed.collection.id,
-        ...rows[index],
-        revision: 1,
+  await client.$transaction(async (tx) => {
+    const collection = await tx.appDocumentCollection.create({
+      data: {
+        slug: seed.collection.id,
+        title: seed.collection.title,
+        version: seed.collection.version,
+        locale: seed.collection.locale,
         createdAt: now,
         updatedAt: now,
-      })),
-    }),
-    client.appFoundationalDocumentRevision.createMany({
+      },
+      select: { id: true },
+    });
+    const documentId = idsBySlug(
+      await tx.appFoundationalDocument.createManyAndReturn({
+        data: seed.documents.map((document, index) => ({
+          slug: document.id,
+          collectionSlug: seed.collection.id,
+          collectionId: collection.id,
+          ...rows[index],
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        select: { id: true, slug: true },
+      }),
+      'foundational document'
+    );
+    await tx.appFoundationalDocumentRevision.createMany({
       data: seed.documents.map((document, index) => ({
-        documentId: document.id,
+        documentSlug: document.id,
+        documentId: documentId(document.id),
         revision: 1,
         ...rows[index],
         // Against nothing, everything is new.
@@ -193,8 +209,8 @@ export async function seedFoundationalDocuments(
         editorId: null,
         changedAt: now,
       })),
-    }),
-  ]);
+    });
+  });
 
   await syncKnowledgeMirror();
   return { status: 'seeded', documents: seed.documents.length };
@@ -233,10 +249,10 @@ export async function syncKnowledgeMirror(): Promise<void> {
   const revisions = async (): Promise<string | null> => {
     try {
       const rows = await defaultClient.appFoundationalDocument.findMany({
-        select: { id: true, revision: true },
-        orderBy: { id: 'asc' },
+        select: { slug: true, revision: true },
+        orderBy: { slug: 'asc' },
       });
-      return rows.map((row) => `${row.id}@${row.revision}`).join(',');
+      return rows.map((row) => `${row.slug}@${row.revision}`).join(',');
     } catch {
       return null;
     }

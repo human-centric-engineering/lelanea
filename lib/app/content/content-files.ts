@@ -215,7 +215,7 @@ export function assertRosterMatchesFile(file: JourneyStructureFile): void {
  */
 function toModuleRow(entry: JourneyModule): Omit<JourneyModuleRow, 'revision'> {
   return {
-    id: entry.id,
+    slug: entry.id,
     displayNumber: entry.displayNumber,
     title: entry.title,
     subtitle: entry.subtitle ?? null,
@@ -309,7 +309,7 @@ export function journeySeedFromFile(
 
   return {
     journey: {
-      id: file.app.name,
+      slug: file.app.name,
       title: file.app.journeyTitle,
       subtitle: file.app.journeySubtitle,
       version: file.app.version,
@@ -319,7 +319,7 @@ export function journeySeedFromFile(
     // partial, the ones it leaves out are skipped.
     tiers: JOURNEY_TIERS.flatMap((rosterTier) => {
       const tier = tiersById.get(rosterTier.id);
-      return tier ? [{ id: tier.id, label: tier.label, intent: tier.intent }] : [];
+      return tier ? [{ slug: tier.id, label: tier.label, intent: tier.intent }] : [];
     }),
     modules: JOURNEY_MODULES.flatMap((rosterModule) => {
       const entry = modulesById.get(rosterModule.id);
@@ -408,10 +408,10 @@ export function journeyFileFromStructure(structure: JourneyStructure): JourneySt
 export function questionSeedFromFile(file: DiscoveryQuestionsFile): QuestionSeed {
   return {
     set: {
-      id: file.content.id,
+      slug: file.content.id,
       title: file.content.title,
       chartTitle: file.content.chartTitle,
-      moduleId: file.content.module,
+      moduleSlug: file.content.module,
       phase: file.content.phase,
       preamble: { style: file.preamble.style, text: file.preamble.text },
       pacing: {
@@ -423,7 +423,7 @@ export function questionSeedFromFile(file: DiscoveryQuestionsFile): QuestionSeed
       locale: file.content.locale,
     },
     questions: file.questions.map((question) => ({
-      id: question.id,
+      slug: question.id,
       number: question.number,
       text: question.text,
       inputType: question.inputType,
@@ -476,7 +476,7 @@ export function questionsFileFromSet(set: DiscoveryQuestionSet): DiscoveryQuesti
 export function resourcesSeedFromFile(file: ResourcesFile): ResourcesSeed {
   return {
     collection: {
-      id: file.resources.id,
+      slug: file.resources.id,
       title: file.resources.title,
       version: file.resources.version,
       locale: file.resources.locale,

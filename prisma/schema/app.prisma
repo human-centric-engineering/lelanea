@@ -825,8 +825,8 @@ enum AppSlotRevisionOrigin {
 ///
 /// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
 model AppSlotDefinition {
-  /// Stable identity, immutable. Matches `framework_slot_value.slotSlug`.
   id             String   @id @default(cuid())
+  /// Stable identity, immutable. Matches `framework_slot_value.slotSlug`.
   slug           String
   /// Thematic cluster — `life_areas`, `the_person`, `external_conditions`,
   /// `preferences`, `development`, or a module's own output.
@@ -955,8 +955,9 @@ enum AppContentRevisionOrigin {
 ///
 /// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
 model AppDocumentCollection {
+  id        String   @id @default(cuid())
   /// Stable identity, as authored in `content/lelanea_foundational_documents.json`.
-  id        String   @id
+  slug      String
   title     String
   /// The collection's authored version label, e.g. `1.1`.
   version   String
@@ -971,6 +972,7 @@ model AppDocumentCollection {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_document_collection")
 }
@@ -1001,9 +1003,11 @@ model AppDocumentCollection {
 ///
 /// Holds nothing about any person; an EXCLUSION in `lib/app/leaf-data-export.ts`.
 model AppFoundationalDocument {
+  id                      String                @id @default(cuid())
   /// Stable identity, e.g. `terms_of_use`. Immutable: it is the API path segment
   /// and the key `DOCUMENT_FOR_KIND` maps an acknowledgement kind to.
-  id                      String                @id
+  slug                    String
+  collectionSlug          String
   collectionId            String
   collection              AppDocumentCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   /// Reading order within the collection — the authored `suggestedOrder`.
@@ -1039,6 +1043,7 @@ model AppFoundationalDocument {
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([collectionId, position])
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_foundational_document")
 }
@@ -1062,6 +1067,7 @@ model AppFoundationalDocument {
 /// that it keeps an administrator's account id and nothing else about them.
 model AppFoundationalDocumentRevision {
   id                      String                   @id @default(cuid())
+  documentSlug            String
   documentId              String
   document                AppFoundationalDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   /// The revision this produced. 1 is the seed.
@@ -1124,8 +1130,9 @@ model AppFoundationalDocumentRevision {
 /// the registered `ModuleDefinition.name` is derived from it at startup. See
 /// `lib/app/content/journey-store.ts`.
 model AppJourney {
+  id        String   @id @default(cuid())
   /// Stable identity, as authored: the app's name.
-  id        String   @id
+  slug      String
   title     String
   subtitle  String
   /// The authored version label, e.g. `1.0`.
@@ -1142,6 +1149,7 @@ model AppJourney {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_journey")
 }
@@ -1149,16 +1157,18 @@ model AppJourney {
 /// One tier's text: its label and what it is for (t-87). Which modules sit in
 /// it, and its order, are the roster's.
 model AppJourneyTier {
+  id          String     @id @default(cuid())
   /// The tier id, e.g. `inner_authority`. Immutable: the roster keys on it.
-  id        String     @id
-  journeyId String
-  journey   AppJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
-  label     String
-  intent    String
+  slug        String
+  journeySlug String
+  journeyId   String
+  journey     AppJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  label       String
+  intent      String
   /// Bumped on every write that changes something. 1 is the seed.
-  revision  Int        @default(1)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  revision    Int        @default(1)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   revisions AppJourneyTierRevision[]
 
@@ -1166,6 +1176,7 @@ model AppJourneyTier {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_journey_tier")
 }
@@ -1175,6 +1186,7 @@ model AppJourneyTier {
 /// `editorId → user ON DELETE SET NULL` foreign key and its drift probe.
 model AppJourneyTierRevision {
   id            String                   @id @default(cuid())
+  tierSlug      String
   tierId        String
   tier          AppJourneyTier           @relation(fields: [tierId], references: [id], onDelete: Cascade)
   revision      Int
@@ -1211,9 +1223,11 @@ model AppJourneyTierRevision {
 /// read (`lib/app/content/journey-view.ts`): every read takes a module whole,
 /// and a snapshot of one row is then a snapshot of the module.
 model AppJourneyModule {
+  id            String     @id @default(cuid())
   /// The authored id, e.g. `module_01_values`. Immutable: the roster, the
   /// resource keys and the question set all name a module by it.
-  id            String     @id
+  slug          String
+  journeySlug   String
   journeyId     String
   journey       AppJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
   displayNumber String
@@ -1234,6 +1248,7 @@ model AppJourneyModule {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_journey_module")
 }
@@ -1241,6 +1256,7 @@ model AppJourneyModule {
 /// One revision of one module's text, whole (t-87).
 model AppJourneyModuleRevision {
   id            String                   @id @default(cuid())
+  moduleSlug    String
   moduleId      String
   module        AppJourneyModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   revision      Int
@@ -1273,11 +1289,13 @@ model AppJourneyModuleRevision {
 /// `preamble` (her note that these are not to be rushed) and `pacing` are JSON,
 /// validated on every write and read.
 model AppQuestionSet {
+  id         String           @id @default(cuid())
   /// Stable identity, as authored: `onboarding_discovery_questions`.
-  id         String           @id
+  slug       String
   title      String
   chartTitle String
   /// The module the set belongs to.
+  moduleSlug String
   moduleId   String
   module     AppJourneyModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
   /// The phase of that module it is asked in.
@@ -1297,6 +1315,7 @@ model AppQuestionSet {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_question_set")
 }
@@ -1304,6 +1323,7 @@ model AppQuestionSet {
 /// One revision of a question set's framing, whole (t-87).
 model AppQuestionSetRevision {
   id            String                   @id @default(cuid())
+  setSlug       String
   setId         String
   set           AppQuestionSet           @relation(fields: [setId], references: [id], onDelete: Cascade)
   revision      Int
@@ -1332,8 +1352,10 @@ model AppQuestionSetRevision {
 
 /// One discovery question (t-87), recalled by its number within the set.
 model AppDiscoveryQuestion {
+  id                  String         @id @default(cuid())
   /// The authored id, e.g. `q01`.
-  id                  String         @id
+  slug                String
+  setSlug             String
   setId               String
   set                 AppQuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
   /// 1-based, and the order they are asked in.
@@ -1358,6 +1380,7 @@ model AppDiscoveryQuestion {
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([setId, number])
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_discovery_question")
 }
@@ -1365,6 +1388,7 @@ model AppDiscoveryQuestion {
 /// One revision of one discovery question, whole (t-87).
 model AppDiscoveryQuestionRevision {
   id                  String                   @id @default(cuid())
+  questionSlug        String
   questionId          String
   question            AppDiscoveryQuestion     @relation(fields: [questionId], references: [id], onDelete: Cascade)
   revision            Int
@@ -1393,8 +1417,9 @@ model AppDiscoveryQuestionRevision {
 /// The resource library as a whole (t-87): its identity, and its provenance —
 /// whether she has signed off what is in it. One row.
 model AppResourceCollection {
+  id         String   @id @default(cuid())
   /// Stable identity, as authored: `lelanea_resources`.
-  id         String   @id
+  slug       String
   title      String
   version    String
   locale     String
@@ -1411,6 +1436,7 @@ model AppResourceCollection {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_resource_collection")
 }
@@ -1423,37 +1449,40 @@ model AppResourceCollection {
 /// one of `href` and `documentId`. Both rules are checked on every write and
 /// read (`lib/app/content/resource-view.ts`).
 model AppResource {
+  id             String                   @id @default(cuid())
   /// Lowercase with hyphens, at most 80 characters. Immutable: a suggestion
   /// already made in a conversation names it.
-  id           String                   @id
-  collectionId String
-  collection   AppResourceCollection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  slug           String
+  collectionSlug String
+  collectionId   String
+  collection     AppResourceCollection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   /// `film` | `reading`.
-  kind         String
+  kind           String
   /// Order within its kind, which is the order the drawer offers them in.
-  position     Int
-  title        String
+  position       Int
+  title          String
   /// What it is for, in her words.
-  subtitle     String
+  subtitle       String
   /// A module id, `journey`, `situations`, or null for a piece that belongs to
   /// everything.
-  relatesTo    String?
+  relatesTo      String?
   /// A film's length, as shown: `6:12`.
-  duration     String?
+  duration       String?
   /// A reading's length, as shown: `8 min`.
-  readingTime  String?
+  readingTime    String?
   /// http(s) only.
-  href         String?
+  href           String?
   /// A reading that is one of her foundational documents.
-  documentId   String?
-  document     AppFoundationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  documentSlug   String?
+  documentId     String?
+  document       AppFoundationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
   /// Retired by an admin (t-91): no longer offered, listed or suggestable, but
   /// kept so a suggestion already made in a conversation still resolves to its
   /// chip. A resource is never deleted; retiring is the tombstone.
-  retired      Boolean                  @default(false)
-  revision     Int                      @default(1)
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+  retired        Boolean                  @default(false)
+  revision       Int                      @default(1)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
   revisions AppResourceRevision[]
 
@@ -1462,6 +1491,7 @@ model AppResource {
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([collectionId, kind, position])
+  @@unique([orgId, slug])
   @@index([orgId])
   @@map("app_resource")
 }
@@ -1469,6 +1499,7 @@ model AppResource {
 /// One revision of one resource, whole (t-87).
 model AppResourceRevision {
   id            String                   @id @default(cuid())
+  resourceSlug  String
   resourceId    String
   resource      AppResource              @relation(fields: [resourceId], references: [id], onDelete: Cascade)
   revision      Int
@@ -1480,7 +1511,7 @@ model AppResourceRevision {
   duration      String?
   readingTime   String?
   href          String?
-  documentId    String?
+  documentSlug  String?
   retired       Boolean                  @default(false)
   changedFields String[]
   origin        AppContentRevisionOrigin
@@ -1504,7 +1535,9 @@ model AppResourceRevision {
 /// Keyed by a module id or `journey`, `situations`, `default`. A key with no
 /// words of its own reads `default`'s, so `default` must exist.
 model AppResourceWords {
-  key              String                @id
+  id               String                @id @default(cuid())
+  key              String
+  collectionSlug   String
   collectionId     String
   collection       AppResourceCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   quote            String
@@ -1523,6 +1556,7 @@ model AppResourceWords {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, key])
   @@index([orgId])
   @@map("app_resource_words")
 }
@@ -1531,7 +1565,8 @@ model AppResourceWords {
 model AppResourceWordsRevision {
   id               String                   @id @default(cuid())
   wordsKey         String
-  words            AppResourceWords         @relation(fields: [wordsKey], references: [key], onDelete: Cascade)
+  wordsId          String
+  words            AppResourceWords         @relation(fields: [wordsId], references: [id], onDelete: Cascade)
   revision         Int
   quote            String
   paragraphs       String[]
@@ -1546,9 +1581,9 @@ model AppResourceWordsRevision {
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([wordsKey, revision])
+  @@unique([wordsId, revision])
   @@index([orgId])
-  @@index([wordsKey, changedAt])
+  @@index([wordsId, changedAt])
   @@index([editorId])
   @@map("app_resource_words_revision")
 }

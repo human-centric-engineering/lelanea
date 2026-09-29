@@ -47,6 +47,7 @@ import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { DB_NULL } from '@/lib/app-db/json-null';
 import { registerModule } from '@/lib/framework/modules/registry';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 import { journeyStructureFileSchema, type JourneyStructureFile } from '@/lib/app/content/schemas';
 import {
   getJourneyStructure,
@@ -84,7 +85,7 @@ import {
 import type { FieldChanges } from '@/lib/app/content/admin/documents';
 import type { JourneyEdit, ModuleEdit, TierEdit } from '@/lib/app/content/admin/validation';
 
-export type TierFields = Omit<JourneyTierRow, 'id' | 'revision'>;
+export type TierFields = Omit<JourneyTierRow, 'slug' | 'revision'>;
 export type ModuleFields = ReturnType<typeof moduleFieldsOf>;
 type ModuleField = (typeof MODULE_SNAPSHOT_FIELDS)[number];
 
@@ -155,9 +156,9 @@ export async function getJourneyAdminView(): Promise<JourneyAdminView> {
 
 export async function listTierHistory(id: string): Promise<RevisionEntry<TierFields>[]> {
   const [tier, revisions] = await Promise.all([
-    prisma.appJourneyTier.findUnique({ where: { id }, select: { id: true } }),
+    prisma.appJourneyTier.findFirst({ where: { slug: id }, select: { slug: true } }),
     prisma.appJourneyTierRevision.findMany({
-      where: { tierId: id },
+      where: { tierSlug: id },
       orderBy: { revision: 'desc' },
     }),
   ]);
@@ -167,15 +168,15 @@ export async function listTierHistory(id: string): Promise<RevisionEntry<TierFie
 
 export async function listModuleHistory(id: string): Promise<RevisionEntry<ModuleFields>[]> {
   const [module, revisions] = await Promise.all([
-    prisma.appJourneyModule.findUnique({ where: { id }, select: { id: true } }),
+    prisma.appJourneyModule.findFirst({ where: { slug: id }, select: { slug: true } }),
     prisma.appJourneyModuleRevision.findMany({
-      where: { moduleId: id },
+      where: { moduleSlug: id },
       orderBy: { revision: 'desc' },
     }),
   ]);
   if (!module) throw new NotFoundError(`There is no journey module "${id}".`);
   return toHistory(revisions, (row: AppJourneyModuleRevision) =>
-    moduleFieldsOf({ ...row, id: row.moduleId })
+    moduleFieldsOf({ ...row, slug: row.moduleSlug })
   );
 }
 
@@ -188,7 +189,7 @@ async function writeTier(
   editorId: string
 ): Promise<JourneyWriteResult> {
   const result = await executeTransaction(async (tx) => {
-    const row = await tx.appJourneyTier.findUnique({ where: { id } });
+    const row = await tx.appJourneyTier.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no journey tier "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`The tier "${row.label}"`, row.revision, revisionRead);
@@ -200,17 +201,25 @@ async function writeTier(
 
     const revision = row.revision + 1;
     const { count } = await tx.appJourneyTier.updateMany({
-      where: { id, revision: revisionRead },
+      where: { slug: id, revision: revisionRead },
       data: { ...next, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `The tier "${row.label}"`,
         revisionRead,
-        tx.appJourneyTier.findUnique({ where: { id }, select: { revision: true } })
+        tx.appJourneyTier.findFirst({ where: { slug: id }, select: { revision: true } })
       );
     await tx.appJourneyTierRevision.create({
-      data: { tierId: id, revision, ...next, changedFields: changed, origin: 'admin', editorId },
+      data: {
+        tierSlug: id,
+        tierId: row.id,
+        revision,
+        ...next,
+        changedFields: changed,
+        origin: 'admin',
+        editorId,
+      },
     });
     return { changed, changes: toChanges(before, next, changed), revision };
   });
@@ -225,7 +234,7 @@ async function writeModule(
   editorId: string
 ): Promise<JourneyWriteResult> {
   const result = await executeTransaction(async (tx) => {
-    const row = await tx.appJourneyModule.findUnique({ where: { id } });
+    const row = await tx.appJourneyModule.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no journey module "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
@@ -235,24 +244,32 @@ async function writeModule(
     // The same check the read path makes, so nothing is saved that every
     // surface would then refuse to render (a phase tier naming a phase the
     // module does not have).
-    moduleFieldsOf({ id, ...next });
+    moduleFieldsOf({ slug: id, ...next });
     const changed: ModuleField[] = changedFieldsOf(before, next, MODULE_SNAPSHOT_FIELDS);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
 
     const revision = row.revision + 1;
     const data = toModuleData(next);
     const { count } = await tx.appJourneyModule.updateMany({
-      where: { id, revision: revisionRead },
+      where: { slug: id, revision: revisionRead },
       data: { ...data, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appJourneyModule.findUnique({ where: { id }, select: { revision: true } })
+        tx.appJourneyModule.findFirst({ where: { slug: id }, select: { revision: true } })
       );
     await tx.appJourneyModuleRevision.create({
-      data: { moduleId: id, revision, ...data, changedFields: changed, origin: 'admin', editorId },
+      data: {
+        moduleSlug: id,
+        moduleId: row.id,
+        revision,
+        ...data,
+        changedFields: changed,
+        origin: 'admin',
+        editorId,
+      },
     });
     return { changed, changes: toChanges(before, next, changed), revision };
   });
@@ -301,8 +318,8 @@ export async function restoreTierRevision(
   revisionRead: number,
   editorId: string
 ): Promise<JourneyWriteResult> {
-  const past = await prisma.appJourneyTierRevision.findUnique({
-    where: { tierId_revision: { tierId: id, revision } },
+  const past = await prisma.appJourneyTierRevision.findFirst({
+    where: { tierSlug: id, revision },
   });
   if (!past) throw new NotFoundError(`The tier "${id}" has no revision ${revision}.`);
   return writeTier(id, () => tierFieldsOf(past), revisionRead, editorId);
@@ -314,11 +331,11 @@ export async function restoreModuleRevision(
   revisionRead: number,
   editorId: string
 ): Promise<JourneyWriteResult> {
-  const past = await prisma.appJourneyModuleRevision.findUnique({
-    where: { moduleId_revision: { moduleId: id, revision } },
+  const past = await prisma.appJourneyModuleRevision.findFirst({
+    where: { moduleSlug: id, revision },
   });
   if (!past) throw new NotFoundError(`The module "${id}" has no revision ${revision}.`);
-  return writeModule(id, () => moduleFieldsOf({ ...past, id }), revisionRead, editorId);
+  return writeModule(id, () => moduleFieldsOf({ ...past, slug: id }), revisionRead, editorId);
 }
 
 /** Save the journey row's own text. It has no history; its lock is `updatedAt`. */
@@ -340,7 +357,7 @@ export async function updateJourney(
     const changed = changedFieldsOf(before, edit, ['title', 'subtitle', 'version', 'locale']);
     if (changed.length === 0) return { changed, changes: {} };
     const { count } = await tx.appJourney.updateMany({
-      where: { id: journey.id, updatedAt: journey.updatedAt },
+      where: { slug: journey.slug, updatedAt: journey.updatedAt },
       data: edit,
     });
     if (count === 0) throw staleRow('The journey');
@@ -377,7 +394,14 @@ export async function exportJourneyFile(): Promise<JourneyStructureFile> {
 // ─── Import ─────────────────────────────────────────────────────────────────
 
 interface StoredJourney {
-  journey: { id: string; title: string; subtitle: string; version: string; locale: string } | null;
+  journey: {
+    id: string;
+    slug: string;
+    title: string;
+    subtitle: string;
+    version: string;
+    locale: string;
+  } | null;
   tiers: readonly AppJourneyTier[];
   modules: readonly AppJourneyModule[];
 }
@@ -413,9 +437,9 @@ export function planJourneyImport(
   }
   if (!stored.journey)
     refusals.push('The journey has not been seeded, so there is nothing to import into.');
-  else if (seed && seed.journey.id !== stored.journey.id) {
+  else if (seed && seed.journey.slug !== stored.journey.slug) {
     refusals.push(
-      `This file is for "${seed.journey.id}", and this database holds "${stored.journey.id}".`
+      `This file is for "${seed.journey.slug}", and this database holds "${stored.journey.slug}".`
     );
   }
 
@@ -429,9 +453,9 @@ export function planJourneyImport(
   });
   const tiers = seed
     ? planKeyedImport<Omit<JourneyTierRow, 'revision'>, TierFields>({
-        incoming: seed.tiers.map((tier) => ({ key: tier.id, value: tier })),
+        incoming: seed.tiers.map((tier) => ({ key: tier.slug, value: tier })),
         stored: stored.tiers.map((row) => ({
-          key: row.id,
+          key: row.slug,
           fields: tierFieldsOf(row),
           revision: row.revision,
         })),
@@ -444,9 +468,9 @@ export function planJourneyImport(
     : keep<TierFields>();
   const modules = seed
     ? planKeyedImport<Omit<JourneyModuleRow, 'revision'>, ModuleFields>({
-        incoming: seed.modules.map((entry) => ({ key: entry.id, value: entry })),
+        incoming: seed.modules.map((entry) => ({ key: entry.slug, value: entry })),
         stored: stored.modules.map((row) => ({
-          key: row.id,
+          key: row.slug,
           fields: moduleFieldsOf(row),
           revision: row.revision,
         })),
@@ -496,7 +520,7 @@ export function planJourneyImport(
       entity: 'journey',
       label: 'Journey',
       creates: [],
-      updates: [{ key: stored.journey.id, changedFields: journeyChanged }],
+      updates: [{ key: stored.journey.slug, changedFields: journeyChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -530,9 +554,9 @@ async function readStored(
   const moduleOrder = new Map(JOURNEY_MODULES.map((entry, index) => [entry.id, index]));
   return {
     journey,
-    tiers: [...tiers].sort((a, b) => (tierOrder.get(a.id) ?? 0) - (tierOrder.get(b.id) ?? 0)),
+    tiers: [...tiers].sort((a, b) => (tierOrder.get(a.slug) ?? 0) - (tierOrder.get(b.slug) ?? 0)),
     modules: [...modules].sort(
-      (a, b) => (moduleOrder.get(a.id) ?? 0) - (moduleOrder.get(b.id) ?? 0)
+      (a, b) => (moduleOrder.get(a.slug) ?? 0) - (moduleOrder.get(b.slug) ?? 0)
     ),
   };
 }
@@ -569,14 +593,17 @@ export async function applyJourneyImport(
           data: planned.journeyAfter,
         });
       }
+      const tierId = idsBySlug(stored.tiers, 'journey tier');
+      const moduleId = idsBySlug(stored.modules, 'journey module');
       for (const change of planned.tiers.updates) {
         await tx.appJourneyTier.update({
-          where: { id: change.key },
+          where: { id: tierId(change.key) },
           data: { ...change.after!, revision: change.revision },
         });
         await tx.appJourneyTierRevision.create({
           data: {
-            tierId: change.key,
+            tierSlug: change.key,
+            tierId: tierId(change.key),
             revision: change.revision,
             ...change.after!,
             changedFields: change.changedFields,
@@ -588,12 +615,13 @@ export async function applyJourneyImport(
       for (const change of planned.modules.updates) {
         const data = toModuleData(change.after!);
         await tx.appJourneyModule.update({
-          where: { id: change.key },
+          where: { id: moduleId(change.key) },
           data: { ...data, revision: change.revision },
         });
         await tx.appJourneyModuleRevision.create({
           data: {
-            moduleId: change.key,
+            moduleSlug: change.key,
+            moduleId: moduleId(change.key),
             revision: change.revision,
             ...data,
             changedFields: change.changedFields,

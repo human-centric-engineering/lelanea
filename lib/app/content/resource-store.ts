@@ -48,11 +48,12 @@ import {
   type ResourceRow,
 } from '@/lib/app/content/resource-view';
 import type { ResourcesSeed } from '@/lib/app/content/resource-view';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 const NOT_SEEDED = ['No resource library in the database', '018-resources.ts'] as const;
 
 const RESOURCE_COLUMNS = {
-  id: true,
+  slug: true,
   kind: true,
   position: true,
   title: true,
@@ -61,7 +62,7 @@ const RESOURCE_COLUMNS = {
   duration: true,
   readingTime: true,
   href: true,
-  documentId: true,
+  documentSlug: true,
   revision: true,
 } as const;
 
@@ -86,7 +87,7 @@ export async function getResourcesLibrary(
 ): Promise<ResourcesLibrary> {
   const [collection, resources, words] = await Promise.all([
     defaultClient.appResourceCollection.findFirst({
-      select: { id: true, title: true, version: true, locale: true, provenance: true },
+      select: { slug: true, title: true, version: true, locale: true, provenance: true },
       orderBy: { createdAt: 'asc' },
     }),
     defaultClient.appResource.findMany({
@@ -123,8 +124,8 @@ export async function getResource(id: string): Promise<{
   kind: ResourceKind;
   resource: ResourceVideoView | ResourceAudioView | ResourceArticleView;
 } | null> {
-  const row = await defaultClient.appResource.findUnique({
-    where: { id },
+  const row = await defaultClient.appResource.findFirst({
+    where: { slug: id },
     select: { ...RESOURCE_COLUMNS, retired: true },
   });
   if (!row || row.retired) return null;
@@ -176,12 +177,12 @@ export type SeedResourcesResult =
 
 /**
  * Throw unless every key the seed names is a module on the journey or a fixed
- * key, and every item is well formed. Documents need no check here: the
- * `documentId` foreign key refuses an unknown one inside the transaction.
+ * key, and every item is well formed. Documents need no check here: an
+ * unknown one is refused inside the transaction, where its id is looked up.
  */
 async function assertWritable(seed: ResourcesSeed, client: TenancyClient): Promise<void> {
   const moduleIds = new Set(
-    (await client.appJourneyModule.findMany({ select: { id: true } })).map((row) => row.id)
+    (await client.appJourneyModule.findMany({ select: { slug: true } })).map((row) => row.slug)
   );
   const isKey = (key: string) => moduleIds.has(key) || FIXED_RESOURCE_KEYS.some((k) => k === key);
   const problems: string[] = [];
@@ -195,7 +196,7 @@ async function assertWritable(seed: ResourcesSeed, client: TenancyClient): Promi
       problems.push(error instanceof Error ? error.message : String(error));
     }
     if (row.relatesTo !== null && (!isKey(row.relatesTo) || row.relatesTo === 'default')) {
-      problems.push(`resource "${row.id}" relates to unknown key "${row.relatesTo}"`);
+      problems.push(`resource "${row.slug}" relates to unknown key "${row.relatesTo}"`);
     }
   }
   for (const row of seed.words) {
@@ -230,7 +231,7 @@ export async function seedResources(
   seed: ResourcesSeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedResourcesResult> {
-  const existing = await client.appResourceCollection.findFirst({ select: { id: true } });
+  const existing = await client.appResourceCollection.findFirst({ select: { slug: true } });
   if (existing) {
     const [resources, words] = await Promise.all([
       client.appResource.count(),
@@ -242,55 +243,81 @@ export async function seedResources(
   await assertWritable(seed, client);
 
   const now = new Date();
-  const collectionId = seed.collection.id;
+  const collectionSlug = seed.collection.slug;
   const provenance = { origin: 'seed' as const, editorId: null, changedAt: now };
 
-  await client.$transaction([
-    client.appResourceCollection.create({
+  await client.$transaction(async (tx) => {
+    const articleDocuments = seed.resources.flatMap((row) =>
+      row.documentSlug === null ? [] : [row.documentSlug]
+    );
+    const documentId = idsBySlug(
+      await tx.appFoundationalDocument.findMany({
+        where: { slug: { in: articleDocuments } },
+        select: { id: true, slug: true },
+      }),
+      'foundational document'
+    );
+    const collection = await tx.appResourceCollection.create({
       data: {
         ...seed.collection,
         provenance: provenanceSchema.parse(seed.collection.provenance),
         createdAt: now,
         updatedAt: now,
       },
-    }),
-    client.appResource.createMany({
-      data: seed.resources.map((row) => ({
-        ...row,
-        collectionId,
-        revision: 1,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    }),
-    client.appResourceWords.createMany({
-      data: seed.words.map((row) => ({
-        ...row,
-        collectionId,
-        revision: 1,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    }),
-    client.appResourceRevision.createMany({
-      data: seed.resources.map(({ id, ...fields }) => ({
-        resourceId: id,
+      select: { id: true },
+    });
+    const resourceId = idsBySlug(
+      await tx.appResource.createManyAndReturn({
+        data: seed.resources.map((row) => ({
+          ...row,
+          documentId: row.documentSlug === null ? null : documentId(row.documentSlug),
+          collectionSlug,
+          collectionId: collection.id,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        select: { id: true, slug: true },
+      }),
+      'resource'
+    );
+    const wordsId = idsBySlug(
+      (
+        await tx.appResourceWords.createManyAndReturn({
+          data: seed.words.map((row) => ({
+            ...row,
+            collectionSlug,
+            collectionId: collection.id,
+            revision: 1,
+            createdAt: now,
+            updatedAt: now,
+          })),
+          select: { id: true, key: true },
+        })
+      ).map(({ id, key }) => ({ id, slug: key })),
+      'resource words'
+    );
+    await tx.appResourceRevision.createMany({
+      data: seed.resources.map(({ slug, ...fields }) => ({
+        resourceSlug: slug,
+        resourceId: resourceId(slug),
         revision: 1,
         ...fields,
         changedFields: [...RESOURCE_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-    client.appResourceWordsRevision.createMany({
+    });
+    await tx.appResourceWordsRevision.createMany({
       data: seed.words.map(({ key, ...fields }) => ({
         wordsKey: key,
+        wordsId: wordsId(key),
         revision: 1,
         ...fields,
         changedFields: [...WORDS_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-  ]);
+    });
+  });
 
   return { status: 'seeded', resources: seed.resources.length, words: seed.words.length };
 }

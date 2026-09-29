@@ -41,6 +41,7 @@ import type {
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 import {
   getResourcesLibrary,
   RESOURCE_SNAPSHOT_FIELDS,
@@ -103,7 +104,10 @@ import type {
 const RESOURCE_FIELDS = [...RESOURCE_SNAPSHOT_FIELDS, 'retired'] as const;
 
 /** Every field a resource revision snapshots. */
-export type ResourceFields = Omit<ResourceRow, 'id' | 'revision'> & { retired: boolean };
+export type ResourceFields = Omit<ResourceRow, 'slug' | 'documentSlug' | 'revision'> & {
+  documentId: string | null;
+  retired: boolean;
+};
 export type WordsFields = Omit<ResourceWordsRow, 'key' | 'revision'>;
 
 /** One resource as the editor reads it: retired ones included. */
@@ -154,9 +158,14 @@ function resourceFieldsOf(
     duration: row.duration,
     readingTime: row.readingTime,
     href: row.href,
-    documentId: row.documentId,
+    documentId: row.documentSlug,
     retired: row.retired,
   };
+}
+
+/** Resource fields as their row's columns: the document it opens is `documentSlug` there. */
+function resourceColumnsOf({ documentId, ...fields }: ResourceFields) {
+  return { ...fields, documentSlug: documentId };
 }
 
 function wordsFieldsOf(row: WordsFields): WordsFields {
@@ -217,10 +226,11 @@ const WORDS_KEY_OPTIONS: readonly string[] = [
 
 /**
  * Throw unless these fields are a resource the read path will serve, relating
- * to a key the journey has and opening a document that exists.
+ * to a key the journey has and opening a document that exists. Returns the
+ * generated id of the document it opens (t-113), or null when it opens none.
  */
-async function assertServable(tx: Tx, id: string, fields: ResourceFields): Promise<void> {
-  const asRow: ResourceRow = { id, ...fields, revision: 1 };
+async function assertServable(tx: Tx, id: string, fields: ResourceFields): Promise<string | null> {
+  const asRow: ResourceRow = { slug: id, ...resourceColumnsOf(fields), revision: 1 };
   try {
     toResource(asRow);
   } catch (error) {
@@ -231,14 +241,14 @@ async function assertServable(tx: Tx, id: string, fields: ResourceFields): Promi
       `"${fields.relatesTo}" is not a module on the journey, "journey" or "situations".`
     );
   }
-  if (fields.documentId !== null) {
-    const document = await tx.appFoundationalDocument.findUnique({
-      where: { id: fields.documentId },
-      select: { id: true },
-    });
-    if (!document)
-      throw new ValidationError(`There is no foundational document "${fields.documentId}".`);
-  }
+  if (fields.documentId === null) return null;
+  const document = await tx.appFoundationalDocument.findFirst({
+    where: { slug: fields.documentId },
+    select: { id: true },
+  });
+  if (!document)
+    throw new ValidationError(`There is no foundational document "${fields.documentId}".`);
+  return document.id;
 }
 
 /**
@@ -270,8 +280,8 @@ export function unverbatimPassages(
 
 async function assertVerbatim(tx: Tx, key: string, fields: WordsFields): Promise<void> {
   if (fields.sourceCollection !== 'foundational_documents') return;
-  const document = await tx.appFoundationalDocument.findUnique({
-    where: { id: fields.sourceId },
+  const document = await tx.appFoundationalDocument.findFirst({
+    where: { slug: fields.sourceId },
     select: { blocks: true },
   });
   if (!document) {
@@ -313,7 +323,10 @@ export async function getResourcesAdminView(): Promise<ResourcesAdminView> {
     prisma.appResourceCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     prisma.appResource.findMany({ orderBy: [{ kind: 'asc' }, { position: 'asc' }] }),
     prisma.appResourceWords.findMany({ orderBy: { key: 'asc' } }),
-    prisma.appFoundationalDocument.findMany({ select: { id: true }, orderBy: { position: 'asc' } }),
+    prisma.appFoundationalDocument.findMany({
+      select: { slug: true },
+      orderBy: { position: 'asc' },
+    }),
   ]);
   const live = resources.filter((row) => !row.retired);
   const retired = resources.filter((row) => row.retired);
@@ -325,7 +338,7 @@ export async function getResourcesAdminView(): Promise<ResourcesAdminView> {
   return {
     seeded: collection !== null,
     collection: collection && {
-      id: collection.id,
+      id: collection.slug,
       title: collection.title,
       version: collection.version,
       locale: collection.locale,
@@ -333,33 +346,33 @@ export async function getResourcesAdminView(): Promise<ResourcesAdminView> {
       updatedAt: collection.updatedAt.toISOString(),
     },
     resources: [...byKind(live), ...byKind(retired)].map((row) => ({
-      id: row.id,
+      id: row.slug,
       revision: row.revision,
       ...resourceFieldsOf(row),
     })),
     words: words.map((row) => ({ key: row.key, revision: row.revision, ...wordsFieldsOf(row) })),
     relatesToOptions: RELATES_TO_OPTIONS,
     wordsKeyOptions: WORDS_KEY_OPTIONS,
-    documentIds: documents.map((row) => row.id),
+    documentIds: documents.map((row) => row.slug),
     readers: RESOURCE_READERS,
   };
 }
 
 export async function listResourceHistory(id: string): Promise<RevisionEntry<ResourceFields>[]> {
   const [resource, revisions] = await Promise.all([
-    prisma.appResource.findUnique({ where: { id }, select: { id: true } }),
+    prisma.appResource.findFirst({ where: { slug: id }, select: { slug: true } }),
     prisma.appResourceRevision.findMany({
-      where: { resourceId: id },
+      where: { resourceSlug: id },
       orderBy: { revision: 'desc' },
     }),
   ]);
   if (!resource) throw new NotFoundError(`There is no resource "${id}".`);
-  return toHistory(revisions, (row: AppResourceRevision) => resourceFieldsOf({ ...row, id }));
+  return toHistory(revisions, (row: AppResourceRevision) => resourceFieldsOf({ ...row, slug: id }));
 }
 
 export async function listWordsHistory(key: string): Promise<RevisionEntry<WordsFields>[]> {
   const [words, revisions] = await Promise.all([
-    prisma.appResourceWords.findUnique({ where: { key }, select: { key: true } }),
+    prisma.appResourceWords.findFirst({ where: { key }, select: { key: true } }),
     prisma.appResourceWordsRevision.findMany({
       where: { wordsKey: key },
       orderBy: { revision: 'desc' },
@@ -378,7 +391,7 @@ async function writeResource(
   editorId: string
 ): Promise<ResourceWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appResource.findUnique({ where: { id } });
+    const row = await tx.appResource.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no resource "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
@@ -390,26 +403,27 @@ async function writeResource(
         `"${id}" is ${aKind(before.kind)}. Videos, audio and articles are offered in different places, so add a new one instead.`
       );
     }
-    await assertServable(tx, id, next);
+    const documentId = await assertServable(tx, id, next);
     const changed = resourceDiff(before, next);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
 
     const revision = row.revision + 1;
     const { count } = await tx.appResource.updateMany({
-      where: { id, revision: revisionRead },
-      data: { ...next, revision },
+      where: { slug: id, revision: revisionRead },
+      data: { ...resourceColumnsOf(next), documentId, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appResource.findUnique({ where: { id }, select: { revision: true } })
+        tx.appResource.findFirst({ where: { slug: id }, select: { revision: true } })
       );
     await tx.appResourceRevision.create({
       data: {
-        resourceId: id,
+        resourceSlug: id,
+        resourceId: row.id,
         revision,
-        ...next,
+        ...resourceColumnsOf(next),
         changedFields: changed,
         origin: 'admin',
         editorId,
@@ -441,8 +455,8 @@ export async function restoreResourceRevision(
   revisionRead: number,
   editorId: string
 ): Promise<ResourceWriteResult> {
-  const past = await prisma.appResourceRevision.findUnique({
-    where: { resourceId_revision: { resourceId: id, revision } },
+  const past = await prisma.appResourceRevision.findFirst({
+    where: { resourceSlug: id, revision },
   });
   if (!past) throw new NotFoundError(`The resource "${id}" has no revision ${revision}.`);
   return writeResource(
@@ -455,7 +469,7 @@ export async function restoreResourceRevision(
       duration: past.duration,
       readingTime: past.readingTime,
       href: past.href,
-      documentId: past.documentId,
+      documentId: past.documentSlug,
     }),
     revisionRead,
     editorId
@@ -473,7 +487,7 @@ async function compactKind(
   editorId: string
 ): Promise<void> {
   const live = await tx.appResource.findMany({
-    where: { kind, retired: false, NOT: { id: excluding } },
+    where: { kind, retired: false, NOT: { slug: excluding } },
     orderBy: { position: 'asc' },
   });
   const moving = live.filter((row, index) => row.position !== index);
@@ -489,9 +503,10 @@ async function compactKind(
     await tx.appResource.update({ where: { id: row.id }, data: { position, revision } });
     await tx.appResourceRevision.create({
       data: {
+        resourceSlug: row.slug,
         resourceId: row.id,
         revision,
-        ...resourceFieldsOf(row),
+        ...resourceColumnsOf(resourceFieldsOf(row)),
         position,
         changedFields: ['position'],
         origin: 'admin',
@@ -513,7 +528,7 @@ export async function setResourceRetired(
   editorId: string
 ): Promise<ResourceWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appResource.findUnique({ where: { id } });
+    const row = await tx.appResource.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no resource "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
@@ -525,7 +540,7 @@ export async function setResourceRetired(
     // since it was retired.
     if (!retired) await assertServable(tx, id, before);
 
-    const others = await tx.appResource.findMany({ where: { kind: row.kind, NOT: { id } } });
+    const others = await tx.appResource.findMany({ where: { kind: row.kind, NOT: { slug: id } } });
     // Live positions are contiguous from 0, so the count of the other live
     // ones is the free place at the end.
     const position = retired
@@ -536,20 +551,21 @@ export async function setResourceRetired(
     const revision = row.revision + 1;
 
     const { count } = await tx.appResource.updateMany({
-      where: { id, revision: revisionRead },
+      where: { slug: id, revision: revisionRead },
       data: { retired, position, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appResource.findUnique({ where: { id }, select: { revision: true } })
+        tx.appResource.findFirst({ where: { slug: id }, select: { revision: true } })
       );
     await tx.appResourceRevision.create({
       data: {
-        resourceId: id,
+        resourceSlug: id,
+        resourceId: row.id,
         revision,
-        ...next,
+        ...resourceColumnsOf(next),
         changedFields: changed,
         origin: 'admin',
         editorId,
@@ -567,9 +583,14 @@ export async function createResource(
   editorId: string
 ): Promise<{ id: string }> {
   return executeTransaction(async (tx) => {
-    const collection = await tx.appResourceCollection.findFirst({ select: { id: true } });
+    const collection = await tx.appResourceCollection.findFirst({
+      select: { id: true, slug: true },
+    });
     if (!collection) throw new NotFoundError('The resource library has not been seeded yet.');
-    const clash = await tx.appResource.findUnique({ where: { id }, select: { retired: true } });
+    const clash = await tx.appResource.findFirst({
+      where: { slug: id },
+      select: { retired: true },
+    });
     if (clash) {
       throw new ConflictError(
         clash.retired
@@ -585,15 +606,24 @@ export async function createResource(
       ...contentFromEdit(edit),
       retired: false,
     };
-    await assertServable(tx, id, fields);
-    await tx.appResource.create({
-      data: { id, collectionId: collection.id, ...fields, revision: 1 },
+    const documentId = await assertServable(tx, id, fields);
+    const resource = await tx.appResource.create({
+      data: {
+        slug: id,
+        collectionSlug: collection.slug,
+        collectionId: collection.id,
+        ...resourceColumnsOf(fields),
+        documentId,
+        revision: 1,
+      },
+      select: { id: true },
     });
     await tx.appResourceRevision.create({
       data: {
-        resourceId: id,
+        resourceSlug: id,
+        resourceId: resource.id,
         revision: 1,
-        ...fields,
+        ...resourceColumnsOf(fields),
         changedFields: [...RESOURCE_FIELDS],
         origin: 'admin',
         editorId,
@@ -614,7 +644,7 @@ export async function reorderResources(
       where: { kind, retired: false },
       orderBy: { position: 'asc' },
     });
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    const byId = new Map(rows.map((row) => [row.slug, row]));
     if (
       order.length !== rows.length ||
       new Set(order.map((entry) => entry.id)).size !== rows.length
@@ -628,7 +658,7 @@ export async function reorderResources(
         throw revisionMoved(`"${row.title}"`, row.revision, entry.revision);
     }
     const target = new Map(order.map((entry, index) => [entry.id, index]));
-    const moving = rows.filter((row) => target.get(row.id) !== row.position);
+    const moving = rows.filter((row) => target.get(row.slug) !== row.position);
     for (const [index, row] of moving.entries()) {
       await tx.appResource.update({
         where: { id: row.id },
@@ -636,14 +666,15 @@ export async function reorderResources(
       });
     }
     for (const row of moving) {
-      const position = target.get(row.id)!;
+      const position = target.get(row.slug)!;
       const revision = row.revision + 1;
       await tx.appResource.update({ where: { id: row.id }, data: { position, revision } });
       await tx.appResourceRevision.create({
         data: {
+          resourceSlug: row.slug,
           resourceId: row.id,
           revision,
-          ...resourceFieldsOf(row),
+          ...resourceColumnsOf(resourceFieldsOf(row)),
           position,
           changedFields: ['position'],
           origin: 'admin',
@@ -664,7 +695,7 @@ async function writeWords(
   editorId: string
 ): Promise<ResourceWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appResourceWords.findUnique({ where: { key } });
+    const row = await tx.appResourceWords.findFirst({ where: { key } });
     if (!row) throw new NotFoundError(`There are no words for "${key}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`The words for "${key}"`, row.revision, revisionRead);
@@ -683,10 +714,18 @@ async function writeWords(
       throw await revisionMovedNow(
         `The words for "${key}"`,
         revisionRead,
-        tx.appResourceWords.findUnique({ where: { key }, select: { revision: true } })
+        tx.appResourceWords.findFirst({ where: { key }, select: { revision: true } })
       );
     await tx.appResourceWordsRevision.create({
-      data: { wordsKey: key, revision, ...next, changedFields: changed, origin: 'admin', editorId },
+      data: {
+        wordsKey: key,
+        wordsId: row.id,
+        revision,
+        ...next,
+        changedFields: changed,
+        origin: 'admin',
+        editorId,
+      },
     });
     return { changed, changes: toChanges(before, next, changed), revision };
   });
@@ -707,8 +746,8 @@ export async function restoreWordsRevision(
   revisionRead: number,
   editorId: string
 ): Promise<ResourceWriteResult> {
-  const past = await prisma.appResourceWordsRevision.findUnique({
-    where: { wordsKey_revision: { wordsKey: key, revision } },
+  const past = await prisma.appResourceWordsRevision.findFirst({
+    where: { wordsKey: key, revision },
   });
   if (!past) throw new NotFoundError(`The words for "${key}" have no revision ${revision}.`);
   return writeWords(key, () => wordsFieldsOf(past), revisionRead, editorId);
@@ -721,22 +760,32 @@ export async function createWords(
   editorId: string
 ): Promise<{ key: string }> {
   return executeTransaction(async (tx) => {
-    const collection = await tx.appResourceCollection.findFirst({ select: { id: true } });
+    const collection = await tx.appResourceCollection.findFirst({
+      select: { id: true, slug: true },
+    });
     if (!collection) throw new NotFoundError('The resource library has not been seeded yet.');
     const fields = wordsFromEdit(edit);
     assertWords(key, fields);
     await assertVerbatim(tx, key, fields);
-    const clash = await tx.appResourceWords.findUnique({ where: { key }, select: { key: true } });
+    const clash = await tx.appResourceWords.findFirst({ where: { key }, select: { key: true } });
     if (clash)
       throw new ConflictError(`"${key}" already has words. Edit them instead.`, {
         reason: 'exists',
       });
-    await tx.appResourceWords.create({
-      data: { key, collectionId: collection.id, ...fields, revision: 1 },
+    const words = await tx.appResourceWords.create({
+      data: {
+        key,
+        collectionSlug: collection.slug,
+        collectionId: collection.id,
+        ...fields,
+        revision: 1,
+      },
+      select: { id: true },
     });
     await tx.appResourceWordsRevision.create({
       data: {
         wordsKey: key,
+        wordsId: words.id,
         revision: 1,
         ...fields,
         changedFields: [...WORDS_SNAPSHOT_FIELDS],
@@ -764,11 +813,11 @@ export async function deleteWords(
     );
   }
   return executeTransaction(async (tx) => {
-    const row = await tx.appResourceWords.findUnique({ where: { key } });
+    const row = await tx.appResourceWords.findFirst({ where: { key } });
     if (!row) throw new NotFoundError(`There are no words for "${key}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`The words for "${key}"`, row.revision, revisionRead);
-    await tx.appResourceWords.delete({ where: { key } });
+    await tx.appResourceWords.delete({ where: { id: row.id } });
     return { removed: wordsFieldsOf(row) };
   });
 }
@@ -791,7 +840,7 @@ export async function updateResourceCollection(
     const changed = changedFieldsOf(before, edit, ['title', 'version', 'locale', 'provenance']);
     if (changed.length === 0) return { changed, changes: {} };
     const { count } = await tx.appResourceCollection.updateMany({
-      where: { id: collection.id, updatedAt: collection.updatedAt },
+      where: { slug: collection.slug, updatedAt: collection.updatedAt },
       data: edit,
     });
     if (count === 0) throw staleRow('The library');
@@ -807,16 +856,16 @@ export function resourcesExportFilename(now: Date): string {
 
 /** The file schema, checked against the roster's modules and the stored documents. */
 async function resourcesFileSchema() {
-  const documents = await prisma.appFoundationalDocument.findMany({ select: { id: true } });
+  const documents = await prisma.appFoundationalDocument.findMany({ select: { slug: true } });
   return buildResourcesFileSchema({
     moduleIds: new Set(JOURNEY_MODULES.map((entry) => entry.id)),
-    documentIds: new Set(documents.map((row) => row.id)),
+    documentIds: new Set(documents.map((row) => row.slug)),
   });
 }
 
 /** The live library as a resources file, checked with the seed's schema. Retired resources are not in it. */
 export async function exportResourcesFile(): Promise<ResourcesFile> {
-  const collection = await prisma.appResourceCollection.findFirst({ select: { id: true } });
+  const collection = await prisma.appResourceCollection.findFirst({ select: { slug: true } });
   if (!collection) {
     throw new ConflictError(
       'There is nothing to export: the resource library has not been seeded.',
@@ -844,6 +893,7 @@ export async function exportResourcesFile(): Promise<ResourcesFile> {
 interface StoredResources {
   collection: {
     id: string;
+    slug: string;
     title: string;
     version: string;
     locale: string;
@@ -852,7 +902,7 @@ interface StoredResources {
   resources: readonly AppResource[];
   words: readonly AppResourceWords[];
   /** Her documents' blocks, which a words passage citing one must occur in. */
-  documents: readonly { id: string; blocks: unknown }[];
+  documents: readonly { id: string; slug: string; blocks: unknown }[];
 }
 
 interface ResourcesImport {
@@ -890,17 +940,19 @@ export function planResourcesImport(
   // "retired", so it cannot mean "bring it back"). It is taken out before the
   // live ones are numbered, so they stay contiguous and a fresh export of the
   // result re-imports with no position changes.
-  const retiredHere = new Set(stored.resources.filter((row) => row.retired).map((row) => row.id));
-  const namedRetired = seed.resources.filter((row) => retiredHere.has(row.id)).map((row) => row.id);
+  const retiredHere = new Set(stored.resources.filter((row) => row.retired).map((row) => row.slug));
+  const namedRetired = seed.resources
+    .filter((row) => retiredHere.has(row.slug))
+    .map((row) => row.slug);
   // A kept resource follows the file's own of its kind, so each kind's order
   // stays contiguous from zero and no two resources claim one place.
-  const inFile = new Set(seed.resources.map((row) => row.id));
+  const inFile = new Set(seed.resources.map((row) => row.slug));
   const kept = removeAbsent
     ? []
-    : stored.resources.filter((row) => !row.retired && !inFile.has(row.id));
+    : stored.resources.filter((row) => !row.retired && !inFile.has(row.slug));
   const liveIncoming = RESOURCE_KINDS.flatMap((kind) =>
     [
-      ...seed.resources.filter((row) => row.kind === kind && !retiredHere.has(row.id)),
+      ...seed.resources.filter((row) => row.kind === kind && !retiredHere.has(row.slug)),
       ...kept.filter((row) => row.kind === kind),
     ].map((row, position) => ({ ...row, position }))
   );
@@ -908,9 +960,9 @@ export function planResourcesImport(
   // Retired rows park below zero, one below another, in the order they retire.
   let retiredBelow = Math.min(0, ...stored.resources.map((row) => row.position));
   const resources = planKeyedImport<Omit<ResourceRow, 'revision'>, ResourceFields>({
-    incoming: liveIncoming.map((row) => ({ key: row.id, value: row })),
+    incoming: liveIncoming.map((row) => ({ key: row.slug, value: row })),
     stored: stored.resources.map((row) => ({
-      key: row.id,
+      key: row.slug,
       fields: resourceFieldsOf(row),
       revision: row.revision,
       retired: row.retired,
@@ -945,7 +997,7 @@ export function planResourcesImport(
     toUpdate: (_before, row) => wordsFieldsOf(row),
     onAbsent: removeAbsent ? () => null : 'keep',
   });
-  const documentsById = new Map(stored.documents.map((document) => [document.id, document]));
+  const documentsById = new Map(stored.documents.map((document) => [document.slug, document]));
   for (const change of [...words.creates, ...words.updates]) {
     const missing = unverbatimPassages(
       change.after!,
@@ -980,7 +1032,7 @@ export function planResourcesImport(
   const sections: ImportPlanSection[] = [
     {
       ...toPlanSection('resource', 'Videos, audio and articles', resources, 'retire'),
-      kept: kept.map((row) => row.id),
+      kept: kept.map((row) => row.slug),
     },
     toPlanSection('words', 'Her words', words, 'delete', true),
   ];
@@ -989,7 +1041,7 @@ export function planResourcesImport(
       entity: 'collection',
       label: 'Library',
       creates: [],
-      updates: [{ key: stored.collection.id, changedFields: collectionChanged }],
+      updates: [{ key: stored.collection.slug, changedFields: collectionChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -1020,7 +1072,7 @@ async function readStored(
     client.appResourceCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appResource.findMany({ orderBy: [{ kind: 'asc' }, { position: 'asc' }] }),
     client.appResourceWords.findMany({ orderBy: { key: 'asc' } }),
-    client.appFoundationalDocument.findMany({ select: { id: true, blocks: true } }),
+    client.appFoundationalDocument.findMany({ select: { id: true, slug: true, blocks: true } }),
   ]);
   return { collection, resources, words, documents };
 }
@@ -1050,7 +1102,14 @@ export async function applyResourcesImport(
       const planned = planResourcesImport(file, stored, removeAbsent);
       if (planned.plan.refusals.length > 0) throw importRefused('resources', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;
+      const collectionSlug = stored.collection!.slug;
       const collectionId = stored.collection!.id;
+      const documentId = idsBySlug(stored.documents, 'foundational document');
+      const documentIdOf = (fields: ResourceFields) =>
+        fields.documentId === null ? null : documentId(fields.documentId);
+      const storedResourceId = idsBySlug(stored.resources, 'resource');
+      const storedWords = stored.words.map(({ id, key }) => ({ id, slug: key }));
+      const storedWordsId = idsBySlug(storedWords, 'resource words');
 
       if (planned.collectionChanged.length > 0) {
         await tx.appResourceCollection.update({
@@ -1063,7 +1122,7 @@ export async function applyResourcesImport(
       // their place below zero, moving updates out of the way.
       for (const change of planned.resources.removals) {
         await tx.appResource.update({
-          where: { id: change.key },
+          where: { id: storedResourceId(change.key) },
           data: { position: change.after!.position },
         });
       }
@@ -1072,19 +1131,35 @@ export async function applyResourcesImport(
       );
       for (const [index, change] of moving.entries()) {
         await tx.appResource.update({
-          where: { id: change.key },
+          where: { id: storedResourceId(change.key) },
           data: { position: parkingPosition(index) },
         });
       }
+      const createdResources: { id: string; slug: string }[] = [];
       for (const change of planned.resources.creates) {
-        await tx.appResource.create({
-          data: { id: change.key, collectionId, ...change.after!, revision: 1 },
-        });
+        createdResources.push(
+          await tx.appResource.create({
+            data: {
+              slug: change.key,
+              collectionSlug,
+              collectionId,
+              ...resourceColumnsOf(change.after!),
+              documentId: documentIdOf(change.after!),
+              revision: 1,
+            },
+            select: { id: true, slug: true },
+          })
+        );
       }
+      const resourceId = idsBySlug([...stored.resources, ...createdResources], 'resource');
       for (const change of [...planned.resources.updates, ...planned.resources.removals]) {
         await tx.appResource.update({
-          where: { id: change.key },
-          data: { ...change.after!, revision: change.revision },
+          where: { id: resourceId(change.key) },
+          data: {
+            ...resourceColumnsOf(change.after!),
+            documentId: documentIdOf(change.after!),
+            revision: change.revision,
+          },
         });
       }
       for (const change of [
@@ -1094,9 +1169,10 @@ export async function applyResourcesImport(
       ]) {
         await tx.appResourceRevision.create({
           data: {
-            resourceId: change.key,
+            resourceSlug: change.key,
+            resourceId: resourceId(change.key),
             revision: change.revision,
-            ...change.after!,
+            ...resourceColumnsOf(change.after!),
             changedFields: change.changedFields,
             origin: 'admin',
             editorId,
@@ -1105,16 +1181,20 @@ export async function applyResourcesImport(
       }
 
       for (const change of planned.words.removals) {
-        await tx.appResourceWords.delete({ where: { key: change.key } });
+        await tx.appResourceWords.delete({ where: { id: storedWordsId(change.key) } });
       }
+      const createdWords: { id: string; slug: string }[] = [];
       for (const change of planned.words.creates) {
-        await tx.appResourceWords.create({
-          data: { key: change.key, collectionId, ...change.after!, revision: 1 },
+        const created = await tx.appResourceWords.create({
+          data: { key: change.key, collectionSlug, collectionId, ...change.after!, revision: 1 },
+          select: { id: true },
         });
+        createdWords.push({ id: created.id, slug: change.key });
       }
+      const wordsId = idsBySlug([...storedWords, ...createdWords], 'resource words');
       for (const change of planned.words.updates) {
         await tx.appResourceWords.update({
-          where: { key: change.key },
+          where: { id: wordsId(change.key) },
           data: { ...change.after!, revision: change.revision },
         });
       }
@@ -1122,6 +1202,7 @@ export async function applyResourcesImport(
         await tx.appResourceWordsRevision.create({
           data: {
             wordsKey: change.key,
+            wordsId: wordsId(change.key),
             revision: change.revision,
             ...change.after!,
             changedFields: change.changedFields,

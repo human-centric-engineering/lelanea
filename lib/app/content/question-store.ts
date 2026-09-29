@@ -25,6 +25,7 @@ import {
   type DiscoveryQuestionSet,
 } from '@/lib/app/content/question-view';
 import type { QuestionSeed } from '@/lib/app/content/question-view';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 /** The one set there is: the onboarding module's discovery questions. */
 export const DISCOVERY_QUESTION_SET_ID = 'onboarding_discovery_questions';
@@ -39,8 +40,8 @@ export const DISCOVERY_QUESTION_SET_ID = 'onboarding_discovery_questions';
  * @throws ContentNotSeededError when the seed has not run.
  */
 export async function getDiscoveryQuestions(): Promise<DiscoveryQuestionSet> {
-  const set = await defaultClient.appQuestionSet.findUnique({
-    where: { id: DISCOVERY_QUESTION_SET_ID },
+  const set = await defaultClient.appQuestionSet.findFirst({
+    where: { slug: DISCOVERY_QUESTION_SET_ID },
     include: { questions: { orderBy: { number: 'asc' } } },
   });
   if (!set) {
@@ -92,19 +93,19 @@ export async function seedDiscoveryQuestions(
   seed: QuestionSeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedQuestionsResult> {
-  const existing = await client.appQuestionSet.findUnique({
-    where: { id: seed.set.id },
-    select: { id: true },
+  const existing = await client.appQuestionSet.findFirst({
+    where: { slug: seed.set.slug },
+    select: { slug: true },
   });
   if (existing) {
     return {
       status: 'skipped',
-      questions: await client.appDiscoveryQuestion.count({ where: { setId: seed.set.id } }),
+      questions: await client.appDiscoveryQuestion.count({ where: { setSlug: seed.set.slug } }),
     };
   }
 
   const now = new Date();
-  const { id: setId, moduleId, ...setText } = seed.set;
+  const { slug: setSlug, moduleSlug, ...setText } = seed.set;
   // Validated again at the write, not just when the seed was built.
   const framing = {
     ...setText,
@@ -117,38 +118,62 @@ export async function seedDiscoveryQuestions(
   }));
   const provenance = { origin: 'seed' as const, editorId: null, changedAt: now };
 
-  await client.$transaction([
-    client.appQuestionSet.create({
-      data: { id: setId, moduleId, ...framing, revision: 1, createdAt: now, updatedAt: now },
-    }),
-    client.appDiscoveryQuestion.createMany({
-      data: questions.map((question) => ({
-        ...question,
-        setId,
+  await client.$transaction(async (tx) => {
+    // The set's module is seeded first (016). Refused here as the foreign key
+    // refused it when the set named its module directly.
+    const setModule = await tx.appJourneyModule.findFirst({
+      where: { slug: moduleSlug },
+      select: { id: true },
+    });
+    if (!setModule)
+      throw new Error(`Question set "${setSlug}" names unknown module "${moduleSlug}"`);
+    const set = await tx.appQuestionSet.create({
+      data: {
+        slug: setSlug,
+        moduleSlug,
+        moduleId: setModule.id,
+        ...framing,
         revision: 1,
         createdAt: now,
         updatedAt: now,
-      })),
-    }),
-    client.appQuestionSetRevision.create({
+      },
+      select: { id: true },
+    });
+    const questionId = idsBySlug(
+      await tx.appDiscoveryQuestion.createManyAndReturn({
+        data: questions.map((question) => ({
+          ...question,
+          setSlug,
+          setId: set.id,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        select: { id: true, slug: true },
+      }),
+      'discovery question'
+    );
+    await tx.appQuestionSetRevision.create({
       data: {
-        setId,
+        setSlug,
+        setId: set.id,
         revision: 1,
         ...framing,
         changedFields: [...QUESTION_SET_SNAPSHOT_FIELDS],
         ...provenance,
       },
-    }),
-    client.appDiscoveryQuestionRevision.createMany({
-      data: questions.map(({ id, ...text }) => ({
-        questionId: id,
+    });
+    await tx.appDiscoveryQuestionRevision.createMany({
+      data: questions.map(({ slug, ...text }) => ({
+        questionSlug: slug,
+        questionId: questionId(slug),
         revision: 1,
         ...text,
         changedFields: [...QUESTION_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-  ]);
+    });
+  });
 
   return { status: 'seeded', questions: seed.questions.length };
 }

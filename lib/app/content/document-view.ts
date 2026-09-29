@@ -106,7 +106,7 @@ const categorySchema = z.enum(['onboarding', 'about', 'legal']);
  * without a client.
  */
 export interface DocumentRow {
-  id: string;
+  slug: string;
   title: string;
   subtitle: string | null;
   category: string;
@@ -131,7 +131,7 @@ export function toDocumentDetail(row: DocumentRow): FoundationalDocumentDetail {
   const category = categorySchema.safeParse(row.category);
   if (!parsedBlocks.success || !category.success) {
     throw new Error(
-      `Foundational document "${row.id}" failed validation on read: ` +
+      `Foundational document "${row.slug}" failed validation on read: ` +
         (parsedBlocks.success ? '' : `blocks ${parsedBlocks.error.message} `) +
         (category.success ? '' : `category "${row.category}"`)
     );
@@ -139,7 +139,7 @@ export function toDocumentDetail(row: DocumentRow): FoundationalDocumentDetail {
   const blocks = parsedBlocks.data;
 
   return {
-    id: row.id,
+    id: row.slug,
     title: row.title,
     subtitle: row.subtitle,
     category: category.data,

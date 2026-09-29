@@ -44,6 +44,9 @@ import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overla
 type Row = Record<string, unknown>;
 
 const TABLES = [
+  // Read, not written, by these units: the resource seed looks its articles'
+  // documents up here (t-113).
+  'appFoundationalDocument',
   'appJourney',
   'appJourneyTier',
   'appJourneyTierRevision',
@@ -71,32 +74,57 @@ function inMemoryDatabase() {
     Table,
     Row[]
   >;
+  // Equality, and `{ in: [...] }`, the two shapes the services' `where`s use.
   const matches = (row: Row, where?: Row) =>
-    !where || Object.entries(where).every(([key, value]) => row[key] === value);
+    !where ||
+    Object.entries(where).every(([key, value]) =>
+      value !== null && typeof value === 'object' && 'in' in value
+        ? (value.in as unknown[]).includes(row[key])
+        : row[key] === value
+    );
+  // t-113: every row gets a generated id, as the database would; the authored
+  // name is its `slug` (words keep `key`). A row that already has one keeps it.
+  let sequence = 0;
+  const generated = (row: Row): Row => ({ id: `gen-${++sequence}`, ...structuredClone(row) });
   const delegate = (name: Table) => ({
-    findFirst: vi.fn(async () => tables[name][0] ?? null),
+    findFirst: vi.fn(
+      async (args?: { where?: Row }) =>
+        tables[name].find((row) => matches(row, args?.where)) ?? null
+    ),
     findUnique: vi.fn(
       async ({ where }: { where: Row }) => tables[name].find((row) => matches(row, where)) ?? null
     ),
-    findMany: vi.fn(async () => tables[name].map((row) => ({ ...row }))),
+    findMany: vi.fn(async (args?: { where?: Row }) =>
+      tables[name].filter((row) => matches(row, args?.where)).map((row) => ({ ...row }))
+    ),
     count: vi.fn(
       async (args?: { where?: Row }) =>
         tables[name].filter((row) => matches(row, args?.where)).length
     ),
     create: vi.fn(async ({ data }: { data: Row }) => {
-      tables[name].push(structuredClone(data));
-      return data;
+      const row = generated(data);
+      tables[name].push(row);
+      return structuredClone(row);
     }),
     createMany: vi.fn(async ({ data }: { data: Row[] }) => {
       tables[name].push(...data.map((row) => structuredClone(row)));
       return { count: data.length };
     }),
+    createManyAndReturn: vi.fn(async ({ data }: { data: Row[] }) => {
+      const rows = data.map(generated);
+      tables[name].push(...rows);
+      return rows.map((row) => structuredClone(row));
+    }),
   });
-  const client = {
+  const client: Record<string, unknown> = {
     ...Object.fromEntries(TABLES.map((name) => [name, delegate(name)])),
-    // Array form, as the services use it: every operation already started.
-    $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
   };
+  // Both forms, as the services use them: the content seeds pass a callback
+  // that gets the client (t-113); the voice overlays pass operations already
+  // started.
+  client.$transaction = vi.fn(async (arg: Promise<unknown>[] | ((tx: unknown) => unknown)) =>
+    Array.isArray(arg) ? Promise.all(arg) : arg(client)
+  );
   return {
     tables,
     client: client as unknown as PrismaClient,
@@ -130,18 +158,23 @@ describe('016-journey-structure', () => {
     await run(journeyUnit);
 
     expect(db.tables.appJourney).toEqual([
-      expect.objectContaining({ id: 'Lelañea', version: '1.0', locale: 'en-US' }),
+      expect.objectContaining({ slug: 'Lelañea', version: '1.0', locale: 'en-US' }),
     ]);
-    expect(db.tables.appJourneyTier.map((row) => row.id)).toEqual([
+    expect(db.tables.appJourneyTier.map((row) => row.slug)).toEqual([
       'onboarding',
       'foundations',
       'inner_authority',
       'embodied_relationship',
       'integration_and_expansion',
     ]);
-    expect(db.tables.appJourneyModule.map((row) => row.id)).toEqual(
+    expect(db.tables.appJourneyModule.map((row) => row.slug)).toEqual(
       JOURNEY_MODULES.map((module) => module.id)
     );
+    // Each tier and module points at the journey's generated id, and keeps its name.
+    const journey = db.tables.appJourney[0];
+    for (const row of [...db.tables.appJourneyTier, ...db.tables.appJourneyModule]) {
+      expect(row).toMatchObject({ journeyId: journey.id, journeySlug: 'Lelañea' });
+    }
   });
 
   it('gives every tier and module its v1 revision, origin seed, with every field changed', async () => {
@@ -165,13 +198,15 @@ describe('016-journey-structure', () => {
         changedFields: [...MODULE_SNAPSHOT_FIELDS],
       });
     }
-    const values = db.tables.appJourneyModule.find((row) => row.id === 'module_01_values');
+    const values = db.tables.appJourneyModule.find((row) => row.slug === 'module_01_values');
     const valuesV1 = db.tables.appJourneyModuleRevision.find(
-      (row) => row.moduleId === 'module_01_values'
+      (row) => row.moduleSlug === 'module_01_values'
     );
     // A full snapshot, not a pointer.
     expect(valuesV1?.phases).toEqual(values?.phases);
     expect(valuesV1?.title).toBe('Values');
+    // Filed against its module's generated id.
+    expect(valuesV1?.moduleId).toBe(values?.id);
   });
 
   it('writes the five tables in one transaction', async () => {
@@ -190,13 +225,13 @@ describe('016-journey-structure', () => {
   it('leaves an edited title in place on a second run', async () => {
     await run(journeyUnit);
 
-    const values = db.tables.appJourneyModule.find((row) => row.id === 'module_01_values')!;
+    const values = db.tables.appJourneyModule.find((row) => row.slug === 'module_01_values')!;
     values.title = 'Values, as she renamed it';
     values.revision = 2;
 
     await run(journeyUnit);
 
-    const after = db.tables.appJourneyModule.find((row) => row.id === 'module_01_values');
+    const after = db.tables.appJourneyModule.find((row) => row.slug === 'module_01_values');
     expect(after).toMatchObject({ title: 'Values, as she renamed it', revision: 2 });
     expect(db.tables.appJourney).toHaveLength(1);
     expect(db.tables.appJourneyModule).toHaveLength(17);
@@ -213,8 +248,9 @@ describe('017-discovery-questions', () => {
 
     expect(db.tables.appQuestionSet).toEqual([
       expect.objectContaining({
-        id: 'onboarding_discovery_questions',
-        moduleId: 'module_00_onboarding',
+        slug: 'onboarding_discovery_questions',
+        moduleSlug: 'module_00_onboarding',
+        moduleId: db.tables.appJourneyModule.find((row) => row.slug === 'module_00_onboarding')?.id,
         phase: 8,
         revision: 1,
       }),
@@ -249,13 +285,13 @@ describe('017-discovery-questions', () => {
     await run(journeyUnit);
     await run(questionsUnit);
 
-    const first = db.tables.appDiscoveryQuestion.find((row) => row.id === 'q01')!;
+    const first = db.tables.appDiscoveryQuestion.find((row) => row.slug === 'q01')!;
     first.text = 'Edited by an admin.';
     first.revision = 2;
 
     await run(questionsUnit);
 
-    expect(db.tables.appDiscoveryQuestion.find((row) => row.id === 'q01')).toMatchObject({
+    expect(db.tables.appDiscoveryQuestion.find((row) => row.slug === 'q01')).toMatchObject({
       text: 'Edited by an admin.',
       revision: 2,
     });
@@ -271,7 +307,7 @@ describe('018-resources', () => {
 
     expect(db.tables.appResourceCollection).toEqual([
       expect.objectContaining({
-        id: 'lelanea_resources',
+        slug: 'lelanea_resources',
         provenance: expect.objectContaining({ status: 'draft' }),
       }),
     ]);
@@ -321,7 +357,7 @@ describe('018-resources', () => {
     await run(journeyUnit);
     const seed = buildResourcesSeed();
     seed.resources.push({
-      id: 'half-a-video',
+      slug: 'half-a-video',
       kind: 'video',
       position: 0,
       title: 'Half a video',
@@ -330,7 +366,7 @@ describe('018-resources', () => {
       duration: '1:00',
       readingTime: null,
       href: null,
-      documentId: null,
+      documentSlug: null,
     });
 
     await expect(seedResources(seed, db.client)).rejects.toThrow(/half-a-video/);
@@ -346,7 +382,7 @@ describe('seedResources refuses what could not be read back', () => {
   it('a piece that relates to `default`, which is spelled null', async () => {
     const seed = buildResourcesSeed();
     seed.resources.push({
-      id: 'for-everything',
+      slug: 'for-everything',
       kind: 'video',
       position: 0,
       title: 'For everything',
@@ -355,7 +391,7 @@ describe('seedResources refuses what could not be read back', () => {
       duration: '1:00',
       readingTime: null,
       href: 'https://example.com/x',
-      documentId: null,
+      documentSlug: null,
     });
 
     await expect(seedResources(seed, db.client)).rejects.toThrow(/unknown key "default"/);

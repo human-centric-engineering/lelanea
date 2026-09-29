@@ -54,25 +54,31 @@ const revision = (parent: string): ModelSpec => ({
 
 const stamped = () => ({ createdAt: new Date(), updatedAt: new Date() });
 
+/** t-113: a content row's authored name is unique per org, beside its generated id. */
+const named = { unique: [['orgId', 'slug']], compound: { orgId_slug: ['orgId', 'slug'] } };
+
 const MODELS: Record<string, ModelSpec> = {
-  appDocumentCollection: { key: 'id', defaults: stamped },
+  appDocumentCollection: { key: 'id', ...named, defaults: stamped },
   appFoundationalDocument: {
     key: 'id',
-    unique: [['collectionId', 'position']],
+    unique: [...named.unique, ['collectionId', 'position']],
+    compound: named.compound,
     defaults: () => ({ ...stamped(), revision: 1 }),
     cascade: [['appFoundationalDocumentRevision', 'documentId']],
     restrict: [['appResource', 'documentId']],
   },
   appFoundationalDocumentRevision: revision('documentId'),
-  appJourney: { key: 'id', defaults: stamped },
+  appJourney: { key: 'id', ...named, defaults: stamped },
   appJourneyTier: {
     key: 'id',
+    ...named,
     defaults: () => ({ ...stamped(), revision: 1 }),
     cascade: [['appJourneyTierRevision', 'tierId']],
   },
   appJourneyTierRevision: revision('tierId'),
   appJourneyModule: {
     key: 'id',
+    ...named,
     // What Postgres holds for a JSON column the seed writes `undefined` to.
     defaults: () => ({ ...stamped(), revision: 1, phaseTiers: null, produces: null }),
     cascade: [['appJourneyModuleRevision', 'moduleId']],
@@ -83,13 +89,15 @@ const MODELS: Record<string, ModelSpec> = {
   },
   appQuestionSet: {
     key: 'id',
+    ...named,
     defaults: () => ({ ...stamped(), revision: 1 }),
     cascade: [['appQuestionSetRevision', 'setId']],
   },
   appQuestionSetRevision: revision('setId'),
   appDiscoveryQuestion: {
     key: 'id',
-    unique: [['setId', 'number']],
+    unique: [...named.unique, ['setId', 'number']],
+    compound: named.compound,
     defaults: () => ({
       ...stamped(),
       revision: 1,
@@ -108,10 +116,11 @@ const MODELS: Record<string, ModelSpec> = {
   slotDefinition: { key: 'id', defaults: () => ({ ...stamped(), isActive: true }) },
   // And the answers filed under a slot, which also mark an id as used.
   slotValue: { key: 'id' },
-  appResourceCollection: { key: 'id', defaults: stamped },
+  appResourceCollection: { key: 'id', ...named, defaults: stamped },
   appResource: {
     key: 'id',
-    unique: [['collectionId', 'kind', 'position']],
+    unique: [...named.unique, ['collectionId', 'kind', 'position']],
+    compound: named.compound,
     defaults: () => ({
       ...stamped(),
       revision: 1,
@@ -120,6 +129,7 @@ const MODELS: Record<string, ModelSpec> = {
       duration: null,
       readingTime: null,
       href: null,
+      documentSlug: null,
       documentId: null,
     }),
     cascade: [['appResourceRevision', 'resourceId']],
@@ -129,11 +139,13 @@ const MODELS: Record<string, ModelSpec> = {
     defaults: () => ({ changedAt: new Date(), retired: false }),
   },
   appResourceWords: {
-    key: 'key',
+    key: 'id',
+    unique: [['orgId', 'key']],
+    compound: { orgId_key: ['orgId', 'key'] },
     defaults: () => ({ ...stamped(), revision: 1 }),
-    cascade: [['appResourceWordsRevision', 'wordsKey']],
+    cascade: [['appResourceWordsRevision', 'wordsId']],
   },
-  appResourceWordsRevision: revision('wordsKey'),
+  appResourceWordsRevision: revision('wordsId'),
   appAcknowledgement: { key: 'id', defaults: () => ({ acknowledgedAt: new Date() }) },
   user: { key: 'id' },
 
@@ -305,6 +317,15 @@ export function createContentDbFake() {
     const spec = MODELS[model];
     const rows = () => tables[model];
     const find = (where?: Where) => rows().filter((row) => matches(row, where, spec));
+    const insertMany = (data: Row[]) =>
+      data.map((fields) => {
+        const row: Row = { ...(spec.defaults?.() ?? {}) };
+        if (spec.key === 'id' && fields.id === undefined) row.id = `fake-${++sequence}`;
+        apply(row, fields);
+        checkUnique(model, row);
+        rows().push(row);
+        return row;
+      });
 
     const withInclude = (row: Row | null, include?: Record<string, unknown>) => {
       if (!row || !include) return row;
@@ -335,8 +356,14 @@ export function createContentDbFake() {
     return {
       findMany: async (args: { where?: Where; orderBy?: unknown } = {}) =>
         sortRows(find(args.where), args.orderBy).map((row) => structuredClone(row)),
-      findFirst: async (args: { where?: Where; orderBy?: unknown } = {}) =>
-        out(sortRows(find(args.where), args.orderBy)[0]),
+      findFirst: async (
+        args: { where?: Where; orderBy?: unknown; include?: Record<string, unknown> } = {}
+      ) => withInclude(out(sortRows(find(args.where), args.orderBy)[0]), args.include),
+      findFirstOrThrow: async (args: { where?: Where; orderBy?: unknown } = {}) => {
+        const row = sortRows(find(args.where), args.orderBy)[0];
+        if (!row) throw new Error(`No ${model} found`);
+        return structuredClone(row);
+      },
       findUnique: async (args: { where: Where; include?: Record<string, unknown> }) =>
         withInclude(out(find(args.where)[0]), args.include),
       findUniqueOrThrow: async (args: { where: Where }) => {
@@ -381,15 +408,12 @@ export function createContentDbFake() {
         return structuredClone(row);
       },
       createMany: async (args: { data: Row[] }) => {
-        for (const data of args.data) {
-          const row: Row = { ...(spec.defaults?.() ?? {}) };
-          if (spec.key === 'id' && data.id === undefined) row.id = `fake-${++sequence}`;
-          apply(row, data);
-          checkUnique(model, row);
-          rows().push(row);
-        }
+        insertMany(args.data);
         return { count: args.data.length };
       },
+      // Whole rows back, whatever `select` asked for: callers read `id` and the name.
+      createManyAndReturn: async (args: { data: Row[] }) =>
+        insertMany(args.data).map((row) => structuredClone(row)),
       update: async (args: { where: Where; data: Row }) => {
         const row = find(args.where)[0];
         if (!row) throw new Error(`No ${model} to update`);
@@ -448,7 +472,12 @@ export function createContentDbFake() {
     rows: (model: keyof typeof MODELS) => structuredClone(tables[model]),
     /** Add rows directly, bypassing every service. */
     insert: (model: keyof typeof MODELS, ...rows: Row[]) => {
-      for (const row of rows) tables[model].push({ ...(MODELS[model].defaults?.() ?? {}), ...row });
+      for (const row of rows) {
+        // A generated id when the test gives only the name, as the database would.
+        const id =
+          MODELS[model].key === 'id' && row.id === undefined ? `fake-${++sequence}` : undefined;
+        tables[model].push({ ...(MODELS[model].defaults?.() ?? {}), ...(id && { id }), ...row });
+      }
     },
     /** Every table, as a count, for "wrote nothing" assertions. */
     fingerprint: () => JSON.stringify(tables),

@@ -178,7 +178,7 @@ describe('the stored JSON is validated on the way out', () => {
   it('throws on a module whose phases fail validation, rather than rendering them', () => {
     const rows = seededJourneyRows();
     const broken = rows.modules.map((row) =>
-      row.id === 'module_01_values' ? { ...row, phases: [{ title: 'no number' }] } : row
+      row.slug === 'module_01_values' ? { ...row, phases: [{ title: 'no number' }] } : row
     );
 
     expect(() => toJourneyStructure(rows.journey, rows.tiers, broken)).toThrow(
@@ -188,12 +188,12 @@ describe('the stored JSON is validated on the way out', () => {
 
   it('throws on a phase tier that names a phase the module does not have', () => {
     const rows = seededJourneyRows();
-    const values = rows.modules.find((row) => row.id === 'module_01_values')!;
+    const values = rows.modules.find((row) => row.slug === 'module_01_values')!;
     const phaseTiers = (values.phaseTiers as { phases: number[] }[]).map((tier, index) =>
       index === 0 ? { ...tier, phases: [99] } : tier
     );
     const broken = rows.modules.map((row) =>
-      row.id === 'module_01_values' ? { ...row, phaseTiers } : row
+      row.slug === 'module_01_values' ? { ...row, phaseTiers } : row
     );
 
     expect(() => toJourneyStructure(rows.journey, rows.tiers, broken)).toThrow(/phase 99/);
@@ -206,7 +206,7 @@ describe('the stored JSON is validated on the way out', () => {
       toJourneyStructure(
         rows.journey,
         rows.tiers,
-        rows.modules.filter((row) => row.id !== 'module_09_nervous_system')
+        rows.modules.filter((row) => row.slug !== 'module_09_nervous_system')
       )
     ).toThrow(/"module_09_nervous_system" is in the roster but has no row/);
   });
@@ -229,7 +229,30 @@ describe('the data migration', () => {
     const match = /\$t87journey\$([\s\S]*?)\$t87journey\$/.exec(sql);
 
     expect(match, 'the migration no longer embeds the journey seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildJourneySeed());
+    // Frozen before t-113, the JSON names each row by `id`. The per-org keys
+    // migration copies that name into `slug` on all three tables, which is
+    // where the seed puts it now.
+    const perOrgKeys = readFileSync(
+      path.join(
+        process.cwd(),
+        'prisma/migrations/20261004100000_app_content_per_org_keys/migration.sql'
+      ),
+      'utf8'
+    );
+    for (const table of ['app_journey', 'app_journey_tier', 'app_journey_module']) {
+      expect(perOrgKeys).toContain(`UPDATE "${table}" SET "slug" = "id";`);
+    }
+    const toSlug = <T extends { id: string }>({ id, ...row }: T) => ({ slug: id, ...row });
+    const written = JSON.parse(match![1]) as {
+      journey: { id: string };
+      tiers: { id: string }[];
+      modules: { id: string }[];
+    };
+    expect({
+      journey: toSlug(written.journey),
+      tiers: written.tiers.map(toSlug),
+      modules: written.modules.map(toSlug),
+    }).toEqual(buildJourneySeed());
   });
 
   it('records the same changed fields the service records', async () => {

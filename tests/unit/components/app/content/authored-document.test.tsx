@@ -66,7 +66,7 @@ const DOCUMENT_IDS = [
 const seeded = seededDocumentRows();
 
 function load(id: string): FoundationalDocumentDetail {
-  const row = seeded.find((candidate) => candidate.id === id);
+  const row = seeded.find((candidate) => candidate.slug === id);
   if (!row) throw new Error(`authored document '${id}' is missing`);
   return toDocumentDetail(row);
 }
@@ -132,7 +132,7 @@ function synthetic(
 
 describe('the seven documents render block for block', () => {
   it('walks exactly the seven documents the collection declares', () => {
-    expect(seeded.map((doc) => doc.id)).toEqual([...DOCUMENT_IDS]);
+    expect(seeded.map((doc) => doc.slug)).toEqual([...DOCUMENT_IDS]);
   });
 
   it.each(DOCUMENT_IDS)('%s renders every block, in order, at the right level', (id) => {

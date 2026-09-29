@@ -100,24 +100,25 @@ export function createFakeJourneyStore() {
       state = null;
     },
     /** Change one module's row, as an admin edit would, and bump its revision. */
-    editModule(id: string, patch: Partial<Omit<JourneyModuleRow, 'id'>>): void {
+    editModule(id: string, patch: Partial<Omit<JourneyModuleRow, 'slug'>>): void {
       if (!state) throw new Error('The fake journey store is empty');
-      if (!state.modules.some((row) => row.id === id)) throw new Error(`No seeded module "${id}"`);
+      if (!state.modules.some((row) => row.slug === id))
+        throw new Error(`No seeded module "${id}"`);
       state = {
         ...state,
         modules: state.modules.map((row) =>
-          row.id === id ? { ...row, ...patch, revision: row.revision + 1 } : row
+          row.slug === id ? { ...row, ...patch, revision: row.revision + 1 } : row
         ),
       };
     },
     /** Change one tier's row and bump its revision. */
-    editTier(id: string, patch: Partial<Omit<JourneyTierRow, 'id'>>): void {
+    editTier(id: string, patch: Partial<Omit<JourneyTierRow, 'slug'>>): void {
       if (!state) throw new Error('The fake journey store is empty');
-      if (!state.tiers.some((row) => row.id === id)) throw new Error(`No seeded tier "${id}"`);
+      if (!state.tiers.some((row) => row.slug === id)) throw new Error(`No seeded tier "${id}"`);
       state = {
         ...state,
         tiers: state.tiers.map((row) =>
-          row.id === id ? { ...row, ...patch, revision: row.revision + 1 } : row
+          row.slug === id ? { ...row, ...patch, revision: row.revision + 1 } : row
         ),
       };
     },
@@ -178,14 +179,14 @@ export function createFakeQuestionStore() {
       state = null;
     },
     /** Change one question's row and bump its revision. */
-    editQuestion(id: string, patch: Partial<Omit<DiscoveryQuestionRow, 'id'>>): void {
+    editQuestion(id: string, patch: Partial<Omit<DiscoveryQuestionRow, 'slug'>>): void {
       if (!state) throw new Error('The fake question store is empty');
-      if (!state.questions.some((row) => row.id === id))
+      if (!state.questions.some((row) => row.slug === id))
         throw new Error(`No seeded question "${id}"`);
       state = {
         ...state,
         questions: state.questions.map((row) =>
-          row.id === id ? { ...row, ...patch, revision: row.revision + 1 } : row
+          row.slug === id ? { ...row, ...patch, revision: row.revision + 1 } : row
         ),
       };
     },
@@ -234,7 +235,7 @@ export function createFakeResourceStore() {
     WORDS_SNAPSHOT_FIELDS: [] as const,
     getResourcesLibrary: vi.fn(async () => library()),
     getResource: vi.fn(async (id: string) => {
-      const row = state?.resources.find((candidate) => candidate.id === id);
+      const row = state?.resources.find((candidate) => candidate.slug === id);
       if (!row) return null;
       return { kind: resourceKindOf(row), resource: toResource(row) };
     }),
@@ -267,13 +268,13 @@ export function createFakeResourceStore() {
       state = { ...state, resources: [...state.resources, { ...row, position, revision: 1 }] };
     },
     /** Change one resource's row and bump its revision. */
-    editResource(id: string, patch: Partial<Omit<ResourceRow, 'id'>>): void {
+    editResource(id: string, patch: Partial<Omit<ResourceRow, 'slug'>>): void {
       if (!state) throw new Error('The fake resource store is empty');
-      if (!state.resources.some((row) => row.id === id)) throw new Error(`No resource "${id}"`);
+      if (!state.resources.some((row) => row.slug === id)) throw new Error(`No resource "${id}"`);
       state = {
         ...state,
         resources: state.resources.map((row) =>
-          row.id === id ? { ...row, ...patch, revision: row.revision + 1 } : row
+          row.slug === id ? { ...row, ...patch, revision: row.revision + 1 } : row
         ),
       };
     },
@@ -303,10 +304,10 @@ export function fakeResourceStore(): FakeResourceStore {
 /** A video row the fake accepts, for tests that need the library to hold one. */
 export function videoRow(
   id: string,
-  overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
+  overrides: Partial<Omit<ResourceRow, 'slug' | 'kind' | 'revision' | 'position'>> = {}
 ): Omit<ResourceRow, 'revision' | 'position'> {
   return {
-    id,
+    slug: id,
     kind: 'video',
     title: `Video ${id}`,
     subtitle: `What ${id} is for`,
@@ -314,7 +315,7 @@ export function videoRow(
     duration: '6:12',
     readingTime: null,
     href: 'https://example.com/video',
-    documentId: null,
+    documentSlug: null,
     ...overrides,
   };
 }
@@ -322,7 +323,7 @@ export function videoRow(
 /** An audio row: a length and a link, as a video has. */
 export function audioRow(
   id: string,
-  overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
+  overrides: Partial<Omit<ResourceRow, 'slug' | 'kind' | 'revision' | 'position'>> = {}
 ): Omit<ResourceRow, 'revision' | 'position'> {
   return {
     ...videoRow(id),
@@ -336,10 +337,10 @@ export function audioRow(
 /** An article row that is one of her documents. */
 export function articleRow(
   id: string,
-  overrides: Partial<Omit<ResourceRow, 'id' | 'kind' | 'revision' | 'position'>> = {}
+  overrides: Partial<Omit<ResourceRow, 'slug' | 'kind' | 'revision' | 'position'>> = {}
 ): Omit<ResourceRow, 'revision' | 'position'> {
   return {
-    id,
+    slug: id,
     kind: 'article',
     title: `Reading ${id}`,
     subtitle: `What ${id} is for`,
@@ -347,7 +348,7 @@ export function articleRow(
     duration: null,
     readingTime: '8 min',
     href: null,
-    documentId: 'the_heart_behind_lelanea',
+    documentSlug: 'the_heart_behind_lelanea',
     ...overrides,
   };
 }

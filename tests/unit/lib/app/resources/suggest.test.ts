@@ -53,7 +53,7 @@ beforeEach(() => {
       relatesTo: 'module_01_values',
       readingTime: '6 min',
       href: 'https://example.com/evidence',
-      documentId: null,
+      documentSlug: null,
     })
   );
 });

@@ -29,7 +29,7 @@ vi.mock('@/lib/env', () => ({ env: { NODE_ENV: 'production' } }));
 
 /** Her documents as the store serves them: seeded rows, real projection (t-86). */
 function load(id: string): FoundationalDocumentDetail {
-  const row = seededDocumentRows().find((candidate) => candidate.id === id);
+  const row = seededDocumentRows().find((candidate) => candidate.slug === id);
   if (!row) throw new Error(`authored document '${id}' is missing`);
   return toDocumentDetail(row);
 }

@@ -39,7 +39,11 @@ import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
 
 /** The rows the seed writes, as `app_foundational_document` would hold them. */
 export function seededDocumentRows(): (DocumentRow & { position: number })[] {
-  return buildFoundationalSeed().documents.map((document) => ({ ...document, revision: 1 }));
+  return buildFoundationalSeed().documents.map(({ id, ...document }) => ({
+    slug: id,
+    ...document,
+    revision: 1,
+  }));
 }
 
 /** The collection row the seed writes. */
@@ -68,7 +72,7 @@ export function createFakeDocumentStore() {
       };
     }),
     getFoundationalDocument: vi.fn(async (id: string) => {
-      const row = rows.find((candidate) => candidate.id === id);
+      const row = rows.find((candidate) => candidate.slug === id);
       return row ? toDocumentDetail(row) : null;
     }),
     seedFoundationalDocuments: vi.fn(),
@@ -93,18 +97,20 @@ export function createFakeDocumentStore() {
       id: string,
       edit: (blocks: StoredDocumentBlock[]) => StoredDocumentBlock[]
     ): StoredDocumentBlock[] {
-      const row = rows.find((candidate) => candidate.id === id);
+      const row = rows.find((candidate) => candidate.slug === id);
       if (!row) throw new Error(`No seeded document "${id}"`);
       const blocks = edit(structuredClone(row.blocks as StoredDocumentBlock[]));
       rows = rows.map((candidate) =>
-        candidate.id === id ? { ...candidate, blocks, revision: candidate.revision + 1 } : candidate
+        candidate.slug === id
+          ? { ...candidate, blocks, revision: candidate.revision + 1 }
+          : candidate
       );
       return blocks;
     },
     /** Change one document's columns other than its blocks. */
-    editRow(id: string, patch: Partial<Omit<DocumentRow, 'id' | 'blocks'>>): void {
+    editRow(id: string, patch: Partial<Omit<DocumentRow, 'slug' | 'blocks'>>): void {
       rows = rows.map((candidate) =>
-        candidate.id === id ? { ...candidate, ...patch } : candidate
+        candidate.slug === id ? { ...candidate, ...patch } : candidate
       );
     },
   };

@@ -164,7 +164,7 @@ describe('documents', () => {
 
     const revisions = db
       .current!.rows('appFoundationalDocumentRevision')
-      .filter((row) => row.documentId === 'the_mission');
+      .filter((row) => row.documentSlug === 'the_mission');
     expect(revisions.map((row) => row.revision)).toEqual([1, 2]);
     expect(revisions[1]).toMatchObject({
       origin: 'admin',
@@ -189,12 +189,13 @@ describe('documents', () => {
     // The first reconcile runs while a second save commits: it read the rows
     // before that save, so what it mirrored is already stale.
     mirror.reconcileKnowledgeMirror.mockImplementationOnce(async () => {
-      await (
-        db.current!.client.appFoundationalDocument as {
-          update: (args: unknown) => Promise<unknown>;
-        }
-      ).update({
-        where: { id: 'about_the_creator' },
+      const documents = db.current!.client.appFoundationalDocument as {
+        findFirstOrThrow: (args: unknown) => Promise<{ id: string }>;
+        update: (args: unknown) => Promise<unknown>;
+      };
+      const other = await documents.findFirstOrThrow({ where: { slug: 'about_the_creator' } });
+      await documents.update({
+        where: { id: other.id },
         data: { title: 'Saved meanwhile', revision: 2 },
       });
       return settled;
@@ -483,9 +484,11 @@ describe('resources', () => {
     const chips = suggestionsFromProvenance(provenance, await loadLibraryForChips([provenance]));
     expect(chips).toEqual([expect.objectContaining({ id: 'the-article', title: 'An article' })]);
     // Never deleted: the row and its history are both still there.
-    expect(db.current!.rows('appResource').find((row) => row.id === 'the-article')).toMatchObject({
-      retired: true,
-    });
+    expect(db.current!.rows('appResource').find((row) => row.slug === 'the-article')).toMatchObject(
+      {
+        retired: true,
+      }
+    );
   });
 
   it('her words must stay word for word what her document says', async () => {

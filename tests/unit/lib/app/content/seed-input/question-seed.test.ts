@@ -32,6 +32,12 @@ const MIGRATION = path.join(
   'prisma/migrations/20260928100100_app_journey_questions_resources_data/migration.sql'
 );
 
+/** t-113: the content tables keyed per org, their authored names moved to `slug`. */
+const PER_ORG_KEYS_MIGRATION = path.join(
+  process.cwd(),
+  'prisma/migrations/20261004100000_app_content_per_org_keys/migration.sql'
+);
+
 describe('the discovery questions, as seeded and served', () => {
   it('numbers the questions from one, in order', () => {
     const { questions } = served();
@@ -114,7 +120,9 @@ describe('the discovery questions, as seeded and served', () => {
   it('throws on a stored follow-up that is not a yes and a no', () => {
     const rows = seededQuestionRows();
     const broken = rows.questions.map((question) =>
-      question.id === 'q01' ? { ...question, conditionalFollowUp: { ifYes: 'only one' } } : question
+      question.slug === 'q01'
+        ? { ...question, conditionalFollowUp: { ifYes: 'only one' } }
+        : question
     );
 
     expect(() => toQuestionSet(rows.set, broken)).toThrow(/"q01" failed validation/);
@@ -150,7 +158,24 @@ describe('the data migration', () => {
     const set = seed.set;
     const questions = seed.questions.map(({ weight: _weight, ...question }) => question);
     expect(match, 'the migration no longer embeds the questions seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual({ set, questions });
+
+    // Frozen before t-113, the JSON names each row by `id` and the set's module
+    // by `moduleId`. The per-org keys migration copies those names into `slug`
+    // and `moduleSlug`, which is where the seed puts them now.
+    const perOrgKeys = readFileSync(PER_ORG_KEYS_MIGRATION, 'utf8');
+    expect(perOrgKeys).toContain('UPDATE "app_question_set" SET "moduleSlug" = "moduleId";');
+    for (const table of ['app_question_set', 'app_discovery_question']) {
+      expect(perOrgKeys).toContain(`UPDATE "${table}" SET "slug" = "id";`);
+    }
+    const written = JSON.parse(match![1]) as {
+      set: { id: string; moduleId: string };
+      questions: { id: string }[];
+    };
+    const { id: setId, moduleId, ...setText } = written.set;
+    expect({
+      set: { slug: setId, moduleSlug: moduleId, ...setText },
+      questions: written.questions.map(({ id, ...question }) => ({ slug: id, ...question })),
+    }).toEqual({ set, questions });
   });
 
   it('records the changed fields the service recorded when it ran', async () => {

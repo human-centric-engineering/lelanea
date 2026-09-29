@@ -40,7 +40,7 @@ export const RESOURCE_KINDS = ['video', 'audio', 'article'] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
 export interface ResourceCollectionRow {
-  id: string;
+  slug: string;
   title: string;
   version: string;
   locale: string;
@@ -49,7 +49,7 @@ export interface ResourceCollectionRow {
 
 /** The columns of `app_resource`. */
 export interface ResourceRow {
-  id: string;
+  slug: string;
   kind: string;
   position: number;
   title: string;
@@ -58,7 +58,7 @@ export interface ResourceRow {
   duration: string | null;
   readingTime: string | null;
   href: string | null;
-  documentId: string | null;
+  documentSlug: string | null;
   revision: number;
 }
 
@@ -84,7 +84,7 @@ export function resourceToRow(
   position: number
 ): Omit<ResourceRow, 'revision'> {
   return {
-    id: item.id,
+    slug: item.id,
     kind,
     position,
     title: item.title,
@@ -93,7 +93,7 @@ export function resourceToRow(
     duration: 'duration' in item ? item.duration : null,
     readingTime: 'readingTime' in item ? item.readingTime : null,
     href: 'href' in item ? item.href : null,
-    documentId: 'documentId' in item ? item.documentId : null,
+    documentSlug: 'documentId' in item ? item.documentId : null,
   };
 }
 
@@ -117,13 +117,13 @@ export function wordsToRow(key: string, words: ResourceWords): Omit<ResourceWord
  */
 function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceVideoView {
   const label = kind === 'video' ? 'a video' : 'an audio piece';
-  if (row.kind !== kind || row.readingTime !== null || row.documentId !== null) {
+  if (row.kind !== kind || row.readingTime !== null || row.documentSlug !== null) {
     throw new Error(
-      `Resource "${row.id}" is not a well-formed ${kind === 'video' ? 'video' : 'audio piece'}`
+      `Resource "${row.slug}" is not a well-formed ${kind === 'video' ? 'video' : 'audio piece'}`
     );
   }
   const parsed = videoSchema.safeParse({
-    id: row.id,
+    id: row.slug,
     title: row.title,
     subtitle: row.subtitle,
     relatesTo: row.relatesTo,
@@ -131,7 +131,9 @@ function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceVideoView {
     href: row.href,
   });
   if (!parsed.success) {
-    throw new Error(`Resource "${row.id}" failed validation as ${label}: ${parsed.error.message}`);
+    throw new Error(
+      `Resource "${row.slug}" failed validation as ${label}: ${parsed.error.message}`
+    );
   }
   return { ...parsed.data, revision: row.revision };
 }
@@ -156,34 +158,36 @@ export function toArticle(row: ResourceRow): ResourceArticleView {
   if (
     row.kind !== 'article' ||
     row.duration !== null ||
-    (row.href === null) === (row.documentId === null)
+    (row.href === null) === (row.documentSlug === null)
   ) {
     throw new Error(
-      `Resource "${row.id}" is not a well-formed article: it needs exactly one of a link and a document`
+      `Resource "${row.slug}" is not a well-formed article: it needs exactly one of a link and a document`
     );
   }
   const base = {
-    id: row.id,
+    id: row.slug,
     title: row.title,
     subtitle: row.subtitle,
     relatesTo: row.relatesTo,
     readingTime: row.readingTime,
   };
   const parsed = articleSchema.safeParse(
-    row.documentId !== null ? { ...base, documentId: row.documentId } : { ...base, href: row.href }
+    row.documentSlug !== null
+      ? { ...base, documentId: row.documentSlug }
+      : { ...base, href: row.href }
   );
   if (!parsed.success) {
     throw new Error(
-      `Resource "${row.id}" failed validation as an article: ${parsed.error.message}`
+      `Resource "${row.slug}" failed validation as an article: ${parsed.error.message}`
     );
   }
   return { ...parsed.data, revision: row.revision };
 }
 
 /** A row's kind, checked. @throws for a kind that is none of the three. */
-export function resourceKindOf(row: Pick<ResourceRow, 'id' | 'kind'>): ResourceKind {
+export function resourceKindOf(row: Pick<ResourceRow, 'slug' | 'kind'>): ResourceKind {
   const kind = RESOURCE_KINDS.find((k) => k === row.kind);
-  if (!kind) throw new Error(`Resource "${row.id}" has unknown kind "${row.kind}"`);
+  if (!kind) throw new Error(`Resource "${row.slug}" has unknown kind "${row.kind}"`);
   return kind;
 }
 
@@ -228,12 +232,12 @@ export function toResourcesLibrary(
 ): ResourcesLibrary {
   const provenance = provenanceSchema.safeParse(collection.provenance);
   if (!provenance.success) {
-    throw new Error(`Resource collection "${collection.id}" has a malformed provenance`);
+    throw new Error(`Resource collection "${collection.slug}" has a malformed provenance`);
   }
   const ordered = [...resourceRows].sort((a, b) => a.position - b.position);
   for (const row of ordered) {
     if (!RESOURCE_KINDS.some((kind) => kind === row.kind)) {
-      throw new Error(`Resource "${row.id}" has unknown kind "${row.kind}"`);
+      throw new Error(`Resource "${row.slug}" has unknown kind "${row.kind}"`);
     }
   }
   const words: Record<string, ResourceWordsView> = {};
@@ -242,7 +246,7 @@ export function toResourcesLibrary(
 
   return {
     collection: {
-      id: collection.id,
+      id: collection.slug,
       title: collection.title,
       version: collection.version,
       locale: collection.locale,

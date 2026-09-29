@@ -11,10 +11,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { setFindUnique } = vi.hoisted(() => ({ setFindUnique: vi.fn() }));
+const { setFindFirst } = vi.hoisted(() => ({ setFindFirst: vi.fn() }));
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appQuestionSet: { findUnique: setFindUnique } },
+  prisma: { appQuestionSet: { findFirst: setFindFirst } },
 }));
 
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
@@ -26,15 +26,15 @@ let rows: ReturnType<typeof seededQuestionRows>;
 beforeEach(() => {
   vi.clearAllMocks();
   rows = seededQuestionRows();
-  setFindUnique.mockResolvedValue({ ...rows.set, questions: rows.questions });
+  setFindFirst.mockResolvedValue({ ...rows.set, questions: rows.questions });
 });
 
 describe('getDiscoveryQuestions', () => {
-  it('reads the one set by id, with its questions in number order', async () => {
+  it('reads the one set by its name, with its questions in number order', async () => {
     const set = await getDiscoveryQuestions();
 
-    expect(setFindUnique).toHaveBeenCalledWith({
-      where: { id: DISCOVERY_QUESTION_SET_ID },
+    expect(setFindFirst).toHaveBeenCalledWith({
+      where: { slug: DISCOVERY_QUESTION_SET_ID },
       include: { questions: { orderBy: { number: 'asc' } } },
     });
     expect(set.questions).toHaveLength(30);
@@ -42,12 +42,12 @@ describe('getDiscoveryQuestions', () => {
   });
 
   it('serves what the ROW says, not what the file says', async () => {
-    setFindUnique.mockResolvedValue({
+    setFindFirst.mockResolvedValue({
       ...rows.set,
       preamble: { style: 'italic', text: 'An edited preamble.' },
       revision: 2,
       questions: rows.questions.map((q) =>
-        q.id === 'q05'
+        q.slug === 'q05'
           ? { ...q, text: 'An edited fifth question.', hint: null, weight: 40, revision: 4 }
           : q
       ),
@@ -68,16 +68,18 @@ describe('getDiscoveryQuestions', () => {
   });
 
   it('throws ContentNotSeededError on an unseeded database rather than serving nothing', async () => {
-    setFindUnique.mockResolvedValue(null);
+    setFindFirst.mockResolvedValue(null);
 
     await expect(getDiscoveryQuestions()).rejects.toBeInstanceOf(ContentNotSeededError);
     await expect(getDiscoveryQuestions()).rejects.toThrow(/017-discovery-questions/);
   });
 
   it('throws on a stored input type outside the vocabulary', async () => {
-    setFindUnique.mockResolvedValue({
+    setFindFirst.mockResolvedValue({
       ...rows.set,
-      questions: rows.questions.map((q) => (q.id === 'q01' ? { ...q, inputType: 'checkbox' } : q)),
+      questions: rows.questions.map((q) =>
+        q.slug === 'q01' ? { ...q, inputType: 'checkbox' } : q
+      ),
     });
 
     await expect(getDiscoveryQuestions()).rejects.toThrow(/"q01" failed validation/);

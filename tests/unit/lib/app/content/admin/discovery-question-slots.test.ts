@@ -170,7 +170,7 @@ describe('the weight and the Core Set switch', () => {
     expect((await questionView('q02')).weight).toBe(40);
     const revisions = db
       .current!.rows('appDiscoveryQuestionRevision')
-      .filter((row) => row.questionId === 'q02');
+      .filter((row) => row.questionSlug === 'q02');
     expect(revisions.at(-1)).toMatchObject({ weight: 40, changedFields: ['weight'] });
   });
 
