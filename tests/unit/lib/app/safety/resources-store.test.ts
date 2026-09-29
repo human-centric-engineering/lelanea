@@ -20,7 +20,7 @@ vi.mock('@/lib/logging', () => ({
 }));
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    appCrisisCopy: { findUnique: db.findCopy },
+    appCrisisCopy: { findFirst: db.findCopy },
     appCrisisRegion: { findMany: db.findRegions },
   },
 }));

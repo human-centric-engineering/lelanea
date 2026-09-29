@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    facilitationAgentBinding: { findMany: vi.fn(), findUnique: vi.fn() },
+    facilitationAgentBinding: { findMany: vi.fn(), findFirst: vi.fn() },
     aiAgent: { findMany: vi.fn(), findUnique: vi.fn() },
   },
 }));
@@ -61,13 +61,13 @@ describe('listFacilitationBindings', () => {
 
 describe('getFacilitationBindingByRole', () => {
   it('returns null (without an agent lookup) when nothing is bound to the role', async () => {
-    vi.mocked(prisma.facilitationAgentBinding.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.facilitationAgentBinding.findFirst).mockResolvedValue(null);
     expect(await getFacilitationBindingByRole('made-up')).toBeNull();
     expect(prisma.aiAgent.findUnique).not.toHaveBeenCalled();
   });
 
   it('stitches the single binding with its bound agent', async () => {
-    vi.mocked(prisma.facilitationAgentBinding.findUnique).mockResolvedValue({
+    vi.mocked(prisma.facilitationAgentBinding.findFirst).mockResolvedValue({
       id: 'fab-1',
       agentId: 'a1',
       role: 'state',
@@ -80,14 +80,14 @@ describe('getFacilitationBindingByRole', () => {
       deletedAt: null,
     } as never);
     const view = await getFacilitationBindingByRole('state');
-    expect(prisma.facilitationAgentBinding.findUnique).toHaveBeenCalledWith({
+    expect(prisma.facilitationAgentBinding.findFirst).toHaveBeenCalledWith({
       where: { role: 'state' },
     });
     expect(view?.agent).toMatchObject({ slug: 'reporter' });
   });
 
   it('sets agent to null when the bound agent row is gone (hard-deleted between reads)', async () => {
-    vi.mocked(prisma.facilitationAgentBinding.findUnique).mockResolvedValue({
+    vi.mocked(prisma.facilitationAgentBinding.findFirst).mockResolvedValue({
       id: 'fab-1',
       agentId: 'ghost',
       role: 'state',

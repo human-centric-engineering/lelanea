@@ -84,6 +84,7 @@ import type {
   SlotDefinitionUpdate,
   SlotUploadMode,
 } from '@/lib/app/slots/validation';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 /** A bulk apply writes one row per slot plus one revision each; 53 of both today. */
 const UPLOAD_TX_TIMEOUT_MS = 30_000;
@@ -219,7 +220,7 @@ export async function getSlotTaxonomyAdminView(): Promise<SlotTaxonomyAdminView>
  */
 export async function listSlotDefinitionHistory(slug: string): Promise<SlotRevisionRow[]> {
   const [definition, revisions] = await Promise.all([
-    prisma.appSlotDefinition.findUnique({ where: { slug }, select: { slug: true } }),
+    prisma.appSlotDefinition.findFirst({ where: { slug }, select: { slug: true } }),
     prisma.appSlotDefinitionRevision.findMany({
       where: { slotSlug: slug },
       orderBy: { version: 'desc' },
@@ -256,6 +257,13 @@ export async function listSlotDefinitionHistory(slug: string): Promise<SlotRevis
     editorEmail: revision.editorId === null ? null : (emailById.get(revision.editorId) ?? null),
     changedAt: revision.changedAt,
   }));
+}
+
+/** A slug the same transaction just wrote always has an id; not finding one is a bug. */
+function definitionIdFor(idBySlug: ReadonlyMap<string, string>, slug: string): string {
+  const id = idBySlug.get(slug);
+  if (id === undefined) throw new Error(`Slot definition "${slug}" was written but has no id`);
+  return id;
 }
 
 // ─── The refusals ───────────────────────────────────────────────────────────
@@ -323,7 +331,7 @@ async function writeDefinitionChange(
   changed: SlotDefinitionField[];
   changes: SlotFieldChanges;
 }> {
-  const before = await prisma.appSlotDefinition.findUnique({
+  const before = await prisma.appSlotDefinition.findFirst({
     where: { slug },
     select: DEFINITION_SELECT,
   });
@@ -350,7 +358,7 @@ async function writeDefinitionChange(
       data: { ...next, version },
     });
     if (count === 0) {
-      const now = await tx.appSlotDefinition.findUnique({
+      const now = await tx.appSlotDefinition.findFirst({
         where: { slug },
         select: { version: true },
       });
@@ -358,10 +366,18 @@ async function writeDefinitionChange(
     }
 
     await tx.appSlotDefinitionRevision.create({
-      data: { slotSlug: slug, version, ...next, changedFields: changed, origin: 'admin', editorId },
+      data: {
+        definition: { connect: { orgId_slug: { orgId: requireOrgId(), slug } } },
+        slotSlug: slug,
+        version,
+        ...next,
+        changedFields: changed,
+        origin: 'admin',
+        editorId,
+      },
     });
 
-    const definition = await tx.appSlotDefinition.findUniqueOrThrow({
+    const definition = await tx.appSlotDefinition.findFirstOrThrow({
       where: { slug },
       select: DEFINITION_SELECT,
     });
@@ -392,7 +408,7 @@ export async function createSlotDefinition(
   };
 
   const definition = await executeTransaction(async (tx) => {
-    const clash = await tx.appSlotDefinition.findUnique({
+    const clash = await tx.appSlotDefinition.findFirst({
       where: { slug },
       select: { slug: true, isActive: true },
     });
@@ -415,6 +431,7 @@ export async function createSlotDefinition(
     });
     await tx.appSlotDefinitionRevision.create({
       data: {
+        definition: { connect: { orgId_slug: { orgId: requireOrgId(), slug } } },
         slotSlug: slug,
         version: 1,
         ...next,
@@ -712,15 +729,23 @@ export async function applyTaxonomyUpload(
       // whatever is stored now, which is what the re-plan above reads.
       for (const change of [...planned.updates, ...planned.retirements]) {
         await tx.appSlotDefinition.update({
-          where: { slug: change.slug },
+          where: { orgId_slug: { orgId: requireOrgId(), slug: change.slug } },
           data: { ...change.after, version: change.version },
         });
       }
 
       const written = [...planned.creates, ...planned.updates, ...planned.retirements];
       if (written.length > 0) {
+        // Revisions point at their definition by id (t-112), and the creates
+        // above only just made theirs, so read every written slug's id back.
+        const ids = await tx.appSlotDefinition.findMany({
+          where: { slug: { in: written.map((change) => change.slug) } },
+          select: { id: true, slug: true },
+        });
+        const idBySlug = new Map(ids.map((row) => [row.slug, row.id]));
         await tx.appSlotDefinitionRevision.createMany({
           data: written.map((change) => ({
+            definitionId: definitionIdFor(idBySlug, change.slug),
             slotSlug: change.slug,
             version: change.version,
             ...change.after,

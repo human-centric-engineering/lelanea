@@ -30,6 +30,7 @@ const { listSlotValueHeadsForAdmin } = await import('@/lib/framework/data-slots/
 
 function row(overrides: Partial<SlotValue> & Pick<SlotValue, 'id' | 'slotSlug'>): SlotValue {
   return {
+    orgId: null,
     userId: 'user_1',
     version: 1,
     value: 'the real value',

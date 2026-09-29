@@ -56,10 +56,19 @@ vi.mock('@/lib/logging', () => ({
   logger: { warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+/**
+ * The upsert is keyed on the per-org unique (`orgId_slug`), whose org comes
+ * from the tenant context. Pinned to the install org so the write has one.
+ */
+vi.mock('@/lib/tenancy/context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tenancy/context')>()),
+  requireOrgId: vi.fn(() => 'install'),
+}));
+
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appAgentSettings: {
-      findUnique: vi.fn(
+      findFirst: vi.fn(
         async ({
           where,
           select,
@@ -78,16 +87,17 @@ vi.mock('@/lib/db/client', () => ({
           update,
           select,
         }: {
-          where: { slug: string };
+          where: { orgId_slug: { orgId: string; slug: string } };
           create: Omit<SettingsRow, 'updatedAt'>;
           update: Partial<SettingsRow>;
           select?: Record<string, boolean>;
         }) => {
-          const existing = db.settings.get(where.slug);
+          const { slug } = where.orgId_slug;
+          const existing = db.settings.get(slug);
           const row: SettingsRow = existing
             ? { ...existing, ...update, updatedAt: new Date() }
             : { ...create, updatedAt: new Date() };
-          db.settings.set(where.slug, row);
+          db.settings.set(slug, row);
           return pick({ ...row }, select);
         }
       ),
@@ -302,7 +312,7 @@ describe('read per request', () => {
     await getAgentDeadlines();
     await getAgentDeadlines();
     await getEffectiveMonthlyCeiling(ADA);
-    expect(prisma.appAgentSettings.findUnique).toHaveBeenCalledTimes(3);
+    expect(prisma.appAgentSettings.findFirst).toHaveBeenCalledTimes(3);
     expect(prisma.appUserBudget.findUnique).toHaveBeenCalledTimes(1);
   });
 });
@@ -311,7 +321,7 @@ describe('several people’s limits at once (t-97)', () => {
   it('is the same answer per person as asking one at a time, in one read of each table', async () => {
     await setUserBudget(ADA, 12.5);
     vi.mocked(prisma.appUserBudget.findMany).mockClear();
-    vi.mocked(prisma.appAgentSettings.findUnique).mockClear();
+    vi.mocked(prisma.appAgentSettings.findFirst).mockClear();
 
     const ceilings = await getEffectiveMonthlyCeilings([ADA, BO]);
 

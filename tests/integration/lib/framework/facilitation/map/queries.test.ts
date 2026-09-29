@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    facilitationGraph: { findMany: vi.fn(), findUnique: vi.fn() },
+    facilitationGraph: { findMany: vi.fn(), findFirst: vi.fn() },
   },
 }));
 
@@ -39,34 +39,34 @@ describe('listGraphs', () => {
 describe('getGraphDetail', () => {
   it('returns the graph with its published version, resolved by slug', async () => {
     const row = { id: 'g1', slug: 'main', publishedVersion: { id: 'v1', version: 1 } };
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue(row as never);
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue(row as never);
 
     await expect(getGraphDetail('main')).resolves.toEqual(row);
-    expect(prisma.facilitationGraph.findUnique).toHaveBeenCalledWith({
+    expect(prisma.facilitationGraph.findFirst).toHaveBeenCalledWith({
       where: { slug: 'main' },
       include: { publishedVersion: true },
     });
   });
 
   it('throws NotFoundError when the map does not exist', async () => {
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue(null);
     await expect(getGraphDetail('ghost')).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
 describe('graphExists', () => {
   it('probes id-only and returns true when the map row exists', async () => {
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue({ id: 'g1' } as never);
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue({ id: 'g1' } as never);
 
     await expect(graphExists('main')).resolves.toBe(true);
-    expect(prisma.facilitationGraph.findUnique).toHaveBeenCalledWith({
+    expect(prisma.facilitationGraph.findFirst).toHaveBeenCalledWith({
       where: { slug: 'main' },
       select: { id: true },
     });
   });
 
   it('returns false for an unknown slug', async () => {
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue(null);
     await expect(graphExists('ghost')).resolves.toBe(false);
   });
 });

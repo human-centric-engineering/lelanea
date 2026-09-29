@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { z } from 'zod';
 
 const prismaFake = vi.hoisted(() => ({
-  module: { findUnique: vi.fn() },
+  module: { findFirst: vi.fn() },
 }));
 vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
 vi.mock('@/lib/framework/modules/registry', () => ({ getRegisteredModule: vi.fn() }));
@@ -26,12 +26,12 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('getModuleConfigForm', () => {
   it('404s for an unknown slug', async () => {
-    prismaFake.module.findUnique.mockResolvedValue(null);
+    prismaFake.module.findFirst.mockResolvedValue(null);
     await expect(getModuleConfigForm('ghost')).rejects.toThrow(NotFoundError);
   });
 
   it('returns descriptors + values for a registered module', async () => {
-    prismaFake.module.findUnique.mockResolvedValue({ config: { tone: 'direct' } });
+    prismaFake.module.findFirst.mockResolvedValue({ config: { tone: 'direct' } });
     vi.mocked(getRegisteredModule).mockReturnValue({
       slug: 'reading',
       name: 'Reading',
@@ -47,7 +47,7 @@ describe('getModuleConfigForm', () => {
   });
 
   it('returns no descriptors but keeps values for an unregistered module', async () => {
-    prismaFake.module.findUnique.mockResolvedValue({ config: { legacy: true } });
+    prismaFake.module.findFirst.mockResolvedValue({ config: { legacy: true } });
     vi.mocked(getRegisteredModule).mockReturnValue(undefined);
 
     const form = await getModuleConfigForm('retired');

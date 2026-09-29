@@ -22,7 +22,9 @@
 // `lib/framework/data-slots/vocabulary.ts`.
 model SlotDefinition {
   id             String   @id @default(cuid())
-  slug           String   @unique // stable, globally-unique identity (matches SlotValue.slotSlug)
+  orgId          String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org            Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  slug           String // stable identity within an org (matches SlotValue.slotSlug) — unique per org, see @@unique([orgId, slug]) below
   group          String // thematic cluster
   description    String   @db.Text // what this slot means — also prompt material
   scope          String   @default("global") // global | module:<slug> | facilitation
@@ -35,7 +37,9 @@ model SlotDefinition {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([orgId, slug])
   @@index([group, scope])
+  @@index([orgId])
   @@map("framework_slot_definition")
 }
 
@@ -58,6 +62,8 @@ model SlotDefinition {
 // `fill_slot` capability's job (f-slot-capture), not a DB constraint.
 model SlotValue {
   id            String    @id @default(cuid())
+  orgId         String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org           Org?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   userId        String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration
   slotSlug      String // definition slug, or a minted slug (open mode)
   version       Int // monotonic per (userId, slotSlug), starting at 1
@@ -74,7 +80,8 @@ model SlotValue {
   supersededAt  DateTime?
   capturedAt    DateTime  @default(now())
 
-  @@unique([userId, slotSlug, version])
+  @@unique([orgId, userId, slotSlug, version])
   @@index([userId, capturedAt]) // "freshest slots" reads for guidance
+  @@index([orgId])
   @@map("framework_slot_value")
 }

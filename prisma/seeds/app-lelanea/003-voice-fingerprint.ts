@@ -251,7 +251,7 @@ const unit: SeedUnit = {
     }
 
     // ---- The agent: created once, two columns reconciled forever after ------
-    const existingAgent = await prisma.aiAgent.findUnique({
+    const existingAgent = await prisma.aiAgent.findFirst({
       where: { slug: VOICE_AGENT_SLUG },
       select: { id: true, profileId: true, knowledgeAccessMode: true, systemInstructions: true },
     });

@@ -131,7 +131,7 @@ export const prismaFake = {
   },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
-    findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
+    findFirst: vi.fn(async ({ where }: { where: { slug: string } }) => {
       const row = world.projections.find((candidate) => candidate.slug === where.slug);
       return row ? { ...row } : null;
     }),
@@ -153,7 +153,7 @@ export const prismaFake = {
         )
         .map((row) => ({ sensitivity: 'standard', ...row }));
     }),
-    findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
+    findFirst: vi.fn(async ({ where }: { where: { slug: string } }) => {
       const row = world.ours.find((candidate) => candidate.slug === where.slug);
       return row ? { ...row } : null;
     }),

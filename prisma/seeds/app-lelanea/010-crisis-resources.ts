@@ -32,7 +32,7 @@ import { CRISIS_COPY_SLUG } from '@/lib/app/safety/resources-store';
 const unit: SeedUnit = {
   name: 'app-lelanea/010-crisis-resources',
   async run({ prisma, logger }) {
-    const existing = await prisma.appCrisisCopy.findUnique({
+    const existing = await prisma.appCrisisCopy.findFirst({
       where: { slug: CRISIS_COPY_SLUG },
       select: { version: true, status: true },
     });

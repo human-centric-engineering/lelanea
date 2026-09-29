@@ -28,17 +28,37 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 
-const prismaMock = vi.hoisted(() => ({
-  orgMembership: { findMany: vi.fn() },
-  verification: { findMany: vi.fn() },
-  aiApiKey: { findMany: vi.fn() },
-  aiAgentEmbedToken: { findMany: vi.fn() },
-  aiAgentInviteToken: { findMany: vi.fn() },
-  mcpApiKey: { findMany: vi.fn() },
-}));
+const prismaMock = vi.hoisted(() => {
+  // The named delegates the hand-written tests reach for, plus a fallback
+  // that mints a `findMany` for any other model on first touch — the
+  // parametric test below drives every tenant-owned source through it.
+  const named: Record<string, { findMany: ReturnType<typeof vi.fn> }> = {
+    orgMembership: { findMany: vi.fn() },
+    verification: { findMany: vi.fn() },
+    aiApiKey: { findMany: vi.fn() },
+    aiAgentEmbedToken: { findMany: vi.fn() },
+    aiAgentInviteToken: { findMany: vi.fn() },
+    mcpApiKey: { findMany: vi.fn() },
+  };
+  return new Proxy(named, {
+    get(target, prop: string) {
+      if (!(prop in target)) target[prop] = { findMany: vi.fn() };
+      return target[prop];
+    },
+  });
+});
 vi.mock('@/lib/db/client', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/tenancy/context', () => ({ isMultiTenant: vi.fn(() => false) }));
 
-const { ORG_DATA_SOURCES, ORG_EXCLUDED_SOURCES } = await import('@/lib/privacy/org-sources');
+const { isMultiTenant } = await import('@/lib/tenancy/context');
+
+// DAYBREAK "keep mine" (Hub t-134): read the manifest through the fork-first
+// getters, so a fork's contributed sources (Daybreak's framework tables) are
+// held to the same coverage and per-source rules as core's. With an empty
+// contribution these are exactly the two constants.
+const { getOrgDataSources, getOrgExcludedSources } = await import('@/lib/privacy/org-sources');
+const ORG_DATA_SOURCES = getOrgDataSources();
+const ORG_EXCLUDED_SOURCES = getOrgExcludedSources();
 
 const SCHEMA_DIR = path.join(process.cwd(), 'prisma', 'schema');
 const MODEL_OPEN = /^model\s+(\w+)\s*\{/;
@@ -101,12 +121,23 @@ describe('org-data source manifest', () => {
       expect(allModels.has('Org')).toBe(true);
     });
 
-    it('finds the five orgId columns it is meant to find', () => {
+    it('finds the orgId columns it is meant to find', () => {
       // Guard on the guard: if the regex stops matching, the coverage rule
-      // below passes while protecting nothing.
-      expect([...orgLinked].sort()).toEqual(
-        ['AiAgentEmbedToken', 'AiAgentInviteToken', 'AiApiKey', 'McpApiKey', 'OrgMembership'].sort()
-      );
+      // below passes while protecting nothing. The five §106 columns are
+      // pinned by name; §107 t-705 took the count to 43 (42 tenant-owned +
+      // OrgMembership) and the classification test owns that roster.
+      for (const model of [
+        'AiAgentEmbedToken',
+        'AiAgentInviteToken',
+        'AiApiKey',
+        'McpApiKey',
+        'OrgMembership',
+      ]) {
+        expect(orgLinked.has(model), model).toBe(true);
+      }
+      // A lower bound, not a total: a fork adds a column plus a disposition
+      // and is done — it must not have to edit this file too.
+      expect(orgLinked.size).toBeGreaterThanOrEqual(43);
     });
 
     it('does not mistake Session.activeOrgId for the org’s data', () => {
@@ -167,15 +198,15 @@ describe('org-data source manifest', () => {
   });
 
   /**
-   * The rule, shown to fire. A schema with a sixth `orgId` model that the
-   * manifest does not know is named — this is what §107 will hit ~23 times.
+   * The rule, shown to fire. A schema with an `orgId` model that the
+   * manifest does not know is named — this is what §107 t-705 hit 38 times.
    */
   describe('the rule against a synthetic schema', () => {
     const fixture: SchemaFile[] = [
       {
         name: 'orchestration-agents.prisma',
         contents: [
-          'model AiAgent {',
+          'model AppWidget {',
           '  id    String @id',
           '  orgId String?',
           '  org   Org?   @relation(fields: [orgId], references: [id])',
@@ -193,16 +224,154 @@ describe('org-data source manifest', () => {
 
     it('names a model with an orgId column that neither list declares', () => {
       const scan = scanSchemaFiles(fixture);
-      expect(undeclaredOrgModels(scan.orgLinked, declared)).toEqual(['AiAgent']);
+      expect(undeclaredOrgModels(scan.orgLinked, declared)).toEqual(['AppWidget']);
     });
 
     it('is satisfied by a declaration in either list', () => {
       const scan = scanSchemaFiles(fixture);
-      expect(undeclaredOrgModels(scan.orgLinked, new Set([...declared, 'AiAgent']))).toEqual([]);
+      expect(undeclaredOrgModels(scan.orgLinked, new Set([...declared, 'AppWidget']))).toEqual([]);
     });
   });
 
   describe('what the sources ask Prisma for', () => {
+    /**
+     * Sources whose rows carry a secret column withheld with `omit`.
+     * `AiEventHook` is the fourth secret-bearing source but is not here: its
+     * rows are mapped through `toSafeHook` instead, pinned separately below.
+     */
+    const SECRET_COLUMNS: Record<string, string> = {
+      AiWebhookSubscription: 'secret',
+      AiWorkflowTrigger: 'signingSecret',
+      AiWorkflowExecution: 'leaseToken',
+    };
+    const MAPPED_SOURCES = new Set(['AiEventHook']);
+    const lowerFirst = (name: string) => name[0].toLowerCase() + name.slice(1);
+    const tenantOwnedExports = ORG_DATA_SOURCES.filter(
+      (source) =>
+        source.disposition === 'export' && !['OrgMembership', 'Verification'].includes(source.model)
+    );
+
+    it('drives every tenant-owned export source (the §107 t-705 set is 36; a fork may add more)', () => {
+      expect(tenantOwnedExports.length).toBeGreaterThanOrEqual(36);
+    });
+
+    it.each(tenantOwnedExports.map((source) => [source.model, source] as const))(
+      '%s: scopes by the org, in a stable order, and withholds only its named secret',
+      async (model, source) => {
+        const delegate = prismaMock[lowerFirst(model)];
+        delegate.findMany.mockResolvedValue([]);
+        await source.fetch({ orgId: 'cmorg000000000000000other' });
+
+        expect(delegate.findMany).toHaveBeenCalledTimes(1);
+        const args = delegate.findMany.mock.calls[0][0] as {
+          where?: unknown;
+          omit?: Record<string, boolean>;
+          orderBy?: unknown;
+          select?: unknown;
+        };
+        expect(args.where).toEqual({ orgId: 'cmorg000000000000000other' });
+        expect(args.orderBy).toBeDefined();
+        // `export` means full rows: never a `select` (which would silently drop a column added tomorrow).
+        expect(args.select).toBeUndefined();
+        const secret = SECRET_COLUMNS[model];
+        if (secret) {
+          expect(args.omit).toEqual({ [secret]: true });
+        } else {
+          expect(args.omit).toBeUndefined();
+        }
+      }
+    );
+
+    describe('a NULL orgId is the install org’s at single, and nobody’s at multi', () => {
+      const install = 'install';
+
+      it('the install org’s export reads orgId IS NULL too — rows born before the chokepoint writes the column', async () => {
+        const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'AiAgent');
+        prismaMock.aiAgent.findMany.mockResolvedValue([]);
+        await source!.fetch({ orgId: install });
+        expect(prismaMock.aiAgent.findMany).toHaveBeenLastCalledWith(
+          expect.objectContaining({ where: { OR: [{ orgId: install }, { orgId: null }] } })
+        );
+      });
+
+      it('another org’s export never reads NULL rows', async () => {
+        const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'AiAgent');
+        prismaMock.aiAgent.findMany.mockResolvedValue([]);
+        await source!.fetch({ orgId: 'cmorg000000000000000other' });
+        expect(prismaMock.aiAgent.findMany).toHaveBeenLastCalledWith(
+          expect.objectContaining({ where: { orgId: 'cmorg000000000000000other' } })
+        );
+      });
+
+      it('at multi the install org’s match is strict — enable backfills NULL before enforcing', async () => {
+        vi.mocked(isMultiTenant).mockReturnValue(true);
+        try {
+          const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'AiAgent');
+          prismaMock.aiAgent.findMany.mockResolvedValue([]);
+          await source!.fetch({ orgId: install });
+          expect(prismaMock.aiAgent.findMany).toHaveBeenLastCalledWith(
+            expect.objectContaining({ where: { orgId: install } })
+          );
+        } finally {
+          vi.mocked(isMultiTenant).mockReturnValue(false);
+        }
+      });
+
+      it('a NULL-org credential is a platform key, never the install org’s — attribution stays strict', async () => {
+        const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'AiApiKey');
+        prismaMock.aiApiKey.findMany.mockResolvedValue([]);
+        await source!.fetch({ orgId: install });
+        expect(prismaMock.aiApiKey.findMany).toHaveBeenLastCalledWith(
+          expect.objectContaining({ where: { orgId: install } })
+        );
+      });
+    });
+
+    it('withholds a secret from exactly the sources that carry one', () => {
+      const withOmit = tenantOwnedExports
+        .map((source) => source.model)
+        .filter((model) => model in SECRET_COLUMNS || MAPPED_SOURCES.has(model));
+      expect(withOmit.sort()).toEqual([...Object.keys(SECRET_COLUMNS), ...MAPPED_SOURCES].sort());
+    });
+
+    it('masks an event hook’s custom header values and drops its secret (toSafeHook), keeping the header names', async () => {
+      // The receiver's bearer token lives in `action.headers` — the admin API
+      // never returns it in plaintext, and neither may the org export.
+      prismaMock.aiEventHook.findMany.mockResolvedValue([
+        {
+          id: 'hook-1',
+          name: 'Notify CRM',
+          eventType: 'conversation.ended',
+          action: {
+            type: 'webhook',
+            url: 'https://crm.example/hooks',
+            headers: { Authorization: 'Bearer live-token', 'X-Env': 'prod' },
+          },
+          filter: null,
+          isEnabled: true,
+          secret: 'signing-secret',
+          createdBy: 'user-1',
+          createdAt: new Date('2026-09-01'),
+          updatedAt: new Date('2026-09-01'),
+          orgId: 'cmorg000000000000000other',
+        },
+      ]);
+      const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'AiEventHook');
+      const [row] = (await source!.fetch({ orgId: 'cmorg000000000000000other' })) as Array<
+        Record<string, unknown>
+      >;
+
+      expect(row).not.toHaveProperty('secret');
+      expect(row.hasSecret).toBe(true);
+      expect((row.action as { url: string }).url).toBe('https://crm.example/hooks');
+      expect((row.action as { headers: Record<string, string> }).headers).toEqual({
+        Authorization: '••••••••',
+        'X-Env': '••••••••',
+      });
+      expect(JSON.stringify(row)).not.toContain('live-token');
+      expect(JSON.stringify(row)).not.toContain('signing-secret');
+    });
+
     it('withholds the invitation token and selects invitations INTO this org only', async () => {
       prismaMock.verification.findMany.mockResolvedValue([]);
       const source = ORG_DATA_SOURCES.find((candidate) => candidate.model === 'Verification');

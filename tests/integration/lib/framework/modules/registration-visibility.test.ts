@@ -23,6 +23,7 @@ const { prismaFake, resetStore } = vi.hoisted(() => {
   function row(slug: string, name: string): Module {
     return {
       id: `mod_${slug}`,
+      orgId: null,
       slug,
       name,
       status: 'draft',

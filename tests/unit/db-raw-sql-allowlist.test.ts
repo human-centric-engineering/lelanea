@@ -71,11 +71,6 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     why: 'capability-usage aggregation across executions',
   },
   {
-    file: 'app/api/v1/admin/orchestration/conversations/search/route.ts',
-    calls: 1,
-    why: 'tsvector full-text conversation search',
-  },
-  {
     file: 'app/api/v1/admin/orchestration/evaluations/datasets/[id]/cases/[position]/route.ts',
     calls: 1,
     why: 'positional case reorder in one statement',
@@ -114,6 +109,11 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     why: 'catalog queries (pg_indexes/pg_constraint/pg_class/pg_policies/information_schema) — reads system catalogs, never tenant rows',
   },
   {
+    file: 'lib/db/tenancy-extension.ts',
+    calls: 3,
+    why: 'the set_config setters that scope every other query at multi (per-op wrap, interactive tx top, batch tx top) — constant SQL with the org as a bound parameter, no tenant rows read',
+  },
+  {
     file: 'lib/db/utils.ts',
     calls: 2,
     why: 'SELECT 1 health checks — no tenant data (the playbook’s exempt row)',
@@ -138,6 +138,11 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     file: 'lib/framework/facilitation/overlays/queries.ts',
     calls: 1,
     why: 'pgvector `<=>` nearest-neighbour self-join on framework_node_embedding — map-scoped content, not subject data',
+  },
+  {
+    file: 'lib/orchestration/chat/conversation-semantic-search.ts',
+    calls: 1,
+    why: 'pgvector cosine-distance conversation search (extracted from the search route for the isolation harness)',
   },
   {
     file: 'lib/orchestration/chat/message-embedder.ts',

@@ -123,7 +123,7 @@ export async function getJourneyDetailForAdmin(
   if (!journey) return null;
 
   const [graph, nodeStates, timeline] = await Promise.all([
-    prisma.facilitationGraph.findUnique({
+    prisma.facilitationGraph.findFirst({
       where: { slug: journey.graphSlug },
       include: { publishedVersion: true },
     }),

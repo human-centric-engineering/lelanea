@@ -26,7 +26,7 @@ const { prismaFake, store, resetStore, drainEngineMock } = vi.hoisted(() => {
   };
 
   const prismaFake: any = {
-    module: { findUnique: async () => store.module },
+    module: { findFirst: async () => store.module },
     moduleWorkflowBinding: {
       findMany: vi.fn(async () => store.bindings.map((b) => ({ ...b }))),
     },

@@ -52,7 +52,7 @@ let regions: RegionRow[];
 
 const prisma = {
   appCrisisCopy: {
-    findUnique: vi.fn(async () => (copy ? { version: copy.version, status: copy.status } : null)),
+    findFirst: vi.fn(async () => (copy ? { version: copy.version, status: copy.status } : null)),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       copy = { version: 1, ...data };
       return copy;

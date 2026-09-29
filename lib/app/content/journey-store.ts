@@ -32,7 +32,7 @@
  * @see lib/app/content/seed-input/journey-seed.ts — what the seed writes
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
 import {
@@ -118,7 +118,7 @@ export type SeedJourneyResult =
  */
 export async function seedJourneyStructure(
   seed: JourneySeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedJourneyResult> {
   const existing = await client.appJourney.findFirst({ select: { id: true } });
   if (existing) {

@@ -62,4 +62,4 @@
  *   0.2.0 took this version off the unauthenticated payload — the constraint did
  *   not lapse with it, it just moved to a different core route.)
  */
-export const DAYBREAK_VERSION = '0.5.0';
+export const DAYBREAK_VERSION = '0.6.0';

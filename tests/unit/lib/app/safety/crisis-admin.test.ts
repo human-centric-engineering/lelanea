@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
   copy: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
   },
@@ -114,7 +114,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   copyRow = { ...COPY };
   gbRow = { ...GB };
-  db.copy.findUnique.mockImplementation(async () => copyRow);
+  db.copy.findFirst.mockImplementation(async () => copyRow);
   db.region.findUnique.mockImplementation(async () => gbRow);
   db.region.findMany.mockImplementation(async () => (gbRow ? [gbRow] : []));
   db.copy.updateMany.mockImplementation(
@@ -198,7 +198,7 @@ describe('updateCrisisCopy', () => {
   it('refuses 409 when another save lands between the read and the write', async () => {
     db.copy.updateMany.mockResolvedValueOnce({ count: 0 });
     copyRow = { ...COPY };
-    db.copy.findUnique
+    db.copy.findFirst
       .mockImplementationOnce(async () => copyRow) // the first read: still v3
       .mockImplementationOnce(async () => ({ ...COPY, version: 4 })); // after losing the race
     await expect(updateCrisisCopy({ ...COPY_TEXT, hardIntro: 'Mine.' }, 3)).rejects.toMatchObject({

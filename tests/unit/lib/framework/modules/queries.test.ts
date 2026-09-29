@@ -7,9 +7,9 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { findUniqueMock } = vi.hoisted(() => ({ findUniqueMock: vi.fn() }));
+const { findFirstMock } = vi.hoisted(() => ({ findFirstMock: vi.fn() }));
 vi.mock('@/lib/db/client', () => ({
-  prisma: { module: { findUnique: findUniqueMock } },
+  prisma: { module: { findFirst: findFirstMock } },
 }));
 
 import { moduleExists } from '@/lib/framework/modules/queries';
@@ -18,16 +18,16 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('moduleExists', () => {
   it('returns true and probes id-only when a row exists', async () => {
-    findUniqueMock.mockResolvedValue({ id: 'm-1' });
+    findFirstMock.mockResolvedValue({ id: 'm-1' });
     expect(await moduleExists('onboarding')).toBe(true);
-    expect(findUniqueMock).toHaveBeenCalledWith({
+    expect(findFirstMock).toHaveBeenCalledWith({
       where: { slug: 'onboarding' },
       select: { id: true },
     });
   });
 
   it('returns false when no row exists', async () => {
-    findUniqueMock.mockResolvedValue(null);
+    findFirstMock.mockResolvedValue(null);
     expect(await moduleExists('ghost')).toBe(false);
   });
 });

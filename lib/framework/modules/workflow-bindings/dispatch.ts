@@ -62,7 +62,7 @@ export async function runModuleWorkflowBindings(
     skipped: [],
   };
 
-  const moduleRow = await prisma.module.findUnique({
+  const moduleRow = await prisma.module.findFirst({
     where: { slug: moduleSlug },
     select: { id: true },
   });

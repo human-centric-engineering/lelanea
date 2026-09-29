@@ -75,6 +75,8 @@ import { TURN_ID_REUSED } from '@/lib/app/agent/turn-codes';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { streamTurn, TurnRefused } from '@/lib/app/conversation/client';
 import type { ConversationEvent } from '@/lib/app/conversation/events';
+import { runAsOrg, requireOrgId } from '@/lib/tenancy/context';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 // The app's own URL by default: better-auth refuses a sign-up from any origin
 // it does not trust, and this install's is `BETTER_AUTH_URL`.
@@ -604,7 +606,7 @@ async function main(): Promise<void> {
       },
     });
     await prisma.aiAgent.update({
-      where: { slug: VOICE_AGENT_SLUG },
+      where: { orgId_slug: { orgId: requireOrgId(), slug: VOICE_AGENT_SLUG } },
       data: { provider: UNREACHABLE_PROVIDER },
     });
     const downId = `${PREFIX}-down-${Date.now()}`;
@@ -690,7 +692,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
+// Scripts run outside a request, so they enter the install org themselves
+// (Sunrise §107), the way the platform's own smokes do.
+runAsOrg(INSTALL_ORG_ID, main, { source: 'job' }).catch((err: unknown) => {
   console.error('\n✗ smoke:app-turn failed:', err instanceof Error ? err.message : err);
   process.exit(1);
 });

@@ -28,7 +28,7 @@
  * @see lib/app/content/seed-input/golden-set-seed.ts — what the seed writes
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { z } from 'zod';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
@@ -72,7 +72,7 @@ const statusSchema = z.enum(['draft', 'signed_off']);
  * @throws ContentNotSeededError when the seed has not run.
  */
 export async function getGoldenSetPointer(
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<VoiceGoldenSetPointer> {
   const row = await client.appVoiceGoldenSet.findUnique({
     where: { id: VOICE_GOLDEN_SET_ID },
@@ -124,7 +124,7 @@ export type SeedGoldenSetResult = { status: 'seeded' } | { status: 'skipped'; ve
  */
 export async function seedGoldenSetPointer(
   seed: GoldenSetSeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedGoldenSetResult> {
   const existing = await client.appVoiceGoldenSet.findUnique({
     where: { id: seed.id },

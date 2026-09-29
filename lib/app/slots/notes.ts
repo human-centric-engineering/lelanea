@@ -326,7 +326,7 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
 
   // Both tiers, as in the read — and before the head lookup, so a hidden slot
   // takes the same path whether or not it has ever been filled.
-  const ours = await prisma.appSlotDefinition.findUnique({
+  const ours = await prisma.appSlotDefinition.findFirst({
     where: { slug: input.slotSlug },
     select: { visibility: true, sensitivity: true },
   });

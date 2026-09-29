@@ -487,7 +487,7 @@ export async function exportGoldenSetFile(): Promise<VoiceGoldenSetFile> {
       reason: 'nothing_to_export',
     });
   }
-  const control = await prisma.aiAgent.findUnique({
+  const control = await prisma.aiAgent.findFirst({
     where: { slug: VOICE_CONTROL_AGENT_SLUG },
     select: { name: true, description: true, systemInstructions: true },
   });
@@ -701,7 +701,7 @@ export function planGoldenSetImport(
 async function readStored(client: Client): Promise<StoredGoldenSet> {
   const [current, control] = await Promise.all([
     readCurrent(client),
-    client.aiAgent.findUnique({
+    client.aiAgent.findFirst({
       where: { slug: VOICE_CONTROL_AGENT_SLUG },
       select: { name: true, description: true, systemInstructions: true },
     }),

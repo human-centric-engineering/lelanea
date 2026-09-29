@@ -46,6 +46,9 @@ const prismaMock = {
 
 vi.mock('@/lib/db/client', () => ({ prisma: prismaMock }));
 
+const ORG = 'org_test';
+vi.mock('@/lib/tenancy/context', () => ({ requireOrgId: vi.fn(() => ORG) }));
+
 const { createJourney } = await import('@/lib/framework/facilitation/journey/create');
 
 const SUBJECT = 'user_1';
@@ -54,6 +57,7 @@ const OTHER = 'user_2';
 function journeyRow(overrides: Partial<UserJourney> = {}): UserJourney {
   return {
     id: 'uj_1',
+    orgId: ORG,
     userId: SUBJECT,
     graphSlug: 'reclaim',
     contextKey: '',
@@ -117,12 +121,25 @@ describe('createJourney — the write it issues', () => {
       { userId: SUBJECT, graphSlug: 'reclaim', contextKey: 'run_7' }
     );
 
-    const naturalKey = { userId: SUBJECT, graphSlug: 'reclaim', contextKey: 'run_7' };
+    const naturalKey = { orgId: ORG, userId: SUBJECT, graphSlug: 'reclaim', contextKey: 'run_7' };
     expect(prismaMock.userJourney.upsert).toHaveBeenCalledWith({
-      where: { userId_graphSlug_contextKey: naturalKey },
+      where: { orgId_userId_graphSlug_contextKey: naturalKey },
       create: naturalKey,
       update: {},
     });
+  });
+
+  it('stamps the org from requireOrgId() onto both the lookup key and the create payload', async () => {
+    await createJourney(
+      { userId: SUBJECT },
+      { userId: SUBJECT, graphSlug: 'reclaim', contextKey: 'run_7' }
+    );
+
+    const [{ create, where }] = prismaMock.userJourney.upsert.mock.calls[0] as [
+      { create: Record<string, unknown>; where: Record<string, Record<string, unknown>> },
+    ];
+    expect(create.orgId).toBe(ORG);
+    expect(where.orgId_userId_graphSlug_contextKey.orgId).toBe(ORG);
   });
 
   it('defaults an omitted contextKey to the empty-string sentinel, never undefined', async () => {
@@ -132,7 +149,7 @@ describe('createJourney — the write it issues', () => {
       { create: Record<string, unknown>; where: Record<string, Record<string, unknown>> },
     ];
     expect(create.contextKey).toBe('');
-    expect(where.userId_graphSlug_contextKey.contextKey).toBe('');
+    expect(where.orgId_userId_graphSlug_contextKey.contextKey).toBe('');
   });
 
   it('returns whatever row the upsert resolved, unmodified', async () => {
@@ -173,7 +190,8 @@ describe('createJourney — idempotence under a concurrent start', () => {
     expect(created).toEqual(winner);
     expect(prismaMock.userJourney.findUniqueOrThrow).toHaveBeenCalledWith({
       where: {
-        userId_graphSlug_contextKey: {
+        orgId_userId_graphSlug_contextKey: {
+          orgId: ORG,
           userId: SUBJECT,
           graphSlug: 'reclaim',
           contextKey: 'run_7',

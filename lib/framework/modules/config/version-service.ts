@@ -69,7 +69,7 @@ interface ResolvedModule {
 
 /** Resolve a module row (id, name) from its slug, or 404. */
 async function loadModule(slug: string): Promise<ResolvedModule> {
-  const row = await prisma.module.findUnique({
+  const row = await prisma.module.findFirst({
     where: { slug },
     select: { id: true, name: true },
   });

@@ -74,7 +74,7 @@ interface ResolvedGraph {
 }
 
 async function loadGraph(slug: string): Promise<ResolvedGraph> {
-  const graph = await prisma.facilitationGraph.findUnique({
+  const graph = await prisma.facilitationGraph.findFirst({
     where: { slug },
     select: { id: true, name: true, publishedVersionId: true },
   });
@@ -284,7 +284,7 @@ export interface PublishResult {
 export async function publishDraft(args: PublishDraftArgs): Promise<PublishResult> {
   const { slug, userId, changeSummary, clientIp } = args;
 
-  const existing = await prisma.facilitationGraph.findUnique({
+  const existing = await prisma.facilitationGraph.findFirst({
     where: { slug },
     select: { id: true, name: true, draftDefinition: true, publishedVersionId: true },
   });
@@ -503,7 +503,7 @@ export interface PublishedMap {
  * typed and would surface a corrupted row rather than hand back a malformed map.
  */
 export async function getPublishedMap(slug: string): Promise<PublishedMap | null> {
-  const graph = await prisma.facilitationGraph.findUnique({
+  const graph = await prisma.facilitationGraph.findFirst({
     where: { slug },
     include: { publishedVersion: true },
   });
@@ -521,7 +521,7 @@ export async function getPublishedMap(slug: string): Promise<PublishedMap | null
  * the live version — e.g. `f-overlays` keying node embeddings on `(graphSlug, version)`.
  */
 export async function getPublishedMapVersion(slug: string): Promise<number | null> {
-  const graph = await prisma.facilitationGraph.findUnique({
+  const graph = await prisma.facilitationGraph.findFirst({
     where: { slug },
     include: { publishedVersion: { select: { version: true } } },
   });

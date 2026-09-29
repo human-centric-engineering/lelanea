@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const db = vi.hoisted(() => ({
-  module: { findUnique: vi.fn() },
+  module: { findFirst: vi.fn() },
   moduleAgentBinding: { findMany: vi.fn() },
   aiAgent: { findMany: vi.fn() },
 }));
@@ -42,13 +42,13 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('listModuleBindings', () => {
   it('404s for an unknown module (never an empty list)', async () => {
-    db.module.findUnique.mockResolvedValue(null);
+    db.module.findFirst.mockResolvedValue(null);
     await expect(listModuleBindings('ghost')).rejects.toBeInstanceOf(NotFoundError);
     expect(db.moduleAgentBinding.findMany).not.toHaveBeenCalled();
   });
 
   it('returns [] for a real module with no bindings — and does not query agents', async () => {
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     db.moduleAgentBinding.findMany.mockResolvedValue([]);
     const rows = await listModuleBindings('reading');
     expect(rows).toEqual([]);
@@ -56,7 +56,7 @@ describe('listModuleBindings', () => {
   });
 
   it('stitches each binding with its agent display fields (batched, deduped)', async () => {
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     db.moduleAgentBinding.findMany.mockResolvedValue([
       binding({ id: 'b1', agentId: 'agent-1', isPrimary: true }),
       binding({ id: 'b2', agentId: 'agent-1', role: 'reviewer' }),
@@ -88,7 +88,7 @@ describe('listModuleBindings', () => {
 
   it('distinguishes a tombstoned agent (deletedAt set) from a merely-deactivated one, and a missing agent (null)', async () => {
     const tombstonedAt = new Date(0);
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     db.moduleAgentBinding.findMany.mockResolvedValue([
       binding({ id: 'b1', agentId: 'tomb' }),
       binding({ id: 'b2', agentId: 'off' }),
@@ -123,13 +123,13 @@ describe('listModuleBindings', () => {
 
 describe('getModuleAgentRoles', () => {
   it('404s for an unknown module', async () => {
-    db.module.findUnique.mockResolvedValue(null);
+    db.module.findFirst.mockResolvedValue(null);
     await expect(getModuleAgentRoles('ghost')).rejects.toBeInstanceOf(NotFoundError);
     expect(registry.getRegisteredModule).not.toHaveBeenCalled();
   });
 
   it('returns the declared seats when the module is registered', async () => {
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     registry.getRegisteredModule.mockReturnValue({
       slug: 'reading',
       agentRoles: ['companion', 'coach'],
@@ -141,13 +141,13 @@ describe('getModuleAgentRoles', () => {
   });
 
   it('returns registered:false with no seats when the code was removed (row still exists)', async () => {
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     registry.getRegisteredModule.mockReturnValue(undefined);
     await expect(getModuleAgentRoles('reading')).resolves.toEqual({ registered: false, roles: [] });
   });
 
   it('treats a registered module with no declared agentRoles as an empty seat list', async () => {
-    db.module.findUnique.mockResolvedValue({ id: 'm1' });
+    db.module.findFirst.mockResolvedValue({ id: 'm1' });
     registry.getRegisteredModule.mockReturnValue({ slug: 'reading' });
     await expect(getModuleAgentRoles('reading')).resolves.toEqual({ registered: true, roles: [] });
   });

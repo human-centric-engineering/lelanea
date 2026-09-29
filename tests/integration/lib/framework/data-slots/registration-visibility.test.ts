@@ -24,6 +24,7 @@ const { prismaFake, resetStore, seedRow } = vi.hoisted(() => {
   function rowFrom(data: Record<string, unknown>): SlotDefinition {
     return {
       id: `slot_${String(data.slug)}`,
+      orgId: (data.orgId as string | null | undefined) ?? null,
       slug: String(data.slug),
       group: String(data.group),
       description: String(data.description),
@@ -79,9 +80,9 @@ const { prismaFake, resetStore, seedRow } = vi.hoisted(() => {
         }
         return { count };
       },
-      update: async (args: { where: { slug: string }; data: Record<string, unknown> }) => {
-        const r = store.get(args.where.slug);
-        if (!r) throw new Error(`no slot ${args.where.slug}`);
+      update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+        const r = [...store.values()].find((row) => row.id === args.where.id);
+        if (!r) throw new Error(`no slot with id ${args.where.id}`);
         Object.assign(r, args.data);
         return { ...r };
       },

@@ -313,6 +313,49 @@ so a Daybreak release's migrations **interleave with yours**.
 
 ---
 
+## Tenancy: every model of yours needs an org decision (Daybreak 0.6.0+)
+
+Sunrise 0.13.0 classifies **every** Prisma model, yours included, as tenant-owned
+(it carries `orgId`), global config, or system. Four always-run tests enforce it,
+and they name your model the moment you add it. Your install stays at
+`TENANCY_MODE=single` (one org, the install org) unless you opt into multi, so
+none of this changes behaviour today. It is what keeps multi-tenancy open to you
+later.
+
+**Daybreak's answer for its own 19 `framework_*` tables is tenant-owned, all of
+them,** including the code-registered `Module` and `SlotDefinition` rows: their
+operator settings are a per-customer decision. That is the shape to follow for
+yours. For each model of your own:
+
+1. **Add the column and the relation**, exactly as the framework models do:
+   `orgId String?`, `org Org? @relation(fields: [orgId], references: [id],
+onDelete: Cascade)`, `@@index([orgId])`. Prisma needs a back-relation line on
+   Sunrise's `Org` model (`prisma/schema/tenancy.prisma`). Add yours **below
+   Daybreak's marked `DAYBREAK` block**, in a block of your own, and keep all of
+   them on every sync.
+2. **Make any global unique per-org.** A `slug @unique` fails
+   `org-scoped-slugs.test.ts`; use `@@unique([orgId, slug])`. Do the same for any
+   unique that two orgs could legitimately share.
+3. **Write the migration by hand** (`prisma migrate diff`, never `migrate dev`):
+   the diff also emits drops for every object Prisma cannot model, framework ones
+   included. Backfill existing rows to `'install'` **before** building the per-org
+   uniques. Add one `org_isolation` policy per table in a second migration, using
+   `orgIsolationPolicySql('<table>')` from `lib/tenancy/isolation.ts` verbatim
+   (`policy-coverage.test.ts` matches its text). See the two `framework_…`
+   migrations dated 2026-09-25 for the pattern.
+4. **Declare it in the org export**: return it from `leafOrgSources()` in
+   `lib/app/leaf-data-export.ts`, as an `export` source scoped by `orgId` (full
+   rows, `omit` for a secret) or as an exclusion with a reason.
+   `lib/framework/privacy/org-sources.ts` has 18 worked examples.
+5. **Look rows up by their per-org key.** A read by slug is `findFirst({ where:
+{ slug } })`, which the tenant context scopes. A write keyed on the unique uses
+   the compound key with `requireOrgId()` from `lib/tenancy/context.ts`, which is
+   the install org at `single`.
+
+Never pass a guard by adding your model to Sunrise's `SYSTEM_MODELS` /
+`GLOBAL_CONFIG_MODELS` unless it genuinely is platform config every customer
+shares, and never by deleting an allowlist row.
+
 ## Two tests you are expected to adjust
 
 Both are working as designed — they assert a property a leaf is _supposed_ to

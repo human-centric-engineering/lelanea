@@ -790,3 +790,24 @@ startsWith "module:"`), never a blanket `notIn`; and (c) **key the "did registra
   in the shape-decisions section ("t-2 ≈ 2 docs → fold into t-1's PR"), so a reader can see the check was run
   rather than inferring it from silence. _Status: adopted — applied in [[f-release]] decision C, which now records
   the re-size and why the chain argument didn't settle it._
+
+### B34 · A plan split into PR-sized tasks must also check each task can merge ALONE — an upstream guard that fails on fork files welds the merge and the fix into one unit
+
+- **Discovery (§34 `f-framework-tenancy`, Hub t-134, 2026-09-24).** Sunrise 0.13.0 stage 2 brought always-run
+  guards (model-classification, policy-coverage, org-scoped-slugs, org-sources) that fail on every fork model
+  without `orgId` — all 19 framework tables. I planned the tenancy work as four PR-sized tasks (ruling, schema,
+  code, docs) plus the sync task, _and_ said they would all land in one PR. The owner caught the contradiction.
+- **Why none of the splits merge.** The `v0.13.0` merge alone is red on `main`. The tenancy work cannot go first
+  — what it needs (`orgIsolationPolicySql`, the classification, the stamping chokepoint) arrives with the tag.
+  Stacked PRs don't help: they still merge one at a time, and every workflow here triggers only on PRs into
+  `main`, so PRs into an integration branch run ungated.
+- **The mistake was the inverse of [[planning-retro#B33|B33]].** B33: a dependency chain is not an argument for
+  separate PRs (sizing is a separate question). Here: PR-sized is not an argument for separate PRs either —
+  **mergeability** is a third question. A task is PR-sized only if `main` stays green after it merges alone.
+- **The tell.** A plan whose tasks are each "done at merge" but whose notes say they "land together" or "in the
+  same PR". Those two claims cannot both hold.
+- **Lesson.** For every task, ask "is `main` green if this merges and nothing after it does?" When an upstream
+  change brings a guard that fails on fork-owned files, the merge and the fork's fix are ONE task — plan them as
+  one, with the review split inside the PR (here: `/code-review` scoped to the Daybreak-authored paths, the
+  upstream diff skipped as on every version merge). _Status: adopted — Hub t-134 carries the whole stage 2; the
+  split tasks t-133/135/136/137 are withdrawn with reasons._

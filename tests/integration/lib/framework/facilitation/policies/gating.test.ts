@@ -24,6 +24,7 @@ import { assembleJourneyContext } from '@/lib/framework/guidance/assemble';
 
 const nodeState = (over: Partial<UserNodeState>): UserNodeState => ({
   id: 'ns',
+  orgId: null,
   journeyId: 'j1',
   nodeKey: 'n1',
   status: 'active',

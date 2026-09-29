@@ -26,8 +26,8 @@
  *
  * **API keys.** Feature finding 13: an `admin`-scoped key is a platform
  * credential and enters no org; any other key enters the org it was minted
- * in. A key whose column is still `NULL` — one minted between 0.12.0 and the
- * backfill that t-673 re-ran — is the install org at `single` and nothing
+ * in. A key whose column is still `NULL` — one minted between the identity
+ * migration and the backfill that t-673 re-ran — is the install org at `single` and nothing
  * at `multi`.
  *
  * **Credentials with no user behind them** — an embed token, an MCP key
@@ -53,7 +53,13 @@ export interface OrgEntry {
   role: OrgRole | null;
   source: Extract<
     TenantContextSource,
-    'session' | 'api-key' | 'resolver' | 'embed-token' | 'mcp-key'
+    | 'session'
+    | 'api-key'
+    | 'resolver'
+    | 'embed-token'
+    | 'mcp-key'
+    | 'inbound-trigger'
+    | 'approval-token'
   >;
 }
 
@@ -181,10 +187,21 @@ export async function enterApiKeyOrg(
  * exactly as it refuses its members' sessions — the widget on a suspended
  * customer's site stops answering. The install org cannot be suspended
  * (`INSTALL_ORG_IMMUTABLE`), so at `single` the status is not consulted.
+ *
+ * The same rule answers the two routes whose credential is a signed token
+ * naming a ROW rather than a principal — the inbound trigger and the HMAC
+ * approval token (§107 t-708). Those routes must read the row to learn the
+ * org, so the read runs under `runAsCredentialLookup` (that one read, nothing else),
+ * and the row's `orgId` and its org's status come here before anything runs
+ * inside the org. A refusal is the route's usual "not found": it names
+ * nothing, like every other refusal.
  */
 export function resolveCredentialOrg(
   credential: { orgId: string | null; orgStatus: string | null },
-  source: Extract<TenantContextSource, 'embed-token' | 'mcp-key'>
+  source: Extract<
+    TenantContextSource,
+    'embed-token' | 'mcp-key' | 'inbound-trigger' | 'approval-token'
+  >
 ): OrgEntryResult {
   const orgId = orgOfColumn(credential.orgId);
   if (!orgId) return { refused: 'no-org' };
@@ -196,8 +213,8 @@ export function resolveCredentialOrg(
 /**
  * What a credential's nullable `orgId` column means, in one place: the org
  * it names, else the install org at `single` and no org at `multi`. The
- * null arm exists for rows minted before the column was written (0.12.0 to
- * the t-673 backfill); nothing mints a null org any more.
+ * null arm exists for rows minted before the column was written (the identity
+ * migration to the t-673 backfill); nothing mints a null org any more.
  */
 export function orgOfColumn(orgId: string | null | undefined): string | null {
   if (orgId) return orgId;

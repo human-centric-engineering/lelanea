@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    userJourney: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+    userJourney: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     userNodeState: { findMany: vi.fn() },
     journeyEvent: { findMany: vi.fn() },
   },
@@ -36,40 +36,39 @@ const support: JourneyViewer = { userId: 'user_support', isAdminSupport: true };
 beforeEach(() => vi.clearAllMocks());
 
 describe('getJourney', () => {
-  it('resolves the journey by its natural unique key for an owning viewer', async () => {
+  it('resolves the journey by its natural per-org key for an owning viewer', async () => {
     const row = { id: 'j1', userId: 'user_alice', graphSlug: 'main', contextKey: '' };
-    vi.mocked(prisma.userJourney.findUnique).mockResolvedValue(row as never);
+    vi.mocked(prisma.userJourney.findFirst).mockResolvedValue(row as never);
 
     await expect(getJourney(alice, { userId: 'user_alice', graphSlug: 'main' })).resolves.toEqual(
       row
     );
-    expect(prisma.userJourney.findUnique).toHaveBeenCalledWith({
+    // A per-org natural key reads via findFirst inside the tenant context (§107) —
+    // not findUnique, since the compound unique is now (orgId, userId, graphSlug,
+    // contextKey) and this read doesn't name orgId explicitly (scoped by the tx).
+    expect(prisma.userJourney.findFirst).toHaveBeenCalledWith({
       where: {
-        userId_graphSlug_contextKey: {
-          userId: 'user_alice',
-          graphSlug: 'main',
-          contextKey: '',
-        },
+        userId: 'user_alice',
+        graphSlug: 'main',
+        contextKey: '',
       },
     });
   });
 
   it('defaults a missing contextKey to the empty-string sentinel', async () => {
-    vi.mocked(prisma.userJourney.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userJourney.findFirst).mockResolvedValue(null);
     await getJourney(alice, { userId: 'user_alice', graphSlug: 'main', contextKey: 'ctx-7' });
-    expect(prisma.userJourney.findUnique).toHaveBeenCalledWith({
+    expect(prisma.userJourney.findFirst).toHaveBeenCalledWith({
       where: {
-        userId_graphSlug_contextKey: {
-          userId: 'user_alice',
-          graphSlug: 'main',
-          contextKey: 'ctx-7',
-        },
+        userId: 'user_alice',
+        graphSlug: 'main',
+        contextKey: 'ctx-7',
       },
     });
   });
 
   it('returns null when the user has not started the journey', async () => {
-    vi.mocked(prisma.userJourney.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userJourney.findFirst).mockResolvedValue(null);
     await expect(
       getJourney(alice, { userId: 'user_alice', graphSlug: 'main' })
     ).resolves.toBeNull();
@@ -79,15 +78,15 @@ describe('getJourney', () => {
     await expect(
       getJourney(alice, { userId: 'user_bob', graphSlug: 'main' })
     ).rejects.toBeInstanceOf(ForbiddenError);
-    expect(prisma.userJourney.findUnique).not.toHaveBeenCalled();
+    expect(prisma.userJourney.findFirst).not.toHaveBeenCalled();
   });
 
   it('lets an admin-support viewer read another subject’s journey', async () => {
-    vi.mocked(prisma.userJourney.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userJourney.findFirst).mockResolvedValue(null);
     await expect(
       getJourney(support, { userId: 'user_alice', graphSlug: 'main' })
     ).resolves.toBeNull();
-    expect(prisma.userJourney.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.userJourney.findFirst).toHaveBeenCalledTimes(1);
   });
 });
 

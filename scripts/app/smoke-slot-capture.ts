@@ -77,6 +77,8 @@ import { getSlotTaxonomy } from '@/lib/app/content/seed-input/slot-taxonomy';
 import { accountLine, accountParts } from '@/lib/app/conversation/account';
 import { capabilityDispatcher } from '@/lib/orchestration/capabilities/dispatcher';
 import { registerBuiltInCapabilities } from '@/lib/orchestration/capabilities/registry';
+import { runAsOrg, requireOrgId } from '@/lib/tenancy/context';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const BASE_URL =
   process.env.SMOKE_BASE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
@@ -532,7 +534,7 @@ async function main(): Promise<void> {
     // write into a test.
     console.log('\n3b. A special-category slot does not store prose');
     const art9 = await prisma.slotDefinition.upsert({
-      where: { slug: ART9_SLUG },
+      where: { orgId_slug: { orgId: requireOrgId(), slug: ART9_SLUG } },
       create: {
         slug: ART9_SLUG,
         group: PREFIX,
@@ -634,7 +636,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
+// Scripts run outside a request, so they enter the install org themselves
+// (Sunrise §107), the way the platform's own smokes do.
+runAsOrg(INSTALL_ORG_ID, main, { source: 'job' }).catch((err: unknown) => {
   console.error(`\n✗ ${err instanceof Error ? err.message : String(err)}\n`);
   process.exitCode = 1;
   void prisma.$disconnect();

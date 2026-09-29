@@ -579,6 +579,8 @@ export function initAppJobs(): void {
       const { count } = await prisma.appInvoice.deleteMany({/* … */});
       return { pruned: count }; // folded into the tick's log line
     },
+    // Optional — `'per-org'` is the default. See "Whose rows" below.
+    scope: 'per-org',
   });
 }
 ```
@@ -589,8 +591,18 @@ instance per interval, and a restart re-arms everything. **Write jobs to be
 idempotent.** If a job must run exactly once cluster-wide it needs its own
 lease — see `execution-reaper` for that pattern.
 
-Three behaviours worth knowing:
+Four behaviours worth knowing:
 
+- **Whose rows a job acts on is declared, and defaults to per-org.** A job runs
+  inside a tenant scope. With `scope` omitted (or `'per-org'`) the tick runs it
+  once per active org, inside that org's context — your Prisma calls see and
+  stamp that org's rows only, and at `TENANCY_MODE=multi` the row-level
+  policies enforce it. On a single-tenant install that is the install org, so a
+  job written before the field existed behaves exactly as before. Declare
+  `scope: { system: 'why' }` only for work on a table with **no** `orgId`: that
+  scope is the audited platform bypass, the reason is logged on every entry,
+  and a tenant-owned row created inside it lands with no org
+  ([`scheduling.md` → App jobs](./.context/orchestration/scheduling.md#app-jobs--the-fork-seam-on-the-tick)).
 - **A slow job never stacks up.** A job still running from an earlier tick is
   skipped, however long ago it became due — so a 5-minute job on a 1-minute
   interval does not accumulate concurrent runs.
@@ -1534,6 +1546,18 @@ your version, and add a follow-up rather than rewriting Sunrise's.
 - **Reading a release's migration set:** the migrations a release added are the
   new folders under `prisma/migrations/` — diff against your last-synced point
   with `git diff <last-sync>..<release> -- prisma/migrations/`.
+- **Your tenant-owned models need a policy.** A model of yours that carries
+  `orgId` is tenant-owned, and
+  `tests/unit/lib/tenancy/policy-coverage.test.ts` fails naming its table until
+  a migration of yours carries its `org_isolation` policy — append
+  `orgIsolationPolicySql('<table>')` from `lib/tenancy/isolation.ts` to a new
+  migration. The policy is dormant at `TENANCY_MODE=single`; the switch, the
+  role split and the `MIGRATE_DATABASE_URL` variable it introduces are in
+  [`.context/tenancy/isolation.md`](./.context/tenancy/isolation.md), and the
+  operator's walkthrough — plus the other tests that name a fork's model
+  until it is classified, exported and slug-scoped, and the two checks a
+  release merge still does by hand — is the
+  [multi-tenancy playbook](./.context/architecture/multi-tenancy.md).
 
 The full reconciliation recipe — including `prisma migrate resolve --applied` /
 `--rolled-back` for baselining or recovering a migration, the pgvector

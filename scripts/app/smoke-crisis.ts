@@ -137,7 +137,7 @@ async function main(): Promise<void> {
     );
 
     console.log('\n3. The words come from the tables an admin edits');
-    if (!(await prisma.appCrisisCopy.findUnique({ where: { slug: 'global' } }))) {
+    if (!(await prisma.appCrisisCopy.findFirst({ where: { slug: 'global' } }))) {
       await crisisSeed.run({ prisma, logger });
       console.log('  (seeded this database from the bundled file first — what db:seed does)');
     }
@@ -210,7 +210,16 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
+// Scripts run outside a request, so they enter the install org themselves
+// (Sunrise §107), the way the platform's own smokes do — imported here, late,
+// for the same reason everything else is.
+async function inInstallOrg(): Promise<void> {
+  const { runAsOrg } = await import('@/lib/tenancy/context');
+  const { INSTALL_ORG_ID } = await import('@/lib/tenancy/constants');
+  await runAsOrg(INSTALL_ORG_ID, main, { source: 'job' });
+}
+
+inInstallOrg().catch((err: unknown) => {
   console.error('\n✗ smoke:app-crisis failed:', err instanceof Error ? err.message : err);
   process.exit(1);
 });

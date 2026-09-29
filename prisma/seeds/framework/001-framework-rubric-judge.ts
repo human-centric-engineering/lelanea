@@ -16,6 +16,7 @@
 
 import type { SeedUnit } from '@/prisma/runner';
 import { serviceAccountWhere } from '@/lib/auth/account';
+import { requireOrgId } from '@/lib/tenancy/context';
 
 const RUBRIC_JUDGE_SLUG = 'eval-judge-framework-rubric';
 
@@ -72,7 +73,7 @@ const unit: SeedUnit = {
     }
 
     await prisma.aiAgent.upsert({
-      where: { slug: RUBRIC_JUDGE_SLUG },
+      where: { orgId_slug: { orgId: requireOrgId(), slug: RUBRIC_JUDGE_SLUG } },
       update: {
         // Seed-managed rubric — OVERWRITE on re-seed (admin edits to a seeded judge are lost; a
         // custom rubric should be a NEW kind='judge' agent, never touched by this seed).

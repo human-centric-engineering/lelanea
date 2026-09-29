@@ -53,7 +53,7 @@ export async function listFacilitationBindings(): Promise<FacilitationAgentBindi
 export async function getFacilitationBindingByRole(
   role: string
 ): Promise<FacilitationAgentBindingView | null> {
-  const binding = await prisma.facilitationAgentBinding.findUnique({ where: { role } });
+  const binding = await prisma.facilitationAgentBinding.findFirst({ where: { role } });
   if (binding === null) return null;
 
   const agent = await prisma.aiAgent.findUnique({

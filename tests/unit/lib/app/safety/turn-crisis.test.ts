@@ -47,7 +47,7 @@ vi.mock('@/lib/db/client', async () => {
   const file = getCrisisResources();
   const crisisTables = {
     appCrisisCopy: {
-      findUnique: vi.fn(() =>
+      findFirst: vi.fn(() =>
         Promise.resolve({
           slug: 'global',
           ...file.copy,

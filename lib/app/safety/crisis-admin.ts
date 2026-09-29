@@ -158,7 +158,7 @@ function sameServices(stored: unknown, submitted: CrisisService[]): boolean {
 }
 
 async function requireSeeded(): Promise<AppCrisisCopy> {
-  const copy = await prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } });
+  const copy = await prisma.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } });
   if (!copy) throw new ConflictError(NOT_SEEDED_MESSAGE, { reason: 'not_seeded' });
   return copy;
 }
@@ -195,7 +195,7 @@ function describeUnservable(err: unknown): string {
 /** Everything as stored, for the admin page. Two reads. */
 export async function getCrisisAdminView(): Promise<CrisisAdminView> {
   const [copy, regions] = await Promise.all([
-    prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
+    prisma.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } }),
     prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
   let unservable: string | null = null;

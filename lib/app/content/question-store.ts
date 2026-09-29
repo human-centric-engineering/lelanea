@@ -14,7 +14,7 @@
  * @see lib/app/content/seed-input/question-seed.ts — what the seed writes
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
 import {
@@ -90,7 +90,7 @@ export type SeedQuestionsResult =
  */
 export async function seedDiscoveryQuestions(
   seed: QuestionSeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedQuestionsResult> {
   const existing = await client.appQuestionSet.findUnique({
     where: { id: seed.set.id },

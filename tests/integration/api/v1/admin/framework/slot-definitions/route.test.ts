@@ -49,6 +49,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 function mockSlotDefinition(overrides: Partial<SlotDefinition> = {}): SlotDefinition {
   return {
     id: 'slot_1',
+    orgId: 'install',
     slug: 'demo-slot',
     group: 'demo',
     description: 'A demo slot',

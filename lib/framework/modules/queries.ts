@@ -31,7 +31,7 @@ export async function listModules(): Promise<Module[]> {
  * over-fetching the settings columns `getModuleSettings` returns.
  */
 export async function moduleExists(slug: string): Promise<boolean> {
-  const row = await prisma.module.findUnique({ where: { slug }, select: { id: true } });
+  const row = await prisma.module.findFirst({ where: { slug }, select: { id: true } });
   return row !== null;
 }
 
@@ -72,7 +72,7 @@ export const MODULE_SETTINGS_SELECT = {
 } as const;
 
 export async function getModuleSettings(slug: string): Promise<ModuleSettings> {
-  const row = await prisma.module.findUnique({
+  const row = await prisma.module.findFirst({
     where: { slug },
     select: MODULE_SETTINGS_SELECT,
   });

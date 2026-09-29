@@ -54,6 +54,9 @@
     "db:migrate:single-doc": "tsx --env-file=.env.local scripts/migrate-knowledge-to-single-doc.ts",
     "db:reset": "prisma migrate reset --force",
     "db:drift-check": "tsx --env-file=.env.local scripts/db/check-drift.ts",
+    "db:tenancy:enable": "tsx --env-file=.env.local scripts/db/tenancy-enable.ts --enable",
+    "db:tenancy:disable": "tsx --env-file=.env.local scripts/db/tenancy-enable.ts --disable",
+    "db:tenancy:role": "tsx --env-file=.env.local scripts/db/tenancy-role.ts",
     "smoke:chat": "tsx --env-file=.env.local scripts/smoke/chat.ts",
     "smoke:orchestration": "tsx --env-file=.env.local scripts/smoke/orchestration.ts",
     "smoke:hybrid-search": "tsx --env-file=.env.local scripts/smoke/knowledge-hybrid-search.ts",
@@ -75,6 +78,7 @@
     "smoke:app-voice": "tsx --env-file=.env.local scripts/app/smoke-voice.ts",
     "smoke:app-slot-capture": "tsx --env-file=.env.local scripts/app/smoke-slot-capture.ts",
     "smoke:tenancy": "tsx --env-file=.env.local scripts/smoke/tenancy.ts",
+    "smoke:tenancy-isolation": "tsx --env-file=.env.local scripts/smoke/tenancy-isolation.ts",
     "postinstall": "prisma generate",
     "prepare": "husky",
     "check:client-env": "tsx scripts/ci/check-client-env-delivery.ts"

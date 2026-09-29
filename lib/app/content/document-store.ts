@@ -32,7 +32,7 @@
  * @see lib/app/content/seed-input/foundational-seed.ts — what the seed writes
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { storedDocumentBlocksSchema } from '@/lib/app/content/schemas';
@@ -141,7 +141,7 @@ export type SeedDocumentsResult =
  */
 export async function seedFoundationalDocuments(
   seed: FoundationalSeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedDocumentsResult> {
   const existing = await client.appDocumentCollection.findFirst({ select: { id: true } });
   if (existing) {

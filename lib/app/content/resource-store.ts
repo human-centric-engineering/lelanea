@@ -25,7 +25,7 @@
  * @see lib/app/content/resources.ts — the schemas and the selection
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
@@ -179,7 +179,7 @@ export type SeedResourcesResult =
  * key, and every item is well formed. Documents need no check here: the
  * `documentId` foreign key refuses an unknown one inside the transaction.
  */
-async function assertWritable(seed: ResourcesSeed, client: PrismaClient): Promise<void> {
+async function assertWritable(seed: ResourcesSeed, client: TenancyClient): Promise<void> {
   const moduleIds = new Set(
     (await client.appJourneyModule.findMany({ select: { id: true } })).map((row) => row.id)
   );
@@ -228,7 +228,7 @@ async function assertWritable(seed: ResourcesSeed, client: PrismaClient): Promis
  */
 export async function seedResources(
   seed: ResourcesSeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedResourcesResult> {
   const existing = await client.appResourceCollection.findFirst({ select: { id: true } });
   if (existing) {

@@ -25,7 +25,7 @@
  * @see lib/app/content/seed-input/voice-overlay-seed.ts — what the seed writes
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { TenancyClient } from '@/lib/db/tenancy-extension';
 import { prisma as defaultClient } from '@/lib/db/client';
 import { ContentNotSeededError } from '@/lib/app/content/document-view';
 import {
@@ -114,7 +114,7 @@ export type SeedVoiceOverlaysResult =
  */
 export async function seedVoiceOverlays(
   seed: VoiceOverlaySeed,
-  client: PrismaClient = defaultClient
+  client: TenancyClient = defaultClient
 ): Promise<SeedVoiceOverlaysResult> {
   const existing = await client.appVoiceOverlaySet.findUnique({
     where: { id: seed.set.id },

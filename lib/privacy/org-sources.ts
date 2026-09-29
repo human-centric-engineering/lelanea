@@ -10,9 +10,8 @@
  * with a disposition, or in {@link ORG_EXCLUDED_SOURCES} with a reason. A
  * model that is in neither fails `tests/unit/lib/privacy/org-sources.test.ts`,
  * which parses `prisma/schema/*.prisma` for `orgId` columns and diffs them
- * against this file. Today that is five models; when row isolation (§107)
- * adds `orgId` to the tenant-owned models, that test names every one until
- * someone decides what the org receives from it — which is the point.
+ * against this file. §107 t-705 added `orgId` to every tenant-owned model and that test named
+ * all 38 until each had a disposition below — which is the point.
  *
  * Dispositions are the subject manifest's two, read for an org:
  *
@@ -42,6 +41,10 @@
 import { prisma } from '@/lib/db/client';
 import type { SourceDisposition, AttributionRow } from '@/lib/privacy/export-sources';
 import { INVITATION_IDENTIFIER_PREFIX } from '@/lib/utils/invitation-token';
+import { toSafeHook, type SafeHook } from '@/lib/orchestration/hooks/serialize';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
+import { isMultiTenant } from '@/lib/tenancy/context';
+import { collectAppOrgSources } from '@/lib/app/data-export';
 
 /** Identity of the org being exported. */
 export interface OrgQuery {
@@ -67,6 +70,26 @@ export interface OrgExcludedSource {
 }
 
 const byCreatedAt = { createdAt: 'asc' } as const;
+
+/**
+ * The `where` for a tenant-owned model, read the way the tenant context reads
+ * a missing org: at `TENANCY_MODE=single` a row with `orgId IS NULL` belongs
+ * to the install org — nothing writes the column until the data-layer
+ * chokepoint (§107 3.2) lands, so every row created between the backfill
+ * migration and that PR carries `NULL`, and the install org's export would
+ * otherwise silently omit it (a fresh install would export none of its
+ * seeded agents; caught by the t-705 code review). At `multi` the match is
+ * strict — `multi` is unreachable until §107 3.2 lifts the guard in
+ * `lib/db/client.ts`, and 3.3's `db:tenancy:enable` (not yet written) owns
+ * backfilling `NULL` to the install org before enforcing, so a `NULL` seen
+ * at `multi` is an orphan, not the install org's. The credential attributions
+ * below deliberately do NOT use this — a `NULL`-org API key is a platform
+ * credential, not the org's.
+ */
+function ownedBy(orgId: string): { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } {
+  if (orgId === INSTALL_ORG_ID && !isMultiTenant()) return { OR: [{ orgId }, { orgId: null }] };
+  return { orgId };
+}
 
 /** Narrow labelled credential rows to the attribution shape. */
 function toAttribution(
@@ -115,6 +138,434 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
         },
         omit: { value: true },
         orderBy: byCreatedAt,
+      }),
+  },
+
+  // ---------------------------------------------------------------------
+  // Tenant-owned records (§107 t-705) — every model that carries `orgId`
+  // because a row of it belongs to one org. Full rows minus the named secrets
+  // (two signing secrets, a lease token, and a hook's header values via
+  // `toSafeHook`); vector columns are `Unsupported` and never selected.
+  // ---------------------------------------------------------------------
+  {
+    model: 'AiAgent',
+    section: 'agents',
+    disposition: 'export',
+    description:
+      'The organisation’s agents: name, slug, instructions, model and provider choices, visibility and runtime settings.',
+    fetch: ({ orgId }) =>
+      prisma.aiAgent.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiAgentVersion',
+    section: 'agentVersions',
+    disposition: 'export',
+    description:
+      'Every published version of each agent — the configuration snapshot as it was at publish time.',
+    fetch: ({ orgId }) =>
+      prisma.aiAgentVersion.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiAgentCapability',
+    section: 'agentCapabilities',
+    disposition: 'export',
+    description:
+      'Which platform capabilities each agent is bound to, and the per-agent configuration of that binding. The capability definitions themselves are platform config and are not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiAgentCapability.findMany({
+        where: ownedBy(orgId),
+        orderBy: [{ agentId: 'asc' }, { capabilityId: 'asc' }],
+      }),
+  },
+  {
+    model: 'AiAgentKnowledgeDocument',
+    section: 'agentKnowledgeDocuments',
+    disposition: 'export',
+    description: 'Which knowledge documents each agent can search.',
+    fetch: ({ orgId }) =>
+      prisma.aiAgentKnowledgeDocument.findMany({
+        where: ownedBy(orgId),
+        orderBy: [{ agentId: 'asc' }, { documentId: 'asc' }],
+      }),
+  },
+  {
+    model: 'AiAgentKnowledgeTag',
+    section: 'agentKnowledgeTags',
+    disposition: 'export',
+    description:
+      'Which knowledge tags each agent searches by. The tag definitions are platform config and are not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiAgentKnowledgeTag.findMany({
+        where: ownedBy(orgId),
+        orderBy: [{ agentId: 'asc' }, { tagId: 'asc' }],
+      }),
+  },
+  {
+    model: 'AiConversation',
+    section: 'conversations',
+    disposition: 'export',
+    description:
+      'Every conversation held with the organisation’s agents: title, channel, participant, context and timestamps.',
+    fetch: ({ orgId }) =>
+      prisma.aiConversation.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiMessage',
+    section: 'messages',
+    disposition: 'export',
+    description:
+      'Every message in those conversations — role, content, tool calls and token counts.',
+    fetch: ({ orgId }) =>
+      prisma.aiMessage.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiConversationShare',
+    section: 'conversationShares',
+    disposition: 'export',
+    description: 'Share grants on conversations: reason, expiry and revocation.',
+    fetch: ({ orgId }) =>
+      prisma.aiConversationShare.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiOutboundMessage',
+    section: 'outboundMessages',
+    disposition: 'export',
+    description:
+      'Messages the organisation’s agents sent out over external channels, with delivery status.',
+    fetch: ({ orgId }) =>
+      prisma.aiOutboundMessage.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiCostLog',
+    section: 'costLog',
+    disposition: 'export',
+    description: 'Per-call model usage and cost for the organisation’s agents and workflows.',
+    fetch: ({ orgId }) =>
+      prisma.aiCostLog.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiUserMemory',
+    section: 'userMemories',
+    disposition: 'export',
+    description:
+      'Facts the organisation’s agents remembered about their users between conversations.',
+    fetch: ({ orgId }) =>
+      prisma.aiUserMemory.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiEventHook',
+    section: 'eventHooks',
+    disposition: 'export',
+    description:
+      'Event hooks the organisation configured — the event, the filter and the action. The hook’s signing secret and the values of its custom request headers are not included.',
+    // `action.headers` holds whatever the author put there — in practice the
+    // receiver's `Authorization` — so the rows go through the same redaction
+    // the admin API applies (`toSafeHook`): header names stay, values are
+    // masked, `secret` is dropped. Found by the security review of t-705.
+    fetch: async ({ orgId }: OrgQuery): Promise<SafeHook[]> => {
+      const rows = await prisma.aiEventHook.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      });
+      return rows.map(toSafeHook);
+    },
+  },
+  {
+    model: 'AiEventHookDelivery',
+    section: 'eventHookDeliveries',
+    disposition: 'export',
+    description: 'Each attempt to deliver an event to a hook, with the payload and the outcome.',
+    fetch: ({ orgId }) =>
+      prisma.aiEventHookDelivery.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWebhookSubscription',
+    section: 'webhookSubscriptions',
+    disposition: 'export',
+    description:
+      'Outbound webhook subscriptions — channel, destination, events and retry policy. The signing secret is not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiWebhookSubscription.findMany({
+        where: ownedBy(orgId),
+        omit: { secret: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWebhookDelivery',
+    section: 'webhookDeliveries',
+    disposition: 'export',
+    description:
+      'Each attempt to deliver an event to a webhook subscription, with the payload and the outcome.',
+    fetch: ({ orgId }) =>
+      prisma.aiWebhookDelivery.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiExperiment',
+    section: 'experiments',
+    disposition: 'export',
+    description: 'A/B experiments the organisation ran on its agents.',
+    fetch: ({ orgId }) =>
+      prisma.aiExperiment.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiExperimentVariant',
+    section: 'experimentVariants',
+    disposition: 'export',
+    description: 'The variants of each experiment and their results.',
+    fetch: ({ orgId }) =>
+      prisma.aiExperimentVariant.findMany({
+        where: ownedBy(orgId),
+        orderBy: { id: 'asc' },
+      }),
+  },
+  {
+    model: 'AiDataset',
+    section: 'datasets',
+    disposition: 'export',
+    description: 'Evaluation datasets the organisation authored.',
+    fetch: ({ orgId }) =>
+      prisma.aiDataset.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiDatasetCase',
+    section: 'datasetCases',
+    disposition: 'export',
+    description: 'The cases in each dataset — inputs and expected outputs.',
+    fetch: ({ orgId }) =>
+      prisma.aiDatasetCase.findMany({
+        where: ownedBy(orgId),
+        orderBy: { id: 'asc' },
+      }),
+  },
+  {
+    model: 'AiEvaluationSession',
+    section: 'evaluationSessions',
+    disposition: 'export',
+    description: 'Manual evaluation sessions on the organisation’s agents.',
+    fetch: ({ orgId }) =>
+      prisma.aiEvaluationSession.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiEvaluationLog',
+    section: 'evaluationLogs',
+    disposition: 'export',
+    description: 'Per-message annotations and scores recorded in evaluation sessions.',
+    fetch: ({ orgId }) =>
+      prisma.aiEvaluationLog.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiEvaluationRun',
+    section: 'evaluationRuns',
+    disposition: 'export',
+    description: 'Dataset-driven evaluation runs, their configuration and summary.',
+    fetch: ({ orgId }) =>
+      prisma.aiEvaluationRun.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiEvaluationCaseResult',
+    section: 'evaluationCaseResults',
+    disposition: 'export',
+    description: 'The per-case outcome of each evaluation run.',
+    fetch: ({ orgId }) =>
+      prisma.aiEvaluationCaseResult.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeBase',
+    section: 'knowledgeBases',
+    disposition: 'export',
+    description: 'The organisation’s knowledge bases.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeBase.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeDocument',
+    section: 'knowledgeDocuments',
+    disposition: 'export',
+    description:
+      'Every document in those knowledge bases — name, slug, source, status and the document text.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeDocument.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeDocumentRevision',
+    section: 'knowledgeDocumentRevisions',
+    disposition: 'export',
+    description: 'The revision history of each document.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeDocumentRevision.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeDocumentPendingChange',
+    section: 'knowledgeDocumentPendingChanges',
+    disposition: 'export',
+    description: 'Edits to documents that are proposed but not yet applied.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeDocumentPendingChange.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeChunk',
+    section: 'knowledgeChunks',
+    disposition: 'export',
+    description:
+      'The searchable chunks each document was split into, with their text and metadata. The vector embeddings are derived data and are not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeChunk.findMany({
+        where: ownedBy(orgId),
+        orderBy: { id: 'asc' },
+      }),
+  },
+  {
+    model: 'AiKnowledgeDocumentTag',
+    section: 'knowledgeDocumentTags',
+    disposition: 'export',
+    description:
+      'Which tags each document carries. The tag definitions are platform config and are not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiKnowledgeDocumentTag.findMany({
+        where: ownedBy(orgId),
+        orderBy: [{ documentId: 'asc' }, { tagId: 'asc' }],
+      }),
+  },
+  {
+    model: 'AiWorkflow',
+    section: 'workflows',
+    disposition: 'export',
+    description: 'The organisation’s workflows — name, slug, definition and settings.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflow.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowVersion',
+    section: 'workflowVersions',
+    disposition: 'export',
+    description: 'Every published version of each workflow.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowVersion.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowSchedule',
+    section: 'workflowSchedules',
+    disposition: 'export',
+    description: 'Cron schedules that run the organisation’s workflows.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowSchedule.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowTrigger',
+    section: 'workflowTriggers',
+    disposition: 'export',
+    description:
+      'Inbound triggers on the organisation’s workflows — channel, name and scope. The trigger’s signing secret is not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowTrigger.findMany({
+        where: ownedBy(orgId),
+        omit: { signingSecret: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowExecution',
+    section: 'workflowExecutions',
+    disposition: 'export',
+    description:
+      'Every run of the organisation’s workflows — input, output, status, cost and timing. The engine’s lease token is not included.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowExecution.findMany({
+        where: ownedBy(orgId),
+        omit: { leaseToken: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowStepDispatch',
+    section: 'workflowStepDispatches',
+    disposition: 'export',
+    description: 'The result each workflow step produced on each run.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowStepDispatch.findMany({
+        where: ownedBy(orgId),
+        orderBy: { createdAt: 'asc' },
+      }),
+  },
+  {
+    model: 'AiWorkflowRunningStep',
+    section: 'workflowRunningSteps',
+    disposition: 'export',
+    description: 'Per-step timing and turn records for each run.',
+    fetch: ({ orgId }) =>
+      prisma.aiWorkflowRunningStep.findMany({
+        where: ownedBy(orgId),
+        orderBy: { startedAt: 'asc' },
       }),
   },
 
@@ -189,4 +640,43 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
  * model whose rows are not the org's to receive (a platform audit row that
  * happens to record the org, say), rather than forcing a fetch nobody wants.
  */
-export const ORG_EXCLUDED_SOURCES: OrgExcludedSource[] = [];
+export const ORG_EXCLUDED_SOURCES: OrgExcludedSource[] = [
+  {
+    model: 'AiMessageEmbedding',
+    reason:
+      'Vector embeddings derived from messages the export already carries in full; the vector column is Unsupported in Prisma and holds nothing readable.',
+  },
+  {
+    model: 'AiWorkflowExecutionLeaseEvent',
+    reason:
+      'Engine lease bookkeeping for stuck-execution recovery — lease tokens and heartbeat events, nothing the organisation authored; the executions themselves are exported.',
+  },
+];
+
+// ─── DAYBREAK fork-first seam (Hub t-134, §34 f-framework-tenancy) ───────────
+//
+// "Not a fork seam yet" (header) was true of core; a fork whose own models
+// carry `orgId` — Daybreak's 19 framework tables — has no other way to satisfy
+// the coverage guard than rows in the lists above. This is the generic seam
+// §109 anticipates, shaped like the subject manifest's: the `lib/app/data-export.ts`
+// bridge contributes sources and exclusions, pulled lazily on every read (never
+// registered at boot, so nothing is lost when a registry resets). With an empty
+// contribution both getters return exactly the lists above — behaviour-neutral
+// at rest, pinned by tests/unit/lib/framework/privacy/org-sources.test.ts.
+// Ledgered in .context/framework/upstream-asks.md; delete when §109 ships its own.
+
+/** What the `lib/app` bridge contributes to the org manifest. */
+export interface AppOrgSourceContribution {
+  sources: OrgDataSource[];
+  excluded: OrgExcludedSource[];
+}
+
+/** Every org-export source: core's, then the app bridge's. */
+export function getOrgDataSources(): OrgDataSource[] {
+  return [...ORG_DATA_SOURCES, ...collectAppOrgSources().sources];
+}
+
+/** Every deliberately excluded model: core's, then the app bridge's. */
+export function getOrgExcludedSources(): OrgExcludedSource[] {
+  return [...ORG_EXCLUDED_SOURCES, ...collectAppOrgSources().excluded];
+}

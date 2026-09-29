@@ -282,9 +282,11 @@ Dispatch uses the cached secret — in multi-instance deployments, each instance
 
 ## Cache Behaviour
 
-- Enabled hooks load from the DB into a module-level `Map<eventType, CachedHook[]>`
-- **TTL:** 60 seconds (`CACHE_TTL_MS`)
-- Any hook CRUD operation (POST, PATCH, DELETE) calls `invalidateHookCache()` so admin changes take effect immediately
+- Enabled hooks load from the DB into a module-level `Map<orgId, { byType, loadedAt }>` — **per org**, because `AiEventHook` is tenant-owned and `eventType` is a label two orgs both use (§108 t-712; before it, whichever org refreshed the cache had its hooks dispatched for every org for the next minute)
+- **TTL:** 60 seconds (`CACHE_TTL_MS`), per org partition
+- Any hook CRUD operation (POST, PATCH, DELETE) calls `invalidateHookCache()`, which clears **every** org's partition so admin changes take effect immediately
+- The load runs in the emitting call stack's tenant context. Two stacks are refused, both logging `Hook dispatch error` and dispatching nothing rather than reading wide — an event that cannot say whose it is cannot say whose hooks to fire: one that entered no org (`TENANCY_MODE=multi` only; at `single` the context is the install org, so there is one partition and nothing changes), and one running under `runAsSystem`, where the RLS bypass would otherwise fan a single event out to **every** org's webhook URL, each signed with that org's secret
+- Partitions past their TTL are dropped on the next refresh, so the map does not accumulate one entry per org that has ever emitted — each holds every enabled hook's action, filter and secret
 - The cache is per-process — in a multi-instance deployment each instance independently reloads within 60s of a change
 
 ## Admin API

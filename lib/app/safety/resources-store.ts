@@ -137,7 +137,7 @@ export function contentFromRows(copy: AppCrisisCopy, regions: AppCrisisRegion[])
  */
 async function readFromDatabase(): Promise<CrisisContent | null> {
   const [copy, regions] = await Promise.all([
-    prisma.appCrisisCopy.findUnique({ where: { slug: CRISIS_COPY_SLUG } }),
+    prisma.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } }),
     prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
   return copy ? contentFromRows(copy, regions) : null;

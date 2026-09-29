@@ -41,7 +41,7 @@ export interface ModuleAgentBindingView extends ModuleAgentBinding {
  */
 /** Resolve a module's id from its slug, or 404 — the existence guard the reads here share. */
 async function loadModuleIdBySlug(moduleSlug: string): Promise<string> {
-  const row = await prisma.module.findUnique({
+  const row = await prisma.module.findFirst({
     where: { slug: moduleSlug },
     select: { id: true },
   });

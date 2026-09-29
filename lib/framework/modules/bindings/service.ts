@@ -57,7 +57,7 @@ function assertModuleSeat(moduleSlug: string, role: string): void {
 
 /** Resolve a module row id from its slug, or 404. */
 async function loadModuleId(slug: string): Promise<string> {
-  const row = await prisma.module.findUnique({ where: { slug }, select: { id: true } });
+  const row = await prisma.module.findFirst({ where: { slug }, select: { id: true } });
   if (!row) throw new NotFoundError(`Module "${slug}" not found`);
   return row.id;
 }

@@ -267,7 +267,7 @@ vi.mock('@/lib/db/client', () => {
         ),
       },
       appAgentSettings: {
-        findUnique: vi.fn(async () => ({
+        findFirst: vi.fn(async () => ({
           ...db.settings,
           defaultMonthlyCeilingUsd: db.defaultCeilingUsd,
           updatedAt: new Date(),
