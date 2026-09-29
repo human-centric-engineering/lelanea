@@ -781,7 +781,7 @@ describe('the status line is one live region, not a line that mounts with the st
 describe('DOCUMENT_PAGES', () => {
   it('names only documents the collection has', () => {
     // The ids the seed writes: the document ids every environment holds.
-    const ids = new Set(seededDocumentRows().map((d) => d.id));
+    const ids = new Set(seededDocumentRows().map((d) => d.slug));
     for (const id of Object.keys(DOCUMENT_PAGES)) expect(ids.has(id), id).toBe(true);
   });
 

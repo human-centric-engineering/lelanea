@@ -88,9 +88,15 @@ function unchangedCount(plan: ContentImportPlan): number {
   return plan.sections.reduce((sum, section) => sum + section.unchanged.length, 0);
 }
 
-/** A table's rows without the columns a fresh write stamps differently. */
+/**
+ * A table's rows without the columns a fresh write stamps differently: the
+ * timestamps, the generated `id`, and the generated parent id a child points at
+ * (its `*Slug` name stays, and is compared).
+ */
 function stable(rows: Record<string, unknown>[]) {
-  return rows.map(({ createdAt: _c, updatedAt: _u, changedAt: _a, id: _i, ...rest }) => rest);
+  return rows.map(
+    ({ createdAt: _c, updatedAt: _u, changedAt: _a, id: _i, collectionId: _ci, ...rest }) => rest
+  );
 }
 
 beforeEach(async () => {
@@ -131,7 +137,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
     await reorderDocuments(
       [...documents]
         .reverse()
-        .map((row) => ({ id: row.id as string, revision: row.revision as number })),
+        .map((row) => ({ id: row.slug as string, revision: row.revision as number })),
       EDITOR
     );
     await createResource(
@@ -199,7 +205,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
     // The live videos are contiguous from 0, the retired one parked below.
     const videos = db
       .current!.rows('appResource')
-      .map((row) => [row.id, row.position, row.retired]);
+      .map((row) => [row.slug, row.position, row.retired]);
     expect(videos).toEqual(
       expect.arrayContaining([
         ['video-b', 0, false],
@@ -223,6 +229,11 @@ describe('an export is a valid seed input', () => {
     );
     expect(stable(fresh.rows('appDocumentCollection'))).toEqual(
       stable(original.rows('appDocumentCollection'))
+    );
+    // Every document points at the collection the fresh seed wrote.
+    const [collection] = fresh.rows('appDocumentCollection');
+    expect(new Set(fresh.rows('appFoundationalDocument').map((row) => row.collectionId))).toEqual(
+      new Set([collection.id])
     );
   });
 
@@ -251,7 +262,7 @@ describe('importing', () => {
     expect(writes(applied)).toEqual(['update document:the_mission title']);
     const revisions = db
       .current!.rows('appFoundationalDocumentRevision')
-      .filter((row) => row.documentId === 'the_mission');
+      .filter((row) => row.documentSlug === 'the_mission');
     expect(revisions.at(-1)).toMatchObject({
       revision: 2,
       origin: 'admin',
@@ -347,7 +358,7 @@ describe('importing', () => {
     expect(plan.sections.find((section) => section.entity === 'resource')?.skippedRetired).toEqual([
       'kept',
     ]);
-    expect(db.current!.rows('appResource').find((row) => row.id === 'kept')).toMatchObject({
+    expect(db.current!.rows('appResource').find((row) => row.slug === 'kept')).toMatchObject({
       retired: true,
     });
   });

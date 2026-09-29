@@ -503,7 +503,7 @@ describe('a stored row is held to the file’s rules on the way out', () => {
   it('refuses an article that is both a link and a document', () => {
     const seed = buildResourcesSeed(fixture());
     const both = seed.resources.map((row) =>
-      row.id === 'read-doc'
+      row.slug === 'read-doc'
         ? { ...row, href: 'https://example.com/x', revision: 1 }
         : { ...row, revision: 1 }
     );
@@ -520,7 +520,7 @@ describe('a stored row is held to the file’s rules on the way out', () => {
   it('refuses a video whose link is not http(s), as the file schema did', () => {
     const seed = buildResourcesSeed(fixture());
     const bad = seed.resources.map((row) =>
-      row.id === 'values-a'
+      row.slug === 'values-a'
         ? { ...row, href: 'javascript:alert(1)', revision: 1 }
         : { ...row, revision: 1 }
     );
@@ -561,6 +561,12 @@ describe('the data migration', () => {
     'prisma/migrations/20261001100000_app_resource_kinds/migration.sql'
   );
 
+  // t-113: the content tables keyed per org, their authored names moved to `slug`.
+  const PER_ORG_KEYS_MIGRATION = path.join(
+    process.cwd(),
+    'prisma/migrations/20261004100000_app_content_per_org_keys/migration.sql'
+  );
+
   /** The value between a pair of dollar-quote tags in the kinds migration. */
   function quoted(sql: string, tag: string): string {
     const match = new RegExp(`\\$${tag}\\$([\\s\\S]*?)\\$${tag}\\$`).exec(sql);
@@ -593,7 +599,27 @@ describe('the data migration', () => {
         },
       },
     };
-    expect(moved).toEqual(buildResourcesSeed());
+    // Frozen before t-113, the JSON names the collection and each item by `id`,
+    // and an article's document by `documentId`. The per-org keys migration
+    // copies those names into `slug` and `documentSlug`, which is where the
+    // seed puts them now. Words keep their `key`.
+    const perOrgKeys = readFileSync(PER_ORG_KEYS_MIGRATION, 'utf8');
+    for (const table of ['app_resource_collection', 'app_resource']) {
+      expect(perOrgKeys).toContain(`UPDATE "${table}" SET "slug" = "id";`);
+    }
+    expect(perOrgKeys).toMatch(/UPDATE "app_resource" SET .*"documentSlug" = "documentId";/);
+    const { id: collectionId, ...collection } = moved.collection as unknown as Omit<
+      typeof moved.collection,
+      'slug'
+    > & { id: string };
+    const resources = (
+      moved.resources as unknown as ({ id: string; documentId: string | null } & object)[]
+    ).map(({ id, documentId, ...row }) => ({ slug: id, documentSlug: documentId, ...row }));
+    expect({
+      ...moved,
+      collection: { slug: collectionId, ...collection },
+      resources,
+    }).toEqual(buildResourcesSeed());
   });
 
   it('records the same changed fields the service records', async () => {

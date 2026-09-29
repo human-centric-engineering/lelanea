@@ -55,13 +55,13 @@ describe('getJourneyStructure', () => {
   it('serves what the ROW says, not what the file says', async () => {
     moduleFindMany.mockResolvedValue(
       rows.modules.map((row) =>
-        row.id === 'module_02_boundaries'
+        row.slug === 'module_02_boundaries'
           ? { ...row, title: 'Boundaries, edited', subtitle: 'A new subtitle', revision: 3 }
           : row
       )
     );
     tierFindMany.mockResolvedValue(
-      rows.tiers.map((row) => (row.id === 'foundations' ? { ...row, intent: 'Edited.' } : row))
+      rows.tiers.map((row) => (row.slug === 'foundations' ? { ...row, intent: 'Edited.' } : row))
     );
 
     const structure = await getJourneyStructure();
@@ -86,7 +86,7 @@ describe('getJourneyStructure', () => {
 
   it('throws on a module row whose phases fail validation', async () => {
     moduleFindMany.mockResolvedValue(
-      rows.modules.map((row) => (row.id === 'module_01_values' ? { ...row, phases: 'x' } : row))
+      rows.modules.map((row) => (row.slug === 'module_01_values' ? { ...row, phases: 'x' } : row))
     );
 
     await expect(getJourneyStructure()).rejects.toThrow(/failed validation/);

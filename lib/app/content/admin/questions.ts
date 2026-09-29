@@ -73,6 +73,7 @@ import {
   type KeyedPlan,
 } from '@/lib/app/content/admin/keyed-import';
 import { QUESTION_READERS } from '@/lib/app/content/admin/readers';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 import { DISCOVERY_SLOT_PREFIX } from '@/lib/app/onboarding/discovery-slot-names';
 import {
   type ContentImportPlan,
@@ -122,13 +123,13 @@ export interface QuestionWriteResult {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function setFieldsOf(row: Omit<QuestionSetRow, 'id' | 'revision'>) {
+function setFieldsOf(row: Omit<QuestionSetRow, 'slug' | 'revision'>) {
   const preamble = storedPreambleSchema.parse(row.preamble);
   const pacing = storedPacingSchema.parse(row.pacing);
   return {
     title: row.title,
     chartTitle: row.chartTitle,
-    moduleId: row.moduleId,
+    moduleId: row.moduleSlug,
     phase: row.phase,
     preamble,
     pacing,
@@ -160,6 +161,14 @@ function toQuestionData(fields: QuestionFields) {
   return { ...fields, conditionalFollowUp: fields.conditionalFollowUp ?? DB_NULL };
 }
 
+/**
+ * The set's columns: `moduleId` is stored as `moduleSlug`, beside the module
+ * row's generated id (t-113), which the caller supplies.
+ */
+function toSetData({ moduleId, ...fields }: QuestionSetFields, moduleRowId: string) {
+  return { ...fields, moduleSlug: moduleId, moduleId: moduleRowId };
+}
+
 const SET_FIELDS = [...QUESTION_SET_SNAPSHOT_FIELDS, 'moduleId'] as const;
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
@@ -171,9 +180,9 @@ async function owningModuleOf(moduleId: string): Promise<QuestionsOwningModule> 
 }
 
 export async function getQuestionsAdminView(): Promise<QuestionsAdminView> {
-  const exists = await prisma.appQuestionSet.findUnique({
-    where: { id: DISCOVERY_QUESTION_SET_ID },
-    select: { id: true },
+  const exists = await prisma.appQuestionSet.findFirst({
+    where: { slug: DISCOVERY_QUESTION_SET_ID },
+    select: { slug: true },
   });
   const set = exists ? await getDiscoveryQuestions() : null;
   return {
@@ -187,27 +196,32 @@ export async function getQuestionsAdminView(): Promise<QuestionsAdminView> {
 export async function listQuestionSetHistory(
   id: string
 ): Promise<RevisionEntry<Omit<QuestionSetFields, 'moduleId'>>[]> {
-  const [set, revisions] = await Promise.all([
-    prisma.appQuestionSet.findUnique({ where: { id }, select: { moduleId: true } }),
-    prisma.appQuestionSetRevision.findMany({ where: { setId: id }, orderBy: { revision: 'desc' } }),
-  ]);
+  const set = await prisma.appQuestionSet.findFirst({
+    where: { slug: id },
+    select: { id: true, moduleSlug: true },
+  });
   if (!set) throw new NotFoundError(`There is no question set "${id}".`);
+  const revisions = await prisma.appQuestionSetRevision.findMany({
+    where: { setId: set.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppQuestionSetRevision) =>
-    setSnapshotOf(setFieldsOf({ ...row, moduleId: set.moduleId }))
+    setSnapshotOf(setFieldsOf({ ...row, moduleSlug: set.moduleSlug }))
   );
 }
 
 export async function listQuestionHistory(id: string): Promise<RevisionEntry<QuestionFields>[]> {
-  const [question, revisions] = await Promise.all([
-    prisma.appDiscoveryQuestion.findUnique({ where: { id }, select: { id: true } }),
-    prisma.appDiscoveryQuestionRevision.findMany({
-      where: { questionId: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const question = await prisma.appDiscoveryQuestion.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
   if (!question) throw new NotFoundError(`There is no discovery question "${id}".`);
+  const revisions = await prisma.appDiscoveryQuestionRevision.findMany({
+    where: { questionId: question.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, (row: AppDiscoveryQuestionRevision) =>
-    questionFieldsOf({ ...row, id })
+    questionFieldsOf({ ...row, slug: id })
   );
 }
 
@@ -220,7 +234,7 @@ async function writeSet(
   editorId: string
 ): Promise<QuestionWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appQuestionSet.findUnique({ where: { id } });
+    const row = await tx.appQuestionSet.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no question set "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved('The question set', row.revision, revisionRead);
@@ -229,29 +243,32 @@ async function writeSet(
     const next = toNext(before);
     const changed = changedFieldsOf(before, next, SET_FIELDS);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
+    let moduleRowId = row.moduleId;
     if (next.moduleId !== before.moduleId) {
-      const target = await tx.appJourneyModule.findUnique({
-        where: { id: next.moduleId },
+      const target = await tx.appJourneyModule.findFirst({
+        where: { slug: next.moduleId },
         select: { id: true },
       });
       if (!target)
         throw new ValidationError(`There is no module "${next.moduleId}" on the journey.`);
+      moduleRowId = target.id;
     }
 
     const revision = row.revision + 1;
     const { count } = await tx.appQuestionSet.updateMany({
-      where: { id, revision: revisionRead },
-      data: { ...next, revision },
+      where: { id: row.id, revision: revisionRead },
+      data: { ...toSetData(next, moduleRowId), revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         'The question set',
         revisionRead,
-        tx.appQuestionSet.findUnique({ where: { id }, select: { revision: true } })
+        tx.appQuestionSet.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appQuestionSetRevision.create({
       data: {
-        setId: id,
+        setSlug: id,
+        setId: row.id,
         revision,
         ...setSnapshotOf(next),
         // `moduleId` is not a revision column; a move between modules is still
@@ -272,32 +289,33 @@ async function writeQuestion(
   editorId: string
 ): Promise<QuestionWriteResult> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appDiscoveryQuestion.findUnique({ where: { id } });
+    const row = await tx.appDiscoveryQuestion.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no discovery question "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`Question ${row.number}`, row.revision, revisionRead);
 
     const before = questionFieldsOf(row);
     const next = toNext(before);
-    questionFieldsOf({ id, ...next });
+    questionFieldsOf({ slug: id, ...next });
     const changed = changedFieldsOf(before, next, QUESTION_SNAPSHOT_FIELDS);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
 
     const revision = row.revision + 1;
     const data = toQuestionData(next);
     const { count } = await tx.appDiscoveryQuestion.updateMany({
-      where: { id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...data, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `Question ${row.number}`,
         revisionRead,
-        tx.appDiscoveryQuestion.findUnique({ where: { id }, select: { revision: true } })
+        tx.appDiscoveryQuestion.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appDiscoveryQuestionRevision.create({
       data: {
-        questionId: id,
+        questionSlug: id,
+        questionId: row.id,
         revision,
         ...data,
         changedFields: changed,
@@ -338,14 +356,17 @@ export async function restoreQuestionSetRevision(
   revisionRead: number,
   editorId: string
 ): Promise<QuestionWriteResult> {
-  const past = await prisma.appQuestionSetRevision.findUnique({
-    where: { setId_revision: { setId: id, revision } },
-  });
+  const set = await prisma.appQuestionSet.findFirst({ where: { slug: id }, select: { id: true } });
+  const past = set
+    ? await prisma.appQuestionSetRevision.findUnique({
+        where: { setId_revision: { setId: set.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`The question set has no revision ${revision}.`);
   // The module it belongs to is not in the snapshot, so it stays where it is.
   return writeSet(
     id,
-    (before) => setFieldsOf({ ...past, moduleId: before.moduleId }),
+    (before) => setFieldsOf({ ...past, moduleSlug: before.moduleId }),
     revisionRead,
     editorId
   );
@@ -362,14 +383,20 @@ export async function restoreQuestionRevision(
   revisionRead: number,
   editorId: string
 ): Promise<QuestionWriteResult> {
-  const past = await prisma.appDiscoveryQuestionRevision.findUnique({
-    where: { questionId_revision: { questionId: id, revision } },
+  const question = await prisma.appDiscoveryQuestion.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = question
+    ? await prisma.appDiscoveryQuestionRevision.findUnique({
+        where: { questionId_revision: { questionId: question.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`Question "${id}" has no revision ${revision}.`);
   return writeQuestion(
     id,
     (before) => ({
-      ...questionFieldsOf({ ...past, id }),
+      ...questionFieldsOf({ ...past, slug: id }),
       number: before.number,
       weight: before.weight,
     }),
@@ -388,7 +415,7 @@ async function applyNumbers(
   numbers: ReadonlyMap<string, number>,
   editorId: string
 ): Promise<number> {
-  const moving = rows.filter((row) => numbers.get(row.id) !== row.number);
+  const moving = rows.filter((row) => numbers.get(row.slug) !== row.number);
   for (const [index, row] of moving.entries()) {
     await tx.appDiscoveryQuestion.update({
       where: { id: row.id },
@@ -396,11 +423,12 @@ async function applyNumbers(
     });
   }
   for (const row of moving) {
-    const number = numbers.get(row.id)!;
+    const number = numbers.get(row.slug)!;
     const revision = row.revision + 1;
     await tx.appDiscoveryQuestion.update({ where: { id: row.id }, data: { number, revision } });
     await tx.appDiscoveryQuestionRevision.create({
       data: {
+        questionSlug: row.slug,
         questionId: row.id,
         revision,
         ...toQuestionData({ ...questionFieldsOf(row), number }),
@@ -457,8 +485,8 @@ async function retiredQuestionIds(
  * a removed `q31` too. See the file header for why a freed id is never reused.
  */
 async function nextQuestionId(tx: Tx): Promise<string> {
-  const live = await tx.appDiscoveryQuestion.findMany({ select: { id: true } });
-  const liveIds = new Set(live.map((row) => row.id));
+  const live = await tx.appDiscoveryQuestion.findMany({ select: { slug: true } });
+  const liveIds = new Set(live.map((row) => row.slug));
   const everUsed = [...liveIds, ...(await retiredQuestionIds(tx, liveIds))];
   const highest = everUsed
     .map((id) => /^q(\d+)$/.exec(id)?.[1])
@@ -473,20 +501,24 @@ export async function createQuestion(
   editorId: string
 ): Promise<{ id: string; number: number }> {
   return executeTransaction(async (tx) => {
-    const set = await tx.appQuestionSet.findUnique({
-      where: { id: DISCOVERY_QUESTION_SET_ID },
-      select: { id: true },
+    const set = await tx.appQuestionSet.findFirst({
+      where: { slug: DISCOVERY_QUESTION_SET_ID },
+      select: { id: true, slug: true },
     });
     if (!set) throw new NotFoundError('The discovery questions have not been seeded yet.');
     const count = await tx.appDiscoveryQuestion.count({ where: { setId: set.id } });
     const id = await nextQuestionId(tx);
     const fields = { ...edit, number: count + 1 };
-    questionFieldsOf({ id, ...fields });
+    questionFieldsOf({ slug: id, ...fields });
     const data = toQuestionData(fields);
-    await tx.appDiscoveryQuestion.create({ data: { id, setId: set.id, ...data, revision: 1 } });
+    const created = await tx.appDiscoveryQuestion.create({
+      data: { slug: id, setSlug: set.slug, setId: set.id, ...data, revision: 1 },
+      select: { id: true },
+    });
     await tx.appDiscoveryQuestionRevision.create({
       data: {
-        questionId: id,
+        questionSlug: id,
+        questionId: created.id,
         revision: 1,
         ...data,
         changedFields: [...QUESTION_SNAPSHOT_FIELDS],
@@ -508,7 +540,7 @@ export async function deleteQuestion(
   editorId: string
 ): Promise<{ removed: QuestionFields; renumbered: number }> {
   return executeTransaction(async (tx) => {
-    const row = await tx.appDiscoveryQuestion.findUnique({ where: { id } });
+    const row = await tx.appDiscoveryQuestion.findFirst({ where: { slug: id } });
     if (!row) throw new NotFoundError(`There is no discovery question "${id}".`);
     if (row.revision !== revisionRead)
       throw revisionMoved(`Question ${row.number}`, row.revision, revisionRead);
@@ -521,7 +553,7 @@ export async function deleteQuestion(
         }
       );
     }
-    await tx.appDiscoveryQuestion.delete({ where: { id } });
+    await tx.appDiscoveryQuestion.delete({ where: { id: row.id } });
     const rest = await tx.appDiscoveryQuestion.findMany({
       where: { setId: row.setId },
       orderBy: { number: 'asc' },
@@ -529,7 +561,7 @@ export async function deleteQuestion(
     const renumbered = await applyNumbers(
       tx,
       rest,
-      new Map(rest.map((q, index) => [q.id, index + 1])),
+      new Map(rest.map((q, index) => [q.slug, index + 1])),
       editorId
     );
     return { removed: questionFieldsOf(row), renumbered };
@@ -542,11 +574,18 @@ export async function reorderQuestions(
   editorId: string
 ): Promise<{ moved: number }> {
   return executeTransaction(async (tx) => {
-    const rows = await tx.appDiscoveryQuestion.findMany({
-      where: { setId: DISCOVERY_QUESTION_SET_ID },
-      orderBy: { number: 'asc' },
+    const set = await tx.appQuestionSet.findFirst({
+      where: { slug: DISCOVERY_QUESTION_SET_ID },
+      select: { id: true },
     });
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    // No set means no questions: every question row belongs to one.
+    const rows = set
+      ? await tx.appDiscoveryQuestion.findMany({
+          where: { setId: set.id },
+          orderBy: { number: 'asc' },
+        })
+      : [];
+    const byId = new Map(rows.map((row) => [row.slug, row]));
     if (
       order.length !== rows.length ||
       new Set(order.map((entry) => entry.id)).size !== rows.length
@@ -631,25 +670,25 @@ export function planQuestionsImport(
     refusals.push(
       'The discovery questions have not been seeded, so there is nothing to import into.'
     );
-  else if (stored.set.id !== seed.set.id) {
+  else if (stored.set.slug !== seed.set.slug) {
     refusals.push(
-      `This file is for the set "${seed.set.id}", and this database holds "${stored.set.id}".`
+      `This file is for the set "${seed.set.slug}", and this database holds "${stored.set.slug}".`
     );
   }
-  if (!stored.moduleIds.has(seed.set.moduleId)) {
+  if (!stored.moduleIds.has(seed.set.moduleSlug)) {
     refusals.push(
-      `The file puts the questions in module "${seed.set.moduleId}", which is not on the journey.`
+      `The file puts the questions in module "${seed.set.moduleSlug}", which is not on the journey.`
     );
   }
   for (const question of seed.questions) {
-    if (stored.retiredIds.has(question.id)) {
+    if (stored.retiredIds.has(question.slug)) {
       refusals.push(
-        `The file adds question "${question.id}", but that id belonged to a question that was removed, and people's answers to it are still filed under it. Give the new question an id the set has never used.`
+        `The file adds question "${question.slug}", but that id belonged to a question that was removed, and people's answers to it are still filed under it. Give the new question an id the set has never used.`
       );
     }
   }
 
-  const { id: _id, ...setIncoming } = seed.set;
+  const { slug: _slug, ...setIncoming } = seed.set;
   const setAfter = setFieldsOf(setIncoming);
   const setChanged = stored.set
     ? changedFieldsOf(setFieldsOf(stored.set), setAfter, SET_FIELDS)
@@ -657,21 +696,21 @@ export function planQuestionsImport(
 
   // Kept ones follow the file's, so the numbering stays 1..n with no gap and
   // no two questions claiming one number.
-  const inFile = new Set(seed.questions.map((question) => question.id));
+  const inFile = new Set(seed.questions.map((question) => question.slug));
   // A weight is an admin setting too. Her file carries none, so a question the
   // file names without one keeps its stored weight rather than being reset.
   const fileWeights = new Map(file.questions.map((question) => [question.id, question.weight]));
-  const kept = removeAbsent ? [] : stored.questions.filter((row) => !inFile.has(row.id));
+  const kept = removeAbsent ? [] : stored.questions.filter((row) => !inFile.has(row.slug));
   const questions = planKeyedImport<Omit<DiscoveryQuestionRow, 'revision'>, QuestionFields>({
     incoming: [
-      ...seed.questions.map((question) => ({ key: question.id, value: question })),
+      ...seed.questions.map((question) => ({ key: question.slug, value: question })),
       ...kept.map((row, index) => ({
-        key: row.id,
+        key: row.slug,
         value: { ...row, number: seed.questions.length + index + 1 },
       })),
     ],
     stored: stored.questions.map((row) => ({
-      key: row.id,
+      key: row.slug,
       fields: questionFieldsOf(row),
       revision: row.revision,
     })),
@@ -679,14 +718,14 @@ export function planQuestionsImport(
     allFields: QUESTION_SNAPSHOT_FIELDS,
     toCreate: (question) => questionFieldsOf(question),
     toUpdate: (before, question) =>
-      questionFieldsOf({ ...question, weight: fileWeights.get(question.id) ?? before.weight }),
+      questionFieldsOf({ ...question, weight: fileWeights.get(question.slug) ?? before.weight }),
     onAbsent: removeAbsent ? () => null : 'keep',
   });
 
   const sections: ImportPlanSection[] = [
     {
       ...toPlanSection('question', 'Questions', questions, 'delete'),
-      kept: kept.map((row) => row.id),
+      kept: kept.map((row) => row.slug),
     },
   ];
   if (setChanged.length > 0 && stored.set) {
@@ -694,7 +733,7 @@ export function planQuestionsImport(
       entity: 'set',
       label: 'Question set',
       creates: [],
-      updates: [{ key: stored.set.id, changedFields: setChanged }],
+      updates: [{ key: stored.set.slug, changedFields: setChanged }],
       removals: [],
       removalKind: 'delete',
       unchanged: [],
@@ -708,7 +747,7 @@ export function planQuestionsImport(
       refusals,
       writesNothing: sectionsWriteNothing(sections),
     },
-    setId: stored.set?.id ?? seed.set.id,
+    setId: stored.set?.slug ?? seed.set.slug,
     setChanged,
     setAfter: stored.set ? setAfter : null,
     questions,
@@ -721,19 +760,22 @@ async function readStored(
     'appQuestionSet' | 'appDiscoveryQuestion' | 'appJourneyModule' | 'slotDefinition' | 'slotValue'
   >
 ): Promise<StoredQuestions> {
-  const [set, questions, modules] = await Promise.all([
-    client.appQuestionSet.findUnique({ where: { id: DISCOVERY_QUESTION_SET_ID } }),
-    client.appDiscoveryQuestion.findMany({
-      where: { setId: DISCOVERY_QUESTION_SET_ID },
-      orderBy: { number: 'asc' },
-    }),
-    client.appJourneyModule.findMany({ select: { id: true } }),
+  const [set, modules] = await Promise.all([
+    client.appQuestionSet.findFirst({ where: { slug: DISCOVERY_QUESTION_SET_ID } }),
+    client.appJourneyModule.findMany({ select: { slug: true } }),
   ]);
+  // No set means no questions: every question row belongs to one.
+  const questions = set
+    ? await client.appDiscoveryQuestion.findMany({
+        where: { setId: set.id },
+        orderBy: { number: 'asc' },
+      })
+    : [];
   return {
     set,
     questions,
-    moduleIds: new Set(modules.map((row) => row.id)),
-    retiredIds: await retiredQuestionIds(client, new Set(questions.map((row) => row.id))),
+    moduleIds: new Set(modules.map((row) => row.slug)),
+    retiredIds: await retiredQuestionIds(client, new Set(questions.map((row) => row.slug))),
   };
 }
 
@@ -762,16 +804,33 @@ export async function applyQuestionsImport(
       if (planned.plan.refusals.length > 0)
         throw importRefused('discovery questions', planned.plan.refusals);
       if (planned.plan.writesNothing) return planned.plan;
+      // Not refused, so the set is stored.
+      const setRowId = stored.set!.id;
+      const storedQuestionId = idsBySlug(stored.questions, 'discovery question');
 
       if (planned.setChanged.length > 0 && planned.setAfter && stored.set) {
         const revision = stored.set.revision + 1;
+        let moduleRowId = stored.set.moduleId;
+        if (planned.setAfter.moduleId !== stored.set.moduleSlug) {
+          // The plan refused a module not on the journey, so this finds it.
+          const target = await tx.appJourneyModule.findFirst({
+            where: { slug: planned.setAfter.moduleId },
+            select: { id: true },
+          });
+          if (!target)
+            throw new ValidationError(
+              `There is no module "${planned.setAfter.moduleId}" on the journey.`
+            );
+          moduleRowId = target.id;
+        }
         await tx.appQuestionSet.update({
-          where: { id: planned.setId },
-          data: { ...planned.setAfter, revision },
+          where: { id: stored.set.id },
+          data: { ...toSetData(planned.setAfter, moduleRowId), revision },
         });
         await tx.appQuestionSetRevision.create({
           data: {
-            setId: planned.setId,
+            setSlug: planned.setId,
+            setId: stored.set.id,
             revision,
             ...setSnapshotOf(planned.setAfter),
             changedFields: planned.setChanged,
@@ -782,37 +841,44 @@ export async function applyQuestionsImport(
       }
 
       for (const change of planned.questions.removals) {
-        await tx.appDiscoveryQuestion.delete({ where: { id: change.key } });
+        await tx.appDiscoveryQuestion.delete({ where: { id: storedQuestionId(change.key) } });
       }
       const moving = planned.questions.updates.filter((change) =>
         change.changedFields.includes('number')
       );
       for (const [index, change] of moving.entries()) {
         await tx.appDiscoveryQuestion.update({
-          where: { id: change.key },
+          where: { id: storedQuestionId(change.key) },
           data: { number: parkingPosition(index) },
         });
       }
+      const created: { id: string; slug: string }[] = [];
       for (const change of planned.questions.creates) {
-        await tx.appDiscoveryQuestion.create({
-          data: {
-            id: change.key,
-            setId: planned.setId,
-            ...toQuestionData(change.after!),
-            revision: 1,
-          },
-        });
+        created.push(
+          await tx.appDiscoveryQuestion.create({
+            data: {
+              slug: change.key,
+              setSlug: planned.setId,
+              setId: setRowId,
+              ...toQuestionData(change.after!),
+              revision: 1,
+            },
+            select: { id: true, slug: true },
+          })
+        );
       }
       for (const change of planned.questions.updates) {
         await tx.appDiscoveryQuestion.update({
-          where: { id: change.key },
+          where: { id: storedQuestionId(change.key) },
           data: { ...toQuestionData(change.after!), revision: change.revision },
         });
       }
+      const questionId = idsBySlug([...stored.questions, ...created], 'discovery question');
       for (const change of [...planned.questions.creates, ...planned.questions.updates]) {
         await tx.appDiscoveryQuestionRevision.create({
           data: {
-            questionId: change.key,
+            questionSlug: change.key,
+            questionId: questionId(change.key),
             revision: change.revision,
             ...toQuestionData(change.after!),
             changedFields: change.changedFields,

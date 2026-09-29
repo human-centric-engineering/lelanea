@@ -81,10 +81,10 @@ export const storedFollowUpSchema = z
 // ============================================================================
 
 export interface QuestionSetRow {
-  id: string;
+  slug: string;
   title: string;
   chartTitle: string;
-  moduleId: string;
+  moduleSlug: string;
   phase: number;
   preamble: unknown;
   pacing: unknown;
@@ -94,7 +94,7 @@ export interface QuestionSetRow {
 }
 
 export interface DiscoveryQuestionRow {
-  id: string;
+  slug: string;
   number: number;
   text: string;
   inputType: string;
@@ -113,10 +113,10 @@ export function toQuestionView(row: DiscoveryQuestionRow): DiscoveryQuestionView
   const inputType = inputTypeSchema.safeParse(row.inputType);
   const followUp = storedFollowUpSchema.safeParse(row.conditionalFollowUp ?? null);
   if (!inputType.success || !followUp.success) {
-    throw new Error(`Discovery question "${row.id}" failed validation on read`);
+    throw new Error(`Discovery question "${row.slug}" failed validation on read`);
   }
   return {
-    id: row.id,
+    id: row.slug,
     number: row.number,
     text: row.text,
     inputType: inputType.data,
@@ -140,13 +140,13 @@ export function toQuestionSet(
   const preamble = storedPreambleSchema.safeParse(set.preamble);
   const pacing = storedPacingSchema.safeParse(set.pacing);
   if (!preamble.success || !pacing.success) {
-    throw new Error(`Question set "${set.id}" failed validation on read`);
+    throw new Error(`Question set "${set.slug}" failed validation on read`);
   }
   const questions = [...questionRows].sort((a, b) => a.number - b.number).map(toQuestionView);
   questions.forEach((question, index) => {
     if (question.number !== index + 1) {
       throw new Error(
-        `Question set "${set.id}": question ${question.id} is numbered ${question.number} ` +
+        `Question set "${set.slug}": question ${question.id} is numbered ${question.number} ` +
           `but sits at position ${index + 1}`
       );
     }
@@ -154,10 +154,10 @@ export function toQuestionSet(
 
   return {
     collection: {
-      id: set.id,
+      id: set.slug,
       title: set.title,
       chartTitle: set.chartTitle,
-      module: set.moduleId,
+      module: set.moduleSlug,
       phase: set.phase,
       version: set.version,
       locale: set.locale,

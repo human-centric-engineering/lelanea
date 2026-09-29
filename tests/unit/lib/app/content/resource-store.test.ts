@@ -16,14 +16,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({
   collectionFindFirst: vi.fn(),
   resourceFindMany: vi.fn(),
-  resourceFindUnique: vi.fn(),
+  resourceFindFirst: vi.fn(),
   wordsFindMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appResourceCollection: { findFirst: db.collectionFindFirst },
-    appResource: { findMany: db.resourceFindMany, findUnique: db.resourceFindUnique },
+    appResource: { findMany: db.resourceFindMany, findFirst: db.resourceFindFirst },
     appResourceWords: { findMany: db.wordsFindMany },
   },
 }));
@@ -57,8 +57,9 @@ beforeEach(() => {
   ];
   db.collectionFindFirst.mockResolvedValue(rows.collection);
   db.resourceFindMany.mockImplementation(async () => resources);
-  db.resourceFindUnique.mockImplementation(
-    async ({ where }: { where: { id: string } }) => resources.find((r) => r.id === where.id) ?? null
+  db.resourceFindFirst.mockImplementation(
+    async ({ where }: { where: { slug: string } }) =>
+      resources.find((r) => r.slug === where.slug) ?? null
   );
   db.wordsFindMany.mockResolvedValue(rows.words);
 });

@@ -127,9 +127,16 @@ what seeds them.
 
 | Table                                | Holds                                                                                    |
 | ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `app_document_collection`            | one row: the collection's id, title, version and locale                                  |
+| `app_document_collection`            | one row: the collection's name, title, version and locale                                |
 | `app_foundational_document`          | each document as served: metadata, `blocks` (JSONB), `version`, `locale`, `revision`     |
 | `app_foundational_document_revision` | a full snapshot per revision, `origin: seed \| admin`, `editorId` (`ON DELETE SET NULL`) |
+
+**A row's `id` is generated; its authored id is its `slug`** (t-113), unique per
+org, so two orgs can each hold a `the_mission`. Every content table works this
+way, and a child keeps its parent's name beside the generated link
+(`collectionSlug` beside `collectionId`). Only the Prisma layer sees it: the
+services, the API and the file still say `id`. See the Tenancy section of
+[`database-changes.md`](./database-changes.md#tenancy-every-table-belongs-to-an-org).
 
 **One service writes and reads them:** `lib/app/content/document-store.ts`. Pages,
 the gate, both emails, the waitlist's locale fallback and the API all call it.
@@ -281,7 +288,8 @@ module names are derived from the rows at startup.
 **Videos, audio and articles share `app_resource`**, because they share one id
 namespace (the suggestion tool and the drawer's pin resolve by id). A video or an audio
 piece has a duration and a link; an article has a reading time and exactly one of a link and
-a document (`documentId` is a foreign key to `app_foundational_document`). Every
+a document (the row's `documentSlug` names it, and `documentId` is the foreign key
+to that document's generated id in `app_foundational_document`). Every
 row is run through the same `videoSchema` / `articleSchema` the file was, on
 write and on read. The resources seed also refuses a key that names no module
 in the database, so it runs after the journey's.

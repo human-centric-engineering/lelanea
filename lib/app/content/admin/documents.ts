@@ -60,6 +60,7 @@ import {
   type FoundationalDocumentDetail,
 } from '@/lib/app/content/document-view';
 import { DOCUMENT_SNAPSHOT_FIELDS, syncKnowledgeMirror } from '@/lib/app/content/document-store';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 import {
   foundationalFileFromRows,
   foundationalSeedFromFile,
@@ -156,8 +157,8 @@ function toAdminRow(row: AppFoundationalDocument): DocumentAdminRow {
   return {
     ...toDocumentDetail(row),
     position: row.position,
-    readers: DOCUMENT_READERS[row.id] ?? [],
-    lockedSections: sectionReadersOf(row.id),
+    readers: DOCUMENT_READERS[row.slug] ?? [],
+    lockedSections: sectionReadersOf(row.slug),
   };
 }
 
@@ -214,7 +215,7 @@ export async function getDocumentsAdminView(): Promise<DocumentsAdminView> {
   return {
     seeded: collection !== null,
     collection: collection && {
-      id: collection.id,
+      id: collection.slug,
       title: collection.title,
       version: collection.version,
       locale: collection.locale,
@@ -243,14 +244,15 @@ function snapshotOf(row: AppFoundationalDocumentRevision): DocumentFields {
 
 /** Every revision of one document, newest first. */
 export async function listDocumentHistory(id: string): Promise<RevisionEntry<DocumentFields>[]> {
-  const [document, revisions] = await Promise.all([
-    prisma.appFoundationalDocument.findUnique({ where: { id }, select: { id: true } }),
-    prisma.appFoundationalDocumentRevision.findMany({
-      where: { documentId: id },
-      orderBy: { revision: 'desc' },
-    }),
-  ]);
+  const document = await prisma.appFoundationalDocument.findFirst({
+    where: { slug: id },
+    select: { id: true },
+  });
   if (!document) throw notFound(id);
+  const revisions = await prisma.appFoundationalDocumentRevision.findMany({
+    where: { documentId: document.id },
+    orderBy: { revision: 'desc' },
+  });
   return toHistory(revisions, snapshotOf);
 }
 
@@ -268,7 +270,7 @@ async function writeDocument(
   editorId: string
 ): Promise<DocumentWriteResult> {
   const result = await executeTransaction(async (tx) => {
-    const row = await tx.appFoundationalDocument.findUnique({ where: { id } });
+    const row = await tx.appFoundationalDocument.findFirst({ where: { slug: id } });
     if (!row) throw notFound(id);
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
@@ -296,18 +298,19 @@ async function writeDocument(
 
     const revision = row.revision + 1;
     const { count } = await tx.appFoundationalDocument.updateMany({
-      where: { id, revision: revisionRead },
+      where: { id: row.id, revision: revisionRead },
       data: { ...next, revision },
     });
     if (count === 0)
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appFoundationalDocument.findUnique({ where: { id }, select: { revision: true } })
+        tx.appFoundationalDocument.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appFoundationalDocumentRevision.create({
       data: {
-        documentId: id,
+        documentSlug: id,
+        documentId: row.id,
         revision,
         ...next,
         changedFields: changed,
@@ -315,7 +318,7 @@ async function writeDocument(
         editorId,
       },
     });
-    const saved = await tx.appFoundationalDocument.findUniqueOrThrow({ where: { id } });
+    const saved = await tx.appFoundationalDocument.findFirstOrThrow({ where: { id: row.id } });
     return {
       document: toAdminRow(saved),
       changed,
@@ -374,9 +377,15 @@ export async function restoreDocumentRevision(
   revisionRead: number,
   editorId: string
 ): Promise<DocumentWriteResult> {
-  const past = await prisma.appFoundationalDocumentRevision.findUnique({
-    where: { documentId_revision: { documentId: id, revision } },
+  const document = await prisma.appFoundationalDocument.findFirst({
+    where: { slug: id },
+    select: { id: true },
   });
+  const past = document
+    ? await prisma.appFoundationalDocumentRevision.findUnique({
+        where: { documentId_revision: { documentId: document.id, revision } },
+      })
+    : null;
   if (!past) throw new NotFoundError(`"${id}" has no revision ${revision}.`);
   const snapshot = snapshotOf(past);
 
@@ -416,18 +425,18 @@ export async function deleteDocument(
   }
 
   await executeTransaction(async (tx) => {
-    const row = await tx.appFoundationalDocument.findUnique({ where: { id } });
+    const row = await tx.appFoundationalDocument.findFirst({ where: { slug: id } });
     if (!row) throw notFound(id);
     if (row.revision !== revisionRead)
       throw revisionMoved(`"${row.title}"`, row.revision, revisionRead);
     const opening = await tx.appResource.findMany({
-      where: { documentId: id },
-      select: { id: true },
+      where: { documentId: row.id },
+      select: { slug: true },
     });
     if (opening.length > 0) {
       throw guardedRemoval(
         `"${id}"`,
-        opening.map((resource) => `the resource "${resource.id}"`),
+        opening.map((resource) => `the resource "${resource.slug}"`),
         'Point those articles elsewhere first.'
       );
     }
@@ -442,10 +451,10 @@ export async function deleteDocument(
         'Cite another document in those words first.'
       );
     }
-    await tx.appFoundationalDocument.delete({ where: { id } });
+    await tx.appFoundationalDocument.delete({ where: { id: row.id } });
     // Keep reading positions contiguous: an export numbers from its list.
     const rest = await tx.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } });
-    await applyPositions(tx, rest, new Map(rest.map((doc, index) => [doc.id, index])), editorId);
+    await applyPositions(tx, rest, new Map(rest.map((doc, index) => [doc.slug, index])), editorId);
   });
   await syncKnowledgeMirror();
 }
@@ -460,7 +469,7 @@ async function applyPositions(
   positions: ReadonlyMap<string, number>,
   editorId: string
 ): Promise<number> {
-  const moving = rows.filter((row) => positions.get(row.id) !== row.position);
+  const moving = rows.filter((row) => positions.get(row.slug) !== row.position);
   for (const [index, row] of moving.entries()) {
     await tx.appFoundationalDocument.update({
       where: { id: row.id },
@@ -468,7 +477,7 @@ async function applyPositions(
     });
   }
   for (const row of moving) {
-    const position = positions.get(row.id)!;
+    const position = positions.get(row.slug)!;
     const revision = row.revision + 1;
     await tx.appFoundationalDocument.update({
       where: { id: row.id },
@@ -476,6 +485,7 @@ async function applyPositions(
     });
     await tx.appFoundationalDocumentRevision.create({
       data: {
+        documentSlug: row.slug,
         documentId: row.id,
         revision,
         ...fieldsOf(row),
@@ -500,7 +510,7 @@ export async function reorderDocuments(
 ): Promise<{ moved: number }> {
   return executeTransaction(async (tx) => {
     const rows = await tx.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } });
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    const byId = new Map(rows.map((row) => [row.slug, row]));
     if (
       order.length !== rows.length ||
       new Set(order.map((entry) => entry.id)).size !== rows.length
@@ -562,6 +572,7 @@ export async function updateDocumentCollection(
         });
         await tx.appFoundationalDocumentRevision.create({
           data: {
+            documentSlug: row.slug,
             documentId: row.id,
             revision,
             ...fieldsOf(row),
@@ -627,7 +638,14 @@ const WORDS_DOCUMENT_SOURCE = 'foundational_documents';
 const KEEP_INSTEAD = ' Or import without removing what the file leaves out, and it is kept.';
 
 interface StoredDocuments {
-  collection: { id: string; title: string; version: string; locale: string } | null;
+  /** `id` is the collection's authored name; `rowId` its generated id (t-113). */
+  collection: {
+    id: string;
+    rowId: string;
+    title: string;
+    version: string;
+    locale: string;
+  } | null;
   rows: readonly AppFoundationalDocument[];
   /** Every resource that opens a document, retired ones included: each holds its document. */
   openedBy: readonly { id: string; documentId: string }[];
@@ -685,17 +703,17 @@ export function planDocumentsImport(
   // Kept ones follow the file's, so the order stays contiguous and no two
   // documents are left claiming one place.
   const inFile = new Set(seed.documents.map((document) => document.id));
-  const kept = removeAbsent ? [] : stored.rows.filter((row) => !inFile.has(row.id));
+  const kept = removeAbsent ? [] : stored.rows.filter((row) => !inFile.has(row.slug));
   const documents = planKeyedImport<DocumentSeed, DocumentFields>({
     incoming: [
       ...seed.documents.map((document) => ({ key: document.id, value: document })),
       ...kept.map((row, index) => ({
-        key: row.id,
-        value: { id: row.id, ...fieldsOf(row), position: seed.documents.length + index },
+        key: row.slug,
+        value: { id: row.slug, ...fieldsOf(row), position: seed.documents.length + index },
       })),
     ],
     stored: stored.rows.map((row) => ({
-      key: row.id,
+      key: row.slug,
       fields: fieldsOf(row),
       revision: row.revision,
     })),
@@ -759,7 +777,7 @@ export function planDocumentsImport(
   const sections: ImportPlanSection[] = [
     {
       ...toPlanSection('document', 'Documents', documents, 'delete'),
-      kept: kept.map((row) => row.id),
+      kept: kept.map((row) => row.slug),
     },
   ];
   const writesCollection = collectionChanged.length > 0;
@@ -798,7 +816,7 @@ async function readStored(
   const [collection, rows, resources, words] = await Promise.all([
     client.appDocumentCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } }),
-    client.appResource.findMany({ select: { id: true, documentId: true } }),
+    client.appResource.findMany({ select: { slug: true, documentId: true } }),
     client.appResourceWords.findMany({
       where: { sourceCollection: WORDS_DOCUMENT_SOURCE },
       select: { key: true, sourceId: true },
@@ -806,13 +824,19 @@ async function readStored(
   ]);
   return {
     collection: collection && {
-      id: collection.id,
+      id: collection.slug,
+      rowId: collection.id,
       title: collection.title,
       version: collection.version,
       locale: collection.locale,
     },
     rows,
-    openedBy: resources.flatMap(({ id, documentId }) => (documentId ? [{ id, documentId }] : [])),
+    // By the foreign key, as the delete guard and the RESTRICT constraint read
+    // it, then named: the plan compares names.
+    openedBy: resources.flatMap(({ slug, documentId }) => {
+      const opened = rows.find((row) => row.id === documentId);
+      return opened ? [{ id: slug, documentId: opened.slug }] : [];
+    }),
     citedBy: words.map(({ key, sourceId }) => ({ key, documentId: sourceId })),
   };
 }
@@ -849,12 +873,17 @@ export async function applyDocumentsImport(
       if (planned.plan.writesNothing) return planned.plan;
 
       if (planned.collectionChanged.length > 0 && planned.collection) {
-        const { id, ...fields } = planned.collection;
-        await tx.appDocumentCollection.update({ where: { id }, data: fields });
+        // The plan refuses a file for another collection, so this is the stored one.
+        const { id: _slug, ...fields } = planned.collection;
+        await tx.appDocumentCollection.update({
+          where: { id: stored.collection!.rowId },
+          data: fields,
+        });
       }
 
+      const storedId = idsBySlug(stored.rows, 'document');
       for (const change of planned.documents.removals) {
-        await tx.appFoundationalDocument.delete({ where: { id: change.key } });
+        await tx.appFoundationalDocument.delete({ where: { id: storedId(change.key) } });
       }
 
       // Park every document whose position changes before any lands, so a
@@ -864,29 +893,36 @@ export async function applyDocumentsImport(
       );
       for (const [index, change] of moving.entries()) {
         await tx.appFoundationalDocument.update({
-          where: { id: change.key },
+          where: { id: storedId(change.key) },
           data: { position: parkingPosition(index) },
         });
       }
 
-      const collectionId = stored.collection!.id;
+      const collectionSlug = stored.collection!.id;
+      const collectionId = stored.collection!.rowId;
+      const created: { id: string; slug: string }[] = [];
       for (const change of planned.documents.creates) {
-        await tx.appFoundationalDocument.create({
-          data: { id: change.key, collectionId, ...change.after!, revision: 1 },
-        });
+        created.push(
+          await tx.appFoundationalDocument.create({
+            data: { slug: change.key, collectionSlug, collectionId, ...change.after!, revision: 1 },
+            select: { id: true, slug: true },
+          })
+        );
       }
       for (const change of planned.documents.updates) {
         await tx.appFoundationalDocument.update({
-          where: { id: change.key },
+          where: { id: storedId(change.key) },
           data: { ...change.after!, revision: change.revision },
         });
       }
 
       const written = [...planned.documents.creates, ...planned.documents.updates];
+      const writtenId = idsBySlug([...stored.rows, ...created], 'document');
       for (const change of written) {
         await tx.appFoundationalDocumentRevision.create({
           data: {
-            documentId: change.key,
+            documentSlug: change.key,
+            documentId: writtenId(change.key),
             revision: change.revision,
             ...change.after!,
             changedFields: change.changedFields,

@@ -86,22 +86,35 @@ the same, or Sunrise's `model-classification`, `policy-coverage` and
 migrations dated 2026-10-03 are the worked example.
 
 - **You rarely write `orgId` yourself.** The tenancy client stamps it on
-  every create and scopes every read to the current org. What changes is how
-  you look a row up by a per-org key: a read is `findFirst({ where: { slug } })`,
-  and a write keyed on it uses `orgId_slug: { orgId: requireOrgId(), slug }`.
-  Scripts run outside a request, so they enter the install org with
-  `runAsOrg(INSTALL_ORG_ID, main, { source: 'job' })`.
-- **Some tables keep install-wide keys, on purpose (owner ruling,
-  29 Sept 2026).** Fourteen are keyed by an authored name: the document,
-  journey, resource and question-set collections, foundational documents,
-  tiers, modules, discovery questions, resources, words keys, the voice
-  overlay set and its situations, the golden set, and crisis region codes.
-  `app_user_budget` is keyed by user id, so a person in two orgs would share
-  one limit. At `TENANCY_MODE=single` none of that matters. **All fifteen
-  must become per-org before anyone enables `multi`.** (`app_knowledge_designation`
-  is keyed by a knowledge-document id, which is already per org, so it needs
-  nothing.) The three tables whose key was a `slug` (`app_agent_settings`,
-  `app_crisis_copy`, `app_slot_definition`) already are.
+  every create. Reads are **not** filtered by org at `TENANCY_MODE=single`:
+  there is one org, and a query sees every row. At `multi` the `org_isolation`
+  policies scope each query to the current org. So code looks a row up by its
+  per-org name, and the database decides whose: a read is
+  `findFirst({ where: { slug } })`, and a write keyed on the name uses
+  `orgId_slug: { orgId: requireOrgId(), slug }`, or `where: { id: row.id }`
+  when you already hold the row. Scripts run outside a request, so they enter
+  the install org with `runAsOrg(INSTALL_ORG_ID, main, { source: 'job' })`.
+- **Authored names are per org, beside a generated id.** Every table keyed by
+  a name follows `app_slot_definition` (t-112): a generated `id` primary key,
+  the name in `slug` (resource words: `key`) with `@@unique([orgId, slug])`,
+  and children pointing at the parent's generated id while keeping its name
+  in a plain `…Slug` column (`journeySlug` beside `journeyId`). The ten content
+  tables moved in t-113, in `20261004100000_app_content_per_org_keys`. The
+  API, the content files and the `changedFields` stored in revisions still
+  say `id`, `documentId`, `moduleId`: only the Prisma layer uses the new names.
+  - **Write both columns of a child.** A child needs its parent's generated
+    id, so a write that creates both reads the parents back
+    (`createManyAndReturn`) and looks each id up with `idsBySlug`
+    (`lib/app/content/row-ids.ts`), inside one interactive transaction.
+  - **Prove it at `multi`.** At `single` nothing shows two orgs apart, so
+    `npm run smoke:app-per-org-content` runs against a throwaway database with
+    the policies enabled (its docblock has the steps).
+- **Five tables keep install-wide keys until t-114:** the voice overlay set
+  and its situations, the golden set, crisis region codes, and
+  `app_user_budget`, keyed by user id, so a person in two orgs would share one
+  limit. At `single` none of that matters; **they must become per-org before
+  anyone enables `multi`.** (`app_knowledge_designation` is keyed by a
+  knowledge-document id, which is already per org, so it needs nothing.)
 
 ### A generated id must be the shape its readers expect
 

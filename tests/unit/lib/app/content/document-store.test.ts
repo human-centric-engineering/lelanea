@@ -15,16 +15,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { collectionFindFirst, documentFindMany, documentFindUnique } = vi.hoisted(() => ({
+const { collectionFindFirst, documentFindMany, documentFindFirst } = vi.hoisted(() => ({
   collectionFindFirst: vi.fn(),
   documentFindMany: vi.fn(),
-  documentFindUnique: vi.fn(),
+  documentFindFirst: vi.fn(),
 }));
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appDocumentCollection: { findFirst: collectionFindFirst },
-    appFoundationalDocument: { findMany: documentFindMany, findUnique: documentFindUnique },
+    appFoundationalDocument: { findMany: documentFindMany, findFirst: documentFindFirst },
   },
 }));
 
@@ -37,14 +37,14 @@ import {
 import { seededCollection, seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
 
 const rows = seededDocumentRows();
-const byId = (id: string) => rows.find((row) => row.id === id) ?? null;
+const bySlug = (slug: string) => rows.find((row) => row.slug === slug) ?? null;
 
 beforeEach(() => {
   vi.clearAllMocks();
   collectionFindFirst.mockResolvedValue(seededCollection());
   documentFindMany.mockResolvedValue(rows);
-  documentFindUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
-    byId(where.id)
+  documentFindFirst.mockImplementation(async ({ where }: { where: { slug: string } }) =>
+    bySlug(where.slug)
   );
 });
 
@@ -127,8 +127,8 @@ describe('getFoundationalDocument', () => {
   it('serves what the ROW says, not what the file says', async () => {
     // The database is the source. A row that differs from the file is served as
     // the row.
-    documentFindUnique.mockResolvedValueOnce({
-      ...byId('the_mission')!,
+    documentFindFirst.mockResolvedValueOnce({
+      ...bySlug('the_mission')!,
       title: 'Edited title',
       blocks: [{ type: 'paragraph', text: 'Edited words.', section: 'opening' }],
       revision: 4,
@@ -149,8 +149,8 @@ describe('getFoundationalDocument', () => {
   });
 
   it('throws on a row whose blocks fail validation, rather than rendering them', async () => {
-    documentFindUnique.mockResolvedValueOnce({
-      ...byId('disclaimer')!,
+    documentFindFirst.mockResolvedValueOnce({
+      ...bySlug('disclaimer')!,
       blocks: [{ type: 'paragraph', text: 'No section field' }],
     });
 
@@ -158,14 +158,14 @@ describe('getFoundationalDocument', () => {
   });
 
   it('throws on a row whose category is outside the vocabulary', async () => {
-    documentFindUnique.mockResolvedValueOnce({ ...byId('disclaimer')!, category: 'marketing' });
+    documentFindFirst.mockResolvedValueOnce({ ...bySlug('disclaimer')!, category: 'marketing' });
 
     await expect(getFoundationalDocument('disclaimer')).rejects.toThrow(/category "marketing"/);
   });
 
   it('throws on a row whose section keys are split, which would splice two passages', async () => {
-    documentFindUnique.mockResolvedValueOnce({
-      ...byId('disclaimer')!,
+    documentFindFirst.mockResolvedValueOnce({
+      ...bySlug('disclaimer')!,
       blocks: [
         { type: 'paragraph', text: 'One.', section: 'crisis' },
         { type: 'paragraph', text: 'Two.', section: null },

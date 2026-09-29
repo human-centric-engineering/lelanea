@@ -67,7 +67,7 @@ const store = fakeDocumentStore();
 
 /** A document as the seed stores it — read synchronously for building expectations. */
 function seeded(id: string) {
-  const row = seededDocumentRows().find((candidate) => candidate.id === id);
+  const row = seededDocumentRows().find((candidate) => candidate.slug === id);
   if (!row) throw new Error(`no seeded document ${id}`);
   return row;
 }

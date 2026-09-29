@@ -42,7 +42,7 @@ import {
 } from '@/tests/helpers/app/foundational-documents';
 
 const store = fakeDocumentStore();
-const DOCUMENT_IDS = seededDocumentRows().map((row) => row.id);
+const DOCUMENT_IDS = seededDocumentRows().map((row) => row.slug);
 
 beforeEach(() => store.reset());
 

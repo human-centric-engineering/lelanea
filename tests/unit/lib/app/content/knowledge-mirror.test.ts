@@ -273,13 +273,13 @@ describe('what is mirrored', () => {
   it('mirrors every non-legal document and neither legal one', () => {
     const rows = seededDocumentRows();
     // The population is the real seed, and it holds both kinds.
-    expect(rows.filter((row) => row.category === 'legal').map((row) => row.id)).toEqual([
+    expect(rows.filter((row) => row.category === 'legal').map((row) => row.slug)).toEqual([
       'disclaimer',
       'terms_of_use',
     ]);
 
     const mirrored = rows.filter((row) => isMirrored({ category: row.category as 'legal' }));
-    expect(mirrored.map((row) => row.id)).toEqual(MIRRORED_IDS);
+    expect(mirrored.map((row) => row.slug)).toEqual(MIRRORED_IDS);
   });
 
   it('renders the title, the subtitle and every block, without merge fields', () => {
@@ -300,7 +300,7 @@ describe('what is mirrored', () => {
   });
 
   it('leaves no merge field in any mirrored document of the real seed', () => {
-    const initiation = seededDocumentRows().find((row) => row.id === 'the_initiation');
+    const initiation = seededDocumentRows().find((row) => row.slug === 'the_initiation');
     // The population carries the field, so its absence below is not free.
     expect(JSON.stringify(initiation?.blocks)).toContain('{{first_name}}');
 
@@ -323,7 +323,7 @@ describe('reconcileKnowledgeMirror', () => {
 
     // Remove the row; four others remain, so this is a removal and not an
     // unseeded database.
-    store.foundational = store.foundational.filter((row) => row.id !== 'the_mission');
+    store.foundational = store.foundational.filter((row) => row.slug !== 'the_mission');
     const second = await reconcileKnowledgeMirror();
 
     expect(second.removed).toEqual([foundationalSourceKey('the_mission')]);
@@ -378,7 +378,7 @@ describe('reconcileKnowledgeMirror', () => {
     store.documentTags.push({ documentId: before.documentId, tagId: both.id });
 
     // And her words change.
-    const mission = store.foundational.find((row) => row.id === 'the_mission')!;
+    const mission = store.foundational.find((row) => row.slug === 'the_mission')!;
     mission.blocks = [{ type: 'paragraph', text: 'A newly written sentence.', section: null }];
 
     const result = await reconcileKnowledgeMirror();
@@ -485,7 +485,7 @@ describe('reconcileKnowledgeMirror', () => {
 
   it('refuses to adopt an admin upload that holds the same text', async () => {
     // An admin uploaded exactly the mirror's text. The platform dedups to it.
-    const mission = store.foundational.find((row) => row.id === 'the_mission')!;
+    const mission = store.foundational.find((row) => row.slug === 'the_mission')!;
     const text = renderMirrorText(mission as Parameters<typeof renderMirrorText>[0]);
     store.documents.push({
       id: 'admin-doc',
@@ -510,7 +510,7 @@ describe('reconcileKnowledgeMirror', () => {
   });
 
   it('refuses to adopt an admin upload with the same text that nobody designated', async () => {
-    const mission = store.foundational.find((row) => row.id === 'the_mission')!;
+    const mission = store.foundational.find((row) => row.slug === 'the_mission')!;
     const text = renderMirrorText(mission as Parameters<typeof renderMirrorText>[0]);
     store.documents.push({
       id: 'admin-doc',

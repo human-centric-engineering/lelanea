@@ -108,15 +108,20 @@ export function toDiscoverySlotDefinition(
  * module then declares no slots. A failed read throws.
  */
 export async function loadDiscoveryModuleSlots(): Promise<DiscoveryModuleSlots | null> {
-  const set = await prisma.appQuestionSet.findUnique({
-    where: { id: DISCOVERY_QUESTION_SET_ID },
+  const set = await prisma.appQuestionSet.findFirst({
+    where: { slug: DISCOVERY_QUESTION_SET_ID },
     select: {
-      moduleId: true,
-      questions: { select: { id: true, text: true }, orderBy: { number: 'asc' } },
+      moduleSlug: true,
+      questions: { select: { slug: true, text: true }, orderBy: { number: 'asc' } },
     },
   });
   if (!set) return null;
-  return { moduleId: set.moduleId, slotDefinitions: set.questions.map(toDiscoverySlotDefinition) };
+  return {
+    moduleId: set.moduleSlug,
+    slotDefinitions: set.questions.map(({ slug, text }) =>
+      toDiscoverySlotDefinition({ id: slug, text })
+    ),
+  };
 }
 
 /**

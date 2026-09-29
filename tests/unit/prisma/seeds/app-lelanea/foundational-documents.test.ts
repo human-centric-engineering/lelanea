@@ -34,7 +34,7 @@ import { DOCUMENT_SNAPSHOT_FIELDS } from '@/lib/app/content/document-store';
 import { readFoundationalDocumentsFile } from '@/lib/app/content/seed-input/foundational-seed';
 import type { StoredDocumentBlock } from '@/lib/app/content/schemas';
 
-type Row = Record<string, unknown> & { id?: string };
+type Row = Record<string, unknown> & { id?: string; slug?: string };
 
 /** Three tables, held in memory, with the calls the service makes. */
 function inMemoryDatabase() {
@@ -43,19 +43,25 @@ function inMemoryDatabase() {
     document: [] as Row[],
     revision: [] as Row[],
   };
+  // t-113: every row gets a generated id, as the database would; the authored
+  // name is its `slug`.
+  let sequence = 0;
+  const generated = (row: Row): Row => ({ id: `gen-${++sequence}`, ...structuredClone(row) });
   const client = {
     appDocumentCollection: {
       findFirst: vi.fn(async () => tables.collection[0] ?? null),
       create: vi.fn(async ({ data }: { data: Row }) => {
-        tables.collection.push({ ...data });
-        return data;
+        const row = generated(data);
+        tables.collection.push(row);
+        return { id: row.id };
       }),
     },
     appFoundationalDocument: {
       count: vi.fn(async () => tables.document.length),
-      createMany: vi.fn(async ({ data }: { data: Row[] }) => {
-        tables.document.push(...data.map((row) => structuredClone(row)));
-        return { count: data.length };
+      createManyAndReturn: vi.fn(async ({ data }: { data: Row[] }) => {
+        const rows = data.map(generated);
+        tables.document.push(...rows);
+        return rows.map(({ id, slug }) => ({ id, slug }));
       }),
     },
     appFoundationalDocumentRevision: {
@@ -64,8 +70,8 @@ function inMemoryDatabase() {
         return { count: data.length };
       }),
     },
-    // Array form, as the service uses it: every operation already started.
-    $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+    // Interactive form, as the service uses it: the callback gets the client.
+    $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(client)),
   };
   return { tables, client: client as unknown as PrismaClient, raw: client };
 }
@@ -90,9 +96,16 @@ describe('015-foundational-documents', () => {
 
     const file = readFoundationalDocumentsFile();
     expect(db.tables.collection).toEqual([
-      expect.objectContaining({ id: file.collection.id, version: '1.1', locale: 'en-US' }),
+      expect.objectContaining({ slug: file.collection.id, version: '1.1', locale: 'en-US' }),
     ]);
-    expect(db.tables.document.map((row) => row.id)).toEqual(file.collection.suggestedOrder);
+    expect(db.tables.document.map((row) => row.slug)).toEqual(file.collection.suggestedOrder);
+    // Each document points at the collection's generated id, and keeps its name.
+    for (const row of db.tables.document) {
+      expect(row).toMatchObject({
+        collectionId: db.tables.collection[0].id,
+        collectionSlug: file.collection.id,
+      });
+    }
     expect(db.tables.document.map((row) => row.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 
@@ -109,9 +122,11 @@ describe('015-foundational-documents', () => {
       });
     }
     // A full snapshot, not a pointer: the revision holds the same blocks.
-    const terms = db.tables.document.find((row) => row.id === 'terms_of_use');
-    const termsV1 = db.tables.revision.find((row) => row.documentId === 'terms_of_use');
+    const terms = db.tables.document.find((row) => row.slug === 'terms_of_use');
+    const termsV1 = db.tables.revision.find((row) => row.documentSlug === 'terms_of_use');
     expect(termsV1?.blocks).toEqual(terms?.blocks);
+    // And it points at its document's generated id, not its name.
+    expect(termsV1?.documentId).toBe(terms?.id);
   });
 
   it('writes the three tables in one transaction', async () => {
@@ -131,11 +146,11 @@ describe('015-foundational-documents', () => {
 
     const file = readFoundationalDocumentsFile();
     for (const authored of file.documents) {
-      const row = db.tables.document.find((candidate) => candidate.id === authored.id);
+      const row = db.tables.document.find((candidate) => candidate.slug === authored.id);
       const stored = row?.blocks as StoredDocumentBlock[];
       expect(stored.map(({ section: _section, ...block }) => block)).toEqual(authored.blocks);
     }
-    const disclaimer = db.tables.document.find((row) => row.id === 'disclaimer');
+    const disclaimer = db.tables.document.find((row) => row.slug === 'disclaimer');
     const keys = new Set((disclaimer?.blocks as StoredDocumentBlock[]).map((b) => b.section));
     expect(keys).toEqual(
       new Set([
@@ -155,7 +170,7 @@ describe('015-foundational-documents', () => {
     await runSeed();
 
     // An admin edit, as t-91 will make it: new words, a new revision.
-    const terms = db.tables.document.find((row) => row.id === 'terms_of_use')!;
+    const terms = db.tables.document.find((row) => row.slug === 'terms_of_use')!;
     const edited: StoredDocumentBlock[] = [
       { type: 'paragraph', text: 'Edited by an admin.', section: null },
     ];
@@ -164,7 +179,7 @@ describe('015-foundational-documents', () => {
 
     await runSeed();
 
-    const after = db.tables.document.find((row) => row.id === 'terms_of_use');
+    const after = db.tables.document.find((row) => row.slug === 'terms_of_use');
     expect(after?.blocks).toEqual(edited);
     expect(after?.revision).toBe(2);
     // And nothing was added: still one collection, seven documents, seven revisions.

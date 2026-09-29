@@ -43,6 +43,7 @@ import {
   type JourneyStructure,
 } from '@/lib/app/content/journey-view';
 import type { JourneySeed } from '@/lib/app/content/journey-view';
+import { idsBySlug } from '@/lib/app/content/row-ids';
 
 const NOT_SEEDED = ['No journey in the database', '016-journey-structure.ts'] as const;
 
@@ -58,15 +59,15 @@ const NOT_SEEDED = ['No journey in the database', '016-journey-structure.ts'] as
 export async function getJourneyStructure(): Promise<JourneyStructure> {
   const [journey, tiers, modules] = await Promise.all([
     defaultClient.appJourney.findFirst({
-      select: { id: true, title: true, subtitle: true, version: true, locale: true },
+      select: { slug: true, title: true, subtitle: true, version: true, locale: true },
       orderBy: { createdAt: 'asc' },
     }),
     defaultClient.appJourneyTier.findMany({
-      select: { id: true, label: true, intent: true, revision: true },
+      select: { slug: true, label: true, intent: true, revision: true },
     }),
     defaultClient.appJourneyModule.findMany({
       select: {
-        id: true,
+        slug: true,
         displayNumber: true,
         title: true,
         subtitle: true,
@@ -120,7 +121,7 @@ export async function seedJourneyStructure(
   seed: JourneySeed,
   client: TenancyClient = defaultClient
 ): Promise<SeedJourneyResult> {
-  const existing = await client.appJourney.findFirst({ select: { id: true } });
+  const existing = await client.appJourney.findFirst({ select: { slug: true } });
   if (existing) {
     const [tiers, modules] = await Promise.all([
       client.appJourneyTier.count(),
@@ -140,45 +141,60 @@ export async function seedJourneyStructure(
   }));
   const provenance = { origin: 'seed' as const, editorId: null, changedAt: now };
 
-  await client.$transaction([
-    client.appJourney.create({ data: { ...seed.journey, createdAt: now, updatedAt: now } }),
-    client.appJourneyTier.createMany({
-      data: seed.tiers.map((tier) => ({
-        ...tier,
-        journeyId: seed.journey.id,
-        revision: 1,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    }),
-    client.appJourneyModule.createMany({
-      data: modules.map((entry) => ({
-        ...entry,
-        journeyId: seed.journey.id,
-        revision: 1,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    }),
-    client.appJourneyTierRevision.createMany({
-      data: seed.tiers.map(({ id, ...text }) => ({
-        tierId: id,
+  await client.$transaction(async (tx) => {
+    const journey = await tx.appJourney.create({
+      data: { ...seed.journey, createdAt: now, updatedAt: now },
+      select: { id: true },
+    });
+    const tierId = idsBySlug(
+      await tx.appJourneyTier.createManyAndReturn({
+        data: seed.tiers.map((tier) => ({
+          ...tier,
+          journeySlug: seed.journey.slug,
+          journeyId: journey.id,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        select: { id: true, slug: true },
+      }),
+      'journey tier'
+    );
+    const moduleId = idsBySlug(
+      await tx.appJourneyModule.createManyAndReturn({
+        data: modules.map((entry) => ({
+          ...entry,
+          journeySlug: seed.journey.slug,
+          journeyId: journey.id,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        select: { id: true, slug: true },
+      }),
+      'journey module'
+    );
+    await tx.appJourneyTierRevision.createMany({
+      data: seed.tiers.map(({ slug, ...text }) => ({
+        tierSlug: slug,
+        tierId: tierId(slug),
         revision: 1,
         ...text,
         changedFields: [...TIER_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-    client.appJourneyModuleRevision.createMany({
-      data: modules.map(({ id, ...text }) => ({
-        moduleId: id,
+    });
+    await tx.appJourneyModuleRevision.createMany({
+      data: modules.map(({ slug, ...text }) => ({
+        moduleSlug: slug,
+        moduleId: moduleId(slug),
         revision: 1,
         ...text,
         changedFields: [...MODULE_SNAPSHOT_FIELDS],
         ...provenance,
       })),
-    }),
-  ]);
+    });
+  });
 
   return { status: 'seeded', tiers: seed.tiers.length, modules: seed.modules.length };
 }

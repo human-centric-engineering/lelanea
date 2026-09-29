@@ -19,7 +19,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  appQuestionSet: { findUnique: vi.fn() },
+  appQuestionSet: { findFirst: vi.fn() },
   slotValue: { findMany: vi.fn(), count: vi.fn() },
   slotDefinition: { findMany: vi.fn() },
 }));
@@ -185,15 +185,15 @@ describe('where an answer goes once it is written', () => {
 
 describe('the module that asks them declares them', () => {
   const ONBOARDING_SET = {
-    moduleId: 'module_00_onboarding',
+    moduleSlug: 'module_00_onboarding',
     questions: [
-      { id: 'q01', text: 'First?' },
-      { id: 'q02', text: 'Second?' },
+      { slug: 'q01', text: 'First?' },
+      { slug: 'q02', text: 'Second?' },
     ],
   };
 
   it('reads the module the set names, and one slot per live question', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
 
     const discovery = await loadDiscoveryModuleSlots();
 
@@ -202,19 +202,19 @@ describe('the module that asks them declares them', () => {
       'discovery_q01',
       'discovery_q02',
     ]);
-    expect(prismaMock.appQuestionSet.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'onboarding_discovery_questions' } })
+    expect(prismaMock.appQuestionSet.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'onboarding_discovery_questions' } })
     );
   });
 
   it('declares nothing when the questions are not in the database', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(null);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(null);
 
     await expect(loadDiscoveryModuleSlots()).resolves.toBeNull();
   });
 
   it('registers Onboarding with the slots and the Core Set switch, and no other module with either', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
 
     await registerJourneyModules();
 
@@ -235,9 +235,9 @@ describe('the module that asks them declares them', () => {
   });
 
   it('follows the set to another module when the set names one', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue({
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue({
       ...ONBOARDING_SET,
-      moduleId: 'module_01_values',
+      moduleSlug: 'module_01_values',
     });
 
     await registerJourneyModules();
@@ -253,7 +253,7 @@ describe('the module that asks them declares them', () => {
       name: 'Onboarding, as she titled it',
       description: 'Read from its row at boot.',
     });
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
 
     await registerJourneyModules();
 
@@ -266,7 +266,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('still declares the slots when only the module names could not be read', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
 
     await registerJourneyModules();
 
@@ -284,7 +284,7 @@ describe('the module that asks them declares them', () => {
   }
 
   it('declares the slots as Daybreak last synced them when the questions cannot be read', async () => {
-    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    prismaMock.appQuestionSet.findFirst.mockRejectedValue(new Error('connection lost'));
     listSlots.mockResolvedValue([
       row('aspirations', 'A taxonomy slot.', { scope: 'global' }),
       row('discovery_q01', 'First?'),
@@ -306,7 +306,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('registers every module, without the slots, when neither read works, and never throws', async () => {
-    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    prismaMock.appQuestionSet.findFirst.mockRejectedValue(new Error('connection lost'));
     listSlots.mockRejectedValue(new Error('connection lost'));
 
     await expect(registerJourneyModules()).resolves.toBe('none');
@@ -318,7 +318,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('re-registers and runs Daybreak’s slot sync after a question write', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
     syncSlots.mockResolvedValue(undefined);
 
     await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
@@ -329,7 +329,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('runs overlapping re-syncs one at a time, so the newer questions are the ones synced', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
     let releaseFirst!: () => void;
     syncSlots
       .mockImplementationOnce(() => new Promise<void>((resolve) => (releaseFirst = resolve)))
@@ -340,10 +340,10 @@ describe('the module that asks them declares them', () => {
     await vi.waitFor(() => expect(syncSlots).toHaveBeenCalledTimes(1));
 
     // The second has not read or registered anything while the first syncs.
-    expect(prismaMock.appQuestionSet.findUnique).toHaveBeenCalledTimes(1);
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue({
+    expect(prismaMock.appQuestionSet.findFirst).toHaveBeenCalledTimes(1);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue({
       ...ONBOARDING_SET,
-      questions: [...ONBOARDING_SET.questions, { id: 'q03', text: 'Third?' }],
+      questions: [...ONBOARDING_SET.questions, { slug: 'q03', text: 'Third?' }],
     });
     releaseFirst();
 
@@ -354,7 +354,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('a failed re-sync does not stall the ones queued behind it', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
     syncSlots.mockRejectedValueOnce(new Error('deadlock')).mockResolvedValue(undefined);
 
     const first = resyncDiscoverySlots({ questionId: 'q01' });
@@ -365,7 +365,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('reports a sync that throws', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
     syncSlots.mockRejectedValue(new Error('deadlock'));
 
     await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
@@ -375,7 +375,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('reports a sync that throws something other than an Error with a message of its own', async () => {
-    prismaMock.appQuestionSet.findUnique.mockResolvedValue(ONBOARDING_SET);
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(ONBOARDING_SET);
     syncSlots.mockRejectedValue('deadlock');
 
     await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({
@@ -386,7 +386,7 @@ describe('the module that asks them declares them', () => {
 
   it('logs reads that throw something other than an Error as strings', async () => {
     getStructure.mockRejectedValue('names gone');
-    prismaMock.appQuestionSet.findUnique.mockRejectedValue('questions gone');
+    prismaMock.appQuestionSet.findFirst.mockRejectedValue('questions gone');
     listSlots.mockRejectedValue('slots gone');
 
     await expect(registerJourneyModules()).resolves.toBe('none');
@@ -406,7 +406,7 @@ describe('the module that asks them declares them', () => {
   });
 
   it('reports, never throws, when the questions cannot be read, and syncs nothing', async () => {
-    prismaMock.appQuestionSet.findUnique.mockRejectedValue(new Error('connection lost'));
+    prismaMock.appQuestionSet.findFirst.mockRejectedValue(new Error('connection lost'));
     listSlots.mockResolvedValue([row('discovery_q01', 'First?')]);
 
     await expect(resyncDiscoverySlots({ questionId: 'q01' })).resolves.toEqual({

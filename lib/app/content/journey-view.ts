@@ -168,7 +168,7 @@ export type StoredPhase = z.infer<typeof storedPhaseSchema>;
  * types, so a test can build them from the seed without a client.
  */
 export interface JourneyRow {
-  id: string;
+  slug: string;
   title: string;
   subtitle: string;
   version: string;
@@ -176,14 +176,14 @@ export interface JourneyRow {
 }
 
 export interface JourneyTierRow {
-  id: string;
+  slug: string;
   label: string;
   intent: string;
   revision: number;
 }
 
 export interface JourneyModuleRow {
-  id: string;
+  slug: string;
   displayNumber: string;
   title: string;
   subtitle: string | null;
@@ -205,7 +205,7 @@ export interface JourneyModuleRow {
  * @throws naming the module and what failed.
  */
 export function parseModuleJson(
-  row: Pick<JourneyModuleRow, 'id' | 'phases' | 'phaseTiers' | 'produces'>
+  row: Pick<JourneyModuleRow, 'slug' | 'phases' | 'phaseTiers' | 'produces'>
 ): {
   phases: StoredPhase[];
   phaseTiers: z.infer<typeof storedPhaseTiersSchema>;
@@ -216,7 +216,7 @@ export function parseModuleJson(
   const produces = storedProducesSchema.safeParse(row.produces);
   if (!phases.success || !phaseTiers.success || !produces.success) {
     throw new Error(
-      `Journey module "${row.id}" failed validation: ` +
+      `Journey module "${row.slug}" failed validation: ` +
         [
           phases.success ? '' : `phases ${phases.error.message}`,
           phaseTiers.success ? '' : `phaseTiers ${phaseTiers.error.message}`,
@@ -231,7 +231,7 @@ export function parseModuleJson(
     const missing = tier.phases.find((number) => !known.has(number));
     if (missing !== undefined) {
       throw new Error(
-        `Journey module "${row.id}": phase tier "${tier.id}" names phase ${missing}, which it does not have`
+        `Journey module "${row.slug}": phase tier "${tier.id}" names phase ${missing}, which it does not have`
       );
     }
   }
@@ -250,8 +250,8 @@ export function toJourneyStructure(
   tierRows: readonly JourneyTierRow[],
   moduleRows: readonly JourneyModuleRow[]
 ): JourneyStructure {
-  const tiersById = new Map(tierRows.map((row) => [row.id, row]));
-  const modulesById = new Map(moduleRows.map((row) => [row.id, row]));
+  const tiersById = new Map(tierRows.map((row) => [row.slug, row]));
+  const modulesById = new Map(moduleRows.map((row) => [row.slug, row]));
 
   const tiers = JOURNEY_TIERS.map((rosterTier): JourneyTierView => {
     const row = tiersById.get(rosterTier.id);
@@ -273,7 +273,7 @@ export function toJourneyStructure(
     }
     const { phases, phaseTiers, produces } = parseModuleJson(row);
     return {
-      id: row.id,
+      id: row.slug,
       number: rosterModule.number,
       displayNumber: row.displayNumber,
       title: row.title,
@@ -289,7 +289,7 @@ export function toJourneyStructure(
 
   return {
     collection: {
-      id: journey.id,
+      id: journey.slug,
       title: journey.title,
       subtitle: journey.subtitle,
       version: journey.version,

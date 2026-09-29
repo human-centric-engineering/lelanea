@@ -139,9 +139,9 @@ describe('getModuleDefinitions', () => {
   it('takes its name from the row: an edited title renames the definition (t-87)', () => {
     const edited = getModuleDefinitions(
       journey((rows) => {
-        const values = rows.modules.find((row) => row.id === 'module_01_values')!;
+        const values = rows.modules.find((row) => row.slug === 'module_01_values')!;
         values.title = 'Values, as she renamed it';
-        const foundations = rows.tiers.find((row) => row.id === 'foundations')!;
+        const foundations = rows.tiers.find((row) => row.slug === 'foundations')!;
         foundations.intent = 'An edited intent.';
       })
     );

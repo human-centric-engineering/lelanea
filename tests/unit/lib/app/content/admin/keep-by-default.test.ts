@@ -60,8 +60,9 @@ function section(plan: ContentImportPlan, entity: string): ImportPlanSection {
   return found;
 }
 
+/** The authored names in `table`: a row's `slug`, or a words row's `key`. */
 function ids(table: string): string[] {
-  return db.current!.rows(table).map((row) => (row.id ?? row.key) as string);
+  return db.current!.rows(table).map((row) => (row.slug ?? row.key) as string);
 }
 
 // ─── Documents ──────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ describe('documents', () => {
     const rows = db
       .current!.rows('appFoundationalDocument')
       .sort((a, b) => (a.position as number) - (b.position as number));
-    expect(rows.at(-1)).toMatchObject({ id: 'loose' });
+    expect(rows.at(-1)).toMatchObject({ slug: 'loose' });
     expect(rows.map((row) => row.position)).toEqual(rows.map((_row, index) => index));
 
     const again = await documents.exportDocumentsFile();
@@ -167,7 +168,7 @@ describe('journey', () => {
 
   it('keeps an omitted module and still applies the rest', async () => {
     const { file, dropped } = await withoutLastModule();
-    const before = db.current!.rows('appJourneyModule').find((row) => row.id === dropped);
+    const before = db.current!.rows('appJourneyModule').find((row) => row.slug === dropped);
     expect(before).toBeDefined();
 
     const plan = await journey.previewJourneyImport(file, false);
@@ -177,8 +178,8 @@ describe('journey', () => {
 
     await journey.applyJourneyImport(file, false, EDITOR);
     const rows = db.current!.rows('appJourneyModule');
-    expect(rows.find((row) => row.id === dropped)).toEqual(before);
-    expect(rows.find((row) => row.id === file.modules[0].id)).toMatchObject({
+    expect(rows.find((row) => row.slug === dropped)).toEqual(before);
+    expect(rows.find((row) => row.slug === file.modules[0].id)).toMatchObject({
       title: 'Retitled by import',
     });
   });
@@ -236,7 +237,7 @@ describe('questions', () => {
 
     await questions.applyQuestionsImport(file, false, EDITOR);
     const rows = db.current!.rows('appDiscoveryQuestion');
-    expect(rows.find((row) => row.id === 'q02')).toMatchObject({ number: 30 });
+    expect(rows.find((row) => row.slug === 'q02')).toMatchObject({ number: 30 });
     expect(rows.map((row) => row.number as number).sort((a, b) => a - b)).toEqual(
       Array.from({ length: 30 }, (_, index) => index + 1)
     );
@@ -302,7 +303,7 @@ describe('resources', () => {
     await resources.applyResourcesImport(file, false, EDITOR);
     const videos = db
       .current!.rows('appResource')
-      .map((row) => [row.id, row.position, row.retired]);
+      .map((row) => [row.slug, row.position, row.retired]);
     expect(videos).toEqual(
       expect.arrayContaining([
         ['second', 0, false],
@@ -323,7 +324,7 @@ describe('resources', () => {
 
     expect(section(plan, 'resource').removals.map((item) => item.key)).toEqual(['first']);
     expect(section(plan, 'words').removals.map((item) => item.key)).toEqual([wordsKey]);
-    expect(db.current!.rows('appResource').find((row) => row.id === 'first')).toMatchObject({
+    expect(db.current!.rows('appResource').find((row) => row.slug === 'first')).toMatchObject({
       retired: true,
     });
     expect(ids('appResourceWords')).not.toContain(wordsKey);
@@ -337,7 +338,7 @@ describe('resources', () => {
 
     await resources.applyResourcesImport(file, false, EDITOR);
 
-    expect(db.current!.rows('appResource').find((row) => row.id === 'first')).toMatchObject({
+    expect(db.current!.rows('appResource').find((row) => row.slug === 'first')).toMatchObject({
       retired: false,
     });
     expect(ids('appResourceWords')).toContain(wordsKey);

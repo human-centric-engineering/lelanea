@@ -70,7 +70,7 @@ function liveVideoIds(): string[] {
     .current!.rows('appResource')
     .filter((row) => row.kind === 'video' && !row.retired)
     .sort((a, b) => (a.position as number) - (b.position as number))
-    .map((row) => row.id as string);
+    .map((row) => row.slug as string);
 }
 
 describe('an item that does not exist', () => {
@@ -166,7 +166,7 @@ describe('a save against a revision that has moved', () => {
         documents.reorderDocuments(
           db
             .current!.rows('appFoundationalDocument')
-            .map((row) => ({ id: row.id as string, revision: 7 })),
+            .map((row) => ({ id: row.slug as string, revision: 7 })),
           EDITOR
         ),
     ],
@@ -210,7 +210,8 @@ describe('the one document delete that is allowed', () => {
         renderStyle: null,
         renderNote: null,
         blocks: storedDocumentBlocksSchema.parse(
-          db.current!.rows('appFoundationalDocument').find((row) => row.id === 'a_new_note')!.blocks
+          db.current!.rows('appFoundationalDocument').find((row) => row.slug === 'a_new_note')!
+            .blocks
         ),
         version: '1.0',
       },
@@ -277,7 +278,7 @@ describe('the one document delete that is allowed', () => {
       status: 409,
       details: { reason: 'import_refused' },
     });
-    expect(db.current!.rows('appFoundationalDocument').map((row) => row.id)).toContain('opened');
+    expect(db.current!.rows('appFoundationalDocument').map((row) => row.slug)).toContain('opened');
   });
 
   it('refuses a document a key’s words cite, naming the key', async () => {
@@ -324,7 +325,7 @@ describe('the one document delete that is allowed', () => {
       status: 409,
       details: { reason: 'import_refused' },
     });
-    expect(db.current!.rows('appFoundationalDocument').map((row) => row.id)).toContain('cited');
+    expect(db.current!.rows('appFoundationalDocument').map((row) => row.slug)).toContain('cited');
   });
 });
 
@@ -338,8 +339,8 @@ describe('bringing a resource back', () => {
     await resources.setResourceRetired('for-a-module', true, 1, EDITOR);
     // Retired while it related to a module that has since left the journey.
     // The roster is code, so stand in for that change on the row itself.
-    await (db.current!.client as unknown as PrismaClient).appResource.update({
-      where: { id: 'for-a-module' },
+    await (db.current!.client as unknown as PrismaClient).appResource.updateMany({
+      where: { slug: 'for-a-module' },
       data: { relatesTo: 'module_99_gone' },
     });
 
@@ -456,8 +457,8 @@ describe('imports that are refused', () => {
     expect(section('resource').removals.map((item) => item.key)).toEqual(['old-video']);
     expect(section('words').removals.map((item) => item.key)).toEqual(['module_01_values']);
     const rows = db.current!.rows('appResource');
-    expect(rows.find((row) => row.id === 'old-video')).toMatchObject({ retired: true });
-    expect(rows.find((row) => row.id === 'new-video')).toMatchObject({
+    expect(rows.find((row) => row.slug === 'old-video')).toMatchObject({ retired: true });
+    expect(rows.find((row) => row.slug === 'new-video')).toMatchObject({
       retired: false,
       position: 0,
     });
@@ -467,9 +468,9 @@ describe('imports that are refused', () => {
 
 describe('small rules', () => {
   it('refuses to remove the last question, which the file format cannot hold', async () => {
-    for (const row of db.current!.rows('appDiscoveryQuestion').filter((q) => q.id !== 'q01')) {
+    for (const row of db.current!.rows('appDiscoveryQuestion').filter((q) => q.slug !== 'q01')) {
       await questions.deleteQuestion(
-        row.id as string,
+        row.slug as string,
         db.current!.rows('appDiscoveryQuestion').find((q) => q.id === row.id)!.revision as number,
         EDITOR
       );
