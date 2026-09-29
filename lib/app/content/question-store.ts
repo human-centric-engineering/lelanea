@@ -120,18 +120,21 @@ export async function seedDiscoveryQuestions(
 
   await client.$transaction(async (tx) => {
     // The set's module is seeded first (016). Refused here as the foreign key
-    // refused it when the set named its module directly.
-    const setModule = await tx.appJourneyModule.findFirst({
+    // refused it when the set named its module directly, and, as every other
+    // seed's lookups are, when the name matches more than one row.
+    const modules = await tx.appJourneyModule.findMany({
       where: { slug: moduleSlug },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
-    if (!setModule)
+    if (modules.length === 0) {
       throw new Error(`Question set "${setSlug}" names unknown module "${moduleSlug}"`);
+    }
+    const moduleId = idsBySlug(modules, 'journey module')(moduleSlug);
     const set = await tx.appQuestionSet.create({
       data: {
         slug: setSlug,
         moduleSlug,
-        moduleId: setModule.id,
+        moduleId,
         ...framing,
         revision: 1,
         createdAt: now,

@@ -263,7 +263,7 @@ async function writeSet(
       throw await revisionMovedNow(
         'The question set',
         revisionRead,
-        tx.appQuestionSet.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appQuestionSet.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appQuestionSetRevision.create({
       data: {
@@ -310,7 +310,7 @@ async function writeQuestion(
       throw await revisionMovedNow(
         `Question ${row.number}`,
         revisionRead,
-        tx.appDiscoveryQuestion.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appDiscoveryQuestion.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appDiscoveryQuestionRevision.create({
       data: {

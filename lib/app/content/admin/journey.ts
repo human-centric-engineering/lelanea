@@ -207,7 +207,7 @@ async function writeTier(
       throw await revisionMovedNow(
         `The tier "${row.label}"`,
         revisionRead,
-        tx.appJourneyTier.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appJourneyTier.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appJourneyTierRevision.create({
       data: {
@@ -257,7 +257,7 @@ async function writeModule(
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appJourneyModule.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appJourneyModule.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appJourneyModuleRevision.create({
       data: {

@@ -305,7 +305,7 @@ async function writeDocument(
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appFoundationalDocument.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appFoundationalDocument.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appFoundationalDocumentRevision.create({
       data: {
@@ -816,7 +816,7 @@ async function readStored(
   const [collection, rows, resources, words] = await Promise.all([
     client.appDocumentCollection.findFirst({ orderBy: { createdAt: 'asc' } }),
     client.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } }),
-    client.appResource.findMany({ select: { slug: true, documentSlug: true } }),
+    client.appResource.findMany({ select: { slug: true, documentId: true } }),
     client.appResourceWords.findMany({
       where: { sourceCollection: WORDS_DOCUMENT_SOURCE },
       select: { key: true, sourceId: true },
@@ -831,9 +831,12 @@ async function readStored(
       locale: collection.locale,
     },
     rows,
-    openedBy: resources.flatMap(({ slug, documentSlug }) =>
-      documentSlug ? [{ id: slug, documentId: documentSlug }] : []
-    ),
+    // By the foreign key, as the delete guard and the RESTRICT constraint read
+    // it, then named: the plan compares names.
+    openedBy: resources.flatMap(({ slug, documentId }) => {
+      const opened = rows.find((row) => row.id === documentId);
+      return opened ? [{ id: slug, documentId: opened.slug }] : [];
+    }),
     citedBy: words.map(({ key, sourceId }) => ({ key, documentId: sourceId })),
   };
 }

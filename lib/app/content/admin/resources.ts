@@ -415,7 +415,7 @@ async function writeResource(
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appResource.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appResource.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appResourceRevision.create({
       data: {
@@ -565,7 +565,7 @@ export async function setResourceRetired(
       throw await revisionMovedNow(
         `"${row.title}"`,
         revisionRead,
-        tx.appResource.findFirst({ where: { slug: id }, select: { revision: true } })
+        tx.appResource.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appResourceRevision.create({
       data: {
@@ -721,7 +721,7 @@ async function writeWords(
       throw await revisionMovedNow(
         `The words for "${key}"`,
         revisionRead,
-        tx.appResourceWords.findFirst({ where: { key }, select: { revision: true } })
+        tx.appResourceWords.findFirst({ where: { id: row.id }, select: { revision: true } })
       );
     await tx.appResourceWordsRevision.create({
       data: {
