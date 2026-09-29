@@ -77,6 +77,7 @@
     "smoke:app-misuse": "tsx --env-file=.env.local scripts/app/smoke-misuse.ts",
     "smoke:app-voice": "tsx --env-file=.env.local scripts/app/smoke-voice.ts",
     "smoke:app-slot-capture": "tsx --env-file=.env.local scripts/app/smoke-slot-capture.ts",
+    "smoke:app-per-org-content": "tsx --env-file=.env.local scripts/app/smoke-per-org-content.ts",
     "smoke:tenancy": "tsx --env-file=.env.local scripts/smoke/tenancy.ts",
     "smoke:tenancy-isolation": "tsx --env-file=.env.local scripts/smoke/tenancy-isolation.ts",
     "postinstall": "prisma generate",
