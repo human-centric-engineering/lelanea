@@ -44,6 +44,7 @@ vi.mock('@/lib/app/data-export', async (importOriginal) => {
 const { ORG_DATA_SOURCES, ORG_EXCLUDED_SOURCES, getOrgDataSources, getOrgExcludedSources } =
   await import('@/lib/privacy/org-sources');
 const { frameworkOrgSources } = await import('@/lib/framework/privacy/org-sources');
+const { leafOrgSources } = await import('@/lib/app/leaf-data-export');
 
 const FRAMEWORK_MODELS = [
   'SlotDefinition',
@@ -98,8 +99,16 @@ describe('the org-export seam, at rest', () => {
 describe('the framework’s contribution, through the real bridge', () => {
   it('appends the framework’s sources after core’s', () => {
     const all = getOrgDataSources();
+    const framework = frameworkOrgSources().sources;
     expect(all.slice(0, ORG_DATA_SOURCES.length)).toEqual(ORG_DATA_SOURCES);
-    expect(all.slice(ORG_DATA_SOURCES.length)).toEqual(frameworkOrgSources().sources);
+    expect(all.slice(ORG_DATA_SOURCES.length, ORG_DATA_SOURCES.length + framework.length)).toEqual(
+      framework
+    );
+    // LELAÑEA — pinned, not deleted (.context/app/divergences.md Row 12). The
+    // leaf's own sources follow the framework's (t-112 fills the seam), and
+    // nothing else does. Upstream this asserted the rest WAS the framework's,
+    // which is only true while the leaf seam is empty.
+    expect(all.slice(ORG_DATA_SOURCES.length + framework.length)).toEqual(leafOrgSources().sources);
   });
 
   it('declares every framework model exactly once, as a source or an exclusion', () => {
