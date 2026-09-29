@@ -6,33 +6,23 @@
  * configured nothing may start one at all. The reconcile itself is mocked here;
  * its behaviour is `tests/unit/lib/app/content/knowledge-mirror.test.ts`.
  *
- * It runs once per active org (t-115). `forEachOrg` is stubbed to walk a
- * fixed list through the real `runAsOrg`, and each pass records the org it
- * ran in, so a test can see the reconcile really ran inside each org.
+ * It runs once per active org (t-115), through the real `forEachOrg`: only the
+ * org table's read is stubbed, so the ACTIVE filter and the per-org scope are
+ * the platform's own. Each pass records the org it ran in, so a test can see
+ * the reconcile really ran inside each org.
  *
  * @see app/api/v1/app/cron/knowledge-mirror/route.ts
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reconcileKnowledgeMirror, orgIds, ranIn } = vi.hoisted(() => ({
+const { reconcileKnowledgeMirror, orgFindMany, ranIn } = vi.hoisted(() => ({
   reconcileKnowledgeMirror: vi.fn(),
-  orgIds: { current: ['install', 'org-b'] as string[] | null },
+  orgFindMany: vi.fn(),
   ranIn: [] as string[],
 }));
 vi.mock('@/lib/app/content/knowledge-mirror', () => ({ reconcileKnowledgeMirror }));
-vi.mock('@/lib/tenancy/context', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/tenancy/context')>();
-  return {
-    ...actual,
-    forEachOrg: async (fn: (orgId: string) => Promise<void>) => {
-      if (!orgIds.current) throw new Error('could not list orgs');
-      for (const orgId of orgIds.current) {
-        await actual.runAsOrg(orgId, () => fn(orgId));
-      }
-    },
-  };
-});
+vi.mock('@/lib/db/client', () => ({ prisma: { org: { findMany: orgFindMany } } }));
 
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v1/app/cron/knowledge-mirror/route';
@@ -59,7 +49,7 @@ const inStep = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('CRON_SECRET', SECRET);
-  orgIds.current = ['install', 'org-b'];
+  orgFindMany.mockResolvedValue([{ id: 'install' }, { id: 'org-b' }]);
   ranIn.length = 0;
   reconcileKnowledgeMirror.mockImplementation(() => {
     ranIn.push(getTenantContext()?.orgId ?? 'none');
@@ -69,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.useRealTimers();
 });
 
 describe('GET /api/v1/app/cron/knowledge-mirror', () => {
@@ -89,6 +80,14 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
     });
   });
 
+  it('reads only ACTIVE orgs, oldest first', async () => {
+    await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
+
+    expect(orgFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } })
+    );
+  });
+
   it('still reconciles the next org when one throws, and answers 500 naming it', async () => {
     reconcileKnowledgeMirror.mockImplementation(() => {
       const orgId = getTenantContext()?.orgId ?? 'none';
@@ -102,12 +101,38 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
     expect(ranIn).toEqual(['install', 'org-b']);
     expect(response.status).toBe(500);
     const body = (await response.json()) as {
-      error: { code: string; details: { failed: unknown[] } };
+      error: { code: string; details: Record<string, unknown> };
     };
     expect(body.error.code).toBe('MIRROR_INCOMPLETE');
-    expect(body.error.details.failed).toEqual([{ orgId: 'install' }]);
+    expect(body.error.details).toEqual({ failed: [], crashed: ['install'], notReached: [] });
     // The error text is logged, not returned.
     expect(JSON.stringify(body)).not.toContain('connection refused');
+  });
+
+  it('starts no org once its time is spent, and answers 500 naming those it left', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    reconcileKnowledgeMirror.mockImplementation(() => {
+      ranIn.push(getTenantContext()?.orgId ?? 'none');
+      // The first org takes the whole budget.
+      vi.setSystemTime(Date.now() + 46_000);
+      return Promise.resolve(inStep);
+    });
+
+    const response = await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
+
+    expect(ranIn).toEqual(['install']);
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error: { details: Record<string, unknown> } };
+    expect(body.error.details).toEqual({ failed: [], crashed: [], notReached: ['org-b'] });
+  });
+
+  it('answers 500 rather than green when there is no active org at all', async () => {
+    orgFindMany.mockResolvedValue([]);
+
+    const response = await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
+
+    expect(response.status).toBe(500);
+    expect(reconcileKnowledgeMirror).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -135,7 +160,7 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
   });
 
   it('answers 500 naming the documents that failed, so the cron log shows red', async () => {
-    orgIds.current = ['org-b'];
+    orgFindMany.mockResolvedValue([{ id: 'org-b' }]);
     reconcileKnowledgeMirror.mockResolvedValue({
       ...inStep,
       failed: [{ sourceKey: 'foundational:the_mission', error: 'Embedding provider unavailable' }],
@@ -146,18 +171,20 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
     expect(response.status).toBe(500);
     const body = (await response.json()) as {
       success: boolean;
-      error: { code: string; details: { failed: unknown[] } };
+      error: { code: string; details: Record<string, unknown> };
     };
     expect(body.error.code).toBe('MIRROR_INCOMPLETE');
-    expect(body.error.details.failed).toEqual([
-      { orgId: 'org-b', sourceKey: 'foundational:the_mission' },
-    ]);
+    expect(body.error.details).toEqual({
+      failed: [{ orgId: 'org-b', sourceKey: 'foundational:the_mission' }],
+      crashed: [],
+      notReached: [],
+    });
     // The provider's error text is logged, not returned.
     expect(JSON.stringify(body)).not.toContain('Embedding provider');
   });
 
   it('answers 500 through the platform error handler when the orgs cannot be listed', async () => {
-    orgIds.current = null;
+    orgFindMany.mockRejectedValue(new Error('could not list orgs'));
 
     const response = await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
 

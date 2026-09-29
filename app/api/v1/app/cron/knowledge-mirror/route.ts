@@ -28,9 +28,11 @@
  *
  * Rate limiting: inherited from the `/api/v1/**` section cap in `proxy.ts`.
  *
- * Response: `{ orgs }`, each org's reconcile summary. 500 when any document
- * failed, or any org did not finish, naming the org and the document (or the
- * org alone), so Vercel's cron log shows the run as failed rather than green.
+ * Response: `{ orgs }`, each org's reconcile summary. 500 when anything was
+ * left undone, so Vercel's cron log shows the run as failed rather than green:
+ * `details.failed` names each document (with its org), `crashed` each org whose
+ * reconcile threw, and `notReached` each org the run had no time left for. 500
+ * too when there was no org at all, which is a failed read, not a clean run.
  */
 
 import { timingSafeEqual } from 'crypto';
@@ -46,13 +48,24 @@ import {
 import { forEachOrg } from '@/lib/tenancy/context';
 
 /**
- * One org's pass: its summary, or that it did not finish. The error text is
- * logged and never returned, as for a document that failed.
+ * One org's pass: its summary; or that it threw, whose error text is logged
+ * and never returned, as for a document that failed; or that the run's time
+ * ran out before it started.
  */
-type OrgMirrorRun = { orgId: string } & ({ result: KnowledgeMirrorResult } | { crashed: true });
+type OrgMirrorRun = { orgId: string } & (
+  { result: KnowledgeMirrorResult } | { crashed: true } | { notReached: true }
+);
 
-/** Five documents per org, each at most one embedding call. Well inside a minute. */
+/** Five documents per org, each at most one embedding call. */
 export const maxDuration = 60;
+
+/**
+ * No new org is started after this long, so the response is built inside
+ * `maxDuration` and the log says which orgs were left. They are reconciled on
+ * the next run, and an org already in step reads rows and writes nothing, so
+ * each day's run gets further than the last.
+ */
+const START_BUDGET_MS = 45_000;
 
 /** Long enough that a guessed or placeholder value is refused outright. */
 const cronSecretSchema = z.string().min(16);
@@ -84,7 +97,12 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   try {
     const orgs: OrgMirrorRun[] = [];
+    const startBy = Date.now() + START_BUDGET_MS;
     await forEachOrg(async (orgId) => {
+      if (Date.now() > startBy) {
+        orgs.push({ orgId, notReached: true });
+        return;
+      }
       try {
         orgs.push({ orgId, result: await reconcileKnowledgeMirror() });
       } catch (error) {
@@ -94,17 +112,33 @@ export async function GET(request: NextRequest): Promise<Response> {
       }
     });
 
-    const failed = orgs.flatMap((run) =>
-      'crashed' in run
-        ? [{ orgId: run.orgId }]
-        : run.result.failed.map((failure) => ({ orgId: run.orgId, sourceKey: failure.sourceKey }))
-    );
-    if (failed.length > 0) {
-      log.error('Knowledge mirror cron: some documents failed', { failed });
-      return errorResponse('Some documents could not be mirrored', {
+    if (orgs.length === 0) {
+      // The install org always exists, so this is a query that told us
+      // nothing, not an install with nothing to mirror: "I could not look" is
+      // never reported as "I found nothing" (.context/architecture/checks.md).
+      log.error('Knowledge mirror cron: found no active org to reconcile');
+      return errorResponse('No organisation to mirror for', {
         code: 'MIRROR_INCOMPLETE',
         status: 500,
-        details: { failed },
+      });
+    }
+
+    const crashed = orgs.filter((run) => 'crashed' in run).map((run) => run.orgId);
+    const notReached = orgs.filter((run) => 'notReached' in run).map((run) => run.orgId);
+    const failed = orgs.flatMap((run) =>
+      'result' in run
+        ? run.result.failed.map((failure) => ({ orgId: run.orgId, sourceKey: failure.sourceKey }))
+        : []
+    );
+    if (crashed.length + notReached.length + failed.length > 0) {
+      if (failed.length > 0) log.error('Knowledge mirror cron: some documents failed', { failed });
+      if (notReached.length > 0) {
+        log.error('Knowledge mirror cron: ran out of time before these orgs', { notReached });
+      }
+      return errorResponse('The mirror is not complete for every organisation', {
+        code: 'MIRROR_INCOMPLETE',
+        status: 500,
+        details: { failed, crashed, notReached },
       });
     }
     return successResponse({ orgs });
