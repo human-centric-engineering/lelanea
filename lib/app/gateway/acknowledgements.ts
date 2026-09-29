@@ -227,15 +227,16 @@ export async function recordAcknowledgement(
   kind: AcknowledgementKind
 ): Promise<RecordAcknowledgementResult> {
   // Resolved first (t-116): the key is per org, so the insert and the repeat
-  // read must be in the same one, and a system scope, which would write a row
-  // with no org that no key constrains, is refused before anything is written.
+  // read name the same one explicitly, and a system scope, which would write a
+  // row with no org that no key constrains, is refused before anything is
+  // written. The tenancy extension never overwrites an explicit org.
   const orgId = requireOrgId();
   const documentVersion = (await getRequiredVersions())[kind];
   const select = { id: true, kind: true, documentVersion: true, acknowledgedAt: true } as const;
 
   try {
     const row = await prisma.appAcknowledgement.create({
-      data: { userId, kind, documentVersion },
+      data: { orgId, userId, kind, documentVersion },
       select,
     });
     logger.info('Acknowledgement recorded', { userId, kind, documentVersion });

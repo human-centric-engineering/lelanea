@@ -91,22 +91,27 @@ function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
   // Every row is in the org the request enters: the install org, at `single`.
   const rows = initial.map((r) => ({ ...r, orgId: INSTALL_ORG_ID, acknowledgedAt: AT }));
   findMany.mockImplementation(() => Promise.resolve(rows));
-  create.mockImplementation(({ data }: { data: { kind: string; documentVersion: string } }) => {
-    if (rows.some((r) => r.kind === data.kind && r.documentVersion === data.documentVersion)) {
-      // The shape Prisma's unique violation has, as far as the module reads it.
-      return Promise.reject(
-        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
-      );
+  create.mockImplementation(
+    ({ data }: { data: { orgId: string; kind: string; documentVersion: string } }) => {
+      if (
+        rows.some(
+          (r) =>
+            r.orgId === data.orgId &&
+            r.kind === data.kind &&
+            r.documentVersion === data.documentVersion
+        )
+      ) {
+        // The shape Prisma's unique violation has, as far as the module reads it.
+        return Promise.reject(
+          Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+        );
+      }
+      // The insert carries its org (t-116), so the row lands where it says.
+      const row = { id: `ack-${rows.length + 1}`, ...data, acknowledgedAt: AT };
+      rows.push(row);
+      return Promise.resolve(row);
     }
-    const row = {
-      id: `ack-${rows.length + 1}`,
-      ...data,
-      orgId: INSTALL_ORG_ID,
-      acknowledgedAt: AT,
-    };
-    rows.push(row);
-    return Promise.resolve(row);
-  });
+  );
   findUnique.mockImplementation(
     ({
       where,
@@ -237,7 +242,12 @@ describe('POST /api/v1/app/acknowledgements', () => {
     expect(response.status).toBe(201);
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { userId: 'user_test', kind: 'disclaimer', documentVersion: COLLECTION_VERSION },
+        data: {
+          orgId: INSTALL_ORG_ID,
+          userId: 'user_test',
+          kind: 'disclaimer',
+          documentVersion: COLLECTION_VERSION,
+        },
       })
     );
     // Status before: all three outstanding. After: two.
