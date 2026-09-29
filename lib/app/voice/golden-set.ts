@@ -14,6 +14,8 @@
 
 import type { VoiceGoldenPrompt, VoiceGoldenSet } from '@/lib/app/content';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { requireOrgId } from '@/lib/tenancy/context';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 /**
  * The dataset id for one version of the golden set — fixed, and versioned.
@@ -36,8 +38,13 @@ import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
  *
  * It is not a cuid, and nothing requires it to be.
  */
-export function goldenSetDatasetId(version: string): string {
-  return `lelanea-voice-golden-set-v${version}`;
+export function goldenSetDatasetId(version: string, orgId: string = requireOrgId()): string {
+  // `ai_dataset.id` is unique across the install, while the golden set is per
+  // org (t-114). The install org keeps the id it has always had, so existing
+  // datasets and the comparisons that name them are untouched; any other org's
+  // dataset carries its org, so two orgs never claim the same id.
+  const org = orgId === INSTALL_ORG_ID ? '' : `${orgId}-`;
+  return `lelanea-voice-golden-set-${org}v${version}`;
 }
 
 /**

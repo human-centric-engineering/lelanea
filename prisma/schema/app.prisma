@@ -443,6 +443,8 @@ model AppUserBudget {
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
+  /// A person's budgets across orgs, and the user FK's cascade on erasure.
+  @@index([userId])
   @@index([orgId])
   @@map("app_user_budget")
 }

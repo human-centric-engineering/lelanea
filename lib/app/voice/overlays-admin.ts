@@ -85,6 +85,17 @@ import type {
 const IMPORT_TX_TIMEOUT_MS = 30_000;
 
 type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/**
+ * The set's generated id and name, or `null` before it is seeded (t-114): its
+ * revisions and overlays point at the id, so a read of either starts here.
+ */
+function findOverlaySet(client: Pick<Tx, 'appVoiceOverlaySet'>) {
+  return client.appVoiceOverlaySet.findFirst({
+    where: { slug: VOICE_OVERLAY_SET_ID },
+    select: { id: true, slug: true },
+  });
+}
 type FieldChanges = Record<string, { from: unknown; to: unknown }>;
 const NO_CHANGES: FieldChanges = {};
 
@@ -296,10 +307,7 @@ export async function getOverlaysAdminView(): Promise<OverlaysAdminView> {
 export async function listOverlaySetHistory(): Promise<
   RevisionEntry<OverlaySetWords & { status: VoiceContentStatus }>[]
 > {
-  const set = await prisma.appVoiceOverlaySet.findFirst({
-    where: { slug: VOICE_OVERLAY_SET_ID },
-    select: { id: true },
-  });
+  const set = await findOverlaySet(prisma);
   // Not seeded: no set, so no history, as before the set had a generated id.
   if (!set) return [];
   const revisions = await prisma.appVoiceOverlaySetRevision.findMany({
@@ -381,10 +389,7 @@ export async function restoreOverlaySetRevision(
   revisionRead: number,
   editorId: string
 ): Promise<VoiceWriteResult> {
-  const set = await prisma.appVoiceOverlaySet.findFirst({
-    where: { slug: VOICE_OVERLAY_SET_ID },
-    select: { id: true },
-  });
+  const set = await findOverlaySet(prisma);
   const past = set
     ? await prisma.appVoiceOverlaySetRevision.findUnique({
         where: { setId_revision: { setId: set.id, revision } },
@@ -578,10 +583,7 @@ export async function createOverlay(
   const { situation, ...edit } = create;
   try {
     return await executeTransaction(async (tx) => {
-      const set = await tx.appVoiceOverlaySet.findFirst({
-        where: { slug: VOICE_OVERLAY_SET_ID },
-        select: { id: true, slug: true },
-      });
+      const set = await findOverlaySet(tx);
       if (!set) throw notSeeded();
       const taken = await tx.appVoiceOverlay.findFirst({
         where: { situation },

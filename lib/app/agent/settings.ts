@@ -19,8 +19,8 @@
  * Every resolver goes to the database on every call (`B9`). A value captured
  * when the module loaded would make a change in the admin take effect at the
  * next deploy — the exact shape the ruling rejected — and on a serverless host
- * would take effect in some instances and not others. Two indexed primary-key
- * reads per turn is the price, and it is small beside the model call.
+ * would take effect in some instances and not others. Two indexed reads per
+ * turn is the price, and it is small beside the model call.
  *
  * ## Who writes what (`fp4`)
  *
@@ -113,7 +113,7 @@ export interface EffectiveCeiling {
  * What one person may spend this month: their override, else the default.
  *
  * Both reads go out together; the default is read even when an override exists,
- * because one round trip for two primary-key lookups costs no more than one.
+ * because one round trip for two indexed lookups costs no more than one.
  */
 export async function getEffectiveMonthlyCeiling(userId: string): Promise<EffectiveCeiling> {
   const [override, settings] = await Promise.all([

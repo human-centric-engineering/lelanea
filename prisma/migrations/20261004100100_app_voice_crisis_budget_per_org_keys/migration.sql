@@ -93,3 +93,6 @@ CREATE UNIQUE INDEX "app_voice_golden_set_orgId_slug_key" ON "app_voice_golden_s
 CREATE UNIQUE INDEX "app_voice_overlay_orgId_situation_key" ON "app_voice_overlay"("orgId", "situation");
 CREATE UNIQUE INDEX "app_crisis_region_orgId_region_key" ON "app_crisis_region"("orgId", "region");
 CREATE UNIQUE INDEX "app_user_budget_orgId_userId_key" ON "app_user_budget"("orgId", "userId");
+-- The old primary key was the only index leading with userId. Reads of one
+-- person's budgets, and the cascade when a user is erased, still need one.
+CREATE INDEX "app_user_budget_userId_idx" ON "app_user_budget"("userId");

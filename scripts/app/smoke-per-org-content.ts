@@ -60,8 +60,14 @@ import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overla
 import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed';
 import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
-import { setUserBudget } from '@/lib/app/agent/settings';
+import { clearUserBudget, setUserBudget } from '@/lib/app/agent/settings';
+import { goldenSetDatasetId } from '@/lib/app/voice/golden-set';
+import goldenSetUnit from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
 import crisisResources from '@/prisma/seeds/app-lelanea/010-crisis-resources';
+
+/** Distinct from any real ceiling, so each org's budget row is recognisable. */
+const INSTALL_CEILING = 777.25;
+const NEW_ORG_CEILING = 1234.5;
 
 const PROBE_ARTICLE = 't113-smoke-article';
 
@@ -97,6 +103,13 @@ async function main(): Promise<void> {
   );
   if (!editor) throw new Error('No admin user to attribute the edits to. Run `npm run db:seed`.');
 
+  // The same person holds a budget in the install org first, so the new org's
+  // budget below can only land beside it if the key is (orgId, userId).
+  const priorInstallBudget = await runAsOrg(INSTALL_ORG_ID, async () => {
+    const prior = await prisma.appUserBudget.findFirst({ where: { userId: editor.id } });
+    await setUserBudget(editor.id, INSTALL_CEILING);
+    return prior;
+  });
   const install = await runAsOrg(INSTALL_ORG_ID, snapshot);
   check(install.modules.length > 0, 'the install org is seeded');
 
@@ -122,6 +135,18 @@ async function main(): Promise<void> {
       // Its marker is the crisis copy (t-112), so it writes only if the new
       // org has none: the region count below says whether it did.
       await crisisResources.run({ prisma, logger });
+      // The golden set's dataset: `ai_dataset.id` is install-wide, so this is
+      // where a second org would collide with the install org's.
+      await goldenSetUnit.run({ prisma, logger });
+      const pointer = await prisma.appVoiceGoldenSet.findFirst({ select: { version: true } });
+      const datasetId = pointer ? goldenSetDatasetId(pointer.version, org.id) : null;
+      const dataset = datasetId
+        ? await prisma.aiDataset.findUnique({ where: { id: datasetId }, select: { id: true } })
+        : null;
+      check(
+        dataset !== null && datasetId !== goldenSetDatasetId(pointer!.version, INSTALL_ORG_ID),
+        'the golden set dataset is seeded under an id of its own, beside the install org’s'
+      );
 
       const mine = await snapshot();
       check(
@@ -195,12 +220,24 @@ async function main(): Promise<void> {
         article?.documentId === document.id && article.documentSlug === document.slug,
         `the article opens the new org's "${document.slug}", not the install org's`
       );
-      const ceiling = 1234.5;
-      const budget = await setUserBudget(editor.id, ceiling);
+      const budget = await setUserBudget(editor.id, NEW_ORG_CEILING);
       const mineBudget = await prisma.appUserBudget.findFirst({ where: { userId: editor.id } });
+      const everyBudget = await runAsSystem('smoke: one person, two orgs', () =>
+        prisma.appUserBudget.findMany({
+          where: { userId: editor.id },
+          select: { orgId: true, monthlyCeilingUsd: true },
+        })
+      );
       check(
-        budget !== null && mineBudget?.monthlyCeilingUsd === ceiling,
-        'the new org holds its own budget for a person the install org also knows'
+        budget !== null &&
+          mineBudget?.monthlyCeilingUsd === NEW_ORG_CEILING &&
+          everyBudget.some(
+            (row) => row.orgId === INSTALL_ORG_ID && row.monthlyCeilingUsd === INSTALL_CEILING
+          ) &&
+          everyBudget.some(
+            (row) => row.orgId === org.id && row.monthlyCeilingUsd === NEW_ORG_CEILING
+          ),
+        'one person holds a budget in each org, side by side'
       );
 
       const strays = await runAsSystem('smoke: cross-org children', async () => {
@@ -294,6 +331,11 @@ async function main(): Promise<void> {
   }
 
   await eraseOrg({ orgId: org.id, actorUserId: editor.id });
+  // Leave the install org's budget for this person as the smoke found it.
+  await runAsOrg(INSTALL_ORG_ID, async () => {
+    if (priorInstallBudget) await setUserBudget(editor.id, priorInstallBudget.monthlyCeilingUsd);
+    else await clearUserBudget(editor.id);
+  });
   const left = await runAsSystem('smoke: anything left', () =>
     Promise.all([
       prisma.appJourneyModule.count({ where: { orgId: org.id } }),
