@@ -25,6 +25,13 @@
 -- the renamed columns, losing their data, and emits drops for hand-written
 -- FKs and indexes elsewhere in the schema.
 
+-- Every step below reads and writes tenant-owned rows. On a database where
+-- `db:tenancy:enable` has run (FORCE ROW LEVEL SECURITY) a NOBYPASSRLS owner
+-- would otherwise see none of them, update nothing, and fail at the first
+-- SET NOT NULL (.context/tenancy/isolation.md). Transaction-local: Prisma
+-- runs the file as one transaction.
+SELECT set_config('app.bypass_rls', 'on', true);
+
 -- 1. Children keep their parent's authored name
 ALTER TABLE "app_foundational_document" ADD COLUMN "collectionSlug" TEXT;
 UPDATE "app_foundational_document" SET "collectionSlug" = "collectionId";

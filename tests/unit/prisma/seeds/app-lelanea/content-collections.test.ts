@@ -242,6 +242,17 @@ describe('016-journey-structure', () => {
 });
 
 describe('017-discovery-questions', () => {
+  // t-113: the set points at its module by the module's generated id, so the
+  // module is looked up first, and a set naming one the journey does not hold
+  // is refused, as the foreign key refused it before.
+  it('refuses a set whose module is not in the database, writing nothing', async () => {
+    await expect(run(questionsUnit)).rejects.toThrow(
+      'Question set "onboarding_discovery_questions" names unknown module "module_00_onboarding"'
+    );
+    expect(db.tables.appQuestionSet).toEqual([]);
+    expect(db.tables.appDiscoveryQuestion).toEqual([]);
+  });
+
   it('writes the set against its module, and the thirty questions numbered 1–30', async () => {
     await run(journeyUnit);
     await run(questionsUnit);
@@ -395,6 +406,31 @@ describe('seedResources refuses what could not be read back', () => {
     });
 
     await expect(seedResources(seed, db.client)).rejects.toThrow(/unknown key "default"/);
+  });
+
+  // t-113: an article points at its document by the document's generated id,
+  // looked up by name before anything is written. The foreign key used to
+  // refuse an unknown name; the lookup does now.
+  it('an article opening a document the database does not hold', async () => {
+    const seed = buildResourcesSeed();
+    seed.resources.push({
+      slug: 'opens-nothing',
+      kind: 'article',
+      position: 0,
+      title: 'Opens nothing',
+      subtitle: 'names a document that was never seeded',
+      relatesTo: null,
+      duration: null,
+      readingTime: '3 min',
+      href: null,
+      documentSlug: 'no_such_document',
+    });
+
+    await expect(seedResources(seed, db.client)).rejects.toThrow(
+      'There is no foundational document "no_such_document"'
+    );
+    expect(db.tables.appResourceCollection).toEqual([]);
+    expect(db.tables.appResource).toEqual([]);
   });
 
   it('a library with no words for `default`', async () => {

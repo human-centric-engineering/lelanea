@@ -257,6 +257,11 @@ export async function seedResources(
       }),
       'foundational document'
     );
+    // Every article's document is resolved before anything is written, so an
+    // unknown one refuses the whole library rather than half of it.
+    const documentIds = seed.resources.map((row) =>
+      row.documentSlug === null ? null : documentId(row.documentSlug)
+    );
     const collection = await tx.appResourceCollection.create({
       data: {
         ...seed.collection,
@@ -268,9 +273,9 @@ export async function seedResources(
     });
     const resourceId = idsBySlug(
       await tx.appResource.createManyAndReturn({
-        data: seed.resources.map((row) => ({
+        data: seed.resources.map((row, index) => ({
           ...row,
-          documentId: row.documentSlug === null ? null : documentId(row.documentSlug),
+          documentId: documentIds[index],
           collectionSlug,
           collectionId: collection.id,
           revision: 1,

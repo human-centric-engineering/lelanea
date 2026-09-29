@@ -1441,13 +1441,13 @@ model AppResourceCollection {
   @@map("app_resource_collection")
 }
 
-/// One film or one piece of reading (t-87). One table because they are one
+/// One video, audio piece or article (t-87). One table because they are one
 /// namespace: an id is what the suggestion tool and the drawer's pin resolve
-/// by, and a film and a reading sharing one would always resolve to the film.
+/// by, and two kinds sharing one would always resolve to the same row.
 ///
-/// A film has `duration` and `href`. A reading has `readingTime` and exactly
-/// one of `href` and `documentId`. Both rules are checked on every write and
-/// read (`lib/app/content/resource-view.ts`).
+/// A video or audio piece has `duration` and `href`. An article has
+/// `readingTime` and exactly one of `href` and a document. These rules are
+/// checked on every write and read (`lib/app/content/resource-view.ts`).
 model AppResource {
   id             String                   @id @default(cuid())
   /// Lowercase with hyphens, at most 80 characters. Immutable: a suggestion
@@ -1456,7 +1456,7 @@ model AppResource {
   collectionSlug String
   collectionId   String
   collection     AppResourceCollection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  /// `film` | `reading`.
+  /// `video` | `audio` | `article` (`RESOURCE_KINDS`).
   kind           String
   /// Order within its kind, which is the order the drawer offers them in.
   position       Int
@@ -1466,13 +1466,14 @@ model AppResource {
   /// A module id, `journey`, `situations`, or null for a piece that belongs to
   /// everything.
   relatesTo      String?
-  /// A film's length, as shown: `6:12`.
+  /// A video's or audio piece's length, as shown: `6:12`.
   duration       String?
-  /// A reading's length, as shown: `8 min`.
+  /// An article's reading time, as shown: `8 min`.
   readingTime    String?
   /// http(s) only.
   href           String?
-  /// A reading that is one of her foundational documents.
+  /// An article that is one of her foundational documents: its name here,
+  /// and the document's generated id in `documentId` (t-113).
   documentSlug   String?
   documentId     String?
   document       AppFoundationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)

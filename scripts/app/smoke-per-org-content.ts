@@ -14,11 +14,12 @@
  *      skipping: the write-once marker is per org, and the same document,
  *      journey, tier, module, question set, question and words names are
  *      accepted beside the install org's.
- *   3. Assert both orgs read the same names, from different rows, and every
- *      child row in the new org points at a parent in the new org.
+ *   3. Assert both orgs read the same names, from different rows.
  *   4. Edit a tier's label and add an article opening a document, in the new
  *      org. Assert the install org's tier is unchanged, and the article points
- *      at the new org's copy of the document, not the install org's.
+ *      at the new org's copy of the document, not the install org's. Then
+ *      assert every generated-id link in the ten tables, in either org, points
+ *      at a parent in its own org.
  *   5. Erase the org through `eraseOrg`, the platform's path, and assert
  *      nothing of it is left.
  *
@@ -126,28 +127,6 @@ async function main(): Promise<void> {
         'the read services serve the new org its own journey and questions'
       );
 
-      const strays = await runAsSystem('smoke: cross-org children', async () => {
-        const org = { select: { orgId: true } } as const;
-        const [modules, tierRevisions, sets, questions, documents, wordsRevisions] =
-          await Promise.all([
-            prisma.appJourneyModule.findMany({ select: { orgId: true, journey: org } }),
-            prisma.appJourneyTierRevision.findMany({ select: { orgId: true, tier: org } }),
-            prisma.appQuestionSet.findMany({ select: { orgId: true, module: org } }),
-            prisma.appDiscoveryQuestion.findMany({ select: { orgId: true, set: org } }),
-            prisma.appFoundationalDocument.findMany({ select: { orgId: true, collection: org } }),
-            prisma.appResourceWordsRevision.findMany({ select: { orgId: true, words: org } }),
-          ]);
-        return [
-          ...modules.map((row) => row.orgId !== row.journey.orgId),
-          ...tierRevisions.map((row) => row.orgId !== row.tier.orgId),
-          ...sets.map((row) => row.orgId !== row.module.orgId),
-          ...questions.map((row) => row.orgId !== row.set.orgId),
-          ...documents.map((row) => row.orgId !== row.collection.orgId),
-          ...wordsRevisions.map((row) => row.orgId !== row.words.orgId),
-        ].filter(Boolean).length;
-      });
-      check(strays === 0, 'every child row, in either org, points at a parent in its own org');
-
       const tier = mine.tiers[0];
       if (!tier) throw new Error('the new org has no tiers');
       const tierRow = await prisma.appJourneyTier.findFirst({
@@ -184,11 +163,72 @@ async function main(): Promise<void> {
         article?.documentId === document.id && article.documentSlug === document.slug,
         `the article opens the new org's "${document.slug}", not the install org's`
       );
+      const strays = await runAsSystem('smoke: cross-org children', async () => {
+        const org = { select: { orgId: true } } as const;
+        const differ = (
+          rows: { orgId: string | null; parent: { orgId: string | null } | null }[]
+        ) => rows.filter((row) => row.parent !== null && row.orgId !== row.parent.orgId).length;
+        const counts = await Promise.all([
+          prisma.appFoundationalDocument
+            .findMany({ select: { orgId: true, collection: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.collection })))),
+          prisma.appFoundationalDocumentRevision
+            .findMany({ select: { orgId: true, document: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.document })))),
+          prisma.appJourneyTier
+            .findMany({ select: { orgId: true, journey: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.journey })))),
+          prisma.appJourneyModule
+            .findMany({ select: { orgId: true, journey: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.journey })))),
+          prisma.appJourneyTierRevision
+            .findMany({ select: { orgId: true, tier: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.tier })))),
+          prisma.appJourneyModuleRevision
+            .findMany({ select: { orgId: true, module: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.module })))),
+          prisma.appQuestionSet
+            .findMany({ select: { orgId: true, module: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.module })))),
+          prisma.appQuestionSetRevision
+            .findMany({ select: { orgId: true, set: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.set })))),
+          prisma.appDiscoveryQuestion
+            .findMany({ select: { orgId: true, set: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.set })))),
+          prisma.appDiscoveryQuestionRevision
+            .findMany({ select: { orgId: true, question: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.question })))),
+          prisma.appResource
+            .findMany({ select: { orgId: true, collection: org, document: org } })
+            .then(
+              (rows) =>
+                differ(rows.map((r) => ({ orgId: r.orgId, parent: r.collection }))) +
+                differ(rows.map((r) => ({ orgId: r.orgId, parent: r.document })))
+            ),
+          prisma.appResourceRevision
+            .findMany({ select: { orgId: true, resource: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.resource })))),
+          prisma.appResourceWords
+            .findMany({ select: { orgId: true, collection: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.collection })))),
+          prisma.appResourceWordsRevision
+            .findMany({ select: { orgId: true, words: org } })
+            .then((rows) => differ(rows.map((r) => ({ orgId: r.orgId, parent: r.words })))),
+        ]);
+        return counts.reduce((sum, n) => sum + n, 0);
+      });
+      check(
+        strays === 0,
+        'every generated-id link, in either org, points at a parent in its own org'
+      );
     });
 
     const after = await runAsOrg(INSTALL_ORG_ID, snapshot);
+    const bySlug = (rows: readonly { slug: string }[]) =>
+      JSON.stringify([...rows].sort((x, y) => x.slug.localeCompare(y.slug)));
     check(
-      JSON.stringify(after.tiers) === JSON.stringify(install.tiers),
+      bySlug(after.tiers) === bySlug(install.tiers),
       "the new org's tier edit left the install org's tiers as they were"
     );
   } catch (error) {
