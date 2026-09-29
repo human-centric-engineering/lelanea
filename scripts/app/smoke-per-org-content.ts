@@ -335,18 +335,21 @@ async function checkTwoOrgs(editorId: string, sourceKey: string): Promise<void> 
 
       // Acknowledgements (t-116): the install org already holds this person's
       // terms at this version, and the new org's gate must still record its own.
-      const ack = await recordAcknowledgement(editorId, 'terms');
-      const repeat = await recordAcknowledgement(editorId, 'terms');
       // The rows collide under the old key only if both orgs serve the same
-      // version, which a freshly seeded install org does.
-      const installAckVersion = await runAsOrg(
+      // version, which a freshly seeded install org does. Checked before any
+      // write, so an edited install org reads as a precondition, not a defect.
+      const installTerms = await runAsOrg(
         INSTALL_ORG_ID,
         async () => (await getRequiredVersions()).terms
       );
-      check(
-        installAckVersion === ack.row.documentVersion,
-        'both orgs serve the same terms version (on a freshly seeded database)'
-      );
+      const mineTerms = (await getRequiredVersions()).terms;
+      if (installTerms !== mineTerms) {
+        throw new Error(
+          `Precondition: the install org serves terms ${installTerms} and the seed ${mineTerms}. Run this on a freshly seeded database.`
+        );
+      }
+      const ack = await recordAcknowledgement(editorId, 'terms');
+      const repeat = await recordAcknowledgement(editorId, 'terms');
       const everyAck = await runAsSystem('smoke: one person, two gates', () =>
         prisma.appAcknowledgement.findMany({
           where: { userId: editorId, kind: 'terms', documentVersion: ack.row.documentVersion },
