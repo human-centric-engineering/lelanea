@@ -69,7 +69,7 @@ import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed
 import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { clearUserBudget, setUserBudget } from '@/lib/app/agent/settings';
-import { recordAcknowledgement } from '@/lib/app/gateway/acknowledgements';
+import { getRequiredVersions, recordAcknowledgement } from '@/lib/app/gateway/acknowledgements';
 import { foundationalSourceKey, isMirrored } from '@/lib/app/content/knowledge-mirror';
 import { toDocumentDetail } from '@/lib/app/content/document-view';
 import { getOrCreateDefaultKnowledgeBase } from '@/lib/orchestration/knowledge/document-manager';
@@ -177,17 +177,27 @@ async function main(): Promise<void> {
     });
     await checkTwoOrgs(editor.id, sourceKey);
   } finally {
-    await runAsOrg(INSTALL_ORG_ID, async () => {
-      if (priorInstallBudget) await setUserBudget(editor.id, priorInstallBudget.monthlyCeilingUsd);
-      else await clearUserBudget(editor.id);
-    });
-    await runAsSystem('smoke: put the install org back', async () => {
-      if (installAck) await prisma.appAcknowledgement.delete({ where: { id: installAck } });
-      // The designation goes with its document (ON DELETE CASCADE).
-      // `deleteMany`, so a stub something else already removed cannot mask
-      // the smoke's own result.
-      if (installStub) await prisma.aiKnowledgeDocument.deleteMany({ where: { id: installStub } });
-    });
+    // Each put-back runs whether or not the one before it failed.
+    const putBack = await Promise.allSettled([
+      runAsOrg(INSTALL_ORG_ID, async () => {
+        if (priorInstallBudget) {
+          await setUserBudget(editor.id, priorInstallBudget.monthlyCeilingUsd);
+        } else await clearUserBudget(editor.id);
+      }),
+      runAsSystem('smoke: put the install org back', async () => {
+        if (installAck) await prisma.appAcknowledgement.delete({ where: { id: installAck } });
+        // The designation goes with its document (ON DELETE CASCADE).
+        // `deleteMany`, so a stub something else already removed cannot mask
+        // the smoke's own result.
+        if (installStub)
+          await prisma.aiKnowledgeDocument.deleteMany({ where: { id: installStub } });
+      }),
+    ]);
+    for (const result of putBack) {
+      if (result.status === 'rejected') {
+        logger.error('Smoke: could not put the install org back', result.reason);
+      }
+    }
   }
 }
 
@@ -331,7 +341,7 @@ async function checkTwoOrgs(editorId: string, sourceKey: string): Promise<void> 
       // version, which a freshly seeded install org does.
       const installAckVersion = await runAsOrg(
         INSTALL_ORG_ID,
-        async () => (await recordAcknowledgement(editorId, 'terms')).row.documentVersion
+        async () => (await getRequiredVersions()).terms
       );
       check(
         installAckVersion === ack.row.documentVersion,
