@@ -12,8 +12,44 @@
  */
 
 import { prisma } from '@/lib/db/client';
-import { registerAppDriftProbe, constraintExists } from '@/lib/db/drift-probes';
-import { tenantOwnedModels } from '@/lib/tenancy/classification';
+import { registerAppDriftProbe, constraintExists, type Probe } from '@/lib/db/drift-probes';
+
+/**
+ * t-115. Every `app_*` table with an `orgId` column carries
+ * `<table>_orgId_not_null`, `CHECK ("orgId" IS NOT NULL)`.
+ *
+ * One probe over the whole schema rather than one per table, and derived from
+ * the database itself: a new `app_*` table whose migration forgot the CHECK
+ * fails here without anyone adding it to a list. Refuses to pass vacuously:
+ * finding no `app_*` table with `orgId` at all is a failure, not a clean run.
+ */
+export const everyAppRowNamesItsOrg: Probe = async () => {
+  const rows = await prisma.$queryRaw<Array<{ table_name: string; has_check: boolean }>>`
+    SELECT c.table_name,
+           EXISTS (
+             SELECT 1
+             FROM pg_constraint k
+             JOIN pg_class t ON t.oid = k.conrelid
+             WHERE t.relname = c.table_name
+               AND k.contype = 'c'
+               AND k.conname = c.table_name || '_orgId_not_null'
+               AND pg_get_constraintdef(k.oid) LIKE '%"orgId" IS NOT NULL%'
+           ) AS has_check
+    FROM information_schema.columns c
+    WHERE c.table_schema = current_schema()
+      AND c.table_name LIKE 'app\\_%'
+      AND c.column_name = 'orgId'
+    ORDER BY c.table_name
+  `;
+  if (rows.length === 0) {
+    return { ok: false, note: 'found no app_* table with an orgId column' };
+  }
+  const missing = rows.filter((row) => !row.has_check).map((row) => row.table_name);
+  if (missing.length > 0) {
+    return { ok: false, note: `no orgId CHECK on: ${missing.join(', ')}` };
+  }
+  return { ok: true };
+};
 
 export function registerLeafDriftProbes(): void {
   registerAppDriftProbe({
@@ -193,19 +229,14 @@ export function registerLeafDriftProbes(): void {
     });
   }
 
-  // t-115. Every tenant-owned app_* table refuses a row with no org
+  // t-115. Every app_* table refuses a row with no org
   // (`20261004100300_app_org_id_required`). A CHECK, because Prisma cannot
-  // model one, so `migrate dev` would drop it. Derived from the tenant-owned
-  // roster rather than listed, so a new app_* table that forgets the CHECK
-  // fails here instead of accepting rows no org can see or any per-org key
-  // can catch.
-  for (const table of tenantOwnedModels(prisma).values()) {
-    if (!table.startsWith('app_')) continue;
-    registerAppDriftProbe({
-      name: `${table}_orgId_not_null (every row names its org)`,
-      kind: 'CHECK constraint',
-      table,
-      probe: constraintExists(`${table}_orgId_not_null`, '"orgId" IS NOT NULL'),
-    });
-  }
+  // model one, so `migrate dev` would drop it. A row with no org would be
+  // seen by no org and caught by no per-org key.
+  registerAppDriftProbe({
+    name: '<table>_orgId_not_null on every app_* table (every row names its org)',
+    kind: 'CHECK constraint',
+    table: 'app_*',
+    probe: everyAppRowNamesItsOrg,
+  });
 }

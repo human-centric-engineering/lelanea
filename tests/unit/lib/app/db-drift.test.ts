@@ -34,23 +34,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * about the registration into an assertion about the check.
  */
 const queryRaw = vi.fn();
-vi.mock('@/lib/db/client', async () => {
-  // t-115: the orgId CHECK probes are derived from the tenant-owned roster,
-  // which the classification reads from a real client's runtime data model.
-  // A real generated client on a pool that never connects supplies it, as in
-  // `tests/unit/lib/tenancy/model-classification.test.ts`.
-  const { Pool } = await import('pg');
-  const { PrismaPg } = await import('@prisma/adapter-pg');
-  const { PrismaClient } = await import('@prisma/client');
-  const pool = new Pool({ connectionString: 'postgresql://never:connects@127.0.0.1:1/never' });
-  const real = new PrismaClient({ adapter: new PrismaPg(pool) });
-  return {
-    prisma: {
-      $queryRaw: (...args: unknown[]) => queryRaw(...args),
-      _runtimeDataModel: (real as unknown as { _runtimeDataModel: unknown })._runtimeDataModel,
-    },
-  };
-});
+vi.mock('@/lib/db/client', () => ({
+  prisma: { $queryRaw: (...args: unknown[]) => queryRaw(...args) },
+}));
 
 import { registerAppDriftProbes } from '@/lib/app/db-drift';
 import { getAppDriftProbes, resetAppDriftProbes } from '@/lib/db/drift-probes';
@@ -316,48 +302,48 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
   });
 
   /**
-   * t-115 — every tenant-owned `app_*` table refuses a row with no org, by a
-   * CHECK Prisma cannot model. The probes are derived from the roster, so this
-   * reads the tables from the schema text rather than from the same roster:
-   * a table the derivation missed would otherwise be missed here too.
+   * t-115 — every `app_*` table with `orgId` refuses a row with no org, by a
+   * CHECK Prisma cannot model. One probe reads the whole schema, so a new
+   * table whose migration forgot the CHECK fails without joining a list.
    */
-  it('registers an orgId CHECK probe for every app_* table that has orgId', async () => {
-    const { readdir, readFile } = await import('node:fs/promises');
-    const dir = `${process.cwd()}/prisma/schema`;
-    const text = (
-      await Promise.all(
-        (await readdir(dir))
-          .filter((file) => file.endsWith('.prisma'))
-          .map((file) => readFile(`${dir}/${file}`, 'utf8'))
-      )
-    ).join('\n');
-    const expected = [...text.matchAll(/^model \w+ \{([\s\S]*?)^\}/gm)]
-      .filter((model) => /^\s*orgId\s+String/m.test(model[1]))
-      .map((model) => /@@map\("([^"]+)"\)/.exec(model[1])?.[1])
-      .filter((table): table is string => table?.startsWith('app_') ?? false)
-      .sort();
+  describe('the orgId CHECK probe', () => {
+    const probe = () =>
+      getAppDriftProbes().find((p) => p.name.includes('_orgId_not_null on every app_* table'));
 
-    registerAppDriftProbes();
-    const checked = getAppDriftProbes()
-      .filter((p) => p.kind === 'CHECK constraint' && p.name.includes('_orgId_not_null'))
-      .map((p) => p.table)
-      .sort();
+    it('is registered', () => {
+      registerAppDriftProbes();
+      expect(probe()?.kind).toBe('CHECK constraint');
+    });
 
-    expect(expected.length).toBeGreaterThan(30);
-    expect(checked).toEqual(expected);
-  });
+    it('passes when every app_* table with orgId has its CHECK', async () => {
+      queryRaw.mockResolvedValueOnce([
+        { table_name: 'app_acknowledgement', has_check: true },
+        { table_name: 'app_turn', has_check: true },
+      ]);
+      registerAppDriftProbes();
 
-  it('passes on the CHECK the migration writes, and FAILS when it is gone', async () => {
-    registerAppDriftProbes();
-    const probe = getAppDriftProbes().find(
-      (p) => p.table === 'app_turn' && p.kind === 'CHECK constraint'
-    );
+      await expect(probe()?.probe()).resolves.toEqual({ ok: true });
+    });
 
-    queryRaw.mockResolvedValueOnce([{ def: 'CHECK (("orgId" IS NOT NULL))' }]);
-    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+    it('FAILS naming each table without one', async () => {
+      queryRaw.mockResolvedValueOnce([
+        { table_name: 'app_acknowledgement', has_check: true },
+        { table_name: 'app_new_thing', has_check: false },
+      ]);
+      registerAppDriftProbes();
 
-    queryRaw.mockResolvedValueOnce([]);
-    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+      await expect(probe()?.probe()).resolves.toEqual({
+        ok: false,
+        note: 'no orgId CHECK on: app_new_thing',
+      });
+    });
+
+    it('FAILS rather than passing vacuously when it finds no app_* table at all', async () => {
+      queryRaw.mockResolvedValueOnce([]);
+      registerAppDriftProbes();
+
+      await expect(probe()?.probe()).resolves.toMatchObject({ ok: false });
+    });
   });
 
   it('keeps the framework probes when the leaf registers its own', () => {
