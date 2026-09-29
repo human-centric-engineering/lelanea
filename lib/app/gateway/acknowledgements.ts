@@ -40,6 +40,7 @@
 import type { AppAcknowledgement } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { requireOrgId } from '@/lib/tenancy/context';
 import { isRecord } from '@/lib/utils';
 import {
   getFoundationalDocument,
@@ -200,9 +201,9 @@ export interface RecordAcknowledgementResult {
 
 /**
  * Whether a rejected write is the unique-index violation on
- * `(userId, kind, documentVersion)` — the same person, the same kind, the same
- * version, from last week or from a double-click a millisecond ago. Every other
- * code is a real failure and belongs to the caller.
+ * `(orgId, userId, kind, documentVersion)` — the same person, in the same org,
+ * the same kind, the same version, from last week or from a double-click a
+ * millisecond ago. Every other code is a real failure and belongs to the caller.
  */
 function isUniqueViolation(error: unknown): boolean {
   return isRecord(error) && error.code === 'P2002';
@@ -239,8 +240,12 @@ export async function recordAcknowledgement(
     if (!isUniqueViolation(error)) throw error;
   }
 
+  // The key is per org (t-116): the row that collided is this org's, the one
+  // the insert was stamped with.
   const row = await prisma.appAcknowledgement.findUnique({
-    where: { userId_kind_documentVersion: { userId, kind, documentVersion } },
+    where: {
+      orgId_userId_kind_documentVersion: { orgId: requireOrgId(), userId, kind, documentVersion },
+    },
     select,
   });
   // The unique violation says the row exists, so `null` here means it was

@@ -50,6 +50,7 @@ import {
   recordAcknowledgement,
 } from '@/lib/app/gateway/acknowledgements';
 import { listFoundationalDocuments } from '@/lib/app/content/document-store';
+import { runAsOrg } from '@/lib/tenancy/context';
 import { fakeDocumentStore, seededCollection } from '@/tests/helpers/app/foundational-documents';
 
 /** The version the seed gives both documents — read, not written down. */
@@ -277,14 +278,16 @@ describe('recordAcknowledgement', () => {
       acknowledgedAt: first,
     });
 
-    const result = await recordAcknowledgement('user-1', 'terms');
+    const result = await runAsOrg('org-b', () => recordAcknowledgement('user-1', 'terms'));
 
     expect(result.created).toBe(false);
     expect(result.row.acknowledgedAt).toEqual(first);
+    // The row that collided is the current org's, so the read is keyed by it.
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId_kind_documentVersion: {
+          orgId_userId_kind_documentVersion: {
+            orgId: 'org-b',
             userId: 'user-1',
             kind: 'terms',
             documentVersion: COLLECTION_VERSION,
@@ -305,7 +308,9 @@ describe('recordAcknowledgement', () => {
     create.mockRejectedValue({ code: 'P2002' });
     findUnique.mockResolvedValue(null);
 
-    await expect(recordAcknowledgement('user-1', 'terms')).rejects.toThrow(/vanished/);
+    await expect(runAsOrg('org-b', () => recordAcknowledgement('user-1', 'terms'))).rejects.toThrow(
+      /vanished/
+    );
   });
 });
 

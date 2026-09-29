@@ -104,9 +104,11 @@ function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
     ({
       where,
     }: {
-      where: { userId_kind_documentVersion: { kind: string; documentVersion: string } };
+      where: {
+        orgId_userId_kind_documentVersion: { kind: string; documentVersion: string };
+      };
     }) => {
-      const key = where.userId_kind_documentVersion;
+      const key = where.orgId_userId_kind_documentVersion;
       const hit = rows.find(
         (r) => r.kind === key.kind && r.documentVersion === key.documentVersion
       );
