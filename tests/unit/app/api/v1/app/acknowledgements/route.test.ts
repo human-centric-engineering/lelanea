@@ -13,6 +13,7 @@
  * collection sees its own version here and nothing else changes.
  */
 
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Her documents are read from the database since t-86. This serves exactly the
@@ -87,7 +88,8 @@ function createSession(sessionId = 'session_test') {
 
 /** A minimal in-memory ledger so a POST changes what the next read reports. */
 function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
-  const rows = initial.map((r) => ({ ...r, acknowledgedAt: AT }));
+  // Every row is in the org the request enters: the install org, at `single`.
+  const rows = initial.map((r) => ({ ...r, orgId: INSTALL_ORG_ID, acknowledgedAt: AT }));
   findMany.mockImplementation(() => Promise.resolve(rows));
   create.mockImplementation(({ data }: { data: { kind: string; documentVersion: string } }) => {
     if (rows.some((r) => r.kind === data.kind && r.documentVersion === data.documentVersion)) {
@@ -96,7 +98,12 @@ function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
         Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
       );
     }
-    const row = { id: `ack-${rows.length + 1}`, ...data, acknowledgedAt: AT };
+    const row = {
+      id: `ack-${rows.length + 1}`,
+      ...data,
+      orgId: INSTALL_ORG_ID,
+      acknowledgedAt: AT,
+    };
     rows.push(row);
     return Promise.resolve(row);
   });
@@ -105,12 +112,14 @@ function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
       where,
     }: {
       where: {
-        orgId_userId_kind_documentVersion: { kind: string; documentVersion: string };
+        orgId_userId_kind_documentVersion: { orgId: string; kind: string; documentVersion: string };
       };
     }) => {
+      // Keyed by org (t-116): a repeat read in any other org finds nothing.
       const key = where.orgId_userId_kind_documentVersion;
       const hit = rows.find(
-        (r) => r.kind === key.kind && r.documentVersion === key.documentVersion
+        (r) =>
+          r.orgId === key.orgId && r.kind === key.kind && r.documentVersion === key.documentVersion
       );
       return Promise.resolve(hit ? { id: 'ack-existing', ...hit } : null);
     }
