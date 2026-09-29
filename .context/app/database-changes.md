@@ -119,9 +119,13 @@ migrations dated 2026-10-03 are the worked example.
   `20261004100200_app_acknowledgement_designation_per_org_uniques`).
   `app_acknowledgement` is unique on `(orgId, userId, kind, documentVersion)`,
   so a person accepts a document in each org they join, and the repeat read
-  in `recordAcknowledgement` is keyed by `requireOrgId()`.
+  in `recordAcknowledgement` is keyed by `requireOrgId()`. That includes
+  `age_18`: a second org asks again, because each org keeps its own record
+  and cannot read another's.
   `app_knowledge_designation` is unique on `(orgId, sourceKey)`, so each org's
-  knowledge mirror holds `foundational:the_mission` for itself. A new unique
+  knowledge mirror can hold `foundational:the_mission` for itself. The key is
+  all this changed: the mirror cron still runs with no org, so only a
+  documents write in an org reconciles that org's mirror. A new unique
   key on an `app_*` table starts with `orgId`, or it fails the second org at
   `multi`.
 
