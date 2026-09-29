@@ -57,6 +57,7 @@ function input(overrides: Partial<AppendSlotValueInput> = {}): AppendSlotValueIn
 function headRow(overrides: Partial<SlotValue> & Pick<SlotValue, 'version'>): SlotValue {
   return {
     id: `sv_${overrides.version}`,
+    orgId: null,
     userId: 'user_1',
     slotSlug: 'primary_goal',
     value: 'old',

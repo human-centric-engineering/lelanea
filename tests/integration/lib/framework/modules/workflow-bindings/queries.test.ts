@@ -20,7 +20,7 @@ const { prismaFake, store, resetStore } = vi.hoisted(() => {
 
   const prismaFake: any = {
     module: {
-      findUnique: async ({ where }: any) => {
+      findFirst: async ({ where }: any) => {
         for (const m of store.modules.values()) if (m.slug === where.slug) return { ...m };
         return null;
       },

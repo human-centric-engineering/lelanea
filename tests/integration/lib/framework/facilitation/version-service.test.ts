@@ -67,6 +67,9 @@ const { prismaFake, resetStore } = vi.hoisted(() => {
       store.graphs.set(row.id, row);
       return { ...row };
     },
+    // `findUnique` (id-keyed reads) and `findFirst` (the per-org slug reads §107 —
+    // `facilitationGraph.slug` is no longer globally unique) share one lookup: the
+    // fake's `findGraph` already branches on which key the `where` carries.
     findUnique: async ({ where, include }: any) => {
       const row = findGraph(where);
       if (!row) return null;
@@ -80,6 +83,7 @@ const { prismaFake, resetStore } = vi.hoisted(() => {
       }
       return { ...row };
     },
+    findFirst: async (args: any) => graph.findUnique(args),
     findUniqueOrThrow: async ({ where }: any) => {
       const row = findGraph(where);
       if (!row) throw new Error('not found');

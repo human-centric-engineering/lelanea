@@ -28,7 +28,7 @@ export async function listSlotDefinitions(): Promise<SlotDefinition[]> {
  * distinguish "retired" from "never declared".
  */
 export async function getSlotDefinition(slug: string): Promise<SlotDefinition | null> {
-  return prisma.slotDefinition.findUnique({ where: { slug } });
+  return prisma.slotDefinition.findFirst({ where: { slug } });
 }
 
 /** A slot's group/scope — the two axes a per-agent exposure allowlist gates on (t-4). */

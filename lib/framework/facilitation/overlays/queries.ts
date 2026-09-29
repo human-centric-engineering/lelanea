@@ -50,7 +50,8 @@ export async function findRelatedNodes(
     `SELECT o."nodeKey" AS "nodeKey"
        FROM framework_node_embedding s
        JOIN framework_node_embedding o
-         ON o."graphSlug" = s."graphSlug"
+         ON o."orgId" IS NOT DISTINCT FROM s."orgId"
+        AND o."graphSlug" = s."graphSlug"
         AND o."version" = s."version"
         AND o."nodeKey" <> s."nodeKey"
       WHERE s."graphSlug" = $1 AND s."version" = $2 AND s."nodeKey" = $3

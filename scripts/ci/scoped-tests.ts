@@ -13,7 +13,7 @@
  * is listed in the export manifest. Nothing imports the schema, so no module
  * graph connects them, so `--changed` will never select that test no matter
  * which model you add. Same for the reserved-namespace rule, the fork-init
- * seam roster, and the outbound-redirect roster. Those are exactly the checks
+ * seam roster, the outbound-redirect roster, and the tenancy guards. Those are exactly the checks
  * this repo leans on hardest, and a scoped run that silently stopped running
  * them would be the "skipped gate reads as green" shape
  * `.context/architecture/ci.md` spends a section on.
@@ -103,6 +103,64 @@ export const ALWAYS_RUN_TESTS: readonly AlwaysRunEntry[] = [
       'parses `prisma/schema/*.prisma` and fails until every model with a ' +
       'user FK appears in `SUBJECT_DATA_SOURCES`. Adding a model is exactly ' +
       'the change no import chain connects to this test.',
+  },
+  {
+    path: 'tests/unit/lib/privacy/org-sources.test.ts',
+    reason:
+      'parses `prisma/schema/*.prisma` and fails until every model carrying ' +
+      '`orgId` appears in the org export manifest (`ORG_DATA_SOURCES` / ' +
+      '`ORG_EXCLUDED_SOURCES`) — the org-subject twin of export-sources. Adding ' +
+      'a tenant-owned model is exactly the change no import chain connects to ' +
+      'this test, and a miss ships an org export and erasure silently short.',
+  },
+  {
+    path: 'tests/unit/lib/tenancy/model-classification.test.ts',
+    reason:
+      'parses `prisma/schema/*.prisma` and fails naming any model that neither ' +
+      'carries `orgId` nor sits on a tenancy allowlist. Adding a model is exactly ' +
+      'the change no import chain connects to this test.',
+  },
+  {
+    path: 'tests/unit/lib/tenancy/org-scoped-slugs.test.ts',
+    reason:
+      'parses `prisma/schema/*.prisma` and fails naming any tenant-owned model whose ' +
+      '`slug` is a global `@unique` or lacks `@@unique([orgId, slug])`, and reads the ' +
+      'migrations for the two per-org partial uniques. A new tenant-owned model with a ' +
+      'slug reaches no test through the module graph.',
+  },
+  {
+    path: 'tests/unit/lib/tenancy/process-state.test.ts',
+    reason:
+      'scans every module under `lib/` for module-level mutable state and fails ' +
+      'on any holder not declared, with its tenancy posture, in ' +
+      '`lib/tenancy/process-state.ts`. The change it exists to catch — a new ' +
+      '`Map` cache in some far-off module — is one whose import graph never ' +
+      'reaches this test, and an undeclared holder is a cross-org cache at multi.',
+  },
+  {
+    path: 'tests/unit/lib/tenancy/roles.test.ts',
+    reason:
+      'holds `ORG_ROLES` / `ORG_STATUSES` equal to the generated Prisma ' +
+      '`OrgRole` / `OrgStatus` enums. Adding an enum value edits only ' +
+      '`prisma/schema/tenancy.prisma`, and the generated client is gitignored, ' +
+      'so no changed module reaches this test. It compares against the client, ' +
+      'so it catches the drift once `prisma generate` has run.',
+  },
+  {
+    path: 'tests/unit/lib/orchestration/scope-authority.test.ts',
+    reason:
+      'walks `lib/` for every capability-dispatch site that threads a scope and ' +
+      'checks which ones may treat it as authoritative. A new dispatch site in ' +
+      'some far-off module is exactly the change no import chain connects to ' +
+      'this test, and a miss lets a request-body scope decide what a tool acts on.',
+  },
+  {
+    path: 'tests/unit/lib/tenancy/policy-coverage.test.ts',
+    reason:
+      'reads every `prisma/migrations/*/migration.sql` off disk (policies created ' +
+      'minus dropped) and compares them with the tenant-owned roster the generated client derives, ' +
+      'failing naming any tenant-owned table without its `org_isolation` policy. A ' +
+      'new model with `orgId`, or a migration, reaches no test through the module graph.',
   },
   {
     path: 'tests/unit/scripts/ci/ownerless-surfaces.test.ts',

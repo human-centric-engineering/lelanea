@@ -12,11 +12,7 @@ import { NotFoundError } from '@/lib/api/errors';
 import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { Prisma } from '@prisma/client';
-import {
-  broadcastMcpResourceUpdated,
-  broadcastMcpResourcesChanged,
-  clearMcpResourceCache,
-} from '@/lib/orchestration/mcp';
+import { clearMcpResourceCache } from '@/lib/orchestration/mcp';
 import { updateExposedResourceSchema } from '@/lib/validations/mcp';
 import { cuidSchema } from '@/lib/validations/common';
 
@@ -42,10 +38,6 @@ export const PATCH = withAdminAuth<{ id: string }>(async (request, session, { pa
   });
 
   clearMcpResourceCache();
-  broadcastMcpResourcesChanged();
-  // Subscribed clients also get a per-URI updated notification so they can
-  // refresh just this resource without re-running resources/list.
-  broadcastMcpResourceUpdated(updated.uri);
 
   log.info('MCP exposed resource updated', {
     adminId: session.user.id,
@@ -67,7 +59,6 @@ export const DELETE = withAdminAuth<{ id: string }>(async (request, session, { p
 
   await prisma.mcpExposedResource.delete({ where: { id } });
   clearMcpResourceCache();
-  broadcastMcpResourcesChanged();
 
   log.info('MCP exposed resource deleted', {
     adminId: session.user.id,

@@ -77,13 +77,11 @@ export async function getJourney(
   if (!(await canRead(viewer, key.userId, scope))) {
     throw new ForbiddenError('Not permitted to read this journey');
   }
-  return prisma.userJourney.findUnique({
+  return prisma.userJourney.findFirst({
     where: {
-      userId_graphSlug_contextKey: {
-        userId: key.userId,
-        graphSlug: key.graphSlug,
-        contextKey: key.contextKey ?? '',
-      },
+      userId: key.userId,
+      graphSlug: key.graphSlug,
+      contextKey: key.contextKey ?? '',
     },
   });
 }

@@ -47,6 +47,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 function mockModule(overrides: Partial<Module> = {}): Module {
   return {
     id: 'mod_1',
+    orgId: 'install',
     slug: 'demo',
     name: 'Demo',
     status: 'draft',

@@ -24,8 +24,10 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { UserJourney } from '@prisma/client';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 interface NaturalKey {
+  orgId: string;
   userId: string;
   graphSlug: string;
   contextKey: string;
@@ -37,7 +39,11 @@ const { prismaFake, resetStore, allJourneys } = vi.hoisted(() => {
 
   const find = (k: NaturalKey): UserJourney | undefined =>
     [...journeys.values()].find(
-      (j) => j.userId === k.userId && j.graphSlug === k.graphSlug && j.contextKey === k.contextKey
+      (j) =>
+        j.orgId === k.orgId &&
+        j.userId === k.userId &&
+        j.graphSlug === k.graphSlug &&
+        j.contextKey === k.contextKey
     );
 
   const prismaFake = {
@@ -47,11 +53,11 @@ const { prismaFake, resetStore, allJourneys } = vi.hoisted(() => {
       // the behaviour the empty `update` is chosen for, and the reason a constant
       // mock cannot test it.
       upsert: async (args: {
-        where: { userId_graphSlug_contextKey: NaturalKey };
+        where: { orgId_userId_graphSlug_contextKey: NaturalKey };
         create: NaturalKey;
         update: Partial<UserJourney>;
       }) => {
-        const existing = find(args.where.userId_graphSlug_contextKey);
+        const existing = find(args.where.orgId_userId_graphSlug_contextKey);
         if (existing) {
           Object.assign(existing, args.update);
           return { ...existing };
@@ -65,8 +71,10 @@ const { prismaFake, resetStore, allJourneys } = vi.hoisted(() => {
         journeys.set(row.id, row);
         return { ...row };
       },
-      findUniqueOrThrow: async (args: { where: { userId_graphSlug_contextKey: NaturalKey } }) => {
-        const hit = find(args.where.userId_graphSlug_contextKey);
+      findUniqueOrThrow: async (args: {
+        where: { orgId_userId_graphSlug_contextKey: NaturalKey };
+      }) => {
+        const hit = find(args.where.orgId_userId_graphSlug_contextKey);
         if (!hit) throw new Error('not found');
         return { ...hit };
       },
@@ -170,5 +178,14 @@ describe('createJourney against a stateful store', () => {
 
     expect(created.userId).toBe('user_bob');
     expect(allJourneys()).toHaveLength(1);
+  });
+
+  it('stamps the org from requireOrgId() onto both the lookup key and the created row', async () => {
+    const created = await createJourney(alice, { userId: 'user_alice', graphSlug: 'main' });
+
+    // Single-tenant mode resolves requireOrgId() to the install org with nothing
+    // entered — the same org create.ts's naturalKey used for the upsert `where`.
+    expect(created.orgId).toBe(INSTALL_ORG_ID);
+    expect(allJourneys()[0].orgId).toBe(INSTALL_ORG_ID);
   });
 });

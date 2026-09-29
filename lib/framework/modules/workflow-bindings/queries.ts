@@ -39,7 +39,7 @@ export interface ModuleWorkflowBindingView extends ModuleWorkflowBinding {
 export async function listModuleWorkflowBindings(
   moduleSlug: string
 ): Promise<ModuleWorkflowBindingView[]> {
-  const moduleRow = await prisma.module.findUnique({
+  const moduleRow = await prisma.module.findFirst({
     where: { slug: moduleSlug },
     select: { id: true },
   });

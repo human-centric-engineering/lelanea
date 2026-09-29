@@ -5,8 +5,15 @@
  * Assembles one org's record into a single JSON bundle: the org row, every
  * table that holds the org's own data, and the credentials it holds. Like the
  * subject export it decides nothing about *which* tables — it walks
- * {@link ORG_DATA_SOURCES}, the manifest a build-breaking test holds level
- * with every `orgId` column in `prisma/schema/*.prisma`.
+ * {@link getOrgDataSources} (core's `ORG_DATA_SOURCES` plus a fork's
+ * contribution), the manifest a build-breaking test holds level with every
+ * `orgId` column in `prisma/schema/*.prisma`.
+ *
+ * DAYBREAK "keep mine" (Hub t-134): this file reads the manifest through the
+ * fork-first getters in `lib/privacy/org-sources.ts` (two call sites below).
+ * On a Sunrise sync that conflicts here, keep the getters — reverting to the
+ * constants silently drops every framework table from org exports.
+ * Ledgered in `.context/framework/upstream-asks.md`.
  *
  * **A partial export is worse than no export.** Any source that throws fails
  * the whole export; nothing is best-effort. Same asymmetry with `eraseOrg()`
@@ -25,8 +32,8 @@
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import {
-  ORG_DATA_SOURCES,
-  ORG_EXCLUDED_SOURCES,
+  getOrgDataSources,
+  getOrgExcludedSources,
   type OrgExcludedSource,
   type OrgQuery,
 } from '@/lib/privacy/org-sources';
@@ -95,7 +102,7 @@ export async function exportOrgData(params: ExportOrgParams): Promise<OrgExport>
   // A rejection propagates: an export that quietly lost a section would be
   // indistinguishable, to the reader, from one that had nothing to show.
   const results = await Promise.all(
-    ORG_DATA_SOURCES.map(async (source) => ({ source, rows: await source.fetch(query) }))
+    getOrgDataSources().map(async (source) => ({ source, rows: await source.fetch(query) }))
   );
 
   const data: Record<string, unknown[]> = {};
@@ -133,7 +140,7 @@ export async function exportOrgData(params: ExportOrgParams): Promise<OrgExport>
       orgId,
       exported,
       attribution,
-      excluded: [...ORG_EXCLUDED_SOURCES],
+      excluded: getOrgExcludedSources(),
     },
     org,
     data,

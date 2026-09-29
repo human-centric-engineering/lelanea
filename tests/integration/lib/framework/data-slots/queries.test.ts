@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { slotDefinition: { findUnique: vi.fn(), findMany: vi.fn() } },
+  prisma: { slotDefinition: { findFirst: vi.fn(), findMany: vi.fn() } },
 }));
 
 import {
@@ -23,16 +23,16 @@ beforeEach(() => vi.clearAllMocks());
 describe('getSlotDefinition', () => {
   it('resolves a definition by its unique slug', async () => {
     const row = { slug: 'primary_goal', isActive: true };
-    vi.mocked(prisma.slotDefinition.findUnique).mockResolvedValue(row as never);
+    vi.mocked(prisma.slotDefinition.findFirst).mockResolvedValue(row as never);
 
     await expect(getSlotDefinition('primary_goal')).resolves.toEqual(row);
-    expect(prisma.slotDefinition.findUnique).toHaveBeenCalledWith({
+    expect(prisma.slotDefinition.findFirst).toHaveBeenCalledWith({
       where: { slug: 'primary_goal' },
     });
   });
 
   it('returns null for an undefined slug (an open-mint candidate)', async () => {
-    vi.mocked(prisma.slotDefinition.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.slotDefinition.findFirst).mockResolvedValue(null);
     await expect(getSlotDefinition('never_declared')).resolves.toBeNull();
   });
 });

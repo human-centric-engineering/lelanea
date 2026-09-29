@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  module: { findMany: vi.fn(), findUnique: vi.fn() },
+  module: { findMany: vi.fn(), findFirst: vi.fn() },
 }));
 vi.mock('@/lib/db/client', () => ({ prisma: prismaMock }));
 
@@ -46,16 +46,16 @@ describe('getModuleSettings', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns the module settings by slug', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(SETTINGS);
+    prismaMock.module.findFirst.mockResolvedValue(SETTINGS);
     const row = await getModuleSettings('onboarding');
     expect(row).toEqual(SETTINGS);
-    expect(prismaMock.module.findUnique).toHaveBeenCalledWith(
+    expect(prismaMock.module.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { slug: 'onboarding' } })
     );
   });
 
   it('throws NotFoundError when the module does not exist', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(null);
+    prismaMock.module.findFirst.mockResolvedValue(null);
     await expect(getModuleSettings('missing')).rejects.toThrow(NotFoundError);
   });
 });

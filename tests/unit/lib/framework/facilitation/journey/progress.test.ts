@@ -41,7 +41,7 @@ const prismaMock = {
     return Promise.resolve(rawResult);
   }),
   userJourney: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   userNodeState: {
     findUniqueOrThrow: vi.fn(),
@@ -90,6 +90,7 @@ const JOURNEY_ID = 'uj_1';
 function nodeStateRow(overrides: Partial<UserNodeState> = {}): UserNodeState {
   return {
     id: 'uns_1',
+    orgId: null,
     journeyId: JOURNEY_ID,
     nodeKey: 'chart',
     status: 'active',
@@ -111,7 +112,7 @@ beforeEach(() => {
   // Hand the callback the same mock the module-level client uses, so an assertion
   // reads the same whether the call happens inside the transaction or before it.
   executeTransaction.mockImplementation((cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock));
-  prismaMock.userJourney.findUnique.mockResolvedValue({ id: JOURNEY_ID });
+  prismaMock.userJourney.findFirst.mockResolvedValue({ id: JOURNEY_ID });
   prismaMock.userNodeState.findUniqueOrThrow.mockResolvedValue(nodeStateRow());
 });
 
@@ -174,7 +175,7 @@ describe('recordNodeProgress — access', () => {
 
     // The guard runs BEFORE anything — a denied call must not even resolve the
     // journey, let alone issue the update.
-    expect(prismaMock.userJourney.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.userJourney.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 });
@@ -187,13 +188,11 @@ describe('recordNodeProgress — the journey it resolves', () => {
 
     // Decision 3: the caller never supplies a `journeyId`, so there is no argument
     // through which a row belonging to an unguarded subject could be named.
-    expect(prismaMock.userJourney.findUnique).toHaveBeenCalledWith({
+    expect(prismaMock.userJourney.findFirst).toHaveBeenCalledWith({
       where: {
-        userId_graphSlug_contextKey: {
-          userId: SUBJECT,
-          graphSlug: 'reclaim',
-          contextKey: 'run_7',
-        },
+        userId: SUBJECT,
+        graphSlug: 'reclaim',
+        contextKey: 'run_7',
       },
       select: { id: true },
     });
@@ -202,14 +201,14 @@ describe('recordNodeProgress — the journey it resolves', () => {
   it('defaults an omitted contextKey to the empty-string sentinel, never undefined', async () => {
     await recordNodeProgress({ userId: SUBJECT }, key, 'chart', { chartShown: true });
 
-    const where = prismaMock.userJourney.findUnique.mock.calls[0]?.[0] as {
-      where: { userId_graphSlug_contextKey: { contextKey: unknown } };
+    const where = prismaMock.userJourney.findFirst.mock.calls[0]?.[0] as {
+      where: { contextKey: unknown };
     };
-    expect(where.where.userId_graphSlug_contextKey.contextKey).toBe('');
+    expect(where.where.contextKey).toBe('');
   });
 
   it('refuses with journey_not_started when the journey does not exist, and issues no update', async () => {
-    prismaMock.userJourney.findUnique.mockResolvedValue(null);
+    prismaMock.userJourney.findFirst.mockResolvedValue(null);
 
     const result = await recordNodeProgress({ userId: SUBJECT }, key, 'chart', {
       chartShown: true,
@@ -310,7 +309,7 @@ describe('recordNodeProgress — the merge and its read-back are paired', () => 
   });
 
   it('does not open a transaction when the guard or the journey lookup refuses', async () => {
-    prismaMock.userJourney.findUnique.mockResolvedValue(null);
+    prismaMock.userJourney.findFirst.mockResolvedValue(null);
     await recordNodeProgress({ userId: SUBJECT }, key, 'chart', { chartShown: true });
     expect(executeTransaction).not.toHaveBeenCalled();
 

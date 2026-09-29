@@ -35,7 +35,10 @@ describe('framework/001-framework-rubric-judge seed', () => {
     });
     expect(upsert).toHaveBeenCalledTimes(1);
     const arg = upsert.mock.calls[0][0];
-    expect(arg.where).toEqual({ slug: 'eval-judge-framework-rubric' });
+    // Keyed on the per-org unique (Sunrise §107): at single the install org.
+    expect(arg.where).toEqual({
+      orgId_slug: { orgId: 'install', slug: 'eval-judge-framework-rubric' },
+    });
     // Create shape: a system judge with runtime-resolved model/provider.
     expect(arg.create).toMatchObject({
       slug: 'eval-judge-framework-rubric',

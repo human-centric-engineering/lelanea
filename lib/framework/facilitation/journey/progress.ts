@@ -120,17 +120,15 @@ export async function recordNodeProgress(
     throw new ForbiddenError('Not permitted to record progress on this journey');
   }
 
-  // Resolved from the guarded natural key — see decision 3. `findUnique` rather than
+  // Resolved from the guarded natural key — see decision 3. A direct read rather than
   // the `canRead`-guarded `getJourney` because the write grant above is the stricter
   // of the two and has already been checked; re-checking through the read seam would
   // read as if `canRead` were what authorises this.
-  const journey = await prisma.userJourney.findUnique({
+  const journey = await prisma.userJourney.findFirst({
     where: {
-      userId_graphSlug_contextKey: {
-        userId: key.userId,
-        graphSlug: key.graphSlug,
-        contextKey: key.contextKey ?? '', // '' is the default, context-free journey (X3)
-      },
+      userId: key.userId,
+      graphSlug: key.graphSlug,
+      contextKey: key.contextKey ?? '', // '' is the default, context-free journey (X3)
     },
     select: { id: true },
   });

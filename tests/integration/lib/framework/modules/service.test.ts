@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
 const prismaMock = vi.hoisted(() => ({
-  module: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  module: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
   moduleAgentBinding: { findMany: vi.fn() },
 }));
 const auditMock = vi.hoisted(() => ({ logAdminAction: vi.fn() }));
@@ -56,7 +56,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('writes the patch and audits the changed fields', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current());
+    prismaMock.module.findFirst.mockResolvedValue(current());
     prismaMock.module.update.mockResolvedValue(current({ status: 'active', name: 'Onboarding' }));
 
     const patch = { status: 'active' };
@@ -76,7 +76,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('serialises Date bounds to ISO strings in the audit diff', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current());
+    prismaMock.module.findFirst.mockResolvedValue(current());
     prismaMock.module.update.mockResolvedValue(current());
 
     const from = new Date('2026-03-01T00:00:00.000Z');
@@ -90,7 +90,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('does not audit a no-op patch (re-sent identical values)', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ status: 'active' }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ status: 'active' }));
     prismaMock.module.update.mockResolvedValue(current({ status: 'active' }));
 
     await updateModuleSettings({ slug: 'onboarding', patch: { status: 'active' }, ...ARGS });
@@ -100,7 +100,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('rejects an incoherent window (from after until) without writing', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current());
+    prismaMock.module.findFirst.mockResolvedValue(current());
 
     const patch = {
       availableFrom: new Date('2026-06-01T00:00:00.000Z'),
@@ -114,7 +114,7 @@ describe('updateModuleSettings', () => {
 
   it('checks coherence against the MERGED row (patch one bound, current the other)', async () => {
     // current.availableUntil is Jan; patch sets availableFrom to June → incoherent merge.
-    prismaMock.module.findUnique.mockResolvedValue(
+    prismaMock.module.findFirst.mockResolvedValue(
       current({ availableUntil: new Date('2026-01-01T00:00:00.000Z') })
     );
     await expect(
@@ -128,14 +128,14 @@ describe('updateModuleSettings', () => {
   });
 
   it('404s on an unknown slug', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(null);
+    prismaMock.module.findFirst.mockResolvedValue(null);
     await expect(
       updateModuleSettings({ slug: 'missing', patch: { name: 'x' }, ...ARGS })
     ).rejects.toThrow(NotFoundError);
   });
 
   it('fires module.status_changed bindings on a status change, with { from, to }', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ status: 'draft' }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ status: 'draft' }));
     prismaMock.module.update.mockResolvedValue(current({ status: 'active' }));
 
     await updateModuleSettings({ slug: 'onboarding', patch: { status: 'active' }, ...ARGS });
@@ -148,7 +148,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('does NOT fire module.status_changed when a non-status field changes', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current());
+    prismaMock.module.findFirst.mockResolvedValue(current());
     prismaMock.module.update.mockResolvedValue(current({ name: 'Renamed' }));
 
     await updateModuleSettings({ slug: 'onboarding', patch: { name: 'Renamed' }, ...ARGS });
@@ -157,7 +157,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('does NOT fire module.status_changed on a no-op status re-submit', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ status: 'active' }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ status: 'active' }));
     prismaMock.module.update.mockResolvedValue(current({ status: 'active' }));
 
     await updateModuleSettings({ slug: 'onboarding', patch: { status: 'active' }, ...ARGS });
@@ -166,7 +166,7 @@ describe('updateModuleSettings', () => {
   });
 
   it('swallows a status_changed dispatch failure (never fails the settings write)', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ status: 'draft' }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ status: 'draft' }));
     prismaMock.module.update.mockResolvedValue(current({ status: 'active' }));
     dispatchMock.runModuleWorkflowBindings.mockRejectedValue(new Error('dispatch boom'));
 
@@ -181,7 +181,7 @@ describe('deleteModule', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('deletes an unregistered module, evicts each bound agent, and audits', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ isRegistered: false }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ isRegistered: false }));
     // Two bindings, one a duplicate agent (two roles) — the eviction set dedups.
     prismaMock.moduleAgentBinding.findMany.mockResolvedValue([
       { agentId: 'agent-1' },
@@ -207,7 +207,7 @@ describe('deleteModule', () => {
   });
 
   it('deletes a module with no bindings without evicting anything', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ isRegistered: false }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ isRegistered: false }));
     prismaMock.moduleAgentBinding.findMany.mockResolvedValue([]);
     prismaMock.module.delete.mockResolvedValue(undefined);
 
@@ -218,7 +218,7 @@ describe('deleteModule', () => {
   });
 
   it('refuses to delete a registered module (409), without enumerating or evicting', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ isRegistered: true }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ isRegistered: true }));
 
     await expect(deleteModule({ slug: 'onboarding', ...ARGS })).rejects.toThrow(ConflictError);
     expect(prismaMock.moduleAgentBinding.findMany).not.toHaveBeenCalled();
@@ -228,13 +228,13 @@ describe('deleteModule', () => {
   });
 
   it('404s on an unknown slug', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(null);
+    prismaMock.module.findFirst.mockResolvedValue(null);
     await expect(deleteModule({ slug: 'missing', ...ARGS })).rejects.toThrow(NotFoundError);
     expect(prismaMock.module.delete).not.toHaveBeenCalled();
   });
 
   it('maps a concurrent delete (P2025) to a clean 404, evicting nothing', async () => {
-    prismaMock.module.findUnique.mockResolvedValue(current({ isRegistered: false }));
+    prismaMock.module.findFirst.mockResolvedValue(current({ isRegistered: false }));
     prismaMock.moduleAgentBinding.findMany.mockResolvedValue([{ agentId: 'agent-1' }]);
     prismaMock.module.delete.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('gone', { code: 'P2025', clientVersion: 'x' })

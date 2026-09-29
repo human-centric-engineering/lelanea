@@ -62,6 +62,7 @@
 import { Prisma } from '@prisma/client';
 import type { UserJourney } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
+import { requireOrgId } from '@/lib/tenancy/context';
 import { ForbiddenError } from '@/lib/api/errors';
 import { canWrite, type JourneyViewer, type AccessScope } from '@/lib/framework/shared/access';
 import type { JourneyKey } from '@/lib/framework/facilitation/journey/queries';
@@ -86,7 +87,12 @@ export async function createJourney(
     throw new ForbiddenError('Not permitted to start this journey');
   }
 
+  // The run's natural key is per org (Sunrise §107, §34): one user in two orgs can
+  // run the same map slug in each. Resolved once, so the lookup key and the row the
+  // create writes cannot name different orgs. At TENANCY_MODE=single this is the
+  // install org.
   const naturalKey = {
+    orgId: requireOrgId(),
     userId: key.userId,
     graphSlug: key.graphSlug,
     contextKey: key.contextKey ?? '', // '' is the default, context-free journey (X3)
@@ -94,7 +100,7 @@ export async function createJourney(
 
   try {
     return await prisma.userJourney.upsert({
-      where: { userId_graphSlug_contextKey: naturalKey },
+      where: { orgId_userId_graphSlug_contextKey: naturalKey },
       create: naturalKey,
       // Empty on purpose: an already-started run is returned AS IT STANDS. Writing
       // anything here (a touched `startedAt`, say) would make a second "start"
@@ -109,7 +115,7 @@ export async function createJourney(
     // conditional-update path uses for a racing `complete`.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return prisma.userJourney.findUniqueOrThrow({
-        where: { userId_graphSlug_contextKey: naturalKey },
+        where: { orgId_userId_graphSlug_contextKey: naturalKey },
       });
     }
     throw err;

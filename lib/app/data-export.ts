@@ -57,7 +57,13 @@
 
 import { collectFrameworkSubjectData } from '@/lib/framework/privacy/export';
 import { initFrameworkSubjectSources } from '@/lib/framework/privacy/export-sources';
-import { collectLeafSubjectData, initLeafSubjectSources } from '@/lib/app/leaf-data-export';
+import {
+  collectLeafSubjectData,
+  initLeafSubjectSources,
+  leafOrgSources,
+} from '@/lib/app/leaf-data-export';
+import { frameworkOrgSources } from '@/lib/framework/privacy/org-sources';
+import type { AppOrgSourceContribution } from '@/lib/privacy/org-sources';
 
 /** Identity of the subject being exported. */
 export interface AppSubjectQuery {
@@ -141,4 +147,24 @@ export async function collectAppSubjectData(subject: AppSubjectQuery): Promise<A
   // another tier already declared, and a refused declaration fails the coverage
   // guard by name. This is the backstop for the ordering, not the guard itself.
   return { ...leaf, ...framework };
+}
+
+/**
+ * DAYBREAK — the org-export contribution (Hub t-134, §34 f-framework-tenancy).
+ *
+ * Read by `getOrgDataSources()` / `getOrgExcludedSources()` in
+ * `lib/privacy/org-sources.ts` — a fork-first seam Daybreak carries in core
+ * until Sunrise §109 ships its own (ledgered in
+ * `.context/framework/upstream-asks.md`). Pulled on every read, so there is no
+ * registration to lose. Framework first, then the leaf; a leaf naming a model
+ * the framework already declared fails the org-sources guard's "declared once"
+ * rule by name, the same backstop the subject manifest relies on.
+ */
+export function collectAppOrgSources(): AppOrgSourceContribution {
+  const framework = frameworkOrgSources();
+  const leaf = leafOrgSources();
+  return {
+    sources: [...framework.sources, ...leaf.sources],
+    excluded: [...framework.excluded, ...leaf.excluded],
+  };
 }

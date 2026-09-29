@@ -20,7 +20,9 @@
 // `lib/framework/facilitation/map/schema.ts` and validated before every publish.
 model FacilitationGraph {
   id                 String   @id @default(cuid())
-  slug               String   @unique // stable identity; user journeys key on it
+  orgId              String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org                Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  slug               String // stable identity; user journeys key on it — unique per org, see @@unique([orgId, slug]) below
   name               String
   description        String?  @db.Text
   draftDefinition    Json? // in-progress edit; null when there is no draft
@@ -32,7 +34,9 @@ model FacilitationGraph {
   publishedVersion FacilitationGraphVersion?  @relation("FacilitationGraphPublishedVersion", fields: [publishedVersionId], references: [id])
   versions         FacilitationGraphVersion[] @relation("FacilitationGraphVersions")
 
+  @@unique([orgId, slug])
   @@index([publishedVersionId])
+  @@index([orgId])
   @@map("framework_facilitation_graph")
 }
 
@@ -45,6 +49,8 @@ model FacilitationGraph {
 // here; personal data (journeys, events) arrives in `f-journey-state`.
 model FacilitationGraphVersion {
   id            String   @id @default(cuid())
+  orgId         String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org           Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   graphId       String
   version       Int // monotonic per graph, starts at 1
   definition    Json // full map snapshot at publish time
@@ -57,6 +63,7 @@ model FacilitationGraphVersion {
 
   @@unique([graphId, version])
   @@index([graphId])
+  @@index([orgId])
   @@map("framework_facilitation_graph_version")
 }
 
@@ -75,6 +82,8 @@ model FacilitationGraphVersion {
 // live *published* version (F2), so republishing must never orphan a journey.
 model UserJourney {
   id         String   @id @default(cuid())
+  orgId      String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org        Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   userId     String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration
   graphSlug  String // the map being walked — plain string (F2), not an FK
   // Distinguishes parallel instances of the same map for one user (e.g. one user
@@ -90,7 +99,8 @@ model UserJourney {
   events     JourneyEvent[]
   nudges     FrameworkJourneyNudge[]
 
-  @@unique([userId, graphSlug, contextKey])
+  @@unique([orgId, userId, graphSlug, contextKey])
+  @@index([orgId])
   @@map("framework_user_journey")
 }
 
@@ -100,6 +110,8 @@ model UserJourney {
 // `lib/framework/facilitation/journey/vocabulary.ts`.
 model UserNodeState {
   id             String    @id @default(cuid())
+  orgId          String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org            Org?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   journeyId      String
   nodeKey        String
   status         String // unvisited | available | active | visited | completed
@@ -115,6 +127,7 @@ model UserNodeState {
   journey UserJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
 
   @@unique([journeyId, nodeKey])
+  @@index([orgId])
   @@map("framework_user_node_state")
 }
 
@@ -133,6 +146,8 @@ model UserNodeState {
 // vocabulary + the stats read side — not this schema.
 model JourneyEvent {
   id         String   @id @default(cuid())
+  orgId      String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org        Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   userId     String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration (erasure path for EVERY event)
   journeyId  String? // set for journey-traversal events; null for non-journey engagement
   nodeKey    String?
@@ -145,6 +160,7 @@ model JourneyEvent {
 
   @@index([userId, occurredAt]) // erasure + per-user engagement reads
   @@index([journeyId, occurredAt]) // the journey timeline (§5.2)
+  @@index([orgId])
   @@map("framework_journey_event")
 }
 
@@ -158,13 +174,17 @@ model JourneyEvent {
 // migration (the `ModuleAgentBinding` pattern). No `userId` → not user data, no erasure path.
 model FacilitationAgentBinding {
   id        String   @id @default(cuid())
+  orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agentId   String // FK to AiAgent.id — no @relation; ON DELETE CASCADE hand-written in the migration
-  role      String   @unique // one facilitation seat, one agent (a role IS the seat); validated against FACILITATION_ROLES
+  role      String // one facilitation seat, one agent (a role IS the seat); validated against FACILITATION_ROLES — unique per org, see @@unique([orgId, role]) below
   config    Json? // per-binding overrides (tone hints, etc.), opaque to the framework
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([orgId, role])
   @@index([agentId])
+  @@index([orgId])
   @@map("framework_facilitation_agent")
 }
 
@@ -180,6 +200,8 @@ model FacilitationAgentBinding {
 // `ModuleVersion.createdBy`), so no erasure cascade/hook (unlike the user-data journey/slot tables).
 model FacilitationPolicy {
   id        String   @id @default(cuid())
+  orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   kind      String // discriminator (auto_approval | …); CHECK-constrained in the migration, payload validated by facilitationPolicySchema
   enabled   Boolean  @default(true)
   payload   Json // per-kind config, validated by the kind's Zod schema
@@ -188,6 +210,7 @@ model FacilitationPolicy {
   updatedAt DateTime @updatedAt
 
   @@index([kind, enabled])
+  @@index([orgId])
   @@map("framework_facilitation_policy")
 }
 
@@ -203,6 +226,8 @@ model FacilitationPolicy {
 // (the approving admin) is a hand-FK to core `User`, `ON DELETE SET NULL` (retained audit).
 model StructureChangeProposal {
   id                 String   @id @default(cuid())
+  orgId              String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org                Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   subjectType        String // 'map' | 'module_config' | 'policy' — CHECK-constrained (widened, f-governance-plus t-1)
   subjectId          String // names the existing target: a map/graph slug, a module slug, or a policy id
   baseVersion        Int? // the version the diff was made against (map/module_config conflict detection); null for policy or when none published yet
@@ -218,6 +243,7 @@ model StructureChangeProposal {
 
   @@index([subjectType, subjectId, status], map: "framework_scp_subject_status_idx")
   @@index([status], map: "framework_scp_status_idx")
+  @@index([orgId])
   @@map("framework_structure_change_proposal")
 }
 
@@ -232,6 +258,8 @@ model StructureChangeProposal {
 // `supervisorReport` holds the optional post-hoc supervisor verdict (t-2).
 model FrameworkConversationEval {
   id               String   @id @default(cuid())
+  orgId            String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org              Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   conversationId   String // the AiConversation scored
   messageId        String   @unique // the assistant AiMessage turn — one eval per turn (re-scoring upserts)
   contextType      String // 'facilitation' | 'module' — the framework surface
@@ -248,6 +276,7 @@ model FrameworkConversationEval {
 
   @@index([conversationId])
   @@index([contextType, contextId])
+  @@index([orgId])
   @@map("framework_conversation_eval")
 }
 
@@ -268,6 +297,8 @@ model FrameworkConversationEval {
 // (t-2), mirroring `AiKnowledgeChunk`/`AiMessageEmbedding`.
 model FrameworkNodeEmbedding {
   id                 String                      @id @default(cuid())
+  orgId              String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org                Org?                        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   graphSlug          String // the FacilitationGraph.slug — plain string (nodes/versions are JSON, F2), not an FK
   nodeKey            String // MapNode.key within the published version
   version            Int // the published FacilitationGraphVersion.version this embedding is for
@@ -279,8 +310,9 @@ model FrameworkNodeEmbedding {
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
 
-  @@unique([graphSlug, nodeKey, version])
+  @@unique([orgId, graphSlug, nodeKey, version])
   @@index([graphSlug, version])
+  @@index([orgId])
   @@map("framework_node_embedding")
 }
 
@@ -296,6 +328,8 @@ model FrameworkNodeEmbedding {
 // the journey tables. `@@unique([journeyId])` keeps it to one throttle row per journey (upsert target).
 model FrameworkJourneyNudge {
   id        String   @id @default(cuid())
+  orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
+  org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   userId    String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration (erasure path)
   journeyId String   @unique // one throttle row per journey; the upsert key
   nodeKey   String // the next-step node last nudged toward (audit/debug)
@@ -304,5 +338,6 @@ model FrameworkJourneyNudge {
   journey UserJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([orgId])
   @@map("framework_journey_nudge")
 }

@@ -45,6 +45,9 @@ describe('findRelatedNodes', () => {
     // SQL is a self-join over the same (graphSlug, version), cosine <=>, self-excluded, threshold-gated.
     expect(call[0]).toContain('<=>');
     expect(call[0]).toContain('"nodeKey" <> s."nodeKey"');
+    // Neighbours come from the same org's copy of the map only (§34: graphSlug is unique per org,
+    // so without this two orgs' nodes could pair whenever RLS is off or bypassed).
+    expect(call[0]).toContain('o."orgId" IS NOT DISTINCT FROM s."orgId"');
     expect(call.slice(1)).toEqual(['primary', 4, 'a', 0.6, 3]); // $1..$5
   });
 

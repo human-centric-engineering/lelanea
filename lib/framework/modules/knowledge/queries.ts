@@ -34,7 +34,7 @@ export interface ModuleKnowledgeScope {
  * display fields, newest first. Unknown module ⇒ 404 (not an empty scope).
  */
 export async function listModuleKnowledge(moduleSlug: string): Promise<ModuleKnowledgeScope> {
-  const moduleRow = await prisma.module.findUnique({
+  const moduleRow = await prisma.module.findFirst({
     where: { slug: moduleSlug },
     select: { id: true },
   });

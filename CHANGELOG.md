@@ -16,8 +16,293 @@ release process.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-09-24
+
+> **Alpha release.** Nineteenth tagged Sunrise release. **MINOR bump**. It
+> carries three multi-tenancy features: org identity (§106), row and namespace
+> isolation (§107), and tenant-aware jobs and caches (§108). It also removes the
+> stateful MCP transport. Measured against `v0.12.1`: 20 PRs merged, no direct
+> commits, two issues closed; the suite is 1,220 files and 24,767 tests.
+>
+> **`TENANCY_MODE=single` stays the default, and every tenancy entry below
+> states its single-mode behaviour.** `multi` can now be switched on end to end;
+> [`multi-tenancy.md`](./.context/architecture/multi-tenancy.md#enabling-it-end-to-end)
+> gives the steps. The rest of the phase has not landed, so read
+> [what you do not yet get](./.context/architecture/multi-tenancy.md#what-you-get-at-multi-and-what-you-do-not-yet)
+> before turning it on. The system agents, for one, are still the install
+> org's rows.
+>
+> ## What a fork has to do: merge it in two stages
+>
+> Six migrations. One of them, `20260919200000_tenant_owned_org_id`, adds
+> `orgId` to 38 tables and backfills every existing row: 38 `UPDATE`s and 38
+> new indexes. That rewrite is the one to schedule on a large database. To
+> apply the identity half first, **merge in two stages, deploying each**.
+> Staging is recommended, not required; a fork with small tables can take the
+> tag in one merge.
+>
+> **Stage 1: merge commit `7d511506`** (#815, the end of §106). Name the SHA,
+> not a branch. Make it a **merge commit, never a squash**. Then run `prisma
+> migrate deploy` and deploy before starting stage 2. If you merge twice and
+> deploy once, every migration runs together and the staging buys nothing.
+> At this commit `lib/sunrise-version.ts` still reads `0.12.1`, which is an
+> ancestor, so the fork-sync ancestry check passes. Stage 1 is the **§106
+> entries below**. They carry these things to act on:
+>
+> - **Two migrations:** `20260917120000_org_identity` (the `Org` and
+>   `OrgMembership` tables, the install org, a membership for every user,
+>   nullable `orgId` on the four credential tables, and
+>   `Session.activeOrgId`, which is also a better-auth session
+>   `additionalField` now) and
+>   `20260918120000_credential_org_backfill`. The second re-runs the first's
+>   backfill; on a fork, where both run in one deploy, it updates nothing.
+> - **A new seam row**, `lib/app/tenant-resolver.ts`, in
+>   `tests/unit/lib/app/defaults.test.ts`. It ships empty.
+> - **Docblock-only edits to `lib/app/authorization.ts`.** A fork that filled
+>   that file keeps its code and takes the comment. If your policy compares
+>   `resource.orgId === viewer.orgId`, guard the resource side: two
+>   `undefined`s compare equal.
+> - **Type changes a build finds:** `EmbedContext` and `McpAuthContext` require
+>   `orgId`.
+> - **One change a build does NOT find:** `runInvitedSignup` takes the
+>   invitation as a second argument, and that argument defaults to `null`. So
+>   a fork's own call with one argument still compiles and still passes the
+>   `invite_only` gate. But the new user's org membership is then decided
+>   without the invitation. An invited platform admin joins the install org as
+>   `MEMBER`, not `OWNER`. An invitation naming another org is ignored. Pass
+>   the invitation metadata at every call site you own.
+> - **Test changes:** the role-literal guard now also polices `'OWNER'` and
+>   `'MEMBER'`. `org-sources.test.ts` fails on any model of yours that carries
+>   `orgId` until it has a disposition in `lib/privacy/org-sources.ts`.
+> - **A dependency move:** `@better-auth/core` moves to `dependencies` at the
+>   same pin.
+>
+> **Stage 2: merge `v0.13.0`.** It brings the other four migrations:
+>
+> - `tenant_owned_org_id`, the backfill above;
+> - `org_isolation_policies`, which creates the RLS policies but does **not**
+>   enable them;
+> - `org_scoped_slugs`;
+> - `remove_mcp_max_sessions_per_key`.
+>
+> And these, each of which announces itself:
+>
+> 1. **Three new always-run tests name your models.**
+>    `model-classification.test.ts` fails on any model that neither carries
+>    `orgId` nor sits on an allowlist. `policy-coverage.test.ts` fails on a
+>    tenant-owned table without its `org_isolation` policy.
+>    `org-scoped-slugs.test.ts` fails on a tenant-owned slug that is still a
+>    global `@unique`. The fix for each is in the §107 entries; never delete
+>    an allowlist row to pass.
+> 2. **`where: { slug }` on `AiAgent`, `AiKnowledgeBase` or
+>    `AiKnowledgeDocument` no longer type-checks.** Use `findFirst` inside an
+>    org context, or `orgId_slug`.
+> 3. **`prisma` is a `TenancyClient`.** Only a parameter annotated exactly
+>    `PrismaClient` needs changing.
+> 4. **The stateful MCP transport is gone.** The table under _Removed_ lists
+>    every symbol, route and env var. `PATCH …/mcp/settings` is now strict: a
+>    body carrying `maxSessionsPerKey`, or any unknown key, gets a 400.
+> 5. **Retention's exported shapes moved.** `RetentionResult` and
+>    `RetentionWindows` lose their audit-log fields.
+>    `POST …/maintenance/tick` gains a ninth `backgroundTasks` name,
+>    `auditLogRetention`.
+> 6. **A test that mocks `@/lib/admin/logs`** must now return
+>    `registerLogTenancy`.
+> 7. **A docblock-only edit to `lib/app/db-drift.ts`**, handled the same way
+>    as the `authorization.ts` edit in stage 1.
+> 8. **Process-global state is now declared.** A fork that adds a module-level
+>    cache to a platform file under `lib/` meets the
+>    `lib/tenancy/process-state.ts` scanner test.
+>
+> Three new optional env vars, all needed only to enable `multi`:
+> `MIGRATE_DATABASE_URL`, plus `TENANCY_APP_ROLE_PASSWORD` and
+> `TENANCY_APP_ROLE` (defaults to `sunrise_app`) for `db:tenancy:role`. Delete `MCP_SESSION_MODE`
+> wherever you set it.
+>
+> **Two behaviour changes at `single`, both corrections.**
+> `AiApiKey.lastUsedAt` is now written; it had been `NULL` for every key. And
+> `POST /api/v1/user/api-keys` refuses an `admin` key asked for while acting
+> in any org but the install org.
+>
+> **Read the MCP entry under _Security_ even though the code is gone.** A fork
+> still on 0.12.x that runs `MCP_SESSION_MODE=stateful` is exposed to a
+> cross-key SSE hijack; the default (`stateless`) never was.
+
 ### Added
 
+- **`runDetached(fn)` on `lib/tenancy/context.ts`** (multi-tenancy §108 t-715)
+  — runs `fn` outside every tenant scope, for arming something whose lifetime
+  is the **process's** from inside a request. An `AsyncLocalStorage` store is
+  captured when `setInterval` is called, so a repeating timer armed inside
+  `runAsOrg` carries that org for the life of the process: every line it logs
+  is attributed to whichever org made the first request after boot, and at
+  `multi` every query it makes is scoped to them. It has **no caller in the
+  platform**: the one it was written for, `McpSessionManager`'s eviction sweep,
+  went with the stateful MCP transport later in this same release (see
+  `Removed`). It ships anyway, because the rule is the asset and the alternatives
+  at a call site are both wrong — `runAsSystem` (an audited database bypass) or a
+  re-derived `AsyncLocalStorage.exit`. **Use it only where the timer's
+  work belongs to the process rather than to one org** — a timer belonging to
+  one org's work (a lease heartbeat, a delivery retry, a `fetch` abort) must
+  KEEP the context it was armed in, because its callback writes that org's rows.
+  "Outlives the request" is not the test: a delivery retry does, and it still
+  belongs to the org that armed it. Nor is this `runAsSystem`, which logs a
+  reason on every entry and is the audited database bypass — a claim about what
+  the code may read that arming a timer is not making.
+- **`registerLogTenancy(bridge)` and the `LogTenancy` type on
+  `lib/admin/logs.ts`** (multi-tenancy §108 t-714) — how the admin log buffer
+  learns which org a line was produced in, and whether the install runs more
+  than one. `lib/tenancy/context.ts` registers it at module scope; nothing else
+  needs to call it. It exists as a registration rather than an import because
+  `lib/admin/logs.ts` must reach no other module at runtime: the logger pulls
+  it in with a literal `require` and is itself imported by client components,
+  so an import here puts `lib/db/client.ts` — and `pg` — in the browser
+  bundle. **Forks:** a test that does `vi.mock('@/lib/admin/logs', …)` must now
+  return `registerLogTenancy`, or importing anything that loads the tenancy
+  module throws.
+- **Each org can set its own retention windows** (multi-tenancy §108 t-713).
+  `PATCH /api/v1/admin/orgs/[id]` takes
+  `settings: { retention: { … } }` — the five windows the tenant retention
+  sweep reads (`webhookRetentionDays`, `webhookDlqRetentionDays`,
+  `costLogRetentionDays`, `executionRetentionDays`, `evaluationRetentionDays`),
+  each optional and nullable, stored on `Org.settings`. A key omitted inherits
+  the global `AiOrchestrationSettings` window; `null` carries whatever `null`
+  means for that column globally (keep forever, except
+  `webhookDlqRetentionDays`, whose existing fallback is "use
+  `webhookRetentionDays`"); `{ "retention": null }` or `{}` removes the slice.
+  A slice is stored and returned in both tenancy modes but **applied at
+  `multi` only** — no prune carries an `orgId`, so at `single`, where there are
+  no policies, one org's window would reach every org's rows. The write refuses
+  a slice whose **effective** cost-log window is shorter than the execution
+  window it would inherit, `executionRetentionDays: null` included: executions
+  kept for ever outlive every finite cost-log window, so keeping them needs
+  `costLogRetentionDays: null` with it. The write replaces
+  the `retention` key and preserves every other key in `settings`, which is a
+  fork's. `auditLogRetentionDays` is deliberately not settable: it prunes a
+  system table with no org. Both objects are strict, and an org's slice is
+  refused when the cost-log window it sets undercuts the execution window it
+  would inherit. Platform admin only until the org console (§111). Two new
+  modules — `lib/tenancy/org-settings.ts` (the slice: its schema, the
+  per-key read and the write-merge) and
+  `lib/orchestration/retention-windows.ts` (`loadRetentionWindows`, the new
+  `loadEffectiveRetentionWindows()`, `readRetentionWindows()` and
+  `RETENTION_WINDOW_KEYS`, moved out of `lib/orchestration/retention.ts`,
+  which re-exports them). `readRetentionWindows()` is `loadRetentionWindows()`
+  without the swallow-on-error, for callers that must not read "I could not
+  look" as "there is nothing to check". See
+  `.context/orchestration/retention.md`.
+- **A fork's recurring job declares whose rows it acts on** (multi-tenancy
+  §108 t-711). `AppJob` (`lib/orchestration/maintenance/app-jobs.ts`, the
+  `registerAppJob` seam) gains an optional `scope?: JobScope` —
+  `'per-org' | { system: string }`, the type re-exported from the same
+  module, with `DEFAULT_APP_JOB_SCOPE = 'per-org'`. A per-org job runs once
+  per active org inside that org's tenant context (its Prisma calls see and
+  stamp that org's rows only; at `multi` the row-level policies enforce it);
+  a system job runs once under the audited bypass with the stated reason
+  logged. Additive: a registration with no `scope` is per-org, which on a
+  single-tenant install is the install org — today's behaviour, now
+  explicit. `lib/app/jobs.ts` is unchanged.
+- **A CI job drives the platform as two orgs and proves neither can see the
+  other** (multi-tenancy §107 t-709). `smoke-multi` in `ci.yml` runs the
+  operator's sequence on a fresh pgvector container — migrate and seed as
+  the owner, `db:tenancy:role --create`, `db:tenancy:enable`, the drift
+  check at `TENANCY_MODE=multi` as the restricted role (93 probes) — then
+  the new `npm run smoke:tenancy-isolation`
+  (`scripts/smoke/tenancy-isolation.ts`, throwaway databases only) as that
+  role: two orgs with equivalent rows, and as one org every read path —
+  vector search, cost reports, conversation semantic search, the message
+  embedder's raw `INSERT`, relation reach from a global root, `forEachOrg`,
+  the credential resolvers and the inbound route called as nobody — answers
+  its own rows and none of the other's. `smoke:tenancy` now also asserts at
+  `single` that RLS is neither enabled nor forced on any tenant-owned table.
+  New on `lib/tenancy/context.ts`: **`runAsCredentialLookup(credential, fn)`**
+  — the null-org system scope for the one read that learns which org a
+  credential belongs to, logged at debug; `resolveApiKey`,
+  `resolveEmbedToken` and `authenticateMcpRequest` run their lookup (and the
+  `lastUsedAt` touch) inside it, which closes the known gap where every
+  credential-authenticated request threw at `multi`, and the inbound and
+  approval routes use it in place of `runAsSystem`. One behaviour change
+  rides along: `AiApiKey.lastUsedAt` is now actually written on every
+  `sk_` request — the previous `void prisma.aiApiKey.update(…)` never ran,
+  a `PrismaPromise` being lazy until awaited, so the column has been `NULL`
+  for every key since it was added; a failed touch is logged at warn. The conversation
+  semantic-search SQL moved from the admin route into
+  `lib/orchestration/chat/conversation-semantic-search.ts`
+  (`searchConversationEmbeddings`) so the harness drives the statement
+  itself; the route's behaviour is unchanged.
+
+- **Isolation policies ship dormant with the schema, and one command turns
+  them on or off** (multi-tenancy §107, the database half of row isolation).
+  One raw-SQL migration, `20260920120000_org_isolation_policies`, creates an
+  `org_isolation` policy on every tenant-owned table (42) — `USING` and
+  `WITH CHECK` both `"orgId" = NULLIF(current_setting('app.current_org',
+  true), '')` behind the bypass arm `current_setting('app.bypass_rls', true) =
+  'on'` — **without** enabling RLS, so a `migrate deploy` carries them while a
+  single-tenant install pays nothing. New commands: `npm run
+  db:tenancy:enable` (refuses if any table lacks its policy; backfills `NULL`
+  `orgId` to the install org — a platform `admin` API key excepted, its `NULL`
+  being the point, and `AiCostLog` skipped, a detached row being no org's — then `ENABLE` + `FORCE ROW LEVEL SECURITY` on every
+  tenant-owned table — derived from the generated client, no list) and `db:tenancy:disable` (`DISABLE` +
+  `NO FORCE`, both flags), each idempotent by reading `pg_class` and
+  refusing to report success until the flags read back; `npm run
+  db:tenancy:role -- --create|--drop` for the required `LOGIN NOBYPASSRLS`
+  app role (`TENANCY_APP_ROLE`, password only via
+  `TENANCY_APP_ROLE_PASSWORD`, sent as a locally computed SCRAM-SHA-256
+  verifier) with its grants and default privileges — nothing on
+  `_prisma_migrations` — refusing to touch a superuser, a `BYPASSRLS` role,
+  a table owner or the connecting role, and revoking before dropping (Neon
+  refuses `DROP OWNED BY`). `prisma/seed.ts` prefers the same owner DSN and
+  now runs through the tenancy chokepoint as the install org (`SeedContext.prisma`
+  is the extended client), so every seeded tenant-owned row is stamped;
+  the raw `INSERT`s that write tenant-owned rows (message embeddings,
+  knowledge chunks from the seeder, the document manager and the two dev
+  scripts) read `orgId` off the parent row in the same statement. A blank
+  `MIGRATE_DATABASE_URL` is unset in every reader, `lib/env.ts` included. New optional env
+  var **`MIGRATE_DATABASE_URL`** — the owner DSN `prisma.config.ts` and the
+  `db:tenancy:*` scripts prefer over `DATABASE_URL`, because a table's owner
+  (and any `BYPASSRLS` role, Neon's `neondb_owner` included) is never
+  subject to the policies. `npm run db:drift-check` gains a derived T-series:
+  `tenancyDriftProbes()` (new export on `lib/db/drift-probes.ts`) yields one
+  `policyExists` probe per tenant-owned table always and an
+  enabled-and-forced probe per table at `TENANCY_MODE=multi` (9 + 42 probes
+  at `single`, 9 + 84 at `multi`); the script now runs under `runAsSystem`.
+  New `lib/tenancy/isolation.ts` (side-effect-free): `orgIsolationPolicySql`,
+  `planRlsSwitch`, `runTenancySwitch`. **Fork note:** a new
+  `tests/unit/lib/tenancy/policy-coverage.test.ts` fails naming any
+  tenant-owned table — yours included — without exactly one `org_isolation`
+  policy in the migrations (append `orgIsolationPolicySql('<table>')` to a new
+  migration), and any non-tenant table carrying one. Behaviour at
+  `TENANCY_MODE=single` is unchanged: the policies are inert until enabled.
+  Docs: new `.context/tenancy/isolation.md`.
+- **Every tenant-owned row knows its org** (multi-tenancy §107, first
+  schema task). One migration, `20260919200000_tenant_owned_org_id`, adds a
+  nullable `orgId` + `org Org? @relation(onDelete: Cascade)` (`SetNull` on
+  `AiCostLog`, a billing record) + `@@index` to
+  the 38 tenant-owned published models that did not yet carry one — every
+  agent, conversation, message, knowledge, workflow, evaluation, experiment,
+  webhook and cost row, child tables included (no join-based policies; the
+  column is what everything derives from) — and backfills every existing row
+  to the install org. `NOT NULL` is a later staged migration. `Org` gains a
+  back-relation per model. New `lib/tenancy/classification.ts`:
+  `SYSTEM_MODELS`, `GLOBAL_CONFIG_MODELS`, `classifyModels()` and
+  `tenantOwnedModels(prisma)` (model → table, derived from the client it is
+  given at runtime — the roster the row-isolation policies, drift probes and
+  enable script will read). Every one of the 38 has a disposition in
+  `lib/privacy/org-sources.ts` (36 `export` — withholding the signing secrets on
+  `AiWebhookSubscription` and `AiWorkflowTrigger`, an execution's `leaseToken`,
+  and an event hook's secret and custom header values via `toSafeHook`;
+  `AiMessageEmbedding` and `AiWorkflowExecutionLeaseEvent` excluded with
+  reasons), so an org export now carries 42 sections. **Fork note:** a new
+  `tests/unit/lib/tenancy/model-classification.test.ts` fails by name on any
+  model — yours included — that neither carries `orgId` nor sits on an
+  allowlist; add the column (the shape is in
+  `.context/tenancy/identity.md`) or classify it deliberately, never by
+  deleting from an allowlist. Behaviour at `TENANCY_MODE=single` is
+  unchanged. The data-layer chokepoint (under _Changed_) stamps the column
+  on every create; a row created between this migration and that stamping
+  carries `NULL`, which the org export treats as the install org's at
+  `single` and strictly at `multi`, where `db:tenancy:enable` will backfill
+  before enforcing.
 - **Every install has an org, and every user belongs to one** (multi-tenancy
   §106, first task). Two published model interfaces in a new
   `prisma/schema/tenancy.prisma`: `Org` (`slug`, `name`, `status`
@@ -181,7 +466,7 @@ release process.
 - **A credential remembers the org it was minted in, and acts only there**
   (multi-tenancy §106, fifth and last task). The four long-lived credentials
   — API keys, embed tokens, agent invite tokens, MCP keys — gained an `orgId`
-  column in 0.12.0 that nothing wrote at mint; under tenancy each was a
+  column in the identity migration above that nothing wrote at mint; under tenancy each was a
   credential that worked everywhere. Now every mint writes the org the
   request was acting in (`orgForMint()` in `lib/tenancy/entry.ts`, one read
   of the tenant context, never a body field) and every resolution enters it:
@@ -201,7 +486,7 @@ release process.
   rule once (install org at `single`, no org at `multi`). One data migration,
   `20260918120000_credential_org_backfill`, re-runs the identity migration's
   four backfill `UPDATE`s verbatim (a test holds them byte-equal) so the
-  credentials minted between 0.12.0 and this release — `orgId = NULL`, read
+  credentials minted between that migration and this one — `orgId = NULL`, read
   as the install org at `single`, refused at `multi` — are bound before any
   install switches modes; from here no mint writes a null org. Guides:
   [`.context/tenancy/identity.md`](./.context/tenancy/identity.md#credentials)
@@ -211,7 +496,219 @@ release process.
   [`agent-visibility.md`](./.context/orchestration/agent-visibility.md#org-binding-106)
   and [`mcp.md`](./.context/orchestration/mcp.md#api-key-lifecycle).
 
+### Removed
+
+- **The stateful MCP transport, and every session-shaped surface with it**
+  (§39 t-718). There is one MCP transport now and it holds nothing: every request
+  stands alone, no `Mcp-Session-Id` is issued, one arriving is **ignored**, and
+  `GET` / `DELETE /api/v1/mcp` answer `405` with `Allow: POST`.
+
+  **Breaking, and the parts a fork has to act on:**
+
+  | Gone                                                          | What to do                                                                 |
+  | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
+  | `MCP_SESSION_MODE`                                             | delete it from every env file and deploy config; an unknown key is inert    |
+  | `GET /api/v1/admin/orchestration/mcp/sessions`                 | nothing to list                                                            |
+  | `DELETE /api/v1/admin/orchestration/mcp/sessions/:id`          | nothing to terminate                                                       |
+  | `McpServerConfig.maxSessionsPerKey` (migration drops the column) | stop sending it to `PATCH …/mcp/settings` — the body is refused with a 400 naming the key, alone or alongside a live field |
+  | `McpSession`, `McpLogLevel`, `MCP_LOG_LEVELS`, `McpLogLevelRank`, `JsonRpcNotification` on `types/mcp.ts` | drop the imports |
+  | `JsonRpcErrorCode.SESSION_NOT_FOUND` (`-32002`) and `.STATELESS_UNSUPPORTED` (`-32005`) | nothing emits either |
+  | `McpSessionManager`, `createEphemeralSession`, `McpResourceAudience`, `NotificationSink` | — |
+  | `getMcpSessionManager()` from `@/lib/orchestration/mcp`        | —                                                                          |
+  | `broadcastMcpToolsChanged`, `broadcastMcpResourcesChanged`, `broadcastMcpPromptsChanged`, `broadcastMcpResourceUpdated` | remove the calls; keep the `clearMcp*Cache()` beside them |
+  | `lib/orchestration/mcp/resource-update-hooks.ts` (`notifyMcpAgentsChanged`, `notifyMcpWorkflowsChanged`, `notifyMcpKnowledgeChanged`) | remove the calls |
+  | `lib/orchestration/mcp/log-emitter.ts` (`emitMcpLog`) and `progress-tracker.ts` (`createProgressReporter`, `extractProgressToken`) | a fork using `emitMcpLog` has no transport to send on |
+  | `resources/subscribe`, `resources/unsubscribe`, `logging/setLevel` | an attempt now answers `METHOD_NOT_FOUND`                                |
+  | the JSON-RPC envelope `GET /api/v1/mcp` used to return with its 405 | stop parsing that 405's body — it is now EMPTY. The stateless GET answered `405` with `{jsonrpc, error: {code: -32005, message}}`; a client or ops script doing `JSON.parse(await res.text())` on it now throws. Read the status and `Allow` instead |
+  | `admin/orchestration/mcp/sessions` page, `mcp-sessions-list.tsx`, `API.ADMIN.ORCHESTRATION.MCP_SESSIONS` and `mcpSessionById` | — |
+
+  **`PATCH /api/v1/admin/orchestration/mcp/settings` now rejects an unknown key**
+  rather than stripping it (`updateMcpSettingsSchema` is `.strict()`). This is
+  what makes the line above true: a plain `z.object` strips what it does not
+  declare, so a settings form PATCHing the whole object got a 200 and lost the
+  `maxSessionsPerKey` value with no signal — the removal announcing itself only in
+  the one shape nobody sends (that key alone). Strict costs a fork one 400 at
+  upgrade time and names the offending key; the same reasoning made §108 t-713's
+  org retention slice strict. It also catches a typo in a field that IS settable,
+  which used to be accepted and ignored.
+
+  **`lib/api/sse.ts` is untouched.** Six non-MCP routes stream through it —
+  `grep -rn "from '@/lib/api/sse'" app` is the list, rather than one copied here
+  that would go stale. The SSE bridge was never MCP's.
+
+  **Why now.** MCP revision
+  [`2026-07-28`](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+  removes protocol-level sessions, the session headers, the `initialize` handshake
+  and the GET stream; tells a server to answer `405` for GET and DELETE and to
+  **ignore** a legacy `Mcp-Session-Id`; and moves server-push to
+  `subscriptions/listen`. Sunrise's default (`stateless`) was already most of that
+  shape. The other mode could not be run — it threw at module scope on `VERCEL` or
+  `AWS_LAMBDA_FUNCTION_NAME`, which is the platform's own deployment target, and
+  it **refused** a current client outright, answering `400 Missing Mcp-Session-Id
+  header` to a request that correctly sends none. Keeping it meant maintaining two
+  transports where one was unusable and increasingly non-conforming.
+
+  **Server-push is not replaced yet.** `subscriptions/listen` is a different
+  design problem from the one that killed `stateful` — a long-lived stream on a
+  function-per-request platform, rather than state shared across processes — and
+  is tracked separately. Until it lands, an MCP client learns a list changed by
+  asking again; the 5-minute registry caches are cleared on every admin mutation
+  exactly as before, so the next `tools/list` is correct.
+  [`mcp.md`](./.context/orchestration/mcp.md#one-transport-and-it-holds-nothing)
+  carries the two decisions that survive the code: a push audience is decided by
+  what CHANGED rather than by who is subscribed, and a session id is not a
+  capability — the key is.
+
+### Security
+
+- **A cross-key MCP SSE hijack is fixed, and then the surface it was on is
+  removed** (multi-tenancy §108 t-716, then §39 t-718 — both in this release).
+  Read this one even though the code is gone, because **a fork still on 0.12.x or
+  earlier is running it.**
+
+  `GET /api/v1/mcp` attached the SSE notification listener and was the only verb
+  not re-checking that the named session belonged to the authenticated key. A
+  caller holding **any** valid MCP key could open the stream with another key's —
+  at `multi`, another org's — `Mcp-Session-Id` and receive that session's
+  `notifications/message`, `resources/updated` and `progress` pushes, while the
+  rightful owner silently stopped receiving them, because the sink registry was
+  keyed by session id and a second registration replaced the first. Polling that
+  endpoint with someone else's session id also **refreshed** it, so a foreign
+  caller could keep another org's session alive indefinitely.
+
+  Reachable only under `MCP_SESSION_MODE=stateful`, which is not the default and
+  throws on any platform announcing itself function-per-request. **If you run the
+  default (`stateless`), you were never exposed.** If you run `stateful` on an
+  older release, upgrade or switch to the default — in this release the mode, the
+  `GET` stream and the whole session plane are removed, so there is no session for
+  a caller to name.
+
 ### Changed
+
+- **MCP sessions were scoped to the org whose key opened them, and are then gone
+  entirely** (multi-tenancy §108 t-716, then §39 t-718 — both in this release).
+  t-716 stamped `McpSession.orgId` from the tenant context, filtered the admin
+  sessions list and the terminate route to the reading org, and made
+  `broadcastMcpResourceUpdated` take a required audience. t-718 removes the
+  transport all of that belonged to, so **nothing in that paragraph is a surface
+  in this release** — it is recorded in `Removed` instead, as one story rather
+  than a breaking change followed by a deletion.
+
+  What it was fixing is still worth knowing if you run an older version at
+  `multi` with `MCP_SESSION_MODE=stateful`: an org admin read every other org's
+  session ids, `apiKeyId`s and activity times and could terminate any of them,
+  and one org's agent edit told every other org that its agent list had changed.
+
+- **The admin Logs page shows only the reading org's lines** (multi-tenancy
+  §108 t-714). `LogEntry` (`types/admin.ts`) gains `orgId?: string | null`,
+  stamped by `addLogEntry` from the tenant context, and `getLogEntries` —
+  behind `GET /api/v1/admin/logs` — filters to the reader's org and counts
+  `total` after that filter. The buffer itself is unchanged: one process-wide
+  ring, scoped at the query. An entry produced outside any tenant scope (boot,
+  a `runAsSystem` job, a request on a platform credential, which carries no org
+  in either mode, or a timer armed through `runDetached`) is stamped `null`. **The scope rule applies at `multi`
+  only**: at `single` the page shows the process's lines exactly as it always
+  has, so a single-tenant install is unchanged. At `multi` an unstamped entry
+  is visible only to a reader who is also outside an org, and an org admin
+  never sees another org's lines —
+  which they previously did, messages, `context` and `meta`, searchable. A
+  platform operator has no cross-org view through this page until §111.
+- **Both org reads now carry the org's settings** (multi-tenancy §108 t-713).
+  `GET /api/v1/admin/orgs/[id]` returns the whole `Org.settings` column, and
+  `createOrg` / `updateOrg` return it on `OrgRecord`. `GET /api/v1/orgs/[id]`
+  gains `settings: { retention }` only — the validated slice, `null` when the
+  org has set none — because that route is readable by every MEMBER and the
+  platform cannot vouch for a key a fork keeps beside its own. An org's data
+  export (`GET /api/v1/admin/orgs/[id]/export`) carries the column too, since
+  it exports the org row whole — so a fork storing its own config in
+  `Org.settings` now sees it there. The retention sweep's incoherent-windows
+  warning now names the org it is about, and no longer reads
+  `executionRetentionDays: null` as "nothing to couple to": executions kept for
+  ever are the longest window, not an absent one.
+- **The maintenance tick runs every platform job and the schedules sweep per
+  org** (multi-tenancy §108 t-711). Every entry in `PLATFORM_JOBS` declares a
+  `scope` (required); all eight existing tasks and `processDueSchedules` are
+  `per-org`, run through `forEachOrg`; the idle-gate horizon read runs under
+  `runAsSystem`. At `TENANCY_MODE=multi` the tick therefore does work again
+  (before, every task threw `No tenant context` and nothing ran) and a tick
+  fired from an admin's session no longer runs inside that admin's org. The
+  published `backgroundTasks` list on `POST /api/v1/admin/orchestration/maintenance/tick`
+  gains a ninth, appended name, **`auditLogRetention`**: the admin and MCP
+  audit-log prunes move out of `enforceRetentionPolicies()` (now
+  tenant-owned tables only, per org) into `enforceSystemRetentionPolicies()`
+  (system scope, once), so `RetentionResult` loses `auditLogsDeleted` /
+  `mcpAuditLogsDeleted` and `SystemRetentionResult` carries them; the exported
+  `RetentionWindows` / `loadRetentionWindows()` lose `auditLogRetentionDays`
+  with them, since the tenant sweep no longer reads that column.
+  `POST /api/v1/admin/orchestration/schedules/tick` runs per org too and gains
+  a `500 SCHEDULER_TICK_FAILED` for a sweep that failed in **every** org —
+  with one org that case already answered 500 by propagating, and without it
+  adding a second org would have turned the same total failure into a 200. At `multi`
+  with more than one org, a per-org task's entry in the completion log line —
+  and the route's `schedules` field — is the fold across orgs
+  (`{ orgs, …summed counters, orgErrors? }`); a single-tenant install sees
+  no change in shape.
+- **Two orgs can each have an agent called `support`** (multi-tenancy §107
+  t-708). `AiAgent`, `AiKnowledgeBase` and `AiKnowledgeDocument` — published
+  model interfaces — move from `slug @unique` to `@@unique([orgId, slug])`
+  (`20260921120000_org_scoped_slugs`; the generated compound key is
+  `orgId_slug`). `AiWorkflow.slug` stays global: it is the unauthenticated
+  `inbound/:channel/:slug` URL segment. **Breaking for a fork that keys a
+  Prisma call on `where: { slug }` for one of the three** — the type no
+  longer admits it; use `findFirst({ where: { slug } })` inside an org
+  context (the tenancy context scopes it at `multi`, the same row at
+  `single`), or `where: { orgId_slug: { orgId: requireOrgId(), slug } }`
+  where the caller has the org (the seeds do; `requireOrgId()` is new on
+  `lib/tenancy/context.ts`, refusing the system scope). The two partial
+  uniques on the same tables that Prisma cannot model move with them, under
+  their existing names: the ready-document dedupe becomes `(orgId,
+  fileHash) WHERE status = 'ready'` and "one default knowledge base"
+  becomes one per org — `getOrCreateDefaultKnowledgeBase()` now upserts
+  the caller's org's default, and only the install org's keeps the fixed id
+  `kb_default`. `npm run db:drift-check`'s A5 and A7 probes assert the new
+  definitions (`indexExists` gains an optional `definitionContains`, the
+  `constraintExists` shape). A new always-run guard,
+  `tests/unit/lib/tenancy/org-scoped-slugs.test.ts`, fails naming any
+  tenant-owned model whose slug is still a global `@unique`. The two routes
+  whose credential is a signed token naming a row — the inbound trigger
+  (`/api/v1/inbound/:channel/:slug`) and the HMAC approval routes — now read
+  that row under `runAsSystem` and run inside `runAsOrg` with the new
+  `TenantContextSource` values `inbound-trigger` and `approval-token`
+  (`resolveCredentialOrg` accepts both); a workflow or execution whose org
+  is suspended, or carries none at `multi`, is a 404. The smoke scripts run
+  their `main` inside the install org.
+
+- **A query runs only inside the org the request entered, and a forgotten
+  path fails loud instead of reading wide** (multi-tenancy §107, the
+  data-layer chokepoint). The tenancy seam's contract changes:
+  `TENANCY_MODE=multi` no longer throws at import. The client
+  `lib/db/client.ts` exports is now the base `PrismaClient` through
+  `withTenancy()` (new `lib/db/tenancy-extension.ts`, a Prisma `$extends`):
+  every create of a tenant-owned row — nested creates included, whatever the
+  root model — is stamped with the org the request entered (the install org
+  at `single` when nothing entered a context; as the scalar `orgId`, or as
+  `org: { connect }` on a row in Prisma's checked form; never overwriting an
+  explicit `orgId`; nothing under `runAsSystem`), and at `multi` every operation on a
+  tenant-owned model, every raw op and every write under a context runs as
+  `$transaction([set_config('app.current_org', <org>, true), op])` with one
+  setter at the top of an interactive or batch `$transaction`, `runAsSystem`
+  setting `app.bypass_rls` instead, and an operation that needs an org and has
+  none throwing before any SQL; a read on a non-tenant model that reaches a
+  tenant-owned one through a relation at any depth (`include` / `select` /
+  `_count`, a relation filter or `orderBy`) is scoped the same way. `runAsOrg` / `runAsSystem` / `forEachOrg` now
+  await their callback inside the scope, so a non-async callback returning a
+  lazy `PrismaPromise` keeps its org. **Type note for forks:** `prisma` is
+  typed `Omit<PrismaClient, '$on'>` (`TenancyClient`) — every call site,
+  `Pick<PrismaClient, …>` default and `typeof prisma.x.y` compiles unchanged;
+  only a parameter annotated exactly `PrismaClient` needs `TenancyClient`, and
+  `$on` was never usable on an extended client. `tenantOwnedModels()` in
+  `lib/tenancy/classification.ts` now takes the client (`tenantOwnedModels(prisma)`)
+  so the module stays free of the client it helps build. Behaviour at
+  `TENANCY_MODE=single` is unchanged apart from the stamped column — no
+  `set_config` is ever issued there, proven through the real Prisma runtime on
+  a recording adapter (`tests/unit/lib/db/tenancy-extension.test.ts`). `multi`
+  is correct only with the policies enabled and a `NOBYPASSRLS` app role
+  (§107's next task ships both).
 
 - **Credential response shapes and resolver contexts carry `orgId`** (§106,
   with the bullet above). `POST`/`GET /api/v1/user/api-keys` (`null` for an
@@ -236,6 +733,53 @@ release process.
   own reason (`no-request-org`). Behaviour at `TENANCY_MODE=single` is
   unchanged for every honest row: an unbound or install-org credential
   resolves to the install org exactly as before.
+
+### Fixed
+
+- **Four process-global caches stopped mixing orgs** (multi-tenancy §108
+  t-712). All four are behaviour changes at `TENANCY_MODE=multi` only; at
+  `single` there is one org and none of them changes anything. The event-hook
+  cache (`lib/orchestration/hooks/registry.ts`) was one process-wide
+  `Map<eventType, CachedHook[]>` holding tenant-owned `AiEventHook` rows, so
+  whichever org refreshed it had **its** hooks dispatched for every org for
+  the next 60 seconds — org B's event POSTed its payload to org A's URL,
+  signed with org A's secret, while B's own hooks never fired. It is now
+  keyed by org; `invalidateHookCache()` still clears every partition, and at
+  `multi` an `emitHookEvent` from a call stack that entered no org — or one
+  running as the audited system scope, where the RLS bypass would otherwise
+  fan a single event out to every org's webhook — logs and dispatches nothing
+  rather than reading wide (at `single` the context is the install org, so
+  nothing changes). And the MCP per-key rate-limit override
+  cache (`lib/orchestration/mcp/protocol-handler.ts`) is keyed by API key id,
+  which is unique across orgs — but it was *filled* inside whichever org's
+  request triggered the refresh, and `McpApiKey` is tenant-owned, so every
+  other org's `rateLimitOverride` was silently dropped for five minutes. The
+  read now runs under the audited system scope, behind an in-flight latch and
+  a failure backoff so a burst — or a failing database — cannot turn that
+  audit line into noise. And the chat prompt-context
+  cache (`lib/orchestration/chat/context-builder.ts`) keyed on
+  `(type, id, userId)`, all three of which a request supplies — the built-in
+  `pattern` type keys by a pattern *number* over tenant-owned
+  `AiKnowledgeChunk` rows, and a fork's registered contributor is handed the
+  caller's own `type`/`id` — so a user who belongs to two orgs could open
+  `pattern:3` in one and, inside the 60-second TTL, be served that org's
+  knowledge content in the other org's system prompt. The key now carries the
+  org first, and a call under the audited system scope is refused outright
+  rather than served a body merged from every org's rows.
+  `invalidateContext` builds the same key, so call it inside the org whose
+  entry you mean to drop. And the MCP system-agent cache
+  (`lib/orchestration/mcp/tool-registry.ts`) resolved `mcp-system` by **slug**,
+  which §107 t-708 made unique *per org* and therefore shared *across* them:
+  under the bypass that lookup answers from an arbitrary org, so it now
+  refuses the system scope rather than caching the answer under a sentinel.
+  An install at `single` is unaffected by any of the
+  four, and multi-tenancy remains the opt-in capability the
+  playbook's
+  [what you do not yet get](./.context/architecture/multi-tenancy.md#what-you-get-at-multi-and-what-you-do-not-yet)
+  describes; the new
+  [`lib/tenancy/process-state.ts`](./lib/tenancy/process-state.ts) manifest
+  and its scanner test are what found them, and are what a fork editing a
+  platform module under `lib/` will meet if it adds process-global state.
 
 ## [0.12.1] — 2026-09-17
 
@@ -6342,7 +6886,8 @@ Sunrise safe to fork and to merge upstream releases into.
 
 ---
 
-[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/human-centric-engineering/sunrise/compare/v0.11.1...v0.11.2

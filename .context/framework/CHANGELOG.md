@@ -25,6 +25,82 @@ process.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-25
+
+> **Sixth tagged Daybreak release: Sunrise 0.13.0, stage 2 of 2.** It carries
+> Sunrise `v0.13.0` (row isolation §107, tenant-aware jobs and caches §108, the
+> stateful MCP transport removed) and Daybreak's own tenancy work, in one merge
+> ([#279](https://github.com/human-centric-engineering/daybreak/pull/279)). They
+> are one unit because `v0.13.0`'s new guards fail on framework tables until that
+> work lands.
+>
+> **Take 0.5.0 and deploy it first**, then this. The migration to schedule is
+> Sunrise's `tenant_owned_org_id`: `orgId` added to 38 tables and every row
+> backfilled. Daybreak does the same for its 19 framework tables. Six migrations
+> in all (four Sunrise, two `framework_…`). Run `db:migrate:deploy`, then
+> `db:drift-check`: a vanilla Daybreak reports 71 probes.
+>
+> **At `TENANCY_MODE=single`, the default, nothing a user sees changes.**
+> **Do not switch to `multi` yet.** The framework's boot syncs (modules, slot
+> definitions) are not yet run per org, and a newly created org gets no module or
+> slot rows. That work is tracked on the Daybreak Hub and is needed before any
+> Daybreak app enables `multi`.
+>
+> **One tooling caveat.** `/pre-pr`'s "≥80% coverage per changed file" is really
+> an 80% average across the changed files. Sunrise's runner passes the per-file
+> flag in a form vitest 5 ignores ([#851](https://github.com/human-centric-engineering/sunrise/issues/851)). Until that's fixed, read
+> `coverage/coverage-summary.json` per file rather than trusting the exit code.
+
+### Security
+
+- **The stateful MCP transport is gone** (Sunrise 0.13.0). A leaf on Daybreak
+  0.5.0 or older (Sunrise 0.12.x up to the stage-1 commit) that ran
+  `MCP_SESSION_MODE=stateful` was exposed to a cross-key SSE hijack. The
+  default, `stateless`, never was. Taking this release removes the mode; delete
+  `MCP_SESSION_MODE` wherever you set it. See Sunrise's `[0.13.0]` Security and
+  Removed entries.
+
+### ⚠️ Changed — action required for existing leaf forks
+
+- **Every model of yours now needs an org decision.** Four always-run tests name
+  it until it has one: `model-classification`, `policy-coverage`,
+  `org-scoped-slugs` and `org-sources`. The recipe (column + relation, per-org
+  uniques, a hand-written migration with the backfill and the isolation policy,
+  an org-export declaration) is in
+  [`building-on-daybreak.md`](./building-on-daybreak.md#tenancy-every-model-of-yours-needs-an-org-decision-daybreak-060).
+  Never pass one by editing an allowlist.
+- **Framework slugs are unique per org now, not install-wide.** That covers
+  `Module`, `FacilitationGraph` and `SlotDefinition` slugs, a facilitation
+  agent's `role`, and the `UserJourney` / `SlotValue` / `FrameworkNodeEmbedding`
+  natural keys, each of which now leads with `orgId`. Code of yours that did
+  `prisma.module.findUnique({ where: { slug } })` no longer type-checks: read with
+  `findFirst({ where: { slug } })`, or write with `orgId_slug: { orgId:
+  requireOrgId(), slug }`. The same holds for Sunrise's `AiAgent`,
+  `AiKnowledgeBase` and `AiKnowledgeDocument`.
+- **Sunrise's `Org` model carries a `DAYBREAK` block of 19 back-relations.** Add
+  your own below it, and keep all of them on every sync that conflicts there.
+  Sunrise [#859](https://github.com/human-centric-engineering/sunrise/issues/859) asks for a way to avoid the edit.
+- **Everything else in Sunrise's stage-2 notes applies unchanged:**
+  - `prisma` is typed `TenancyClient`.
+  - Mocks of `@/lib/admin/logs` must return `registerLogTenancy`.
+  - `PATCH …/mcp/settings` refuses unknown keys.
+
+  See [`../../CHANGELOG.md`](../../CHANGELOG.md) `[0.13.0]`.
+
+### Added
+
+- **`leafOrgSources()` in `lib/app/leaf-data-export.ts`**: declares your
+  `orgId` models for an org's data export. It ships empty. It's reached through
+  `collectAppOrgSources()` on the `lib/app/data-export.ts` bridge, which a
+  fork-first seam in Sunrise's `lib/privacy/org-sources.ts` pulls
+  (`getOrgDataSources()` / `getOrgExcludedSources()`). It will be replaced by
+  Sunrise's own seam when it ships ([#858](https://github.com/human-centric-engineering/sunrise/issues/858)). See
+  [`upstream-asks.md`](./upstream-asks.md).
+- **The org export now carries the framework's tables**: journeys, node state,
+  events, nudges, slot values, conversation evals, maps and their versions,
+  policies, agent bindings, proposals, modules and their versions and bindings,
+  and slot definitions. Node embeddings are excluded as derived vectors.
+
 ## [0.5.0] — 2026-09-24
 
 > **Fifth tagged Daybreak release: Sunrise 0.13.0, stage 1 of 2.** Daybreak takes

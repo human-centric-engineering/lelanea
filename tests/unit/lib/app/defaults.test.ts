@@ -182,7 +182,11 @@ import {
   __resetUserCreatedHooksForTests,
 } from '@/lib/auth/user-created-hooks';
 import { prisma } from '@/lib/db/client';
-import { collectLeafSubjectData, initLeafSubjectSources } from '@/lib/app/leaf-data-export';
+import {
+  collectLeafSubjectData,
+  initLeafSubjectSources,
+  leafOrgSources,
+} from '@/lib/app/leaf-data-export';
 import {
   getAppSubjectSources,
   getAppExcludedSubjectSources,
@@ -607,6 +611,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // framework tier first, then this seam. `initLeafSubjectSources()` is
       // idempotent by model, so it cannot be measured as a delta after that —
       // what is asserted instead is the state it is responsible for producing.
+
+      // The org-export half (Daybreak 0.6.0): every leaf table carries `orgId`
+      // (t-112), so every one is accounted for in the ORG export too, as a
+      // source or as an exclusion with a reason, and nothing else is.
+      const org = leafOrgSources();
+      expect(
+        [...org.sources.map((entry) => entry.model), ...org.excluded.map((entry) => entry.model)].sort()
+      ).toEqual(appModels);
       __resetAppSubjectSourceRegistryForTests();
       initLeafSubjectSources();
       const sources = getAppSubjectSources();

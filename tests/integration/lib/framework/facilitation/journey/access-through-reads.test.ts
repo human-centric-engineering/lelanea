@@ -8,7 +8,7 @@
  * here in `tests/`).
  *
  * No live DB in vitest (house style), so Prisma is a small STATEFUL in-memory fake:
- * `findUnique`/`findMany` read a seeded store, and `userNodeState.findMany` honours
+ * `findFirst`/`findMany` read a seeded store, and `userNodeState.findMany` honours
  * the `journey: { userId }` relation filter by joining back to the journey store —
  * so the real ownership `where` guard runs against real data. Mirrors
  * tests/integration/lib/framework/data-slots/registration-visibility.test.ts.
@@ -24,15 +24,12 @@ const { prismaFake, resetStore, seedJourney, seedNodeState, seedEvent } = vi.hoi
 
   const prismaFake = {
     userJourney: {
-      findUnique: async (args: {
-        where: {
-          userId_graphSlug_contextKey: { userId: string; graphSlug: string; contextKey: string };
-        };
+      findFirst: async (args: {
+        where: { userId: string; graphSlug: string; contextKey: string };
       }) => {
-        const k = args.where.userId_graphSlug_contextKey;
+        const { userId, graphSlug, contextKey } = args.where;
         const hit = [...journeys.values()].find(
-          (j) =>
-            j.userId === k.userId && j.graphSlug === k.graphSlug && j.contextKey === k.contextKey
+          (j) => j.userId === userId && j.graphSlug === graphSlug && j.contextKey === contextKey
         );
         return hit ? { ...hit } : null;
       },
@@ -83,6 +80,7 @@ const { prismaFake, resetStore, seedJourney, seedNodeState, seedEvent } = vi.hoi
       j: Pick<UserJourney, 'id' | 'userId' | 'graphSlug'> & { contextKey?: string }
     ) => {
       journeys.set(j.id, {
+        orgId: null,
         contextKey: '',
         startedAt: new Date(0),
         ...j,
@@ -90,6 +88,7 @@ const { prismaFake, resetStore, seedJourney, seedNodeState, seedEvent } = vi.hoi
     },
     seedNodeState: (n: Pick<UserNodeState, 'id' | 'journeyId' | 'nodeKey' | 'status'>) => {
       nodeStates.set(n.id, {
+        orgId: null,
         timesCompleted: 0,
         progress: null,
         firstEnteredAt: null,
@@ -102,6 +101,7 @@ const { prismaFake, resetStore, seedJourney, seedNodeState, seedEvent } = vi.hoi
       e: Pick<JourneyEvent, 'id' | 'userId' | 'journeyId' | 'type'> & { occurredAt: Date }
     ) => {
       events.set(e.id, {
+        orgId: null,
         nodeKey: null,
         moduleSlug: null,
         payload: null,

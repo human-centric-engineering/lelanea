@@ -66,7 +66,10 @@ model Org {
   status   OrgStatus @default(ACTIVE)   // ACTIVE | SUSPENDED
   settings Json?
   memberships OrgMembership[]
-  // + the four credential relations (see "Credentials")
+  // + a back-relation for every tenant-owned model (42 as of §107 t-705):
+  //   the four credential relations (see "Credentials") and the 38 the
+  //   row-isolation feature added. The relation, not a list, is what lets
+  //   eraseOrg() cascade — see "The lifecycle".
 }
 
 model OrgMembership {
@@ -95,6 +98,19 @@ Three things about the shape are decisions, not defaults:
   fork's product tiers sit beneath the org). The database refuses a fourth
   value, and `tests/unit/lib/tenancy/roles.test.ts` asserts the enum and
   `ORG_ROLES` agree.
+- **`settings` is one JSON column with exactly one platform-owned key**, and
+  the rest of it is a fork's. That key is `retention` (§108 t-713): the
+  retention windows this org keeps instead of the platform's, described in
+  [Data Retention](../orchestration/retention.md#per-org-windows) and written
+  through `PATCH /api/v1/admin/orgs/[id]`. `lib/tenancy/org-settings.ts` is the
+  whole of what the platform reads and writes there, and it **replaces its own
+  slice rather than the object**, so a fork's keys survive a platform write.
+  Two rules follow from the column being shared. A fork adding its own slice
+  owns the route that writes it — the platform's PATCH is strict and refuses a
+  key it does not know, deliberately, so a typo is a 400 rather than a value
+  written and never read. And nothing publishes the raw column to an org
+  member: `GET /api/v1/orgs/[id]` returns the validated `retention` slice
+  alone, because the platform cannot vouch for what a fork put beside it.
 
 Multi-membership is allowed: a user may belong to several orgs. Which one a
 session is _acting in_ is `Session.activeOrgId` — see
@@ -402,9 +418,11 @@ org-bound key can never hold `admin`" holds at mint and at both guards, and
 a fork's policy cannot widen it. That is also why the read rule keys on the scope, not on
 `NULL` alone.
 
-**The interim rows.** The column landed in 0.12.0 (`20260917120000_org_identity`),
-backfilled once, and nothing wrote it at mint until t-673 — so every
-credential minted in between carried `orgId = NULL`. At `single` the read
+**The interim rows.** The column landed in `20260917120000_org_identity`
+(0.13.0 — no release before it carried the column), backfilled once, and nothing wrote it at mint until t-673 — so every
+credential minted in between carried `orgId = NULL`. Both migrations ship in
+0.13.0, so an install upgrading from a release applies them together and
+never holds such a row; only a deployment tracking `main` between them could. At `single` the read
 rule resolves such a row to the install org, so nothing was wrong; at
 `multi` it is refused, so an install that switches modes must never meet one.
 `20260918120000_credential_org_backfill` re-runs the identity migration's
@@ -425,8 +443,25 @@ merge-impact section promises forks.
 - **A product layer beneath the org** — plans, billing, branding, teams — is
   yours (principle 8). Put it in your own schema file with a FK to `Org`.
 - **Your own tenant-owned models** join the org by carrying an `orgId` column
-  (principle 4); the row-isolation feature's classification test will name
-  each one until it is classified.
+  (principle 4), in the exact shape every core model uses:
+
+  ```prisma
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  ```
+
+  plus a back-relation line on `Org`. `Cascade` is the rule for data that is
+  the org's; a retained record (a billing row — `AiCostLog` is the one core
+  case) uses `onDelete: SetNull` instead, per the FK rule in `CLAUDE.md`.
+  `tests/unit/lib/tenancy/model-classification.test.ts`
+  names every model that is neither tenant-owned nor on the two allowlists in
+  `lib/tenancy/classification.ts` (`SYSTEM_MODELS`, `GLOBAL_CONFIG_MODELS`)
+  until it is classified, and `tests/unit/lib/privacy/org-sources.test.ts`
+  names every `orgId` model until `lib/privacy/org-sources.ts` says what an
+  org receives from it. Never delete from an allowlist to go green.
+
 - **Not a fourth org role.** The enum is closed upstream. A "billing admin"
   or "viewer" is a product-layer concept on your side of the FK, not a value
   on `OrgMembership.role`.
@@ -485,8 +520,8 @@ merge-impact section promises forks.
   for, and what reads it
 - [Multi-tenancy design record](../architecture/multi-tenancy-design.md) —
   the decisions and principles this page applies
-- [Multi-tenancy playbook](../architecture/multi-tenancy.md) — the RLS
-  retrofit the later features perform
+- [Multi-tenancy playbook](../architecture/multi-tenancy.md) — enabling
+  the capability, and what a fork adds for its own models
 - [Authorization](../auth/authorization.md) — the policy that reads the org
   role
 - [Data erasure](../privacy/data-erasure.md) · [Subject access](../privacy/data-export.md)

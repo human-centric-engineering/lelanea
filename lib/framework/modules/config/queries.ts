@@ -32,7 +32,7 @@ export interface ModuleConfigForm {
  * module). An unregistered module returns `registered: false` with no descriptors.
  */
 export async function getModuleConfigForm(slug: string): Promise<ModuleConfigForm> {
-  const row = await prisma.module.findUnique({ where: { slug }, select: { config: true } });
+  const row = await prisma.module.findFirst({ where: { slug }, select: { config: true } });
   if (!row) throw new NotFoundError(`Module "${slug}" not found`);
 
   const def = getRegisteredModule(slug);

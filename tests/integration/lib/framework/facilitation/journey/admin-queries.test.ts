@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    facilitationGraph: { findMany: vi.fn(), findUnique: vi.fn() },
+    facilitationGraph: { findMany: vi.fn(), findFirst: vi.fn() },
     userNodeState: { groupBy: vi.fn() },
   },
 }));
@@ -49,6 +49,7 @@ describe('listJourneysForAdmin', () => {
     const journeys = [
       {
         id: 'j1',
+        orgId: null,
         userId: 'user_alice',
         graphSlug: 'main',
         contextKey: '',
@@ -56,6 +57,7 @@ describe('listJourneysForAdmin', () => {
       },
       {
         id: 'j2',
+        orgId: null,
         userId: 'user_bob',
         graphSlug: 'gone',
         contextKey: 'ctx',
@@ -117,6 +119,7 @@ describe('listJourneysForAdmin', () => {
 describe('getJourneyDetailForAdmin', () => {
   const journeyRow = {
     id: 'j1',
+    orgId: null,
     userId: 'user_alice',
     graphSlug: 'main',
     contextKey: '',
@@ -132,7 +135,7 @@ describe('getJourneyDetailForAdmin', () => {
 
   it('composes identity + parsed structure + node states + timeline with ISO dates', async () => {
     vi.mocked(getJourneyById).mockResolvedValue(journeyRow);
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue({
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue({
       name: 'Main Map',
       slug: 'main',
       publishedVersion: { definition: { nodes: [{ key: 'n1', type: 'stage' }], edges: [] } },
@@ -182,7 +185,7 @@ describe('getJourneyDetailForAdmin', () => {
 
   it('degrades graph to null when the map is gone', async () => {
     vi.mocked(getJourneyById).mockResolvedValue(journeyRow);
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue(null);
     vi.mocked(getNodeStates).mockResolvedValue([] as never);
     vi.mocked(getJourneyTimeline).mockResolvedValue([] as never);
 
@@ -192,7 +195,7 @@ describe('getJourneyDetailForAdmin', () => {
 
   it('degrades structure to null when there is no published version', async () => {
     vi.mocked(getJourneyById).mockResolvedValue(journeyRow);
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue({
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue({
       name: 'Main Map',
       slug: 'main',
       publishedVersion: null,
@@ -206,7 +209,7 @@ describe('getJourneyDetailForAdmin', () => {
 
   it('degrades structure to null when the published definition does not parse', async () => {
     vi.mocked(getJourneyById).mockResolvedValue(journeyRow);
-    vi.mocked(prisma.facilitationGraph.findUnique).mockResolvedValue({
+    vi.mocked(prisma.facilitationGraph.findFirst).mockResolvedValue({
       name: 'Main Map',
       slug: 'main',
       publishedVersion: { definition: { nodes: 'not-an-array' } },

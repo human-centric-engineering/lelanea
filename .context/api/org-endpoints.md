@@ -145,12 +145,22 @@ GET /api/v1/orgs/[id]
     "name": "Acme",
     "status": "ACTIVE",
     "createdAt": "…",
+    "settings": { "retention": { "executionRetentionDays": 365 } },
     "memberCount": 4,
     "role": "MEMBER",
     "joinedAt": "…"
   }
 }
 ```
+
+`settings.retention` is the org's own retention windows, `null` when it has set
+none and is on every global window (§108 t-713 — see
+[Data Retention](../orchestration/retention.md#per-org-windows)). **Only that
+slice is published here**, not the `Org.settings` column: this route is readable
+by every MEMBER, a fork keeps its own org config in the same JSON, and the
+platform can only vouch for the key it owns. The whole column is on the
+platform-admin view below. A window whose stored value cannot be read is
+reported as absent, exactly as the sweep treats it.
 
 - **403 Forbidden** `Access denied`: not a member, or no such org.
 
@@ -307,9 +317,11 @@ POST /api/v1/admin/orgs
 GET /api/v1/admin/orgs/[id]
 ```
 
-The org row plus `members` in the roster shape above. `404 ORG_NOT_FOUND`.
+The org row plus `members` in the roster shape above, and the whole `settings`
+column — a fork's own keys included, which is the difference from the member
+view. `404 ORG_NOT_FOUND`.
 
-### Rename, re-slug, suspend, reinstate
+### Rename, re-slug, suspend, reinstate, set retention windows
 
 ```
 PATCH /api/v1/admin/orgs/[id]
@@ -318,15 +330,40 @@ PATCH /api/v1/admin/orgs/[id]
 **Request Body** (`updateOrgSchema`, at least one key):
 
 ```json
-{ "name": "Acme Ltd", "slug": "acme-ltd", "status": "SUSPENDED" }
+{
+  "name": "Acme Ltd",
+  "slug": "acme-ltd",
+  "status": "SUSPENDED",
+  "settings": { "retention": { "executionRetentionDays": 365, "costLogRetentionDays": null } }
+}
 ```
 
 Suspension writes only the status: members are not signed out, the guard
 refuses their next request into the org, and the switch is their way to
 another org. Reinstating is `{ "status": "ACTIVE" }`.
 
+`settings.retention` sets this org's own retention windows (§108 t-713).
+`settings` and `retention` are both **strict**, so an unknown key inside either
+is a 400 rather than a value written and silently ignored. The **top level** is
+not: like every other body in this API it strips what it does not know, so a
+misspelled `settngs` renames the org and drops the retention write without
+saying so. The five keys are `webhookRetentionDays`,
+`webhookDlqRetentionDays`, `costLogRetentionDays`, `executionRetentionDays` and
+`evaluationRetentionDays`; a key omitted inherits the global window, and `null`
+carries whatever `null` means for that column globally — keep forever for four
+of them, and "use the webhook window" for `webhookDlqRetentionDays`, whose
+fallback predates this. A slice is stored and returned in both tenancy modes
+but **applied at `multi` only**. The write **replaces** the `retention`
+slice and preserves every other key in `settings`;
+`{ "settings": { "retention": null } }` removes the slice.
+[Data Retention](../orchestration/retention.md#per-org-windows) has the
+precedence rules and why `auditLogRetentionDays` is not among them. Platform
+admin only for now — the org-admin console is §111.
+
 **Error Responses**: `400 INSTALL_ORG_IMMUTABLE` (the install org can be
-renamed but never suspended or re-slugged) · `409 SLUG_TAKEN` ·
+renamed but never suspended or re-slugged) · `400 VALIDATION_ERROR` (a
+malformed slice, or a cost-log window shorter than the execution window the org
+would be left with once the global row is inherited) · `409 SLUG_TAKEN` ·
 `404 ORG_NOT_FOUND`.
 
 ### Export an org's data

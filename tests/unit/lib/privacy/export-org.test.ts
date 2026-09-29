@@ -25,8 +25,10 @@ const sources = vi.hoisted(() => ({
   members: vi.fn(),
   keys: vi.fn(),
 }));
+// DAYBREAK "keep mine" (Hub t-134): export-org reads the manifest through the
+// fork-first getters, so the fixture is served by them.
 vi.mock('@/lib/privacy/org-sources', () => ({
-  ORG_DATA_SOURCES: [
+  getOrgDataSources: () => [
     {
       model: 'OrgMembership',
       section: 'members',
@@ -42,7 +44,7 @@ vi.mock('@/lib/privacy/org-sources', () => ({
       fetch: sources.keys,
     },
   ],
-  ORG_EXCLUDED_SOURCES: [{ model: 'Ghost', reason: 'Fixture exclusion.' }],
+  getOrgExcludedSources: () => [{ model: 'Ghost', reason: 'Fixture exclusion.' }],
 }));
 
 import {

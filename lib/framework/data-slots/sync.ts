@@ -108,9 +108,11 @@ function resolveSlotDefinition(input: SlotDefinitionInput, scope: string): Resol
 
 /**
  * Collect every registered module's `slotDefinitions`, resolve defaults, and stamp
- * `scope = module:<slug>`. Deduped by slug — a slot slug is globally unique (spec
- * §6.1), so a repeat (within a module or across two) is an authoring error: the last
- * registration wins, logged with the module that supplied it.
+ * `scope = module:<slug>`. Deduped by slug — a slot slug is unique across the code
+ * registry (spec §6.1), which every org shares, so a repeat (within a module or across
+ * two) is an authoring error: the last registration wins, logged with the module that
+ * supplied it. (The DATABASE key is `(orgId, slug)` since §34: each org holds its own
+ * row for the same registered slug.)
  * Exported for unit testing of the collection/stamping step.
  */
 export function collectRegisteredSlotDefinitions(): ResolvedSlotDefinition[] {
@@ -120,7 +122,7 @@ export function collectRegisteredSlotDefinitions(): ResolvedSlotDefinition[] {
     for (const input of mod.slotDefinitions ?? []) {
       if (bySlug.has(input.slug)) {
         logger.warn(
-          'collectRegisteredSlotDefinitions: duplicate slot slug — last registration wins (slugs must be globally unique)',
+          'collectRegisteredSlotDefinitions: duplicate slot slug — last registration wins (slugs must be unique across the registry)',
           { slug: input.slug, moduleSlug: mod.slug }
         );
       }
@@ -196,7 +198,7 @@ async function reconcileSlotDefinitions(
     }
     if (slotDefinitionNeedsUpdate(row, desired)) {
       await tx.slotDefinition.update({
-        where: { slug: desired.slug },
+        where: { id: row.id },
         data: { ...desired, isActive: true },
       });
       updated++;

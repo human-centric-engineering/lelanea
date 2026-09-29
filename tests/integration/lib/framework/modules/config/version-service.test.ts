@@ -43,10 +43,14 @@ const { prismaFake, resetStore, seedModule } = vi.hoisted(() => {
   }
 
   const moduleFake = {
+    // `findUnique` (id-keyed reads) and `findFirst` (the per-org slug reads §107 —
+    // `module.slug` is no longer globally unique) share one lookup: `findModule`
+    // already branches on which key the `where` carries.
     findUnique: async ({ where }: any) => {
       const row = findModule(where);
       return row ? { ...row } : null;
     },
+    findFirst: async (args: any) => moduleFake.findUnique(args),
     update: async ({ where, data }: any) => {
       const row = findModule(where);
       if (!row) throw new Error('not found');
