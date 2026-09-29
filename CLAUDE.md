@@ -141,7 +141,7 @@
 >
 > ```bash
 > git fetch daybreak --tags
-> git merge daybreak-v0.4.0        # tags are prefixed `daybreak-v`
+> git merge daybreak-vX.Y.Z        # the next tag; tags are prefixed `daybreak-v`
 > npm install && npm run db:migrate:status && npm run db:migrate:dev
 > npm run db:drift-check
 > ```
