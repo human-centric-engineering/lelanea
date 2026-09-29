@@ -70,7 +70,8 @@ import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import { seedGoldenSetPointer } from '@/lib/app/content/golden-set-store';
 import { clearUserBudget, setUserBudget } from '@/lib/app/agent/settings';
 import { recordAcknowledgement } from '@/lib/app/gateway/acknowledgements';
-import { foundationalSourceKey } from '@/lib/app/content/knowledge-mirror';
+import { foundationalSourceKey, isMirrored } from '@/lib/app/content/knowledge-mirror';
+import { toDocumentDetail } from '@/lib/app/content/document-view';
 import { getOrCreateDefaultKnowledgeBase } from '@/lib/orchestration/knowledge/document-manager';
 import { goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import goldenSetUnit from '@/prisma/seeds/app-lelanea/004-voice-golden-set';
@@ -83,13 +84,17 @@ const NEW_ORG_CEILING = 1234.5;
 const PROBE_ARTICLE = 't113-smoke-article';
 
 /**
- * Give the current org a designation under `sourceKey`, on a stub document in
- * its own default knowledge base, unless it already holds one. Returns the
- * stub's id when it made one, so the caller can remove it.
+ * The document the current org holds under `sourceKey`. Where the mirror has
+ * not made one (no embedding provider), this makes a stub in the org's own
+ * default knowledge base and designates it, and says so, so the caller can
+ * remove it.
  */
-async function holdMirrorKey(sourceKey: string): Promise<string | null> {
-  const held = await prisma.appKnowledgeDesignation.findFirst({ where: { sourceKey } });
-  if (held) return null;
+async function holdMirrorKey(sourceKey: string): Promise<{ documentId: string; stub: boolean }> {
+  const held = await prisma.appKnowledgeDesignation.findFirst({
+    where: { sourceKey },
+    select: { documentId: true },
+  });
+  if (held) return { documentId: held.documentId, stub: false };
   const stamp = `t116-smoke-${Date.now()}`;
   const document = await prisma.aiKnowledgeDocument.create({
     data: {
@@ -107,7 +112,7 @@ async function holdMirrorKey(sourceKey: string): Promise<string | null> {
   await prisma.appKnowledgeDesignation.create({
     data: { documentId: document.id, sourceKey, designatedBy: null },
   });
-  return document.id;
+  return { documentId: document.id, stub: true };
 }
 
 function check(condition: boolean, message: string): void {
@@ -150,14 +155,16 @@ async function main(): Promise<void> {
   );
   // Likewise the terms and a knowledge-mirror key (t-116). Both are removed
   // afterwards only if this run made them.
-  const firstDocument = await runAsOrg(INSTALL_ORG_ID, () =>
-    prisma.appFoundationalDocument.findFirst({
-      orderBy: { position: 'asc' },
-      select: { slug: true },
-    })
+  // A document the mirror mirrors: a legal text's key is one the mirror's
+  // removal pass would treat as stale.
+  const mirrored = await runAsOrg(INSTALL_ORG_ID, async () =>
+    (await prisma.appFoundationalDocument.findMany({ orderBy: { position: 'asc' } }))
+      .map(toDocumentDetail)
+      .find(isMirrored)
   );
-  if (!firstDocument) throw new Error('The install org has no documents. Run `npm run db:seed`.');
-  const sourceKey = foundationalSourceKey(firstDocument.slug);
+  if (!mirrored)
+    throw new Error('The install org has no mirrored documents. Run `npm run db:seed`.');
+  const sourceKey = foundationalSourceKey(mirrored.id);
   let installAck: string | null = null;
   let installStub: string | null = null;
   try {
@@ -165,7 +172,8 @@ async function main(): Promise<void> {
       await setUserBudget(editor.id, INSTALL_CEILING);
       const ack = await recordAcknowledgement(editor.id, 'terms');
       if (ack.created) installAck = ack.row.id;
-      installStub = await holdMirrorKey(sourceKey);
+      const held = await holdMirrorKey(sourceKey);
+      if (held.stub) installStub = held.documentId;
     });
     await checkTwoOrgs(editor.id, sourceKey);
   } finally {
@@ -176,7 +184,9 @@ async function main(): Promise<void> {
     await runAsSystem('smoke: put the install org back', async () => {
       if (installAck) await prisma.appAcknowledgement.delete({ where: { id: installAck } });
       // The designation goes with its document (ON DELETE CASCADE).
-      if (installStub) await prisma.aiKnowledgeDocument.delete({ where: { id: installStub } });
+      // `deleteMany`, so a stub something else already removed cannot mask
+      // the smoke's own result.
+      if (installStub) await prisma.aiKnowledgeDocument.deleteMany({ where: { id: installStub } });
     });
   }
 }
@@ -317,6 +327,16 @@ async function checkTwoOrgs(editorId: string, sourceKey: string): Promise<void> 
       // terms at this version, and the new org's gate must still record its own.
       const ack = await recordAcknowledgement(editorId, 'terms');
       const repeat = await recordAcknowledgement(editorId, 'terms');
+      // The rows collide under the old key only if both orgs serve the same
+      // version, which a freshly seeded install org does.
+      const installAckVersion = await runAsOrg(
+        INSTALL_ORG_ID,
+        async () => (await recordAcknowledgement(editorId, 'terms')).row.documentVersion
+      );
+      check(
+        installAckVersion === ack.row.documentVersion,
+        'both orgs serve the same terms version (on a freshly seeded database)'
+      );
       const everyAck = await runAsSystem('smoke: one person, two gates', () =>
         prisma.appAcknowledgement.findMany({
           where: { userId: editorId, kind: 'terms', documentVersion: ack.row.documentVersion },
@@ -333,7 +353,9 @@ async function checkTwoOrgs(editorId: string, sourceKey: string): Promise<void> 
       );
 
       // The knowledge mirror's key (t-116), beside the install org's.
-      const stub = await holdMirrorKey(sourceKey);
+      // The mirror's own document where there is an embedding provider, a stub
+      // where there is not. Either way the key is held in both orgs at once.
+      const mirror = await holdMirrorKey(sourceKey);
       const everyKey = await runAsSystem('smoke: one key, two mirrors', () =>
         prisma.appKnowledgeDesignation.findMany({
           where: { sourceKey },
@@ -345,11 +367,10 @@ async function checkTwoOrgs(editorId: string, sourceKey: string): Promise<void> 
         select: { documentId: true },
       });
       check(
-        stub !== null &&
-          everyKey.some((row) => row.orgId === INSTALL_ORG_ID) &&
-          everyKey.some((row) => row.orgId === org.id && row.documentId === stub) &&
+        everyKey.some((row) => row.orgId === INSTALL_ORG_ID) &&
+          everyKey.some((row) => row.orgId === org.id && row.documentId === mirror.documentId) &&
           mineKey.length === 1 &&
-          mineKey[0]?.documentId === stub,
+          mineKey[0]?.documentId === mirror.documentId,
         `the new org designates "${sourceKey}" beside the install org, and reads only its own`
       );
 
