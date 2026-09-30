@@ -33,6 +33,8 @@ import { Drawers } from '@/components/app/shell/drawer';
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import {
   DOCUMENT_PAGES,
+  DOCUMENTS_ENDPOINT,
+  READS_EYEBROW,
   RESOURCES_ENDPOINT,
   RESOURCES_FALLBACK_LEDE,
   resourceKeyFor,
@@ -40,7 +42,8 @@ import {
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { APIClientError } from '@/lib/api/client';
-import { seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
+import { seededCollection, seededDocumentRows } from '@/tests/helpers/app/foundational-documents';
+import { ONBOARDING_READS, readPath } from '@/lib/app/onboarding/first-run';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -159,9 +162,32 @@ function fallbackSelection(): ResourcesSelection {
   });
 }
 
-/** Answer the resources route from a table; the map route is not this file's. */
-function serve(answers: Record<string, ResourcesSelection | Error>) {
+/** The document index as the route serves it: every seeded document, no blocks. */
+function documentIndex() {
+  return {
+    collection: seededCollection(),
+    documents: seededDocumentRows().map((row) => ({
+      id: row.slug,
+      title: row.title,
+      subtitle: row.subtitle,
+      category: row.category,
+    })),
+  };
+}
+
+/**
+ * Answer the resources route from a table; the map route is not this file's.
+ * The document index — the reads' titles — answers only when `index` is given,
+ * so the sections that are not about the reads see none.
+ */
+function serve(
+  answers: Record<string, ResourcesSelection | Error>,
+  index?: ReturnType<typeof documentIndex> | Error
+) {
   get.mockImplementation((path: string) => {
+    if (path === DOCUMENTS_ENDPOINT && index !== undefined) {
+      return index instanceof Error ? Promise.reject(index) : Promise.resolve(index);
+    }
     if (!path.startsWith(`${RESOURCES_ENDPOINT}/`)) return new Promise<never>(() => {});
     const request = path.slice(RESOURCES_ENDPOINT.length + 1);
     const answer = answers[request];
@@ -405,7 +431,7 @@ describe('to watch and to read', () => {
     expect(card).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('opens an external article in a new tab, and a document on its own page', async () => {
+  it('opens an external article in a new tab, and a read in the shell', async () => {
     renderDrawers();
     await openResources();
     const external = await within(panel()).findByRole('link', { name: /The inheritance test/ });
@@ -413,7 +439,7 @@ describe('to watch and to read', () => {
     expect(external).toHaveAttribute('target', '_blank');
 
     const mission = within(panel()).getByRole('link', { name: /The mission/ });
-    expect(mission).toHaveAttribute('href', '/mission');
+    expect(mission).toHaveAttribute('href', '/app/read/the_mission');
     expect(mission).not.toHaveAttribute('target');
   });
 
@@ -778,6 +804,122 @@ describe('the status line is one live region, not a line that mounts with the st
 // The document table is pinned to the real collection
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The reads stay in the drawer, and open in the shell (t-103)
+// ---------------------------------------------------------------------------
+
+describe('the reads, always there', () => {
+  const readsSection = async () =>
+    (await within(panel()).findByRole('heading', { name: READS_EYEBROW })).closest('section')!;
+
+  it('lists every read, in order, each opening in the shell rather than the site', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+
+    const links = within(await readsSection()).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      ONBOARDING_READS.map((id) => readPath(id))
+    );
+    expect(links.map((link) => link.textContent)).toEqual([
+      expect.stringContaining('The Heart Behind Lelañea'),
+      expect.stringContaining('The Mission'),
+      expect.stringContaining('About the Creator'),
+      expect.stringContaining('The Lineage of Lelañea'),
+    ]);
+    for (const link of links) {
+      expect(link).not.toHaveAttribute('target');
+      expect(link.getAttribute('href')).not.toMatch(/^\/(lelanea|mission)$/);
+    }
+    expect(get).toHaveBeenCalledWith(DOCUMENTS_ENDPOINT);
+  });
+
+  it('is there whatever is open, even when the selection has nothing to read', async () => {
+    serve(
+      { default: emptySelection({ key: 'default', title: 'Lelañea', tier: null }) },
+      documentIndex()
+    );
+    renderDrawers('/app/settings');
+    await openResources();
+    expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
+    expect(within(panel()).getByText(/Nothing to read yet/)).toBeInTheDocument();
+  });
+
+  it('says so when the titles cannot be loaded, rather than an empty heading', async () => {
+    serve({ values: fullSelection() }, new APIClientError('boom', 'INTERNAL_ERROR', 500));
+    renderDrawers();
+    await openResources();
+    expect(within(await readsSection()).getByText(/could not be loaded/)).toBeInTheDocument();
+  });
+
+  it('does not ask again while the drawer stays open after a failure, only on the next open', async () => {
+    serve({ values: fullSelection() }, new APIClientError('boom', 'INTERNAL_ERROR', 500));
+    renderDrawers();
+    await openResources();
+    await within(await readsSection()).findByText(/could not be loaded/);
+    // Let any effect the failure schedules run.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const asked = () => get.mock.calls.filter(([path]) => path === DOCUMENTS_ENDPOINT).length;
+    expect(asked()).toBe(1);
+
+    serve({ values: fullSelection() }, documentIndex());
+    await openResources(); // closes
+    await openResources(); // opens again
+    expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
+    expect(asked()).toBe(2);
+  });
+
+  it('treats an index with none of the reads as a failure, and asks again on the next open', async () => {
+    serve({ values: fullSelection() }, { ...documentIndex(), documents: [] });
+    renderDrawers();
+    await openResources();
+    await within(await readsSection()).findByText(/could not be loaded/);
+
+    serve({ values: fullSelection() }, documentIndex());
+    await openResources();
+    await openResources();
+    expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
+  });
+
+  it('closes when a read is opened, so the page is not left under it', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+    const [first] = within(await readsSection()).getAllByRole('link');
+    const dialog = panel();
+    await userEvent.click(first);
+    // Closed: the panel stays mounted to animate, inert and off screen.
+    expect(dialog).toHaveAttribute('inert');
+  });
+
+  it('closes when an article opens in the shell, too', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+    const dialog = panel();
+    await userEvent.click(await within(dialog).findByRole('link', { name: /The mission/ }));
+    expect(dialog).toHaveAttribute('inert');
+  });
+
+  it('asks for the titles once, not on every open', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+    await readsSection();
+    await openResources(); // closes
+    await openResources(); // opens again
+    await readsSection();
+    expect(get.mock.calls.filter(([path]) => path === DOCUMENTS_ENDPOINT)).toHaveLength(1);
+  });
+
+  it('labels them as the document header labels their category', async () => {
+    const { CATEGORY_LABEL } = await import('@/components/app/content/authored-document');
+    expect(READS_EYEBROW).toBe(CATEGORY_LABEL.about);
+  });
+});
+
 describe('DOCUMENT_PAGES', () => {
   it('names only documents the collection has', () => {
     // The ids the seed writes: the document ids every environment holds.
@@ -787,5 +929,11 @@ describe('DOCUMENT_PAGES', () => {
 
   it('leaves out the welcome, which has no page of its own', () => {
     expect(DOCUMENT_PAGES).not.toHaveProperty('the_initiation');
+  });
+
+  it('sends every read to the shell, and only the legal documents to the site', () => {
+    for (const id of ONBOARDING_READS) expect(DOCUMENT_PAGES[id]).toBe(readPath(id));
+    expect(DOCUMENT_PAGES.disclaimer).toBe('/disclaimer');
+    expect(DOCUMENT_PAGES.terms_of_use).toBe('/terms');
   });
 });

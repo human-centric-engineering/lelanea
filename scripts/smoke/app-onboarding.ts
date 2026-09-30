@@ -9,7 +9,9 @@
  * `onboarding` node on that map (availability is computed from the stored
  * graph, the module rows and their liveness), that a second call writes
  * nothing, and that `recordNodeProgress` then accepts a once-only beat. That
- * last one is the reason the node is entered at all.
+ * last one is the reason the node is entered at all. Then the first run's own
+ * beats (t-103): recorded through the real store, read back from the real
+ * row, and not replayed.
  *
  * Needs a seeded database: the map published (`001-journey-map`) and the
  * gate's documents present. Skips (exit 0, says so) with no database, and fails
@@ -35,6 +37,8 @@ import { JOURNEY_MAP_SLUG, ONBOARDING_NODE_KEY } from '@/lib/app/journey/map-def
 import { getJourneyMap } from '@/lib/app/journey/map';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
+import { FIRST_RUN_BEATS, pendingBeats } from '@/lib/app/onboarding/first-run';
+import { getFirstRunProgress, recordFirstRunBeat } from '@/lib/app/onboarding/first-run-store';
 import { recordNodeProgress } from '@/lib/framework/facilitation/journey/progress';
 import { NODE_STATE_STATUS } from '@/lib/framework/facilitation/journey/vocabulary';
 import { getPublishedMapVersion } from '@/lib/framework/facilitation/map/version-service';
@@ -144,6 +148,45 @@ async function main(): Promise<void> {
       { welcomed: true }
     );
     check(beat.ok, 'recordNodeProgress accepts a beat on the entered node');
+
+    console.log('\n6. The first run is recorded, and not replayed (t-103)');
+    const before = await getFirstRunProgress(user.id);
+    check(
+      before !== null && pendingBeats(before).length === FIRST_RUN_BEATS.length,
+      'every beat is still to come'
+    );
+    check(
+      (await recordFirstRunBeat(user.id, 'initiation')) === 'recorded',
+      'the Initiation is recorded'
+    );
+    check(
+      (await recordFirstRunBeat(user.id, 'read:the_mission')) === 'recorded',
+      'a skipped read is recorded'
+    );
+    check(
+      (await recordFirstRunBeat(user.id, 'initiation')) === 'already',
+      'recording it again answers already'
+    );
+    const after = await getFirstRunProgress(user.id);
+    check(
+      after !== null &&
+        after.initiationShown &&
+        !pendingBeats(after).includes('initiation') &&
+        !pendingBeats(after).includes('read:the_mission') &&
+        pendingBeats(after).length === FIRST_RUN_BEATS.length - 2,
+      'a fresh read of the row resumes after them'
+    );
+    const row = await prisma.userNodeState.findFirst({
+      where: { journeyId, nodeKey: ONBOARDING_NODE_KEY },
+    });
+    const progress = row?.progress;
+    check(
+      typeof progress === 'object' &&
+        progress !== null &&
+        !Array.isArray(progress) &&
+        'welcomed' in progress,
+      'the earlier beat on the same node survives the merge'
+    );
 
     console.log('\n✓ smoke:app-onboarding passed');
   } finally {

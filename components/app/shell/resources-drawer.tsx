@@ -1,6 +1,7 @@
 'use client';
 
 import { ExternalLink, FileText, Headphones, Play } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,9 +9,11 @@ import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
+import type { FoundationalDocumentIndex } from '@/lib/app/content/document-view';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
 import type { LucideIcon } from 'lucide-react';
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
+import { ONBOARDING_READS, readPath, type OnboardingRead } from '@/lib/app/onboarding/first-run';
 import { cn } from '@/lib/utils';
 
 /** The endpoint the drawer reads, minus the key. One place, so a test can name it. */
@@ -54,15 +57,95 @@ export function resourceKeyFor(pathname: string): string {
  * is the first-run welcome and has none — renders as a row without a link
  * rather than a link to nowhere. `resources-drawer.test.tsx` pins every id here
  * against the real collection.
+ *
+ * The reads open in the shell (`/app/read/:id`, t-103), so reading one never
+ * leaves the app. Only the legal documents still go to the site, where they
+ * sit beside the acknowledgement flow that links to them.
  */
 export const DOCUMENT_PAGES: Readonly<Record<string, string>> = {
-  the_mission: '/mission',
+  ...Object.fromEntries(ONBOARDING_READS.map((id) => [id, readPath(id)])),
   disclaimer: '/disclaimer',
   terms_of_use: '/terms',
-  the_heart_behind_lelanea: '/lelanea',
-  about_the_creator: '/lelanea',
-  the_lineage_of_lelanea: '/lelanea',
 };
+
+/** The document index the drawer reads the reads' titles from. */
+export const DOCUMENTS_ENDPOINT = '/api/v1/app/content/documents';
+
+/**
+ * The permanent section's eyebrow: the reads' category, as the document header
+ * labels it (`CATEGORY_LABEL.about`). Restated rather than imported, because
+ * that module reads the server environment; the test pins the two together.
+ */
+export const READS_EYEBROW = 'about lelañea';
+
+/** One read as the drawer lists it: its title and subtitle from the index. */
+export interface ReadLink {
+  id: OnboardingRead;
+  title: string;
+  subtitle: string | null;
+}
+
+export type ReadsLoad =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; reads: ReadLink[] }
+  | { status: 'failed' };
+
+/**
+ * The reads, for the drawer's permanent section: fetched the first time the
+ * drawer opens and kept, because they do not follow what is open. The titles
+ * come from the document index, so an edited title is the drawer's too. A
+ * failure is retried on the next open, as the selection's is.
+ */
+export function useReads(): ReadsLoad {
+  const { drawer } = useShellLayout();
+  const open = drawer === 'resources';
+  const [load, setLoad] = useState<ReadsLoad>({ status: 'idle' });
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Where the load stands, read by the effect without re-running it. Keyed on
+  // `open` alone: with the status in the deps, a failure re-ran the effect
+  // while the drawer was still open and fetched again at once, in a loop that
+  // spent the section's rate limit (`/code-review`). Now a failure waits for
+  // the next open, as the docblock says.
+  const status = useRef<ReadsLoad['status']>('idle');
+
+  useEffect(() => {
+    if (!open || status.current === 'loading' || status.current === 'loaded') return;
+    const settle = (next: ReadsLoad): void => {
+      status.current = next.status;
+      if (mounted.current) setLoad(next);
+    };
+    settle({ status: 'loading' });
+    apiClient
+      .get<FoundationalDocumentIndex>(DOCUMENTS_ENDPOINT)
+      .then((index) => {
+        // In the order the first run offers them, not the index's.
+        const byId = new Map(index.documents.map((doc) => [doc.id, doc]));
+        const reads = ONBOARDING_READS.flatMap((id): ReadLink[] => {
+          const doc = byId.get(id);
+          return doc ? [{ id, title: doc.title, subtitle: doc.subtitle }] : [];
+        });
+        // An index with none of them (a database not yet seeded) is a failure,
+        // not an answer: kept as `loaded` it would never be asked for again.
+        settle(reads.length > 0 ? { status: 'loaded', reads } : { status: 'failed' });
+      })
+      .catch(() => settle({ status: 'failed' }));
+  }, [open]);
+
+  return load;
+}
+
+/** A path inside the shell, which navigates client-side rather than reloading it. */
+function isInApp(href: string): boolean {
+  return href.startsWith('/app/');
+}
 
 export type ResourcesLoad =
   | { status: 'idle' }
@@ -197,6 +280,21 @@ export function resourcesHead(load: ResourcesLoad): { lede: string; tone: string
 
 const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
+/** A document row: the article rows under `to read`, and the reads. */
+const ROW_CLASS = cn(
+  'flex w-full items-start gap-3 rounded-[14px] border border-[var(--color-card-border)]',
+  'bg-[var(--color-card)] px-3.5 py-3 text-left no-underline hover:no-underline',
+  'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+  'motion-reduce:transition-none'
+);
+
+/** What a row that goes somewhere adds. */
+const ROW_LINK_CLASS = cn(
+  'hover:bg-[var(--color-pill-hover)]',
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+  'focus-visible:outline-[var(--color-ring)]'
+);
+
 /**
  * The resources drawer's body: her words on whatever is open, two to watch,
  * two to listen to, three to read — the prototype's `renderResources`, over the API.
@@ -225,6 +323,7 @@ const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer' } as const;
  * read as her words on Boundaries — which is the wrong kind of true.
  */
 export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
+  const reads = useReads();
   /*
    * ONE status line, always mounted, whose text changes — never a line that
    * mounts with the state. A live region announces changes to content it
@@ -251,12 +350,17 @@ export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
         {status}
       </p>
       {load.status === 'loaded' && <ResourcesSelectionBody selection={load.selection} />}
+      <ReadsSection load={reads} />
     </div>
   );
 }
 
 /** The panel once the selection is here: the card, `to watch`, `to listen`, `to read`. */
 function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }) {
+  // An in-app link closes the panel, as the map's do: the shell keeps the
+  // drawer open across a navigation, so the page it opened would otherwise
+  // sit under the panel (on a phone, entirely).
+  const { closeDrawer } = useShellLayout();
   const { words, wordsAreOwn, videos, audio, articles } = selection;
   return (
     <>
@@ -307,12 +411,7 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
               const href =
                 'href' in article ? article.href : (DOCUMENT_PAGES[article.documentId] ?? null);
               const external = 'href' in article;
-              const rowClass = cn(
-                'flex w-full items-start gap-3 rounded-[14px] border border-[var(--color-card-border)]',
-                'bg-[var(--color-card)] px-3.5 py-3 text-left no-underline hover:no-underline',
-                'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
-                'motion-reduce:transition-none'
-              );
+              const rowClass = ROW_CLASS;
               const inner = (
                 <>
                   <FileText
@@ -337,17 +436,21 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
               );
               return (
                 <li key={article.id}>
-                  {href ? (
+                  {href && !external && isInApp(href) ? (
+                    <Link
+                      href={href}
+                      onClick={closeDrawer}
+                      title={`${article.title} · ${article.readingTime}`}
+                      className={cn(rowClass, ROW_LINK_CLASS)}
+                    >
+                      {inner}
+                    </Link>
+                  ) : href ? (
                     <a
                       href={href}
                       {...(external ? EXTERNAL : {})}
                       title={`${article.title} · ${article.readingTime}`}
-                      className={cn(
-                        rowClass,
-                        'hover:bg-[var(--color-pill-hover)]',
-                        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                        'focus-visible:outline-[var(--color-ring)]'
-                      )}
+                      className={cn(rowClass, ROW_LINK_CLASS)}
                     >
                       {inner}
                     </a>
@@ -363,6 +466,62 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * The reads, always: the heart behind Lelañea, the mission, the creator, the
+ * lineage. The first run offers each once and does not push them again (owner
+ * ruling at claim), so this is where they stay. They open in the workspace.
+ *
+ * Unlike the sections above, this does not follow what is open. Until the
+ * index arrives it renders nothing rather than a second loading line, since
+ * the panel's status line already speaks for the panel; a failure says so
+ * quietly and retries on the next open.
+ */
+function ReadsSection({ load }: { load: ReadsLoad }) {
+  const { closeDrawer } = useShellLayout();
+  if (load.status === 'idle' || load.status === 'loading') return null;
+  return (
+    <section aria-labelledby="resources-about" className="flex flex-col gap-2.5">
+      <Eyebrow as="h3" id="resources-about" className="px-0.5">
+        {READS_EYEBROW}
+      </Eyebrow>
+      {load.status === 'failed' ? (
+        <p className="text-muted-foreground px-0.5 text-[13px] leading-[1.6]">
+          These could not be loaded. Close this and open it again in a moment.
+        </p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {load.reads.map((read) => (
+            <li key={read.id}>
+              <Link
+                href={readPath(read.id)}
+                onClick={closeDrawer}
+                className={cn(ROW_CLASS, ROW_LINK_CLASS)}
+              >
+                <FileText
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-muted-foreground mt-[3px] flex-none"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="brand-display block text-[17.5px] text-[var(--color-heading)]">
+                    {read.title}
+                  </span>
+                  {read.subtitle === null ? null : (
+                    <span className="text-muted-foreground mt-1 block text-[12px] leading-[1.5]">
+                      {read.subtitle}
+                    </span>
+                  )}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

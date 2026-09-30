@@ -12,6 +12,9 @@ with it. What exists so far:
 | Weights                               | the questions editor, `/admin/app/content`   | t-101 |
 | The journey, started at the gate      | `lib/app/journey/start.ts`                   | t-102 |
 | The Onboarding module, `active`       | migration + seed `021-activate-onboarding`   | t-102 |
+| The Initiation, then the reads        | `components/app/onboarding/first-run*.tsx`   | t-103 |
+| What has been shown, per person       | `lib/app/onboarding/first-run*.ts`           | t-103 |
+| The reads in the shell                | `app/(lelanea)/app/read/[id]/page.tsx`       | t-103 |
 
 ## The journey starts when the gate passes
 
@@ -26,6 +29,42 @@ content lands (Values with t-106). The migration
 `20261005100000_app_activate_onboarding_module` moves existing databases and
 the seed unit `021-activate-onboarding` moves a fresh one, each only from
 `draft`. From then on status is the operator's, at Framework → Modules.
+
+## The first run: welcome, then the reads (t-103)
+
+On `/app`, a person who has not been through it meets the Initiation, read
+with their first name, and then each read in turn: the heart behind Lelañea,
+the mission, the creator, the lineage. Each read is offered, and can be read
+there or skipped. It covers the conversation until the last beat is behind
+them, then renders nothing. The discovery questions (t-104) will follow the
+reads.
+
+- **The name** goes through `firstNameFrom` (`lib/app/onboarding/first-name.ts`),
+  the rule the welcome email shares: a blank name, or the platform's `'User'`
+  stand-in, is no name, and `applyFirstName` closes the sentence over the gap.
+- **Each beat is recorded once**, on the onboarding node, through Daybreak's
+  `recordNodeProgress`: `initiation_shown_at`, and `read_offered_at:<id>` per
+  read. One flat key per beat, because the merge is shallow. A beat is recorded
+  when the person **moves past it** (Continue, or Not now), not when it
+  appears, and the client posts it to `POST /api/v1/app/onboarding/first-run`
+  without waiting. `GET` on the same route answers what is recorded and what
+  is still to come.
+- **A reload resumes.** The page reads the ledger on every render and renders
+  only what is still pending. A ledger that cannot be read renders nothing
+  rather than welcoming someone again.
+- **No node, no record.** Before the journey has started, a beat cannot be
+  recorded and is replayed once. The shell layout's `ensureJourneyStarted`
+  backstop starts the journey on the next entry. The route never starts one
+  itself: that belongs to passing the gate.
+- **Offered once, then kept.** Owner ruling at claim: a read is not pushed
+  again. The resources drawer lists every read permanently under "about
+  lelañea", and each opens in the workspace at `/app/read/<id>`, as does an
+  article that names one of them.
+- **Existing accounts** had nothing recorded before this, so each sees the
+  first run once on its next visit to `/app`.
+- **The cookie banner** is fixed over the bottom of the page. The first run
+  pads itself clear of it with `useConsentBannerClearance`, as the gate does
+  (t-117).
 
 ## A discovery answer is a data slot
 
