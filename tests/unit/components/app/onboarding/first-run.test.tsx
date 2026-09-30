@@ -31,6 +31,13 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   return { ...actual, apiClient: { ...actual.apiClient, post } };
 });
 
+// The banner clearance has its own tests (`consent-clearance.test.tsx`); here
+// only that the first run applies what it answers.
+const { clearance } = vi.hoisted(() => ({ clearance: { current: 0 } }));
+vi.mock('@/components/app/ui/consent-clearance', () => ({
+  useConsentBannerClearance: () => clearance.current,
+}));
+
 import { FIRST_RUN_COPY, FIRST_RUN_ROUTE } from '@/components/app/onboarding/first-run';
 import { FirstRunView } from '@/components/app/onboarding/first-run-view';
 import * as sections from '@/lib/app/content/sections';
@@ -50,6 +57,7 @@ const recorded = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   post.mockResolvedValue({ recorded: true });
+  clearance.current = 0;
 });
 
 describe('the Initiation, by name', () => {
@@ -153,6 +161,19 @@ describe('when her words cannot be read', () => {
     vi.spyOn(sections, 'requireDocument').mockRejectedValueOnce(new Error('not seeded'));
     const element = await FirstRunView({ pending: FIRST_RUN_BEATS, userName: 'Maya' });
     expect(element).toBeNull();
+  });
+});
+
+describe('the cookie banner', () => {
+  it('keeps the button clear of it while it shows', async () => {
+    clearance.current = 140;
+    await renderView('Maya', ['initiation']);
+    expect(screen.getByTestId('first-run').style.paddingBottom).toBe('140px');
+  });
+
+  it('reserves nothing when there is no banner', async () => {
+    await renderView('Maya', ['initiation']);
+    expect(screen.getByTestId('first-run').style.paddingBottom).toBe('');
   });
 });
 

@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { Button } from '@/components/app/ui/button';
+import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { FirstRunBeat, OnboardingRead } from '@/lib/app/onboarding/first-run';
@@ -72,6 +73,9 @@ export function FirstRun({ steps }: { steps: readonly FirstRunStep[] }) {
   const heading = React.useRef<HTMLHeadingElement>(null);
   const body = React.useRef<HTMLDivElement>(null);
   const moved = React.useRef(false);
+  // Each step ends on its button, and a first visit is when the cookie banner
+  // is most likely still up over the bottom of the page (t-117).
+  const clearance = useConsentBannerClearance();
 
   React.useEffect(() => {
     if (!moved.current) return;
@@ -94,7 +98,11 @@ export function FirstRun({ steps }: { steps: readonly FirstRunStep[] }) {
   };
 
   return (
-    <div className="bg-background min-h-full" data-testid="first-run">
+    <div
+      className="bg-background min-h-full"
+      style={clearance > 0 ? { paddingBottom: clearance } : undefined}
+      data-testid="first-run"
+    >
       <div
         key={step.beat}
         className={cn(
