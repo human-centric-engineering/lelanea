@@ -23,7 +23,7 @@ vi.mock('@/lib/app/content/document-store', async () =>
 );
 
 import { applyFirstName } from '@/components/app/content/authored-document';
-import WelcomeEmail, { firstNameFrom, WELCOME_SECTION } from '@/components/app/emails/welcome';
+import WelcomeEmail, { WELCOME_SECTION } from '@/components/app/emails/welcome';
 import * as sections from '@/lib/app/content/sections';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import { fakeDocumentStore, rewriteSection } from '@/tests/helpers/app/foundational-documents';
@@ -114,23 +114,6 @@ describe('WelcomeEmail — where a loader failure would land', () => {
 
     await render(element);
     expect(sections.requireDocument).toHaveBeenCalledWith('the_initiation');
-  });
-});
-
-describe('firstNameFrom', () => {
-  it.each([
-    ['Maya Reyes', 'Maya'],
-    ['Maya', 'Maya'],
-    ['  Maya   Reyes  ', 'Maya'],
-    ['User', null],
-    ['', null],
-    ['   ', null],
-  ])('%j → %j', (input, expected) => {
-    expect(firstNameFrom(input)).toBe(expected);
-  });
-
-  it('does not treat a person actually called User-something as the stand-in', () => {
-    expect(firstNameFrom('Userwald Smith')).toBe('Userwald');
   });
 });
 

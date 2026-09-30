@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
+import { READ_PATH_PREFIX } from '@/lib/app/onboarding/first-run';
 import { USAGE_PAGE } from '@/lib/app/usage/usage-view';
 
 /**
@@ -83,5 +84,13 @@ export function toneStyleFor(
  * `TIER_INKS` names each arc in it (`map-drawer.tsx`).
  */
 function toneKeyFor(pathname: string): string {
-  return pathname.startsWith(`${MODULES_PATH_PREFIX}/`) ? '/app/workspace' : pathname;
+  // A read (t-103) is a document opened in the workspace, so it takes the
+  // workspace's tone as a module does.
+  if (
+    pathname.startsWith(`${MODULES_PATH_PREFIX}/`) ||
+    pathname.startsWith(`${READ_PATH_PREFIX}/`)
+  ) {
+    return '/app/workspace';
+  }
+  return pathname;
 }

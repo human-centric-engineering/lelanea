@@ -5,6 +5,7 @@ import { applyFirstName } from '@/components/app/content/authored-document';
 import { CardLink, LelaneaEmail, styles } from '@/components/app/emails/lelanea-email';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import { appAuthLandingRoute } from '@/lib/app/auth-landing';
+import { firstNameFrom } from '@/lib/app/onboarding/first-name';
 import { BRAND } from '@/lib/brand';
 
 /**
@@ -51,26 +52,14 @@ import { BRAND } from '@/lib/brand';
  * ## The first name
  *
  * The merge field takes the reader's first name, or the sentence closes over
- * the gap ("Welcome." — decision D7, `applyFirstName`). The platform hands
- * this template `user.name || 'User'` rather than `null` for an account with no
- * name, so `'User'` — the platform's literal fallback — is treated as no name.
- * That is a coupling to a string in Sunrise-owned `lib/auth/config.ts`; the
- * test pins it, and the honest fix is upstream (pass `null` through), which is
- * noted in the PR rather than patched here.
+ * the gap ("Welcome." — decision D7, `applyFirstName`). Which names count as
+ * none — including the platform's `'User'` stand-in — is `firstNameFrom`'s
+ * rule (`lib/app/onboarding/first-name.ts`), shared with the in-app Initiation
+ * so the two greetings cannot disagree.
  */
 
 /** The section of `the_initiation` the greeting is: "Welcome, …" through "Welcome to Lelañea." */
 export const WELCOME_SECTION = 'welcome';
-
-/** The platform's stand-in for a missing name (`user.name || 'User'`). */
-const PLATFORM_NAME_FALLBACK = 'User';
-
-/** First whitespace-separated part of the name, or `null` when there is none. */
-export function firstNameFrom(userName: string): string | null {
-  const trimmed = userName.trim();
-  if (!trimmed || trimmed === PLATFORM_NAME_FALLBACK) return null;
-  return trimmed.split(/\s+/)[0] ?? null;
-}
 
 export interface WelcomeEmailProps {
   userName: string;
