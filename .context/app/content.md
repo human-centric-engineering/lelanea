@@ -325,9 +325,20 @@ every chip it resolves (`loadLibraryForChips`), and not at all when nothing was
 suggested; if the read fails, the replies are shown without chips and a warning
 is logged.
 
-**Her list of videos, audio and articles (t-76) is therefore a migration**, not an edit
-to `seed-data/drafted/lelanea_resources.json`: once the library is written, the
-file reaches only a database that was never seeded.
+**Her list of videos, audio and articles is operator content** (owner ruling,
+30 Sept 2026), entered at Admin → App → Content → Resources rather than added to
+`seed-data/drafted/lelanea_resources.json`: once the library is written, the file
+reaches only a database that was never seeded. An entry reaches only the database
+it is made in, so her list is entered on production; dev and preview keep the
+seeded, empty lists unless someone enters test content there, or carries the
+library across with the page's export and import. That is accepted: her list is
+content, not something a build needs.
+
+The rows stay in `app_resource*` and are edited on this app page, not in each
+module's Framework → Modules area, under the 28 Sept 2026 ruling on this
+feature: no Daybreak element models a resource list, and Daybreak has no seam
+yet for a leaf to add a module tab (daybreak#281, ask 2). When it has one, a
+module's resources move there to be edited; the rows do not move.
 
 ## The voice overlays and the golden set: the database
 
@@ -738,7 +749,7 @@ nothing.
 builder picked from her material (values, from the "Centered Living" lesson; the
 default, from the welcome statement) and **empty video, audio and article lists** — no
 video or audio of hers exists yet and only she can say which pieces belong beside which
-module. Her list lands in t-76, as a migration (see above). The working `notes`
+module. Her list is entered through the admin (see above). The working `notes`
 are withheld, as every file's are.
 
 | Function                                    | Returns                                                                                                                            |

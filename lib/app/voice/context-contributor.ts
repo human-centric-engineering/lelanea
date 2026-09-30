@@ -21,8 +21,8 @@
  *    instead of inventing one (f-slots t-72).
  * 4. **What may be offered** — Lelañea Fulton's videos, audio and articles
  *    (`lib/app/resources/offering.ts`), so a suggestion names a real id
- *    (f-resources t-77). Empty until her list lands, and then nothing is
- *    offered, which is the truth.
+ *    (f-resources t-77). While no list has been entered in the admin it is
+ *    empty, and nothing is offered, which is the truth.
  *
  * The third and fourth are here rather than in their own contributors because
  * **a request carries one context tuple**, so registering a second loader for

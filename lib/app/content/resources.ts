@@ -43,7 +43,7 @@
  *
  * **It ships as a draft.** The two passages are the builder's pick of her
  * material and every list is empty; `provenance` says so and is served rather
- * than withheld. Her list lands in t-76.
+ * than withheld. Her list is entered in the admin.
  *
  * @see lib/app/content/resource-store.ts — the reads and writes
  * @see app/api/v1/app/content/resources — the HTTP surface
