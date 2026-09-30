@@ -428,22 +428,31 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   }, []);
 
   /**
-   * Arriving at `medium` beside a page with the conversation open slims the menu.
+   * At `medium` beside a page, an open conversation never has an expanded menu
+   * next to it — however the reader got there.
    *
    * The exclusivity rule (see `setChatSlim`) is enforced by the two verbs, but
    * neither runs when the reader simply ARRIVES in the competing geometry — a
    * module opened at 1150px with the menu expanded in storage, or a window
-   * narrowed into the band. Without this the three would share the width and
-   * the page would be the one squeezed, which is what the rule exists to stop.
+   * narrowed into the band — nor when the menu expands by itself: widening from
+   * 1050 to 1150 stays inside `medium`, and `fit`'s outward 1100px crossing
+   * drops the override back to an expanded stored preference. Keyed on
+   * `navSlim` as well as the geometry so that case re-asserts too. It cannot
+   * fight the menu's own control: expanding it here parks the conversation in
+   * the same batch (`toggleNavSlim`), so the condition is already false.
    *
    * It used to park the conversation instead, because the conversation was a
    * slide-over whose resting place was parked. It now sits beside the page
    * (t-83), so the conversation stays and the menu steps aside — the same
    * direction as the verb that opens the conversation. Live value only.
+   *
+   * Before paint, like every other correction to the menu's width here: the
+   * width transition is always armed, so a passive effect let a direct load of
+   * a module at 1100–1240px paint the 234px menu and then animate it shut.
    */
-  useEffect(() => {
-    if (width === 'medium' && wsOpen && !chatSlim) setSlimOverride(true);
-  }, [width, wsOpen, chatSlim]);
+  useIsomorphicLayoutEffect(() => {
+    if (width === 'medium' && wsOpen && !chatSlim && !navSlim) setSlimOverride(true);
+  }, [width, wsOpen, chatSlim, navSlim]);
 
   /**
    * With no workspace there is no second pane to be showing — AND nothing for
@@ -689,14 +698,16 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       if (event.key !== 'Escape') return;
       if (navOpen) return closeNav();
       if (drawer) return closeDrawer();
-      // Parking the conversation is no longer a rung: at `medium` it used to be
-      // a panel covering the page, but it now sits beside it (t-83), so it is
-      // not covering anything and there is nothing for Escape to take away.
-      if (chatSlim) return setChatSlim(false);
+      // Not at `medium`, either way round. Parking was a rung there while the
+      // conversation was a panel covering the page; beside it (t-83) it covers
+      // nothing, so there is nothing to take away. And un-folding it would
+      // collapse the menu too (the exclusivity rule) — so an Escape meant for a
+      // popover in the page could take back a menu the reader just expanded.
+      if (chatSlim && width !== 'medium') return setChatSlim(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, closeDrawer, setChatSlim]);
+  }, [navOpen, drawer, width, chatSlim, closeNav, closeDrawer, setChatSlim]);
 
   const value = useMemo<ShellLayout>(
     () => ({

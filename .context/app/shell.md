@@ -121,10 +121,13 @@ One ordered walk rather than independent handlers, which would race. Each rung i
 
 1. the ≤900 nav drawer
 2. a map/resources drawer
-3. un-fold a folded conversation
+3. un-fold a folded conversation, anywhere but medium
 
 Parking the conversation at medium was a rung while it was a panel covering the
 page. Beside the page it covers nothing, so there is nothing for Escape to take.
+Nor does Escape un-fold it there: at medium that also collapses the menu, so an
+Escape meant for a popover in the page would take back a menu the reader had just
+expanded.
 
 The account menu sits above rung 1 without being in the walk: Radix dismisses it
 on Escape in the capture phase, and the menu stops the event there so the drawer
@@ -169,7 +172,9 @@ conversation to a 56px strip when somebody expanded the menu on a 1600px screen.
 
 The two verbs enforce it, and so does **arriving**: a module opened at medium
 with the conversation open — the ordinary case since t-83 — slims the menu, live
-value only. Without that, a reader whose stored menu is expanded would land on
+value only, before paint. So does the menu expanding by itself inside the band:
+widening from 1050 to 1150 crosses 1100 outward, which drops the override to an
+expanded stored preference, without the width class changing. Without that, a reader whose stored menu is expanded would land on
 1150px with all three columns squeezing the page.
 
 It also **releases** the override when the conversation is parked again, rather

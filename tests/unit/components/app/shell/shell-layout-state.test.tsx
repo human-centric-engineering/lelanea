@@ -12,7 +12,7 @@
  * @see components/app/shell/use-shell-layout.tsx · conversation-pane.tsx
  */
 
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -150,13 +150,19 @@ describe('the Escape chain', () => {
     expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
   });
 
-  it('un-folds a folded conversation on a tablet, as at large', async () => {
-    renderShell('medium');
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+  it('does not un-fold a folded conversation on a tablet either', async () => {
+    // Un-folding at medium collapses the menu too (the exclusivity rule), so an
+    // Escape meant for a popover in the page would take back a menu the reader
+    // had just expanded — which is how the conversation got folded.
+    renderShell(1200);
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
     expect(strip()).not.toBeNull();
 
     await userEvent.keyboard('{Escape}');
-    expect(strip()).toBeNull();
+    expect(strip()).not.toBeNull();
+    expect(document.querySelector('nav[aria-label="Main"]')?.getAttribute('data-slim')).toBe(
+      'false'
+    );
   });
 
   it('un-folds the conversation when there is nothing else left to close', async () => {
@@ -311,6 +317,26 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
   });
 
+  it('keeps the menu slim when widening across 1100 inside the band', () => {
+    // `fit`'s outward 1100px crossing releases the override, which hands an
+    // expanded stored menu back — while the width class stays `medium`, so
+    // nothing about the geometry changed. The rule has to re-assert there, or
+    // the menu grows to 234px beside an open conversation at 1150px.
+    renderShell(1050);
+    expect(slimNow()).toBe('true');
+
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        value: 1150,
+        writable: true,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(slimNow()).toBe('true');
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
   it('does NOT hand a 234px menu back to a 1000px tablet', async () => {
     // The regression the first fix introduced. `slimOverride` is one slot with
     // two writers, and releasing it to `null` handed the menu back to the
@@ -398,15 +424,17 @@ describe('Escape goes through the verbs, not the setters beneath them', () => {
   // afford it, being keyboard-only.
   const nav = () => document.querySelector('nav[aria-label="Main"]');
 
-  it('takes the menu override when Escape un-folds the conversation on a tablet', async () => {
-    renderShell(1200);
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
-    expect(nav()?.getAttribute('data-slim')).toBe('false');
+  it('leaves the menu override alone when Escape un-folds the conversation at large', async () => {
+    // At large the un-fold rung runs, and `setChatSlim` must not touch the menu
+    // there — the same answer the strip gives.
+    renderShell('large');
+    handle().focus();
+    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
+    expect(strip()).not.toBeNull();
 
     await userEvent.keyboard('{Escape}');
     expect(strip()).toBeNull();
-    // The strip already did this. The key has to agree with it.
-    expect(nav()?.getAttribute('data-slim')).toBe('true');
+    expect(nav()?.getAttribute('data-slim')).toBe('false');
   });
 
   it('hands focus back to the burger when Escape closes the ≤900px drawer', async () => {

@@ -316,38 +316,38 @@ export function ConversationPane() {
  * The WHOLE strip is the button, so bringing her back is one target rather than
  * a small control hidden on a dead pane.
  */
-const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void; className?: string }>(
-  function Strip({ onOpen, className }, ref) {
-    return (
-      <button
-        ref={ref}
-        type="button"
-        onClick={onOpen}
-        aria-label="Open the conversation"
-        className={cn(
-          'text-muted-foreground flex flex-none flex-col items-center gap-4',
-          'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
-          'w-14 py-4 max-[640px]:w-11',
-          'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
-          'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-          'motion-reduce:transition-none',
-          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
-          'focus-visible:outline-[var(--color-ring)]',
-          className
-        )}
-      >
-        <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
-          Ask Lelañea
-        </span>
-        <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-          <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
-        </span>
-      </button>
-    );
-  }
-);
+const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void }>(function Strip(
+  { onOpen },
+  ref
+) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onOpen}
+      aria-label="Open the conversation"
+      className={cn(
+        'text-muted-foreground flex flex-none flex-col items-center gap-4',
+        'border-r border-[var(--color-divider)] bg-[var(--color-background)]',
+        'w-14 py-4 max-[640px]:w-11',
+        'hover:bg-[var(--color-pill)] hover:text-[var(--color-secondary-ink)]',
+        'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+        'motion-reduce:transition-none',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid',
+        'focus-visible:outline-[var(--color-ring)]'
+      )}
+    >
+      <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
+        Ask Lelañea
+      </span>
+      <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+        <i className="block h-1 w-1 rounded-full bg-current opacity-50" />
+      </span>
+    </button>
+  );
+});
 
 /**
  * The one thing worth resizing: the conversation, against the work.

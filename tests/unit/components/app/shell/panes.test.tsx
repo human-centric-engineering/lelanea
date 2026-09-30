@@ -66,11 +66,11 @@ describe('the view tone reaches both panes', () => {
   it('is published on an ancestor of each, not on a sibling', () => {
     // The defect this pins: `--tone` was set on the workspace `<section>`,
     // which is a SIBLING of the conversation pane. A custom property inherits
-    // downward only, so the conversation's own `border-t-[var(--tone,…)]` —
-    // the edge of the panel when it slides over on a tablet — could never
-    // resolve it, and stayed teal while the band on the other side of the
-    // screen was green. Asserting containment rather than a computed colour,
-    // because containment is the thing that was wrong.
+    // downward only, so a reader on the conversation's side — the tablet
+    // slide-over's panel edge, until t-83 removed it — could never resolve it,
+    // and stayed teal while the band on the other side of the screen was
+    // green. Asserting containment rather than a computed colour, because
+    // containment is the thing that was wrong.
     renderPanes('large', '/app/journey');
 
     const toned = document.querySelector('[style*="--tone"]');

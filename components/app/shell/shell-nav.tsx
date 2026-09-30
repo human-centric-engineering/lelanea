@@ -23,9 +23,8 @@ const WORKSPACE_HREF = '/app/workspace';
 /**
  * What a click-away must NOT collapse the menu on.
  *
- * The same list `workspace.tsx` guards its re-park gesture with, and for the
- * same reason: a click on a control is a request to do that thing, not an
- * incidental press on the background. Without it, using anything at all in the
+ * A click on a control is a request to do that thing, not an incidental press
+ * on the background. Without it, using anything at all in the
  * workspace — a button, a link, a checkbox — folded the menu as a side effect,
  * which reads as the app flinching rather than as dismissing something.
  */
