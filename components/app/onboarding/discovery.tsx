@@ -262,7 +262,7 @@ export function Discovery({
         ) : null}
 
         {offering ? (
-          <section className="flex flex-col gap-4" data-testid="discovery-offer">
+          <section className="flex flex-col gap-4" data-testid="discovery-offer-card">
             <Eyebrow as="p">{DISCOVERY_COPY.eyebrow}</Eyebrow>
             <p className="text-foreground max-w-prose">{DISCOVERY_COPY.offer}</p>
             <p className="brand-display text-2xl leading-[1.3] text-[var(--color-heading)]">
