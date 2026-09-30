@@ -27,8 +27,10 @@ import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { fakeJourneyStore } from '@/tests/helpers/app/content-stores';
 
-const { getJourneyMap, notFound } = vi.hoisted(() => ({
+const { getJourneyMap, notFound, getServerSession, getDiscoveryState } = vi.hoisted(() => ({
   getJourneyMap: vi.fn(),
+  getServerSession: vi.fn(),
+  getDiscoveryState: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
@@ -38,6 +40,13 @@ vi.mock('@/lib/app/content/journey-store', async () =>
   (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
 );
 vi.mock('next/navigation', () => ({ notFound, usePathname: () => '/app/modules/values' }));
+vi.mock('@/lib/auth/utils', () => ({ getServerSession }));
+vi.mock('@/lib/app/onboarding/discovery-store', () => ({ getDiscoveryState }));
+vi.mock('@/components/app/onboarding/discovery-view', () => ({
+  DiscoveryView: ({ userId, where }: { userId: string; where: string }) => (
+    <div data-testid="discovery-view" data-user-id={userId} data-where={where} />
+  ),
+}));
 vi.mock('@/lib/hooks/use-local-storage', () => ({
   useLocalStorage: () => [null, vi.fn(), vi.fn()],
 }));
@@ -45,7 +54,11 @@ vi.mock('@/lib/hooks/use-local-storage', () => ({
 import ModulePage, { generateMetadata } from '@/app/(lelanea)/app/modules/[slug]/page';
 
 const store = fakeJourneyStore();
-beforeEach(() => store.reset());
+beforeEach(() => {
+  store.reset();
+  getServerSession.mockResolvedValue({ user: { id: 'user_1', name: 'Maya Reyes' } });
+  getDiscoveryState.mockResolvedValue({ set: { moduleSlug: 'onboarding' } });
+});
 
 async function realMap() {
   const structure = await getJourneyStructure();
@@ -93,6 +106,37 @@ describe('/app/modules/[slug]', () => {
     expect(screen.getByText('integration & expansion · module 16')).toBeInTheDocument();
     expect(screen.getByText('Part 1')).toBeInTheDocument();
     expect(screen.getByText(/Spiritual Oneness arc/)).toBeInTheDocument();
+  });
+
+  it('gives the module that asks the discovery questions the questions, in place of the placeholder (t-104)', async () => {
+    getJourneyMap.mockResolvedValue(await realMap());
+    const ui = await ModulePage(params('onboarding'));
+    render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+
+    const questions = screen.getByTestId('discovery-view');
+    expect(questions).toHaveAttribute('data-where', 'module');
+    expect(questions).toHaveAttribute('data-user-id', 'user_1');
+    expect(screen.queryByText('module placeholder')).toBeNull();
+    expect(getDiscoveryState).toHaveBeenCalledWith('user_1');
+  });
+
+  it('gives every other module its placeholder, not the questions', async () => {
+    getJourneyMap.mockResolvedValue(await realMap());
+    const ui = await ModulePage(params('values'));
+    render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+
+    expect(screen.queryByTestId('discovery-view')).toBeNull();
+    expect(screen.getByText('module placeholder')).toBeInTheDocument();
+  });
+
+  it('keeps Onboarding’s placeholder when the questions cannot be read', async () => {
+    getJourneyMap.mockResolvedValue(await realMap());
+    getDiscoveryState.mockResolvedValue(null);
+    const ui = await ModulePage(params('onboarding'));
+    render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+
+    expect(screen.queryByTestId('discovery-view')).toBeNull();
+    expect(screen.getByText('module placeholder')).toBeInTheDocument();
   });
 
   it('404s a slug that is not on the published map', async () => {
