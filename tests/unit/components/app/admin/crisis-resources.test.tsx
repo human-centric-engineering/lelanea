@@ -390,4 +390,32 @@ describe('the "every crisis turn is failing" banner after a save', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('alert')).toHaveTextContent(/internationalUrl/);
   });
+
+  it('keeps the latest re-check when two answer out of order', async () => {
+    const user = userEvent.setup();
+    const first = { ...COPY, hardIntro: 'One.', status: 'draft' as const, version: 3 };
+    const second = { ...first, hardIntro: 'Two.', version: 4 };
+    let answerFirst: (r: Response) => void = () => {};
+    fetchMock
+      .mockResolvedValueOnce(ok({ copy: first, changed: ['hardIntro'] }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce(ok({ copy: second, changed: ['hardIntro'] }))
+      .mockResolvedValueOnce(ok({ ...VIEW, copy: second, unservable: null }));
+    render(<CrisisResourcesPanel initialView={{ ...VIEW, unservable: BROKEN }} />);
+
+    const intro = screen.getByLabelText('Opening — when the conversation stops');
+    await user.clear(intro);
+    await user.type(intro, 'One.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.clear(intro);
+    await user.type(intro, 'Two.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    // The first save's re-check answers last, still broken — too late to count.
+    answerFirst(ok({ ...VIEW, copy: first, unservable: BROKEN }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

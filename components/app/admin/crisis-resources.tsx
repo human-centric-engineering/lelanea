@@ -27,7 +27,7 @@
  */
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -142,11 +142,15 @@ export function CrisisResourcesPanel({
    * After any save, ask the server again whether the rows can be served: the
    * check is the turn's own (`contentFromRows`), so the browser does not guess
    * at it. A failed re-check keeps the banner as it was — it clears only when
-   * the server says the rows are servable (t-68).
+   * the server says the rows are servable (t-68). Only the latest re-check
+   * may set it: two quick saves can answer out of order, and the older answer
+   * would put back a banner the newer save cleared (found by /code-review).
    */
+  const latestCheck = useRef(0);
   const recheck = async () => {
+    const mine = ++latestCheck.current;
     const result = await send<CrisisViewJson>('GET', CRISIS_RESOURCES_ENDPOINT);
-    if (result.ok) setUnservable(result.data.unservable);
+    if (result.ok && mine === latestCheck.current) setUnservable(result.data.unservable);
   };
 
   if (!initialView.seeded || copy === null) {
