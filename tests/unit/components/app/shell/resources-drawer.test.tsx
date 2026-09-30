@@ -852,6 +852,37 @@ describe('the reads, always there', () => {
     expect(within(await readsSection()).getByText(/could not be loaded/)).toBeInTheDocument();
   });
 
+  it('does not ask again while the drawer stays open after a failure, only on the next open', async () => {
+    serve({ values: fullSelection() }, new APIClientError('boom', 'INTERNAL_ERROR', 500));
+    renderDrawers();
+    await openResources();
+    await within(await readsSection()).findByText(/could not be loaded/);
+    // Let any effect the failure schedules run.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const asked = () => get.mock.calls.filter(([path]) => path === DOCUMENTS_ENDPOINT).length;
+    expect(asked()).toBe(1);
+
+    serve({ values: fullSelection() }, documentIndex());
+    await openResources(); // closes
+    await openResources(); // opens again
+    expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
+    expect(asked()).toBe(2);
+  });
+
+  it('treats an index with none of the reads as a failure, and asks again on the next open', async () => {
+    serve({ values: fullSelection() }, { ...documentIndex(), documents: [] });
+    renderDrawers();
+    await openResources();
+    await within(await readsSection()).findByText(/could not be loaded/);
+
+    serve({ values: fullSelection() }, documentIndex());
+    await openResources();
+    await openResources();
+    expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
+  });
+
   it('asks for the titles once, not on every open', async () => {
     serve({ values: fullSelection() }, documentIndex());
     renderDrawers();

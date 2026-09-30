@@ -109,25 +109,35 @@ export function useReads(): ReadsLoad {
     };
   }, []);
 
+  // Where the load stands, read by the effect without re-running it. Keyed on
+  // `open` alone: with the status in the deps, a failure re-ran the effect
+  // while the drawer was still open and fetched again at once, in a loop that
+  // spent the section's rate limit (`/code-review`). Now a failure waits for
+  // the next open, as the docblock says.
+  const status = useRef<ReadsLoad['status']>('idle');
+
   useEffect(() => {
-    if (!open || load.status === 'loading' || load.status === 'loaded') return;
-    setLoad({ status: 'loading' });
+    if (!open || status.current === 'loading' || status.current === 'loaded') return;
+    const settle = (next: ReadsLoad): void => {
+      status.current = next.status;
+      if (mounted.current) setLoad(next);
+    };
+    settle({ status: 'loading' });
     apiClient
       .get<FoundationalDocumentIndex>(DOCUMENTS_ENDPOINT)
       .then((index) => {
-        if (!mounted.current) return;
         // In the order the first run offers them, not the index's.
         const byId = new Map(index.documents.map((doc) => [doc.id, doc]));
         const reads = ONBOARDING_READS.flatMap((id): ReadLink[] => {
           const doc = byId.get(id);
           return doc ? [{ id, title: doc.title, subtitle: doc.subtitle }] : [];
         });
-        setLoad({ status: 'loaded', reads });
+        // An index with none of them (a database not yet seeded) is a failure,
+        // not an answer: kept as `loaded` it would never be asked for again.
+        settle(reads.length > 0 ? { status: 'loaded', reads } : { status: 'failed' });
       })
-      .catch(() => {
-        if (mounted.current) setLoad({ status: 'failed' });
-      });
-  }, [open, load.status]);
+      .catch(() => settle({ status: 'failed' }));
+  }, [open]);
 
   return load;
 }
@@ -471,7 +481,7 @@ function ReadsSection({ load }: { load: ReadsLoad }) {
       <Eyebrow as="h3" id="resources-about" className="px-0.5">
         {READS_EYEBROW}
       </Eyebrow>
-      {load.status === 'failed' || load.reads.length === 0 ? (
+      {load.status === 'failed' ? (
         <p className="text-muted-foreground px-0.5 text-[13px] leading-[1.6]">
           These could not be loaded. Close this and open it again in a moment.
         </p>
