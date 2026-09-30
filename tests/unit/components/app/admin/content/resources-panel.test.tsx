@@ -2,7 +2,7 @@
 
 /**
  * The resource library editor (f-content-seeds t-91): the library's own
- * fields and sign-off, every video and article (live and retired), reordering,
+ * fields and sign-off, every video, audio piece and article (live and retired), reordering,
  * adding, and her words per key.
  *
  * What is proved here is what the admin sees and what the browser sends —
@@ -120,7 +120,7 @@ const ARTICLE1: ResourceAdminRow = {
 };
 
 const AUDIO1: ResourceAdminRow = {
-  id: 'quiet_hour',
+  id: 'quiet-hour',
   kind: 'audio',
   position: 1,
   title: 'A Quiet Hour',
@@ -395,7 +395,7 @@ describe('editing a resource', () => {
 
     await user.click(dialog.getByRole('button', { name: 'Save' }));
 
-    expect(sent().url).toBe(contentItemEndpoint('resources', 'resource', 'quiet_hour'));
+    expect(sent().url).toBe(contentItemEndpoint('resources', 'resource', 'quiet-hour'));
     expect(sent().method).toBe('PUT');
     expect(sent().body).toEqual({
       revision: 3,
@@ -617,12 +617,12 @@ describe('adding a resource', () => {
 
   it('adds an audio piece, sending kind audio with its length and link', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_audio' }));
+    fetchMock.mockResolvedValueOnce(ok({ id: 'a-new-audio' }));
     render(<ResourcesPanel initialView={VIEW} />);
     await user.click(screen.getByRole('button', { name: 'Add an audio piece' }));
     const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
 
-    await user.type(within(form).getByLabelText('Id'), 'a_new_audio');
+    await user.type(within(form).getByLabelText('Id'), 'a-new-audio');
     await user.type(within(form).getByLabelText('Title'), 'A New Audio Piece');
     await user.type(within(form).getByLabelText('What it is for'), 'For the evening.');
     await user.selectOptions(within(form).getByLabelText('Belongs to'), 'module_01_a');
@@ -634,7 +634,7 @@ describe('adding a resource', () => {
     expect(sent().url).toBe(contentEntityEndpoint('resources', 'resource'));
     expect(sent().method).toBe('POST');
     expect(sent().body).toEqual({
-      id: 'a_new_audio',
+      id: 'a-new-audio',
       kind: 'audio',
       title: 'A New Audio Piece',
       subtitle: 'For the evening.',

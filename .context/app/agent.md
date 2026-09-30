@@ -326,8 +326,8 @@ slot vocabulary, for the same reason — a tool nobody is told about is never
 used), the id is looked up server-side, and an unknown one is refused with a
 structured error rather than thrown. Everything the person then sees — the chip
 beside the reply, the account line, the drawer pinned to it — is the file's
-words. The offering block is empty until an admin enters Lelañea Fulton's list,
-and then nothing is offered, which is the truth.
+words. While no list has been entered in the admin, the offering block is empty
+and nothing is offered, which is the truth.
 
 **Not on the control agent.** `voice-control-bare` holds no tools and gets no
 context block (the comparison sends none), so the offer cannot reach it.

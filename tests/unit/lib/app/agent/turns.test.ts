@@ -85,7 +85,7 @@ const db = vi.hoisted(() => ({
 const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 
 // One video in the library, so a replay can carry a suggestion on its call's
-// frame (t-77). The shipped file holds none until her list lands.
+// frame (t-77). The shipped file holds none; her list is entered in the admin.
 // The library is rows since t-87: the seed's, plus one video a replay's chip
 // resolves to.
 vi.mock('@/lib/app/content/resource-store', async () => {

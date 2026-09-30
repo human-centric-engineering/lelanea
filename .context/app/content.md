@@ -325,11 +325,20 @@ every chip it resolves (`loadLibraryForChips`), and not at all when nothing was
 suggested; if the read fails, the replies are shown without chips and a warning
 is logged.
 
-**Her list of videos, audio and articles is operator content**, entered at Admin →
-App → Content → Resources (owner ruling, 30 Sept 2026), not an edit to
+**Her list of videos, audio and articles is operator content** (owner ruling,
+30 Sept 2026), entered at Admin → App → Content → Resources rather than added to
 `seed-data/drafted/lelanea_resources.json`: once the library is written, the file
-reaches only a database that was never seeded, and the admin is what writes the
-rows every database serves.
+reaches only a database that was never seeded. An entry reaches only the database
+it is made in, so her list is entered on production; dev and preview keep the
+seeded, empty lists unless someone enters test content there, or carries the
+library across with the page's export and import. That is accepted: her list is
+content, not something a build needs.
+
+The rows stay in `app_resource*` and are edited on this app page, not in each
+module's Framework → Modules area, under the 28 Sept 2026 ruling on this
+feature: no Daybreak element models a resource list, and Daybreak has no seam
+yet for a leaf to add a module tab (daybreak#281, ask 2). When it has one, a
+module's resources move there to be edited; the rows do not move.
 
 ## The voice overlays and the golden set: the database
 

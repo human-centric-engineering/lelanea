@@ -2,12 +2,12 @@
 
 /**
  * The resources drawer follows what is open: her words on it, two to watch,
- * three to read — from `/api/v1/app/content/resources/:key` (f-resources t-75).
+ * two to listen to, three to read — from `/api/v1/app/content/resources/:key` (f-resources t-75).
  *
  * `drawer.test.tsx` covers the panel's chrome as chrome. This file is about
  * what the panel SAYS: that the key comes from the route, that the head names
  * the module and takes its arc, that her words reach the card verbatim, that a
- * full selection renders as two cards and three rows and an empty one as the
+ * full selection renders as video and audio cards and three rows and an empty one as the
  * honest empty states, and that a failed fetch is said rather than left blank.
  *
  * The API client is mocked; the fixtures are shaped as the route serves them.
@@ -75,17 +75,22 @@ const WORDS_ON_VALUES = {
   revision: 1,
 };
 
-function video(id: string, title: string, duration: string) {
+function timed(host: string, id: string, title: string, duration: string) {
   return {
     id,
     title,
     subtitle: `what ${id} is for`,
     relatesTo: 'module_01_values',
     duration,
-    href: `https://videos.example/${id}`,
+    href: `https://${host}/${id}`,
     revision: 1,
   };
 }
+
+const video = (id: string, title: string, duration: string) =>
+  timed('videos.example', id, title, duration);
+const audio = (id: string, title: string, duration: string) =>
+  timed('audio.example', id, title, duration);
 
 /** Her words on values, two videos, one audio piece, three articles — the full panel. */
 function fullSelection(): ResourcesSelection {
@@ -100,17 +105,7 @@ function fullSelection(): ResourcesSelection {
       video('why-values', 'Why values come first', '6:12'),
       video('four-marks', 'The four marks', '4:48'),
     ],
-    audio: [
-      {
-        id: 'a-quiet-hour',
-        title: 'A quiet hour',
-        subtitle: 'to listen to on a walk',
-        relatesTo: 'module_01_values',
-        duration: '12:05',
-        href: 'https://audio.example/a-quiet-hour',
-        revision: 1,
-      },
-    ],
+    audio: [audio('a-quiet-hour', 'A quiet hour', '12:05')],
     articles: [
       {
         id: 'inheritance-test',
@@ -415,7 +410,7 @@ describe('to watch, to listen and to read', () => {
     const pieces = within(listen).getAllByRole('link');
     expect(pieces).toHaveLength(1);
     expect(pieces[0]).toHaveTextContent('A quiet hour');
-    expect(pieces[0]).toHaveTextContent('to listen to on a walk');
+    expect(pieces[0]).toHaveTextContent('what a-quiet-hour is for');
     expect(pieces[0]).toHaveTextContent('12:05');
     expect(pieces[0]).toHaveAttribute('href', 'https://audio.example/a-quiet-hour');
     expect(pieces[0]).toHaveAttribute('target', '_blank');
