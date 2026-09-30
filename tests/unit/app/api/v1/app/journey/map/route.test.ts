@@ -77,13 +77,19 @@ describe('GET /api/v1/app/journey/map', () => {
     // Sunrise 0.12.0: `withAuth` refuses (500, `OwnershipDecisionMissingError`)
     // any route that made no ownership decision for a caller the default
     // policy narrows — every non-admin. The session is a plain USER, and the
-    // route declares `'nothing'`: one published map per install, owned by nobody.
+    // route declares `'self'`: the per-person part is the caller's own journey.
     const response = await GET(createRequest());
     const body = (await response.json()) as { success: boolean; error?: { message: string } };
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.error).toBeUndefined();
+  });
+
+  it("projects the caller's own journey state, by their session id (§15 t-102)", async () => {
+    await GET(createRequest());
+
+    expect(getJourneyMap).toHaveBeenCalledWith('user_test');
   });
 
   it('serves the projection in the standard envelope with an ETag', async () => {

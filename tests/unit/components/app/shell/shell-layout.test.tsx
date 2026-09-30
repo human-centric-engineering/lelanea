@@ -99,6 +99,10 @@ vi.mock('@/lib/analytics', () => ({
 
 import { ThemeProvider } from '@/hooks/use-theme';
 
+// The journey backstop (t-102) is asserted in `tests/unit/app/shell-gate.test.tsx`;
+// here it is a no-op so the frame renders without a journey store.
+vi.mock('@/lib/app/journey/start', () => ({ ensureJourneyStarted: vi.fn(async () => 'already') }));
+
 import ShellLayout from '@/app/(lelanea)/app/layout';
 import { stubImageLoading } from '@/tests/unit/components/app/shell/render-shell';
 

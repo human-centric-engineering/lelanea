@@ -19,6 +19,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const { getPublishedMap } = vi.hoisted(() => ({ getPublishedMap: vi.fn() }));
 vi.mock('@/lib/framework/facilitation/map/version-service', () => ({ getPublishedMap }));
+const { getJourney, getNodeStates } = vi.hoisted(() => ({
+  getJourney: vi.fn(),
+  getNodeStates: vi.fn(),
+}));
+vi.mock('@/lib/framework/facilitation/journey/queries', () => ({ getJourney, getNodeStates }));
 vi.mock('@/lib/db/client', () => ({
   prisma: { appWaitlistEntry: { findMany: vi.fn(async () => []) } },
 }));
@@ -201,5 +206,72 @@ describe('getJourneyMap', () => {
       'region "tier:limbo" is not an authored tier',
       'module "oneness" is in no projected region (tier:limbo)',
     ]);
+  });
+});
+
+describe("getJourneyMap — the reader's own state (§15 t-102)", () => {
+  const USER = 'user_1';
+
+  function nodeState(nodeKey: string, status: string) {
+    return { id: `s-${nodeKey}`, journeyId: 'j1', nodeKey, status };
+  }
+
+  it("reads nobody's journey without a user id", async () => {
+    getPublishedMap.mockResolvedValue(published());
+
+    const map = await getJourneyMap();
+
+    expect(getJourney).not.toHaveBeenCalled();
+    expect(map?.modules.every((m) => m.state === 'open')).toBe(true);
+  });
+
+  it('marks onboarding current for a journey that has just started, and everything else open', async () => {
+    getPublishedMap.mockResolvedValue(published());
+    getJourney.mockResolvedValue({ id: 'j1', userId: USER });
+    getNodeStates.mockResolvedValue([nodeState('onboarding', 'active')]);
+
+    const map = await getJourneyMap(USER);
+
+    expect(getJourney).toHaveBeenCalledWith(
+      { userId: USER },
+      { userId: USER, graphSlug: JOURNEY_MAP_SLUG }
+    );
+    expect(getNodeStates).toHaveBeenCalledWith(
+      { userId: USER },
+      { journeyId: 'j1', subject: USER }
+    );
+    const states = Object.fromEntries(map!.modules.map((m) => [m.slug, m.state]));
+    expect(states['onboarding']).toBe('current');
+    expect(Object.values(states).filter((s) => s === 'open')).toHaveLength(
+      LELANEA_MODULE_COUNT - 1
+    );
+  });
+
+  it('marks a completed node done and an active one current', async () => {
+    getPublishedMap.mockResolvedValue(published());
+    getJourney.mockResolvedValue({ id: 'j1', userId: USER });
+    getNodeStates.mockResolvedValue([
+      nodeState('onboarding', 'completed'),
+      nodeState('values', 'active'),
+      // A status the drawer has no word for yet reads as not started.
+      nodeState('boundaries', 'visited'),
+    ]);
+
+    const map = await getJourneyMap(USER);
+
+    const states = Object.fromEntries(map!.modules.map((m) => [m.slug, m.state]));
+    expect(states['onboarding']).toBe('done');
+    expect(states['values']).toBe('current');
+    expect(states['boundaries']).toBe('open');
+  });
+
+  it('is all open for a person whose journey has not started', async () => {
+    getPublishedMap.mockResolvedValue(published());
+    getJourney.mockResolvedValue(null);
+
+    const map = await getJourneyMap(USER);
+
+    expect(getNodeStates).not.toHaveBeenCalled();
+    expect(map?.modules.every((m) => m.state === 'open')).toBe(true);
   });
 });

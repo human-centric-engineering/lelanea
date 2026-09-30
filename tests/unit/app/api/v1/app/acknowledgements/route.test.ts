@@ -34,6 +34,12 @@ vi.mock('@/lib/db/client', () => ({
   prisma: { appAcknowledgement: { create, findUnique, findMany } },
 }));
 
+// Starting the journey is its own module with its own tests
+// (`tests/unit/lib/app/journey/start.test.ts`); here only WHEN the route calls
+// it, and that its outcome never reaches the response.
+const { ensureJourneyStarted } = vi.hoisted(() => ({ ensureJourneyStarted: vi.fn() }));
+vi.mock('@/lib/app/journey/start', () => ({ ensureJourneyStarted }));
+
 import { GET, POST } from '@/app/api/v1/app/acknowledgements/route';
 import { auth } from '@/lib/auth/config';
 import { API_KEY_SESSION_ID_PREFIX } from '@/lib/auth/api-keys';
@@ -135,6 +141,7 @@ function stubLedger(initial: { kind: string; documentVersion: string }[] = []) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
+  ensureJourneyStarted.mockResolvedValue('started');
   stubLedger();
 });
 
@@ -303,5 +310,59 @@ describe('POST /api/v1/app/acknowledgements', () => {
   it('answers 400 on a missing body', async () => {
     const response = await POST(createRequest(undefined, 'POST'));
     expect(response.status).toBe(400);
+  });
+});
+
+describe('POST — passing the gate starts the journey (§15 t-102)', () => {
+  const twoOfThree = () => [
+    { kind: 'disclaimer', documentVersion: COLLECTION_VERSION },
+    { kind: 'terms', documentVersion: COLLECTION_VERSION },
+  ];
+
+  it('starts the journey for the caller on the write that completes the gate', async () => {
+    stubLedger(twoOfThree());
+
+    const response = await POST(createRequest({ kind: 'age_18' }, 'POST'));
+
+    expect(response.status).toBe(201);
+    expect(ensureJourneyStarted).toHaveBeenCalledTimes(1);
+    expect(ensureJourneyStarted).toHaveBeenCalledWith('user_test');
+  });
+
+  it('does not start it while the gate is still incomplete', async () => {
+    stubLedger([{ kind: 'disclaimer', documentVersion: COLLECTION_VERSION }]);
+
+    const body = (await (
+      await POST(createRequest({ kind: 'terms' }, 'POST'))
+    ).json()) as StatusBody;
+
+    expect(body.data.complete).toBe(false);
+    expect(ensureJourneyStarted).not.toHaveBeenCalled();
+  });
+
+  it('does not start it again on a repeat POST once the gate is complete', async () => {
+    const rows = stubLedger([...twoOfThree(), { kind: 'age_18', documentVersion: AGE_18_VERSION }]);
+
+    const response = await POST(createRequest({ kind: 'age_18' }, 'POST'));
+    const body = (await response.json()) as StatusBody;
+
+    // Complete, but this call recorded nothing, so it is not the transition.
+    expect(response.status).toBe(200);
+    expect(body.data.complete).toBe(true);
+    expect(rows).toHaveLength(3);
+    expect(ensureJourneyStarted).not.toHaveBeenCalled();
+  });
+
+  it('still answers the acknowledgement when the journey could not start', async () => {
+    stubLedger(twoOfThree());
+    ensureJourneyStarted.mockResolvedValue('failed');
+
+    const response = await POST(createRequest({ kind: 'age_18' }, 'POST'));
+    const body = (await response.json()) as StatusBody;
+
+    expect(ensureJourneyStarted).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.data.complete).toBe(true);
   });
 });

@@ -48,6 +48,12 @@ const world = vi.hoisted(() => ({ paused: false }));
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 const { getPublishedMap } = vi.hoisted(() => ({ getPublishedMap: vi.fn() }));
 vi.mock('@/lib/framework/facilitation/map/version-service', () => ({ getPublishedMap }));
+// The map carries the reader's own journey state since t-102; a reader with no
+// journey yet is the ordinary case, and needs no model either.
+vi.mock('@/lib/framework/facilitation/journey/queries', () => ({
+  getJourney: vi.fn(async () => null),
+  getNodeStates: vi.fn(async () => []),
+}));
 vi.mock('@/lib/orchestration/llm/provider-manager', async (importOriginal) => {
   const unreachable = (): Promise<never> =>
     Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:9 — the model is unreachable'));

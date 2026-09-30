@@ -655,11 +655,10 @@ is the specific failure D6 names.
   list lands (t-76) both `to watch` and `to read` are empty, and each section
   says so under its eyebrow rather than carrying two plausible videos. See
   [`content.md`](./content.md#resources--her-videos-and-reading-and-her-words-on-whatever-is-open).
-- **A module's real state in the map.** Every row reads `not started ○`, because
-  no per-user journey exists. `open` — which the API returns — is a fact about
-  the system rather than about the reader, and putting it in the column made all
-  seventeen rows say the same non-word about themselves. `STATE_ROW` in
-  `map-drawer.tsx` is the seam that widens.
+- ~~**A module's real state in the map.**~~ Real from §15 t-102: each row
+  reads the reader's own journey — `complete ●`, `in progress ●` for the module
+  they are in, `not started ○` otherwise (`STATE_ROW` in `map-drawer.tsx`). The
+  design's `step 5 of 10` waits on something that counts a module's steps.
 - ~~**The budget meter** — omitted from the topbar rather than faked.~~ In the
   topbar from §13 t-95, reading the same endpoint as `/app/usage`. See
   [the spend meter](#the-spend-meter-reads-when-a-person-could-have-spent) below.

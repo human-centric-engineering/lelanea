@@ -113,6 +113,9 @@ every non-admin member 500 (`OwnershipDecisionMissingError`).
   unknown kind, and on any extra field — **the version is never in the
   request.** It is decided server-side from what is currently served, so a
   client cannot satisfy the gate by naming a version it read last year.
+  The write that completes the gate also **starts the person's journey**
+  (§15 t-102, `ensureJourneyStarted`); that call never throws and never changes
+  the response. See [`journey.md`](./journey.md#a-persons-journey-starts-at-the-gate-15-t-102).
 
 Rate limit: the `/api/v1/**` section cap only. Three writes per person per
 version is the route's lifetime traffic.

@@ -66,25 +66,26 @@ export const TIER_INKS: Readonly<Record<string, string>> = {
 /**
  * What a module's `state` reads as in the row, and the dot that goes with it.
  *
- * **`open` reads as "not started", deliberately.** `open` is a fact about the
- * SYSTEM — every module can be jumped into, because no per-user journey exists
- * yet — and putting it in the row made every line say the same non-word about
- * itself. The design's column says where the reader has got to (`complete ●`,
- * `step 5 of 10 ●`, `not started ○`), so while there is nothing to say, the
- * honest thing to say is that nothing has been started.
+ * The state is the reader's own journey (§15, t-102), and the words and dots
+ * are the design's (`.mod.done`, `.mod.now`): `complete ●` in status green,
+ * the module they are in with an accent-ink dot, and `not started ○` for
+ * everything else. **`open` still reads as "not started", deliberately**:
+ * `open` means the module can be jumped into, which every module can, so it is
+ * a fact about the system rather than about the reader.
  *
- * The dot encodes the same thing: a hollow ring for not started, and a filled
- * one in the state's colour once there is a state to fill it with. `null` here
- * means the ring.
+ * The design's current row says `step 5 of 10`. Nothing counts a module's steps
+ * yet, so it says `in progress` until something does.
  *
- * Widens with per-user journeys — and a tab whose bundle predates that widening
- * stays mounted across every in-app navigation, so a state this table does not
- * know falls back to the raw value rather than rendering `undefined`.
+ * `null` fill means the hollow ring. A tab whose bundle predates a future
+ * widening stays mounted across every in-app navigation, so a state this table
+ * does not know falls back to the raw value rather than rendering `undefined`.
  */
 const STATE_ROW: Readonly<
   Record<JourneyMapView['modules'][number]['state'], { text: string; fill: string | null }>
 > = {
   open: { text: 'not started', fill: null },
+  current: { text: 'in progress', fill: 'var(--color-accent-ink)' },
+  done: { text: 'complete', fill: 'var(--color-status-green)' },
 };
 function stateRow(state: JourneyMapView['modules'][number]['state']): {
   text: string;
@@ -110,15 +111,16 @@ type Load =
  * `drawer.tsx`), so a fetch on mount would run for every signed-in page view
  * whether or not anyone opens the map. Keyed on the first open instead, and
  * kept for the session: the ETag on the route makes a refetch cheap, but a
- * drawer that re-loads every time it slides in would flash, and the map does
- * not change under a reader.
+ * drawer that re-loads every time it slides in would flash. Structure does not
+ * change under a reader; state does once a module can be completed, and when
+ * that lands (§15 t-106) a stale `current` is the thing to watch for here.
  *
- * ## Every row is simply open
+ * ## Two kinds of "current"
  *
- * No `done`, no `current`: those are per-user journey state, which this phase
- * deliberately does not have. The one state that IS shown is *where you are* —
- * `aria-current="page"` on the module whose page is open — because that is a
- * fact about the route, not about progress.
+ * A row's `state` is the reader's journey: the module they are working in,
+ * the ones they have completed. Separately, `aria-current="page"` marks the
+ * module whose page is open, which is a fact about the route. The two usually
+ * coincide and need not: someone in onboarding can open Values to look around.
  *
  * ## Rows are links
  *
@@ -270,8 +272,10 @@ export function MapDrawerBody() {
                       </span>
                       <span
                         className={cn(
-                          'text-muted-foreground min-w-0 flex-1 truncate text-[14px]',
-                          current && 'font-medium text-[var(--color-heading)]'
+                          'min-w-0 flex-1 truncate text-[14px]',
+                          module.state === 'done' ? 'text-foreground' : 'text-muted-foreground',
+                          (current || module.state === 'current') &&
+                            'font-medium text-[var(--color-heading)]'
                         )}
                       >
                         {module.title}
@@ -281,9 +285,8 @@ export function MapDrawerBody() {
                       </span>
                       {/*
                         The dot encodes the state: a hollow ring for not
-                        started, filled in the state's colour once there is one.
-                        With no per-user journey every row is a ring, honestly —
-                        `state.fill` is the seam that stops being null.
+                        started, filled in the state's colour once there is one
+                        (see `STATE_ROW`).
                       */}
                       <i
                         aria-hidden="true"

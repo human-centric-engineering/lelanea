@@ -50,6 +50,12 @@ import {
 export const JOURNEY_MAP_SLUG = 'lelanea-journey';
 
 /**
+ * The node a new journey enters when the person passes the gate: the
+ * onboarding module, whose node key is its slug (§15, t-102).
+ */
+export const ONBOARDING_NODE_KEY = 'onboarding';
+
+/**
  * The prefix that marks a region node as a tier. One definition: the reader
  * in `map.ts` strips it to find the tier, and a drift between the two would
  * fail every region at once — a whole-shell outage from a one-token change.

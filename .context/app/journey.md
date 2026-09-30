@@ -76,7 +76,9 @@ against the structure file, so the two cannot drift before the seed runs.
 
 | `lib/app/journey/map.ts` | The published graph joined with the content: what the shell reads |
 | `lib/app/journey/paths.ts` | `/app/modules/<slug>`, and the `localStorage` key for the last one visited |
-| `app/api/v1/app/journey/map/route.ts` | `GET` — `withAuth` with `ownership: 'nothing'` (one published map, owned by nobody; becomes `'self'` when per-user progress arrives), ETag; 404 while unpublished; 500 when inconsistent |
+| `app/api/v1/app/journey/map/route.ts` | `GET` — `withAuth` with `ownership: 'self'` (the structure is nobody's; `state` is the caller's journey), ETag; 404 while unpublished; 500 when inconsistent |
+| `lib/app/journey/start.ts` | `ensureJourneyStarted()`: create the person's journey and enter onboarding; idempotent, never throws |
+| `scripts/smoke/app-onboarding.ts` | `npm run smoke:app-onboarding` — gate → journey → onboarding entered → a progress beat, on the real DB |
 | `components/app/shell/map-drawer.tsx` | The map drawer's body: five tiers, seventeen rows, `aria-current` |
 | `components/app/views/module-view.tsx` | A module's page: eyebrow, title, parts, placeholder, the tier's intent |
 | `components/app/views/module-actions.tsx` | "In Lelañea's own words" (opens resources) · "Talk about this part" (off) |
@@ -96,15 +98,21 @@ break every URL the day a module is renumbered.
 node keys, the journey API's routes and anything else that must meet the
 registry by slug call it rather than re-deriving it.
 
-## Status: every row is born `draft`, and that is fine this phase
+## Status: every row is born `draft`; Onboarding alone is `active`
 
 `syncRegisteredModules()` writes no status; the schema default is `draft`, and
-status is operator-owned from then on (the seed never touches it). Nothing this
-phase reads consults `isModuleLive` — the admin list returns every row, the map
-validator checks node shape only, and liveness is consumed solely by the
-facilitation engine's per-user availability. **Do not add a status write to the
-seed to "activate" modules**: it would clobber an operator's choice on every
-boot, and nothing needs it until per-user journeys are switched on.
+status is operator-owned from then on. Liveness matters in one place: the
+facilitation engine enters only a node whose module is live, and only `active`
+is live. So when journeys arrived (§15 t-102), Onboarding had to be switched on
+or nobody could enter it.
+
+Owner ruling, 30 Sept 2026: **Onboarding only**, and each other module when its
+content lands (Values with t-106). It is a one-off move from `draft`, never a
+reconcile: the migration `20261005100000_app_activate_onboarding_module` for
+existing databases, and the write-once seed unit `021-activate-onboarding` for a
+fresh one. **Do not make a seed reconcile status**: it would clobber an
+operator's choice on every run. Activate the next module the same way, with its
+own migration.
 
 ## The map (decision A6)
 
@@ -177,12 +185,35 @@ region, which the drawer would otherwise list under no tier. Do not "fix"
 either by filtering — a sixteen-module map that renders is exactly the failure
 nobody notices.
 
-**Every module reads `open`.** No `done`, no `current`: those are per-user
-journey state, which this phase deliberately does not have. The one state the
-drawer shows is _where you are_ — `aria-current="page"` on the open module's
-row — because that is a fact about the route. The `state` field is on the wire
-shape now so the drawer and the page do not grow a second contract when
-journeys arrive.
+**`state` is the reader's journey (§15 t-102).** Given a user id,
+`getJourneyMap()` reads that person's node states: `current` for a node they
+are in, `done` for one completed, `open` for the rest. `open` never means
+"unlocked as opposed to locked" — the map has no prerequisites. The route
+passes the caller; the module page passes nobody and gets every module `open`,
+because nothing on the page renders state yet. `aria-current="page"` in the
+drawer is separate: it marks the open module's row, a fact about the route.
+
+## A person's journey starts at the gate (§15 t-102)
+
+`ensureJourneyStarted(userId)` (`lib/app/journey/start.ts`) creates the
+person's `UserJourney` on `JOURNEY_MAP_SLUG` and enters the `onboarding` node
+through `applyJourneyTransition` — entered, because `recordNodeProgress`
+refuses a node that never was. Two callers:
+
+- **`POST /api/v1/app/acknowledgements`**, on the write that turns the gate
+  complete (`created && complete`). The outcome is logged and never changes the
+  response: the acknowledgement is the legal floor.
+- **The shell layout**, on every entry past the gate — the backstop for
+  accounts that passed before journeys existed, and for a start that failed.
+
+It reads before it writes and enters only when the journey has **no node
+state at all**. An `enter` appends a `node.entered` event every time, even for
+an active node, so blind re-entry would fill the log, and entering onboarding
+for someone already in Values would move them backwards. It refuses to create
+a journey while the map is unpublished (`createJourney` does not check the
+slug, so such a journey would be silently inert). It never throws: a failure
+is logged and the next shell entry retries. `onFirstArrival` is not wired
+(ruling at planning); the app renders the welcome itself.
 
 **The tier tone is a swatch, not the label's colour.** The task said "label
 coloured by tier tone"; `shell.md` measured exactly that pattern at 3.17:1 and

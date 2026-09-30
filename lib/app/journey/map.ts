@@ -18,10 +18,13 @@
  * and it is the authored file. The first draft of this file took tier and order
  * from the content while claiming the opposite; review caught it.
  *
- * **State is always `open` this phase.** Jumping anywhere is first-class and no
- * per-user journey exists yet; the field is on the shape now so the drawer and
- * the module page do not grow a second contract when `done` and `current`
- * arrive with per-user journeys.
+ * **State is the reader's own (§15, t-102).** Given a user id, each module's
+ * `state` comes from that person's journey on this map: `current` for a node
+ * they are in, `done` for one they have completed, `open` for everything else.
+ * Every module stays enterable whatever its state — our map has no
+ * prerequisites, so `open` means "not started", never "available as opposed to
+ * locked". Without a user id, or before their journey has started, every module
+ * is `open`: the structural read the module page makes.
  *
  * **A module the code does not register is reported, not dropped.** A map node
  * whose `moduleSlug` has no `ModuleDefinition` means the seed ran against newer
@@ -40,10 +43,15 @@ import type { ModuleTier } from '@/lib/app/content/schemas';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { getRegisteredModule } from '@/lib/framework/modules/registry';
 import { getPublishedMap } from '@/lib/framework/facilitation/map/version-service';
+import { getJourney, getNodeStates } from '@/lib/framework/facilitation/journey/queries';
+import { NODE_STATE_STATUS } from '@/lib/framework/facilitation/journey/vocabulary';
 import { JOURNEY_MAP_SLUG, tierIdForRegionKey } from '@/lib/app/journey/map-definition';
 
-/** The one state a module can be in this phase. Widens with per-user journeys. */
-export type JourneyModuleState = 'open';
+/**
+ * Where the reader stands on a module: `current` while they are in it, `done`
+ * once they have completed it, `open` otherwise. Never a lock — see above.
+ */
+export type JourneyModuleState = 'open' | 'current' | 'done';
 
 export interface JourneyMapTier {
   id: ModuleTier;
@@ -81,15 +89,40 @@ export interface JourneyMapView {
 export const JOURNEY_MAP_INCONSISTENT = 'JOURNEY_MAP_INCONSISTENT';
 
 /**
+ * `userId`'s state on each node of their journey, keyed by node key. Empty when
+ * they have not started one. Reads through Daybreak's `canRead`-guarded
+ * queries as the person themself.
+ */
+async function readNodeStates(userId: string): Promise<Map<string, JourneyModuleState>> {
+  const viewer = { userId };
+  const journey = await getJourney(viewer, { userId, graphSlug: JOURNEY_MAP_SLUG });
+  const states = new Map<string, JourneyModuleState>();
+  if (!journey) return states;
+  for (const row of await getNodeStates(viewer, { journeyId: journey.id, subject: userId })) {
+    // `active` is checked first: a repeatable node re-entered after completion
+    // is active again, and where they are now is what the drawer shows.
+    if (row.status === NODE_STATE_STATUS.active) states.set(row.nodeKey, 'current');
+    else if (row.status === NODE_STATE_STATUS.completed) states.set(row.nodeKey, 'done');
+  }
+  return states;
+}
+
+/**
  * The published map, projected for the shell — or `null` when no version is
  * published yet (a fresh database before `db:seed`), which the route turns into
  * a 404 and the drawer into its honest note.
+ *
+ * With `userId`, each module carries that person's state; without it, every
+ * module is `open`.
  */
-export async function getJourneyMap(): Promise<JourneyMapView | null> {
+export async function getJourneyMap(userId?: string): Promise<JourneyMapView | null> {
   const published = await getPublishedMap(JOURNEY_MAP_SLUG);
   if (!published) return null;
 
-  const structure = await getJourneyStructure();
+  const [structure, nodeStates] = await Promise.all([
+    getJourneyStructure(),
+    userId === undefined ? new Map<string, JourneyModuleState>() : readNodeStates(userId),
+  ]);
   const tiersById = new Map(structure.tiers.map((tier) => [tier.id as string, tier]));
   const modulesBySlug = new Map(structure.modules.map((m) => [moduleSlugFromId(m.id), m]));
 
@@ -138,7 +171,7 @@ export async function getJourneyMap(): Promise<JourneyMapView | null> {
       displayNumber: authored.displayNumber,
       title: authored.title,
       tier: tier.id,
-      state: 'open',
+      state: nodeStates.get(node.key) ?? 'open',
     });
   }
 

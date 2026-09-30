@@ -10,6 +10,22 @@ with it. What exists so far:
 | The names those slots use             | `lib/app/onboarding/discovery-slot-names.ts` | t-101 |
 | The Core Set switch                   | `lib/app/onboarding/discovery-config.ts`     | t-101 |
 | Weights                               | the questions editor, `/admin/app/content`   | t-101 |
+| The journey, started at the gate      | `lib/app/journey/start.ts`                   | t-102 |
+| The Onboarding module, `active`       | migration + seed `021-activate-onboarding`   | t-102 |
+
+## The journey starts when the gate passes
+
+Passing the gate creates the person's journey and enters the `onboarding`
+node, so its once-only beats can be recorded with `recordNodeProgress`. The
+mechanics are in [`journey.md`](./journey.md#a-persons-journey-starts-at-the-gate-15-t-102).
+
+**Onboarding is the one `active` module.** Daybreak's engine enters only a
+node whose module is live, and module rows are born `draft`. Owner ruling,
+30 Sept 2026: activate Onboarding only, and each other module when its
+content lands (Values with t-106). The migration
+`20261005100000_app_activate_onboarding_module` moves existing databases and
+the seed unit `021-activate-onboarding` moves a fresh one, each only from
+`draft`. From then on status is the operator's, at Framework → Modules.
 
 ## A discovery answer is a data slot
 

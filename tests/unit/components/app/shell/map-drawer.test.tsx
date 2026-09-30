@@ -121,12 +121,11 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(within(onboarding).getAllByRole('link')).toHaveLength(1);
   });
 
-  it('shows number, title and an honest state on each row — no done, no current', async () => {
-    // `open` is a fact about the SYSTEM — every module can be jumped into,
-    // because no per-user journey exists yet — and putting that word in the row
-    // made all seventeen lines say the same non-word about themselves. The
-    // design's column says where the READER has got to, so while there is
-    // nothing to say, "not started" is the honest thing to say.
+  it('reads an all-open map as not started on every row', async () => {
+    // `open` is a fact about the SYSTEM — every module can be jumped into —
+    // and putting that word in the row made all seventeen lines say the same
+    // non-word about themselves. The design's column says where the READER has
+    // got to, so a module they have not started says so.
     renderDrawers();
     await openMap();
 
@@ -139,6 +138,41 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(mapPanel().textContent).not.toMatch(/complete|step \d/i);
     // And every row says it, rather than one row being special by accident.
     for (const row of rows()) expect(row).toHaveTextContent('not started');
+  });
+
+  it("shows the reader's own journey: onboarding in progress, then complete (§15 t-102)", async () => {
+    const withStates = (states: Record<string, JourneyMapView['modules'][number]['state']>) => {
+      const map = realMap();
+      return {
+        ...map,
+        modules: map.modules.map((m) => ({ ...m, state: states[m.slug] ?? m.state })),
+      };
+    };
+
+    // A journey that has just started: onboarding is where they are.
+    get.mockResolvedValue(withStates({ onboarding: 'current' }));
+    const { unmount } = renderDrawers();
+    await openMap();
+
+    const [onboarding, values] = rows();
+    expect(onboarding).toHaveTextContent('in progress');
+    expect(onboarding).not.toHaveTextContent('not started');
+    expect(onboarding.querySelector('i')?.getAttribute('style')).toContain('--color-accent-ink');
+    expect(values).toHaveTextContent('not started');
+    expect(values.querySelector('i')?.getAttribute('style')).toBeNull();
+    // Where they are in the journey is not the route: no page is open here.
+    expect(onboarding).not.toHaveAttribute('aria-current');
+    unmount();
+
+    // Later: onboarding complete, Values in progress.
+    get.mockResolvedValue(withStates({ onboarding: 'done', values: 'current' }));
+    renderDrawers();
+    await openMap();
+
+    expect(rows()[0]).toHaveTextContent('complete');
+    expect(rows()[0].querySelector('i')?.getAttribute('style')).toContain('--color-status-green');
+    expect(rows()[1]).toHaveTextContent('in progress');
+    expect(rows().filter((r) => r.textContent?.includes('not started'))).toHaveLength(15);
   });
 
   it('names each arc in its own ink, from a token, and lowercase', async () => {

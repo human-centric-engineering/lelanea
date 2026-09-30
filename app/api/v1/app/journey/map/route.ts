@@ -3,12 +3,11 @@
  *
  * GET /api/v1/app/journey/map — the published journey map projected for the
  * shell: five tiers (label, intent) and seventeen modules (number, display
- * number, title, slug, tier), each with a `state` that is always `open` this
- * phase. What the map drawer renders and what a module page is built from.
+ * number, title, slug, tier), each with the caller's own `state` on it —
+ * `current`, `done` or `open` (§15, t-102). What the map drawer renders.
  *
- * Authentication: required. The map is the shape of the members' journey, and
- * `state` will carry per-user progress when journeys arrive — the contract is
- * behind auth from the start so that field never has to move.
+ * Authentication: required. `state` is the caller's journey, read as them.
+ * An API-key session reads its owner's, which is what the key is for.
  *
  * Rate limiting: inherited from the `/api/v1/**` section cap.
  *
@@ -30,9 +29,9 @@ import { getRouteLogger } from '@/lib/api/context';
 import { getJourneyMap } from '@/lib/app/journey/map';
 
 export const GET = withAuth(
-  async (request) => {
+  async (request, session) => {
     const log = await getRouteLogger(request);
-    const map = await getJourneyMap();
+    const map = await getJourneyMap(session.user.id);
     if (!map) throw new NotFoundError('No journey map is published');
 
     const etag = computeETag(map);
@@ -48,11 +47,11 @@ export const GET = withAuth(
     return successResponse(map, undefined, { headers: { ETag: etag } });
   },
   {
-    // Ownership: none to decide — see RouteOwnership in lib/auth/guards.ts.
+    // Ownership: self-scoped — see RouteOwnership in lib/auth/guards.ts.
     ownership: {
-      decidedBy: 'nothing',
+      decidedBy: 'self',
       because:
-        'Serves the published journey map, one row per install and owned by nobody. Every member sees the same tiers and modules; `state` is a constant this phase. When per-user progress arrives this becomes a `self` read and the declaration moves with it.',
+        "The map's structure is one row per install and owned by nobody; the only per-person part is `state`, which is read from the caller's own journey by `session.user.id`. Nothing here names another subject.",
     },
   }
 );
