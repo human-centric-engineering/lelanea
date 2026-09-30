@@ -5,8 +5,9 @@
  * What someone using it would notice going wrong: editing offered before the
  * tables are seeded, a sign-off offered over unsaved edits (it would sign off
  * the old words), a sign-off that does not send the version on screen, a saved
- * edit still shown as signed off, a removal with no second step, and a refusal
- * from the route that never reaches the screen.
+ * edit still shown as signed off, a removal with no second step, a refusal
+ * from the route that never reaches the screen, and a "turns are failing"
+ * banner that outlives the save that fixed it (t-68).
  *
  * @see components/app/admin/crisis-resources.tsx
  */
@@ -17,6 +18,7 @@ import userEvent from '@testing-library/user-event';
 
 import { CrisisResourcesPanel, type CrisisViewJson } from '@/components/app/admin/crisis-resources';
 import {
+  CRISIS_RESOURCES_ENDPOINT,
   CRISIS_COPY_ENDPOINT,
   CRISIS_COPY_SIGN_OFF_ENDPOINT,
   CRISIS_REGIONS_ENDPOINT,
@@ -77,6 +79,9 @@ function sent(call: number): { url: string; method: string; body: unknown } {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // `clearAllMocks` leaves queued `…Once` responses behind, so a test that
+  // stops early would hand its unused responses to the next one.
+  fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -285,5 +290,132 @@ describe('a country', () => {
     // being shown the version built into the code" would describe it as
     // handled.
     expect(alert).not.toHaveTextContent(/built into the code/);
+  });
+});
+
+// t-68: the banner used to read the page's first load forever, so after a save
+// that fixed the rows it went on telling the admin every turn was failing.
+describe('the "every crisis turn is failing" banner after a save', () => {
+  const BROKEN = 'internationalUrl: must be an https:// address';
+
+  it('clears once the server says the saved rows can be served', async () => {
+    const user = userEvent.setup();
+    const fixed = {
+      ...COPY,
+      internationalUrl: 'https://fixed.example',
+      status: 'draft',
+      version: 3,
+    };
+    fetchMock
+      .mockResolvedValueOnce(ok({ copy: fixed, changed: ['internationalUrl'] }))
+      .mockResolvedValueOnce(ok({ ...VIEW, copy: fixed, unservable: null }));
+    render(
+      <CrisisResourcesPanel
+        initialView={{
+          ...VIEW,
+          copy: { ...COPY, internationalUrl: 'http://x.example' },
+          unservable: BROKEN,
+        }}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/every crisis turn is failing/);
+
+    const link = screen.getByLabelText('Directory — link');
+    await user.clear(link);
+    await user.type(link, 'https://fixed.example');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(sent(1)).toMatchObject({ url: CRISIS_RESOURCES_ENDPOINT, method: 'GET' });
+  });
+
+  it('clears after a region save repairs malformed services', async () => {
+    const user = userEvent.setup();
+    const repaired = { ...GB, version: 4 };
+    fetchMock
+      .mockResolvedValueOnce(ok({ region: repaired, changed: ['services'] }))
+      .mockResolvedValueOnce(ok({ ...VIEW, regions: [repaired], unservable: null }));
+    render(
+      <CrisisResourcesPanel
+        initialView={{
+          ...VIEW,
+          unservable: '0: Expected array, received string',
+          regions: [{ ...GB, services: [], malformed: true }],
+        }}
+      />
+    );
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const editor = screen.getByRole('form', { name: 'Edit GB' });
+    await user.type(within(editor).getByLabelText('Name'), 'Samaritans');
+    await user.type(within(editor).getByLabelText('How to reach them'), 'Call 116 123');
+    await user.type(within(editor).getByLabelText('When they answer'), 'Free, 24 hours a day');
+    await user.click(within(editor).getByRole('button', { name: 'Save as a draft' }));
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+
+  it('stays, with the new reason, while the server still cannot serve the rows', async () => {
+    const user = userEvent.setup();
+    const saved = { ...COPY, hardIntro: 'Reworded.', status: 'draft', version: 3 };
+    fetchMock
+      .mockResolvedValueOnce(ok({ copy: saved, changed: ['hardIntro'] }))
+      .mockResolvedValueOnce(ok({ ...VIEW, copy: saved, unservable: 'GB: no emergency number' }));
+    render(<CrisisResourcesPanel initialView={{ ...VIEW, unservable: BROKEN }} />);
+
+    const intro = screen.getByLabelText('Opening — when the conversation stops');
+    await user.clear(intro);
+    await user.type(intro, 'Reworded.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/GB: no emergency number/)
+    );
+  });
+
+  it('stays when the re-check does not reach the server', async () => {
+    const user = userEvent.setup();
+    const saved = { ...COPY, hardIntro: 'Reworded.', status: 'draft', version: 3 };
+    fetchMock
+      .mockResolvedValueOnce(ok({ copy: saved, changed: ['hardIntro'] }))
+      .mockRejectedValueOnce(new TypeError('offline'));
+    render(<CrisisResourcesPanel initialView={{ ...VIEW, unservable: BROKEN }} />);
+
+    const intro = screen.getByLabelText('Opening — when the conversation stops');
+    await user.clear(intro);
+    await user.type(intro, 'Reworded.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('alert')).toHaveTextContent(/internationalUrl/);
+  });
+
+  it('keeps the latest re-check when two answer out of order', async () => {
+    const user = userEvent.setup();
+    const first = { ...COPY, hardIntro: 'One.', status: 'draft' as const, version: 3 };
+    const second = { ...first, hardIntro: 'Two.', version: 4 };
+    let answerFirst: (r: Response) => void = () => {};
+    fetchMock
+      .mockResolvedValueOnce(ok({ copy: first, changed: ['hardIntro'] }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce(ok({ copy: second, changed: ['hardIntro'] }))
+      .mockResolvedValueOnce(ok({ ...VIEW, copy: second, unservable: null }));
+    render(<CrisisResourcesPanel initialView={{ ...VIEW, unservable: BROKEN }} />);
+
+    const intro = screen.getByLabelText('Opening — when the conversation stops');
+    await user.clear(intro);
+    await user.type(intro, 'One.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.clear(intro);
+    await user.type(intro, 'Two.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    // The first save's re-check answers last, still broken — too late to count.
+    answerFirst(ok({ ...VIEW, copy: first, unservable: BROKEN }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

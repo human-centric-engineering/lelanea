@@ -1,8 +1,9 @@
 /**
  * The crisis resource's writer (f-safety t-63): an edit that changes something
  * goes back to `draft` with a new version; one that changes nothing does not;
- * a sign-off must name the version it read; nothing is written before the seed;
- * and each write drops the resolver's cache.
+ * a sign-off must name the version it read, and is refused while the stored
+ * rows cannot be served (t-68); nothing is written before the seed; and each
+ * write drops the resolver's cache.
  *
  * @see lib/app/safety/crisis-admin.ts
  */
@@ -307,11 +308,52 @@ describe('sign-off', () => {
     });
     expect(db.invalidate).not.toHaveBeenCalled();
   });
+});
 
-  it('refuses to sign off a region whose stored services are malformed', async () => {
-    gbRow = { ...GB, services: 'not a list' };
+// t-68: one row the turn cannot read fails every crisis turn, so nothing stored
+// is being shown — and nobody signs off words they did not see.
+describe('sign-off while the stored rows cannot be served', () => {
+  const UNSERVABLE: Array<[string, () => void]> = [
+    [
+      'a directory link that is not https',
+      () => (copyRow = { ...COPY, status: 'draft', internationalUrl: 'http://x.example' }),
+    ],
+    ['a region code that is not two capitals', () => (gbRow = { ...GB, region: 'gb' })],
+    ['a blank emergency number', () => (gbRow = { ...GB, emergencyNumber: '  ' })],
+    ['malformed services', () => (gbRow = { ...GB, services: 'not a list' })],
+  ];
+
+  it.each(UNSERVABLE)('refuses the copy 409 for %s', async (_label, arrange) => {
+    arrange();
+    await expect(signOffCrisisCopy(3)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: 'unservable' },
+    });
+    expect(db.copy.updateMany).not.toHaveBeenCalled();
+    expect(db.invalidate).not.toHaveBeenCalled();
+  });
+
+  it.each(UNSERVABLE)('refuses a region 409 for %s', async (_label, arrange) => {
+    arrange();
     await expect(signOffCrisisRegion('GB', 2)).rejects.toMatchObject({
-      details: { reason: 'malformed' },
+      status: 409,
+      details: { reason: 'unservable' },
+    });
+    expect(db.region.updateMany).not.toHaveBeenCalled();
+    expect(db.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('says what is wrong, in the words the page banner uses', async () => {
+    copyRow = { ...COPY, internationalUrl: 'http://x.example' };
+    await expect(signOffCrisisCopy(3)).rejects.toThrow(/internationalUrl.*every crisis turn/);
+  });
+
+  it('refuses a region whose own row is fine when another row is not', async () => {
+    const fr = { ...GB, id: 'region-fr', region: 'FR', emergencyNumber: '', status: 'draft' };
+    gbRow = { ...GB, status: 'draft' };
+    db.region.findMany.mockResolvedValue([fr, gbRow]);
+    await expect(signOffCrisisRegion('GB', 2)).rejects.toMatchObject({
+      details: { reason: 'unservable' },
     });
     expect(db.region.updateMany).not.toHaveBeenCalled();
   });

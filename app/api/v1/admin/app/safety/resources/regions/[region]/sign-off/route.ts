@@ -4,8 +4,8 @@
  * POST /api/v1/admin/app/safety/resources/regions/:region/sign-off
  *
  * Body: `{ version }` — the version the admin read. 409 if it has moved since,
- * if the stored services are malformed, or before the tables are seeded; 404
- * for a region not listed.
+ * if the stored rows cannot be served (`unservable`), or before the tables are
+ * seeded; 404 for a region not listed.
  *
  * Authentication: admin. Rate limiting: the `admin` section tier from `proxy.ts`.
  * Audited: the audit log is where "who signed this off" is kept.
