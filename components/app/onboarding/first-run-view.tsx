@@ -1,3 +1,5 @@
+import type * as React from 'react';
+
 import {
   AuthoredBlocks,
   AuthoredDocument,
@@ -43,10 +45,13 @@ export async function FirstRunView({
   userId,
   pending,
   userName,
+  children,
 }: {
   userId: string;
   pending: readonly FirstRunBeat[];
   userName: string | null | undefined;
+  /** What follows the last beat (t-104's questions), rendered by the stepper. */
+  children?: React.ReactNode;
 }) {
   const firstName = firstNameFrom(userName);
 
@@ -81,8 +86,13 @@ export async function FirstRunView({
     );
   } catch (error) {
     logger.error('First-run sequence could not be loaded', error, { pending });
+    // Not `children`: the questions come after the welcome, never instead of it.
     return null;
   }
 
-  return <FirstRun userId={userId} steps={steps} />;
+  return (
+    <FirstRun userId={userId} steps={steps}>
+      {children}
+    </FirstRun>
+  );
 }

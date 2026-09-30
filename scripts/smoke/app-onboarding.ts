@@ -11,7 +11,10 @@
  * nothing, and that `recordNodeProgress` then accepts a once-only beat. That
  * last one is the reason the node is entered at all. Then the first run's own
  * beats (t-103): recorded through the real store, read back from the real
- * row, and not replayed.
+ * row, and not replayed. Then the discovery questions (t-104): an answer
+ * appended as a slot value with onboarding provenance, revised as a second
+ * version, a skip and a leave on the same node, and a fresh read resuming
+ * after them.
  *
  * Needs a seeded database: the map published (`001-journey-map`) and the
  * gate's documents present. Skips (exit 0, says so) with no database, and fails
@@ -39,6 +42,12 @@ import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
 import { FIRST_RUN_BEATS, pendingBeats } from '@/lib/app/onboarding/first-run';
 import { getFirstRunProgress, recordFirstRunBeat } from '@/lib/app/onboarding/first-run-store';
+import {
+  answerDiscoveryQuestion,
+  getDiscoveryState,
+  leaveDiscovery,
+  skipDiscoveryQuestion,
+} from '@/lib/app/onboarding/discovery-store';
 import { recordNodeProgress } from '@/lib/framework/facilitation/journey/progress';
 import { NODE_STATE_STATUS } from '@/lib/framework/facilitation/journey/vocabulary';
 import { getPublishedMapVersion } from '@/lib/framework/facilitation/map/version-service';
@@ -69,6 +78,7 @@ async function cleanup(userId: string): Promise<void> {
     .catch(() => undefined);
   await prisma.userJourney.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.appAcknowledgement.deleteMany({ where: { userId } }).catch(() => undefined);
+  await prisma.slotValue.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.user.deleteMany({ where: { id: userId } }).catch(() => undefined);
 }
 
@@ -186,6 +196,78 @@ async function main(): Promise<void> {
         !Array.isArray(progress) &&
         'welcomed' in progress,
       'the earlier beat on the same node survives the merge'
+    );
+
+    console.log('\n7. The discovery questions: answer, revise, skip, resume (t-104)');
+    const fresh = await getDiscoveryState(user.id);
+    if (fresh === null) throw new Error('the discovery state could not be read');
+    const [first, second, third] = fresh.set.questions;
+    if (!first || !second || !third) throw new Error('the set has fewer than three questions');
+    check(fresh.position.next === first.id && !fresh.started, `a new person starts at ${first.id}`);
+    const firstAnswer = first.conditionalFollowUp
+      ? ({ words: 'A smoke answer.', branch: 'yes' } as const)
+      : { words: 'A smoke answer.' };
+    check(
+      (await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer)) === 'written',
+      `${first.id} is answered`
+    );
+    check(
+      (await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer)) === 'unchanged',
+      'the same answer again writes nothing'
+    );
+    check(
+      (await answerDiscoveryQuestion(user.id, fresh.set, first, {
+        ...firstAnswer,
+        words: 'A revised smoke answer.',
+      })) === 'written',
+      'a revision is written'
+    );
+    const values = await prisma.slotValue.findMany({
+      where: { userId: user.id, slotSlug: first.slotSlug },
+      orderBy: { version: 'asc' },
+    });
+    check(
+      values.length === 2 &&
+        values[0].supersededAt !== null &&
+        values[1].supersededAt === null &&
+        values[1].version === 2,
+      'two versions, the first superseded: appended, never overwritten'
+    );
+    const provenance = values[1].provenance;
+    check(
+      typeof provenance === 'object' &&
+        provenance !== null &&
+        !Array.isArray(provenance) &&
+        provenance.moduleSlug === fresh.set.moduleSlug &&
+        provenance.nodeKey === ONBOARDING_NODE_KEY,
+      'the value carries onboarding provenance'
+    );
+    if (second.core) {
+      check(
+        (await answerDiscoveryQuestion(user.id, fresh.set, second, {
+          words: 'A smoke answer.',
+          ...(second.conditionalFollowUp && { branch: 'no' as const }),
+        })) === 'written',
+        `${second.id} is core, so it is answered rather than skipped`
+      );
+    } else {
+      check(
+        (await skipDiscoveryQuestion(user.id, second.id)) === 'recorded',
+        `${second.id} is skipped`
+      );
+    }
+    check((await leaveDiscovery(user.id)) === 'recorded', 'leaving is recorded');
+    const resumed = await getDiscoveryState(user.id);
+    check(
+      resumed !== null &&
+        resumed.started &&
+        resumed.position.next === third.id &&
+        resumed.answers[first.id]?.words === 'A revised smoke answer.',
+      `a fresh read resumes at ${third.id}, with the revised answer`
+    );
+    check(
+      (await getFirstRunProgress(user.id))?.initiationShown === true,
+      'the first run’s beats survive the discovery beats on the same node'
     );
 
     console.log('\n✓ smoke:app-onboarding passed');

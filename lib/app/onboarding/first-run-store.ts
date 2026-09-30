@@ -35,14 +35,24 @@ import { logger } from '@/lib/logging';
 /** What {@link recordFirstRunBeat} did. */
 export type RecordBeatOutcome = 'recorded' | 'already' | 'failed';
 
-/** Reads the person's own ledger — both callers are that person's request. */
-async function readLedger(userId: string): Promise<FirstRunProgress> {
+/**
+ * The onboarding node's `progress` payload for `userId`, or `null` when there
+ * is no journey or the node was never entered. The person's own ledger: every
+ * caller is that person's request. Shared with the discovery questions
+ * (`discovery-store.ts`), which record their skips on the same node. Throws on
+ * a failed read.
+ */
+export async function readOnboardingProgress(userId: string): Promise<unknown> {
   const viewer = { userId };
   const journey = await getJourney(viewer, { userId, graphSlug: JOURNEY_MAP_SLUG });
-  if (!journey) return NOTHING_RECORDED;
+  if (!journey) return null;
   const states = await getNodeStates(viewer, { journeyId: journey.id, subject: userId });
-  const onboarding = states.find((state) => state.nodeKey === ONBOARDING_NODE_KEY);
-  return onboarding ? progressFromLedger(onboarding.progress) : NOTHING_RECORDED;
+  return states.find((state) => state.nodeKey === ONBOARDING_NODE_KEY)?.progress ?? null;
+}
+
+async function readLedger(userId: string): Promise<FirstRunProgress> {
+  const progress = await readOnboardingProgress(userId);
+  return progress === null ? NOTHING_RECORDED : progressFromLedger(progress);
 }
 
 /**

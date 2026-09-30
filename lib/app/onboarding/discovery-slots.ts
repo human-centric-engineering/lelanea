@@ -276,6 +276,8 @@ export interface DiscoveryQuestionToAsk extends DiscoveryQuestionView {
 
 /** The questions to ask, under the module's current Core Set setting. */
 export interface DiscoverySetToAsk {
+  /** The slug of the module that asks them: the provenance an answer is written with. */
+  moduleSlug: string;
   preamble: { style: string; text: string };
   pacing: { rushDiscouraged: boolean; allowPartialCompletion: boolean; note: string };
   /** Whether only the Core Set is being asked (the module's config). */
@@ -300,7 +302,8 @@ export interface DiscoverySetToAsk {
  */
 export async function getDiscoverySet(): Promise<DiscoverySetToAsk> {
   const set = await getDiscoveryQuestions();
-  const { coreSetOnly } = await readDiscoveryConfig(moduleSlugFromId(set.collection.module));
+  const moduleSlug = moduleSlugFromId(set.collection.module);
+  const { coreSetOnly } = await readDiscoveryConfig(moduleSlug);
   const all = set.questions.map((question) => ({
     ...question,
     slotSlug: discoverySlotSlug(question.id),
@@ -317,5 +320,11 @@ export async function getDiscoverySet(): Promise<DiscoverySetToAsk> {
       questions = core;
     }
   }
-  return { preamble: set.preamble, pacing: set.pacing, coreOnly: coreSetOnly, questions };
+  return {
+    moduleSlug,
+    preamble: set.preamble,
+    pacing: set.pacing,
+    coreOnly: coreSetOnly,
+    questions,
+  };
 }

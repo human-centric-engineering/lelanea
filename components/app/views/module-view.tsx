@@ -1,3 +1,5 @@
+import type * as React from 'react';
+
 import { ModuleActions } from '@/components/app/views/module-actions';
 import { View } from '@/components/app/views/view';
 import { Card } from '@/components/app/ui/card';
@@ -20,6 +22,11 @@ export interface ModuleViewProps {
   /** The tier's authored intent: the one thing that is written. */
   tierIntent: string;
   parts: readonly ModulePart[];
+  /**
+   * What the module has written, in place of the placeholder. Only Onboarding
+   * has any yet: its discovery questions (t-104).
+   */
+  children?: React.ReactNode;
 }
 
 /**
@@ -67,6 +74,7 @@ export function ModuleView({
   tierLabel,
   tierIntent,
   parts,
+  children,
 }: ModuleViewProps) {
   return (
     <View eyebrow={`${tierLabel.toLowerCase()} · module ${displayNumber}`} title={title}>
@@ -89,35 +97,37 @@ export function ModuleView({
         ))}
       </ul>
 
-      <div
-        className={cn(
-          'flex max-w-[52rem] flex-col gap-4 rounded-[20px] border border-dashed',
-          'bg-background border-[var(--color-border)] px-6 py-[26px] shadow-[var(--shadow-rest)]'
-        )}
-      >
-        <span
+      {children ?? (
+        <div
           className={cn(
-            'text-muted-foreground inline-flex h-6 items-center self-start rounded-full',
-            'border border-[var(--color-border)] px-[11px] text-[11px] tracking-[0.12em]'
+            'flex max-w-[52rem] flex-col gap-4 rounded-[20px] border border-dashed',
+            'bg-background border-[var(--color-border)] px-6 py-[26px] shadow-[var(--shadow-rest)]'
           )}
         >
-          module placeholder
-        </span>
-        <p className="brand-display text-[24px] leading-[1.14] text-[var(--color-heading)]">
-          {title}
-        </p>
-        <p className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.65]">
-          This module is not written yet. What is here is the shape of it: where it sits in the arc,
-          what it is for, and how you get to it and back.
-        </p>
-        <Skeleton />
-        <div aria-hidden="true" className="flex gap-2.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 flex-1 rounded-[14px] bg-[var(--color-pill)]" />
-          ))}
+          <span
+            className={cn(
+              'text-muted-foreground inline-flex h-6 items-center self-start rounded-full',
+              'border border-[var(--color-border)] px-[11px] text-[11px] tracking-[0.12em]'
+            )}
+          >
+            module placeholder
+          </span>
+          <p className="brand-display text-[24px] leading-[1.14] text-[var(--color-heading)]">
+            {title}
+          </p>
+          <p className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.65]">
+            This module is not written yet. What is here is the shape of it: where it sits in the
+            arc, what it is for, and how you get to it and back.
+          </p>
+          <Skeleton />
+          <div aria-hidden="true" className="flex gap-2.5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-16 flex-1 rounded-[14px] bg-[var(--color-pill)]" />
+            ))}
+          </div>
+          <Skeleton />
         </div>
-        <Skeleton />
-      </div>
+      )}
 
       <Card
         title="What this module is for"
