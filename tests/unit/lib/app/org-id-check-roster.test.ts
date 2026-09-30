@@ -37,10 +37,13 @@ async function orgOwnedAppTables(): Promise<string[]> {
   const client = new PrismaClient({ adapter: new PrismaPg(pool) });
   // Ours by model name as well as by table: a leaf model with no @@map has a
   // table named after the model (`AppNewThing`), and must not slip past.
-  return [...tenantOwnedModels(client)]
-    .filter(([model, table]) => model.startsWith('App') || table.startsWith('app_'))
-    .map(([, table]) => table)
-    .sort();
+  return (
+    [...tenantOwnedModels(client)]
+      // `App` then a capital, so an upstream `Approval…` model is not ours.
+      .filter(([model, table]) => /^App[A-Z]/.test(model) || table.startsWith('app_'))
+      .map(([, table]) => table)
+      .sort()
+  );
 }
 
 describe('APP_ORG_OWNED_TABLES', () => {

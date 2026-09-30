@@ -45,6 +45,13 @@ is how every **existing** one does. A change usually needs both.
 - **Say who changed it.** Where the history has an origin or editor column,
   use the operator value (for example `origin = 'seed'`, `editorId` null), not
   a person.
+- **Name the org on every row you insert.** A migration is raw SQL, which the
+  tenancy client never sees, so nothing stamps `orgId`, and every `app_*`
+  table refuses a row without one (t-115). Insert one row per org that needs
+  it (`SELECT … FROM "org"`), or `'install'` where only the install org
+  holds the data. An `UPDATE` keeps the row's org and needs nothing. Open the
+  file with `SELECT set_config('app.bypass_rls', 'on', true);`, since a
+  database with the policies enabled shows its owner no rows otherwise.
 - **Apply it with `npm run db:migrate:deploy`**, then run
   `npm run db:drift-check`. A data-only migration has no schema diff, so there
   is nothing for `migrate dev` to generate.
@@ -124,8 +131,9 @@ migrations dated 2026-10-03 are the worked example.
   and cannot read another's.
   `app_knowledge_designation` is unique on `(orgId, sourceKey)`, so each org's
   knowledge mirror holds `foundational:the_mission` for itself. The mirror
-  cron (`/api/v1/app/cron/knowledge-mirror`) reconciles every active org, each
-  inside its own scope through `forEachOrg` (t-115). A new unique key on an
+  cron (`/api/v1/app/cron/knowledge-mirror`, t-115) reconciles the install org
+  at `single`, and at `multi` every active org, each inside its own scope; see
+  [`content.md`](./content.md) for its time budget and daily rotation. A new unique key on an
   `app_*` table starts with `orgId`, or it fails the second org at `multi`.
 - **Every row names its org, and the database refuses one that does not**
   (t-115, `20261004100300_app_org_id_required`). `orgId` stays nullable in
@@ -134,9 +142,9 @@ migrations dated 2026-10-03 are the worked example.
   `CHECK ("orgId" IS NOT NULL)`, named `<table>_orgId_not_null`. A row with no
   org would belong to nobody: no org's screens would show it, and no per-org
   key would catch a duplicate of it, because Postgres treats two NULLs as
-  different. The tenancy client stamps every create, and only a create under
-  `runAsSystem` goes unstamped, so a system-scope write to an `app_*` table
-  now fails loudly. Prisma cannot model a CHECK, so each is pinned by a drift
+  different. The tenancy client stamps every create; a create under
+  `runAsSystem` and raw SQL (a migration included) go unstamped, so either now
+  fails loudly unless it names the org. Prisma cannot model a CHECK, so each is pinned by a drift
   probe over `APP_ORG_OWNED_TABLES` (`lib/app/leaf-db-drift.ts`). That list
   is written out, and `tests/unit/lib/app/org-id-check-roster.test.ts`
   (always-run) pins it to the tenant-owned roster: a new `app_*` model fails

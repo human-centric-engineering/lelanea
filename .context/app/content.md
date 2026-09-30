@@ -235,10 +235,15 @@ because on Vercel nothing calls the tick, and when something does it runs app
 jobs after answering, where the function can be frozen. See the journal
 decision "Knowledge mirror (t-90)…".
 
-**The cron reconciles every active org**, each inside its own scope
-(`forEachOrg`, t-115), because each org mirrors its own documents. One org's
-failure is logged and the next org still runs; the response names each failed
-org and document, and answers 500.
+**The cron reconciles each org's own mirror** (t-115). At `single`, the
+install org alone: nothing scopes a read there, so a pass for another org
+would read the install org's rows. At `multi`, every active org, each inside
+its own scope, starting at a different org each day so a slow one cannot
+always crowd out the same others; it starts no org after 30 seconds, leaving
+the rest for a later run. One org's failure is logged and the next org still
+runs. The response is 500 when anything was left undone, naming each failed
+document, each org whose reconcile threw and each org not reached; and 500
+when there is no active org at all, which is a failed read, not a clean run.
 
 **The cron route needs `CRON_SECRET`** (16+ characters) in the Vercel project.
 Vercel Cron sends it as `Authorization: Bearer …`. Without it the route refuses
