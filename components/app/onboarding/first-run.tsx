@@ -20,7 +20,7 @@ export const FIRST_RUN_ROUTE = '/api/v1/app/onboarding/first-run';
  */
 export const FIRST_RUN_COPY = {
   continue: 'Continue',
-  offer: 'Or read it later: it stays in Resources.',
+  offer: 'Skip it if you like. It stays in Resources.',
   read: 'Read it',
   skip: 'Not now',
 } as const;
