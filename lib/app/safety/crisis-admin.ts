@@ -26,6 +26,12 @@
  * back a number another admin just corrected, and nobody signs off words they
  * did not see.
  *
+ * **A sign-off is refused while the stored rows cannot be served** (409,
+ * `reason: 'unservable'`) — the same `contentFromRows` check a crisis turn
+ * makes, over every row, since one bad row fails every turn. Signing off copy
+ * nobody is being shown would put a sign-off of unseen words in the audit log
+ * (t-68).
+ *
  * @see lib/app/safety/resources-store.ts — how the turn reads what this writes
  * @see .context/app/safety.md — "The resource"
  */
@@ -192,23 +198,40 @@ function describeUnservable(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Why the stored rows cannot be served, or `null` when they can: the check a
+ * crisis turn makes, so the page and the sign-offs agree with what people see.
+ */
+function unservableReason(copy: AppCrisisCopy, regions: AppCrisisRegion[]): string | null {
+  try {
+    contentFromRows(copy, regions);
+    return null;
+  } catch (err) {
+    return describeUnservable(err);
+  }
+}
+
+/** Refuse a sign-off while nothing stored is being shown to anyone. */
+async function requireServable(copy: AppCrisisCopy): Promise<void> {
+  const regions = await prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } });
+  const reason = unservableReason(copy, regions);
+  if (reason !== null) {
+    throw new ConflictError(
+      `What is stored cannot be read (${reason}), so every crisis turn is failing and nobody is being shown these words. Correct it and save, then sign off.`,
+      { reason: 'unservable' }
+    );
+  }
+}
+
 /** Everything as stored, for the admin page. Two reads. */
 export async function getCrisisAdminView(): Promise<CrisisAdminView> {
   const [copy, regions] = await Promise.all([
     prisma.appCrisisCopy.findFirst({ where: { slug: CRISIS_COPY_SLUG } }),
     prisma.appCrisisRegion.findMany({ orderBy: { region: 'asc' } }),
   ]);
-  let unservable: string | null = null;
-  if (copy) {
-    try {
-      contentFromRows(copy, regions);
-    } catch (err) {
-      unservable = describeUnservable(err);
-    }
-  }
   return {
     seeded: copy !== null,
-    unservable,
+    unservable: copy ? unservableReason(copy, regions) : null,
     copy: copy ? toCopyRow(copy) : null,
     regions: regions.map(toRegionRow),
   };
@@ -248,6 +271,7 @@ export async function updateCrisisCopy(
 /** Sign the shared copy off, at the version the admin read. */
 export async function signOffCrisisCopy(version: number): Promise<CrisisCopyRow> {
   const before = await requireSeeded();
+  await requireServable(before);
   const { count } = await prisma.appCrisisCopy.updateMany({
     where: { slug: CRISIS_COPY_SLUG, version },
     data: { status: 'signed_off', signedOffAt: new Date() },
@@ -328,14 +352,9 @@ export async function signOffCrisisRegion(
   region: string,
   version: number
 ): Promise<CrisisRegionRow> {
-  await requireSeeded();
+  const copy = await requireSeeded();
   const before = await requireRegion(region);
-  if (toRegionRow(before).malformed) {
-    throw new ConflictError(
-      `${region}'s stored services are malformed, so they are not being shown. Save the region to repair it, then sign it off.`,
-      { reason: 'malformed' }
-    );
-  }
+  await requireServable(copy);
   const { count } = await prisma.appCrisisRegion.updateMany({
     where: { id: before.id, version },
     data: { status: 'signed_off', signedOffAt: new Date() },

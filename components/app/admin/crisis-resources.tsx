@@ -39,6 +39,7 @@ import { FieldHelp } from '@/components/ui/field-help';
 import { ClientDate } from '@/components/ui/client-date';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import {
+  CRISIS_RESOURCES_ENDPOINT,
   CRISIS_COPY_ENDPOINT,
   CRISIS_COPY_SIGN_OFF_ENDPOINT,
   CRISIS_REGIONS_ENDPOINT,
@@ -135,6 +136,18 @@ export function CrisisResourcesPanel({
   const [copy, setCopy] = useState<CopyJson | null>(initialView.copy);
   const [regions, setRegions] = useState<RegionJson[]>(initialView.regions);
   const [adding, setAdding] = useState(false);
+  const [unservable, setUnservable] = useState<string | null>(initialView.unservable);
+
+  /**
+   * After any save, ask the server again whether the rows can be served: the
+   * check is the turn's own (`contentFromRows`), so the browser does not guess
+   * at it. A failed re-check keeps the banner as it was — it clears only when
+   * the server says the rows are servable (t-68).
+   */
+  const recheck = async () => {
+    const result = await send<CrisisViewJson>('GET', CRISIS_RESOURCES_ENDPOINT);
+    if (result.ok) setUnservable(result.data.unservable);
+  };
 
   if (!initialView.seeded || copy === null) {
     return (
@@ -156,15 +169,19 @@ export function CrisisResourcesPanel({
   const malformed = regions.filter((r) => r.malformed).map((r) => r.region);
   const replaceRegion = (row: RegionJson) =>
     setRegions((all) => all.map((r) => (r.region === row.region ? row : r)));
+  const saveRegion = (row: RegionJson) => {
+    replaceRegion(row);
+    void recheck();
+  };
 
   return (
     <div className="space-y-10">
-      {initialView.unservable && (
+      {unservable && (
         <p role="alert" className="text-destructive max-w-3xl text-sm">
           What is stored here cannot be read, so{' '}
           <strong>every crisis turn is failing right now</strong> and nobody is being shown a
-          helpline. The problem: {initialView.unservable}. Correct it and save — there is no other
-          copy to fall back on.
+          helpline. The problem: {unservable}. Correct it and save — there is no other copy to fall
+          back on.
         </p>
       )}
 
@@ -178,7 +195,14 @@ export function CrisisResourcesPanel({
         </p>
       )}
 
-      <CopyForm copy={copy} onSaved={setCopy} />
+      <CopyForm
+        copy={copy}
+        onSigned={setCopy}
+        onSaved={(saved) => {
+          setCopy(saved);
+          void recheck();
+        }}
+      />
 
       <section aria-labelledby="crisis-regions-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -205,6 +229,7 @@ export function CrisisResourcesPanel({
             onSaved={(row) => {
               setRegions((all) => [...all, row].sort((a, b) => a.region.localeCompare(b.region)));
               setAdding(false);
+              void recheck();
             }}
           />
         )}
@@ -220,10 +245,12 @@ export function CrisisResourcesPanel({
               <li key={region.region}>
                 <RegionCard
                   region={region}
-                  onChanged={replaceRegion}
-                  onRemoved={() =>
-                    setRegions((all) => all.filter((r) => r.region !== region.region))
-                  }
+                  onSigned={replaceRegion}
+                  onSaved={saveRegion}
+                  onRemoved={() => {
+                    setRegions((all) => all.filter((r) => r.region !== region.region));
+                    void recheck();
+                  }}
                 />
               </li>
             ))}
@@ -293,7 +320,15 @@ function copyText(copy: CopyJson): CopyText {
   return Object.fromEntries(COPY_FIELDS.map((f) => [f.key, copy[f.key]])) as CopyText;
 }
 
-function CopyForm({ copy, onSaved }: { copy: CopyJson; onSaved: (copy: CopyJson) => void }) {
+function CopyForm({
+  copy,
+  onSaved,
+  onSigned,
+}: {
+  copy: CopyJson;
+  onSaved: (copy: CopyJson) => void;
+  onSigned: (copy: CopyJson) => void;
+}) {
   const [text, setText] = useState<CopyText>(() => copyText(copy));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,7 +366,7 @@ function CopyForm({ copy, onSaved }: { copy: CopyJson; onSaved: (copy: CopyJson)
     });
     setBusy(false);
     if (!result.ok) return setError(result.message);
-    onSaved(result.data.copy);
+    onSigned(result.data.copy);
     setNotice('Signed off.');
   };
 
@@ -404,11 +439,13 @@ function CopyForm({ copy, onSaved }: { copy: CopyJson; onSaved: (copy: CopyJson)
 
 function RegionCard({
   region,
-  onChanged,
+  onSaved,
+  onSigned,
   onRemoved,
 }: {
   region: RegionJson;
-  onChanged: (row: RegionJson) => void;
+  onSaved: (row: RegionJson) => void;
+  onSigned: (row: RegionJson) => void;
   onRemoved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -423,7 +460,7 @@ function RegionCard({
         initial={region}
         onCancel={() => setEditing(false)}
         onSaved={(row) => {
-          onChanged(row);
+          onSaved(row);
           setEditing(false);
         }}
       />
@@ -440,7 +477,7 @@ function RegionCard({
     );
     setBusy(false);
     if (!result.ok) return setError(result.message);
-    onChanged(result.data.region);
+    onSigned(result.data.region);
   };
 
   const remove = async () => {

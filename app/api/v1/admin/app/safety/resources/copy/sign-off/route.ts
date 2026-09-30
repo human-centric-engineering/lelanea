@@ -4,7 +4,8 @@
  * POST /api/v1/admin/app/safety/resources/copy/sign-off
  *
  * Body: `{ version }` — the version the admin read. 409 if it has moved since
- * (someone edited in between) or the tables are not seeded.
+ * (someone edited in between), if the stored rows cannot be served
+ * (`unservable`), or the tables are not seeded.
  *
  * Authentication: admin. Rate limiting: the `admin` section tier from `proxy.ts`.
  * Audited: the audit log is where "who signed this off" is kept.

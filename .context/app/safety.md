@@ -183,12 +183,14 @@ the wording **and a check that every number still answers.**
 - **A save and a sign-off both name the version the admin read** (`version` in
   the body), and either is refused 409 if it has moved. A stale form cannot
   silently put back a number another admin just corrected, and nobody signs off
-  words they did not see. A region whose stored services are malformed cannot be
-  signed off.
+  words they did not see. Nor is anything signed off while the stored rows cannot
+  be served (409, `reason: 'unservable'`): one bad row fails every crisis turn,
+  so a sign-off then would record words nobody is shown (t-68).
 - **The page says when the stored rows cannot be served at all** (`unservable`
   on `GET`): it runs the same check the turn does (`contentFromRows` in
   `resources-store.ts`), so any row that would fail a crisis turn is named there
-  rather than edited unseen. Since t-88 that is the whole stake — there is no
+  rather than edited unseen. The banner is re-checked after every save, so it
+  clears as soon as a save makes the rows servable again. Since t-88 that is the whole stake — there is no
   file behind it — and it is also why the write routes share those schemas.
 - **The frame's `status` is `signed_off` only when everything shown is**: the
   copy, and the region's services where a region was chosen.
