@@ -106,10 +106,11 @@ describe('the bundled resources', () => {
     });
   });
 
-  it('invents no video, no audio and no article — her list is t-76', () => {
+  it('invents no video, no audio and no article — her list is entered in the admin', () => {
     // Pinned so that the first entry is a deliberate change to this test, not
     // something that slipped in beside a code change.
     expect(getResourcesLibrary().videos).toEqual([]);
+    expect(getResourcesLibrary().audio).toEqual([]);
     expect(getResourcesLibrary().articles).toEqual([]);
   });
 });

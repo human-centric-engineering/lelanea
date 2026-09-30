@@ -30,7 +30,7 @@
  *
  * ## Empty when there is nothing to offer, and that is deliberate
  *
- * Until Lelañea Fulton's list lands (t-76) both lists are empty, and the block
+ * Until an admin enters Lelañea Fulton's list, every list is empty, and the block
  * is `''`: no heading over nothing, no note saying a list exists and is being
  * withheld — which would be an invitation to invent. With no block the agent
  * cannot suggest, which is the truth.

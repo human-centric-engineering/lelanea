@@ -674,8 +674,8 @@ is the specific failure D6 names.
   beside them. Nothing reads a leaning until a model is answering, which is
   phase 2.
 - **The resources drawer's lists.** The drawer is real from §14 t-75 — it
-  follows the open module and shows her words on it from the API — but until her
-  list lands (t-76) both `to watch` and `to read` are empty, and each section
+  follows the open module and shows her words on it from the API — but until an
+  admin enters her list `to watch`, `to listen` and `to read` are empty, and each section
   says so under its eyebrow rather than carrying two plausible videos. See
   [`content.md`](./content.md#resources--her-videos-and-reading-and-her-words-on-whatever-is-open).
 - ~~**A module's real state in the map.**~~ Real from §15 t-102: each row

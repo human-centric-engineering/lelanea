@@ -3,7 +3,7 @@
  * for anything else (f-resources t-77).
  *
  * The library's store is faked with the seed's rows plus two added here, so the
- * cases do not depend on what ships today (nothing — her list is t-76). The shape
+ * cases do not depend on what ships today (nothing — her list is entered in the admin). The shape
  * reader in `suggestion.ts` and the provenance resolver are covered here too,
  * because they are the two other places a suggestion is read from.
  *

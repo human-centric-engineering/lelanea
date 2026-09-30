@@ -87,7 +87,7 @@ function video(id: string, title: string, duration: string) {
   };
 }
 
-/** Her words on values, two videos, three articles — the full panel. */
+/** Her words on values, two videos, one audio piece, three articles — the full panel. */
 function fullSelection(): ResourcesSelection {
   return {
     collection: COLLECTION,
@@ -100,7 +100,17 @@ function fullSelection(): ResourcesSelection {
       video('why-values', 'Why values come first', '6:12'),
       video('four-marks', 'The four marks', '4:48'),
     ],
-    audio: [video('a-quiet-hour', 'A quiet hour', '12:05')],
+    audio: [
+      {
+        id: 'a-quiet-hour',
+        title: 'A quiet hour',
+        subtitle: 'to listen to on a walk',
+        relatesTo: 'module_01_values',
+        duration: '12:05',
+        href: 'https://audio.example/a-quiet-hour',
+        revision: 1,
+      },
+    ],
     articles: [
       {
         id: 'inheritance-test',
@@ -380,7 +390,7 @@ describe('her words', () => {
   });
 });
 
-describe('to watch and to read', () => {
+describe('to watch, to listen and to read', () => {
   it('renders two cards and three rows from a full selection', async () => {
     renderDrawers();
     await openResources();
@@ -394,6 +404,26 @@ describe('to watch and to read', () => {
 
     const read = within(panel()).getByRole('heading', { name: 'to read' }).closest('section')!;
     expect(read.querySelectorAll('li')).toHaveLength(3);
+  });
+
+  it('renders audio under to listen, apart from the videos, opening in a new tab', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+
+    const listen = within(panel()).getByRole('heading', { name: 'to listen' }).closest('section')!;
+    const pieces = within(listen).getAllByRole('link');
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0]).toHaveTextContent('A quiet hour');
+    expect(pieces[0]).toHaveTextContent('to listen to on a walk');
+    expect(pieces[0]).toHaveTextContent('12:05');
+    expect(pieces[0]).toHaveAttribute('href', 'https://audio.example/a-quiet-hour');
+    expect(pieces[0]).toHaveAttribute('target', '_blank');
+    expect(pieces[0]).toHaveAttribute('rel', 'noopener noreferrer');
+
+    // Each kind in its own section: the audio is not a third video.
+    const watch = within(panel()).getByRole('heading', { name: 'to watch' }).closest('section')!;
+    expect(within(watch).queryByText('A quiet hour')).toBeNull();
   });
 
   it('opens a video in a new tab, safely', async () => {
@@ -430,8 +460,10 @@ describe('to watch and to read', () => {
     await openResources();
 
     await within(panel()).findByText(/Nothing to watch yet/);
+    expect(within(panel()).getByText(/Nothing to listen to yet/)).toBeInTheDocument();
     expect(within(panel()).getByText(/Nothing to read yet/)).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'to watch' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'to listen' })).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'to read' })).toBeInTheDocument();
     // And invents nothing: no duration, no link, no image.
     expect(panel().textContent).not.toMatch(/\d+\s*(min|:\d\d)/i);

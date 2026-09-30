@@ -16,9 +16,9 @@
  * idempotent, and no `hashInputs` over the JSON, for the reasons
  * `016-journey-structure.ts` gives.
  *
- * **Her list (t-76) is therefore a migration, not an edit to the file.** The
- * file ships with no videos and no articles. Once this has written the library,
- * adding them to the file reaches only a database that was never seeded.
+ * **Her list is therefore entered in the admin, not added to the file.** The
+ * file ships with no videos, audio or articles. Once this has written the
+ * library, adding them to the file reaches only a database that was never seeded.
  *
  * Runs after 015 and 016: an article names a document, and a key names a module.
  */

@@ -222,7 +222,7 @@ async function assertWritable(seed: ResourcesSeed, client: TenancyClient): Promi
  *
  * **Write-once (`fp4`)**, marked by the collection row, written in the same
  * transaction as everything else. **Safe on empty**: no removal pass, and a
- * library with no videos, audio or articles is a real state (her list lands in t-76).
+ * library with no videos, audio or articles is a real state (her list is entered in the admin).
  *
  * Runs after the journey is seeded: a key is checked against the modules in
  * the database.

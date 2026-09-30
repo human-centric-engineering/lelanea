@@ -214,7 +214,7 @@ const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer' } as const;
  *
  * ## The empty states stay honest
  *
- * Until her list lands (t-76) every list is empty, and a section with nothing
+ * Until an admin enters her list, every list is empty, and a section with nothing
  * under its eyebrow reads as something that failed to load. So each says which
  * it is, inside the section rather than instead of it.
  *

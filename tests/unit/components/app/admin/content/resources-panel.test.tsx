@@ -119,6 +119,21 @@ const ARTICLE1: ResourceAdminRow = {
   revision: 1,
 };
 
+const AUDIO1: ResourceAdminRow = {
+  id: 'quiet_hour',
+  kind: 'audio',
+  position: 1,
+  title: 'A Quiet Hour',
+  subtitle: 'To listen to on a walk.',
+  relatesTo: null,
+  duration: '12:05',
+  readingTime: null,
+  href: 'https://example.com/quiet-hour',
+  documentId: null,
+  retired: false,
+  revision: 3,
+};
+
 const WORDS_DEFAULT = {
   key: 'default',
   quote: 'Begin where you are.',
@@ -160,6 +175,9 @@ const VIEW: ResourcesAdminView = {
   documentIds: ['the_initiation', 'the_mission'],
   readers: READERS,
 };
+
+/** The library with an audio piece in it — kept apart so the other counts stay as they are. */
+const VIEW_WITH_AUDIO: ResourcesAdminView = { ...VIEW, resources: [...VIEW.resources, AUDIO1] };
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -303,6 +321,14 @@ describe('the videos and articles lists', () => {
     // Retired ones are inside a details/summary, counted on their own.
     expect(screen.getByText('Retired videos (1)')).toBeInTheDocument();
   });
+
+  it('lists audio under its own heading, apart from the videos', () => {
+    render(<ResourcesPanel initialView={VIEW_WITH_AUDIO} />);
+
+    expect(screen.getByText('Audio (1)')).toBeInTheDocument();
+    expect(screen.getByText('Videos (2)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'A Quiet Hour' })).toBeInTheDocument();
+  });
 });
 
 describe('editing a resource', () => {
@@ -350,6 +376,36 @@ describe('editing a resource', () => {
     });
     expect(await screen.findByText('Saved "The Call, reworded".')).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
+  });
+
+  it('saves an audio piece as audio, with its length and link', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ changed: ['duration', 'href'] }));
+    render(<ResourcesPanel initialView={VIEW_WITH_AUDIO} />);
+    await user.click(screen.getByRole('button', { name: 'A Quiet Hour' }));
+    const dialog = editor('A Quiet Hour');
+
+    const length = dialog.getByLabelText('Length (m:ss)');
+    await user.clear(length);
+    await user.type(length, '11:40');
+
+    const href = dialog.getByLabelText('Link');
+    await user.clear(href);
+    await user.type(href, 'https://example.com/quiet-hour-2');
+
+    await user.click(dialog.getByRole('button', { name: 'Save' }));
+
+    expect(sent().url).toBe(contentItemEndpoint('resources', 'resource', 'quiet_hour'));
+    expect(sent().method).toBe('PUT');
+    expect(sent().body).toEqual({
+      revision: 3,
+      kind: 'audio',
+      title: 'A Quiet Hour',
+      subtitle: 'To listen to on a walk.',
+      relatesTo: null,
+      duration: '11:40',
+      href: 'https://example.com/quiet-hour-2',
+    });
   });
 
   it('sends null relatesTo when "everything" is chosen', async () => {
@@ -555,6 +611,39 @@ describe('adding a resource', () => {
     expect(screen.queryByLabelText('Id')).toBeNull();
     expect(
       await screen.findByText('Added "A New Video" at the end of the videos.')
+    ).toBeInTheDocument();
+    expect(mockRouter.refresh).toHaveBeenCalled();
+  });
+
+  it('adds an audio piece, sending kind audio with its length and link', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(ok({ id: 'a_new_audio' }));
+    render(<ResourcesPanel initialView={VIEW} />);
+    await user.click(screen.getByRole('button', { name: 'Add an audio piece' }));
+    const form = screen.getByLabelText('Id').closest('.rounded-md.border.p-3') as HTMLElement;
+
+    await user.type(within(form).getByLabelText('Id'), 'a_new_audio');
+    await user.type(within(form).getByLabelText('Title'), 'A New Audio Piece');
+    await user.type(within(form).getByLabelText('What it is for'), 'For the evening.');
+    await user.selectOptions(within(form).getByLabelText('Belongs to'), 'module_01_a');
+    await user.type(within(form).getByLabelText('Length (m:ss)'), '9:15');
+    await user.type(within(form).getByLabelText('Link'), 'https://example.com/new-audio');
+
+    await user.click(within(form).getByRole('button', { name: 'Add' }));
+
+    expect(sent().url).toBe(contentEntityEndpoint('resources', 'resource'));
+    expect(sent().method).toBe('POST');
+    expect(sent().body).toEqual({
+      id: 'a_new_audio',
+      kind: 'audio',
+      title: 'A New Audio Piece',
+      subtitle: 'For the evening.',
+      relatesTo: 'module_01_a',
+      duration: '9:15',
+      href: 'https://example.com/new-audio',
+    });
+    expect(
+      await screen.findByText('Added "A New Audio Piece" at the end of the audio.')
     ).toBeInTheDocument();
     expect(mockRouter.refresh).toHaveBeenCalled();
   });
