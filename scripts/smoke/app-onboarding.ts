@@ -18,6 +18,12 @@
  * Self-cleaning: creates one `smoke-app-onboarding-*` user and removes it and
  * every row keyed on it, on every path. Never unscoped deletes.
  *
+ * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam (`initLeafApp()`),
+ * because the map projection checks each node against the module registry it
+ * fills. It asserts Lelañea's map, its `onboarding` node and its gate; a fork
+ * with a different journey, or none, should replace this script rather than
+ * pin ours.
+ *
  * Usage: `npm run smoke:app-onboarding` (reads `.env.local`). Exit 0 on every
  * assertion passing, 1 otherwise.
  */
