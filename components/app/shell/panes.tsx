@@ -34,13 +34,12 @@ export function Panes({ children }: { children: React.ReactNode }) {
        * The view's tone is published HERE, on the common ancestor of both
        * panes, and not on the workspace.
        *
-       * A custom property inherits downward only. Setting it on the workspace
-       * `<section>` put it on a SIBLING of the conversation, so
-       * `conversation-pane.tsx`'s own `border-t-[var(--tone,…)]` — the edge of
-       * the panel when it slides over on a tablet — could never resolve it and
-       * always fell back to the teal. The band on one side of the screen and
-       * the panel edge on the other are meant to be the same colour; from a
-       * sibling they never could be.
+       * A custom property inherits downward only, so set on the workspace
+       * `<section>` it is out of the conversation's reach. The one reader
+       * outside the workspace — the tablet slide-over's panel edge — went with
+       * the slide-over (t-83), so today only the workspace reads it; it stays
+       * on the common ancestor so a reader on either side resolves the same
+       * value without the property having to move again.
        *
        * `view-tone.ts` carries the table and the rest of the reasoning.
        */

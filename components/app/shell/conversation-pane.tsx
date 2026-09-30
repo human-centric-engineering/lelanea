@@ -14,6 +14,7 @@ import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
   CHAT_FOLD,
   CHAT_MAX,
+  CHAT_MEDIUM,
   CHAT_MIN,
   type ModulePlace,
   useShellLayout,
@@ -124,20 +125,23 @@ export function ConversationPane() {
   }, [chatSlim]);
 
   /**
-   * On a tablet the conversation stops being a column and becomes a panel.
+   * Beside the page at every width above 900px — including a tablet.
    *
-   * The prototype's medium block is emphatic about why: the panel is ALWAYS its
-   * full 420px and rides in and out on a transform, so nothing animates a layout
-   * property and the workspace never reflows. Parked, it is translated left by
-   * its own width less the strip, so only that strip clears the viewport — which
-   * is why the strip is pinned to the panel's right edge rather than being a
-   * separate narrow pane. Built as an in-flow pane instead, the surface shunts
-   * sideways every time the conversation opens, which is the reflow the design
-   * spent a transform avoiding.
+   * The prototype made the conversation a fixed 420px panel riding OVER the page
+   * at `medium`, on a transform so the page never reflowed. The cost was the
+   * page itself: a third of it sat under the panel, cut off mid-sentence, for as
+   * long as the conversation was open. Owner ruling (t-83, 30 Sept 2026): the
+   * two share the width instead, as at `large`, and the page reflowing when the
+   * conversation opens is the accepted price.
+   *
+   * Narrower at `medium` — `CHAT_MEDIUM`, where that constant says why — and
+   * without the handle, which stays a `large` affordance: the band is too
+   * narrow for a reader to be given 330–660px to play with.
    */
-  const overlay = width === 'medium' && wsOpen;
+  const inFlow = wsOpen && !carousel;
+  const basis = width === 'medium' ? Math.min(chatW, CHAT_MEDIUM) : chatW;
 
-  if (chatSlim && !overlay) return <Strip ref={stripRef} onOpen={() => setChatSlim(false)} />;
+  if (chatSlim) return <Strip ref={stripRef} onOpen={() => setChatSlim(false)} />;
 
   return (
     <section
@@ -153,35 +157,15 @@ export function ConversationPane() {
        */
       inert={carousel && pane !== 'chat'}
       data-pane="chat"
-      style={wsOpen && !carousel && !overlay ? { flexBasis: `${chatW}px` } : undefined}
+      style={inFlow ? { flexBasis: `${basis}px` } : undefined}
       className={cn(
         'relative flex min-w-0 flex-col bg-[var(--color-background)]',
-        wsOpen && !carousel && !overlay
-          ? 'flex-none border-r border-[var(--color-divider)]'
-          : 'flex-1',
-        // The tablet panel: fixed width, moved with a transform, never reflowing
-        // what is behind it. `-translate-x-[364px]` is 420 less the 56px strip.
-        overlay && [
-          'absolute top-0 bottom-0 left-0 z-[38] w-[420px] flex-none',
-          'border-r border-[var(--color-divider)]',
-          !reducedMotion && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
-          chatSlim
-            ? '-translate-x-[364px]'
-            : [
-                'translate-x-0 shadow-[var(--shadow-lift)]',
-                // Slid open it is a panel like the drawers beside it, so it
-                // carries the same tone band rather than arriving as a grey edge.
-                'border-t-[3px] border-t-[var(--tone,var(--color-secondary-ink))]',
-              ],
-        ],
-        // `!overlay && !carousel`, and this is not belt-and-braces: `cn` is
-        // `twMerge`, so a later class in the same group REPLACES an earlier one.
-        // Emitted unconditionally, this deleted the overlay's
-        // `transition-transform duration-[340ms]` — measured — and the tablet
-        // panel popped in and out instead of riding the transform it is built
-        // around. The carousel's transform transition went the same way.
+        inFlow ? 'flex-none border-r border-[var(--color-divider)]' : 'flex-1',
+        // `!carousel`, and this is not belt-and-braces: `cn` is `twMerge`, so a
+        // later class in the same group REPLACES an earlier one. Emitted
+        // unconditionally, this deleted the carousel's `transition-transform
+        // duration-[340ms]` — measured — and the panes popped rather than slid.
         !reducedMotion &&
-          !overlay &&
           !carousel &&
           'transition-[flex-basis] duration-[280ms] ease-[var(--ease-brand)]',
         // The carousel lays both panes over each other and slides them, so the
@@ -194,143 +178,121 @@ export function ConversationPane() {
         carousel && (pane === 'chat' ? 'translate-x-0' : 'pointer-events-none -translate-x-full')
       )}
     >
-      {overlay && chatSlim ? null : (
-        <>
-          {/*
-            The chat head (`.chat-head`), and the collapse control the prototype
-            puts in it (`#chat-collapse`), shown whenever there is a workspace to
-            give the width back to — `#app.no-ws` hides it, and so does the small
-            block, where the pane switch does this job instead.
+      {/*
+        The chat head (`.chat-head`), and the collapse control the prototype
+        puts in it (`#chat-collapse`), shown whenever there is a workspace to
+        give the width back to — `#app.no-ws` hides it, and so does the small
+        block, where the pane switch does this job instead.
 
-            The control was missing entirely, which left Escape as the ONLY way
-            to park the conversation on a tablet: the surface click is a
-            fallback, not an affordance, and nothing on screen said the pane
-            could collapse at all. The strip is how it comes back; this is how it
-            goes away.
+        Above 900px this is the ONE way to park the conversation from the
+        pane itself — dragging the handle past the fold is the other, at
+        `large` only. The strip is how it comes back; this is how it goes
+        away.
 
-            THE HEAD ITSELF renders at every width and in both view states, which
-            it did not: it was nested inside the same condition as the control,
-            so the one view every signed-in visitor lands on — `/app`, the
-            conversation at full width — had no title on it at all. The prototype
-            hides the BUTTON there (`#app.no-ws #chat-collapse`) and keeps
-            `#chat-label` where it always is, top left above the first turn.
-          */}
-          <div className="flex flex-none items-center gap-2 px-6 pt-3.5 max-[760px]:px-3.5 max-[760px]:pt-3">
-            {wsOpen && width !== 'small' ? (
-              <button
-                type="button"
-                onClick={() => setChatSlim(true)}
-                aria-label="Collapse the conversation"
-                title="Collapse the conversation"
-                className={cn(
-                  'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
-                  'items-center justify-center',
-                  ICON_RADIUS,
-                  'hover:bg-[var(--color-pill-hover)]',
-                  'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
-                  'motion-reduce:transition-none',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                  'focus-visible:outline-[var(--color-ring)]'
-                )}
-              >
-                <PanelCollapseIcon />
-              </button>
-            ) : null}
-
-            {/*
-              THE WAY BACK, and it is the thing in this column that actually
-              costs somebody something when it is wrong.
-
-              With the workspace open the head is a link — a back arrow and `the
-              main conversation` in the secondary ink — with where you currently
-              are beside it in muted text. It was a small outlined panel glyph
-              followed by `the conversation` in grey: a different icon, different
-              words, the wrong colour, and nothing about it read as a link at
-              all, so the one way back out of a module looked like a caption.
-
-              On `/app` there is nowhere to go back TO — that IS the main
-              conversation — so it stays the eyebrow the design keeps there.
-            */}
-            {wsOpen ? (
-              <>
-                <Link
-                  href="/app"
-                  title="Return to the main conversation with Lelañea"
-                  className={cn(
-                    'flex min-w-0 flex-none items-center gap-1.5 px-2 py-1',
-                    ICON_RADIUS,
-                    'text-[13.5px] text-[var(--color-secondary-ink)] no-underline',
-                    'hover:bg-[var(--color-secondary-wash)] hover:no-underline',
-                    'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
-                    'motion-reduce:transition-none',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                    'focus-visible:outline-[var(--color-ring)]'
-                  )}
-                >
-                  <ArrowLeft size={15} strokeWidth={1.6} className="flex-none" aria-hidden="true" />
-                  <span className="truncate">the main conversation</span>
-                </Link>
-                {/*
-                  Muted, and quietly absent rather than wrong: a module's label
-                  arrives one effect after the route does, and the provider
-                  withholds it while the slug and the route disagree.
-                */}
-                {placeLabel(pathname, modulePlace) ? (
-                  <span className="text-muted-foreground min-w-0 truncate text-[13px]">
-                    on {placeLabel(pathname, modulePlace)}
-                  </span>
-                ) : null}
-              </>
-            ) : (
-              <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+        THE HEAD ITSELF renders at every width and in both view states, which
+        it did not: it was nested inside the same condition as the control,
+        so the one view every signed-in visitor lands on — `/app`, the
+        conversation at full width — had no title on it at all. The prototype
+        hides the BUTTON there (`#app.no-ws #chat-collapse`) and keeps
+        `#chat-label` where it always is, top left above the first turn.
+      */}
+      <div className="flex flex-none items-center gap-2 px-6 pt-3.5 max-[760px]:px-3.5 max-[760px]:pt-3">
+        {wsOpen && width !== 'small' ? (
+          <button
+            type="button"
+            onClick={() => setChatSlim(true)}
+            aria-label="Collapse the conversation"
+            title="Collapse the conversation"
+            className={cn(
+              'text-muted-foreground hover:text-foreground flex h-8 w-8 flex-none',
+              'items-center justify-center',
+              ICON_RADIUS,
+              'hover:bg-[var(--color-pill-hover)]',
+              'transition-[background-color,color] duration-200 ease-[var(--ease-brand)]',
+              'motion-reduce:transition-none',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+              'focus-visible:outline-[var(--color-ring)]'
             )}
-          </div>
+          >
+            <PanelCollapseIcon />
+          </button>
+        ) : null}
 
-          {/*
-            The transcript (`.chat-log`): a SCROLL CONTAINER with the composer
-            below it. The column keeps its three parts whether or not there is
-            anything in the transcript yet; the empty state goes INSIDE it,
-            where a turn will go (t-36). `.inner` is the prototype's 604px
-            measure, shared with the composer so the two line up as one column.
-          */}
-          <Transcript
-            phase={conversation.phase}
-            entries={conversation.entries}
-            live={conversation.live}
-            unreadable={conversation.unreadable}
-            onRevealed={conversation.revealed}
-          />
+        {/*
+          THE WAY BACK, and it is the thing in this column that actually
+          costs somebody something when it is wrong.
 
-          <StatusLine generation={conversation.status} />
+          With the workspace open the head is a link — a back arrow and `the
+          main conversation` in the secondary ink — with where you currently
+          are beside it in muted text. It was a small outlined panel glyph
+          followed by `the conversation` in grey: a different icon, different
+          words, the wrong colour, and nothing about it read as a link at
+          all, so the one way back out of a module looked like a caption.
 
-          <Composer
-            value={conversation.draft}
-            onChange={conversation.setDraft}
-            onSend={() => conversation.send()}
-            busy={conversation.phase !== 'idle'}
-            voiceInput={conversation.voiceInput}
-            insert={ask}
-            onInserted={takeAsk}
-          />
-        </>
-      )}
+          On `/app` there is nowhere to go back TO — that IS the main
+          conversation — so it stays the eyebrow the design keeps there.
+        */}
+        {wsOpen ? (
+          <>
+            <Link
+              href="/app"
+              title="Return to the main conversation with Lelañea"
+              className={cn(
+                'flex min-w-0 flex-none items-center gap-1.5 px-2 py-1',
+                ICON_RADIUS,
+                'text-[13.5px] text-[var(--color-secondary-ink)] no-underline',
+                'hover:bg-[var(--color-secondary-wash)] hover:no-underline',
+                'transition-[background-color] duration-200 ease-[var(--ease-brand)]',
+                'motion-reduce:transition-none',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+                'focus-visible:outline-[var(--color-ring)]'
+              )}
+            >
+              <ArrowLeft size={15} strokeWidth={1.6} className="flex-none" aria-hidden="true" />
+              <span className="truncate">the main conversation</span>
+            </Link>
+            {/*
+              Muted, and quietly absent rather than wrong: a module's label
+              arrives one effect after the route does, and the provider
+              withholds it while the slug and the route disagree.
+            */}
+            {placeLabel(pathname, modulePlace) ? (
+              <span className="text-muted-foreground min-w-0 truncate text-[13px]">
+                on {placeLabel(pathname, modulePlace)}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
+        )}
+      </div>
 
       {/*
-        The strip belongs to the PARKED panel only.
-        
-        It rides on the panel's right edge so that it lands at the screen edge
-        when the panel is translated away. Rendered while the panel is open, it
-        sits on top of the panel's own right-hand 56px instead — covering the end
-        of the copy and the send button, which is what it was doing. The
-        prototype hides it the same way: the base rule is `display: none`, and
-        only `.chat.slim .chat-slim` brings it back.
+        The transcript (`.chat-log`): a SCROLL CONTAINER with the composer
+        below it. The column keeps its three parts whether or not there is
+        anything in the transcript yet; the empty state goes INSIDE it,
+        where a turn will go (t-36). `.inner` is the prototype's 604px
+        measure, shared with the composer so the two line up as one column.
       */}
-      {overlay && chatSlim ? (
-        <Strip
-          onOpen={() => setChatSlim(false)}
-          className="absolute top-0 right-0 bottom-0 h-auto"
-        />
-      ) : null}
+      <Transcript
+        phase={conversation.phase}
+        entries={conversation.entries}
+        live={conversation.live}
+        unreadable={conversation.unreadable}
+        onRevealed={conversation.revealed}
+      />
+
+      <StatusLine generation={conversation.status} />
+
+      <Composer
+        value={conversation.draft}
+        onChange={conversation.setDraft}
+        onSend={() => conversation.send()}
+        busy={conversation.phase !== 'idle'}
+        voiceInput={conversation.voiceInput}
+        insert={ask}
+        onInserted={takeAsk}
+      />
 
       {/*
         The handle is only meaningful when there is a workspace to take width
