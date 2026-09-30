@@ -4,10 +4,12 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { Button } from '@/components/app/ui/button';
+import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import { logger } from '@/lib/logging';
 import {
+  ACKNOWLEDGEMENT_KINDS,
   type AcknowledgementKind,
   type GateStatusJson,
   type KindStatusJson,
@@ -39,21 +41,21 @@ export const STEP_COPY: Record<
 > = {
   disclaimer: {
     title: 'First, what this is — and what it is not.',
-    statement: 'You have read the disclaimer, and you understand what Lelañea is and is not.',
+    statement: 'You understand what Lelañea is and is not.',
     action: 'I have read the disclaimer',
     record: 'Disclaimer acknowledged',
     readAgain: '/disclaimer',
   },
   terms: {
     title: 'Then, the terms.',
-    statement: 'You have read the terms of use, and you agree to them.',
+    statement: 'You agree to the terms of use.',
     action: 'I agree to the terms',
     record: 'Terms acknowledged',
     readAgain: '/terms',
   },
   age_18: {
     title: 'And one thing to confirm.',
-    statement: 'Lelañea is for adults. The terms ask that you are eighteen or over.',
+    statement: 'Lelañea is for adults.',
     action: 'I am eighteen or over',
     record: 'Age confirmed',
     readAgain: null,
@@ -75,23 +77,22 @@ export const AGE_STEP_BODY = [
 const COUNT_WORD: Record<number, string> = { 1: 'one', 2: 'two', 3: 'three' };
 
 /**
- * The opening line, by how many steps this visit actually asks for.
+ * The opening line. One line, and no count in it (copy rule: a count in the
+ * words is wrong the day the steps change).
  *
- * Three is a first visit. Fewer is a return — two of three done last week, or
- * a document that changed since it was agreed to (a version bump leaves the
- * age confirmation standing and asks for the two documents again). Counting
- * from `ACKNOWLEDGEMENT_KINDS` instead said "one of three, two of three" and
- * then stopped, on the one page whose job is to be accurate about what was
- * asked (code review, round 1).
+ * A first visit asks for everything. A return asks for less — two of three
+ * done last week, or a document that changed since it was agreed to (a version
+ * bump leaves the age confirmation standing and asks for the two documents
+ * again) — and says why, because a person who agreed once is entitled to know
+ * why they are asked again.
  */
-export const INTRO: Record<number, string> = {
-  3: 'Three short steps, and each one is recorded — what you agreed to, which version, and when. You can come back to this page to see it.',
-  2: 'Two short steps. Something you agreed to has changed since, or was not finished, so it is asked again — and recorded like the rest: which version, and when.',
-  1: 'One short step, recorded like the rest — what you agreed to, which version, and when.',
-};
+export const INTRO = {
+  first: 'Each step is recorded. You can see the record later.',
+  again: 'Anything that changed, or was not finished, is asked again.',
+} as const;
 
 export function introFor(total: number): string {
-  return INTRO[total] ?? INTRO[3];
+  return total >= ACKNOWLEDGEMENT_KINDS.length ? INTRO.first : INTRO.again;
 }
 
 /**
@@ -158,6 +159,10 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
   const [status, setStatus] = React.useState<GateStatusJson>(initialStatus);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // The cookie banner is fixed over the bottom of the page, where each step's
+  // button is pinned. Padding by its height keeps the button above it (t-117).
+  const clearance = useConsentBannerClearance();
+  const clear = clearance > 0 ? { paddingBottom: clearance } : undefined;
 
   const acknowledge = (kind: AcknowledgementKind): void => {
     setBusy(true);
@@ -176,7 +181,7 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
     // `Begin` for the person who just finished the third step; `Return` for
     // the one who came back to read the record (from the account view), who
     // began some time ago and has nothing to begin.
-    return <Record status={status} justCompleted={!initialStatus.complete} />;
+    return <Record status={status} justCompleted={!initialStatus.complete} style={clear} />;
   }
 
   // `complete` is false exactly when `outstanding` is non-empty.
@@ -195,6 +200,7 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
     // stranding the control at the bottom of an empty viewport.
     <div
       className={cn('flex flex-col', document ? 'h-dvh' : 'min-h-[60dvh]')}
+      style={clear}
       data-testid={`step-${current}`}
     >
       <header className="flex flex-col gap-2 pt-[clamp(28px,5vw,48px)] pb-6">
@@ -257,9 +263,18 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
 export const ACCOUNT_ROUTE = '/app/account';
 
 /** The screen once every kind stands — three facts, their dates, and one way on. */
-function Record({ status, justCompleted }: { status: GateStatusJson; justCompleted: boolean }) {
+function Record({
+  status,
+  justCompleted,
+  style,
+}: {
+  status: GateStatusJson;
+  justCompleted: boolean;
+  /** The cookie banner's clearance, from `BeginView`. */
+  style?: React.CSSProperties;
+}) {
   return (
-    <div className="flex min-h-dvh flex-col gap-10 pt-[clamp(28px,5vw,48px)] pb-20">
+    <div className="flex min-h-dvh flex-col gap-10 pt-[clamp(28px,5vw,48px)] pb-20" style={style}>
       <header className="flex flex-col gap-2">
         <Eyebrow as="p">what you agreed to</Eyebrow>
         <h1 className="brand-display text-3xl text-[var(--color-heading)] sm:text-4xl">

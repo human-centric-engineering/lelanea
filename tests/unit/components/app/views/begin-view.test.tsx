@@ -19,6 +19,12 @@ vi.mock('@/lib/api/client', () => ({ apiClient: { post } }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+// The banner clearance has its own tests (`consent-clearance.test.tsx`); here
+// only that the gate applies what it answers.
+const { clearance } = vi.hoisted(() => ({ clearance: { current: 0 } }));
+vi.mock('@/components/app/ui/consent-clearance', () => ({
+  useConsentBannerClearance: () => clearance.current,
+}));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: React.ComponentPropsWithoutRef<'a'>) => (
     <a href={href} {...rest}>
@@ -71,6 +77,7 @@ function button(name: string): HTMLButtonElement {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearance.current = 0;
 });
 
 describe('BeginView shows ONE step — the first outstanding kind', () => {
@@ -94,7 +101,7 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
     // Progress counts what THIS visit asks for. "three of three" here would
     // promise two steps that never happened.
     expect(screen.getByText(/one of one/)).toBeTruthy();
-    expect(screen.getByText(INTRO[1])).toBeTruthy();
+    expect(screen.getByText(INTRO.again)).toBeTruthy();
     expect(screen.queryByTestId('document-pane')).toBeNull();
     expect(button(STEP_COPY.age_18.action)).toBeTruthy();
     // No document, so the step says what the confirmation is rather than
@@ -104,6 +111,33 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
       expect(screen.getByText(paragraph)).toBeTruthy();
     }
     expect(screen.getByTestId('step-age_18').className).not.toContain('h-dvh');
+  });
+
+  it('opens a first visit with the one-line intro', () => {
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    expect(screen.getByText(INTRO.first)).toBeTruthy();
+  });
+
+  it('keeps every line short, and names no count', () => {
+    const lines = [
+      ...Object.values(INTRO),
+      ...Object.values(STEP_COPY).map((copy) => copy.statement),
+    ];
+    for (const line of lines) {
+      expect(line.length, line).toBeLessThanOrEqual(70);
+      expect(line, line).not.toMatch(/\b(\d+|one|two|three)\b/i);
+    }
+  });
+
+  it('lifts the step clear of the cookie banner while it shows', () => {
+    clearance.current = 132;
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    expect(screen.getByTestId('step-disclaimer').style.paddingBottom).toBe('132px');
+  });
+
+  it('reserves nothing when there is no banner', () => {
+    render(<BeginView initialStatus={status()} documents={DOCUMENTS} />);
+    expect(screen.getByTestId('step-disclaimer').style.paddingBottom).toBe('');
   });
 
   it('gives a document step the fixed frame, so the control never leaves the viewport', () => {
@@ -119,7 +153,7 @@ describe('BeginView shows ONE step — the first outstanding kind', () => {
     render(<BeginView initialStatus={status('age_18')} documents={DOCUMENTS} />);
 
     expect(screen.getByText(/one of two/)).toBeTruthy();
-    expect(screen.getByText(INTRO[2])).toBeTruthy();
+    expect(screen.getByText(INTRO.again)).toBeTruthy();
 
     fireEvent.click(button(STEP_COPY.disclaimer.action));
 
