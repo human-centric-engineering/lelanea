@@ -59,8 +59,17 @@ about the shell is checkable from a screenshot of one width.
 | Class    | Range    | What changes                                                                                                                            |
 | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `small`  | ≤ 900    | Nav becomes a drawer; the panes are a carousel with a pane switch in the topbar; the right rail becomes two full-width keys in a footer |
-| `medium` | 901–1240 | The conversation is an absolutely-positioned panel over the workspace                                                                   |
+| `medium` | 901–1240 | Both panes in flow, the conversation capped at `CHAT_MEDIUM` (360px) and without the resize handle                                      |
 | `large`  | > 1240   | Both panes are in flow, side by side                                                                                                    |
+
+**Medium departs from the prototype** (t-83, owner ruling 30 Sept 2026). The
+design made the conversation a fixed 420px panel riding _over_ the workspace on
+a transform, so the page never reflowed — and a third of the page sat under it,
+cut off mid-sentence, for as long as the conversation was open. It now shares
+the width, and the page reflowing is the accepted price. 360 rather than 420
+because at 901px with the menu slim the two panes have 767px: 420 leaves the page
+~347px (phone-width), 360 leaves ~407. The cap only takes width away, so a
+reader who sized the conversation narrower at `large` keeps their width.
 
 A fourth threshold, **1100**, is not a width class: crossing _inward_ past it
 auto-slims the nav, and crossing back out releases the override. It is keyed on
@@ -112,8 +121,10 @@ One ordered walk rather than independent handlers, which would race. Each rung i
 
 1. the ≤900 nav drawer
 2. a map/resources drawer
-3. at medium, park the conversation panel
-4. un-fold a folded conversation, anywhere but medium
+3. un-fold a folded conversation
+
+Parking the conversation at medium was a rung while it was a panel covering the
+page. Beside the page it covers nothing, so there is nothing for Escape to take.
 
 The account menu sits above rung 1 without being in the walk: Radix dismisses it
 on Escape in the capture phase, and the menu stops the event there so the drawer
@@ -136,7 +147,7 @@ and persisting any of those silently rewrites a choice somebody made on purpose
 
 A press on any control — a link, a button, the separator — does none of it, or
 using the app folds the menu as a side effect. Same guard list `workspace.tsx`
-uses for its re-park gesture. **And nothing at all while a drawer is open**: the
+used for its re-park gesture before t-83. **And nothing at all while a drawer is open**: the
 scrim is a bare `<div>` and a panel's own dead space is not a control either, so
 without that guard dismissing the map by clicking its scrim also collapsed the
 menu behind it. A press inside an `aria-modal` dialog must not reach the shell it
@@ -148,12 +159,19 @@ components each reaching for the other's setter is one rule written twice, and
 the second copy is the one that rots.
 
 "Where they compete" is the rule, not a caveat on it. At `medium` with the
-workspace open the conversation is a fixed 420px panel riding over the work while
-the menu is a 234px column in the flow, so the two eat the same screen from the
-same end. At `large` both panes are in the flow and the reader sizes the
-conversation with the handle; at `small` the menu is a drawer and the panes are a
-carousel. Applied everywhere, this folded the conversation to a 56px strip when
-somebody expanded the menu on a 1600px screen.
+workspace open the menu and the conversation are both columns in the flow, and
+every pixel either takes comes out of the page: at 1100px an expanded 234px menu
+and a 360px conversation leave it ~400px. (Before t-83 the conversation rode
+_over_ the page and the rule was about the two covering it from the same end; it
+survives on the width they take instead.) At `large` there is room for all three
+and the reader sizes the conversation with the handle; at `small` the menu is a
+drawer and the panes are a carousel. Applied everywhere, this folded the
+conversation to a 56px strip when somebody expanded the menu on a 1600px screen.
+
+The two verbs enforce it, and so does **arriving**: a module opened at medium
+with the conversation open — the ordinary case since t-83 — slims the menu, live
+value only. Without that, a reader whose stored menu is expanded would land on
+1150px with all three columns squeezing the page.
 
 It also **releases** the override when the conversation is parked again, rather
 than only setting it. Otherwise the sole thing that ever cleared it was `fit`'s
