@@ -17,6 +17,14 @@
  * Reading through a key would be harmless, but answering one verb and not the
  * other invites a client to treat the read as proof the key can proceed.
  *
+ * **Passing the gate starts the journey (§15, t-102).** When this POST records
+ * the acknowledgement that turns the gate complete, it starts the person's
+ * journey and enters onboarding (`ensureJourneyStarted`). That call never throws
+ * and its outcome never changes the answer: the acknowledgement is the legal
+ * floor and has already been written, so a journey that could not start is
+ * logged and left to the shell layout's backstop on the next entry. A repeat
+ * POST (`created: false`) does not call it at all.
+ *
  * The version is never in the request. `recordAcknowledgement` records
  * against what is currently served, so a client cannot satisfy the gate by
  * naming a version it read last year.
@@ -37,6 +45,7 @@ import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { acknowledgeSchema } from '@/lib/validations/app-acknowledgement';
 import { getGateStatus, recordAcknowledgement } from '@/lib/app/gateway/acknowledgements';
+import { ensureJourneyStarted } from '@/lib/app/journey/start';
 
 /** Both verbs refuse a key for the same reason; one place says it. */
 function assertPersonPresent(session: AuthSession): void {
@@ -79,12 +88,17 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
     const { kind } = await validateRequestBody(request, acknowledgeSchema);
     const result = await recordAcknowledgement(session.user.id, kind);
     const status = await getGateStatus(session.user.id);
+    // Only the write that completed the gate — a repeat recorded nothing, so it
+    // cannot be the transition. The outcome is logged, never returned.
+    const journey =
+      result.created && status.complete ? await ensureJourneyStarted(session.user.id) : undefined;
     log.info('Acknowledgement received', {
       userId: session.user.id,
       kind,
       documentVersion: result.row.documentVersion,
       created: result.created,
       complete: status.complete,
+      ...(journey ? { journey } : {}),
     });
     return successResponse(status, undefined, { status: result.created ? 201 : 200 });
   } catch (error) {

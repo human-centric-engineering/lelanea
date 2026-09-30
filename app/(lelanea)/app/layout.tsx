@@ -9,6 +9,7 @@ import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrapper';
 import { gateRedirectFor } from '@/lib/app/gateway/gate';
+import { ensureJourneyStarted } from '@/lib/app/journey/start';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
 import { BRAND } from '@/lib/brand';
@@ -83,6 +84,16 @@ export const metadata: Metadata = {
  * re-gates by construction: the ledger matches rows against the version
  * required now, so this file has nothing to notice.
  *
+ * ## The journey backstop (§15, t-102)
+ *
+ * Passing the gate starts a person's journey, and the acknowledgement POST is
+ * where that normally happens. Two kinds of person never reach it: accounts
+ * that passed the gate before journeys existed, and anyone whose journey
+ * failed to start after their acknowledgement landed. So once the gate has
+ * passed, this layout makes the same idempotent call. For someone whose
+ * journey has started it is two indexed reads and no write. It never throws,
+ * so a journey that cannot start never keeps anyone out of the shell.
+ *
  * ## `h-dvh`, not `h-screen`
  *
  * `100vh` on mobile Safari is the viewport *without* the browser chrome
@@ -113,6 +124,8 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
   const gate = await gateRedirectFor(session.user);
   if (gate) redirect(gate);
+
+  await ensureJourneyStarted(session.user.id);
 
   return (
     <MaintenanceWrapperWithAdminNotice>
