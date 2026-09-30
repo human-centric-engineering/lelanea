@@ -357,6 +357,10 @@ export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
 
 /** The panel once the selection is here: the card, `to watch`, `to listen`, `to read`. */
 function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }) {
+  // An in-app link closes the panel, as the map's do: the shell keeps the
+  // drawer open across a navigation, so the page it opened would otherwise
+  // sit under the panel (on a phone, entirely).
+  const { closeDrawer } = useShellLayout();
   const { words, wordsAreOwn, videos, audio, articles } = selection;
   return (
     <>
@@ -435,6 +439,7 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
                   {href && !external && isInApp(href) ? (
                     <Link
                       href={href}
+                      onClick={closeDrawer}
                       title={`${article.title} · ${article.readingTime}`}
                       className={cn(rowClass, ROW_LINK_CLASS)}
                     >
@@ -475,6 +480,7 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
  * quietly and retries on the next open.
  */
 function ReadsSection({ load }: { load: ReadsLoad }) {
+  const { closeDrawer } = useShellLayout();
   if (load.status === 'idle' || load.status === 'loading') return null;
   return (
     <section aria-labelledby="resources-about" className="flex flex-col gap-2.5">
@@ -489,7 +495,11 @@ function ReadsSection({ load }: { load: ReadsLoad }) {
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {load.reads.map((read) => (
             <li key={read.id}>
-              <Link href={readPath(read.id)} className={cn(ROW_CLASS, ROW_LINK_CLASS)}>
+              <Link
+                href={readPath(read.id)}
+                onClick={closeDrawer}
+                className={cn(ROW_CLASS, ROW_LINK_CLASS)}
+              >
                 <FileText
                   size={16}
                   strokeWidth={1.5}

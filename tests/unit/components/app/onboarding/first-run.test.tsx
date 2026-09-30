@@ -38,7 +38,11 @@ vi.mock('@/components/app/ui/consent-clearance', () => ({
   useConsentBannerClearance: () => clearance.current,
 }));
 
-import { FIRST_RUN_COPY, FIRST_RUN_ROUTE } from '@/components/app/onboarding/first-run';
+import {
+  FIRST_RUN_COPY,
+  FIRST_RUN_ROUTE,
+  forgetPassedBeats,
+} from '@/components/app/onboarding/first-run';
 import { FirstRunView } from '@/components/app/onboarding/first-run-view';
 import * as sections from '@/lib/app/content/sections';
 import { FIRST_RUN_BEATS, type FirstRunBeat } from '@/lib/app/onboarding/first-run';
@@ -58,6 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   post.mockResolvedValue({ recorded: true });
   clearance.current = 0;
+  forgetPassedBeats();
 });
 
 describe('the Initiation, by name', () => {
@@ -138,6 +143,18 @@ describe('the reads, in sequence', () => {
     const { container } = await renderView('Maya', ['read:the_lineage_of_lelanea']);
     await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.skip }));
     expect(container.firstChild).toBeNull();
+  });
+
+  it('does not replay what was passed when /app is shown again from the router cache', async () => {
+    const user = userEvent.setup();
+    const first = await renderView('Maya', ['initiation', 'read:the_mission']);
+    await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.continue }));
+    first.unmount();
+
+    // Back to `/app`: the same server output as before, remounted.
+    await renderView('Maya', ['initiation', 'read:the_mission']);
+    expect(screen.queryByText('Welcome, Maya.')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'The Mission' })).toBeInTheDocument();
   });
 
   it('moves on even when the beat does not land', async () => {

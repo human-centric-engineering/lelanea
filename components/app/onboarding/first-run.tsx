@@ -42,8 +42,27 @@ export interface ReadStep {
 
 export type FirstRunStep = InitiationStep | ReadStep;
 
+/**
+ * The beats moved past since this page loaded.
+ *
+ * `/app`'s server output is the list of steps still pending when it rendered,
+ * and the stepper's place in it is client state. So a Back navigation, which
+ * restores `/app` from the router's cache, remounted the stepper at the start
+ * of a list the person had finished, and so did coming back before the
+ * records landed (`/code-review` round 2). Held at module scope, which lives
+ * as long as the page, so a remount skips what is behind the person whatever
+ * the server last said. A full reload clears it and reads the ledger again.
+ */
+const passed = new Set<FirstRunBeat>();
+
+/** For tests: forget what this page has moved past. */
+export function forgetPassedBeats(): void {
+  passed.clear();
+}
+
 /** Tell the server the person moved past `beat`. Never waited on, never retried. */
 function record(beat: FirstRunBeat): void {
+  passed.add(beat);
   apiClient.post(FIRST_RUN_ROUTE, { body: { beat } }).catch((caught: unknown) => {
     // The person has moved on; nothing here should hold them. A beat that did
     // not land is replayed once on their next entry, which is the remedy.
@@ -67,7 +86,10 @@ function record(beat: FirstRunBeat): void {
  * step's heading takes focus, which also brings it to the top of the scroll
  * container. Not on the first render: nothing has moved yet.
  */
-export function FirstRun({ steps }: { steps: readonly FirstRunStep[] }) {
+export function FirstRun({ steps: fromServer }: { steps: readonly FirstRunStep[] }) {
+  // Fixed for this mount: filtering on every render would shift the list
+  // under `index` as each beat is passed.
+  const [steps] = React.useState(() => fromServer.filter((step) => !passed.has(step.beat)));
   const [index, setIndex] = React.useState(0);
   const [opened, setOpened] = React.useState(false);
   const heading = React.useRef<HTMLHeadingElement>(null);

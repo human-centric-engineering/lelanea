@@ -883,6 +883,26 @@ describe('the reads, always there', () => {
     expect(within(await readsSection()).getAllByRole('link')).toHaveLength(ONBOARDING_READS.length);
   });
 
+  it('closes when a read is opened, so the page is not left under it', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+    const [first] = within(await readsSection()).getAllByRole('link');
+    const dialog = panel();
+    await userEvent.click(first);
+    // Closed: the panel stays mounted to animate, inert and off screen.
+    expect(dialog).toHaveAttribute('inert');
+  });
+
+  it('closes when an article opens in the shell, too', async () => {
+    serve({ values: fullSelection() }, documentIndex());
+    renderDrawers();
+    await openResources();
+    const dialog = panel();
+    await userEvent.click(await within(dialog).findByRole('link', { name: /The mission/ }));
+    expect(dialog).toHaveAttribute('inert');
+  });
+
   it('asks for the titles once, not on every open', async () => {
     serve({ values: fullSelection() }, documentIndex());
     renderDrawers();
