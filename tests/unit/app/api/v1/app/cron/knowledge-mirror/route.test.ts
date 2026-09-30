@@ -6,10 +6,12 @@
  * configured nothing may start one at all. The reconcile itself is mocked here;
  * its behaviour is `tests/unit/lib/app/content/knowledge-mirror.test.ts`.
  *
- * It runs once per active org (t-115), through the real `forEachOrg`: only the
- * org table's read is stubbed, so the ACTIVE filter and the per-org scope are
- * the platform's own. Each pass records the org it ran in, so a test can see
- * the reconcile really ran inside each org.
+ * At `multi` it runs once per active org (t-115), through the platform's own
+ * `listActiveOrgIds` and `runAsOrg`: only the org table's read is stubbed, so
+ * the ACTIVE filter and the per-org scope are real. At `single` it runs for
+ * the install org alone. Each pass records the org it ran in, so a test can
+ * see the reconcile really ran inside that org. The clock is pinned to a day
+ * whose rotation offset is 0, so the starting org is known.
  *
  * @see app/api/v1/app/cron/knowledge-mirror/route.ts
  */
@@ -23,6 +25,20 @@ const { reconcileKnowledgeMirror, orgFindMany, ranIn } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/app/content/knowledge-mirror', () => ({ reconcileKnowledgeMirror }));
 vi.mock('@/lib/db/client', () => ({ prisma: { org: { findMany: orgFindMany } } }));
+const mockEnv = vi.hoisted(() => ({ TENANCY_MODE: 'multi' }));
+vi.mock('@/lib/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/env')>();
+  return {
+    ...actual,
+    env: new Proxy(actual.env, {
+      get: (target, key) =>
+        key === 'TENANCY_MODE' ? mockEnv.TENANCY_MODE : Reflect.get(target, key),
+    }),
+  };
+});
+
+/** A day whose index is even, so two orgs rotate by 0 and start at the oldest. */
+const DAY_ZERO = Date.UTC(1970, 0, 1, 4, 17);
 
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v1/app/cron/knowledge-mirror/route';
@@ -50,6 +66,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('CRON_SECRET', SECRET);
   orgFindMany.mockResolvedValue([{ id: 'install' }, { id: 'org-b' }]);
+  mockEnv.TENANCY_MODE = 'multi';
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(DAY_ZERO);
   ranIn.length = 0;
   reconcileKnowledgeMirror.mockImplementation(() => {
     ranIn.push(getTenantContext()?.orgId ?? 'none');
@@ -78,6 +97,24 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
         ],
       },
     });
+  });
+
+  it('starts at a different org each day, so no org is always last', async () => {
+    vi.setSystemTime(DAY_ZERO + 86_400_000);
+
+    await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
+
+    expect(ranIn).toEqual(['org-b', 'install']);
+  });
+
+  it('at single, reconciles the install org alone and reads no org list', async () => {
+    mockEnv.TENANCY_MODE = 'single';
+
+    const response = await GET(createRequest({ authorization: `Bearer ${SECRET}` }));
+
+    expect(response.status).toBe(200);
+    expect(ranIn).toEqual(['install']);
+    expect(orgFindMany).not.toHaveBeenCalled();
   });
 
   it('reads only ACTIVE orgs, oldest first', async () => {
@@ -110,11 +147,10 @@ describe('GET /api/v1/app/cron/knowledge-mirror', () => {
   });
 
   it('starts no org once its time is spent, and answers 500 naming those it left', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
     reconcileKnowledgeMirror.mockImplementation(() => {
       ranIn.push(getTenantContext()?.orgId ?? 'none');
       // The first org takes the whole budget.
-      vi.setSystemTime(Date.now() + 46_000);
+      vi.setSystemTime(Date.now() + 31_000);
       return Promise.resolve(inStep);
     });
 
