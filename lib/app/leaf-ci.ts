@@ -206,8 +206,9 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'fails when an app_* model with orgId is missing from ' +
       'APP_ORG_OWNED_TABLES, whose CHECK the drift check probes: a table ' +
       'without it accepts rows no org can see and no per-org key catches ' +
-      '(t-115). It reads prisma/schema off disk, so the branch that adds a ' +
-      'model reaches it through no module graph.',
+      '(t-115). It reads the tenant-owned roster from the generated client ' +
+      '(run prisma generate after a schema edit), which no module graph ' +
+      'from the branch that adds a model reaches.',
   },
 ];
 

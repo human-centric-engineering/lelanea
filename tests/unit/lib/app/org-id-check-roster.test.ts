@@ -35,8 +35,12 @@ async function orgOwnedAppTables(): Promise<string[]> {
   const { PrismaClient } = await import('@prisma/client');
   const pool = new Pool({ connectionString: 'postgresql://never:connects@127.0.0.1:1/never' });
   const client = new PrismaClient({ adapter: new PrismaPg(pool) });
-  // Every table name, mapped or not, so a model with no @@map is not skipped.
-  return [...tenantOwnedModels(client).values()].filter((table) => table.startsWith('app_')).sort();
+  // Ours by model name as well as by table: a leaf model with no @@map has a
+  // table named after the model (`AppNewThing`), and must not slip past.
+  return [...tenantOwnedModels(client)]
+    .filter(([model, table]) => model.startsWith('App') || table.startsWith('app_'))
+    .map(([, table]) => table)
+    .sort();
 }
 
 describe('APP_ORG_OWNED_TABLES', () => {
