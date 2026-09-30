@@ -15,6 +15,9 @@ with it. What exists so far:
 | The Initiation, then the reads        | `components/app/onboarding/first-run*.tsx`   | t-103 |
 | What has been shown, per person       | `lib/app/onboarding/first-run*.ts`           | t-103 |
 | The reads in the shell                | `app/(lelanea)/app/read/[id]/page.tsx`       | t-103 |
+| The questions, asked and resumable    | `components/app/onboarding/discovery*.tsx`   | t-104 |
+| Answers, skips, where a person is     | `lib/app/onboarding/discovery*.ts`           | t-104 |
+| The write route                       | `app/api/v1/app/onboarding/discovery`        | t-104 |
 
 ## The journey starts when the gate passes
 
@@ -36,8 +39,7 @@ On `/app`, a person who has not been through it meets the Initiation, read
 with their first name, and then each read in turn: the heart behind Lelañea,
 the mission, the creator, the lineage. Each read is offered, and can be read
 there or skipped. It covers the conversation until the last beat is behind
-them, then renders nothing. The discovery questions (t-104) will follow the
-reads.
+them, then hands on to the discovery questions (below).
 
 - **The name** goes through `firstNameFrom` (`lib/app/onboarding/first-name.ts`),
   the rule the welcome email shares: a blank name, or the platform's `'User'`
@@ -65,6 +67,65 @@ reads.
 - **The cookie banner** is fixed over the bottom of the page. The first run
   pads itself clear of it with `useConsentBannerClearance`, as the gate does
   (t-117).
+
+## The discovery questions: asked, then offered, and always in Onboarding (t-104)
+
+The source asks that the questions not be rushed (`pacing.rushDiscouraged`,
+`allowPartialCompletion`), so they are answered over as many sittings as the
+person wants. Owner ruling, 30 Sept 2026, on where they live:
+
+- **The first sitting is on `/app`**, straight after the last read: the
+  preamble, a line saying they can break away any time and come back through
+  Onboarding on the map, then each question in turn. **Leave for now** hands
+  back the conversation.
+- **A return to `/app` offers the next question; it does not ask it.** A
+  card shows the question with **Answer it** and **Not now**. Not now leaves
+  the conversation for the rest of that page's life, and the next visit
+  offers again.
+- **Onboarding's own area (`/app/modules/onboarding`) always has the whole
+  set**, whatever `/app` is doing: continue, pick up a skipped question,
+  revise an answer. The module the set names gets the questions in place of
+  its placeholder. Content that belongs to a module is visible in its area.
+- **When every question is answered or skipped, `/app` shows nothing more.**
+  Skipped questions wait in Onboarding's area; they are not pushed again.
+
+**How it is held.** Nothing lives only in the browser:
+
+- **An answer** is the head value of its question's slot, appended through
+  Daybreak's `appendSlotValue` with provenance `{ moduleSlug, nodeKey:
+'onboarding' }`, confidence 10, source `direct`. A revision appends a
+  version, and an identical answer writes nothing. A save that fails says so
+  and keeps the text.
+- **A branching question** (q04, q25: a `conditionalFollowUp`) asks yes or no
+  first, then the follow-up for that answer. The value is written `Yes. <words>`
+  or `No. <words>`, so it reads whole beside the question to her and to the
+  person. `readAnswer` parses the branch back to prefill a revision.
+- **A skip** is a beat on the onboarding node, `discovery_skipped_at:<id>`,
+  one flat key per question like the first run's. The question stays
+  unanswered, never blank. **A core question cannot be skipped**: the surface
+  offers no Skip, and the route refuses one.
+- **The first sitting ends** (`discovery_started_at`, recorded once) when the
+  person leaves. Any answer or skip also counts as started.
+- **Where a person resumes** is the first question in the **current** set
+  that is neither answered nor skipped (owner ruling, 30 Sept 2026). It is
+  computed from the slot heads and the node's `progress` on every render, so a
+  reload, a week away, or a change to the Core Set switch lands on the right
+  question. Answers outside the current set are kept, just not asked.
+
+**The route** (`POST /api/v1/app/onboarding/discovery`, `withAuth`, API keys
+refused) takes `answer`, `skip` or `leave`. It refuses a question outside the
+caller's current set, an empty answer (skip it instead), an answer over
+`MAX_ANSWER_LENGTH`, a missing branch on a branching question, and a branch on
+one that does not branch. `GET` answers the caller's whole state. Answers are
+never logged.
+
+**A skip or leave with no journey yet** answers `recorded: false`. The shell's
+`ensureJourneyStarted` starts the journey on the next entry, and the skipped
+question comes back once. Answers need no journey.
+
+**Proved on a real database** by `npm run smoke:app-onboarding`: an answer,
+its revision as version 2 with onboarding provenance, a skip and a leave on
+the node, and a fresh read resuming after them.
 
 ## A discovery answer is a data slot
 
@@ -167,8 +228,8 @@ its own.
 
 Each question has a weight from 0 to 100. **A question weighted 100 is core:
 it is always asked and cannot be skipped** (owner ruling, 25 Sept 2026).
-`getDiscoverySet()` marks each question `core`. The questions surface (t-104)
-offers no way past a core question.
+`getDiscoverySet()` marks each question `core`. The questions surface offers
+no way past a core question, and the route refuses a skip of one.
 
 **Core Set only** is the Onboarding module's own config, not a column of ours:
 `discoveryConfigSchema` (`lib/app/onboarding/discovery-config.ts`) is the
@@ -245,3 +306,7 @@ collection. The next question save, import or boot repairs either.
 - **Making them global slots again**, or adding a Core Set column to our
   tables. They are Onboarding's: its slots and its config.
 - **Using `priorityWeight` to mean core.** It is Daybreak's sequencing field.
+- **Keeping a person's place in browser storage.** Where they are is derived
+  from their answers and the node's beats, which survive a new device.
+- **Writing an empty value for a skipped question.** A skip leaves it
+  unanswered; an empty value would read as an answer of nothing.
