@@ -310,9 +310,9 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
    * The two halves are separate on purpose. Handing over the words is the
    * cross-pane channel; making the conversation visible is layout, and which
    * gesture that takes depends on the width — below 900px the panes are a
-   * carousel and the conversation is a pane you switch to, at `medium` it is a
-   * panel parked off to the side, and above that it is already on screen and
-   * neither call does anything.
+   * carousel and the conversation is a pane you switch to; above that it sits
+   * beside the page, and the only thing to undo is a fold — the reader's own,
+   * or the one expanding the menu makes at `medium`.
    */
   const ask = useCallback(
     (text: string) => {

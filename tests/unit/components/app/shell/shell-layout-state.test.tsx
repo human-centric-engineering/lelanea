@@ -422,20 +422,11 @@ describe('Escape goes through the verbs, not the setters beneath them', () => {
   // having added them: the same user-visible action then behaves one way from
   // the button and another from the key, and Escape is the rung that can least
   // afford it, being keyboard-only.
-  const nav = () => document.querySelector('nav[aria-label="Main"]');
-
-  it('leaves the menu override alone when Escape un-folds the conversation at large', async () => {
-    // At large the un-fold rung runs, and `setChatSlim` must not touch the menu
-    // there — the same answer the strip gives.
-    renderShell('large');
-    handle().focus();
-    await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
-    expect(strip()).not.toBeNull();
-
-    await userEvent.keyboard('{Escape}');
-    expect(strip()).toBeNull();
-    expect(nav()?.getAttribute('data-slim')).toBe('false');
-  });
+  //
+  // Only `closeNav`'s half is reachable from Escape now. Since t-83 no rung
+  // calls `setChatSlim` where its second half runs (`medium` + workspace):
+  // there, Escape neither parks nor un-folds the conversation. See 'the
+  // Escape chain' for that.
 
   it('hands focus back to the burger when Escape closes the ≤900px drawer', async () => {
     // The panel goes `inert` the instant it closes, so focus left on it drops

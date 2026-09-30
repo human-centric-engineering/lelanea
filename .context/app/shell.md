@@ -133,7 +133,7 @@ The account menu sits above rung 1 without being in the walk: Radix dismisses it
 on Escape in the capture phase, and the menu stops the event there so the drawer
 under it stays open. See [the account menu](#the-account-menu).
 
-## The left menu opens and closes five ways, and two of them persist
+## The left menu opens and closes six ways, and two of them persist
 
 | Gesture                          | Direction | Where                | Writes `lelanea.nav.slim` |
 | -------------------------------- | --------- | -------------------- | ------------------------- |
@@ -142,6 +142,7 @@ under it stays open. See [the account menu](#the-account-menu).
 | a press out in the panes         | closes    | above 900px          | no                        |
 | Ask Lelañea opening / parking    | both      | `medium` + workspace | no                        |
 | crossing 1100px inward           | closes    | —                    | no                        |
+| a conversation open at `medium`  | closes    | `medium` + workspace | no                        |
 
 The split is about **what the press was aimed at**. The first two are a reader
 working the menu; the rest are the layout getting out of the way for a moment,
