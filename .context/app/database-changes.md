@@ -45,6 +45,13 @@ is how every **existing** one does. A change usually needs both.
 - **Say who changed it.** Where the history has an origin or editor column,
   use the operator value (for example `origin = 'seed'`, `editorId` null), not
   a person.
+- **Name the org on every row you insert.** A migration is raw SQL, which the
+  tenancy client never sees, so nothing stamps `orgId`, and every `app_*`
+  table refuses a row without one (t-115). Insert one row per org that needs
+  it (`SELECT … FROM "org"`), or `'install'` where only the install org
+  holds the data. An `UPDATE` keeps the row's org and needs nothing. Open the
+  file with `SELECT set_config('app.bypass_rls', 'on', true);`, since a
+  database with the policies enabled shows its owner no rows otherwise.
 - **Apply it with `npm run db:migrate:deploy`**, then run
   `npm run db:drift-check`. A data-only migration has no schema diff, so there
   is nothing for `migrate dev` to generate.
@@ -123,12 +130,43 @@ migrations dated 2026-10-03 are the worked example.
   `age_18`: a second org asks again, because each org keeps its own record
   and cannot read another's.
   `app_knowledge_designation` is unique on `(orgId, sourceKey)`, so each org's
-  knowledge mirror can hold `foundational:the_mission` for itself. The key is
-  all this changed: the mirror cron runs with no org, which reconciles the
-  install org at `single` and fails at `multi`, so there only a documents
-  write in an org reconciles that org's mirror. A new unique
-  key on an `app_*` table starts with `orgId`, or it fails the second org at
-  `multi`.
+  knowledge mirror holds `foundational:the_mission` for itself. The mirror
+  cron (`/api/v1/app/cron/knowledge-mirror`, t-115) reconciles the install org
+  at `single`, and at `multi` every active org, each inside its own scope; see
+  [`content.md`](./content.md) for its time budget and daily rotation. A new unique key on an
+  `app_*` table starts with `orgId`, or it fails the second org at `multi`.
+- **Every row names its org, and the database refuses one that does not**
+  (t-115, `20261004100300_app_org_id_required`). `orgId` stays nullable in
+  the schema, as Sunrise's own columns do, so Prisma's types are unchanged,
+  but every tenant-owned `app_*` table carries
+  `CHECK ("orgId" IS NOT NULL)`, named `<table>_orgId_not_null`. A row with no
+  org would belong to nobody: no org's screens would show it, and no per-org
+  key would catch a duplicate of it, because Postgres treats two NULLs as
+  different. The tenancy client stamps every create; a create under
+  `runAsSystem` and raw SQL (a migration included) go unstamped, so either now
+  fails loudly unless it names the org. Prisma cannot model a CHECK, so each is pinned by a drift
+  probe over `APP_ORG_OWNED_TABLES` (`lib/app/leaf-db-drift.ts`). That list
+  is written out, and `tests/unit/lib/app/org-id-check-roster.test.ts`
+  (always-run) pins it to the tenant-owned roster: a new `app_*` model fails
+  there until it is listed, then `db:drift-check` fails until its migration
+  adds the CHECK. Adding a model means both.
+- **Lookups rely on the policies, not on an explicit org** (t-115, the
+  owner's ruling). Leaf code reads by name inside an org, as Sunrise and
+  Daybreak do, and names the org explicitly only where Prisma needs it: a
+  `findUnique` or `upsert` on a per-org compound key (`orgId_slug`, and the
+  like), or a write that must pair with one. Two orgs are isolated only at
+  `TENANCY_MODE=multi` with `db:tenancy:enable` run.
+  - **So a second org is never hosted at `single`.** Sunrise's lifecycle API
+    will create one there, and a session can act in it, but nothing scopes a
+    read at `single`: an editor in the second org could edit the install
+    org's copy of a document, and its members could read the install org's
+    content. Explicit org filters in our code would not make that safe,
+    because the platform's conversations, agents and knowledge base would
+    still mix. Switch to `multi` first.
+  - **An explicit org filter is not a fix for a leak at `multi`.** If a read
+    crosses orgs there, a policy is missing or off, and the fix is the
+    policy: `db:drift-check` as the app role, and
+    `smoke:app-per-org-content`, show which.
 
 ### A generated id must be the shape its readers expect
 

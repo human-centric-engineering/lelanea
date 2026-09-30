@@ -40,6 +40,7 @@ vi.mock('@/lib/db/client', () => ({
 
 import { registerAppDriftProbes } from '@/lib/app/db-drift';
 import { getAppDriftProbes, resetAppDriftProbes } from '@/lib/db/drift-probes';
+import { APP_ORG_OWNED_TABLES } from '@/lib/app/leaf-db-drift';
 
 describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
   beforeEach(() => {
@@ -298,6 +299,35 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
     registerAppDriftProbes();
     const probe = getAppDriftProbes().find((p) => p.table === 'app_slot_definition_revision');
 
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
+  });
+
+  /**
+   * t-115 — every `app_*` table with `orgId` refuses a row with no org, by a
+   * CHECK Prisma cannot model. That the list matches the schema is
+   * `org-id-check-roster.test.ts`; this is that each listed table is probed.
+   */
+  it('registers an orgId CHECK probe for every listed table', () => {
+    registerAppDriftProbes();
+    const checked = getAppDriftProbes()
+      .filter((p) => p.kind === 'CHECK constraint' && p.name.includes('_orgId_not_null'))
+      .map((p) => p.table);
+
+    expect(checked).toEqual([...APP_ORG_OWNED_TABLES]);
+  });
+
+  it('passes on the CHECK the migration writes, and FAILS when it is gone', async () => {
+    registerAppDriftProbes();
+    const probe = getAppDriftProbes().find(
+      (p) => p.table === 'app_turn' && p.kind === 'CHECK constraint'
+    );
+
+    queryRaw.mockResolvedValueOnce([{ def: 'CHECK (("orgId" IS NOT NULL))' }]);
+    await expect(probe?.probe()).resolves.toMatchObject({ ok: true });
+    // It asks for the name the migration writes, not a near miss.
+    expect(queryRaw.mock.calls[0]).toContain('app_turn_orgId_not_null');
+
+    queryRaw.mockResolvedValueOnce([]);
     await expect(probe?.probe()).resolves.toMatchObject({ ok: false });
   });
 
