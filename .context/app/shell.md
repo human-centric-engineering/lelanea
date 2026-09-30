@@ -146,8 +146,7 @@ and persisting any of those silently rewrites a choice somebody made on purpose
 (divergence Row 2's rule, which now has three callers rather than one).
 
 A press on any control — a link, a button, the separator — does none of it, or
-using the app folds the menu as a side effect. Same guard list `workspace.tsx`
-used for its re-park gesture before t-83. **And nothing at all while a drawer is open**: the
+using the app folds the menu as a side effect. **And nothing at all while a drawer is open**: the
 scrim is a bare `<div>` and a panel's own dead space is not a control either, so
 without that guard dismissing the map by clicking its scrim also collapsed the
 menu behind it. A press inside an `aria-modal` dialog must not reach the shell it
