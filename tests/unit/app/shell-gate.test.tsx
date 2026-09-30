@@ -58,6 +58,10 @@ vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/app', redirect }));
 vi.mock('@/lib/auth/utils', () => ({ getServerSession: vi.fn(async () => session.current) }));
 vi.mock('@/lib/auth/clear-session', () => ({ clearInvalidSession }));
+// The journey start's own behaviour is `tests/unit/lib/app/journey/start.test.ts`;
+// here only that the layout calls it once the gate has passed (t-102).
+const { ensureJourneyStarted } = vi.hoisted(() => ({ ensureJourneyStarted: vi.fn() }));
+vi.mock('@/lib/app/journey/start', () => ({ ensureJourneyStarted }));
 
 import ShellLayout from '@/app/(lelanea)/app/layout';
 import { AGE_18_VERSION } from '@/lib/app/gateway/acknowledgements';
@@ -93,6 +97,7 @@ beforeEach(() => {
   env.REQUIRE_EMAIL_VERIFICATION = false;
   env.NODE_ENV = 'test';
   findMany.mockResolvedValue([]);
+  ensureJourneyStarted.mockResolvedValue('already');
   session.current = {
     user: {
       id: 'u1',
@@ -161,5 +166,33 @@ describe('the shell layout gates on entry', () => {
     session.current = null;
     await expect(enter()).rejects.toThrow('cleared');
     expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('the journey backstop (§15 t-102)', () => {
+  it('starts the journey of a person already past the gate, on entry', async () => {
+    // An account that passed the gate before journeys existed never posts an
+    // acknowledgement again; entering the shell is what starts theirs.
+    findMany.mockResolvedValue(ALL_CURRENT);
+    ensureJourneyStarted.mockResolvedValue('started');
+
+    await expect(enter()).resolves.toBeNull();
+    expect(ensureJourneyStarted).toHaveBeenCalledTimes(1);
+    expect(ensureJourneyStarted).toHaveBeenCalledWith('u1');
+  });
+
+  it('does not start a journey for someone the gate sends away', async () => {
+    findMany.mockResolvedValue([row('disclaimer', VERSION)]);
+
+    await expect(enter()).resolves.toBe('/app/begin');
+    expect(ensureJourneyStarted).not.toHaveBeenCalled();
+  });
+
+  it('lets the person in when the journey could not start', async () => {
+    findMany.mockResolvedValue(ALL_CURRENT);
+    ensureJourneyStarted.mockResolvedValue('failed');
+
+    await expect(enter()).resolves.toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });
