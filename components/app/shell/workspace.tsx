@@ -78,20 +78,12 @@ const TONE_WASH: React.CSSProperties = {
 };
 
 export function Workspace({ children }: { children: React.ReactNode }) {
-  const { width, wsOpen, pane, chatSlim, setChatSlim } = useShellLayout();
+  const { width, wsOpen, pane } = useShellLayout();
 
   if (!wsOpen) return null;
 
   const carousel = width === 'small';
   const carouselHidden = carousel && pane !== 'ws';
-  /*
-   * On a tablet the conversation is an absolutely-positioned panel over this
-   * surface, so the surface has to clear the strip that stays visible when the
-   * panel is parked — a fixed margin, never a width that changes. The whole
-   * point of the transform over there is that nothing here reflows when the
-   * conversation opens and closes.
-   */
-  const overlay = width === 'medium';
 
   return (
     <section
@@ -108,36 +100,6 @@ export function Workspace({ children }: { children: React.ReactNode }) {
        */
       inert={carouselHidden}
       data-pane="ws"
-      // On a tablet, clicking the surface re-parks the conversation — the
-      // prototype's own gesture. Above and below that width the two panes are
-      // both genuinely on screen, so there is nothing to re-park.
-      onClick={
-        width === 'medium' && !chatSlim
-          ? (event) => {
-              // Only a click on the surface ITSELF. Without this the handler
-              // fires for anything that bubbles out of the body — and from t-11
-              // that body is full of buttons, links and checkboxes, every one of
-              // which would collapse the conversation as a side effect of being
-              // used.
-              // "Not from something interactive", NOT "only the section
-              // itself". The tighter guard I added last round was wrong in the
-              // direction that matters: the body fills the surface, so almost
-              // every click lands on a child and the gesture stopped working —
-              // leaving Escape as the only way to park the conversation.
-              //
-              // What the guard is actually for is t-11's views, where a click on
-              // a button or a link should do that thing and not also collapse a
-              // pane on the other side of the screen.
-              if (
-                event.target instanceof Element &&
-                event.target.closest('a, button, input, select, textarea, [role="button"]')
-              ) {
-                return;
-              }
-              setChatSlim(true);
-            }
-          : undefined
-      }
       className={cn(
         'bg-muted relative flex min-w-0 flex-1 flex-col overflow-hidden',
         // TRANSPARENT when a view sets no tone, which is the prototype's own
@@ -147,9 +109,6 @@ export function Workspace({ children }: { children: React.ReactNode }) {
         // width. Below 900px it lands beside the pane switch's accent underline
         // and the two read as one broken two-colour line, which is how it was
         // spotted; above 900px it was simply a stray line nobody asked for.
-        //
-        // The tablet slide-over keeps an inked fallback on purpose: there it is
-        // a panel edge over other content, not a band inside a surface.
         //
         // NOT AT SMALL, and this is the second time this line has had to be
         // answered. Below 900px the topbar carries the pane switch, whose
@@ -163,7 +122,6 @@ export function Workspace({ children }: { children: React.ReactNode }) {
         // is not left untinted — it just stops competing with the control
         // directly above it.
         !carousel && 'border-t-[3px] border-t-[var(--tone,transparent)]',
-        overlay && 'ml-14',
         carousel && 'absolute inset-0 w-full flex-none',
         carousel && 'transition-transform duration-[340ms] ease-[var(--ease-brand)]',
         carousel && 'motion-reduce:transition-none',

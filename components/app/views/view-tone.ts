@@ -17,14 +17,13 @@ import { USAGE_PAGE } from '@/lib/app/usage/usage-view';
  * The prototype sets `--tone` from inside each render function, because its
  * views are functions that mutate one surface. Here a view is a route, and the
  * tone has to be set ABOVE the view: custom properties inherit downward, so a
- * `--tone` set on the page could never reach the band across the workspace head
- * or the edge of the conversation panel when it slides over.
+ * `--tone` set on the page could never reach the band across the workspace head.
  *
- * `Panes` is where it goes, and the distinction cost a round: the workspace is
- * above the band but is a SIBLING of the conversation, so publishing it there
- * left the panel edge on one side of the screen permanently teal while the band
- * on the other was green. `Panes` is the common ancestor of both, and the only
- * thing it knows about the view is its path — so the path is the key.
+ * `Panes` is where it goes: the common ancestor of both panes, so a reader on
+ * either side resolves the same value. (It once had one on the conversation's
+ * side — the tablet slide-over's panel edge, removed in t-83 — and publishing
+ * from the workspace, its sibling, left that edge permanently teal.) The only
+ * thing `Panes` knows about the view is its path — so the path is the key.
  *
  * A destination with no entry gets no tone at all, and the band stays
  * transparent. That is `/app` itself: the clean conversation belongs to no part

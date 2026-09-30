@@ -17,6 +17,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
+import { CHAT_DEFAULT, CHAT_MEDIUM } from '@/components/app/shell/use-shell-layout';
 import { Workspace } from '@/components/app/shell/workspace';
 import { renderInShell, type WidthName } from '@/tests/unit/components/app/shell/render-shell';
 
@@ -89,59 +90,16 @@ describe('the surface body scrolls, not the frame', () => {
   });
 });
 
-describe('the tablet re-parks the conversation', () => {
-  it('parks it when the surface is clicked at medium', async () => {
+describe('a click on the page never parks the conversation', () => {
+  it('leaves the conversation open when the surface is clicked at medium', async () => {
+    // The re-park gesture belonged to the slide-over, where the conversation
+    // covered the page and a click on the page meant "get out of the way".
+    // Beside the page (t-83) it covers nothing, so a click on the page is a
+    // click on the page — collapsing a pane over it would be a side effect.
     renderWorkspace('medium');
-    const chat = () => document.querySelector('[data-pane="chat"]')!;
-
-    // Un-park first, so this tests the click rather than the initial state.
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(chat().className).toContain('translate-x-0');
-
-    // The surface ITSELF, not something inside it.
-    await userEvent.click(document.querySelector('[data-pane="ws"]')!);
-    expect(chat().className).toContain('-translate-x-[364px]');
-  });
-
-  it('parks on a click anywhere in the body that is not a control', async () => {
-    // The guard has to be "not from something interactive", not "only the
-    // section itself": the body FILLS the surface, so a tighter rule meant
-    // almost every click landed on a child and the gesture stopped working
-    // altogether — leaving Escape as the only way to park the conversation.
-    renderWorkspace('medium');
-    const chat = () => document.querySelector('[data-pane="chat"]')!;
-
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(chat().className).toContain('translate-x-0');
 
     await userEvent.click(screen.getByText('the module'));
-    expect(chat().className).toContain('-translate-x-[364px]');
-  });
-
-  it('does not park when a CONTROL inside the surface is used', async () => {
-    // What the guard is actually for: from t-11 the body is full of buttons and
-    // links, and using one should do that thing without also collapsing a pane
-    // on the other side of the screen.
-    mockPathname.current = '/app/journey';
-    renderInShell(
-      <>
-        <ConversationPane />
-        <Workspace>
-          <button type="button">a control in a view</button>
-        </Workspace>
-      </>,
-      'medium'
-    );
-    const chat = () => document.querySelector('[data-pane="chat"]')!;
-
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    await userEvent.click(screen.getByRole('button', { name: 'a control in a view' }));
-    expect(chat().className).toContain('translate-x-0');
-  });
-
-  it('does nothing on a click at large, where both panes are on screen', async () => {
-    renderWorkspace('large');
-    await userEvent.click(screen.getByText('the module'));
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
   });
 });
@@ -222,13 +180,11 @@ describe('the tone band', () => {
     );
   });
 
-  it('keeps an inked fallback on the tablet panel, which is an edge not a band', async () => {
+  it('gives the conversation no panel edge at medium, now it is not a panel', () => {
+    // The 3px tone edge was the slide-over's, marking it as a panel over other
+    // content like the drawers. In the flow it is a column, as at large.
     renderWorkspace('medium');
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-
-    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
-      'border-t-[var(--tone,var(--color-secondary-ink))]'
-    );
+    expect(document.querySelector('[data-pane="chat"]')?.className).not.toContain('border-t-[3px]');
   });
 });
 
@@ -240,82 +196,78 @@ describe('the classes survive twMerge', () => {
    * here the resolved class list IS the behaviour, because the thing that went
    * wrong was invisible in the source and only appeared after the merge.
    */
-  it('keeps the tablet panel transitioning its transform, not its flex-basis', async () => {
-    // The worst of the three: this component is built around riding a transform
-    // so the workspace never reflows, and the unconditional
-    // `transition-[flex-basis]` after it deleted exactly that. The panel popped.
-    renderWorkspace('medium');
-    const chat = document.querySelector('[data-pane="chat"]')!;
 
-    expect(chat.className).toContain('transition-transform');
-    expect(chat.className).not.toContain('transition-[flex-basis]');
-  });
+  it('keeps the flex-basis transition wherever the conversation is in the flow', () => {
+    // Medium included since t-83: it is a column there too, so opening and
+    // closing it animates its basis rather than riding a transform.
+    for (const width of ['large', 'medium'] as const) {
+      const { unmount } = renderWorkspace(width);
+      const chat = document.querySelector('[data-pane="chat"]')!;
 
-  it('keeps the flex-basis transition where it IS the animation', () => {
-    renderWorkspace('large');
-    const chat = document.querySelector('[data-pane="chat"]')!;
-
-    expect(chat.className).toContain('transition-[flex-basis]');
-    expect(chat.className).not.toContain('transition-transform');
+      expect(chat.className, width).toContain('transition-[flex-basis]');
+      expect(chat.className, width).not.toContain('transition-transform');
+      unmount();
+    }
   });
 });
 
-describe('the tablet panel rides over the surface', () => {
-  it('never reflows the workspace when the conversation opens or closes', async () => {
-    // The reason the prototype uses a transform rather than a width: with the
-    // conversation in the flow, the surface shunts sideways every time it opens.
-    // So the assertion is that the surface's own geometry does NOT change.
+describe('at medium the conversation sits beside the page, not over it', () => {
+  /*
+   * t-83. The prototype's slide-over was a fixed 420px panel riding OVER the
+   * page, and whatever lay under it — headings, cards, body copy — was cut off
+   * for as long as the conversation was open. Owner ruling: the two share the
+   * width, as at large, with the conversation capped narrower.
+   */
+  const chat = () => document.querySelector<HTMLElement>('[data-pane="chat"]')!;
+
+  it('is an in-flow column, open on arrival, capped at CHAT_MEDIUM', () => {
     renderWorkspace('medium');
-    const surface = document.querySelector('[data-pane="ws"]')!;
-    const parked = surface.className;
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(surface.className).toBe(parked);
-  });
-
-  it('clears the strip with a fixed margin, not a changing width', () => {
-    renderWorkspace('medium');
-    expect(document.querySelector('[data-pane="ws"]')?.className).toContain('ml-14');
-  });
-
-  it('makes the conversation a fixed-width panel, moved by transform', async () => {
-    renderWorkspace('medium');
-    const chat = document.querySelector('[data-pane="chat"]')!;
-
-    expect(chat.className).toContain('w-[420px]');
-    expect(chat.className).toContain('absolute');
-    // Parked: translated left by its width less the visible strip.
-    expect(chat.className).toContain('-translate-x-[364px]');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(chat.className).toContain('translate-x-0');
-    expect(chat.className).toContain('w-[420px]');
-  });
-
-  it('keeps the strip reachable while the panel is parked', () => {
-    // The strip rides on the panel's right edge so it lands at the screen edge;
-    // if it were a separate pane it would be translated off with everything else.
-    renderWorkspace('medium');
-    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
-  });
-
-  it('takes the strip away once the panel is open, rather than laying it over the copy', async () => {
-    // The strip is pinned to the panel's RIGHT edge. Left rendered while the
-    // panel is open it covers the panel's own last 56px — the end of the line
-    // and the send button — which is what it was doing. Parked, it is the only
-    // thing showing; open, it should be gone.
-    renderWorkspace('medium');
-    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-
-    expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
-    // And the content it was covering is back.
+    // In the flow: nothing positioned, nothing overlapping.
+    expect(chat().className).not.toContain('absolute');
+    expect(chat().className).toContain('flex-none');
+    // The stored default is 440; medium caps it.
+    expect(chat().style.flexBasis).toBe(`${CHAT_MEDIUM}px`);
+    // Open, not parked: the page opening no longer folds the conversation.
     expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
   });
 
-  it('is an in-flow column at large, not a panel', () => {
+  it('keeps a width the reader chose that is already narrower than the cap', () => {
+    // The cap only takes width away. A reader who sized the conversation to
+    // 340 at large gets 340 here, not 360.
+    window.localStorage.setItem('lelanea.chat.width', '340');
+    renderWorkspace('medium');
+    expect(chat().style.flexBasis).toBe('340px');
+  });
+
+  it('does not cap it at large', () => {
+    // Without this, capping at every width would pass the cases above.
     renderWorkspace('large');
-    const chat = document.querySelector('[data-pane="chat"]')!;
-    expect(chat.className).not.toContain('absolute');
-    expect(chat.className).not.toContain('w-[420px]');
+    expect(chat().style.flexBasis).toBe(`${CHAT_DEFAULT}px`);
+  });
+
+  it('leaves the page no margin to clear — nothing sits over it', () => {
+    // `ml-14` cleared the parked panel's strip, which lay over the page's
+    // left edge. The strip is in the flow now, so the margin would be a gap.
+    renderWorkspace('medium');
+    expect(screen.getByLabelText('Workspace').className).not.toContain('ml-14');
+  });
+
+  it('folds to the strip in the flow, and back', async () => {
+    renderWorkspace('medium');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(screen.queryByLabelText('Conversation')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('offers the resize handle at large only', () => {
+    // 330–660 of play is meaningless in a band where the page has ~400px.
+    renderWorkspace('medium').unmount();
+    expect(screen.queryByRole('separator', { name: 'Resize the conversation' })).toBeNull();
+
+    renderWorkspace('large');
+    expect(screen.getByRole('separator', { name: 'Resize the conversation' })).toBeTruthy();
   });
 });

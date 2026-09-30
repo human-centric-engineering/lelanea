@@ -419,8 +419,7 @@ describe('ShellNav — clicking away collapses it', () => {
   it('ignores a press on a control, so using the app does not fold the menu', async () => {
     // Without this guard every button, link and checkbox in the workspace
     // collapsed the menu as a side effect of being used — the app flinching
-    // rather than dismissing something. Same list `workspace.tsx` guards its
-    // own re-park gesture with.
+    // rather than dismissing something.
     renderAt('/app');
     const nav = document.querySelector('nav');
 

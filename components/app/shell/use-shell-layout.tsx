@@ -82,6 +82,16 @@ export const CHAT_MIN = 330;
 export const CHAT_MAX = 660;
 export const CHAT_DEFAULT = 440;
 export const CHAT_FOLD = 296;
+/**
+ * The most the conversation takes at `medium` with the workspace open.
+ *
+ * There it sits beside the page rather than over it (t-83), and at 901px with
+ * the menu slim that leaves 767px for both panes. At 420px the page is left
+ * about 347px, which is phone-width; at 360 it keeps about 407. A reader who
+ * has sized the conversation narrower than this at `large` keeps their width —
+ * the cap only ever takes width away, never adds it.
+ */
+export const CHAT_MEDIUM = 360;
 
 /** `fitToWidth()`'s three classes, named rather than recomputed at each site. */
 export type WidthClass = 'small' | 'medium' | 'large';
@@ -256,7 +266,7 @@ function classify(w: number): WidthClass {
  * The prototype has a global `S` and paints classes onto `#app`; four separate
  * React islands cannot each own a slice of that, because `fitToWidth()` reaches
  * across all of them at once — a resize past 1100 slims the nav, a resize into
- * medium with the workspace open parks the conversation, and a resize down to
+ * medium with the conversation open beside a page slims it, and a resize down to
  * small has to shut a nav drawer that only exists below it. Splitting the state
  * per component would mean each one re-deriving the viewport and disagreeing
  * about it.
@@ -418,15 +428,31 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   }, []);
 
   /**
-   * Medium parks the conversation when the workspace is open.
+   * At `medium` beside a page, an open conversation never has an expanded menu
+   * next to it — however the reader got there.
    *
-   * Separate from `fit` because it also has to fire when the WORKSPACE opens at
-   * a width that has not changed — which, now that `wsOpen` is route-driven, is
-   * the common case rather than the rare one.
+   * The exclusivity rule (see `setChatSlim`) is enforced by the two verbs, but
+   * neither runs when the reader simply ARRIVES in the competing geometry — a
+   * module opened at 1150px with the menu expanded in storage, or a window
+   * narrowed into the band — nor when the menu expands by itself: widening from
+   * 1050 to 1150 stays inside `medium`, and `fit`'s outward 1100px crossing
+   * drops the override back to an expanded stored preference. Keyed on
+   * `navSlim` as well as the geometry so that case re-asserts too. It cannot
+   * fight the menu's own control: expanding it here parks the conversation in
+   * the same batch (`toggleNavSlim`), so the condition is already false.
+   *
+   * It used to park the conversation instead, because the conversation was a
+   * slide-over whose resting place was parked. It now sits beside the page
+   * (t-83), so the conversation stays and the menu steps aside — the same
+   * direction as the verb that opens the conversation. Live value only.
+   *
+   * Before paint, like every other correction to the menu's width here: the
+   * width transition is always armed, so a passive effect let a direct load of
+   * a module at 1100–1240px paint the 234px menu and then animate it shut.
    */
-  useEffect(() => {
-    if (width === 'medium' && wsOpen) setChatSlimState(true);
-  }, [width, wsOpen]);
+  useIsomorphicLayoutEffect(() => {
+    if (width === 'medium' && wsOpen && !chatSlim && !navSlim) setSlimOverride(true);
+  }, [width, wsOpen, chatSlim, navSlim]);
 
   /**
    * With no workspace there is no second pane to be showing — AND nothing for
@@ -434,8 +460,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    *
    * Resetting only `pane` left `chatSlim` set, so "Return to the conversation"
    * on a tablet produced a screen with no conversation on it: the workspace
-   * unmounts, the panel stops being an overlay, and the pane takes its folded
-   * early return — a 56px strip beside empty space. The fold means "give the
+   * unmounts and the pane takes its folded early return — a 56px strip beside
+   * empty space. The fold means "give the
    * width to the work"; with no work there is nothing to give it to.
    */
   useEffect(() => {
@@ -505,13 +531,20 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
    *
    * ## The width condition is the rule, not a caveat on it
    *
-   * The owner's reason was that the two crowd the conversation off the screen,
-   * and that is a statement about one geometry: at `medium` with the workspace
-   * open, the conversation is a fixed 420px panel riding OVER the work while the
-   * menu is a 234px column in the flow, so the two eat the same screen from the
-   * same end and a tablet shows slivers of three things and the whole of none.
+   * The owner's reason was that the two crowd the screen, and that is a
+   * statement about one geometry: at `medium` with the workspace open, the menu
+   * and the conversation are both columns in the flow, and every pixel either
+   * takes comes out of the page between them. At 1100px an expanded 234px menu
+   * and a 360px conversation leave the page about 400px; at 901px, even with
+   * the menu slim, the conversation alone leaves it about 407. Both open, a
+   * tablet shows slivers of three things and the whole of none.
    *
-   * At `large` both panes are in the flow and the reader sizes the conversation
+   * (Until t-83 the conversation was a 420px panel riding OVER the page here,
+   * and the rule was about the two covering it from the same end. It now sits
+   * beside the page, owner ruling 30 Sept 2026, and the rule survives on the
+   * width it takes rather than the area it covers.)
+   *
+   * At `large` there is room for all three — the reader sizes the conversation
    * themselves with the handle; at `small` the menu is a drawer and the panes
    * are a carousel. Neither competes. Applied unconditionally, this folded the
    * conversation to a 56px strip when somebody expanded the menu on a 1600px
@@ -665,12 +698,16 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       if (event.key !== 'Escape') return;
       if (navOpen) return closeNav();
       if (drawer) return closeDrawer();
-      if (width === 'medium' && wsOpen && !chatSlim) return setChatSlim(true);
+      // Not at `medium`, either way round. Parking was a rung there while the
+      // conversation was a panel covering the page; beside it (t-83) it covers
+      // nothing, so there is nothing to take away. And un-folding it would
+      // collapse the menu too (the exclusivity rule) — so an Escape meant for a
+      // popover in the page could take back a menu the reader just expanded.
       if (chatSlim && width !== 'medium') return setChatSlim(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen, drawer, width, wsOpen, chatSlim, closeNav, closeDrawer, setChatSlim]);
+  }, [navOpen, drawer, width, chatSlim, closeNav, closeDrawer, setChatSlim]);
 
   const value = useMemo<ShellLayout>(
     () => ({

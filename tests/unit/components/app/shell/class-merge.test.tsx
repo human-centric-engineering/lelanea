@@ -5,8 +5,9 @@
  *
  * `cn` is `twMerge(clsx(...))`, so a later class in the same Tailwind group
  * REPLACES an earlier one. Round 2 found three conditional blocks being deleted
- * that way, and the worst of them meant the tablet slide-over — a component
- * built entirely around riding a transform — had no transform transition at all.
+ * that way, and the worst of them meant the tablet slide-over (since removed,
+ * t-83) — a component built entirely around riding a transform — had no
+ * transform transition at all.
  * It popped, through a build, a visual check and a code-review round, because
  * the defect is invisible in the source AND in a screenshot. Only the resolved
  * class list shows it.
@@ -20,7 +21,6 @@
  * already writes to.
  */
 
-import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '@/components/app/shell/conversation-pane';
@@ -65,12 +65,12 @@ interface Row {
 
 const ROWS: Row[] = [
   {
-    what: 'tablet panel keeps its transform transition',
+    what: 'tablet pane is a column in the flow, as at large',
     width: 'medium',
     render: () => <ConversationPane />,
     select: '[data-pane="chat"]',
-    keeps: ['absolute', 'w-[420px]', 'transition-transform', 'duration-[340ms]'],
-    drops: ['transition-[flex-basis]', 'duration-[280ms]'],
+    keeps: ['flex-none', 'transition-[flex-basis]', 'duration-[280ms]'],
+    drops: ['absolute', 'transition-transform'],
   },
   {
     what: 'desktop pane keeps its flex-basis transition',
@@ -129,11 +129,11 @@ const ROWS: Row[] = [
     drops: ['translate-x-0'],
   },
   {
-    what: 'tablet surface keeps the margin that clears the strip',
+    what: 'tablet surface keeps its tone band',
     width: 'medium',
     render: () => <Workspace>view</Workspace>,
     select: '[data-pane="ws"]',
-    keeps: ['ml-14', 'border-t-[var(--tone,transparent)]'],
+    keeps: ['border-t-[var(--tone,transparent)]'],
     drops: ['border-t-[var(--color-secondary-ink)]'],
   },
 ];
@@ -153,12 +153,5 @@ describe('conditional classes survive the merge', () => {
     for (const cls of drops ?? []) {
       expect(classes.has(cls), `${cls} survived and should not have`).toBe(false);
     }
-  });
-
-  it('the strip is not laid over the panel it belongs to', () => {
-    // Not a merge case, but the same family: a class-level pairing where one
-    // element's geometry only makes sense given another's state.
-    renderInShell(<ConversationPane />, 'medium');
-    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
   });
 });

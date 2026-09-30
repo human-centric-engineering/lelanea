@@ -566,7 +566,7 @@ export function NoteCard({
       {/*
         The container query is the point, and it is the repo's first.
         This card's width is set by the workspace pane — which a reader drags,
-        and which the conversation overlays at `medium` — so a viewport
+        and which narrows whenever the conversation opens beside it — so a viewport
         breakpoint would split the columns on a 1400px window while the pane
         itself was 320px wide. `@container` asks the only question that matters:
         is THIS card wide enough for two columns.

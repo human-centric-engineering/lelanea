@@ -12,7 +12,7 @@
  * @see components/app/shell/use-shell-layout.tsx · conversation-pane.tsx
  */
 
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -138,18 +138,31 @@ describe('the Escape chain', () => {
     );
   });
 
-  it('parks the conversation on a tablet before it touches anything else', async () => {
-    // At medium the strip is ALWAYS present — it rides on the panel's right
-    // edge — so parked-ness is the panel's transform, not the strip's presence.
+  it('does not park the conversation on a tablet — it covers nothing there', async () => {
+    // Parking was a rung while the conversation was a slide-over covering the
+    // page. Beside the page (t-83) it covers nothing, so Escape has nothing to
+    // take away and must leave it where it is.
     renderShell('medium');
-    const chat = () => document.querySelector('[data-pane="chat"]')!;
-    expect(chat().className).toContain('-translate-x-[364px]');
-
-    await userEvent.click(strip()!);
-    expect(chat().className).toContain('translate-x-0');
+    expect(strip()).toBeNull();
 
     await userEvent.keyboard('{Escape}');
-    expect(chat().className).toContain('-translate-x-[364px]');
+    expect(strip()).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+  });
+
+  it('does not un-fold a folded conversation on a tablet either', async () => {
+    // Un-folding at medium collapses the menu too (the exclusivity rule), so an
+    // Escape meant for a popover in the page would take back a menu the reader
+    // had just expanded — which is how the conversation got folded.
+    renderShell(1200);
+    await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(strip()).not.toBeNull();
+
+    await userEvent.keyboard('{Escape}');
+    expect(strip()).not.toBeNull();
+    expect(document.querySelector('nav[aria-label="Main"]')?.getAttribute('data-slim')).toBe(
+      'false'
+    );
   });
 
   it('un-folds the conversation when there is nothing else left to close', async () => {
@@ -178,16 +191,18 @@ describe('the Escape chain', () => {
   });
 });
 
-describe('the tablet parks the conversation when a module opens', () => {
-  it('folds it as soon as the workspace is open at medium', () => {
+describe('a module opening on a tablet leaves the conversation open', () => {
+  it('keeps it open, in the flow, when the workspace opens at medium', () => {
+    // It used to park itself here, because the slide-over's resting place was
+    // parked. Beside the page (t-83) there is room for both, so opening a
+    // module takes nothing away from the conversation.
     renderShell('medium');
-    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
-      '-translate-x-[364px]'
-    );
+    expect(strip()).toBeNull();
+    expect(document.querySelector('[data-pane="chat"]')?.className).not.toContain('absolute');
   });
 
   it('leaves it alone on the clean view', () => {
-    // No workspace, so nothing to park against and no panel at all.
+    // No workspace, so nothing to fold against.
     mockPathname.current = '/app';
     renderShell('medium');
     expect(strip()).toBeNull();
@@ -207,16 +222,14 @@ describe('leaving a module', () => {
     );
   }
 
-  it('un-folds the conversation, because there is nothing left to fold against', () => {
-    // At medium the workspace parks the conversation. Resetting only `pane` on
-    // the way out left `chatSlim` set — so "Return to the conversation" produced
-    // a screen with no conversation on it: the workspace unmounts, the panel
-    // stops being an overlay, and the pane takes its folded early return. A
-    // 56px strip beside empty space.
+  it('un-folds the conversation, because there is nothing left to fold against', async () => {
+    // Resetting only `pane` on the way out left `chatSlim` set — so "Return to
+    // the conversation" produced a screen with no conversation on it: the
+    // workspace unmounts and the pane takes its folded early return. A 56px
+    // strip beside empty space.
     const { rerender } = renderShell('medium');
-    expect(document.querySelector('[data-pane="chat"]')?.className).toContain(
-      '-translate-x-[364px]'
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(strip()).not.toBeNull();
 
     navigate('/app', rerender);
     expect(document.querySelector('[data-pane="chat"]')).not.toBeNull();
@@ -224,8 +237,8 @@ describe('leaving a module', () => {
   });
 
   it('un-folds a conversation the reader folded themselves, too', async () => {
-    // Not only the automatic park: with no work to give the width to, a fold
-    // means nothing whoever asked for it.
+    // At large as at medium: with no work to give the width to, a fold means
+    // nothing whoever asked for it.
     const { rerender } = renderShell('large');
     handle().focus();
     await userEvent.keyboard('{Shift>}{ArrowLeft>6/}{/Shift}');
@@ -269,13 +282,13 @@ describe('the auto-slim fires on crossing, not on every resize', () => {
 });
 
 describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPETE', () => {
-  // The owner's reason was that the two crowd the conversation off the screen,
-  // and that is a statement about one geometry: at `medium` with the workspace
-  // open the conversation is a fixed 420px panel riding over the work while the
-  // menu is a 234px column in the flow. At `large` both panes are in the flow
-  // and the reader sizes the conversation themselves. Applied everywhere, the
-  // rule folded the conversation to a 56px strip on a 1600px screen, where a
-  // 234px menu and a 440px pane fit with room to spare.
+  // The owner's reason was that the two crowd the screen, and that is a
+  // statement about one geometry: at `medium` with the workspace open, the menu
+  // and the conversation are both columns in the flow and every pixel either
+  // takes comes out of the page (t-83 put the conversation beside the page;
+  // before it, it rode over it). At `large` there is room for all three.
+  // Applied everywhere, the rule folded the conversation to a 56px strip on a
+  // 1600px screen, where a 234px menu and a 440px pane fit with room to spare.
   const nav = () => document.querySelector('nav[aria-label="Main"]');
   const slimNow = () => nav()?.getAttribute('data-slim');
 
@@ -286,13 +299,42 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
   // that can collapse the menu is the rule under test.
   it('collapses the menu when the conversation is opened on a tablet', async () => {
     renderShell(1200);
-    // At medium with a workspace open the conversation parks itself, so the
-    // strip is already there.
-    const pull = strip();
-    expect(pull).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+    expect(slimNow()).toBe('false');
 
-    await userEvent.click(pull!);
+    await userEvent.click(strip()!);
     expect(slimNow()).toBe('true');
+  });
+
+  it('collapses the menu on ARRIVING at a tablet with the conversation open', () => {
+    // Neither verb runs when the reader simply arrives in the competing
+    // geometry — a module opened at 1200px with the conversation open, which
+    // since t-83 is how every module opens there. Without the arrival rule the
+    // menu, the conversation and the page would all share 1200px.
+    renderShell(1200);
+    expect(slimNow()).toBe('true');
+    // The live value only: arriving is not a statement about the menu.
+    expect(window.localStorage.getItem('lelanea.nav.slim')).toBeNull();
+  });
+
+  it('keeps the menu slim when widening across 1100 inside the band', () => {
+    // `fit`'s outward 1100px crossing releases the override, which hands an
+    // expanded stored menu back — while the width class stays `medium`, so
+    // nothing about the geometry changed. The rule has to re-assert there, or
+    // the menu grows to 234px beside an open conversation at 1150px.
+    renderShell(1050);
+    expect(slimNow()).toBe('true');
+
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        value: 1150,
+        writable: true,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(slimNow()).toBe('true');
+    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
   });
 
   it('does NOT hand a 234px menu back to a 1000px tablet', async () => {
@@ -306,7 +348,6 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     renderShell(1000);
     expect(slimNow()).toBe('true');
 
-    await userEvent.click(strip()!);
     await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
     expect(slimNow()).toBe('true');
   });
@@ -318,7 +359,6 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     // menu for the rest of the session. That is the failure the override exists
     // to prevent, one level down.
     renderShell(1200);
-    await userEvent.click(strip()!);
     expect(slimNow()).toBe('true');
 
     await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
@@ -328,7 +368,6 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
 
   it('parks the conversation when the menu is expanded on a tablet', async () => {
     renderShell(1200);
-    await userEvent.click(strip()!);
     expect(strip()).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
@@ -383,18 +422,11 @@ describe('Escape goes through the verbs, not the setters beneath them', () => {
   // having added them: the same user-visible action then behaves one way from
   // the button and another from the key, and Escape is the rung that can least
   // afford it, being keyboard-only.
-  const nav = () => document.querySelector('nav[aria-label="Main"]');
-
-  it('releases the menu override when Escape parks the conversation', async () => {
-    renderShell(1200);
-    await userEvent.click(strip()!);
-    expect(nav()?.getAttribute('data-slim')).toBe('true');
-
-    await userEvent.keyboard('{Escape}');
-    expect(strip()).not.toBeNull();
-    // The collapse BUTTON already did this. The key has to agree with it.
-    expect(nav()?.getAttribute('data-slim')).toBe('false');
-  });
+  //
+  // Only `closeNav`'s half is reachable from Escape now. Since t-83 no rung
+  // calls `setChatSlim` where its second half runs (`medium` + workspace):
+  // there, Escape neither parks nor un-folds the conversation. See 'the
+  // Escape chain' for that.
 
   it('hands focus back to the burger when Escape closes the ≤900px drawer', async () => {
     // The panel goes `inert` the instant it closes, so focus left on it drops

@@ -26,7 +26,7 @@ export const WIDTHS = {
   /** Above 1240: both panes side by side, nav at the reader's preference. */
   large: 1400,
   /**
-   * 901–1240: the conversation parks as a slide-over, and the nav is slim.
+   * 901–1240: the conversation sits beside the page, narrower, and the nav is slim.
    *
    * 1000, not 1100. The auto-slim threshold is `w < 1100`, so 1100 itself does
    * NOT slim — a fixture named `medium` that leaves the nav expanded, while its

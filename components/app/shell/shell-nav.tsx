@@ -23,9 +23,8 @@ const WORKSPACE_HREF = '/app/workspace';
 /**
  * What a click-away must NOT collapse the menu on.
  *
- * The same list `workspace.tsx` guards its re-park gesture with, and for the
- * same reason: a click on a control is a request to do that thing, not an
- * incidental press on the background. Without it, using anything at all in the
+ * A click on a control is a request to do that thing, not an incidental press
+ * on the background. Without it, using anything at all in the
  * workspace — a button, a link, a checkbox — folded the menu as a side effect,
  * which reads as the app flinching rather than as dismissing something.
  */
@@ -90,7 +89,7 @@ export function initialsFor(name: string, email: string): string {
  * renders comes from the server: the five destinations are static, and the
  * account footer is passed the session's user rather than fetching one.
  *
- * ## Five ways it opens and closes, and they are not interchangeable
+ * ## Six ways it opens and closes, and they are not interchangeable
  *
  * | Gesture                          | Direction | Where                | Persists |
  * | -------------------------------- | --------- | -------------------- | -------- |
@@ -99,6 +98,7 @@ export function initialsFor(name: string, email: string): string {
  * | a press out in the panes         | closes    | above 900px          | no       |
  * | Ask Lelañea opening / parking    | both      | `medium` + workspace | no       |
  * | crossing 1100px inward           | closes    | —                    | no       |
+ * | a conversation open at `medium`  | closes    | `medium` + workspace | no       |
  *
  * The split is about what the press was aimed at. The first two are a reader
  * working the menu deliberately, so they persist; the rest are the layout
@@ -109,6 +109,8 @@ export function initialsFor(name: string, email: string): string {
  * `aria-modal` dialog must not reach the shell it is covering. And the Ask
  * Lelañea row is width-conditional because its whole reason is crowding — see
  * `setChatSlim` for the geometry that decides where the two actually compete.
+ * The last row is the same rule held when no verb ran — arriving in that
+ * geometry, or the menu expanding by itself inside it (t-83).
  *
  * ## What is deliberately absent
  *
