@@ -58,5 +58,5 @@ export default async function ShellHomePage() {
   const pending = pendingBeats(progress);
   if (pending.length === 0) return null;
 
-  return <FirstRunView pending={pending} userName={session.user.name} />;
+  return <FirstRunView userId={session.user.id} pending={pending} userName={session.user.name} />;
 }

@@ -40,9 +40,11 @@ function readIdOf(beat: FirstRunBeat): OnboardingRead | null {
  * and nothing is recorded, so it is shown on a later entry.
  */
 export async function FirstRunView({
+  userId,
   pending,
   userName,
 }: {
+  userId: string;
   pending: readonly FirstRunBeat[];
   userName: string | null | undefined;
 }) {
@@ -82,5 +84,5 @@ export async function FirstRunView({
     return null;
   }
 
-  return <FirstRun steps={steps} />;
+  return <FirstRun userId={userId} steps={steps} />;
 }

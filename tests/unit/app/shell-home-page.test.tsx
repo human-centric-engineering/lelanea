@@ -29,8 +29,16 @@ vi.mock('@/lib/app/onboarding/first-run-store', () => ({
   getFirstRunProgress: mocks.getFirstRunProgress,
 }));
 vi.mock('@/components/app/onboarding/first-run-view', () => ({
-  FirstRunView: ({ pending, userName }: { pending: string[]; userName: string }) => (
-    <div data-testid="first-run-view" data-user-name={userName}>
+  FirstRunView: ({
+    userId,
+    pending,
+    userName,
+  }: {
+    userId: string;
+    pending: string[];
+    userName: string;
+  }) => (
+    <div data-testid="first-run-view" data-user-id={userId} data-user-name={userName}>
       {pending.join(' ')}
     </div>
   ),
@@ -55,6 +63,7 @@ describe('the shell clean view', () => {
     const view = getByTestId('first-run-view');
     expect(view).toHaveTextContent('initiation read:the_heart_behind_lelanea');
     expect(view).toHaveAttribute('data-user-name', 'Maya Reyes');
+    expect(view).toHaveAttribute('data-user-id', 'user_1');
     expect(mocks.getFirstRunProgress).toHaveBeenCalledWith('user_1');
   });
 

@@ -49,9 +49,10 @@ import { FIRST_RUN_BEATS, type FirstRunBeat } from '@/lib/app/onboarding/first-r
 
 async function renderView(
   userName: string | null,
-  pending: readonly FirstRunBeat[] = FIRST_RUN_BEATS
+  pending: readonly FirstRunBeat[] = FIRST_RUN_BEATS,
+  userId = 'user_1'
 ) {
-  const element = await FirstRunView({ pending, userName });
+  const element = await FirstRunView({ userId, pending, userName });
   return render(<>{element}</>);
 }
 
@@ -157,6 +158,16 @@ describe('the reads, in sequence', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'The Mission' })).toBeInTheDocument();
   });
 
+  it('skips only what this person passed, not someone signed in after them on the same page', async () => {
+    const user = userEvent.setup();
+    const first = await renderView('Maya', ['initiation'], 'user_1');
+    await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.continue }));
+    first.unmount();
+
+    await renderView('Sam', ['initiation'], 'user_2');
+    expect(screen.getByText('Welcome, Sam.')).toBeInTheDocument();
+  });
+
   it('moves on even when the beat does not land', async () => {
     post.mockRejectedValue(new Error('offline'));
     const user = userEvent.setup();
@@ -176,7 +187,11 @@ describe('the reads, in sequence', () => {
 describe('when her words cannot be read', () => {
   it('renders nothing rather than an error over the shell', async () => {
     vi.spyOn(sections, 'requireDocument').mockRejectedValueOnce(new Error('not seeded'));
-    const element = await FirstRunView({ pending: FIRST_RUN_BEATS, userName: 'Maya' });
+    const element = await FirstRunView({
+      userId: 'user_1',
+      pending: FIRST_RUN_BEATS,
+      userName: 'Maya',
+    });
     expect(element).toBeNull();
   });
 });

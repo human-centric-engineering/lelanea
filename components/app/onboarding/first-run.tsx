@@ -53,7 +53,18 @@ export type FirstRunStep = InitiationStep | ReadStep;
  * as long as the page, so a remount skips what is behind the person whatever
  * the server last said. A full reload clears it and reads the ledger again.
  */
-const passed = new Set<FirstRunBeat>();
+const passed = new Map<string, Set<FirstRunBeat>>();
+
+/** What `userId` has moved past on this page — per person, because a sign-in
+ * after a session expired lands on the same loaded page (`/code-review` round 3). */
+function passedBy(userId: string): Set<FirstRunBeat> {
+  let beats = passed.get(userId);
+  if (!beats) {
+    beats = new Set();
+    passed.set(userId, beats);
+  }
+  return beats;
+}
 
 /** For tests: forget what this page has moved past. */
 export function forgetPassedBeats(): void {
@@ -61,8 +72,8 @@ export function forgetPassedBeats(): void {
 }
 
 /** Tell the server the person moved past `beat`. Never waited on, never retried. */
-function record(beat: FirstRunBeat): void {
-  passed.add(beat);
+function record(userId: string, beat: FirstRunBeat): void {
+  passedBy(userId).add(beat);
   apiClient.post(FIRST_RUN_ROUTE, { body: { beat } }).catch((caught: unknown) => {
     // The person has moved on; nothing here should hold them. A beat that did
     // not land is replayed once on their next entry, which is the remedy.
@@ -86,10 +97,18 @@ function record(beat: FirstRunBeat): void {
  * step's heading takes focus, which also brings it to the top of the scroll
  * container. Not on the first render: nothing has moved yet.
  */
-export function FirstRun({ steps: fromServer }: { steps: readonly FirstRunStep[] }) {
+export function FirstRun({
+  userId,
+  steps: fromServer,
+}: {
+  userId: string;
+  steps: readonly FirstRunStep[];
+}) {
   // Fixed for this mount: filtering on every render would shift the list
   // under `index` as each beat is passed.
-  const [steps] = React.useState(() => fromServer.filter((step) => !passed.has(step.beat)));
+  const [steps] = React.useState(() =>
+    fromServer.filter((step) => !passedBy(userId).has(step.beat))
+  );
   const [index, setIndex] = React.useState(0);
   const [opened, setOpened] = React.useState(false);
   const heading = React.useRef<HTMLHeadingElement>(null);
@@ -113,7 +132,7 @@ export function FirstRun({ steps: fromServer }: { steps: readonly FirstRunStep[]
   if (!step) return null;
 
   const next = (): void => {
-    record(step.beat);
+    record(userId, step.beat);
     moved.current = true;
     setOpened(false);
     setIndex((i) => i + 1);
