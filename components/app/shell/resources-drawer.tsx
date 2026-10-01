@@ -7,10 +7,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { TIMED_CARD_CLASS, VideoCard } from '@/components/app/shell/video-card';
+import { AudioCard } from '@/components/app/shell/audio-card';
+import { TIMED_CARD_CLASS, TIMED_DISC_CLASS, VideoCard } from '@/components/app/shell/video-card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { FoundationalDocumentIndex } from '@/lib/app/content/document-view';
+import { canPlayInPage } from '@/lib/app/content/audio-hosts';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
 import type { LucideIcon } from 'lucide-react';
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
@@ -307,8 +309,9 @@ const ROW_LINK_CLASS = cn(
  * files carry her cadence as data (`content.md`). A video is the design's
  * picture card, with its host's own still, and plays in a lightbox in the page
  * (`video-card.tsx`, t-119). YouTube is the first host, and a video whose link
- * no host plays opens its link instead. An audio piece is a card that opens its
- * link in a new tab until it plays inline (t-120). An article is a row that
+ * no host plays opens its link instead. An audio piece that is a direct file
+ * plays inline in its card (`audio-card.tsx`, t-120), and any other audio link
+ * opens in a new tab. An article is a row that
  * opens its link, or the page the site renders its document on.
  *
  * ## The empty states stay honest
@@ -403,7 +406,17 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         eyebrow="to listen"
         empty="Nothing to listen to yet. Her audio lands here as the programme opens."
         items={audio}
-        renderItem={(piece) => <TimedLinkCard item={piece} Icon={Headphones} />}
+        renderItem={(piece) =>
+          // A direct audio file this page may play plays inline in its card
+          // (t-120). Any other link, or a file on an origin the CSP's
+          // media-src does not allow yet, opens in a new tab rather than
+          // offering a player the browser would refuse.
+          piece.player && canPlayInPage(piece.player.src, window.location.origin) ? (
+            <AudioCard piece={piece} player={piece.player} />
+          ) : (
+            <TimedLinkCard item={piece} Icon={Headphones} />
+          )
+        }
       />
 
       <section aria-labelledby="resources-to-read" className="flex flex-col gap-2.5">
@@ -574,7 +587,7 @@ function TimedSection<T extends { id: string }>({
  * A video or an audio piece that opens its link in a new tab: the prototype's
  * `.videocard` without a still, because there is none to show and a stock one
  * is what D6 forbids. The glyph says what kind of thing it is; the duration
- * says how long. Every audio piece until t-120, and a video no host plays.
+ * says how long. An audio piece or a video whose link does not play in the page.
  */
 function TimedLinkCard({
   item,
@@ -593,13 +606,7 @@ function TimedLinkCard({
         TIMED_CARD_CLASS
       )}
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-          'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
-        )}
-      >
+      <span aria-hidden="true" className={TIMED_DISC_CLASS}>
         <Icon size={15} strokeWidth={1.6} />
       </span>
       <span className="min-w-0 flex-1">

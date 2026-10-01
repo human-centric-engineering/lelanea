@@ -4,6 +4,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Play, X } from 'lucide-react';
 import { useRef } from 'react';
 
+import { announcePlay } from '@/components/app/shell/media-playback';
 import type { ResourceVideoView } from '@/lib/app/content/resources';
 import type { VideoPlayer } from '@/lib/app/content/video-hosts';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,12 @@ export const TIMED_CARD_CLASS = cn(
   'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
   'focus-visible:outline-[var(--color-ring)]'
+);
+
+/** The round glyph or control at the left of a timed card: a 36px disc on the pill wash. */
+export const TIMED_DISC_CLASS = cn(
+  'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
+  'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
 );
 
 /**
@@ -93,7 +100,8 @@ export function VideoCard({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   return (
-    <DialogPrimitive.Root>
+    // Opening the lightbox stops any audio playing in the drawer.
+    <DialogPrimitive.Root onOpenChange={(open) => open && announcePlay(player.embedUrl)}>
       <DialogPrimitive.Trigger asChild>
         <button
           type="button"

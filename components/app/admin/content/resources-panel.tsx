@@ -36,6 +36,7 @@ import {
   contentRetiredEndpoint,
 } from '@/lib/app/content/admin/endpoint';
 import type { ResourceAdminRow, ResourcesAdminView } from '@/lib/app/content/admin/resources';
+import { SUPPORTED_AUDIO_FILES } from '@/lib/app/content/audio-hosts';
 import { SUPPORTED_VIDEO_HOSTS, VIDEO_LINK_EXAMPLES } from '@/lib/app/content/video-hosts';
 import { RESOURCE_KINDS, type ResourceKind } from '@/lib/app/content/resource-view';
 
@@ -207,7 +208,9 @@ function ResourceFields({
           help={
             draft.kind === 'video'
               ? `A ${SUPPORTED_VIDEO_HOSTS.join(' or ')} link, which plays in the page: ${VIDEO_LINK_EXAMPLES.join(' or ')}.`
-              : 'Where it opens: an http or https address.'
+              : draft.kind === 'audio'
+                ? `Any link. A direct https link to an audio file (ending ${SUPPORTED_AUDIO_FILES.join(' or ')}) plays in the page when it is on the app's own site or a host the app allows; none is allowed yet, so for now a file elsewhere opens in a new tab, as any other link (an episode page) does.`
+                : 'Where it opens: an http or https address.'
           }
         >
           <Input

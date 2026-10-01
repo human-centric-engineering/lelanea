@@ -388,7 +388,7 @@ export async function listWordsHistory(key: string): Promise<RevisionEntry<Words
  * Throw unless a video's link may be written: a new video, or one whose link
  * changes, must have a link a supported host plays in the page (t-119). A link
  * carried unchanged is not re-checked, so a video entered before then can still
- * have its title corrected. See `videoLinkRefusal`.
+ * have its title corrected. Only videos: audio takes any link (t-120).
  */
 function assertPlayableVideoLink(before: ResourceFields | null, next: ResourceFields): void {
   const refusal = videoFieldsRefusal(before, next);
