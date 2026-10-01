@@ -169,7 +169,7 @@ not listed, and the page says so.
 **This UTC month, three levels.** The page shows the total, then who (each
 person against their limit), then which conversations, then seat, model and
 day. A conversation opens to its turns, costliest first. A turn opens to every
-row it cost, with her reply and its side costs apart: a search's embedding, a
+row it cost, with the agent's reply and its side costs apart: a search's embedding, a
 summary, tool calls, an earlier attempt. That last page is the first reader the
 admin turn route has had since #66.
 

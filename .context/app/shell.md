@@ -312,7 +312,7 @@ visible and says the pairing should provoke curiosity about what has been
 recorded and why. A note appearing inside the turn that wrote it is the whole
 demonstration of that, and it is witnessed only by somebody sitting on the
 destination while they talk — which nobody does from inside a popover. Owner
-ruling, 21 September 2026. See [`slots.md`](./slots.md#her-notes--the-member-surface-t-73).
+ruling, 21 September 2026. See [`slots.md`](./slots.md#lelañeas-notes--the-member-surface-t-73).
 
 Two counts move with it and are worth grepping when the next one lands:
 `shell-nav.test.tsx` asserts the number of links at 64px (derived from
@@ -677,7 +677,7 @@ is the specific failure D6 names.
   follows the open module and shows her words on it from the API — but until an
   admin enters her list, `to watch`, `to listen` and `to read` are empty, and each section
   says so under its eyebrow rather than carrying two plausible videos. See
-  [`content.md`](./content.md#resources--her-videos-and-reading-and-her-words-on-whatever-is-open).
+  [`content.md`](./content.md#resources--her-videos-audio-and-articles-and-her-words-on-whatever-is-open).
 - ~~**A module's real state in the map.**~~ Real from §15 t-102: each row
   reads the reader's own journey — `complete ●`, `in progress ●` for the module
   they are in, `not started ○` otherwise (`STATE_ROW` in `map-drawer.tsx`). The
@@ -687,7 +687,7 @@ is the specific failure D6 names.
   [the spend meter](#the-spend-meter-reads-when-a-person-could-have-spent) below.
 - ~~**The composer** — present, inert.~~ Live from §10 t-64; see
   [`conversation.md`](./conversation.md). What the pane still leaves out —
-  the account row, the endings in her words, the mic — is listed there.
+  the account row, the endings in her register, the mic — is listed there.
 
 The account view shows the three facts the session holds and no statistics. The
 prototype's version carries "Eleven sessions so far" and three counters with

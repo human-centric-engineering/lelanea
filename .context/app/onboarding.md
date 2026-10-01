@@ -79,9 +79,9 @@ of ours:
 - **Subject access.** `framework_slot_value` is in Daybreak's export manifest,
   earlier versions included.
 - **Erasure.** The hand-written `ON DELETE CASCADE` on its `userId` removes it.
-- **Reading back.** She reads answers through `get_state`, in Onboarding and
-  in every later module: `get_state` reads a person's values in every scope,
-  filtered only by her allowlist, which names the `discovery` group. Seed 013 writes the allowlist on a fresh database;
+- **Reading back.** The agent reads answers through `get_state`, in Onboarding
+  and in every later module: `get_state` reads a person's values in every scope,
+  filtered only by the agent's allowlist, which names the `discovery` group. Seed 013 writes the allowlist on a fresh database;
   migration `20261002100000_app_discovery_question_weight` adds it to an existing
   grant.
 - **The person's own panel.** The slots are `open`, so the person sees and can
@@ -90,7 +90,7 @@ of ours:
 ### Onboarding's slots, declared through Daybreak
 
 The slots are the `slotDefinitions` of the module the question set names
-(`AppQuestionSet.moduleId`, Onboarding in her file), handed to Daybreak's
+(`AppQuestionSet.moduleId`, Onboarding in Lelañea Fulton's file), handed to Daybreak's
 `registerModule()` by `registerJourneyModules()`
 (`lib/app/onboarding/discovery-slots.ts`). Daybreak scopes them
 `module:onboarding`, and its own module slot sync reconciles them. Nothing of
@@ -124,7 +124,7 @@ module's name from its row.
 Owner ruling, 25 Sept 2026. **`special_category` does not mask a free-text value;
 it discards it.** Daybreak masks before storage, so the person's words become a
 redaction sentinel as they are written
-(`lib/framework/data-slots/capabilities/masking.ts`). Neither the person nor she
+(`lib/framework/data-slots/capabilities/masking.ts`). Neither the person nor the agent
 could read them again, and onboarding would have nothing to mirror back.
 
 `sensitive` stores the words. The admin slot browser masks them unless an admin
@@ -132,12 +132,12 @@ reveals, and the reveal is audited. So the grade is fixed in code and is not a
 per-question setting. `tests/unit/lib/app/onboarding/discovery-slots.test.ts`
 runs the projected grade through the real masking policy.
 
-### Hers to read, never hers to write
+### The agent's to read, never its to write
 
 `GuardedFillSlotCapability` (`lib/app/slots/capture.ts`) refuses any
-`discovery_` slug before the framework writes anything, on every path. Her
+`discovery_` slug before the framework writes anything, on every path. The agent's
 reading appended as a newer version would replace the person's words as the head
-value. The slots are also absent from the capture vocabulary she is shown,
+value. The slots are also absent from the capture vocabulary the agent is shown,
 because that list reads the taxonomy alone.
 
 The taxonomy refuses the `discovery_` slug prefix and the `discovery` group key
@@ -235,8 +235,8 @@ collection. The next question save, import or boot repairs either.
 
 - **Grading a discovery question `special_category`** to protect it. That
   destroys the answer. See above.
-- **Letting her `fill_slot` a discovery slug**, to "keep the baseline up to
-  date". What she learns goes in the taxonomy's slots. The answer stays the
+- **Letting the agent `fill_slot` a discovery slug**, to "keep the baseline up
+  to date". What it learns goes in the taxonomy's slots. The answer stays the
   person's.
 - **Reusing a question id**, even for a question on the same theme. The old
   answers would read as answers to the new words.

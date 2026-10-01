@@ -371,7 +371,7 @@ rather than transcribed from her, and a seed cannot say she has signed them off.
 **The golden set's row is a pointer and nothing more, and that is `fp4`.** The
 prompts stay in `AiDatasetCase` and the control's instructions on the control
 agent, both written by seed 004. Copying either into a table of ours would give
-her prompts two writable homes. What the dataset could not hold is which version
+the prompts two writable homes. What the dataset could not hold is which version
 is current — it is keyed by the version — which is why that one field is a row.
 
 **Neither store is re-exported from `@/lib/app/content`** — only their types

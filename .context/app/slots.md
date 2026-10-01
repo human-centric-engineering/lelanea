@@ -1,9 +1,10 @@
 # The slot taxonomy — what the app aims to learn, as data
 
-What Lelañea learns about a person is a **slot value**; what she is looking for
+What Lelañea learns about a person is a **slot value**; what it is looking for
 is a **slot definition**. This document covers both: where the taxonomy lives
-and how it changes, how she fills it, and — since t-73 — how the person it is
-about reads it back, corrects it, or argues with it ("Her notes", below).
+and how it changes, how the agent fills it, and — since t-73 — how the person it
+is about reads it back, corrects it, or argues with it ("Lelañea's notes",
+below).
 
 **Locations:** `seed-data/drafted/lelanea_slot_taxonomy.json` (the v1 draft) ·
 `lib/app/slots/taxonomy-file.ts` (the file schema, runtime-safe) ·
@@ -87,7 +88,7 @@ decision** — the file ships `provenance.status: draft`.
 §12: _"Development is a tuning signal, never a grade. It must never rank, score,
 or display that as a level."_ `visibility: hidden` is the mechanism — the value
 never leaves the server to a member. The content test asserts it **in both
-directions**: a development slot that became `open` would reach her notes
+directions**: a development slot that became `open` would reach Lelañea's notes
 (`/app/notes`), and an unrelated slot that became `hidden` would be withheld
 from the person it is about for no reason.
 
@@ -500,10 +501,10 @@ and type names.
   on the button, retired rows stay on the page, and Restore is one click.
 - **Choose `mode`.** Never offered; every row is written `targeted`.
 
-## Capture — she writes the profile herself (t-72)
+## Capture — the agent writes the profile itself (t-72)
 
 **Locations:** `lib/app/slots/capture.ts` (the guard) · `lib/app/slots/vocabulary.ts`
-(what she can see) · `lib/app/capabilities.ts` (the mount) ·
+(what the agent can see) · `lib/app/capabilities.ts` (the mount) ·
 `lib/app/agent/pins.ts` (`SLOT_CAPABILITY_SLUGS`) ·
 `lib/app/content/seed-input/slot-taxonomy.ts` (`slotExposureConfig`) ·
 `lib/app/voice/fingerprint.ts` (when to write) ·
@@ -511,23 +512,23 @@ and type names.
 `prisma/seeds/app-lelanea/013-agent-slot-tools.ts` (the grant) ·
 `scripts/app/smoke-slot-capture.ts`
 
-She holds `get_state` and `fill_slot` and calls them inside her own tool loop.
-There is **no side extractor** — owner ruling at claim: a second model reading
-untrusted text with write access to the profile was rejected, and so was
+The agent holds `get_state` and `fill_slot` and calls them inside its own tool
+loop. There is **no side extractor** — owner ruling at claim: a second model
+reading untrusted text with write access to the profile was rejected, and so was
 delaying `done` to run one.
 
 ### The grant, and the two halves of the allowlist
 
-| Facet             | What it says                           | Why                                                                |
-| ----------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `write`           | **absent** — she may write anything    | Any restriction also forbids minting; the owner ruled she may mint |
-| `read` → `groups` | every group whose slots are all `open` | §12 — a `development` slot must never reach a sentence she says    |
+| Facet             | What it says                              | Why                                                                   |
+| ----------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `write`           | **absent** — the agent may write anything | Any restriction also forbids minting; the owner ruled it may mint     |
+| `read` → `groups` | every group whose slots are all `open`    | §12 — a `development` slot must never reach a sentence the agent says |
 
 Daybreak's facet filters on `group` and `scope` only, and **a minted slug has
 neither**. `facetAllows()` refuses a null group against any named list, so a
 `write` facet — however wide — would silently switch minting off. The two
-cannot both hold, and the ruling chose minting. What bounds her writing is her
-instruction, not the allowlist.
+cannot both hold, and the ruling chose minting. What bounds the agent's writing
+is its instruction, not the allowlist.
 
 The read list is **derived** by `readableSlotGroups()`, never typed out, so
 marking a slot hidden is the whole act. That is only lossless while no group
@@ -546,7 +547,7 @@ Nothing under `lib/app/agent` reads the file now. The shape is built in
 spellings of the same config.
 
 **The cost, accepted with the ruling:** the same filter drops null-group slots,
-so **she cannot read her own mints back**. The panel (t-73) reads by its own
+so **the agent cannot read its own mints back**. The panel (t-73) reads by its own
 path, not through `get_state`.
 
 **The grant is operator-owned and filled once**, like 007's: created with its
@@ -604,40 +605,40 @@ delegate straight to `super`. `capabilityDispatcher.register()` refuses any
 inherited one does not count. That is deliberate upstream.
 
 **The refusal is silent**: it is caught by the registration pass, logged as an
-`UnknownError`, and the slug is simply absent, so she goes on searching normally
-and quietly captures nothing. Nothing in `capture.ts` fails. What catches it is
-the `lib/app/capabilities.ts` row in `tests/unit/lib/app/defaults.test.ts`,
-which asserts the handler the dispatcher **actually holds** for the slug — and
-it caught exactly this during t-72's build. Noted on `daybreak#167` for the
-next fork.
+`UnknownError`, and the slug is simply absent, so the agent goes on searching
+normally and quietly captures nothing. Nothing in `capture.ts` fails. What
+catches it is the `lib/app/capabilities.ts` row in
+`tests/unit/lib/app/defaults.test.ts`, which asserts the handler the dispatcher
+**actually holds** for the slug — and it caught exactly this during t-72's
+build. Noted on `daybreak#167` for the next fork.
 
-### And she has to be left able to speak
+### And the agent has to be left able to speak
 
 `fill_slot` sets `skipFollowup`, so a silent capture does not cost a second
 model pass. That is right for an agent that answers _and_ captures in one pass.
-Hers does not: she is told to record before she answers, and the pinned model
+This one does not: it is told to record before it answers, and the pinned model
 obliges with a first pass carrying nothing but tool calls — with the follow-up
 skipped, **that pass is the whole turn**, and someone who has just confided
 something is answered with an empty string. Measured on a real turn, not
 predicted.
 
 `answering()` drops the flag on every return, so the turn always gets a pass in
-which she speaks. It costs one extra model call on any turn she captures in —
-the cost the owner accepted at claim ("each write also adds a tool pass to her
-turn"). It is **not** fixed by rewording the instruction, which would make the
+which the agent speaks. It costs one extra model call on any turn it captures in —
+the cost the owner accepted at claim (each write also adds a tool pass to the
+turn). It is **not** fixed by rewording the instruction, which would make the
 turn's correctness depend on a model choosing to emit text beside a tool call.
 
-### She has to be able to SEE the taxonomy, or none of the above is true
+### The agent has to be able to SEE the taxonomy, or none of the above is true
 
-**Granting `fill_slot` does not make her fill an authored slot.** Nothing in the
-platform tells a model which slugs exist: the tool's advertised schema names one
-example (`"primary_goal"`, not even in this taxonomy), `get_state` returns only
-slots already filled so it cannot introduce an empty one, and Daybreak's module
-context injects a module's slot _values_ — and this taxonomy hangs on no module
-by design.
+**Granting `fill_slot` does not make the agent fill an authored slot.** Nothing
+in the platform tells a model which slugs exist: the tool's advertised schema
+names one example (`"primary_goal"`, not even in this taxonomy), `get_state`
+returns only slots already filled so it cannot introduce an empty one, and
+Daybreak's module context injects a module's slot _values_ — and this taxonomy
+hangs on no module by design.
 
 Measured on the first real turn of the capture smoke: told that someone had not
-spoken to their brother since their father died, she minted
+spoken to their brother since their father died, the agent minted
 `family_communication` and used none of the 50 authored slots covering exactly
 that. t-70's taxonomy and t-71's editor were both unreachable from the only path
 that writes.
@@ -651,7 +652,7 @@ health and belief prose was landing in `framework_slot_value.value`. Found by
 `/security-review`; the cause was worse than the finding.
 
 `lib/app/slots/vocabulary.ts` is the fix: the live taxonomy, one line per slot,
-spliced into her facilitation block per turn. The same message now fills
+spliced into the agent's facilitation block per turn. The same message now fills
 `life_family_strain`, and a `special_category` slug stores
 `<redacted: special_category>`. Both are asserted in the smoke — the second on a
 temporary `special_category` slot the smoke defines for the run, because since
@@ -668,34 +669,34 @@ Four things about it worth knowing before you change it:
   along with the mint-sensitivity default.
 - **It rides in the voice contributor because a request carries one context
   tuple.** A second `registerContextContributor(FACILITATION_CONTEXT_TYPE, …)`
-  would _replace_ her voice block, not add to it.
+  would _replace_ the voice block, not add to it.
 - **Facilitation only.** The admin `voice` path is what the voice comparison
   measures, so adding ~2,000 tokens to it would change what the golden set
   compares between runs.
-- **Hidden slots are left out**, so she cannot fill `development`. The strict
-  reading of §12 — putting a development scale's descriptions in her prompt is
-  the first step toward her reasoning aloud about which rung someone is on.
-  Whoever fills development decides how, with that risk in front of them.
+- **Hidden slots are left out**, so the agent cannot fill `development`. The
+  strict reading of §12 — putting a development scale's descriptions in the
+  agent's prompt is the first step toward it reasoning aloud about which rung
+  someone is on. Whoever fills development decides how, with that risk in front
+  of them.
 
 **Inventing is the exception, and the rule travels with the list.** Owner
-ruling, 21 Sept 2026: she may mint, but only on a strong case — genuinely
+ruling, 21 Sept 2026: the agent may mint, but only on a strong case — genuinely
 salient information with a real gap in the taxonomy — and the behaviour belongs
 behind an admin setting we can switch off while we learn what it does (idea
-#33). The rule is in her instructions _and_ beside the list, because that is
+#33). The rule is in the agent's instructions _and_ beside the list, because that is
 where a model weighing "does anything here fit?" is reading.
 
-**The residual, accepted:** she can still mint, and a mint still cannot be
+**The residual, accepted:** the agent can still mint, and a mint still cannot be
 masked. That is inherent — an invented slug is unclassified, and the only
 fail-safe default would redact every minted value into a sentinel. What reduces
-it is her seeing the taxonomy; what would remove it is the admin setting.
+it is the agent seeing the taxonomy; what would remove it is the admin setting.
 
 ### What proves the write
 
 `HB9`: a value written where nobody can read it is indistinguishable from one
-not written. t-73 closed that — "Her notes" below is the read surface, and it
-is where a person sees the write happen inside the turn that made it. The
-smoke stays, because it proves a different thing: the write itself, end to
-end.
+not written. t-73 closed that — "Lelañea's notes" below is the read surface, and
+it is where a person sees the write happen inside the turn that made it. The
+smoke stays, because it proves a different thing: the write itself, end to end.
 
 **`npm run smoke:app-slot-capture`** runs against the dev database, through the
 real route, in a running app. It asserts
@@ -703,17 +704,17 @@ the value, its conversation, its confidence and its `sourceType`; that every
 write reached the stream as a `capability_result`; that a forced-failed turn
 re-run under the same id adds no version; and that the hidden group is withheld.
 
-It cannot prove she captures the _right_ things at the right confidence. That is
-her judgement, and the voice golden set measures it.
+It cannot prove the agent captures the _right_ things at the right confidence.
+That is the agent's judgement, and the voice golden set measures it.
 
 ### After a change here
 
 A changed grant or tool schema is dark until each database is reseeded **and the
 server restarted** (`sunrise.mcp-reseed`). The dispatcher also caches an agent's
 bindings for five minutes, so a fresh grant can be invisible for that long on a
-process that had already resolved her.
+process that had already resolved the agent.
 
-## Her notes — the member surface (t-73)
+## Lelañea's notes — the member surface (t-73)
 
 **Locations:** `lib/app/slots/notes.ts` (the read and the correction) ·
 `lib/app/slots/notes-query.ts` (search, filter and sort — pure, t-79) ·
@@ -732,7 +733,7 @@ one not written, and the only proof was a smoke script.
 ruling sent person-things to the account menu and this looked like one; it is
 not, because a note appearing inside the turn that wrote it is the whole
 demonstration and nobody witnesses that from inside a popover. And a note has
-**two** doors: correct it, or take it back to her.
+**two** doors: correct it, or take it back to Lelañea.
 
 ### The route
 
@@ -781,21 +782,22 @@ with a sentinel _at capture_. A correction runs through `appendSlotValue`, which
 engine and masks nothing — so "let them fix it" would put raw health and belief
 prose at rest through the one door built to keep it out, and masking the
 correction instead would tell someone their words were kept when they were
-discarded. Refused, with the remedy shipped beside it (`HB10`): _ask her about
+discarded. Refused, with the remedy shipped beside it (`HB10`): _ask Lelañea about
 it_, which routes the words back through the capture path where the masking
 applies. The panel says what happened in a sentence rather than printing
 `<redacted: special_category>`.
 
 **A blanked-out note shows its summary** (t-80, owner ruling 21 Sept 2026).
 Masking covers `value` and nothing else — Daybreak's `fill_slot` passes the
-reasoning note straight to `appendSlotValue` — and her instructions ask for that
-line as a paraphrase of what the person said ([`voice.md`](./voice.md)). The card
-used to say nothing was kept, then print the gist under "How Lelañea came to
-this". The ruling was to keep the gist rather than hide it — the exact words are
-gone, the summary is not, and a note with neither is worth nothing — so the card
-now says exactly that: _a summary rather than your exact words_, and where to find
-it. Nothing on the page may say the words were never kept. Whether the reasoning
-should be masked at capture too is Daybreak's question,
+reasoning note straight to `appendSlotValue` — and the agent's instructions ask
+for that line as a paraphrase of what the person said
+([`voice.md`](./voice.md)). The card used to say nothing was kept, then print
+the gist under "How Lelañea came to this". The ruling was to keep the gist
+rather than hide it — the exact words are gone, the summary is not, and a note
+with neither is worth nothing — so the card now says exactly that: _a summary
+rather than your exact words_, and where to find it. Nothing on the page may say
+the words were never kept. Whether the reasoning should be masked at capture too
+is Daybreak's question,
 [`daybreak#269`](https://github.com/human-centric-engineering/daybreak/issues/269).
 
 **A correction cannot mint.** The route refuses any slug with no head of the
@@ -834,8 +836,8 @@ Delete `readPreviousVersions()` when one lands.
 Four rules, each from a screenshot of the running page, and each easy to undo
 by someone reading the prototype or the persona doc instead of this.
 
-- **Lelañea by name, never "she" or "her".** A panel that pronouns her
-  throughout reads as somebody else describing her to you, and this is the one
+- **Lelañea by name, never "she" or "her".** A panel that says "she"
+  throughout reads as somebody else describing Lelañea to you, and this is the one
   surface where the reader needs to know exactly who is making each claim. (The
   admin surfaces have the opposite rule — "the AI" — for the opposite reason.)
 - **The reader is "you", never "they".** Which is why the taxonomy's own
@@ -845,17 +847,19 @@ by someone reading the prototype or the persona doc instead of this.
   reader as "this person". The slug, humanised, is the card's tag instead.
 - **Certainty is humble at every rung** — _Confident · Fairly sure · Not certain
   · Only a guess_. The top rung said "As certain as it gets", which the owner
-  read as arrogant, and it was: the scale's ceiling is her judgement, not a fact.
-- **The bands are hers.** **8–10 / 5–7 / 3–4 / 1–2**, following the bands her
-  instructions tell her to write in (see [`voice.md`](./voice.md)), with her
+  read as arrogant, and it was: the scale's ceiling is the agent's judgement,
+  not a fact.
+- **The bands are the agent's.** **8–10 / 5–7 / 3–4 / 1–2**, following the bands
+  its instructions tell it to write in (see [`voice.md`](./voice.md)), with its
   "inferred" band split in two for display. The first cut used 9 / 7 / 4 and
   showed a plainly-stated 8 as "Fairly sure" — found by `/pre-pr`'s
   docs-against-code step, which is the only reason it did not ship.
 
-**And the same register one layer down, in what she writes.** A reading and its
-reasoning note are read back by the person they are about, so her instructions
-now say to write the reading **to** them and to make the reasoning a paraphrase
-of what they did with the act named — said, mentioned, noticed, wondered. See
+**And the same register one layer down, in what the agent writes.** A reading
+and its reasoning note are read back by the person they are about, so the
+agent's instructions now say to write the reading **to** them and to make the
+reasoning a paraphrase of what they did with the act named — said, mentioned,
+noticed, wondered. See
 [`voice.md`](./voice.md#the-instructions-are-where-when-to-note-something-lives-t-72).
 
 **"How Lelañea came to this" is a line of text, not a panel** (owner ruling, t-79):
@@ -897,11 +901,11 @@ only, so both ride on the provider for `modulePlace`'s reason
   no refresh. A counter rather than a boolean (nowhere to go after the first
   turn) or a clock (two turns in one millisecond). The panel's first read is its
   mount, so a mount is never a refresh.
-- **`ask` / `takeAsk`** — "Ask her about this" hands the note's question to the
-  composer through the **same `insertAtCaret`** the microphone uses. Three rounds
-  of review went into where those words land and whether focus is taken; a second
-  path would get one of them wrong. `takeAsk` clearing to `null` is what lets the
-  same words be handed over twice.
+- **`ask` / `takeAsk`** — "Ask Lelañea about this" hands the note's question to
+  the composer through the **same `insertAtCaret`** the microphone uses. Three
+  rounds of review went into where those words land and whether focus is taken;
+  a second path would get one of them wrong. `takeAsk` clearing to `null` is
+  what lets the same words be handed over twice.
 
 ### Group headings are derived, and the order is not the taxonomy's
 
@@ -912,12 +916,12 @@ the taxonomy, and an upload can introduce a group the file never described.
 
 Groups are ordered by that heading, alphabetically. **Not by `priorityWeight`**,
 which looked tempting and is a borrowed rationale that does not transfer
-(`fp5`): it is capture sequencing — what she should ask about soonest — and says
-nothing about how a person wants to read their own record. Within a group the
-order is `getSlotHeads`' own, freshest first, which is what puts the note she has
-just written at the top of its group.
+(`fp5`): it is capture sequencing — what the agent should ask about soonest —
+and says nothing about how a person wants to read their own record. Within a
+group the order is `getSlotHeads`' own, freshest first, which is what puts the
+note the agent has just written at the top of its group.
 
-**Slugs she invented have `group: null`, not a magic key.** A mint has no
+**Slugs the agent invented have `group: null`, not a magic key.** A mint has no
 definition and therefore no group; a key standing in for "none" is a value that
 eventually gets compared against a real one. They sort after every taxonomy
 group, under "Lelañea's own headings". (The one place a stand-in exists is the
@@ -926,10 +930,10 @@ _query_ value `group=_own` — see below — and it is never stored or returned.
 #### A minted heading is permanent, and there is no suggestion step
 
 Worth saying plainly, because the panel makes it look provisional and it is not.
-**Nothing promotes a minted slug into the taxonomy.** She coins the name once, at
-capture, and no later pass reviews it, renames it or proposes it to anybody — the
-"propose a slot for approval" mode is the third of idea #33's three and is
-deliberately not built here.
+**Nothing promotes a minted slug into the taxonomy.** The agent coins the name
+once, at capture, and no later pass reviews it, renames it or proposes it to
+anybody — the "propose a slot for approval" mode is the third of idea #33's
+three and is deliberately not built here.
 
 There **is** a path, and it is an admin's: adding a definition in the editor
 whose `slug` is exactly the minted one. The slug is the join key, so every value
@@ -945,7 +949,7 @@ them.
 
 ### Finding your way around (t-79)
 
-A full profile is 50 open targeted slots across five groups plus her own
+A full profile is 50 open targeted slots across five groups plus Lelañea's own
 headings — long enough that "where did Lelañea write down the thing about my
 brother" means scrolling. So the page gains a search, a group filter, a sort and
 a list view. One PR, owner ruling 21 September 2026.
@@ -953,11 +957,11 @@ a list view. One PR, owner ruling 21 September 2026.
 **The query surface.** `GET /api/v1/app/notes?q=&group=&sort=`, Zod-validated
 (`notesQuerySchema`):
 
-| Parameter | Accepts                                     | Notes                                                                     |
-| --------- | ------------------------------------------- | ------------------------------------------------------------------------- |
-| `q`       | trimmed, ≤ 200 characters                   | every word must appear; case and accents folded ("lelanea" → "Lelañea")   |
-| `group`   | a group key, or `_own` for her own headings | `_own` cannot collide: a group key is a slug and starts with a letter     |
-| `sort`    | `grouped` (default) · `recent`              | `recent` is one list, freshest first, each note labelled with its heading |
+| Parameter | Accepts                                           | Notes                                                                     |
+| --------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
+| `q`       | trimmed, ≤ 200 characters                         | every word must appear; case and accents folded ("lelanea" → "Lelañea")   |
+| `group`   | a group key, or `_own` for Lelañea's own headings | `_own` cannot collide: a group key is a slug and starts with a letter     |
+| `sort`    | `grouped` (default) · `recent`                    | `recent` is one list, freshest first, each note labelled with its heading |
 
 A malformed value is a 400. A well-formed `group` nobody has notes under —
 **hidden or nonexistent — gets the same empty answer, byte for byte**, since
@@ -983,7 +987,7 @@ a few kilobytes already in memory. **Revisit if one person passes a few hundred
 notes.** No pagination either: hiding half someone's record behind a control is
 a worse answer to §3.19 than a long page.
 
-**What a search matches.** The reading, how Lelañea came to it, what she was
+**What a search matches.** The reading, how Lelañea came to it, what Lelañea was
 looking for, the tag and the heading. **A blanked-out note never matches on its
 reading**, which is a sentinel — a search for "redacted" would find all of them.
 Its summary is searched like any other since t-80, because the card shows it;
@@ -1053,8 +1057,9 @@ yet"_, which gets no controls at all.
 **To look at it with a real record**, `npx tsx --env-file=.env.local
 scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
 fortnight's worth: every visible group, a corrected and a twice-revised note,
-two blanked-out notes (sentinel value, the summary shown beside it), two of her own headings and one hidden development note that must never
-appear. Dev only; nothing runs it.
+two blanked-out notes (sentinel value, the summary shown beside it), two of
+Lelañea's own headings and one hidden development note that must never appear.
+Dev only; nothing runs it.
 
 ### What a person is not shown
 
@@ -1078,7 +1083,7 @@ appear. Dev only; nothing runs it.
   [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156),
   offered rather than assumed: `values.ts` is insert-only by design, and whether
   it should expose a removal is a product decision as much as an API one.
-- **Admin control over minting** — whether she may invent a slot at all, against
-  admin-authored guidance, or only by proposing one for approval. Owner ruling
-  20 Sept 2026 that this should be a three-mode setting; captured as its own
-  feature rather than built here.
+- **Admin control over minting** — whether the agent may invent a slot at all,
+  against admin-authored guidance, or only by proposing one for approval. Owner
+  ruling 20 Sept 2026 that this should be a three-mode setting; captured as its
+  own feature rather than built here.
