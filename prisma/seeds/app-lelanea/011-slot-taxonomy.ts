@@ -177,9 +177,9 @@ const unit: SeedUnit = {
     // Anything else means the definitions we just wrote reached no agent, and a
     // seed that records success in that state is the exact silent failure this
     // call exists to prevent — the taxonomy would be absent with nothing saying
-    // so until someone noticed the agent was asking nothing. A THROW, not a
-    // warning: an unthrown status lets the runner stamp `SeedHistory`, after
-    // which this unit is skipped forever and the repair never runs.
+    // so until someone noticed she was asking nothing. A THROW, not a warning:
+    // an unthrown status lets the runner stamp `SeedHistory`, after which this
+    // unit is skipped forever and the repair never runs.
     //
     // Only on the path that wrote rows. On the skip path `empty` is reachable
     // without anything being wrong — an admin who has retired every slot — and

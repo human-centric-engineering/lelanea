@@ -57,7 +57,7 @@
  * applies a document filter in the `restricted` branch. The platform default is
  * `full`, in the Prisma column and in `agentCreateSchema` both.
  *
- * So a voice agent left on the default never consults t-25's designation rule:
+ * So an agent of hers left on the default never consults t-25's designation rule:
  * it searches the whole corpus, and material marked `purpose-voice` or
  * `sensitivity-client` is quoted back at someone exactly as if that task had
  * never shipped — while `/admin/app/knowledge` still reports **Agent may quote:
@@ -78,10 +78,10 @@
  *
  * **It binds no capabilities**, and still does not. The exemplar path added in
  * t-27 does not need one — it calls the knowledge search service directly, from
- * outside the turn — and binding `search_knowledge_base` belongs with the
- * surface a member talks to the agent through. The mode is set now so that the
- * rule is already live when a tool does arrive, rather than being something
- * somebody has to remember.
+ * outside the turn — and binding `search_knowledge_base` belongs with the surface
+ * a member talks to her through. The mode is set now so that the rule is already
+ * live when a tool does arrive, rather than being something somebody has to
+ * remember.
  *
  * **It leaves `visibility` at the platform default (`internal`).** Widening it is
  * the job of whichever task builds the surface a member talks to, and shipping a
@@ -105,7 +105,7 @@ import {
 } from '@/lib/app/voice/fingerprint';
 
 /**
- * The mode the voice agents must carry, as a constant rather than a literal at the
+ * The mode her agents must carry, as a constant rather than a literal at the
  * write site.
  *
  * Exported so the test asserts the same string the seed writes. A test carrying
@@ -264,11 +264,11 @@ const unit: SeedUnit = {
           description:
             'The guide a person meets inside the app — her voice, her material, her boundaries.',
           systemInstructions: VOICE_AGENT_SYSTEM_INSTRUCTIONS,
-          // Empty strings here, on purpose: choosing the agent's model is
+          // Empty strings here, on purpose: choosing her model is
           // `005-agent-models.ts`'s job, and it fills these only while they are
           // still blank — so a model an admin picked survives a re-seed. Until
-          // that unit runs the agent resolves like the platform's own seeded
-          // agents, from the install's default chat model.
+          // that unit runs she resolves like the platform's own seeded agents,
+          // from the install's default chat model.
           model: '',
           provider: '',
           isActive: true,

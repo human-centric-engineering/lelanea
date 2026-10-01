@@ -230,7 +230,7 @@ describe('a re-run', () => {
 
     expect(voiceAgent().visibility).toBe('internal');
     expect(world.versions).toHaveLength(2);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('narrowed it since'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('narrowed her since'));
   });
 
   it('leaves a grant an operator switched off switched off', async () => {

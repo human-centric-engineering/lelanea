@@ -2,9 +2,9 @@
  * The operator's switch that pauses conversations — created, off (§08 t-55).
  *
  * `LELANEA_GENERATION_PAUSED` is a Sunrise feature flag: flip it at
- * `/admin/features` and every turn on the guide's seats is refused before any
- * model call with the plain `paused` ending, while everything readable keeps
- * working. See `lib/app/agent/availability.ts`.
+ * `/admin/features` and every turn on her seats is refused before any model call
+ * with the plain `paused` ending, while everything readable keeps working. See
+ * `lib/app/agent/availability.ts`.
  *
  * ## The row this writes, and who owns it (`fp4`)
  *
@@ -20,7 +20,7 @@
  * Sunrise-owned, and adding to it would be a divergence for one row.
  *
  * @see lib/app/agent/availability.ts
- * @see .context/app/agent.md — "When the agent can't answer"
+ * @see .context/app/agent.md — "When she can't answer"
  */
 
 import type { SeedUnit } from '@/prisma/runner';
