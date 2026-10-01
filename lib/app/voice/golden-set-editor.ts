@@ -45,6 +45,7 @@ import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import {
+  GOLDEN_SET_KINDS,
   GOLDEN_SET_REQUIRED_KINDS,
   voiceGoldenSetFileSchema,
   type GoldenSetKind,
@@ -115,7 +116,7 @@ export interface GoldenSetEditorView {
   nextVersion: string | null;
 }
 
-const kindSchema = z.enum(GOLDEN_SET_REQUIRED_KINDS);
+const kindSchema = z.enum(GOLDEN_SET_KINDS);
 const caseMetadataSchema = z.object({
   key: z.string().min(1),
   kind: kindSchema,

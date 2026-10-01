@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 
+import { useOnboardingFinished } from '@/components/app/shell/use-shell-layout';
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
@@ -195,6 +196,14 @@ export function Discovery({
   const currentId =
     chosen ?? position.next ?? (variant === 'module' ? (position.skipped[0] ?? null) : null);
   const current = questions.find((q) => q.id === currentId) ?? null;
+
+  // Every question answered or skipped: the conversation beside them moves on
+  // from the onboarding seat to the facilitator's (t-105). Also on a mount
+  // that is already finished, which is where the server's seat would be too.
+  const onboardingFinished = useOnboardingFinished();
+  React.useEffect(() => {
+    if (position.finished) onboardingFinished();
+  }, [position.finished, onboardingFinished]);
 
   React.useEffect(() => {
     if (!moved.current) return;

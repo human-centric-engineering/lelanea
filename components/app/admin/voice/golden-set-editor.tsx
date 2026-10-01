@@ -33,7 +33,7 @@ import {
   GOLDEN_SET_VERSIONS_ENDPOINT,
   goldenPromptEndpoint,
 } from '@/lib/app/voice/endpoint';
-import { GOLDEN_SET_REQUIRED_KINDS, type GoldenSetKind } from '@/lib/app/content/schemas';
+import { GOLDEN_SET_KINDS, type GoldenSetKind } from '@/lib/app/content/schemas';
 import type { GoldenPrompt, GoldenSetEditorView } from '@/lib/app/voice/golden-set-editor';
 
 /** How each kind of moment reads to an admin. */
@@ -43,6 +43,7 @@ const KIND_LABELS: Record<GoldenSetKind, string> = {
   'grounded-claim': 'A claim from the source material',
   'retrieval-empty': 'Nothing to draw on',
   refusal: 'Refusing',
+  mirroring: 'Handing their words back',
 };
 
 interface PromptDraft {
@@ -99,11 +100,11 @@ function PromptFields({
           onChange={(e) =>
             onChange({
               ...draft,
-              kind: GOLDEN_SET_REQUIRED_KINDS.find((kind) => kind === e.target.value) ?? draft.kind,
+              kind: GOLDEN_SET_KINDS.find((kind) => kind === e.target.value) ?? draft.kind,
             })
           }
         >
-          {GOLDEN_SET_REQUIRED_KINDS.map((kind) => (
+          {GOLDEN_SET_KINDS.map((kind) => (
             <option key={kind} value={kind}>
               {KIND_LABELS[kind]}
             </option>

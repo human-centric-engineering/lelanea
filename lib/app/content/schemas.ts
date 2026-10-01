@@ -781,7 +781,20 @@ export const GOLDEN_SET_REQUIRED_KINDS = [
   'refusal',
 ] as const;
 
-export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];
+/**
+ * Every kind a golden-set prompt may be: the required ones, and those a set may
+ * carry without having to.
+ *
+ * `mirroring` (f-onboarding t-105) is the person's own words handed back. The
+ * case carries the words in the prompt, because the comparison sends no
+ * context type and so no contributor puts their answers in front of the model.
+ * It is allowed rather than required on purpose: a set already stored in an
+ * install has none, and a required kind would refuse every edit to that set
+ * until one was added (`assertCoverage`). The authored file carries one.
+ */
+export const GOLDEN_SET_KINDS = [...GOLDEN_SET_REQUIRED_KINDS, 'mirroring'] as const;
+
+export type GoldenSetKind = (typeof GOLDEN_SET_KINDS)[number];
 
 /**
  * The golden set — seed-data/drafted/lelanea_voice_golden_set.json
@@ -852,7 +865,7 @@ export const voiceGoldenSetFileSchema = z
            * says out loud when they report that one of them regressed.
            */
           key: voiceSituationSchema,
-          kind: z.enum(GOLDEN_SET_REQUIRED_KINDS),
+          kind: z.enum(GOLDEN_SET_KINDS),
           /** What this prompt is probing. Shown to whoever reads the comparison. */
           probe: z.string().min(1),
           prompt: z.string().trim().min(1),

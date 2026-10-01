@@ -239,6 +239,22 @@ describe('the kinds of moment', () => {
   });
 });
 
+describe('a set with no mirroring case (t-105)', () => {
+  it('is still editable: the kind is allowed, never required, so an install seeded before it is not locked', async () => {
+    const { contentHash, prompts } = await view();
+    const mirroring = prompts.find((prompt) => prompt.kind === 'mirroring');
+    expect(mirroring).toBeDefined();
+
+    await editor.deleteGoldenPrompt(mirroring!.key, contentHash!);
+
+    const after = await view();
+    expect(after.prompts.some((prompt) => prompt.kind === 'mirroring')).toBe(false);
+    // ...and the set without one takes further edits.
+    const refusal = after.prompts.find((prompt) => prompt.kind === 'refusal')!;
+    await expect(editor.deleteGoldenPrompt(refusal.key, after.contentHash!)).resolves.toBeDefined();
+  });
+});
+
 describe('starting a new version', () => {
   it('copies the frozen prompts into the next version, points the install at it, and lets it be edited', async () => {
     runIt();
@@ -381,7 +397,7 @@ describe('a stored case that is not the shape the seed writes', () => {
 
     expect(after.malformed).toEqual([0]);
     expect(after.prompts.map((p) => p.key)).not.toContain('first-hello');
-    expect(after.prompts).toHaveLength(8);
+    expect(after.prompts).toHaveLength(goldenSet.prompts.length - 1);
   });
 
   it('blocks every prompt edit until an import repairs it', async () => {

@@ -13,7 +13,7 @@
 
 import { z } from 'zod';
 
-import { GOLDEN_SET_REQUIRED_KINDS, voiceSituationSchema } from '@/lib/app/content/schemas';
+import { GOLDEN_SET_KINDS, voiceSituationSchema } from '@/lib/app/content/schemas';
 
 const text = (label: string, max: number) =>
   z
@@ -102,7 +102,7 @@ export const promptKeySchema = voiceSituationSchema.max(
 
 /** What a prompt asks and what it is there to test. */
 export const goldenPromptEditSchema = z.strictObject({
-  kind: z.enum(GOLDEN_SET_REQUIRED_KINDS),
+  kind: z.enum(GOLDEN_SET_KINDS),
   /** What the answer should show: shown beside both arms to whoever reads them. */
   probe: text('What it tests', 1_000),
   prompt: text('The prompt', 2_000),

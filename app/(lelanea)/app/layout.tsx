@@ -10,6 +10,7 @@ import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
 import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrapper';
 import { gateRedirectFor } from '@/lib/app/gateway/gate';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
+import { conversationSeatForUser } from '@/lib/app/onboarding/conversation-seat';
 import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
 import { BRAND } from '@/lib/brand';
@@ -94,6 +95,14 @@ export const metadata: Metadata = {
  * journey has started it is two indexed reads and no write. It never throws,
  * so a journey that cannot start never keeps anyone out of the shell.
  *
+ * ## Which seat the conversation talks to (t-105)
+ *
+ * The onboarding seat while the discovery questions are ahead of the person,
+ * the facilitator seat after (`lib/app/onboarding/conversation-seat.ts`). Read
+ * here so the first paint is already right; the questions surface moves the
+ * pane on in the browser when the last question is behind them, because a
+ * layout is not re-rendered by moving between its own pages.
+ *
  * ## `h-dvh`, not `h-screen`
  *
  * `100vh` on mobile Safari is the viewport *without* the browser chrome
@@ -126,10 +135,11 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   if (gate) redirect(gate);
 
   await ensureJourneyStarted(session.user.id);
+  const conversationSeat = await conversationSeatForUser(session.user.id);
 
   return (
     <MaintenanceWrapperWithAdminNotice>
-      <ShellLayoutProvider>
+      <ShellLayoutProvider conversationSeat={conversationSeat}>
         <div
           className={cn(
             'bg-background relative flex h-dvh overflow-hidden',

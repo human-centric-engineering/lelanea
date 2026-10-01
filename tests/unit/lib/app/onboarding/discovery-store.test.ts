@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   getJourney: vi.fn(),
   getNodeStates: vi.fn(),
   recordNodeProgress: vi.fn(),
+  invalidateContext: vi.fn(),
 }));
 vi.mock('@/lib/app/onboarding/discovery-slots', () => ({
   getDiscoverySet: mocks.getDiscoverySet,
@@ -44,6 +45,9 @@ vi.mock('@/lib/framework/facilitation/journey/queries', () => ({
 }));
 vi.mock('@/lib/framework/facilitation/journey/progress', () => ({
   recordNodeProgress: mocks.recordNodeProgress,
+}));
+vi.mock('@/lib/orchestration/chat/context-builder', () => ({
+  invalidateContext: mocks.invalidateContext,
 }));
 
 import { JOURNEY_MAP_SLUG, ONBOARDING_NODE_KEY } from '@/lib/app/journey/map-definition';
@@ -171,6 +175,26 @@ describe('answerDiscoveryQuestion', () => {
       answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' })
     ).resolves.toEqual({ outcome: 'unchanged', version: 1 });
     expect(mocks.appendSlotValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the person’s cached facilitation block on both seats, so the next turn reads the new words (t-105)', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'New words.' });
+
+    expect(mocks.invalidateContext).toHaveBeenCalledWith('facilitation', 'facilitator', {
+      userId: USER,
+    });
+    expect(mocks.invalidateContext).toHaveBeenCalledWith('facilitation', 'onboarding', {
+      userId: USER,
+    });
+  });
+
+  it('leaves the cache alone when nothing was written', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
+    mocks.invalidateContext.mockClear();
+
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
+
+    expect(mocks.invalidateContext).not.toHaveBeenCalled();
   });
 
   it('writes the branch into the value, and reads it back', async () => {

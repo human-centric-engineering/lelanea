@@ -24,9 +24,13 @@
  *    (f-resources t-77). While no list has been entered in the admin it is
  *    empty, and nothing is offered, which is the truth.
  *
- * The third and fourth are here rather than in their own contributors because
- * **a request carries one context tuple**, so registering a second loader for
- * either type would replace this block rather than add to it.
+ * 5. **What the person wrote in the discovery questions** — on a facilitation
+ *    seat turn only, after the rest (`lib/app/onboarding/answers-context.ts`,
+ *    f-onboarding t-105).
+ *
+ * The third, fourth and fifth are here rather than in their own contributors
+ * because **a request carries one context tuple**, so registering a second
+ * loader for either type would replace this block rather than add to it.
  *
  * It is on **both** registered types, and the first cut got that wrong: it was
  * facilitation-only, on the grounds that a 2,000-token block would change what
@@ -86,10 +90,11 @@
  * what a model actually reads, and a labelling regression that only showed up in
  * the framing would pass a test written against the former.
  *
- * ## It is the same for every user, on purpose
+ * ## Her voice is the same for every user, on purpose
  *
  * `buildContext` hands a contributor the request's `userId` and partitions its
- * cache by it, so a per-user block is available. This one does not use it. A
+ * cache by it, so a per-user block is available. The voice half of this one
+ * does not use it; only the discovery answers (5, above) are per person. A
  * user's voice leanings are a later filter over the overlays and the exemplars,
  * and until that is designed, one person's preference silently reshaping how her
  * voice comes across is a change nobody asked for and nobody can see.
@@ -119,6 +124,8 @@ import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agent
 import { logger } from '@/lib/logging';
 import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 import { loadResourceOffering } from '@/lib/app/resources/offering';
+import { loadAnswersContext } from '@/lib/app/onboarding/answers-context';
+import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -316,15 +323,25 @@ export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * The voice block for a facilitation seat turn (§08 t-54).
+ * The voice block for a facilitation seat turn (§08 t-54), and the person's own
+ * discovery answers after it (f-onboarding t-105).
  *
  * Registered for `facilitation` beside `voice` because a request carries one
  * context tuple and a facilitation turn's is Daybreak's: without this, her
  * overlays and exemplars reached an admin-chat `voice` turn and no turn a person
  * actually takes. Daybreak registers no contributor for the type, so this claims
  * nothing another tier holds.
+ *
+ * The answers are here, on this path only, for the reason the taxonomy is in
+ * `loadVoiceContext`: one tuple per turn, so a second loader would replace this
+ * block rather than add to it. They are per person, read by `request.userId`,
+ * which the facilitation route sets from the session and `buildContext` keys
+ * its cache on (`lib/app/onboarding/answers-context.ts`).
  */
-export async function loadFacilitationVoiceContext(seat: string): Promise<string> {
+export async function loadFacilitationVoiceContext(
+  seat: string,
+  request: ContextRequest = {}
+): Promise<string> {
   // The voice agent's seats only. The type is every facilitation seat, and
   // Daybreak has six; a seat bound to another agent must not be handed her
   // voice. One read, and `buildContext` caches the block per seat and person for its TTL. Found by
@@ -333,5 +350,19 @@ export async function loadFacilitationVoiceContext(seat: string): Promise<string
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
 
   // `loadVoiceContext` carries the taxonomy as well, for every path — see there.
-  return loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
+  const voice = await loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
+
+  // Guarded for the reason the overlay read is: a throw from a contributor
+  // blanks the WHOLE block, taking the taxonomy with it. A turn without the
+  // answers is a turn that cannot quote them; a turn without the taxonomy mints.
+  let answers = '';
+  try {
+    answers = await loadAnswersContext(seat, request.userId ?? '');
+  } catch (err) {
+    logger.error('discoveryAnswers: could not read them; this turn cannot quote them', {
+      seat,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return [voice, answers].filter(Boolean).join('\n\n');
 }

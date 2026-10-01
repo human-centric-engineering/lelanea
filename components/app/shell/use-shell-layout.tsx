@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 
+import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { modulePath } from '@/lib/app/journey/paths';
 import { useLocalStorage } from '@/lib/hooks/use-local-storage';
 
@@ -202,6 +203,22 @@ export interface ShellLayout {
    */
   noteTurnSettled: () => void;
   /**
+   * The seat the conversation pane speaks to (t-105): the onboarding seat while
+   * the discovery questions are ahead of the person, the facilitator seat after.
+   *
+   * Starts as the layout read it, server-side, and lives here for the
+   * `modulePlace` reason: the questions are answered in the workspace, and the
+   * conversation that has to move on is its sibling. A changed value from the
+   * server (a refresh) is adopted; see {@link noteOnboardingFinished} for the
+   * move made in the browser.
+   */
+  conversationSeat: string;
+  /**
+   * The last discovery question is behind the person: the pane moves to the
+   * facilitator seat now, without waiting for the next server render.
+   */
+  noteOnboardingFinished: () => void;
+  /**
    * Words the composer should be holding, put there by something outside the
    * conversation — today, "Ask Lelañea about this" on a note. `null` when there is
    * nothing waiting, which is almost always.
@@ -243,6 +260,18 @@ export function useShellLayout(): ShellLayout {
   return value;
 }
 
+/** Does nothing: what a surface rendered outside the shell is handed. */
+function nothing(): void {}
+
+/**
+ * The shell's {@link ShellLayout.noteOnboardingFinished}, for the questions
+ * surface — or a no-op outside the shell, which renders the questions on its
+ * own in tests and has no conversation to move on.
+ */
+export function useOnboardingFinished(): () => void {
+  return useContext(ShellLayoutContext)?.noteOnboardingFinished ?? nothing;
+}
+
 /**
  * How long after a turn ends its cost is assumed written.
  *
@@ -278,8 +307,26 @@ function classify(w: number): WidthClass {
  * default" reasoning `Lotus` uses. The real class is adopted in a layout effect
  * before paint (see below), so the correction never reaches the screen.
  */
-export function ShellLayoutProvider({ children }: { children: React.ReactNode }) {
+export function ShellLayoutProvider({
+  children,
+  conversationSeat: serverSeat = CONVERSATION_SEAT,
+}: {
+  children: React.ReactNode;
+  /** The seat the layout read for this person. Defaults to the facilitator seat. */
+  conversationSeat?: string;
+}) {
   const pathname = usePathname();
+
+  // Adopted again whenever the server's value changes, during render rather
+  // than in an effect, so the pane never fetches the old seat's transcript for
+  // a frame first.
+  const [conversationSeat, setConversationSeat] = useState(serverSeat);
+  const [seatFromServer, setSeatFromServer] = useState(serverSeat);
+  if (seatFromServer !== serverSeat) {
+    setSeatFromServer(serverSeat);
+    setConversationSeat(serverSeat);
+  }
+  const noteOnboardingFinished = useCallback(() => setConversationSeat(CONVERSATION_SEAT), []);
   const wsOpen = pathname !== '/app';
 
   const [width, setWidth] = useState<WidthClass>('large');
@@ -732,6 +779,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       noteSlotsWritten,
       turnsSettled,
       noteTurnSettled,
+      conversationSeat,
+      noteOnboardingFinished,
       ask,
       setAsk,
       takeAsk,
@@ -761,6 +810,8 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
       noteSlotsWritten,
       turnsSettled,
       noteTurnSettled,
+      conversationSeat,
+      noteOnboardingFinished,
       ask,
       setAsk,
       takeAsk,

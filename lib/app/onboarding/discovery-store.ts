@@ -12,6 +12,8 @@
  *   only lost for that skip, which comes back on their next visit. The shell
  *   layout's `ensureJourneyStarted` starts the journey on the next entry.
  *   Answers need no journey.
+ * - **A written answer** also drops the cached block that carries the person's
+ *   answers into a turn (`answers-context.ts`, t-105).
  */
 
 import {
@@ -38,6 +40,9 @@ import {
   type DiscoverySetToAsk,
 } from '@/lib/app/onboarding/discovery-slots';
 import { readOnboardingProgress } from '@/lib/app/onboarding/first-run-store';
+import { READABLE_SEATS } from '@/lib/app/conversation/seats';
+import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
+import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 
@@ -156,8 +161,20 @@ export async function answerDiscoveryQuestion(
     if (retried || !isUniqueViolation(error)) throw error;
     return answerDiscoveryQuestion(userId, set, question, answer, true);
   }
+  forgetCachedAnswers(userId);
   await markDiscoveryStarted(userId, { action: 'answer', questionId: question.id });
   return { outcome: 'written', version: written.version };
+}
+
+/**
+ * Drop the person's cached facilitation block on every seat they can talk to,
+ * so the next turn quotes the answer just written rather than a copy of the
+ * block up to a minute old (t-105). Process-local, like the cache itself.
+ */
+function forgetCachedAnswers(userId: string): void {
+  for (const seat of READABLE_SEATS) {
+    invalidateContext(FACILITATION_CONTEXT_TYPE, seat, { userId });
+  }
 }
 
 /** What a beat on the onboarding node did. */
