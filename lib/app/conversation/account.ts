@@ -40,7 +40,7 @@ import type { Citation } from '@/types/orchestration';
 
 /** What a source reads: the reply's own data, live or read back. */
 export interface AccountInput {
-  /** When her reply landed — ISO. */
+  /** When the reply landed — ISO. */
   at: string;
   /** Capability slugs the turn called, in order. */
   capabilities: string[];
@@ -62,7 +62,7 @@ export interface AccountPart {
 
 export type AccountSource = (input: AccountInput) => AccountPart | null;
 
-/** The capabilities her seat may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
+/** The capabilities the guide agent may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
@@ -91,25 +91,25 @@ const lookedUp: AccountSource = (input) => {
 };
 
 /**
- * Looked at what she already understands about the person (§11 t-72).
+ * Looked at what is already understood about the person (§11 t-72).
  *
  * Said without naming a slot, and that is not vagueness. The line is what a
  * member reads, `development` slots are hidden from them by §12 — "a tuning
  * signal, never a grade" — and this source cannot tell which slugs a read
- * covered anyway: the frame carries the capability, not its result. "What she
- * understands about you" is true of all of it and discloses none of it.
+ * covered anyway: the frame carries the capability, not its result. "What is
+ * understood about you" is true of all of it and discloses none of it.
  */
 const readTheProfile: AccountSource = (input) => {
   if (!input.capabilities.includes(READ_THE_PROFILE)) return null;
   return {
     key: 'read_profile',
-    line: 'Looked at what she already understands about you',
-    detail: 'Looked at what she already understands about you.',
+    line: 'Looked at what is already understood about you',
+    detail: 'Looked at what is already understood about you.',
   };
 };
 
 /**
- * Wrote something new into what she understands about the person (§11 t-72).
+ * Wrote something new into what is understood about the person (§11 t-72).
  *
  * **This is the guardrail's own line** — "nothing is understood invisibly". A
  * capture is a silent tool (D5): the model is told not to announce it, and
@@ -135,8 +135,8 @@ const wroteToProfile: AccountSource = (input) => {
   if (!input.capabilities.includes(WRITE_THE_PROFILE)) return null;
   return {
     key: 'wrote_profile',
-    line: 'Added something to what she understands about you',
-    detail: 'Added something to what she understands about you. You can see it, and correct it.',
+    line: 'Added something to what is understood about you',
+    detail: 'Added something to what is understood about you. You can see it, and correct it.',
   };
 };
 
@@ -202,7 +202,7 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
- * A capability this account has no words for. Every slug her seat may call has
+ * A capability this account has no words for. Every slug the guide agent may call has
  * one above (`pins-misuse.test.ts` pins the list against
  * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
  * added before its sentence is: named, never hidden.
@@ -300,7 +300,7 @@ const clock = new Intl.DateTimeFormat(undefined, {
   hour12: false,
 });
 
-/** The time her reply landed, as the prototype shows it: `09:12`, in the reader's zone. */
+/** The time the reply landed, as the prototype shows it: `09:12`, in the reader's zone. */
 export function accountTime(at: string): string {
   return clock.format(new Date(at));
 }

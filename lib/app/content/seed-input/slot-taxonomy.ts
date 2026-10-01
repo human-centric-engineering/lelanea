@@ -43,15 +43,15 @@ export function getSlotTaxonomy(): SlotTaxonomyFile {
 }
 
 /**
- * The groups she may read back — every declared group none of whose slots is
+ * The groups the agent may read back — every declared group none of whose slots is
  * hidden (f-slots t-72).
  *
- * This is the `read` half of her slot exposure allowlist
+ * This is the `read` half of the agent's slot exposure allowlist
  * (seed 013's stored `customConfig`, shaped by {@link slotExposureConfig}),
  * and it is **derived from
  * the taxonomy rather than typed out** so that marking a slot hidden is the
  * whole act. Naming the five open groups by hand would mean a slot turned hidden
- * inside one of them kept being read back into her context — §12's "never a
+ * inside one of them kept being read back into the agent's context — §12's "never a
  * grade" undone by a list nobody remembered to edit.
  *
  * **Group-level, because the allowlist is.** Daybreak's facet filters on
@@ -77,8 +77,8 @@ export function readableSlotGroups(): string[] {
     file.slots.filter((slot) => slot.visibility === 'hidden').map((slot) => slot.group)
   );
   // The discovery answers are their own group, projected from the questions
-  // rather than authored here (f-onboarding t-101), and she reads them back like
-  // any open slot. Existing grants get it from migration
+  // rather than authored here (f-onboarding t-101), and the agent reads them
+  // back like any open slot. Existing grants get it from migration
   // `20261002100000_app_discovery_question_weight`.
   return [
     ...file.groups.map((group) => group.key).filter((key) => !hidden.has(key)),

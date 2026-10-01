@@ -3,8 +3,8 @@
  *
  * ## What each case is actually defending
  *
- * This module exists because granting `fill_slot` did not make her fill an
- * authored slot — nothing told her the slugs existed, so she invented one, and
+ * This module exists because granting `fill_slot` did not make the agent fill
+ * an authored slot — nothing told it the slugs existed, so it invented one, and
  * an invented slug has no definition, so the `special_category` masking that
  * protects health and belief prose could never fire. So the cases below are
  * about a data-protection control, not about prompt tidiness:
@@ -17,7 +17,7 @@
  *   block when a contributor throws, which would take her register and her own
  *   passages with it.
  *
- * The end-to-end proof that she now fills an authored slot is
+ * The end-to-end proof that the agent now fills an authored slot is
  * `npm run smoke:app-slot-capture`; no unit test can make a model choose.
  *
  * @see lib/app/slots/vocabulary.ts
@@ -69,7 +69,7 @@ describe('the vocabulary it offers', () => {
   });
 
   it('carries the rule that inventing is the exception, beside the list', async () => {
-    // Owner ruling, 21 Sept 2026. It is here as well as in her system
+    // Owner ruling, 21 Sept 2026. It is here as well as in the agent's system
     // instructions because this is where a model weighing "does anything here
     // fit?" is reading.
     const body = await slotVocabulary();
@@ -113,7 +113,7 @@ describe('what it withholds', () => {
     ]);
 
     expect(await slotVocabulary()).toBe('');
-    // Said out loud: she is capturing with no taxonomy, so everything she
+    // Said out loud: the agent is capturing with no taxonomy, so everything it
     // records will be a minted slug and nobody would otherwise know why.
     expect(logger.warn).toHaveBeenCalled();
   });

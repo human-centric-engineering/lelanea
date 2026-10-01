@@ -60,7 +60,7 @@ beforeEach(() => {
   retrieveVoiceExemplarsSafely.mockResolvedValue([]);
 });
 
-describe('a turn on one of her seats', () => {
+describe('a turn on a seat bound to the voice agent', () => {
   it('carries her register and the taxonomy in one body', async () => {
     const body = await loadFacilitationVoiceContext('onboarding');
 
@@ -97,8 +97,8 @@ describe('a turn on one of her seats', () => {
   });
 });
 
-describe('a seat that is not hers', () => {
-  it('is handed nothing — neither her voice nor what she is looking for', async () => {
+describe('a seat bound to another agent', () => {
+  it('is handed nothing — neither her voice nor what the voice agent is looking for', async () => {
     // Daybreak has six facilitation seats and the context type covers all of
     // them. A seat bound to another agent must not be given her register, and
     // equally must not be given our taxonomy: what that agent is looking for is

@@ -1,5 +1,5 @@
 /**
- * The browser's side of her notes — the paths the panel test cannot reach
+ * The browser's side of the agent's notes — the paths the panel test cannot reach
  * (f-slots t-73).
  *
  * `notes-panel.test.tsx` drives this module through a real component against a

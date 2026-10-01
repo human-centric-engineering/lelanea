@@ -1,7 +1,7 @@
 /**
  * The turn record — the one row that says which model and which prompt produced
- * a turn with her, what it cost, and whether a second request with the same id
- * may run it again (§08 t-54; product description §8.1, §8.2, §11).
+ * a turn with the agent, what it cost, and whether a second request with the same
+ * id may run it again (§08 t-54; product description §8.1, §8.2, §11).
  *
  * This file is the store. What a claim MEANS to a request — replay, refuse,
  * re-run — is `lib/app/agent/turns.ts`, which is the only caller.
@@ -103,12 +103,13 @@ export async function hashTurnRequest(seat: string, message: string): Promise<st
 }
 
 /**
- * Her fingerprint version as the agent is about to be told it, or null.
+ * The voice fingerprint version as the agent is about to be told it, or null.
  *
  * Read from the COMPOSED prompt, as the voice comparison reads it, for the same
  * reason: the content file says which version is authored, and only the prompt
  * says which version this turn was given. Null for an agent that does not
- * inherit her core — and null, never a guess, when the agent cannot be read.
+ * inherit the fingerprint's core — and null, never a guess, when the agent cannot
+ * be read.
  */
 export async function readAgentFingerprintVersion(agentSlug: string): Promise<string | null> {
   const agent = await prisma.aiAgent.findFirst({
@@ -289,7 +290,7 @@ export interface TurnOutcome {
 
 /**
  * When a turn's messages begin: the person's own message for it, as stamped by
- * the same writer as her reply — falling back to the claim's start when the turn
+ * the same writer as the reply — falling back to the claim's start when the turn
  * has no user message id.
  */
 async function turnWindowStart(

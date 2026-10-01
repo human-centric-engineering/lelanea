@@ -339,7 +339,7 @@ export function ResourcesDrawerBody({ load }: { load: ResourcesLoad }) {
    */
   const status =
     load.status === 'failed'
-      ? 'Her resources could not be loaded. Close this and open it again in a moment.'
+      ? 'The resources could not be loaded. Close this and open it again in a moment.'
       : load.status === 'loaded'
         ? ''
         : 'Finding her words on this…';

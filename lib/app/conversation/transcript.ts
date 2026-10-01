@@ -3,7 +3,7 @@
  *
  * What the pane shows on load, and what the account under each reply reads
  * from: the person's conversation on a seat, as turns — what they said, what
- * she said, and the turn row that says what produced the reply.
+ * the agent said, and the turn row that says what produced the reply.
  *
  * ## Why this is a leaf read and not Sunrise's
  *
@@ -31,8 +31,8 @@
  * ## Which conversation
  *
  * The one the next turn would resume — `resolveFacilitationSurface`, the same
- * door the stream route opens. No surface (the seat unbound, her visibility
- * narrowed, a stage policy) reads as an empty transcript, not an error: the
+ * door the stream route opens. No surface (the seat unbound, the agent's
+ * visibility narrowed, a stage policy) reads as an empty transcript, not an error: the
  * pane still renders, with nothing in it, and a turn would 404 the same way.
  *
  * The message rows are read through the platform's `conversationVisibilityWhere`
@@ -230,11 +230,11 @@ export function assembleTranscript(
     const turn = rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined);
     // A turn that failed on a later pass, and was never retried, leaves its
     // earlier passes' rows behind with no reply linked to any of them. Those
-    // are fragments, not her answer; the turn row's `errorCode` is the record.
+    // are fragments, not the agent's answer; the turn row's `errorCode` is the record.
     // A reply with no turn row at all is from before the seam, and is kept.
-    // Two look the same and are not: a turn still `running` (her final row is
+    // Two look the same and are not: a turn still `running` (its final row is
     // written a moment before the link), and one settled `reply_not_linked`
-    // — she answered on the stream and only the link failed. Both keep their
+    // — the agent answered on the stream and only the link failed. Both keep their
     // rows.
     if (
       !turn &&
@@ -262,8 +262,8 @@ export function assembleTranscript(
 
   for (const row of messages) {
     if (row.role === 'assistant') {
-      // The platform's own marker for a turn that ended without her. Not her
-      // words; the turn row's `errorCode` is the record of what happened.
+      // The platform's own marker for a turn that ended without a reply. Not a
+      // reply; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
       (pendingReply ??= { rows: [] }).rows.push(row);
       continue;

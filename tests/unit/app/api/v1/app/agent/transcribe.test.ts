@@ -44,7 +44,7 @@ import { getAudioProvider } from '@/lib/orchestration/llm/provider-manager';
 import { logCost } from '@/lib/orchestration/llm/cost-tracker';
 import { GET, POST } from '@/app/api/v1/app/agent/transcribe/route';
 
-const HER = { id: 'agent-hers', enableVoiceInput: true };
+const AGENT = { id: 'agent-guide', enableVoiceInput: true };
 
 function clip(bytes = new Uint8Array([1, 2, 3, 4])): File {
   return new File([bytes], 'voice.webm', { type: 'audio/webm' });
@@ -64,7 +64,7 @@ function form(file: File | null = clip(), language?: string): FormData {
   const fd = new FormData();
   if (file) fd.set('audio', file);
   if (language) fd.set('language', language);
-  // A caller's agentId is ignored: hers is set server-side.
+  // A caller's agentId is ignored: the agent's is set server-side.
   fd.set('agentId', 'somebody-elses-agent');
   return fd;
 }
@@ -83,13 +83,13 @@ beforeEach(() => {
   vi.mocked(prisma.aiOrchestrationSettings.findUnique).mockResolvedValue({
     voiceInputGloballyEnabled: true,
   } as never);
-  vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(HER as never);
+  vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(AGENT as never);
   vi.mocked(getAudioProvider).mockResolvedValue(audio() as never);
   transcribe.mockResolvedValue({ text: 'what I said', durationMs: 1200, language: 'en' });
 });
 
 describe('POST — a clip, transcribed', () => {
-  it('returns the text, and writes one cost row with the person’s id and her seat — nothing else', async () => {
+  it('returns the text, and writes one cost row with the person’s id and the agent’s seat — nothing else', async () => {
     const response = await POST(post(form(clip(), 'en')));
     expect(response.status).toBe(200);
     const body = await json<{ data: { text: string; durationMs: number; language: string } }>(
@@ -101,13 +101,13 @@ describe('POST — a clip, transcribed', () => {
     expect(transcribe).toHaveBeenCalledTimes(1);
     expect(transcribe.mock.calls[0][1]).toMatchObject({ model: 'whisper-1', language: 'en' });
 
-    // One cost row: the person's, on her seat, and no other write on the client.
+    // One cost row: the person's, on the agent's seat, and no other write on the client.
     const me = mockAuthenticatedUser('USER').user.id;
     expect(logCost).toHaveBeenCalledTimes(1);
     expect(logCost).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: me,
-        agentId: HER.id,
+        agentId: AGENT.id,
         operation: 'transcription',
         durationMs: 1200,
         model: 'whisper-1',
@@ -132,9 +132,9 @@ describe('POST — a clip, transcribed', () => {
     expect(logged).toContain('"bytes":4');
   });
 
-  it('ignores the caller’s agentId — the cost row is hers', async () => {
+  it('ignores the caller’s agentId — the cost row is the agent’s', async () => {
     await POST(post(form()));
-    expect(logCost).toHaveBeenCalledWith(expect.objectContaining({ agentId: HER.id }));
+    expect(logCost).toHaveBeenCalledWith(expect.objectContaining({ agentId: AGENT.id }));
     expect(JSON.stringify(vi.mocked(logCost).mock.calls)).not.toContain('somebody-elses-agent');
   });
 
@@ -157,7 +157,7 @@ describe('POST — a clip, transcribed', () => {
     expect(logCost).not.toHaveBeenCalled();
   });
 
-  it('refuses when her flag is off, with zero provider calls', async () => {
+  it('refuses when the agent’s flag is off, with zero provider calls', async () => {
     await POST(post(form()));
     expect(transcribe).toHaveBeenCalledTimes(1);
     transcribe.mockClear();
@@ -165,7 +165,7 @@ describe('POST — a clip, transcribed', () => {
     vi.mocked(logCost).mockClear();
 
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
-      ...HER,
+      ...AGENT,
       enableVoiceInput: false,
     } as never);
     const response = await POST(post(form()));
@@ -248,12 +248,12 @@ describe('GET — whether the microphone is offered', () => {
 
     vi.mocked(prisma.aiOrchestrationSettings.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
-      ...HER,
+      ...AGENT,
       enableVoiceInput: false,
     } as never);
     expect((await json<{ data: { voiceInput: string } }>(await get())).data.voiceInput).toBe('off');
 
-    vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(HER as never);
+    vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(AGENT as never);
     vi.mocked(getAudioProvider).mockResolvedValue(null);
     expect((await json<{ data: { voiceInput: string } }>(await get())).data.voiceInput).toBe(
       'no_provider'

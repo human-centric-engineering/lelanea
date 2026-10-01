@@ -1,10 +1,11 @@
 /**
- * The model she is pinned to, and what it costs — nothing else.
+ * The model the voice agent is pinned to, and what it costs — nothing else.
  *
  * Split out of `pins.ts` for one reason: `lib/app/llm-providers.ts` imports this
  * file, and that seam is loaded in every module graph that is about to resolve a
- * provider. `pins.ts` also names her seats, which pulls in Daybreak's vocabulary, and the
- * matrix row; none of that belongs on the path to a model call. This file imports the model registry — synchronous, no database — and
+ * provider. `pins.ts` also names the agent's seats, which pulls in Daybreak's
+ * vocabulary, and the matrix row; none of that belongs on the path to a model
+ * call. This file imports the model registry — synchronous, no database — and
  * nothing more.
  *
  * ## Why the price is here at all
@@ -42,7 +43,7 @@
 import { getModel, registerModels } from '@/lib/orchestration/llm/model-registry';
 import type { ModelInfo } from '@/lib/orchestration/llm/types';
 
-/** The `AiProviderConfig.slug` her turns go to. Explicit, so it is never re-picked. */
+/** The `AiProviderConfig.slug` the agent's turns go to. Explicit, so it is never re-picked. */
 export const PINNED_PROVIDER = 'openai';
 
 /** A dated snapshot, never the alias that can be repointed. */
@@ -87,11 +88,11 @@ export const PINNED_MODEL_INFO: ModelInfo = {
  * this entry, and the provider seam is wired once per process so it does not put
  * it back. After a SUCCESSFUL refresh that is harmless: OpenRouter lists this
  * snapshot at the same split rate, and delists one only when the provider retires
- * the model — at which point her turns fail for a better reason than their price.
- * A FAILED refresh leaves the registry, and this entry, as they were. Nothing on
- * the chat path or in the evaluation worker calls the refresh at all; it takes an
- * admin page sharing the module instance. §08 t-54 owns the turn path and can call
- * this per turn, which closes even that.
+ * the model — at which point the agent's turns fail for a better reason than
+ * their price. A FAILED refresh leaves the registry, and this entry, as they
+ * were. Nothing on the chat path or in the evaluation worker calls the refresh at
+ * all; it takes an admin page sharing the module instance. §08 t-54 owns the turn
+ * path and can call this per turn, which closes even that.
  */
 export function ensurePinnedModelPriced(): void {
   const known = getModel(PINNED_MODEL);

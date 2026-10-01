@@ -98,7 +98,7 @@ describe('endingForCode', () => {
       expect(endingForCode(ENDING_NOT_SENT)).toBe(ENDING_NOT_SENT);
     });
 
-    it('leaves every other code where it was — her reply refused is still a re-runnable turn', () => {
+    it('leaves every other code where it was — a refused reply is still a re-runnable turn', () => {
       expect(endingForCode('output_blocked')).toBe('unavailable');
       expect(endingForCode('citation_required')).toBe('unavailable');
       expect(endingForCode('invalid_request')).toBe('unavailable');

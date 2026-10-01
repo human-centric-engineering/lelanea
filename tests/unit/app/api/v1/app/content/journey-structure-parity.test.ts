@@ -24,7 +24,7 @@
  * FORK NOTE — this runs the real `leaf-bootstrap` seam
  * ---------------------------------------------------------------------------
  * `initLeafApp()` registers Lelañea's seventeen modules so the map view can be
- * built, and the counts asserted are hers. A fork with a different journey pins
+ * built, and the counts asserted are this app's. A fork with a different journey pins
  * its own counts and keeps the parity cases, which hold for any journey.
  *
  * @see app/api/v1/app/content/journey-structure/route.ts

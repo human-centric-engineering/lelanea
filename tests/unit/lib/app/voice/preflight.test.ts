@@ -117,7 +117,7 @@ describe('getVoicePreflight', () => {
     expect(preflight.cost?.highUsd).toBeCloseTo(0.08);
   });
 
-  it('teaches the registry her pinned model’s rate before asking for an estimate', async () => {
+  it('teaches the registry the agent’s pinned model rate before asking for an estimate', async () => {
     // The estimator prices from the registry and never resolves a provider, so
     // the seam that registers the rate does not run on this path. Cold, the
     // dated id is unknown — and the estimate would read as unpriced whenever

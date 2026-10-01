@@ -43,12 +43,12 @@ and startup logs a warning; a later boot that can read the rows renames them in
 the registry. The agent's module context and the map-node
 embeddings read the registered name, so they say what the drawer says.
 
-**`framework_module.name` is Daybreak's, not hers.** The framework copies the
+**`framework_module.name` is Daybreak's, not Lelañea Fulton's.** The framework copies the
 definition's name into that column once, when the row is created, and after
 that an operator may override it in Daybreak's admin. It is the framework's
 display label and nothing of Lelañea's reads it. One consequence: if a new
 environment's very first boot cannot read the rows, the slug-spelled names are
-what that column is created with, and they stay until an operator renames them. Her admin editor
+what that column is created with, and they stay until an operator renames them. The admin editor
 (t-91) does not write it: the module title field says the title is hers and that
 label is Daybreak's. What a title edit does reach is the registered definition:
 every journey write re-registers the modules from the rows

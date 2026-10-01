@@ -1,22 +1,23 @@
 /**
- * An attempt on one of her seats is written down (f-safety t-60).
+ * An attempt on one of the agent's seats is written down (f-safety t-60).
  *
- * The platform's inline guards run on every turn. On her seats they are pinned
- * to observe (`GUARD_MODES`), so a detection never stops a turn, and without an
- * observer it would reach nothing but a log line. Two observers pick it up:
+ * The platform's inline guards run on every turn. On the agent's seats they are
+ * pinned to observe (`GUARD_MODES`), so a detection never stops a turn, and
+ * without an observer it would reach nothing but a log line. Two observers
+ * pick it up:
  *
  * - **Daybreak's escalation contributor** turns an input-guard detection into a
- *   notification plus an audit entry, driven by the policies her seed writes
- *   (`ESCALATION_POLICIES`).
+ *   notification plus an audit entry, driven by the policies the agent's seed
+ *   writes (`ESCALATION_POLICIES`).
  * - **This one** writes it to the safety record, beside the crisis events, so the
  *   person's own export shows it (Art. 15) and it is erased with their account.
  *
  * **Only the input guard.** It is the one that reads what the PERSON wrote. The
- * output and citation guards read her reply, so a hit there is about her, not an
- * attempt by them, and a row in their safety record saying otherwise would be
- * false. It would also reach them in their Art. 15 export under wording that
- * calls it theirs. A guard an operator switched off (`none`) emits an event with
- * nothing flagged in it and is not recorded either.
+ * output and citation guards read the agent's reply, so a hit there is about the
+ * agent, not an attempt by them, and a row in their safety record saying
+ * otherwise would be false. It would also reach them in their Art. 15 export
+ * under wording that calls it theirs. A guard an operator switched off (`none`)
+ * emits an event with nothing flagged in it and is not recorded either.
  *
  * Registered through `lib/app/guard-event-contributors.ts`. Contributors run
  * fire-and-forget after the guard has acted. This one also catches its own

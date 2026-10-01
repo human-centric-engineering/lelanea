@@ -152,8 +152,8 @@ export function registerLeafDriftProbes(): void {
     table: 'app_turn',
     // `ON DELETE CASCADE` is the whole Art. 17 disposition for a person's turn
     // records — no erasure hook stands behind it. Re-created with `NO ACTION`,
-    // `eraseUser()` would fail with `P2003` for everyone who ever talked to her;
-    // with `SET NULL`, on the NOT NULL column.
+    // `eraseUser()` would fail with `P2003` for everyone who ever talked to the
+    // agent; with `SET NULL`, on the NOT NULL column.
     probe: constraintExists('app_turn_userId_fkey', 'ON DELETE CASCADE'),
   });
 

@@ -5,9 +5,9 @@
  * compiler. Change a clause in the core to fix one awkward reply and three other
  * replies quietly get worse — nothing fails, nothing is logged, and there is no
  * way to notice except by reading everything again. This module is the part of
- * the remedy that can be built: it queues the fixed golden set through her
- * assembled prompt path AND through a bare model, over the same cases, with each
- * side's answers attached to the words that produced them.
+ * the remedy that can be built: it queues the fixed golden set through the
+ * agent's assembled prompt path AND through a bare model, over the same cases,
+ * with each side's answers attached to the words that produced them.
  *
  * ## What is Sunrise's, and what is ours (`fp1`)
  *
@@ -42,8 +42,8 @@
  *
  * | Check | The misconfiguration it catches |
  * | --- | --- |
- * | the fingerprint arm's prompt carries a version marker | the profile came detached from her agent |
- * | the bare arm's prompt carries none | somebody pointed the control at her profile |
+ * | the fingerprint arm's prompt carries a version marker | the profile came detached from the voice agent |
+ * | the bare arm's prompt carries none | somebody pointed the control at the voice profile |
  * | the two prompts differ | both arms are the same agent, or the same text |
  * | provider, model and temperature match | the comparison is silently a model comparison |
  *

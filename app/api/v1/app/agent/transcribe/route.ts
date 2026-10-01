@@ -10,7 +10,7 @@
  * GET /api/v1/app/agent/transcribe — `{ voiceInput: 'available' | 'off' |
  * 'no_provider' }`, what the pane asks before offering the microphone.
  *
- * Authentication: required — only members talk to her.
+ * Authentication: required — only members talk to the agent.
  *
  * Rate limiting: the `/api/v1/**` section cap, and the platform's audio
  * sub-cap keyed on the person (`audio:app:<userId>`) — the one expensive
@@ -57,7 +57,7 @@ export const GET = withAuth(
     ownership: {
       decidedBy: 'nothing',
       because:
-        'Serves one install-wide word — whether a voice note may be sent. It reads an operator switch, her agent flag and whether a provider exists, nothing keyed to the caller, so every member gets the same answer.',
+        'Serves one install-wide word — whether a voice note may be sent. It reads an operator switch, the agent’s flag and whether a provider exists, nothing keyed to the caller, so every member gets the same answer.',
     },
   }
 );
@@ -85,14 +85,14 @@ export const POST = withAuth(async (request, session) => {
     });
   }
 
-  // The two switches, and her agent, before the provider is even asked.
+  // The two switches, and the agent, before the provider is even asked.
   const switches = await voiceInputSwitches();
   if (!switches.on || switches.agentId === null) {
     return errorResponse('Voice input is off', { code: 'VOICE_DISABLED', status: 403 });
   }
   const agentId = switches.agentId;
 
-  // The validator wants an `agentId` field; it is hers, never the caller's.
+  // The validator wants an `agentId` field; it is the agent's, never the caller's.
   formData.set('agentId', agentId);
   const validation = validateTranscribeUpload(formData);
   if (!validation.ok) return validation.response;

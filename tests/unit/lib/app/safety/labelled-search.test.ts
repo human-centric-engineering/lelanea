@@ -1,11 +1,11 @@
 /**
- * Her search results say whose material each passage is (f-safety t-60).
+ * The agent's search results say whose material each passage is (f-safety t-60).
  *
  * Asserted on what the MODEL reads, not on the capability's return value. The
  * result goes through the platform's real `extractCitations`, the step that
  * turns it into the tool message the chat handler sends back, and the test
  * reads the serialised message. A label the citation step dropped would pass a
- * test written against the envelope and never reach her.
+ * test written against the envelope and never reach the agent.
  *
  * The platform's search and access resolver are mocked (no database, no
  * embedding). Everything between them and the tool message is real.
@@ -62,12 +62,12 @@ function hit(documentId: string, documentName: string, content: string) {
 const HERS = hit('doc-hers', 'The Mission', 'Remembering is not becoming.');
 const PLATFORM = hit('doc-platform', 'Agentic Design Patterns', 'Reflection is a pattern where…');
 
-const CONTEXT = { agentId: 'agent-her', userId: 'user-1' };
+const CONTEXT = { agentId: 'agent-voice', userId: 'user-1' };
 
 /** What the two document lookups find: her designated corpus, and the platform's. */
 const corpus = { quotable: [] as string[], system: [] as string[] };
 
-/** The tool message the chat handler would send her, parsed back. */
+/** The tool message the chat handler would send the agent, parsed back. */
 function toolMessage(result: unknown): Array<Record<string, unknown>> {
   const { augmentedResult } = extractCitations('search_knowledge_base', result, 1);
   const parsed: unknown = JSON.parse(JSON.stringify(augmentedResult));
@@ -107,7 +107,7 @@ beforeEach(() => {
   );
 });
 
-describe('for her', () => {
+describe('for the agent', () => {
   it('labels every passage by origin, in the message the model reads', async () => {
     const result = await new LabelledSearchKnowledgeCapability().execute(
       { query: 'remembering' },
@@ -132,11 +132,11 @@ describe('for her', () => {
     ]);
   });
 
-  it('does not disown a document she reaches another way — it is unverified, not "not hers"', async () => {
-    // An app document an operator granted her agent directly: in her access
-    // set, not in her designated corpus, not the platform's.
+  it('does not disown a document the agent reaches another way — it is unverified, not "not hers"', async () => {
+    // An app document an operator granted the voice agent directly: in its
+    // access set, not in Lelañea Fulton's designated corpus, not the platform's.
     mocks.search.mockResolvedValue({
-      results: [hit('doc-granted', 'Session notes', 'Something granted to her.')],
+      results: [hit('doc-granted', 'Session notes', 'Something granted to the agent.')],
       embedding: { model: 'm', provider: 'p', inputTokens: 1, costUsd: 0 },
     });
     const passages = toolMessage(

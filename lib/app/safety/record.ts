@@ -3,8 +3,8 @@
  * never the words (f-safety t-58).
  *
  * Two kinds share `app_safety_event`: `crisis` (t-58) and `misuse` (t-60, the
- * input guard flagging a message on one of her seats). What a row holds and why it holds no
- * text is on the model (`prisma/schema/app.prisma`).
+ * input guard flagging a message on one of the agent's seats). What a row holds
+ * and why it holds no text is on the model (`prisma/schema/app.prisma`).
  *
  * **A failed write never withholds the resource.** The person is owed the
  * resource whether or not the record was kept, so the caller logs and moves on
@@ -56,9 +56,9 @@ export interface MisuseEventInput {
 }
 
 /**
- * That a guard flagged a message on one of her seats (f-safety t-60). Only which
- * guard and what it did. The platform's guard events carry no text, and this
- * row never will either.
+ * That a guard flagged a message on one of the agent's seats (f-safety t-60).
+ * Only which guard and what it did. The platform's guard events carry no text,
+ * and this row never will either.
  */
 export async function recordMisuseEvent(event: MisuseEventInput): Promise<void> {
   await prisma.appSafetyEvent.create({

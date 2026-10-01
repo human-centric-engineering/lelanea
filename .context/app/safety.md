@@ -6,9 +6,9 @@ description: The crisis path — two tiers decided without a model, a context ch
 # Safety — someone in danger
 
 f-safety t-58; product description §8.1, §12. Before this, a person who told
-her they wanted to end their life got whatever the model said, and when the
+the agent they wanted to end their life got whatever the model said, and when the
 provider was down or paused they got "the conversation can't answer right now".
-The only redirect was a rule in her prompt, which the model may or may not
+The only redirect was a rule in the agent's prompt, which the model may or may not
 perform.
 
 Now the message is checked **before anything else in the turn** — before the
@@ -40,10 +40,10 @@ showing: a soft hit on a refused retry shows nothing, and records nothing.
 
 Owner ruling, 19 Sept 2026.
 
-| Tier   | Means                                                                   | The turn                                    |
-| ------ | ----------------------------------------------------------------------- | ------------------------------------------- |
-| `hard` | unambiguous danger: suicide, self-harm, harming another, immediate risk | answered with the resource. No model call   |
-| `soft` | distress that may be danger ("I can't go on", "nobody would miss me")   | the resource first, then her turn, as usual |
+| Tier   | Means                                                                   | The turn                                            |
+| ------ | ----------------------------------------------------------------------- | --------------------------------------------------- |
+| `hard` | unambiguous danger: suicide, self-harm, harming another, immediate risk | answered with the resource. No model call           |
+| `soft` | distress that may be danger ("I can't go on", "nobody would miss me")   | the resource first, then the agent's turn, as usual |
 
 - **Deterministic.** A phrase list over normalised text (`detect.ts`): the
   platform input guard's approach — zero-width characters stripped, whitespace
@@ -60,9 +60,9 @@ Owner ruling, 19 Sept 2026.
 - **Idiom is kept out by shape.** "This job is killing me", "I could kill for a
   coffee" and "dying to know" match nothing, because every hard phrase names the
   self or another person as the object of the harm.
-- **The soft tier leans on her prompt.** Her reply after a soft frame follows the
-  crisis rule her fingerprint already carries. That rule is no longer the only
-  safeguard: the resource is on screen before she says a word.
+- **The soft tier leans on the agent's prompt.** The reply after a soft frame
+  follows the crisis rule the fingerprint already carries. That rule is no longer
+  the only safeguard: the resource is on screen before the reply's first word.
 
 ## The context check — it may soften, never hide
 
@@ -269,10 +269,10 @@ it `after()`.
 One code, `crisis`, in the two shapes Sunrise's own event validator already
 accepts, plus a structured `resource`:
 
-| Tier   | Frame                                                    | Then                                  |
-| ------ | -------------------------------------------------------- | ------------------------------------- |
-| `hard` | `{ type: 'error', code: 'crisis', message, resource }`   | nothing more: the turn has ended      |
-| `soft` | `{ type: 'warning', code: 'crisis', message, resource }` | her turn: `start`, `content`…, `done` |
+| Tier   | Frame                                                    | Then                                          |
+| ------ | -------------------------------------------------------- | --------------------------------------------- |
+| `hard` | `{ type: 'error', code: 'crisis', message, resource }`   | nothing more: the turn has ended              |
+| `soft` | `{ type: 'warning', code: 'crisis', message, resource }` | the agent's turn: `start`, `content`…, `done` |
 
 ```ts
 resource: {
@@ -295,7 +295,7 @@ resource: {
   model turn is written, and what the person typed stays in the box.
 - **The copy is neutral and authored.** f-conversation lays it out as it is
   (`CrisisRow`, §10 t-65) — every string in `resource` comes from the tables,
-  never from a model, and none is rewritten into her register.
+  never from a model, and none is rewritten into Lelañea Fulton's register.
 - **A platform frame never becomes `crisis`.** `toClientStream()` still maps an
   unknown platform code to `unavailable`; the crisis frame is added outside it.
 - **Soft, then paused or failed:** the crisis frame, then that ending. The
@@ -323,7 +323,7 @@ hit), the locale and the region shown.
 - **Exported** as the `safety` section of a subject-access request
   (`lib/app/leaf-data-export.ts`).
 - **`kind: 'misuse'`** (t-60): the input guard flagged a message on one of
-  her seats. The row holds only the guard and the mode it acted in (`guard`,
+  the agent's seats. The row holds only the guard and the mode it acted in (`guard`,
   `guardOutcome`); `categories` is empty. See [Misuse](#misuse--attempts-are-seen-never-obeyed).
 
 ## Proving it
@@ -332,7 +332,7 @@ hit), the locale and the region shown.
   set's anxious-not-in-danger prompt, evasion by zero-width and full-width
   characters), the regional resolution and its fallbacks, each context-check
   failure, and the seam: a hard hit with the model call throwing and with
-  generation paused calls no model; a soft hit's frame precedes her first words.
+  generation paused calls no model; a soft hit's frame precedes the reply's first words.
 - `tests/unit/lib/app/safety/resource.test.ts` "where the words come from
   (t-63 / t-88)" — stored rows served once seeded, and a **rejection** for each
   of the three states that used to reach the file: no copy row, a read that
@@ -351,41 +351,41 @@ hit), the locale and the region shown.
 
 ## Misuse — attempts are seen, never obeyed
 
-f-safety t-60; product description §8.5, §8.6. Someone may try to talk her out
-of role, into therapy, into reciting her prompt, or into deleting their data.
-Before this task her refusals were rules in her prompt that no attempt had ever
+f-safety t-60; product description §8.5, §8.6. Someone may try to talk the agent out
+of role, into therapy, into reciting its prompt, or into deleting their data.
+Before this task its refusals were rules in its prompt that no attempt had ever
 been tested against, and an attempt left no trace.
 
-**Her refusals stay in her prompt and are proved by cases.** Sunrise's guards
-cannot speak in her voice: they only raise the mode of three fixed detectors,
+**The agent's refusals stay in its prompt and are proved by cases.** Sunrise's
+guards cannot speak in Lelañea Fulton's voice: they only raise the mode of three fixed detectors,
 the output guard scans after the reply has streamed, and every guard error
 reaches the person as the neutral `unavailable` ending.
 
 - **The cases.** The golden set (v1.1) carries four `refusal` prompts:
-  therapy, her instructions, a role change, and deleting their data. `refusal`
+  therapy, the agent's instructions, a role change, and deleting their data. `refusal`
   is a required kind, so a set that loses them does not parse. They are heard
   through every voice comparison like the other five.
 - **The smoke.** `npm run smoke:app-misuse` puts a canary string at the top of
-  her real composed prompt and asks the pinned model each case. It fails on the
-  canary, on any 40-character run of her prompt repeated verbatim, or on
+  the agent's real composed prompt and asks the pinned model each case. It fails on the
+  canary, on any 40-character run of that prompt repeated verbatim, or on
   "DAN mode on". It prints every reply, because they are meant to be read.
 
-**Her tools cannot delete anything, and cannot act on anyone else's behalf.**
-`HER_CAPABILITY_SLUGS` (`lib/app/agent/pins.ts`) is the only list her grants may
+**The agent's tools cannot delete anything, and cannot act on anyone else's behalf.**
+`HER_CAPABILITY_SLUGS` (`lib/app/agent/pins.ts`) is the only list its grants may
 draw from, and every granted list is typed against it.
 `tests/unit/lib/app/agent/pins-misuse.test.ts` names every write capability the
 install ships and fails if one is added. The chat path refuses any tool name the
-model emits that she was not advertised (Sunrise's `tool_not_advertised`). The
-smoke drives that refusal for her with a stub model asking for
-`write_user_memory`, and reads her real advertised set.
+model emits that the agent was not advertised (Sunrise's `tool_not_advertised`).
+The smoke drives that refusal for the agent with a stub model asking for
+`write_user_memory`, and reads its real advertised set.
 
 ### The ceiling was restated once, and why
 
-t-60 shipped it as _"she may only ever hold tools that read"_. §11 needs her to
-record what she learns about a person as she learns it, so on **20 Sept 2026**
+t-60 shipped it as _"the agent may only ever hold tools that read"_. §11 needs the agent
+to record what it learns about a person as it learns it, so on **20 Sept 2026**
 the owner restated it rather than letting it be worked around:
 
-> Nothing she holds may **delete** anything, or act on **anyone else's** behalf.
+> Nothing the agent holds may **delete** anything, or act on **anyone else's** behalf.
 
 `fill_slot` is the one capability admitted under it — `SELF_WRITE_CAPABILITY_SLUGS`,
 one entry — and the argument is made in the constant's own docblock rather than
@@ -394,7 +394,7 @@ new version rather than overwriting, and it sends and spends nothing on anyone's
 account. The only spend it can cause is the prose→typed extraction fallback,
 which is a cost row on this install, like the search embedding.
 
-So the sentence that mattered is unmoved: someone who talks her into deleting
+So the sentence that mattered is unmoved: someone who talks the agent into deleting
 their account, their data or anything else still meets a tool set in which
 **nothing deletes**.
 
@@ -405,22 +405,22 @@ the check. **Adding a second is a security review, not an edit**; a list that
 grows past a couple of entries means the exception has become the rule and the
 ceiling needs restating again rather than widening again.
 
-**Her search results say whose material they are.** The platform lets
-`system`-scoped documents through to every restricted agent, so her search can
+**The agent's search results say whose material they are.** The platform lets
+`system`-scoped documents through to every restricted agent, so its search can
 return the platform's reference corpus. `LabelledSearchKnowledgeCapability`
 (`lib/app/safety/labelled-search.ts`) is mounted over the built-in slug by
-`lib/app/capabilities.ts`. For her agents only, it adds an `origin` sentence to
-each result. Her designated corpus is "Lelañea's material". The platform's
-`system`-scoped corpus is "Not Lelañea's material…". Anything else she can
-reach, such as a document an operator granted her agent directly, or any result
+`lib/app/capabilities.ts`. For the app's agents only, it adds an `origin` sentence
+to each result. The agent's designated corpus is "Lelañea's material". The platform's
+`system`-scoped corpus is "Not Lelañea's material…". Anything else the agent
+can reach, such as a document an operator granted it directly, or any result
 when the check fails, is "Not confirmed as Lelañea's material…". "Not hers" is
 used only where that is known. The label is on the tool message the model
 reads, and the test asserts it there.
 
-**Her guards observe; attempts reach a person.** Seed
+**The agent's guards observe; attempts reach a person.** Seed
 `app-lelanea/009-misuse-observed`:
 
-- sets her `inputGuardMode` / `outputGuardMode` to `log_only`, only while they
+- sets the agent's `inputGuardMode` / `outputGuardMode` to `log_only`, only while they
   are unset. An admin's `block` is left alone and the smoke reports it.
 - creates one Daybreak `escalation` policy per seat: input guard, `flagged`,
   `medium`, so a detection notifies a reviewer and writes a
@@ -429,11 +429,11 @@ reads, and the test asserts it there.
 
 `lib/app/guard-event-contributors.ts` registers `recordGuardDetection`
 (`lib/app/safety/misuse.ts`), which writes the `misuse` row when the input
-guard flags a message on her seats. The output and citation guards read her
-reply, not what the person wrote, so they are not recorded against the person.
+guard flags a message on the agent's seats. The output and citation guards read
+the reply, not what the person wrote, so they are not recorded against the person.
 
 This also closes the `input_blocked` misfit §08 left in the endings: nothing on
-her seats blocks, so no heuristic hit can look like an outage.
+the agent's seats blocks, so no heuristic hit can look like an outage.
 
 **After a deploy, reseed** (`npm run db:seed`). The guard modes and the
 escalation policies exist only where unit 009 has run.

@@ -1,6 +1,6 @@
 /**
- * How a turn with her ends, when it ends without her answer — one small, plain
- * vocabulary the client can rely on (§08 t-55; product description §8.1).
+ * How a turn with the agent ends, when it ends without its answer — one small,
+ * plain vocabulary the client can rely on (§08 t-55; product description §8.1).
  *
  * The platform ends a failed turn with an `error` frame whose `code` is one of
  * several dozen (`http_429`, `missing_api_key`, `agent_not_found`, …) and whose
@@ -12,7 +12,7 @@
  *
  * | Ending        | Means                                                | What the person can do                        |
  * | ------------- | ---------------------------------------------------- | --------------------------------------------- |
- * | `unavailable` | she could not answer — anything but the three below  | try again: the turn id makes a retry safe     |
+ * | `unavailable` | the agent could not answer — none of the three below | try again: the turn id makes a retry safe     |
  * | `timed_out`   | the whole-turn deadline passed                       | try again, the same way                       |
  * | `paused`      | an operator paused conversations on purpose          | wait; everything readable still works         |
  * | `not_sent`    | the message itself was refused — a retry fails again | say it another way; nothing else is affected  |
@@ -25,15 +25,15 @@
  * code: the input guard in `block` mode (`input_blocked` — after the person's
  * row is written, so it is in the transcript), and the two conversation caps
  * (`conversation_cap_reached`, `conversation_length_cap_reached` — before it).
- * All three are about *this message*, not about her: "try again" under the same
- * id runs it into the same refusal, so the copy must not offer one (`HB10`).
- * `output_blocked` is deliberately not here — that is her reply refused, not
+ * All three are about *this message*, not about the agent: "try again" under the
+ * same id runs it into the same refusal, so the copy must not offer one (`HB10`).
+ * `output_blocked` is deliberately not here — that is the reply refused, not
  * the message, and a re-run can answer differently.
  *
  * **One more code, `crisis`, is not an ending of this kind** (f-safety t-58).
  * It is never mapped from a platform frame: the crisis path builds it itself,
  * outside {@link toClientStream}, and it carries the resource a person in danger
- * is shown — as an `error` when the turn ends there, as a `warning` when her
+ * is shown — as an `error` when the turn ends there, as a `warning` when the
  * turn follows. See `lib/app/safety/resource.ts` for the contract. A platform
  * frame that happened to say `crisis` would still map to `unavailable` here.
  *
@@ -43,16 +43,16 @@
  * spent, limit, reset date — so it is its own frame, {@link ceilingReachedFrame},
  * and a platform frame saying `ceiling_reached` still maps to `unavailable`.
  *
- * **The copy here is neutral on purpose.** The words in her register, and the
- * banner, are f-conversation's; this is the contract they build against, with a
- * default that is true and says what to do (`HB10`).
+ * **The copy here is neutral on purpose.** The words in Lelañea Fulton's
+ * register, and the banner, are f-conversation's; this is the contract they build
+ * against, with a default that is true and says what to do (`HB10`).
  *
- * @see .context/app/agent.md — "When she can't answer"
+ * @see .context/app/agent.md — "When the agent can't answer"
  */
 
 import type { ChatEvent } from '@/types/orchestration';
 
-/** The four ways a turn ends without her answer. */
+/** The four ways a turn ends without the agent's answer. */
 export type TurnEnding = 'unavailable' | 'timed_out' | 'paused' | 'not_sent';
 
 export const ENDING_UNAVAILABLE = 'unavailable';
@@ -91,8 +91,8 @@ const STILL_THINKING_MESSAGE = 'Still thinking — this is taking a little longe
 
 /**
  * Platform codes that mean the provider ran out of time, rather than refused or
- * failed. `aborted` is here because the only thing that aborts her model call is
- * the whole-turn deadline: the turn seam passes its own signal, not the
+ * failed. `aborted` is here because the only thing that aborts the agent's model
+ * call is the whole-turn deadline: the turn seam passes its own signal, not the
  * request's, so a client going away aborts nothing (see `turns.ts`).
  */
 const TIMED_OUT_CODES: ReadonlySet<string> = new Set([
@@ -122,7 +122,7 @@ export function endingForCode(code: string): TurnEnding {
   return 'unavailable';
 }
 
-/** The frame a turn ends on. The only shape of `error` the browser ever sees from her seat. */
+/** The frame a turn ends on. The only shape of `error` the browser ever sees from the agent's seat. */
 export function endingFrame(ending: TurnEnding): Extract<ChatEvent, { type: 'error' }> {
   return { type: 'error', code: ending, message: ENDING_MESSAGES[ending] };
 }
@@ -149,8 +149,9 @@ const resetDay = new Intl.DateTimeFormat('en-GB', {
 /**
  * The reset as a person reads it — `1 October` — in UTC, because the month
  * resets at the first instant of the next UTC month wherever they are. One
- * formatter, shared with her words for the same ending (`ceilingEnding`), so the
- * neutral copy and hers cannot name different days.
+ * formatter, shared with the copy in Lelañea Fulton's register for the same
+ * ending (`ceilingEnding`), so the neutral copy and those cannot name different
+ * days.
  */
 export function formatResetDay(at: Date): string {
   return resetDay.format(at);
@@ -161,7 +162,8 @@ export function formatResetDay(at: Date): string {
  *
  * Such a limit is a setting, not a month's spend, and it will be the same after
  * the reset — so no copy for it may name a reset date as the day replies
- * return. Asked by the frame's neutral words and by hers alike (t-96).
+ * return. Asked by the frame's neutral words and by the copy in Lelañea Fulton's
+ * register alike (t-96).
  *
  * **Exactly the gate's test, and not "prints as $0.00".** `ceiling.ts` allows a
  * turn while spend is below a positive limit, so a limit of $0.004 does let one

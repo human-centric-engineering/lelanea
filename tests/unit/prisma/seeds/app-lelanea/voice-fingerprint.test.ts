@@ -170,7 +170,7 @@ vi.mock('@/lib/db/client', () => ({
       ),
     },
     // The resolver's own restricted-branch queries, and the corpus
-    // contributor's. Empty: her agents carry no operator grants, and this file
+    // contributor's. Empty: the voice agents carry no operator grants, and this file
     // is about the MODE rather than about which documents it admits — which
     // `tests/unit/lib/app/voice/corpus-access.test.ts` already pins.
     aiAgentKnowledgeDocument: { findMany: vi.fn(async () => []) },
@@ -501,7 +501,7 @@ describe('what a change to the tree has to re-run', () => {
     // derives from `CORPUS_AGENT_SLUG_PREFIX`, which lives there — change the
     // prefix and unit 002 re-runs while this one would not, leaving an agent
     // whose slug no longer matches `isCorpusAgent()`. The corpus contributor
-    // then stops widening her restricted agent, and her designated material
+    // then stops widening the restricted voice agent, and her designated material
     // drops out of its document set silently.
     //
     // The loader entry is the one that has been wrong rather than missing.
@@ -561,14 +561,14 @@ describe('what a change to the tree has to re-run', () => {
 });
 
 describe('the mode, through the resolver that actually decides', () => {
-  it('leaves at least one of her agents behind to ask about', async () => {
+  it('leaves at least one corpus agent behind to ask about', async () => {
     // fp6: every assertion below is a `for` over this set, and an empty set
     // would make all of them pass while proving nothing.
     await runSeed();
 
-    const hers = world.agents.filter((agent) => isCorpusAgent(agent.slug));
-    expect(hers.length).toBeGreaterThan(0);
-    expect(hers.map((agent) => agent.slug)).toContain(
+    const corpusAgents = world.agents.filter((agent) => isCorpusAgent(agent.slug));
+    expect(corpusAgents.length).toBeGreaterThan(0);
+    expect(corpusAgents.map((agent) => agent.slug)).toContain(
       `${CORPUS_AGENT_SLUG_PREFIX}${VOICE_AGENT_SLUG.slice(CORPUS_AGENT_SLUG_PREFIX.length)}`
     );
   });

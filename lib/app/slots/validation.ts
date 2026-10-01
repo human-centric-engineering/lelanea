@@ -199,13 +199,13 @@ export const slotTaxonomyUploadSchema = z.strictObject({
 export const MAX_MINTED_SLUG_LENGTH = 120;
 
 /**
- * Longest a member's correction may be. A note is a sentence or two she wrote;
+ * Longest a member's correction may be. A note is a sentence or two the agent wrote;
  * this is generous against that without being a door for a paste of a book.
  */
 export const MAX_NOTE_LENGTH = 2000;
 
 /**
- * A member correcting one of her notes (t-73).
+ * A member correcting one of Lelañea's notes (t-73).
  *
  * Not a definition schema, and it is here for the reason the header gives: the
  * panel is a client component and imports these bounds, so the schema cannot

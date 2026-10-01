@@ -7,14 +7,14 @@
  * chat, and nowhere for a signed-in member. This is the member's: the same
  * pieces those two routes use — the upload validator, the audio sub-cap, the
  * audio-capable provider, the cost log — behind `withAuth`, keyed on the
- * person, costed to the person, tagged with her seat.
+ * person, costed to the person, tagged with the agent's seat.
  *
  * ## Two switches, both honoured
  *
  * `AiOrchestrationSettings.voiceInputGloballyEnabled` is an operator's off
- * switch that needs no deploy; her agent's `enableVoiceInput` is the flag the
- * seed turns on once (`prisma/seeds/app-lelanea/012-agent-voice-input.ts`) and
- * an admin may turn off. Either off → the route refuses and the microphone is
+ * switch that needs no deploy; the voice agent's `enableVoiceInput` is the flag
+ * the seed turns on once (`prisma/seeds/app-lelanea/012-agent-voice-input.ts`)
+ * and an admin may turn off. Either off → the route refuses and the microphone is
  * not offered — the pane asks {@link voiceInputAvailability} first.
  *
  * ## What happens to the audio: nothing
@@ -36,14 +36,15 @@ import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
  * Whether a member may speak instead of type, and why not.
  *
  * - `available` — both switches on, an audio-capable provider configured.
- * - `off` — an operator's switch is off (global or hers); the control is not offered.
+ * - `off` — an operator's switch is off (global or the agent's); the control is
+ *   not offered.
  * - `no_provider` — allowed, but nothing to transcribe with; the control is not offered either.
  */
 export type VoiceInputState = 'available' | 'off' | 'no_provider';
 
 export interface VoiceInputAvailability {
   state: VoiceInputState;
-  /** Her agent's id, for the cost row. Null when she does not exist. */
+  /** The voice agent's id, for the cost row. Null when it does not exist. */
   agentId: string | null;
 }
 

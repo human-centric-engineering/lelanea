@@ -75,8 +75,8 @@ const STEP_SHIFT = 48;
  * when the pane comes back. The pane itself is mounted once, in the group
  * layout, so a turn also survives navigating to a module.
  *
- * When she can't answer, the ending stands in her words where the reply would
- * have been, the words go back into the box for the same turn id, and the
+ * When the agent can't answer, the ending stands in the pane's ending copy where
+ * the reply would have been, the words go back into the box for the same turn id, and the
  * status read puts one quiet line above the composer (t-65).
  *
  * Under every completed reply, the account row — the time, what the turn did,
@@ -85,7 +85,7 @@ const STEP_SHIFT = 48;
  *
  * ## The strip
  *
- * Collapsed, the pane is 56px (44px on a phone) with her name running down it —
+ * Collapsed, the pane is 56px (44px on a phone) with the name running down it —
  * a drawer pull, not a disabled state, so the whole strip is the button that
  * brings it back.
  */
@@ -107,7 +107,7 @@ export function ConversationPane() {
   const reducedMotion = useReducedMotion();
   // The cross-pane channels, all explained on the provider: a turn that
   // captured tells the notes panel to re-read, any finished turn tells the
-  // topbar's spend meter to, and "Ask her about this" on a note puts its
+  // topbar's spend meter to, and "Ask Lelañea about this" on a note puts its
   // question in the box here. None is layout, and all live there because the
   // panes are siblings (see `modulePlace`).
   const conversation = useConversation({
@@ -313,7 +313,7 @@ export function ConversationPane() {
 /**
  * The collapsed conversation: a drawer pull, not a disabled state.
  *
- * The WHOLE strip is the button, so bringing her back is one target rather than
+ * The WHOLE strip is the button, so bringing the conversation back is one target rather than
  * a small control hidden on a dead pane.
  */
 const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void }>(function Strip(

@@ -20,8 +20,8 @@
  * ## What a search can match, and what it never can
  *
  * A note matches when **every** word of the search appears somewhere in what
- * the card shows about it: the reading, how Lelañea came to it, what she was
- * looking for, and the heading it is filed under.
+ * the card shows about it: the reading, how Lelañea came to it, what was being
+ * looked for, and the heading it is filed under.
  *
  * **A withheld note never matches on its reading**, which is a sentinel:
  * matching it would find every special-category note for a search on

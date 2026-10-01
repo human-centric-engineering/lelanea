@@ -2,25 +2,25 @@
  * Least privilege and observe-only guards, pinned (f-safety t-60).
  *
  * "A talked-into deletion attempt cannot delete anything" is only as true as
- * the tool set she holds. The allowlist is typed, so a grant outside it does not
+ * the tool set the agent holds. The allowlist is typed, so a grant outside it does not
  * compile. This file is the half the type cannot see: a slug that writes must
  * never be ADDED to the allowlist itself. It names every write capability the
  * install ships, in Sunrise and in Daybreak, and fails if one appears.
  *
  * **One exception is now argued for rather than assumed** (f-slots t-72). §11
- * needs her to record what she learns about a person, so the ceiling was
- * restated by the owner on 20 Sept 2026 from "she may only hold tools that
- * read" to "nothing she holds may delete anything, or act on anyone else's
+ * needs the agent to record what it learns about a person, so the ceiling was
+ * restated by the owner on 20 Sept 2026 from "the agent may only hold tools
+ * that read" to "nothing the agent holds may delete anything, or act on anyone else's
  * behalf". `fill_slot` is admitted under it and is listed in
  * {@link SANCTIONED_SELF_WRITES} below — still named as a write, still failing
  * every case but the one that names it. The sentence that mattered is unmoved:
- * nothing she holds deletes.
+ * nothing the agent holds deletes.
  *
  * The guard modes and the escalation payloads are pinned for the same reason.
- * `block` would turn a heuristic false positive into her `unavailable` ending,
+ * `block` would turn a heuristic false positive into the agent's `unavailable` ending,
  * and a payload the framework's schema refuses would never fire.
  *
- * Her ADVERTISED set on a real install (what an operator bound) is checked by
+ * The agent's ADVERTISED set on a real install (what an operator bound) is checked by
  * `npm run smoke:app-misuse`. So is the chat path refusing a model-emitted name
  * outside it; the mechanism itself is Sunrise's `tool_not_advertised`, pinned
  * in `tests/unit/lib/orchestration/chat/streaming-handler.test.ts`.
@@ -74,10 +74,10 @@ const WRITE_CAPABILITY_SLUGS = [
 ];
 
 /**
- * The one write she is allowed, and the whole reason it is allowed.
+ * The one write the agent is allowed, and the whole reason it is allowed.
  *
- * Owner ruling, 20 Sept 2026 (f-slots t-72): the ceiling became "nothing she
- * holds may delete anything, or act on anyone else's behalf". `fill_slot`
+ * Owner ruling, 20 Sept 2026 (f-slots t-72): the ceiling became "nothing the
+ * agent holds may delete anything, or act on anyone else's behalf". `fill_slot`
  * qualifies — own profile only, appends rather than overwrites, sends and
  * spends nothing on anyone's account. The argument is in
  * `SELF_WRITE_CAPABILITY_SLUGS`' docblock; this constant is what stops the
@@ -89,7 +89,7 @@ const WRITE_CAPABILITY_SLUGS = [
  */
 const SANCTIONED_SELF_WRITES = ['fill_slot'];
 
-describe('her tools', () => {
+describe('the agent’s tools', () => {
   it('are exactly what the three seeds grant, and nothing else', () => {
     expect(
       [...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS, ...RESOURCE_CAPABILITY_SLUGS].sort()
@@ -108,8 +108,8 @@ describe('her tools', () => {
     ];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
       if (SANCTIONED_SELF_WRITES.includes(slug)) continue;
-      expect(allowed, `${slug} writes — it cannot be on her allowlist`).not.toContain(slug);
-      expect(granted, `${slug} writes — it cannot be granted to her`).not.toContain(slug);
+      expect(allowed, `${slug} writes — it cannot be on the agent's allowlist`).not.toContain(slug);
+      expect(granted, `${slug} writes — it cannot be granted to the agent`).not.toContain(slug);
     }
   });
 
@@ -134,14 +134,14 @@ describe('her tools', () => {
   });
 });
 
-describe('her guards', () => {
+describe('the agent’s guards', () => {
   it('observe and never block, so a heuristic hit never reads as an outage', () => {
     expect(GUARD_MODES).toEqual({ inputGuardMode: 'log_only', outputGuardMode: 'log_only' });
   });
 });
 
-describe('her escalation policies', () => {
-  it('cover each of her seats once, on the input guard, from the first detection', () => {
+describe('the agent’s escalation policies', () => {
+  it('cover each of the agent’s seats once, on the input guard, from the first detection', () => {
     expect(ESCALATION_POLICIES.map((policy) => policy.scope.id)).toEqual([...SEATED_ROLES]);
     for (const policy of ESCALATION_POLICIES) {
       expect(policy.signal).toEqual({ guard: 'input', outcome: 'flagged' });

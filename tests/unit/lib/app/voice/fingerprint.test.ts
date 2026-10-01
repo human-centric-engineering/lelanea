@@ -127,15 +127,15 @@ describe('the composed prompt, with nothing retrieved', () => {
     for (const line of core.identity.lines) expect(prompt).toContain(line);
   });
 
-  it('carries how she grounds what she says', () => {
+  it('carries how a reply is grounded in her material', () => {
     const prompt = composedPrompt(voiceProfile());
 
     expect(prompt).toContain(core.grounding.heading);
     for (const line of core.grounding.lines) expect(prompt).toContain(line);
   });
 
-  it('carries what she declines, and how she declines it', () => {
-    // Two halves of one property. What she will not do is the easy half to
+  it('carries what the agent declines, and the manner of declining that sounds like her', () => {
+    // Two halves of one property. What the agent will not do is the easy half to
     // carry; the manner of the refusal is the half that makes a decline sound
     // like her rather than like a policy page.
     const prompt = composedPrompt(voiceProfile());
@@ -376,7 +376,7 @@ describe('no knowledge retrieval is in this path', () => {
 });
 
 describe('the agent this core is written for', () => {
-  it('is one of hers, so t-25 designation rule governs what it can quote', () => {
+  it('is a corpus agent, so the t-25 designation rule governs what it can quote', () => {
     // Derived from the prefix rather than typed out, but asserted anyway: the
     // slug is what makes the corpus contributor fire for this agent at all.
     expect(VOICE_AGENT_SLUG.startsWith(CORPUS_AGENT_SLUG_PREFIX)).toBe(true);

@@ -1,5 +1,5 @@
 /**
- * Capture — she writes what she learns into the profile, once per turn
+ * Capture — the agent writes what it learns into the profile, once per turn
  * (f-slots t-72; product description §3.12, §8.1, §11).
  *
  * Daybreak's `fill_slot` does the writing: validation, the open-mode mint, the
@@ -46,7 +46,7 @@
  * context (`streaming-handler.ts`, the `dispatchContext` literal), the
  * dispatcher shallow-copies the context before `execute()` so it survives, and
  * `lib/app/agent/turns.ts` already puts `{ turnId, seat }` there on every turn
- * she takes. The id is therefore reachable today, through a carrier declared for
+ * the agent takes. The id is therefore reachable today, through a carrier declared for
  * something else.
  *
  * **That is a workaround and is read as one** (`fp5`: the shape transfers, the
@@ -71,8 +71,8 @@
  * is written against the retry, because the retry is the defect.
  *
  * **A dispatch with no turn id at all** — a workflow step, an MCP call, the
- * general consumer chat route (`.context/app/agent.md`, "Where else she can be
- * reached"). It runs unguarded, exactly as it did before this existed. Failing
+ * general consumer chat route (`.context/app/agent.md`, "Where else the agent
+ * can be reached"). It runs unguarded, exactly as it did before this existed. Failing
  * closed there would refuse every write on paths the turn seam never reaches;
  * the guard's job is to stop a SECOND write, and without a turn id there is no
  * "second" to recognise.
@@ -109,19 +109,19 @@ export function turnIdFrom(context: CapabilityContext): string | null {
 }
 
 /**
- * The framework's result, with `skipFollowup` dropped — so she still speaks.
+ * The framework's result, with `skipFollowup` dropped — so the agent still speaks.
  *
  * **Measured, not reasoned about.** `fill_slot` sets `skipFollowup` so a silent
  * capture does not cost a second model pass, which is right for an agent that
- * answers *and* captures in one pass. Her instruction tells her to record
- * before she answers, and the pinned model obliges literally: a first pass
+ * answers *and* captures in one pass. The agent's instruction tells it to record
+ * before it answers, and the pinned model obliges literally: a first pass
  * carrying nothing but tool calls. With the follow-up skipped, that pass IS the
- * turn — she records what the person told her and replies with an empty string.
+ * turn — the agent records what the person said and replies with an empty string.
  * Observed on a real turn against the dev database, not predicted.
  *
- * Letting the follow-up run costs one extra model call on any turn she captures
- * in. That is the cost the owner accepted at claim — *"each write also adds a
- * tool pass to her turn"* — and the alternative is a person who confides
+ * Letting the follow-up run costs one extra model call on any turn that
+ * captures. That is the cost the owner accepted at claim — each write also adds a
+ * tool pass to the turn — and the alternative is a person who confides
  * something and is answered with silence.
  *
  * **Not fixed in the instruction instead.** "Answer in the same breath as you
@@ -199,7 +199,7 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
    *
    * **And the refusal is silent.** The throw is caught by the registration
    * pass, logged as an `UnknownError`, and the slug is simply absent from the
-   * dispatcher — so she would have gone on searching normally and quietly never
+   * dispatcher — so the agent would have gone on searching normally and quietly never
    * captured anything. Nothing in this file would have failed; what caught it
    * was the `lib/app/capabilities.ts` row in `tests/unit/lib/app/defaults.test.ts`
    * asserting the handler the dispatcher ACTUALLY holds for the slug.
@@ -220,11 +220,11 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
 
   async execute(args: FillSlotArgs, context: CapabilityContext): Promise<FillSlotResult> {
     // A discovery answer is the person's own words, written by the onboarding
-    // surface (f-onboarding t-101). A reading of hers appended to that slot
-    // would become its newest version and stand in for what they wrote, so she
-    // may read these slots and never write one. Refused before the turn guard,
-    // on every path, and answered so she still speaks (`answering()`): the
-    // message tells her where the reading belongs instead.
+    // surface (f-onboarding t-101). A reading of the agent's appended to that
+    // slot would become its newest version and stand in for what they wrote, so
+    // the agent may read these slots and never write one. Refused before the turn
+    // guard, on every path, and answered so the agent still speaks
+    // (`answering()`): the message tells it where the reading belongs instead.
     if (isDiscoverySlotSlug(args.slotSlug)) {
       return answering(
         this.error(

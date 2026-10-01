@@ -34,7 +34,7 @@ If one no longer answers where it says, fix this page before anything else.
 | Level  | Means                                                                                                | Examples                                                                                                            | Response                                         |
 | ------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | **S1** | A person may be at risk, **or** personal data has reached, or may have reached, someone it shouldn't | the crisis path not showing the resource · one member's conversation readable by another · a leaked database or key | now, any hour · the 72-hour clock may be running |
-| **S2** | Harm is plausible but not happening yet, or money is leaving fast                                    | a cost runaway · her replying out of role or as a therapist in a live conversation · repeated abusive use           | same day                                         |
+| **S2** | Harm is plausible but not happening yet, or money is leaving fast                                    | a cost runaway · the agent replying out of role or as a therapist in a live conversation · repeated abusive use     | same day                                         |
 | **S3** | Degraded, not harmful                                                                                | provider outage (turns end `unavailable`) · a helpline number that has changed but still redirects                  | next working day                                 |
 
 When in doubt, choose the higher level. You can lower it once you know more.
@@ -55,21 +55,21 @@ When in doubt, choose the higher level. You can lower it once you know more.
 
 Each lever names what it does, where it is, and what it does **not** do.
 
-### Pause every conversation with her
+### Pause every conversation with the agent
 
-**`/admin/features` → `LELANEA_GENERATION_PAUSED` → on.** On both of her seats,
-every turn gets the `paused` ending **before** anything is claimed or any model
-is called. No turn row and no cost row are written. The change applies from the
-next turn, with no deploy.
+**`/admin/features` → `LELANEA_GENERATION_PAUSED` → on.** On both of the agent's
+seats, every turn gets the `paused` ending **before** anything is claimed or any
+model is called. No turn row and no cost row are written. The change applies
+from the next turn, with no deploy.
 
 - **The crisis path still works.** The crisis check runs ahead of the pause, and
   while paused it calls no model: the context check counts as unavailable and
   the hit stays hard. A person in danger still gets the resource.
 - **Everything readable stays readable.** Content, the journey map and replays
   of completed turns are still served (`reading-survives.test.ts`).
-- **It pauses her seats only.** Knowledge ingestion, workflows, admin chat and
-  the platform's own agents keep calling models. To stop those, see [Cost
-  runaway](#cost-runaway).
+- **It pauses the agent's seats only.** Knowledge ingestion, workflows, admin
+  chat and the platform's own agents keep calling models. To stop those, see
+  [Cost runaway](#cost-runaway).
 - **Undo:** switch it off. A turn the person retries under the same id then runs.
 - Created off by seed `008`, and a re-seed never writes it again. **If the flag
   is missing, there is no pause** (a missing flag reads as not paused). Create it
@@ -79,42 +79,43 @@ next turn, with no deploy.
 
 Details: [`agent.md` → The pause switch](./agent.md#the-pause-switch).
 
-### Take her off a seat
+### Take the agent off a seat
 
-**`/admin/orchestration/agents` → her agent (`lelanea-guide`) → Active off.**
-An inactive agent gives no facilitation surface (`resolveFacilitationSurface`),
-so both of her seats answer **404**. Setting her visibility to anything other than
-`public` has the same effect.
+**`/admin/orchestration/agents` → the guide agent (`lelanea-guide`) → Active
+off.** An inactive agent gives no facilitation surface
+(`resolveFacilitationSurface`), so both of its seats answer **404**. Setting its
+visibility to anything other than `public` has the same effect.
 
 - **Prefer the pause.** A 404 ends a conversation silently. The pause tells the
-  person, in plain words, what happened. Take her off a seat only when she must
-  not be reachable at all: her agent compromised, or her prompt or tools
+  person, in plain words, what happened. Take the agent off a seat only when it
+  must not be reachable at all: the agent compromised, or its prompt or tools
   changed by someone who shouldn't have.
 - **Unbinding one seat only** is API-only. Read the binding id from
   `GET /api/v1/admin/framework/facilitation/agents`, then
   `DELETE /api/v1/admin/framework/facilitation/agents/:bindingId`. **The next
-  re-seed binds her again** (seed `006` fills empty seats). To keep her off a seat
-  for good, remove the role from `SEATED_ROLES` (`lib/app/agent/pins.ts`) and
-  deploy.
-- **She has no other door.** Sunrise's consumer chat route refuses her slug
-  (divergences Row 21). **Never make her a module's primary agent**: Daybreak's
-  module chat route would reach her without the turn hook, so without the crisis
-  check or the ceiling ([`agent.md`](./agent.md#where-else-she-can-be-reached)).
+  re-seed binds the agent again** (seed `006` fills empty seats). To keep it off
+  a seat for good, remove the role from `SEATED_ROLES` (`lib/app/agent/pins.ts`)
+  and deploy.
+- **The agent has no other door.** Sunrise's consumer chat route refuses its slug
+  (divergences Row 21). **Never make it a module's primary agent**: Daybreak's
+  module chat route would reach it without the turn hook, so without the crisis
+  check or the ceiling ([`agent.md`](./agent.md#where-else-the-agent-can-be-reached)).
 
 ### Rotate a provider key
 
-Her model is OpenAI's (`PINNED_PROVIDER`, `lib/app/agent/pinned-model.ts`). The
-provider row at `/admin/orchestration/providers` stores only the **name** of the
-environment variable. The key itself lives only in the host's environment
-(`OPENAI_API_KEY`; the others appear on the same page).
+The agent's model is OpenAI's (`PINNED_PROVIDER`,
+`lib/app/agent/pinned-model.ts`). The provider row at
+`/admin/orchestration/providers` stores only the **name** of the environment
+variable. The key itself lives only in the host's environment (`OPENAI_API_KEY`;
+the others appear on the same page).
 
 1. Create a new key in the provider's console.
 2. Set it in the host's environment and redeploy (or restart), so every instance
    reads it.
 3. **Then revoke the old key in the provider's console.** Revoking first leaves
    every turn failing as `unavailable` until the new key is live.
-4. Confirm with one turn on her seat, then `GET /api/v1/app/agent/status`, which
-   should read `available`.
+4. Confirm with one turn on the agent's seat, then
+   `GET /api/v1/app/agent/status`, which should read `available`.
 
 The same steps apply to `RESEND_API_KEY` (email). **`BETTER_AUTH_SECRET` is a
 bigger change**, so rotate it only when the secret itself has leaked, or when a
@@ -172,7 +173,8 @@ Every turn they start then ends on `ceiling_reached`, before any model call.
 - **It fails open.** If the month's spend can't be read (a database problem),
   the turn is allowed, and a warning is logged
   (`Monthly ceiling could not be read; the turn is allowed`). So a `0` limit is
-  not a hard stop. Where one is needed, use the pause or take her off a seat.
+  not a hard stop. Where one is needed, use the pause or take the agent off a
+  seat.
 - **The member-facing copy is written for a monthly limit.** It says replies come
   back on the reset date. For a person you have stopped on purpose, that is not
   true. See [Repeated abusive use](#repeated-abusive-use).
@@ -212,7 +214,7 @@ it works. So a failure here is ours, and it is **S1**.
 | One phrase is missed                                                   | the phrase list doesn't match that wording                                                                                   | add the wording as a case in `tests/unit/lib/app/safety/detect.test.ts` **first**, then the pattern in `lib/app/safety/detect.ts`. Ship it as a fix the same day                                                                                                                  |
 | A helpline number has stopped answering, or its details changed        | the authored resource is out of date                                                                                         | edit the region at `/admin/app/safety` (Lelañea → Crisis helplines) — it takes effect within a minute, as a draft — then have Lelañea sign off the change. While it waits: remove the service (every region keeps at least one, and the international directory is always listed) |
 | The resource shows, but no event row                                   | the record write failed. It is logged at `error` (`Crisis event record write failed`), and the person still got the resource | the path worked. Fix the write. The missing rows cannot be rebuilt: the log line carries the same fields minus the person                                                                                                                                                         |
-| A turn reached her with no crisis check at all                         | another door was opened: a module's primary agent, or an unsafe route                                                        | **take her off** that door. See [Take her off a seat](#take-her-off-a-seat)                                                                                                                                                                                                       |
+| A turn reached the agent with no crisis check at all                   | another door was opened: a module's primary agent, or an unsafe route                                                        | **take the agent off** that door. See [Take the agent off a seat](#take-the-agent-off-a-seat)                                                                                                                                                                                     |
 
 **Rehearsal:** `npm run smoke:app-crisis`. It runs with every `*_API_KEY`
 removed, and proves a hard hit gets the UK resource with no model call. A
@@ -227,15 +229,15 @@ that the path works**. They are not a queue anyone watches for individuals.
 
 Three limits, from narrowest to widest:
 
-| Lever                      | Where                                                      | Effect                                                                                                                                                                                                                   |
-| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| One person's limit         | `/admin/app/agent`                                         | `ceiling_reached` before their next turn                                                                                                                                                                                 |
-| Her agent's monthly budget | `/admin/orchestration/agents` → her agent → monthly budget | the platform refuses her turns once spend passes it; members see `unavailable`                                                                                                                                           |
-| **Global monthly budget**  | `/admin/orchestration/settings` → global monthly budget    | every agent's chat turns stop once the install's combined month-to-date spend reaches it — admin chat and the platform's agents too. Enforced in the chat handler only, so ingestion and workflows are not stopped by it |
+| Lever                            | Where                                                            | Effect                                                                                                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| One person's limit               | `/admin/app/agent`                                               | `ceiling_reached` before their next turn                                                                                                                                                                                 |
+| The guide agent's monthly budget | `/admin/orchestration/agents` → the guide agent → monthly budget | the platform refuses its turns once spend passes it; members see `unavailable`                                                                                                                                           |
+| **Global monthly budget**        | `/admin/orchestration/settings` → global monthly budget          | every agent's chat turns stop once the install's combined month-to-date spend reaches it — admin chat and the platform's agents too. Enforced in the chat handler only, so ingestion and workflows are not stopped by it |
 
-Plus the **pause** for her seats, and a **spend limit set in the provider's
-console**. The provider's limit is the only one that stops every call, and the
-only one that holds if our own metering is wrong.
+Plus the **pause** for the agent's seats, and a **spend limit set in the
+provider's console**. The provider's limit is the only one that stops every
+call, and the only one that holds if our own metering is wrong.
 
 **Find the source** with `GET /api/v1/admin/app/metering?by=user` (also
 `by=seat`, `model`, `day`, `conversation`), and see `/admin/orchestration/costs`.
@@ -254,9 +256,10 @@ confirmed in review (19 Sept 2026).
 
 ### What is recorded, and who reads it
 
-When the input guard flags a message on either of her seats (prompt injection,
-role override, prompt extraction), two things are written. Her guards are set to
-`log_only`, so the person is never blocked, and no text is kept:
+When the input guard flags a message on either of the agent's seats (prompt
+injection, role override, prompt extraction), two things are written. The
+agent's guards are set to `log_only`, so the person is never blocked, and no
+text is kept:
 
 1. **An `app_safety_event` row**, `kind = 'misuse'`, with the user id, seat and
    guard. It holds no words.
@@ -295,7 +298,7 @@ needs their consent at the time, and is logged (§8.3, §12).
 
 | Pattern (30 days)                                                | Response                                                                                                                                                                                                            |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1–4 flags                                                        | nothing. Her refusals handled it                                                                                                                                                                                    |
+| 1–4 flags                                                        | nothing. The agent's refusals handled it                                                                                                                                                                            |
 | 5 or more, or a burst (5 in a day)                               | **S2.** The owner looks at the pattern (seats, times, spend) — never the words — and notes it in the incident log                                                                                                   |
 | Continues after that, or comes with a cost spike                 | the owner **writes to the person**, from a monitored address. Plain words: what we saw (the count, not the content) and what the app is for. Set their limit to `0` at `/admin/app/agent` while waiting for a reply |
 | Continues after being written to, or causes harm to someone else | the owner decides whether to **end the account** under the Terms. Offer the export first (`GET /api/v1/users/:id/export`), then delete it from the list at `/admin/users` (`eraseUser()`)                           |

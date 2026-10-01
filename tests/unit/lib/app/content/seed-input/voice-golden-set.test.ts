@@ -16,8 +16,8 @@
  *   schema refuses it, and the case below proves the schema refuses it.
  * - **Provenance cannot go quiet.** The third file in a row that is not a
  *   transcription, and the oddest of the three: these are words a PERSON puts to
- *   her. The block is served rather than withheld, and it still names who has yet
- *   to sign it off. That case is MEANT to be edited, once.
+ *   the agent. The block is served rather than withheld, and it still names who
+ *   has yet to sign it off. That case is MEANT to be edited, once.
  * - **The control is real copy.** The bare arm's whole system prompt is
  *   authored here rather than written into a seed, so what the comparison
  *   compares against is as readable, and as much hers to change, as what it

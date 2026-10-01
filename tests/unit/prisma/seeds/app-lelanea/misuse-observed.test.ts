@@ -1,5 +1,5 @@
 /**
- * The misuse seed: her guards observe, each seat escalates an attempt, and an
+ * The misuse seed: the voice agent's guards observe, each seat escalates an attempt, and an
  * operator's later choice about either is never undone (f-safety t-60).
  *
  * ## `fp4` — both are operator-owned
@@ -116,7 +116,7 @@ function runSeed() {
   return unit.run({ prisma: client, logger } as unknown as Parameters<typeof unit.run>[0]);
 }
 
-function her(): AgentRow {
+function voiceAgent(): AgentRow {
   const row = world.agents[0];
   if (!row) throw new Error('no agent');
   return row;
@@ -134,7 +134,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   world.agents = [
     {
-      id: 'agent-her',
+      id: 'agent-voice',
       slug: 'lelanea-guide',
       createdBy: 'author',
       deletedAt: null,
@@ -147,15 +147,15 @@ beforeEach(() => {
 });
 
 describe('a fresh install', () => {
-  it('sets both her guards to observe, as an entry in her timeline', async () => {
+  it("sets both the agent's guards to observe, as an entry in its timeline", async () => {
     await runSeed();
 
-    expect(her()).toMatchObject({ inputGuardMode: 'log_only', outputGuardMode: 'log_only' });
+    expect(voiceAgent()).toMatchObject({ inputGuardMode: 'log_only', outputGuardMode: 'log_only' });
     expect(world.versions.map((v) => v.changeSummary)).toEqual([
       expect.any(String),
       GUARD_MODES_CHANGE_SUMMARY,
     ]);
-    // The initial entry is her configuration BEFORE the write, so a restore to
+    // The initial entry is the agent's configuration BEFORE the write, so a restore to
     // it really does restore the unset guards.
     expect(world.versions[0]?.snapshot).toMatchObject({
       inputGuardMode: null,
@@ -194,17 +194,17 @@ describe('a fresh install', () => {
 
 describe("an operator's choices", () => {
   it('leaves a guard an admin set to block, and fills only the one still unset', async () => {
-    her().inputGuardMode = 'block';
+    voiceAgent().inputGuardMode = 'block';
 
     await runSeed();
 
-    expect(her()).toMatchObject({ inputGuardMode: 'block', outputGuardMode: 'log_only' });
+    expect(voiceAgent()).toMatchObject({ inputGuardMode: 'block', outputGuardMode: 'log_only' });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('"block"'));
   });
 
   it('writes no timeline entry when both guards were already chosen', async () => {
-    her().inputGuardMode = 'warn_and_continue';
-    her().outputGuardMode = 'log_only';
+    voiceAgent().inputGuardMode = 'warn_and_continue';
+    voiceAgent().outputGuardMode = 'log_only';
 
     await runSeed();
 
@@ -250,13 +250,19 @@ describe("an operator's choices", () => {
   });
 });
 
-describe('her timeline', () => {
-  it('adds one entry after an existing history, carrying her grants into the snapshot', async () => {
+describe("the agent's timeline", () => {
+  it('adds one entry after an existing history, carrying its grants into the snapshot', async () => {
     world.versions = [
-      { agentId: 'agent-her', version: 3, snapshot: {}, changeSummary: 'earlier', createdBy: 'x' },
+      {
+        agentId: 'agent-voice',
+        version: 3,
+        snapshot: {},
+        changeSummary: 'earlier',
+        createdBy: 'x',
+      },
     ];
     client.aiAgent.findUniqueOrThrow.mockImplementationOnce(async () => ({
-      ...her(),
+      ...voiceAgent(),
       grantedTags: [{ tagId: 'tag-1' }],
       grantedDocuments: [{ documentId: 'doc-1' }],
     }));
@@ -291,7 +297,7 @@ describe('safe on empty', () => {
     expect(writes()).toBe(0);
   });
 
-  it('throws rather than banking success when her agent is missing', async () => {
+  it('throws rather than banking success when the voice agent is missing', async () => {
     world.agents = [];
 
     await expect(runSeed()).rejects.toThrow(/no such agent/);

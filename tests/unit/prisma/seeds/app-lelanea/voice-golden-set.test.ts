@@ -29,7 +29,7 @@
  *
  * ## 3. The control is reconciled back to bare
  *
- * An operator who attaches her profile to the control produces a comparison of
+ * An operator who attaches the fingerprint profile to the control produces a comparison of
  * her voice with itself. `assertArmsComparable` refuses to QUEUE in that state
  * (`tests/unit/lib/app/voice/comparison.test.ts`); this file pins the half that
  * stops the state persisting.
@@ -356,7 +356,7 @@ describe('a fresh install', () => {
     );
   });
 
-  it('creates the control bare, restricted, and with nothing of hers on it', async () => {
+  it("creates the control bare, restricted, and with nothing of the voice agent's on it", async () => {
     await runSeed();
 
     expect(control().systemInstructions).toBe(goldenSet.control.systemInstructions);
@@ -437,10 +437,10 @@ describe('a re-run', () => {
     expect(world.goldenSetRevisions).toHaveLength(1);
   });
 
-  it('puts the control back when somebody gave it her profile', async () => {
+  it('puts the control back when somebody gave it the fingerprint profile', async () => {
     await runSeed();
     control().profileId = 'profile-core';
-    control().persona = 'her persona, pasted';
+    control().persona = 'the voice persona, pasted';
 
     await runSeed();
 

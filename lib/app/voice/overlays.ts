@@ -1,8 +1,8 @@
 /**
  * Which register the moment calls for — the fingerprint's second layer.
  *
- * The core (`lib/app/voice/fingerprint.ts`) makes her sound consistent. It
- * cannot make her sound *specific*: the register of a first hello and the
+ * The core (`lib/app/voice/fingerprint.ts`) makes her voice consistent. It
+ * cannot make it *specific*: the register of a first hello and the
  * register of someone in grief are not the same register, and a core that tried
  * to hold both would have to say something vague enough to cover them, which is
  * how a voice stops being a voice.

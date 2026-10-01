@@ -5,7 +5,7 @@
  * Twelve JSON files hold the words this app is built from. Six, under
  * `content/`, are transcriptions of documents Lelañea Fulton wrote. Six, under
  * `seed-data/drafted/`, were drafted FOR her — the voice fingerprint's core, its
- * context-selected overlays, the golden set of prompts a PERSON puts to her, the
+ * context-selected overlays, the golden set of prompts a PERSON puts to the agent, the
  * crisis resources, the slot taxonomy and the resource library. Each of those
  * carries a `provenance` block saying so and naming who has yet to sign it off,
  * because a drafted file sitting silently beside six transcriptions is the one

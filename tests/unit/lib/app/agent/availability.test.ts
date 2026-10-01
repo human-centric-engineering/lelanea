@@ -1,5 +1,5 @@
 /**
- * Whether she can be talked to right now: the operator's switch, then what the
+ * Whether the agent can be talked to right now: the operator's switch, then what the
  * most recent finished turn says (§08 t-55).
  *
  * The read is install-wide and learned from rows, never from the platform's

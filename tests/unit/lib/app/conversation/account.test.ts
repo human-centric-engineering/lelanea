@@ -84,13 +84,13 @@ describe('the parts', () => {
     expect(accountDetail(input(), parts)).toMatch(/^Nothing was written from this turn\./);
   });
 
-  it('says she looked at what she already understands, without naming a slot', () => {
+  it('says it looked at what is already understood, without naming a slot', () => {
     const parts = accountParts(input({ capabilities: ['get_state'] }));
     expect(parts).toEqual([
       {
         key: 'read_profile',
-        line: 'Looked at what she already understands about you',
-        detail: 'Looked at what she already understands about you.',
+        line: 'Looked at what is already understood about you',
+        detail: 'Looked at what is already understood about you.',
       },
     ]);
   });
@@ -102,9 +102,8 @@ describe('the parts', () => {
     expect(parts).toEqual([
       {
         key: 'wrote_profile',
-        line: 'Added something to what she understands about you',
-        detail:
-          'Added something to what she understands about you. You can see it, and correct it.',
+        line: 'Added something to what is understood about you',
+        detail: 'Added something to what is understood about you. You can see it, and correct it.',
       },
     ]);
   });
@@ -119,7 +118,7 @@ describe('the parts', () => {
     const three = accountParts(input({ capabilities: ['fill_slot', 'fill_slot', 'fill_slot'] }));
     const one = accountParts(input({ capabilities: ['fill_slot'] }));
 
-    expect(three[0].line).toBe('Added something to what she understands about you');
+    expect(three[0].line).toBe('Added something to what is understood about you');
     expect(three[0].line).toBe(one[0].line);
     expect(three[0].line).not.toMatch(/\d/);
   });
@@ -133,12 +132,12 @@ describe('the parts', () => {
     );
     expect(parts.map((part) => part.key)).toEqual(['looked_up', 'read_profile', 'wrote_profile']);
     expect(accountLine(parts)).toBe(
-      'Looked something up in her material; Looked at what she already understands about you; Added something to what she understands about you'
+      'Looked something up in her material; Looked at what is already understood about you; Added something to what is understood about you'
     );
   });
 
   it('names a capability it has no words for rather than hiding it', () => {
-    // A slug her seat cannot call today. `get_state` used to stand here and now
+    // A slug the agent's seat cannot call today. `get_state` used to stand here and now
     // has a sentence of its own, which is the whole point of this floor: the day
     // a tool is granted before its words are written, it is named rather than
     // hidden.

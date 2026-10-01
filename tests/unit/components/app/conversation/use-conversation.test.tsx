@@ -4,7 +4,7 @@
  * The conversation's state, frame by frame — the paths the pane test does
  * not reach by typing: what rides on the live turn, how a turn folds into an
  * entry, a refusal, a dropped stream, and the busy guard (§10 t-64); and when
- * she can't answer, that the words go back and the second try is the same
+ * the agent can't answer, that the words go back and the second try is the same
  * turn — the id asserted sent, then asserted equal (t-65).
  *
  * @see components/app/conversation/use-conversation.ts
@@ -289,7 +289,7 @@ describe('useConversation', () => {
     expect(result.current.live?.userText).toBe('first');
   });
 
-  describe('when she can\u2019t answer (t-65)', () => {
+  describe('when the agent can\u2019t answer (t-65)', () => {
     /** The ending, then the same words sent again: one id across both requests. */
     async function endThenRetry(code: string) {
       const { result } = await loaded();
@@ -306,7 +306,7 @@ describe('useConversation', () => {
       'on %s the words are back in the box, and sending them again is the same turn',
       async (code) => {
         const { result, first } = await endThenRetry(code);
-        // The frame's own words are on the entry; the row swaps them for hers.
+        // The frame's own words are on the entry; the row swaps them for its own.
         expect(result.current.entries).toEqual([
           expect.objectContaining({ kind: 'ending', code, message: `frame words for ${code}` }),
         ]);
@@ -601,7 +601,7 @@ describe('a turn that writes a note tells the panel, once', () => {
     expect(onSlotsWritten).not.toHaveBeenCalled();
   });
 
-  it('still tells it when the turn captured and then ended without her', async () => {
+  it('still tells it when the turn captured and then ended without a reply', async () => {
     const onSlotsWritten = vi.fn();
     const hook = renderHook(() => useConversation({ fetchImpl, onSlotsWritten }));
     await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
@@ -653,7 +653,7 @@ describe('every finished turn tells the spend meter, once', () => {
     expect(onTurnSettled).toHaveBeenCalledTimes(1);
   });
 
-  it('tells it once when the turn ended without her', async () => {
+  it('tells it once when the turn ended without a reply', async () => {
     // An ending can still have cost something — the model ran before it failed.
     const onTurnSettled = vi.fn();
     const hook = renderHook(() => useConversation({ fetchImpl, onTurnSettled }));

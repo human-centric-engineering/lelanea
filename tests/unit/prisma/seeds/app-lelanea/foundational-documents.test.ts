@@ -1,5 +1,5 @@
 /**
- * The foundational-documents seed: fills empty tables from her file, with the
+ * The foundational-documents seed: fills empty tables from Lelañea Fulton's file, with the
  * owner's section keys on the blocks, and never touches them again
  * (f-content-seeds t-86).
  *

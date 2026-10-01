@@ -53,10 +53,10 @@ import type { Citation } from '@/types/orchestration';
  * ## The shape
  *
  * - `entries` — what the read route returned, plus every turn finished since.
- * - `live` — the turn in flight, if any: the person's words, hers so far,
- *   whether she has passed the first-words deadline, and how it ended. On
+ * - `live` — the turn in flight, if any: the person's words, the reply so far,
+ *   whether it has passed the first-words deadline, and how it ended. On
  *   `done` it is folded into `entries` as a reply; on an ending it becomes an
- *   `ending` entry, which the transcript renders in her words.
+ *   `ending` entry, which the transcript renders in the pane's ending copy.
  * - `draft` — the composer's text. It clears on `start`, not on send: the
  *   words leave the box only once the server has them (§8.1).
  * - `status` — the last word from the status read, for the line above the
@@ -66,12 +66,12 @@ import type { Citation } from '@/types/orchestration';
  * prototype's `S.busy` guard makes it; the composer disables its send
  * control to say so.
  *
- * ## When she can't answer (t-65)
+ * ## When the agent can't answer (t-65)
  *
  * §8.1: *a message that fails to send stays in the box, retryable, with the
  * conversation intact around it.* So on an ending the words go back into the
  * box — not into the transcript as a bubble as well, which would show them
- * twice — and the ending row stands where her reply would have been. The one
+ * twice — and the ending row stands where the reply would have been. The one
  * exception is a box already holding a newer thought: that draft is not
  * overwritten, so the failed words stay in the transcript as their bubble.
  *
@@ -95,20 +95,20 @@ import type { Citation } from '@/types/orchestration';
 export type ConversationPhase = 'loading' | 'idle' | 'sending' | 'thinking' | 'streaming';
 
 /**
- * How a live turn ended without her answer. Client-only; never persisted.
+ * How a live turn ended without a reply. Client-only; never persisted.
  * `message` is the frame's own words — the neutral contract — which the row
- * replaces with hers where it knows the code (`CONVERSATION_COPY.endings`).
+ * replaces with the pane's own copy where it knows the code (`CONVERSATION_COPY.endings`).
  */
 export interface EndingEntry {
   kind: 'ending';
   turnId: string;
   code: string;
   message: string;
-  /** A hard crisis frame's resource, laid out in place of any words of hers. */
+  /** A hard crisis frame's resource, laid out in place of any ending copy. */
   resource?: CrisisResource;
   /**
-   * What a `ceiling_reached` frame carried — spent, limit, reset — for her
-   * words about it (`ceilingEnding`, t-96). Absent when the frame's figures did
+   * What a `ceiling_reached` frame carried — spent, limit, reset — for the
+   * ending's words about it (`ceilingEnding`, t-96). Absent when the frame's figures did
    * not parse; the row still says what happened.
    */
   ceiling?: CeilingFigures;
@@ -120,7 +120,7 @@ export interface EndingEntry {
  */
 export type StreamedReplyEntry = Extract<TranscriptEntry, { kind: 'reply' }> & {
   streamed?: true;
-  /** A soft crisis frame that came ahead of her turn, laid out before the reply. */
+  /** A soft crisis frame that came ahead of the agent's turn, laid out before the reply. */
   resource?: CrisisResource;
   /** Its `message` — the whole resource as text — shown when `resource` did not parse. */
   crisisText?: string;
@@ -131,14 +131,14 @@ export type ConversationEntry = TranscriptEntry | StreamedReplyEntry | EndingEnt
 export interface LiveTurn {
   turnId: string;
   userText: string;
-  /** Her words so far, as the server sent them — the pacing is the view's. */
+  /** The reply so far, as the server sent it — the pacing is the view's. */
   replyText: string;
   stillThinking: boolean;
   /** Capability slugs the turn called, for the account row. */
   capabilities: string[];
   /** What the turn offered — a video, audio piece or article, by id (t-77). */
   suggestions: ResourceSuggestion[];
-  /** A soft crisis frame shown ahead of her turn. */
+  /** A soft crisis frame shown ahead of the agent's turn. */
   resource?: CrisisResource;
   /** The same frame's `message` — the whole resource as text — shown when `resource` did not parse. */
   crisisText?: string;
@@ -168,7 +168,7 @@ export interface ConversationState {
 interface Options {
   seat?: string;
   /**
-   * A turn ended having written to her notes (t-73). Called **once per turn**,
+   * A turn ended having written to Lelañea's notes (t-73). Called **once per turn**,
    * whatever the turn wrote and however it ended — the panel re-reads the whole
    * page, so three notes is still one refresh, and a turn that wrote and then
    * failed has still written.
@@ -363,7 +363,7 @@ export function useConversation(options: Options = {}): ConversationState {
         };
 
         /**
-         * A turn that ended without her. The words go back into the box —
+         * A turn that ended without a reply. The words go back into the box —
          * `start` cleared it, and "what you wrote is still in the box" has to
          * be true where the person looks (§8.1) — and the id stays bound to
          * them for the retry, unless a retry could not help. A box already
@@ -375,7 +375,7 @@ export function useConversation(options: Options = {}): ConversationState {
           if (boxed) setDraft(message);
           if (options.keepId) kept.current = { turnId, message };
           finish(boxed ? [ending] : [userEntry, ending]);
-          // A turn that captured and then ended without her has still written:
+          // A turn that captured and then ended without a reply has still written:
           // the note is in the profile, and a panel left stale until the next
           // turn would be showing the person less than the app holds. The
           // retry writes nothing further — `app_turn_slot_write` suppresses a
@@ -440,10 +440,10 @@ export function useConversation(options: Options = {}): ConversationState {
               // The platform's operator strings. Never shown.
               return;
             case 'done':
-              // A reply arrived: whatever the status read said, she is answering.
+              // A reply arrived: whatever the status read said, the agent is answering.
               setStatus('available');
               // Before `finish`, so the panel is asked to re-read in the same
-              // batch that puts her reply in the transcript — §3.3's pairing is
+              // batch that puts the reply in the transcript — §3.3's pairing is
               // that the consequence appears beside the words, not after them.
               settled();
               finish([

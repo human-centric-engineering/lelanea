@@ -1,15 +1,15 @@
 /**
- * Her search results say whose material each passage is (f-safety t-60).
+ * The agent's search results say whose material each passage is (f-safety t-60).
  *
- * **What it fixes.** Her instructions tell her to answer from Lelañea's
+ * **What it fixes.** The agent's instructions tell it to answer from Lelañea's
  * material and to search it first. But `search_knowledge_base` does not return
  * only Lelañea's material. The platform's access resolver always lets
  * `system`-scoped documents through to a restricted agent. On an install that
  * holds the platform's own reference corpus ("Agentic Design Patterns" on a
- * seeded dev database), her searches can return passages from it. Nothing on
- * the result says so, so she could quote it to someone as hers.
+ * seeded dev database), its searches can return passages from it. Nothing on
+ * the result says so, so the agent could quote it to someone as hers.
  *
- * Her voice exemplars were already labelled by origin, but by the context
+ * The voice exemplars were already labelled by origin, but by the context
  * contributor (`lib/app/voice/context-contributor.ts`), which covers a
  * different path. This is the same labelling on the tool path.
  *
@@ -22,20 +22,20 @@
  * (`extractCitations`, `{ ...raw, marker }`). The test asserts that composed
  * message.
  *
- * **Only for her agents.** Other agents on the install get the platform's
+ * **Only for the corpus agents (`lelanea-`).** Other agents on the install get the platform's
  * result unchanged. "Not Lelañea's material" means nothing to an agent that is
- * not her, so the label would be noise. The one exception is below: when the
- * agent itself cannot be looked up, every result is marked unverified.
+ * not a voice agent, so the label would be noise. The one exception is below:
+ * when the agent itself cannot be looked up, every result is marked unverified.
  *
  * **Three labels, and "not hers" is only for what is known not to be.** A
- * passage from her designated corpus is hers. One from the platform's
- * `system`-scoped reference corpus is not. Anything else she can reach, such as
- * an app document an operator granted her agent directly or a person's own
- * upload, is marked unverified. Calling those "not hers" would tell her to
- * disown material that may be hers or the person's.
+ * passage from Lelañea Fulton's designated corpus is hers. One from the
+ * platform's `system`-scoped reference corpus is not. Anything else the agent can
+ * reach, such as an app document an operator granted the agent directly or a
+ * person's own upload, is marked unverified. Calling those "not hers" would tell
+ * the agent to disown material that may be hers or the person's.
  *
  * **Fail-safe, not fail-open.** If the labelling lookup fails, the results are
- * still returned, because a search that errors leaves her answering from
+ * still returned, because a search that errors leaves the agent answering from
  * memory, which is worse. Each result is marked unverified, never hers.
  *
  * @see lib/app/voice/corpus-access.ts — which documents are hers

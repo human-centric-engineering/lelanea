@@ -105,7 +105,7 @@ vi.mock('@/lib/db/client', () => ({
         evaluateDocumentWhere(where).map((document) => ({ id: document.id }))
       ),
     },
-    // The resolver's own `restricted` queries. Empty throughout: her agents carry
+    // The resolver's own `restricted` queries. Empty throughout: the corpus agents carry
     // NO operator grants, which is the arrangement the rule depends on (a tag
     // grant would UNION past the client exclusion — see designation.ts).
     aiAgentKnowledgeDocument: { findMany: vi.fn(async () => []) },
@@ -145,7 +145,7 @@ import {
   voiceQualifyingTagSlugs,
 } from '@/lib/app/voice/corpus-access';
 
-const HER_AGENT = 'agent-hers';
+const CORPUS_AGENT = 'agent-corpus';
 const PLATFORM_AGENT = 'agent-platform';
 
 /**
@@ -158,7 +158,7 @@ const PLATFORM_AGENT = 'agent-platform';
 function seedWorld(): void {
   world.agents = [
     {
-      id: HER_AGENT,
+      id: CORPUS_AGENT,
       slug: `${CORPUS_AGENT_SLUG_PREFIX}companion`,
       knowledgeAccessMode: 'restricted',
     },
@@ -215,13 +215,13 @@ beforeEach(() => {
   seedWorld();
 });
 
-describe('the tool-path document set for one of her agents', () => {
+describe('the tool-path document set for one of the corpus agents', () => {
   it('is composed from a non-empty corpus, and includes her quotable material', async () => {
     // fp6: establish the population BEFORE asserting anything is absent from it.
     // Every absence claim below is worthless if this one does not hold.
     expect(world.documents.length).toBeGreaterThan(0);
 
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     expect(documentIds.length).toBeGreaterThan(0);
     expect(documentIds).toContain('doc-knowledge');
@@ -229,7 +229,7 @@ describe('the tool-path document set for one of her agents', () => {
   });
 
   it('excludes the voice-designated document', async () => {
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     // Guarded by the presence assertion, so this cannot pass on an empty set.
     expect(documentIds).toContain('doc-knowledge');
@@ -237,7 +237,7 @@ describe('the tool-path document set for one of her agents', () => {
   });
 
   it('admits nothing marked `sensitivity: client`, whatever its purpose', async () => {
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     // `doc-client` is designated `purpose: knowledge`. It is excluded anyway,
     // which is the half a tag grant could not express.
@@ -252,14 +252,14 @@ describe('the tool-path document set for one of her agents', () => {
     // document is searchable by every agent regardless of what this returns.
     // Contributing it would add nothing while making the set look as though it
     // governed material it does not (`B31`).
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     expect(documentIds).toContain('doc-knowledge');
     expect(documentIds).not.toContain('doc-system');
   });
 
   it('admits nothing nobody has designated', async () => {
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     expect(documentIds).toContain('doc-knowledge');
     expect(documentIds).not.toContain('doc-undesignated');
@@ -268,18 +268,18 @@ describe('the tool-path document set for one of her agents', () => {
 });
 
 describe('who the rule widens', () => {
-  it('contributes nothing to a restricted agent that is not hers', async () => {
+  it('contributes nothing to a restricted agent that is not a corpus agent', async () => {
     // The platform seeds several restricted agents of its own. Widening those
     // would hand her corpus to the pattern advisor because it happens to be
     // restricted — the leak this participation test exists to prevent.
-    const hers = await toolPathDocumentIds(HER_AGENT);
-    expect(hers.length).toBeGreaterThan(0);
+    const corpus = await toolPathDocumentIds(CORPUS_AGENT);
+    expect(corpus.length).toBeGreaterThan(0);
 
     const theirs = await toolPathDocumentIds(PLATFORM_AGENT);
     expect(theirs).toEqual([]);
   });
 
-  it('recognises her agents by slug prefix and nothing else', () => {
+  it('recognises the corpus agents by slug prefix and nothing else', () => {
     expect(isCorpusAgent(`${CORPUS_AGENT_SLUG_PREFIX}companion`)).toBe(true);
     expect(isCorpusAgent('pattern-advisor')).toBe(false);
     expect(isCorpusAgent('not-lelanea-companion')).toBe(false);
@@ -307,7 +307,7 @@ describe('the voice-path document set — the other half of the same vocabulary'
 
   it('is the set the tool path is NOT — the property t-25 shipped and t-27 must not weaken', async () => {
     const voicePath = await resolveVoiceDocumentIds();
-    const toolPath = await toolPathDocumentIds(HER_AGENT);
+    const toolPath = await toolPathDocumentIds(CORPUS_AGENT);
 
     // The same document, on one path and off the other. Read together, these two
     // lines are the feature: her register reaches the prompt labelled as hers,
@@ -374,7 +374,7 @@ describe('the query and the pure rule agree', () => {
       ],
     }));
 
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     for (const { purpose, sensitivity } of combinations) {
       const id = `doc-${purpose ?? 'none'}-${sensitivity ?? 'none'}`;
@@ -503,7 +503,7 @@ describe('the SQL and the pure rules agree on every tag set an operator can make
     // existed when that rule was written.
     const sets = seedEveryTagSet();
 
-    const documentIds = await toolPathDocumentIds(HER_AGENT);
+    const documentIds = await toolPathDocumentIds(CORPUS_AGENT);
 
     for (const [index, tagSlugs] of sets.entries()) {
       const id = `doc-${index}`;
@@ -536,7 +536,7 @@ describe('the SQL and the pure rules agree on every tag set an operator can make
 
     expect(await resolveVoiceDocumentIds()).toEqual(['doc-dual']);
     // Guarded by a presence claim, so the absence is not free.
-    const toolPath = await toolPathDocumentIds(HER_AGENT);
+    const toolPath = await toolPathDocumentIds(CORPUS_AGENT);
     expect(toolPath).toContain('doc-plain');
     expect(toolPath).not.toContain('doc-dual');
   });

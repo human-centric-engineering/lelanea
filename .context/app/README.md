@@ -37,7 +37,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`gateway.md`](./gateway.md)                               | The gate: the ledger, its API, the redirect, `/app/begin`, and the two data rights                                            |
 | [`emails.md`](./emails.md)                                 | Which auth emails are ours, the chrome they share, and why the welcome is verbatim                                            |
 | [`voice.md`](./voice.md)                                   | Voice: the three layers, what each document may be quoted for, and the golden set it is heard through                         |
-| [`agent.md`](./agent.md)                                   | The one agent: the model she is pinned to, where an admin changes it, no fallback, and her two seats                          |
+| [`agent.md`](./agent.md)                                   | The one agent: the model it is pinned to, where an admin changes it, no fallback, and its two seats                           |
 | [`safety.md`](./safety.md)                                 | The crisis path: the two tiers, the context check, the regional resource, the client frame, the record                        |
 | [`onboarding.md`](./onboarding.md)                         | The first-run sequence: the discovery questions as the Onboarding module's slots and config, core questions, ids never reused |
 | [`incident-runbook.md`](./incident-runbook.md)             | When something goes wrong with a person's data or safety: owner, severity, levers, the 72-hour clock                          |
@@ -74,7 +74,7 @@ rediscovered. Re-checked against the tree and the repo settings at t-19.
   starter template's generic policy, kept on purpose and labelled as interim by
   the notice D8 required — deleting it would leave the site with no policy at
   all, and writing one ourselves would put a legal document on lelanea.com that
-  no lawyer has seen. It closes when her own policy is written, not before. The
+  no lawyer has seen. It closes when Lelañea Fulton's own policy is written, not before. The
   Terms of Use cross-reference it (clause 12) and the authored file flags it as
   an open review note. See `app/(public)/privacy/page.tsx` and
   [`divergences.md`](./divergences.md) row 10.

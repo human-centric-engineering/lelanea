@@ -1,5 +1,5 @@
 /**
- * The voice-input seed: her flag goes on once, as an entry in her timeline —
+ * The voice-input seed: the agent's flag goes on once, as an entry in its timeline —
  * and an admin who turns it off is never overruled (§10 t-67; `fp4`).
  *
  * A re-run that writes nothing passes for free against a seed that wrote
@@ -90,14 +90,14 @@ async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
 }
 
-const HER_ID = 'agent-hers';
-const her = (): AgentRow => world.agents[0];
+const VOICE_AGENT_ID = 'agent-voice';
+const voiceAgent = (): AgentRow => world.agents[0];
 
 beforeEach(() => {
   vi.clearAllMocks();
   world.agents = [
     {
-      id: HER_ID,
+      id: VOICE_AGENT_ID,
       slug: VOICE_AGENT_SLUG,
       enableVoiceInput: false,
       createdBy: 'creator',
@@ -108,9 +108,9 @@ beforeEach(() => {
 });
 
 describe('a fresh install', () => {
-  it('switches voice input on, as an entry in her timeline above her initial configuration', async () => {
+  it('switches voice input on, as an entry in its timeline above its initial configuration', async () => {
     await runSeed();
-    expect(her().enableVoiceInput).toBe(true);
+    expect(voiceAgent().enableVoiceInput).toBe(true);
     expect(world.versions.map((v) => [v.version, v.changeSummary])).toEqual([
       [1, 'Initial configuration'],
       [2, VOICE_INPUT_CHANGE_SUMMARY],
@@ -123,13 +123,19 @@ describe('a fresh install', () => {
   it('appends to a timeline that already has history', async () => {
     world.versions = [
       {
-        agentId: HER_ID,
+        agentId: VOICE_AGENT_ID,
         version: 1,
         snapshot: {},
         changeSummary: 'Initial configuration',
         createdBy: 'x',
       },
-      { agentId: HER_ID, version: 2, snapshot: {}, changeSummary: 'Pinned model', createdBy: 'x' },
+      {
+        agentId: VOICE_AGENT_ID,
+        version: 2,
+        snapshot: {},
+        changeSummary: 'Pinned model',
+        createdBy: 'x',
+      },
     ];
     await runSeed();
     expect(world.versions.map((v) => v.version)).toEqual([1, 2, 3]);
@@ -143,7 +149,7 @@ describe('a fresh install', () => {
 });
 
 describe('a re-run', () => {
-  it('writes nothing when she already accepts voice input', async () => {
+  it('writes nothing when the agent already accepts voice input', async () => {
     await runSeed();
     expect(world.versions).toHaveLength(2);
     await runSeed();
@@ -153,12 +159,12 @@ describe('a re-run', () => {
 
   it('leaves an admin’s off alone: switched on before, then turned off, stays off', async () => {
     await runSeed();
-    expect(her().enableVoiceInput).toBe(true);
+    expect(voiceAgent().enableVoiceInput).toBe(true);
     // An admin turns it off, as the admin form would.
-    her().enableVoiceInput = false;
+    voiceAgent().enableVoiceInput = false;
 
     await runSeed();
-    expect(her().enableVoiceInput).toBe(false);
+    expect(voiceAgent().enableVoiceInput).toBe(false);
     expect(world.versions).toHaveLength(2);
     expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
       expect.stringContaining('turned it off since')
@@ -173,7 +179,7 @@ describe('a re-run', () => {
 });
 
 describe('safe on empty', () => {
-  it('throws when her agent does not exist, so the runner never records success', async () => {
+  it('throws when the voice agent does not exist, so the runner never records success', async () => {
     world.agents = [];
     await expect(runSeed()).rejects.toThrow(/no such agent/);
     expect(world.versions).toHaveLength(0);

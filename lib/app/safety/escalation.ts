@@ -1,7 +1,7 @@
 /**
  * Which seats already carry an escalation policy for which guard (f-safety t-60).
  *
- * Pure, and shared by the seed that creates her policies
+ * Pure, and shared by the seed that creates the agent's policies
  * (`prisma/seeds/app-lelanea/009-misuse-observed.ts`) and the smoke that checks
  * them (`scripts/app/smoke-misuse.ts`). They have to agree on what "covered"
  * means. If they didn't, the seed could skip a seat the smoke then reports

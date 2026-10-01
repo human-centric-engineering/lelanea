@@ -1,8 +1,8 @@
 /**
- * Her notes, as the person they are about reads them — and corrects one
+ * Lelañea's notes, as the person they are about reads them — and corrects one
  * (f-slots t-73; product description §3.3, §3.12, §3.19, §12).
  *
- * t-72 made her write what she learns. Until this module there was nowhere to
+ * t-72 made the agent write what it learns. Until this module there was nowhere to
  * read it: `HB9`'s exact shape — a write surface shipped ahead of its read
  * surface is indistinguishable from a write that is not happening, including to
  * the person it is about. The only proof was a smoke script.
@@ -12,7 +12,7 @@
  * **Hidden slots never leave the server.** §12: *"Development is a tuning
  * signal, never a grade. It must never rank, score, or display that as a
  * level."* `visibility: hidden` is that mechanism on the read side, the way the
- * exposure allowlist is on hers (`lib/app/agent/pins.ts`). It is applied here as
+ * exposure allowlist is on the agent's (`lib/app/agent/pins.ts`). It is applied here as
  * a **withholding of values**, not as a filter on definitions — a value is
  * dropped before anything about it is shaped, so no later branch can put one
  * back.
@@ -27,8 +27,8 @@
  *
  * **A retired slot still has answers, and they still belong to the person.**
  * Retirement deactivates the projection; it deletes nothing, at either tier. So
- * a note under a retired slug is shown, labelled, and not correctable — she is
- * no longer asking, and letting someone file a fresh reading against a question
+ * a note under a retired slug is shown, labelled, and not correctable — the agent
+ * is no longer asking, and letting someone file a fresh reading against a question
  * nobody will ask again is a write nothing will ever read.
  *
  * ## Why a special-category note cannot be corrected
@@ -45,7 +45,7 @@
  * correctable — the slot keeps words, so the person can say them again.
  *
  * **The reading, and only the reading.** Masking covers `value` and nothing
- * else: the reasoning note is stored as she wrote it, a paraphrase of what the
+ * else: the reasoning note is stored as the agent wrote it, a paraphrase of what the
  * person said (`voice.md`). So what the app keeps is a summary, not "nothing",
  * and it is shown — owner ruling, t-80: the gist is the compromise that keeps
  * the note worth having. Nothing here may say the words were never kept.
@@ -58,7 +58,7 @@
  * alternative, masking the correction, stores a sentinel over a sentinel and
  * tells the person their words were kept when they were discarded. Neither is
  * honest, so the correction is refused and the remedy shipped beside it
- * (`HB10`): *ask her about it*, which routes the words back through the capture
+ * (`HB10`): *ask the agent about it*, which routes the words back through the capture
  * path where the masking applies.
  *
  * ## The history read is a stopgap, and is commented upstream
@@ -80,7 +80,7 @@
  * with the framework half raised as a paragraph on `daybreak#156`.
  *
  * @see lib/app/slots/notes-view.ts — the wire shape
- * @see .context/app/slots.md — "Her notes"
+ * @see .context/app/slots.md — "Lelañea's notes"
  */
 
 import { z } from 'zod';
@@ -105,7 +105,7 @@ const WITHHELD = redactedString('special_category');
 
 /**
  * The one line stored against a correction, so a later reader of the row knows
- * it was not her reading. `sourceType` already says so; this says it in the
+ * it was not the agent's reading. `sourceType` already says so; this says it in the
  * place the panel actually prints.
  */
 export const CORRECTION_NOTE = 'The person corrected this themselves, in Lelañea’s notes.';
@@ -216,7 +216,7 @@ async function readPreviousVersions(
 }
 
 /**
- * Everything she currently holds about this person — and nothing else — as the
+ * Everything the agent currently holds about this person — and nothing else — as the
  * page asked to see it.
  *
  * Four queries for the whole panel, whatever the number of notes: the heads,

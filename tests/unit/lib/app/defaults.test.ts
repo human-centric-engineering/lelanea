@@ -43,7 +43,7 @@
  * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
  * `leaf-bootstrap.ts` (the seventeen journey modules, the waitlist's
- * erasure hook, the facilitation turn hook and her consumer-chat exclusion), `leaf-data-export.ts` (the
+ * erasure hook, the facilitation turn hook and the agent's consumer-chat exclusion), `leaf-data-export.ts` (the
  * waitlist's Art. 15 declaration and collector), `leaf-admin-nav.ts` (the
  * "Lelañea" sidebar section), `context-contributors.ts` (her voice block) and
  * `csp.ts` (the YouTube player's origin) assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
@@ -409,7 +409,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
 
       expect(initAppContextContributors()).toBeUndefined();
 
-      // §08 t-54 adds the second: her block on Daybreak's facilitation turns,
+      // §08 t-54 adds the second: the voice block on Daybreak's facilitation turns,
       // under the type Daybreak's surface pins — held equal to its constant here.
       expect(FACILITATION_CONTEXT_TYPE).toBe(FACILITATION_SURFACE_CONTEXT_TYPE);
       const added = [...(registry?.keys() ?? [])].filter((type) => !before.has(type));
@@ -852,7 +852,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
       expect(hooks[0]?.cleanupExternal).toBeUndefined();
 
-      // §08 t-54: the facilitation turn hook (divergences Row 18) — her turns
+      // §08 t-54: the facilitation turn hook (divergences Row 18) — the agent's turns
       // claimed by id and recorded. By identity, and not the pass-through the
       // framework falls back to when nothing registered.
       __resetFacilitationTurnHookForTests();
@@ -860,8 +860,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       await initLeafApp();
       expect(getFacilitationTurnHook()).toBe(runRecordedTurn);
 
-      // f-safety t-61: she is kept off Sunrise's consumer chat route
-      // (divergences Row 21) — exactly her slug, and nothing else by accident.
+      // f-safety t-61: the voice agent is kept off Sunrise's consumer chat route
+      // (divergences Row 21) — exactly its slug, and nothing else by accident.
       resetConsumerChatExclusions();
       expect(isExcludedFromConsumerChat(VOICE_AGENT_SLUG)).toBe(false);
       await initLeafApp();
@@ -913,10 +913,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     // PINNED, not deleted (`HB2`). f-safety t-60 fills this with ONE observer: a
-    // guard flagging a message on one of her seats writes a `misuse` safety
-    // event. Driven through the real emitter, so the pin is on what the
-    // registration DOES: her seat is recorded, and a turn on any other surface
-    // is not. The observer's own branches are in
+    // guard flagging a message on one of the agent's seats writes a `misuse`
+    // safety event. Driven through the real emitter, so the pin is on what
+    // the registration DOES: the agent's seat is recorded, and a turn on any
+    // other surface is not. The observer's own branches are in
     // tests/unit/lib/app/safety/misuse.test.ts.
     seam: 'lib/app/guard-event-contributors.ts',
     risk: 'a stray observer would receive every install’s inline-chat guard events',

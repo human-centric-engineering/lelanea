@@ -44,7 +44,7 @@ export interface TranscriptProps {
  * ## Scroll
  *
  * Follows the foot, as the prototype's `scrollLog()` does, whenever a turn is
- * added or her words grow — including the paced reveal, which goes on after
+ * added or the reply grows — including the paced reveal, which goes on after
  * the last chunk has landed and which `ReplyTurn` reports through `onGrow`.
  * A reader who has scrolled up to re-read is not pinned there; that
  * refinement is deliberately not in this task.
@@ -126,8 +126,8 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
         ) : null}
       </ReplyTurn>
     );
-    // A soft crisis frame came ahead of her turn: the resource is shown first,
-    // whatever her reply then says (safety.md).
+    // A soft crisis frame came ahead of the agent's turn: the resource is shown
+    // first, whatever the reply then says (safety.md).
     return 'crisisText' in entry && entry.crisisText
       ? [
           <CrisisRow

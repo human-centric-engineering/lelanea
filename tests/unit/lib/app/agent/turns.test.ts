@@ -5,7 +5,7 @@
  * Runs the real `runRecordedTurn` → `turn-record.ts` chain against a small
  * STATEFUL in-memory fake of the four tables it touches, and a fake model that
  * does what the platform's chat handler does to them: writes the person's
- * message (with `metadata.app`), a cost row (with `costLogMetadata`), her reply,
+ * message (with `metadata.app`), a cost row (with `costLogMetadata`), the reply,
  * then yields `start` / `content` / `done`. The properties worth proving are
  * about state across requests — a replay finds the first request's row — and a
  * canned mock can only echo what it was told.
@@ -106,7 +106,7 @@ vi.mock('@/lib/logging', () => ({
   logger: { warn, error, info: vi.fn(), debug: vi.fn() },
 }));
 
-/** Her agent as the seed leaves it: instructions on the agent, her core on the profile. */
+/** The voice agent as the seed leaves it: instructions on it, her voice core on the profile. */
 const HER_PERSONA = 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint_core v1.0';
 
 vi.mock('@/lib/db/client', () => {
@@ -414,7 +414,7 @@ function fakeRun(
         costUsd: behaviour.costUsd,
         metadata: extras.costLogMetadata,
       });
-      const reply = `Her answer to: ${turn.message}`;
+      const reply = `The answer to: ${turn.message}`;
       db.messages.push({
         id: `msg-${++db.seq}`,
         conversationId,
@@ -626,7 +626,7 @@ describe('a turn id', () => {
     expect(modelCalls).toBe(2);
     expect(db.turns.map((t) => t.userId)).toEqual(['user-1', 'user-2']);
     const content = theirs.find((e) => e.type === 'content');
-    expect(content).toEqual({ type: 'content', delta: 'Her answer to: Theirs.' });
+    expect(content).toEqual({ type: 'content', delta: 'The answer to: Theirs.' });
   });
 
   it('refuses an id reused for a different message', async () => {
@@ -698,9 +698,9 @@ describe('what a turn records', () => {
 
 describe('a turn costed at nothing', () => {
   it('is marked unpriced with no cost — beside a priced turn as the population', async () => {
-    // The population: her pinned model, which t-52 taught the registry, prices.
+    // The population: the agent's pinned model, which t-52 taught the registry, prices.
     await take(turnFor({ clientTurnId: 'priced-turn' }));
-    // An id an admin could pin her to that no registry holds. The platform's
+    // An id an admin could pin the agent to that no registry holds. The platform's
     // own cost row for it says $0.
     behaviour = {
       model: 'gpt-imaginary-2031-01-01',
@@ -810,7 +810,7 @@ describe('when the record itself fails', () => {
 });
 
 describe('a client that disconnects mid-answer (§08 t-55)', () => {
-  it('does not stop her answer: the turn completes, and the retry is a replay', async () => {
+  it('does not stop the answer: the turn completes, and the retry is a replay', async () => {
     const thinking = gate();
     behaviour.gate = thinking.promise;
     const turn = turnFor();
@@ -834,7 +834,7 @@ describe('a client that disconnects mid-answer (§08 t-55)', () => {
     expect(db.messages.filter((m) => m.role === 'user')).toHaveLength(1);
     expect(retry.find((e) => e.type === 'content')).toEqual({
       type: 'content',
-      delta: 'Her answer to: Where do I start?',
+      delta: 'The answer to: Where do I start?',
     });
     expect(retry.at(-1)?.type).toBe('done');
   });
@@ -1096,7 +1096,7 @@ describe('the edges of a claim', () => {
     const bare = (): AsyncIterable<ChatEvent> =>
       (async function* () {
         yield { type: 'start', conversationId: 'conv-user-1' };
-        // What the platform does before `done`: her reply is persisted.
+        // What the platform does before `done`: the reply is persisted.
         db.conversationOwners.set('conv-user-1', 'user-1');
         db.messages.push({
           id: 'reply-1',
@@ -1288,7 +1288,7 @@ describe('the two deadlines (§08 t-55)', () => {
       code: 'still_thinking',
       message: expect.any(String),
     });
-    // Not aborted, not settled: a slow answer is still her answer.
+    // Not aborted, not settled: a slow answer is still an answer.
     expect(db.turns[0].status).toBe('running');
     expect(callSignals[0]?.aborted).toBe(false);
 
@@ -1406,7 +1406,7 @@ describe('the two deadlines (§08 t-55)', () => {
   });
 });
 
-describe('what reaches the browser when she cannot answer (§08 t-55)', () => {
+describe('what reaches the browser when the agent cannot answer (§08 t-55)', () => {
   it('a provider error naming a slug, a model and an env var reaches no frame', async () => {
     behaviour.outcome = 'error';
     behaviour.errorMessage =

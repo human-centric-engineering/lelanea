@@ -19,20 +19,22 @@ import { View } from '@/components/app/views/view';
 
 describe('the landmark and the heading', () => {
   it('gives the view a main landmark', () => {
-    render(<View eyebrow="settings" title="How she speaks to you" />);
+    render(<View eyebrow="settings" title="How the replies speak to you" />);
     expect(screen.getByRole('main')).toBeTruthy();
   });
 
   it('names the page with the one top-level heading', () => {
-    render(<View eyebrow="settings" title="How she speaks to you" />);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('How she speaks to you');
+    render(<View eyebrow="settings" title="How the replies speak to you" />);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'How the replies speak to you'
+    );
   });
 
   it('leaves the eyebrow out of the heading outline', () => {
     // It LABELS the h1 directly under it. Promoting it would put two headings
     // where the design shows one, and make every view announce its own name
     // twice to anyone navigating by heading.
-    render(<View eyebrow="settings" title="How she speaks to you" />);
+    render(<View eyebrow="settings" title="How the replies speak to you" />);
     expect(screen.getAllByRole('heading')).toHaveLength(1);
     expect(screen.getByText('settings').tagName).toBe('P');
   });

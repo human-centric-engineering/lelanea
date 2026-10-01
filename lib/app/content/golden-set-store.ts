@@ -14,7 +14,7 @@
  * on the control agent. Both are written by
  * `prisma/seeds/app-lelanea/004-voice-golden-set.ts` and both are already read
  * back from the database by `comparison-admin.ts`. Copying either into a table
- * of ours would give her prompts two writable homes, which is the failure t-87
+ * of ours would give the prompts two writable homes, which is the failure t-87
  * named when it split the journey's roster from the journey's words.
  *
  * Before t-88 the authored file answered "which version is current", which is

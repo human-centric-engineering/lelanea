@@ -29,7 +29,7 @@ export interface LotusMarkProps {
 
 /**
  * The lotus as a still glyph — avatars, favicons, the 16px mark above a pull
- * quote, the inline mark beside her name (§6.7).
+ * quote, the inline mark beside the name Lelañea (§6.7).
  *
  * This is `Lotus` with every petal already at rest and nothing that moves, and
  * it is a separate component rather than `<Lotus open idle={false} />` because

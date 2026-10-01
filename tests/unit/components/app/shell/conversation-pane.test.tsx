@@ -6,11 +6,11 @@
  * The stub's rules — nothing sends, no digit, no article — lived here until
  * the conversation arrived. What replaces them is the conversation's own
  * contract: Enter sends and Shift+Enter does not, the box clears on the
- * server's `start`, the thinking row shows until her first words, a person
- * who asked for less motion gets the reply whole, and the off-screen carousel
- * pane is `inert` now that it holds real controls. And when she can't answer
- * (t-65): each ending in her words, the crisis resource laid out, and the
- * quiet line above the composer.
+ * server's `start`, the thinking row shows until the reply's first words, a
+ * person who asked for less motion gets the reply whole, and the off-screen
+ * carousel pane is `inert` now that it holds real controls. And when the
+ * agent can't answer (t-65): each ending in her register, the crisis resource
+ * laid out, and the quiet line above the composer.
  *
  * @see components/app/shell/conversation-pane.tsx
  * @see components/app/conversation/*
@@ -123,8 +123,8 @@ async function renderLoaded(width: 'large' | 'small' | 'medium' = 'large') {
 }
 
 const box = () => screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel });
-/** Her words alone — the bubble, not the account row under it (t-66). */
-const herWords = () =>
+/** The reply's words alone — the bubble, not the account row under it (t-66). */
+const replyWords = () =>
   screen.getByRole('article', { name: 'Lelañea said' }).querySelector('p')?.textContent;
 const latestTurn = () => seat.turns[seat.turns.length - 1];
 
@@ -154,7 +154,7 @@ describe('sending', () => {
     await waitFor(() => expect(box()).toHaveValue(''));
   });
 
-  it('shows the person\u2019s words as a turn at once, and the thinking row until her first words', async () => {
+  it('shows the person\u2019s words as a turn at once, and the thinking row until the reply\u2019s first words', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'Are you there?{Enter}');
@@ -218,7 +218,7 @@ describe('sending', () => {
     expect(seat.bodies).toHaveLength(1);
   });
 
-  it('renders her reply whole, not paced, for a reader who asked for less motion', async () => {
+  it('renders the reply whole, not paced, for a reader who asked for less motion', async () => {
     motion.reduced = true;
     const user = userEvent.setup();
     await renderLoaded();
@@ -227,7 +227,7 @@ describe('sending', () => {
       latestTurn().push('start', { conversationId: 'c1' });
       latestTurn().push('content', { delta: 'Every word at once, as it arrives.' });
     });
-    await waitFor(() => expect(herWords()).toBe('Every word at once, as it arrives.'));
+    await waitFor(() => expect(replyWords()).toBe('Every word at once, as it arrives.'));
   });
 
   it('folds a finished turn into the transcript, and the send control comes back', async () => {
@@ -246,7 +246,7 @@ describe('sending', () => {
     expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
   });
 
-  it('tells the person when a turn ends without her, in her words, and the words are back in the box', async () => {
+  it('tells the person when a turn ends without a reply, in her register, and the words are back in the box', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'hello{Enter}');
@@ -288,7 +288,7 @@ describe('sending', () => {
   });
 });
 
-describe('when she can\u2019t answer (t-65)', () => {
+describe('when the agent can\u2019t answer (t-65)', () => {
   const endingRow = () => screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel });
 
   async function endOn(code: string, message: string, extra: Record<string, unknown> = {}) {
@@ -305,7 +305,7 @@ describe('when she can\u2019t answer (t-65)', () => {
   }
 
   it.each(['unavailable', 'timed_out', 'paused', 'not_sent'] as const)(
-    'renders %s in her words, never the frame\u2019s',
+    'renders %s in her register, never the frame\u2019s',
     async (code) => {
       await endOn(code, ENDING_MESSAGES[code]);
       expect(endingRow().textContent).toBe(CONVERSATION_COPY.endings[code]);
@@ -324,7 +324,7 @@ describe('when she can\u2019t answer (t-65)', () => {
     expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('a hard week');
   });
 
-  it('says she is still on it when the earlier request is still being answered', async () => {
+  it('says the agent is still on it when the earlier request is still being answered', async () => {
     const user = await endOn('unavailable', ENDING_MESSAGES.unavailable);
     vi.mocked(fetch).mockImplementationOnce(
       async () =>
@@ -352,7 +352,7 @@ describe('when she can\u2019t answer (t-65)', () => {
       resetsAt: new Date('2026-10-01T00:00:00.000Z'),
     });
 
-    it('says it in her words, with the figures and the date, never the frame\u2019s', async () => {
+    it('says it in her register, with the figures and the date, never the frame\u2019s', async () => {
       await endOn(frame.code, frame.message, { ceiling: frame.ceiling });
       const words = endingRow().textContent ?? '';
 
@@ -381,7 +381,7 @@ describe('when she can\u2019t answer (t-65)', () => {
     });
 
     it('shows the frame\u2019s own true words when the limit did not parse', async () => {
-      // Without the limit her words could not tell a limit of nothing from a
+      // Without the limit the ending's copy could not tell a limit of nothing from a
       // month used up; the server's message was built from figures it knew.
       await endOn(frame.code, frame.message, { ceiling: 'x' });
       expect(endingRow().textContent).toBe(frame.message);
@@ -434,7 +434,7 @@ describe('when she can\u2019t answer (t-65)', () => {
     expect(alert.textContent).toContain(hard.keptMessage);
     // Only an https:// address becomes a link; anything else stays as text.
     expect(screen.queryByRole('link', { name: 'Call 116 123' })).toBeNull();
-    // Verbatim: nothing of hers is said under it, and the text form is not shown twice.
+    // Verbatim: none of the pane's own copy is said under it, and the text form is not shown twice.
     expect(screen.queryByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeNull();
     expect(alert.textContent).not.toContain('as text');
     expect(box()).toHaveValue('I want to end it');
@@ -455,7 +455,7 @@ describe('when she can\u2019t answer (t-65)', () => {
     expect(within(alert).queryByRole('link')).toBeNull();
   });
 
-  it('a soft crisis frame lays out the resource, then her turn', async () => {
+  it('a soft crisis frame lays out the resource, then the reply', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'a hard week{Enter}');
@@ -489,7 +489,7 @@ describe('when she can\u2019t answer (t-65)', () => {
       expect(line.compareDocumentPosition(box()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it('shows nothing when she is available, and clears once a read says so', async () => {
+    it('shows nothing when the agent is available, and clears once a read says so', async () => {
       seat.generation = 'paused';
       const user = userEvent.setup();
       await renderLoaded();
@@ -523,7 +523,7 @@ describe('folding the pane mid-conversation', () => {
       latestTurn().push('done', {});
       latestTurn().close();
     });
-    await waitFor(() => expect(herWords()).toBe('Every word of this reply.'));
+    await waitFor(() => expect(replyWords()).toBe('Every word of this reply.'));
 
     // Now with motion back on, fold and unfold. A reply still flagged as
     // streamed would remount `useTypedText` from '' and start typing.
@@ -531,13 +531,13 @@ describe('folding the pane mid-conversation', () => {
     await user.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open the conversation' }));
 
-    expect(herWords()).toBe('Every word of this reply.');
+    expect(replyWords()).toBe('Every word of this reply.');
     expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('hello');
   });
 });
 
 describe('a soft crisis frame whose resource did not parse', () => {
-  it('shows the text form ahead of her reply, and keeps it there once the turn is done', async () => {
+  it('shows the text form ahead of the reply, and keeps it there once the turn is done', async () => {
     const user = userEvent.setup();
     await renderLoaded();
     await user.type(box(), 'a hard week{Enter}');
@@ -563,7 +563,7 @@ describe('a soft crisis frame whose resource did not parse', () => {
     const alert = screen.getByRole('alert');
     const reply = screen.getByRole('article', { name: 'Lelañea said' });
     expect(alert.textContent).toContain('Samaritans, 116 123');
-    // The resource comes first, whatever she then says.
+    // The resource comes first, whatever the reply then says.
     expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
@@ -636,7 +636,7 @@ describe('the account under a reply (t-66)', () => {
       });
       latestTurn().close();
     });
-    await waitFor(() => expect(herWords()).toBe('She says…'));
+    await waitFor(() => expect(replyWords()).toBe('She says…'));
     return user;
   }
 
@@ -717,7 +717,7 @@ describe('the account under a reply (t-66)', () => {
     // Folded into the transcript, still typing: no row yet.
     await waitFor(() => expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy());
     expect(screen.queryByRole('button', { name: /Nothing was written/ })).toBeNull();
-    await waitFor(() => expect(herWords()).toBe('A reply of several words, paced.'), {
+    await waitFor(() => expect(replyWords()).toBe('A reply of several words, paced.'), {
       timeout: 4000,
     });
     await waitFor(() =>
@@ -725,7 +725,7 @@ describe('the account under a reply (t-66)', () => {
     );
   });
 
-  it('has no row under a turn that ended without her, nor under a reply from before the seam', async () => {
+  it('has no row under a turn that ended without a reply, nor under a reply from before the seam', async () => {
     seat.transcript = [{ ...reloadedReply, turn: null, capabilities: [] }];
     const user = userEvent.setup();
     await renderLoaded();
@@ -1082,7 +1082,7 @@ describe('a resource offered with a reply', () => {
       latestTurn().push('done', {});
       latestTurn().close();
     });
-    await waitFor(() => expect(herWords()).toBe('There is a piece on exactly this.'));
+    await waitFor(() => expect(replyWords()).toBe('There is a piece on exactly this.'));
 
     const offered = screen.getByRole('list', { name: 'Offered with this reply' });
     expect(within(offered).getAllByRole('button')).toHaveLength(1);

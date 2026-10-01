@@ -12,7 +12,7 @@ import { NOTES_PAGE } from '@/lib/app/slots/notes-client';
 
 /**
  * The six destinations of the left nav — the prototype's five, in its order,
- * plus her notes.
+ * plus Lelañea's notes.
  *
  * The prototype has seven: "Usage and billing" and "Settings" sat at the foot,
  * pinned down by a flexible spacer. Both moved into the account menu
@@ -59,7 +59,7 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   {
     href: '/app',
     label: 'The conversation',
-    hint: 'Just her, and nothing else',
+    hint: 'Nothing but the conversation',
     icon: MessageCircle,
   },
   {

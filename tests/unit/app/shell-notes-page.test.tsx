@@ -90,7 +90,7 @@ describe('with a session', () => {
     // of it (§3.19). Asserted because copy is the whole mechanism here — there
     // is no other signal that a note is a conclusion rather than a quote.
     expect(screen.getByText(/not your words back/)).toBeTruthy();
-    expect(screen.getByText(/She can be wrong/)).toBeTruthy();
+    expect(screen.getByText(/They can be wrong/)).toBeTruthy();
   });
 
   it('holds the page in a centred column', async () => {

@@ -26,18 +26,18 @@
  * Owner ruling, 25 Sept 2026. Daybreak masks `special_category` BEFORE storage:
  * a free-text value becomes a redaction sentinel as it is written
  * (`lib/framework/data-slots/capabilities/masking.ts`). For a discovery answer
- * that means the person's words are gone, to them and to her, and onboarding's
+ * that means the person's words are gone, to them and to the agent, and onboarding's
  * whole purpose (a baseline in their words, mirrored back) is defeated.
  * `sensitive` keeps the words, and the admin slot browser masks them unless an
  * admin deliberately reveals, which is audited. The grade is therefore fixed
  * here rather than editable per question.
  *
- * ## Hers to read, never hers to write
+ * ## The agent's to read, never its to write
  *
  * `fill_slot` refuses a discovery slug (`lib/app/slots/capture.ts`). An answer
- * is what the person wrote, and a reading of hers appended as a newer version
+ * is what the person wrote, and a reading of the agent's appended as a newer version
  * would replace their words as the head value. The slots are also left out of
- * the capture vocabulary she is shown, because that reads the taxonomy alone
+ * the capture vocabulary the agent is shown, because that reads the taxonomy alone
  * (`lib/app/slots/vocabulary.ts`).
  *
  * @see lib/app/content/admin/questions.ts — the editor, and why ids are never reused

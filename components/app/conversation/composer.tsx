@@ -17,8 +17,8 @@ export interface ComposerProps {
   /** Whether the microphone is offered — the route's answer; `null` until it has answered. */
   voiceInput?: VoiceInputState | null;
   /**
-   * Words handed to the box from outside the conversation — "Ask her about
-   * this" on one of her notes (t-73). `null` when nothing is waiting.
+   * Words handed to the box from outside the conversation — "Ask Lelañea about
+   * this" on one of Lelañea's notes (t-73). `null` when nothing is waiting.
    *
    * They go through the same `insertAtCaret` the microphone uses, and that is
    * the point of the prop rather than a second path: three rounds of review
@@ -54,8 +54,8 @@ export interface ComposerProps {
  * only once they are held somewhere else (§8.1).
  *
  * While a turn runs the send control is disabled and says why; typing is not.
- * A person can draft their next thought while she answers. Enter while she is
- * answering does nothing — neither sends nor breaks a line — as the prototype's
+ * A person can draft their next thought while the agent answers. Enter while it
+ * is answering does nothing — neither sends nor breaks a line — as the prototype's
  * `if (!v || S.busy) return` after its `preventDefault` makes it; Shift+Enter
  * still breaks a line.
  *

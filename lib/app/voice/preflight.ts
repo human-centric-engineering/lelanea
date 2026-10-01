@@ -112,7 +112,7 @@ export async function getVoicePreflight(userId: string): Promise<VoicePreflight>
   if (arms.length === 0 || !dataset || dataset.caseCount === 0) return preflight;
 
   // The estimator prices from the in-memory registry and never resolves a
-  // provider, so the seam that teaches the registry her pinned model's rate does
+  // provider, so the seam that teaches the registry the agent's pinned model's rate does
   // not run on this path. Without this the estimate for the dated id depends on
   // OpenRouter answering, and reads as unpriced whenever it does not — while the
   // rate sits in this repo. See `lib/app/agent/pinned-model.ts`.

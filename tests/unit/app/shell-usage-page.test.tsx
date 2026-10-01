@@ -92,7 +92,7 @@ describe('with a session', () => {
     render(await UsagePage());
 
     // The two sentences the placeholder carried, both false by the time it was
-    // replaced: she has been answering since §10, and a budget a person sets
+    // replaced: the agent has been answering since §10, and a budget a person sets
     // belongs to the commercial phase and is not being built.
     const page = screen.getByRole('main').textContent ?? '';
     expect(page).not.toMatch(/not calling a model/);

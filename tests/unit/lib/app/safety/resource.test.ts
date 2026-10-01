@@ -143,7 +143,7 @@ describe('crisisFrame', () => {
     expect(frame.code).toBe('crisis');
   });
 
-  it('leads the turn on a soft hit: a warning frame, so her turn can follow', async () => {
+  it('leads the turn on a soft hit: a warning frame, so the turn can follow', async () => {
     const frame = crisisFrame(await resolveCrisisResource('en-GB', 'soft'));
     expect(frame.type).toBe('warning');
     expect(frame.code).toBe('crisis');

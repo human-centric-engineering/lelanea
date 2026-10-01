@@ -1,10 +1,10 @@
 /**
- * Everything readable stays readable when she cannot answer (§08 t-55;
+ * Everything readable stays readable when the agent cannot answer (§08 t-55;
  * product description §8.1).
  *
  * The authored-content routes and the journey map are what a person reads
  * between conversations. They must answer normally in both of the conditions
- * that stop her: the model unreachable, and an operator's pause. Each case sets
+ * that stop the agent: the model unreachable, and an operator's pause. Each case sets
  * the condition up for real first — the flag store answers "paused", the
  * provider layer throws on every lookup — and asserts it holds, so a 200 below
  * is a 200 *under* it, not a 200 in a world where nothing was wrong.
@@ -13,7 +13,7 @@
  * (filled by `initLeafApp()`), with only the framework's published-map DB read
  * mocked, as `tests/unit/lib/app/journey/map.test.ts` does. The content routes
  * run as shipped. What no unit test can show — the same routes answering from a
- * running server with her model pointed at an unreachable endpoint — is in
+ * running server with the agent's model pointed at an unreachable endpoint — is in
  * `scripts/app/smoke-turn.ts`.
  *
  * ---------------------------------------------------------------------------
@@ -166,9 +166,9 @@ beforeEach(async () => {
   });
 });
 
-describe('with her model unreachable', () => {
+describe("with the agent's model unreachable", () => {
   it('every read route answers 200', async () => {
-    // The condition, established: asking for her provider fails.
+    // The condition, established: asking for the agent's provider fails.
     await expect(getProvider('openai')).rejects.toThrow(/unreachable/);
 
     await expect(readEverything()).resolves.toEqual(ALL_OK);

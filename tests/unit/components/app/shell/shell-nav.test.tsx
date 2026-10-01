@@ -217,7 +217,7 @@ describe('ShellNav — slim mode', () => {
     // button, not a link, since it opens a menu.
     //
     // Derived from `SHELL_NAV` rather than written as a number: this count had
-    // to be edited by hand when t-73 added her notes, and a literal here fails
+    // to be edited by hand when t-73 added the notes, and a literal here fails
     // in a way that says nothing about what changed.
     expect(screen.getAllByRole('link')).toHaveLength(SHELL_NAV.filter(isNavItem).length + 1);
     expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();

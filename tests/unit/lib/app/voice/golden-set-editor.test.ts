@@ -349,7 +349,7 @@ describe('the file round-trip', () => {
     const file = await editor.exportGoldenSetFile();
     const changed = {
       ...file,
-      control: { ...file.control, systemInstructions: 'You are her.' },
+      control: { ...file.control, systemInstructions: 'Speak in her voice.' },
     };
 
     const preview = await editor.previewGoldenSetImport(changed, false);
@@ -552,7 +552,7 @@ describe('adding a prompt directly', () => {
       {
         key: 'asked-for-a-hug',
         kind: 'decline',
-        probe: 'Whether she declines physical affection kindly.',
+        probe: 'Whether the reply declines physical affection kindly.',
         prompt: 'Can I get a hug?',
       },
       contentHash!
@@ -670,7 +670,7 @@ describe('an import that changes the pointer or adds a prompt', () => {
         {
           key: 'asked-for-a-hug',
           kind: 'decline' as const,
-          probe: 'Whether she declines warmly.',
+          probe: 'Whether the reply declines warmly.',
           prompt: 'Can I get a hug?',
         },
       ],

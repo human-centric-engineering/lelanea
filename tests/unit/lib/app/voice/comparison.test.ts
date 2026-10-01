@@ -4,19 +4,19 @@
  *
  * This is the load-bearing file of §05 t-28, and the reason is narrow enough to
  * state in a sentence: **every way this feature fails is silent.** A profile
- * detached from her agent, a control pointed at her profile, both arms resolving
- * to the same agent, a model pinned on one side through the admin form — none of
- * those throws, none logs, and every one of them produces two walls of plausible
- * prose that look exactly like a comparison in which her fingerprint changed
- * nothing. The guard is the only thing standing between that and somebody
- * concluding her voice does not matter.
+ * detached from the voice agent, a control pointed at the voice profile, both arms
+ * resolving to the same agent, a model pinned on one side through the admin form —
+ * none of those throws, none logs, and every one of them produces two walls of
+ * plausible prose that look exactly like a comparison in which her fingerprint
+ * changed nothing. The guard is the only thing standing between that and
+ * somebody concluding her voice does not matter.
  *
  * ## The assertions are made on the COMPOSED PROMPT, not on the constants
  *
  * Asserting that `VOICE_AGENT_SLUG !== VOICE_CONTROL_AGENT_SLUG` would pass
- * against a world where the control had been given her profile — which is the
- * whole failure. So the arms are resolved out of a stateful fake world through
- * Sunrise's real `resolveEffectivePrompt` / `composeSystemPromptString`, and the
+ * against a world where the control had been given the voice profile — which is
+ * the whole failure. So the arms are resolved out of a stateful fake world
+ * through Sunrise's real `resolveEffectivePrompt` / `composeSystemPromptString`, and the
  * difference is asserted on the strings a model would actually receive.
  *
  * Every absence claim sits after a presence claim, for the reason `fp6` names:
@@ -181,14 +181,14 @@ function seedWorld(): void {
 
   world.agents = [
     {
-      id: 'agent-her',
+      id: 'agent-voice',
       slug: VOICE_AGENT_SLUG,
       isActive: true,
       provider: '',
       model: '',
       temperature: 0.7,
       systemInstructions: VOICE_AGENT_SYSTEM_INSTRUCTIONS,
-      // Her agent's own three inheritable columns are NULL so the PROFILE is
+      // The voice agent's own three inheritable columns are NULL so the PROFILE is
       // what speaks — which is what `003-voice-fingerprint.ts` writes.
       persona: null,
       guardrails: null,
@@ -321,14 +321,14 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
     expect(() => assertArmsComparable([resolved[0]])).toThrow(/needs exactly/i);
   });
 
-  it('refuses when her agent lost its profile — a bare answer filed as hers', async () => {
+  it('refuses when the voice agent lost its profile — a bare answer filed as her voice', async () => {
     agent(VOICE_AGENT_SLUG).profile = null;
     await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
       /carries no fingerprint version/i
     );
   });
 
-  it('refuses when the CONTROL wears her profile — her against herself', async () => {
+  it('refuses when the CONTROL wears the voice profile — the voice against itself', async () => {
     // The failure the whole file exists for. Both arms answer, both sound like
     // her, the comparison reports no difference, and the conclusion drawn is
     // that her fingerprint does nothing.

@@ -1,6 +1,6 @@
 /**
- * Smoke: a turn with her, sent twice, is one turn — through the real route, in
- * a running app, against the dev database (§08 t-54).
+ * Smoke: a turn with the agent, sent twice, is one turn — through the real
+ * route, in a running app, against the dev database (§08 t-54).
  *
  * **Why this exists rather than another unit test.** The load-bearing claim of
  * t-54 is that Daybreak's facilitation route REACHES the leaf's turn hook. The
@@ -9,9 +9,9 @@
  * those two meet in one process is a fact about how Next bundles and boots the
  * app. No mock can prove it; a running server can.
  *
- * It also proves the price: her pinned model's cost row is greater than zero on
- * the real turn path (t-52's registration reaching a real turn), and the turn
- * record says `priced`.
+ * It also proves the price: the agent's pinned model's cost row is greater than
+ * zero on the real turn path (t-52's registration reaching a real turn), and the
+ * turn record says `priced`.
  *
  * Flow:
  *   1. Sign up a throwaway member, verify it in the database, sign in.
@@ -27,38 +27,39 @@
  * And the meter, read back (§08 t-56):
  *   3b. GET /api/v1/app/usage/turns/:turnId shows the model, fingerprint version,
  *       seat and a non-zero cost equal to the turn's cost rows — the tagged ones
- *       and the embedding of her reply; month to date includes it.
+ *       and the embedding of the reply; month to date includes it.
  *
- * And when she can't answer (§08 t-55):
- *   6. Drop the connection after her first words. The turn still completes and
- *      is recorded `completed`; the retry is a replay — one model call, one cost
- *      row, one user message.
- *   7. Point her at an unreachable endpoint (a throwaway provider row whose host
- *      cannot resolve). The turn ends with the plain `unavailable` ending, and no
- *      frame names the provider or its host; the person's message is kept; the
- *      read routes answer 200; the status read says `unavailable`. Point her back
- *      and the same turn id runs. Both requests go through the browser's own
+ * And when the agent can't answer (§08 t-55):
+ *   6. Drop the connection after the reply's first words. The turn still
+ *      completes and is recorded `completed`; the retry is a replay — one model
+ *      call, one cost row, one user message.
+ *   7. Point the agent at an unreachable endpoint (a throwaway provider row
+ *      whose host cannot resolve). The turn ends with the plain `unavailable`
+ *      ending, and no frame names the provider or its host; the person's
+ *      message is kept; the read routes answer 200; the status read says
+ *      `unavailable`. Point it back and the same turn id runs. Both requests go through the browser's own
  *      client (`lib/app/conversation/client.ts`, §10 t-65), so what is proved
  *      is what the pane meets: the ending as the client parses it, and the
  *      retry under the id it was given.
  *   8. Pause generation. The turn is refused before any model call — no turn
  *      row, no cost row — with the `paused` ending; the status read says
  *      `paused`; the read routes answer 200.
- *   9. Remove the member, the cost rows, the throwaway provider, and put her
- *      provider and the pause switch back.
+ *   9. Remove the member, the cost rows, the throwaway provider, and put the
+ *      agent's provider and the pause switch back.
  *
- * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — she
- * must be public and seated, and the pause flag must exist), and a working
+ * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — the
+ * agent must be public and seated, and the pause flag must exist), and a working
  * OpenAI key under the `openai` provider slug. Against the proxied
  * `https://lelanea.test` (the origin better-auth trusts), Node must trust the
  * local CA from the system store: `NODE_OPTIONS=--use-system-ca npm run smoke:app-turn`. It costs three real model calls —
  * about $0.002.
  *
- * **It changes two shared rows while it runs**: her agent's provider (step 7)
- * and the pause switch (step 8). Both are put back in `finally`, and the startup
- * sweep puts them back after an interrupted run — her provider by the throwaway
- * slug, the switch by the `setBy` marker this script writes into its metadata. A
- * turn someone else takes in those seconds meets the same condition.
+ * **It changes two shared rows while it runs**: the voice agent's provider
+ * (step 7) and the pause switch (step 8). Both are put back in `finally`, and
+ * the startup sweep puts them back after an interrupted run — the agent's
+ * provider by the throwaway slug, the switch by the `setBy` marker this script
+ * writes into its metadata. A turn someone else takes in those seconds meets
+ * the same condition.
  *
  * Safety: every row is scoped by the `smoke-test-turn` prefix or by this run's
  * turn id, and removed on every path, including a sweep at startup for anything
@@ -182,8 +183,8 @@ async function takeTurnAsClient(
 }
 
 /**
- * Take a turn and hang up after her first words — a person whose connection
- * drops mid-answer. Returns the frames that arrived before the drop.
+ * Take a turn and hang up after the reply's first words — a person whose
+ * connection drops mid-answer. Returns the frames that arrived before the drop.
  */
 async function takeTurnAndDrop(cookie: string, turnId: string, message: string): Promise<Frame[]> {
   const controller = new AbortController();
@@ -266,7 +267,7 @@ function chatCostRowsFor(turnId: string): Promise<number> {
 
 /**
  * One turn's record from the member meter API, and the cost rows it should
- * equal: those tagged with the turn, plus the embedding of her reply.
+ * equal: those tagged with the turn, plus the embedding of the reply.
  *
  * The embedding is written fire-and-forget after the reply, so wait for it
  * before comparing — reading too early would compare against a moving total.
@@ -334,7 +335,7 @@ async function restoreSharedRows(): Promise<void> {
 async function sweep(): Promise<void> {
   await restoreSharedRows();
   // Cost rows are kept on user deletion (SET NULL), so they go by turn id —
-  // and by the member, BEFORE the account goes: the embedding of her reply
+  // and by the member, BEFORE the account goes: the embedding of the reply
   // carries no turn id, and left behind it would read as platform cost.
   await prisma.aiCostLog.deleteMany({
     where: {
@@ -399,9 +400,12 @@ async function main(): Promise<void> {
     const firstError = first.frames.find((frame) => frame.type === 'error');
     if (firstError) throw new Error(`first turn ended in error: ${JSON.stringify(firstError)}`);
     check(firstDone !== undefined, 'the first request ran to `done`');
-    check(firstDone?.model === PINNED_MODEL, `she answered on her pinned model (${PINNED_MODEL})`);
+    check(
+      firstDone?.model === PINNED_MODEL,
+      `the agent answered on its pinned model (${PINNED_MODEL})`
+    );
     const reply = replyOf(first.frames);
-    check(reply.length > 0, `she said something (${reply.length} characters)`);
+    check(reply.length > 0, `the agent said something (${reply.length} characters)`);
     // The wiring, asked directly. No turn row means the route ran the
     // framework's pass-through: the server booted without the leaf's hook — an
     // old process, or an `initApp()` that threw before registering it.
@@ -450,13 +454,13 @@ async function main(): Promise<void> {
     check(turn.pricing === 'priced' && (turn.costUsd ?? 0) > 0, `priced at $${turn.costUsd}`);
     check(
       turn.fingerprintVersion !== null,
-      `her fingerprint version recorded (v${turn.fingerprintVersion})`
+      `the voice fingerprint version recorded (v${turn.fingerprintVersion})`
     );
     check(
       turn.modelId === PINNED_MODEL && turn.providerSlug === 'openai',
       'model and provider recorded'
     );
-    check(turn.assistantMessageId !== null, 'her reply is linked');
+    check(turn.assistantMessageId !== null, 'the reply is linked');
 
     const userMessages = await prisma.aiMessage.findMany({
       where: { conversationId: turn.conversationId ?? '', role: 'user' },
@@ -483,7 +487,7 @@ async function main(): Promise<void> {
     );
     check(
       record?.fingerprintVersion === turn.fingerprintVersion && record?.seat === SEAT,
-      `her fingerprint v${String(record?.fingerprintVersion)}, on the ${String(record?.seat)} seat`
+      `voice fingerprint v${String(record?.fingerprintVersion)}, on the ${String(record?.seat)} seat`
     );
     const costOfRows = meter.rows.reduce((total, row) => total + row.totalCostUsd, 0);
     check(
@@ -534,7 +538,7 @@ async function main(): Promise<void> {
       replied.length === 1 &&
         replyEntry.text === reply &&
         replyEntry.id === turn.assistantMessageId,
-      'her reply, word for word, keyed on the row the turn names'
+      'the reply, word for word, keyed on the row the turn names'
     );
     check(
       account?.turnId === TURN_ID &&
@@ -560,14 +564,14 @@ async function main(): Promise<void> {
     );
     check(reusedAsClient.events.length === 0, 'and no frame reached it');
 
-    // 6. The connection drops after her first words. Owner ruling (18 Sept
-    //    2026): that does not stop her answer.
+    // 6. The connection drops after the reply's first words. Owner ruling (18
+    //    Sept 2026): that does not stop the answer.
     console.log('\n5. The connection drops mid-answer');
     const dropId = `${PREFIX}-drop-${Date.now()}`;
     const beforeDrop = await takeTurnAndDrop(cookie, dropId, 'Tell me slowly: what happens first?');
     check(
       beforeDrop.some((frame) => frame.type === 'content'),
-      'hung up after her first words'
+      "hung up after the reply's first words"
     );
     const dropped = await waitForSettled(user.id, dropId);
     check(
@@ -590,8 +594,8 @@ async function main(): Promise<void> {
     });
     check(replayed.attempts === 1, 'the retry was a replay, not a re-run');
 
-    // 7. Her model unreachable.
-    console.log('\n6. Her model pointed at an unreachable endpoint');
+    // 7. The agent's model unreachable.
+    console.log("\n6. The agent's model pointed at an unreachable endpoint");
     await prisma.aiProviderConfig.create({
       data: {
         name: `${PREFIX} unreachable`,

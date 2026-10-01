@@ -104,11 +104,11 @@ describe('the bundled taxonomy', () => {
   });
 
   it('keeps every group wholly open or wholly hidden, which is what makes the read allowlist lossless', () => {
-    // Her `get_state` allowlist filters by GROUP — Daybreak's exposure facet
-    // has no per-slot axis (f-slots t-72). So `readableSlotGroups()` can only
-    // be honest while no group mixes the two: a mixed group would either
-    // withhold its open slots from her or read its hidden one back, and which
-    // of those happened would depend on a rule nobody chose.
+    // The agent's `get_state` allowlist filters by GROUP — Daybreak's exposure
+    // facet has no per-slot axis (f-slots t-72). So `readableSlotGroups()` can
+    // only be honest while no group mixes the two: a mixed group would either
+    // withhold its open slots from the agent or read its hidden one back, and
+    // which of those happened would depend on a rule nobody chose.
     //
     // This is the assertion that has to fail FIRST, before the derivation
     // quietly does the wrong thing. It is stricter than the case above, which
@@ -122,11 +122,12 @@ describe('the bundled taxonomy', () => {
     }
   });
 
-  it('offers her back every group but the hidden one, and the discovery answers', () => {
+  it('offers the agent back every group but the hidden one, and the discovery answers', () => {
     // Derived, never typed out — the point being that marking a slot hidden is
     // the whole act. Both directions, so a derivation that returned everything
     // (or nothing) fails. `discovery` is not in the file: the answers are
-    // projected from the questions (f-onboarding t-101), and she reads them back.
+    // projected from the questions (f-onboarding t-101), and the agent reads them
+    // back.
     const groups = readableSlotGroups();
     expect(groups).not.toContain('development');
     expect(new Set(groups)).toEqual(

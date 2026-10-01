@@ -52,19 +52,19 @@ export function initLeafApp(): Promise<void> {
 
   // §08 t-54. Every turn on a facilitation seat is claimed by its id, tagged with
   // its seat and recorded (`lib/app/agent/turns.ts`). Before anything that can
-  // throw: with no hook the route falls back to the pass-through, and her turns
-  // would run unrecorded — and bill twice on a retry — with nothing saying so.
-  // A pure registration, as this function requires. The seam is carried ahead
+  // throw: with no hook the route falls back to the pass-through, and the agent's
+  // turns would run unrecorded — and bill twice on a retry — with nothing saying
+  // so. A pure registration, as this function requires. The seam is carried ahead
   // of Daybreak — `.context/app/divergences.md` Row 18.
   registerFacilitationTurnHook(runRecordedTurn);
 
-  // f-safety t-61. She is `public` for the facilitation surface's sake, which
-  // also opens Sunrise's general consumer chat route to her — a door with no
-  // turn hook behind it, so no crisis check, no ceiling and no record. Keep her
-  // off it: that route now answers her slug as an unknown agent and its listing
-  // omits her. Before anything that can throw, for the same reason as the hook
-  // above. The seam is carried ahead of Sunrise — `.context/app/divergences.md`
-  // Row 21.
+  // f-safety t-61. The voice agent is `public` for the facilitation surface's
+  // sake, which also opens Sunrise's general consumer chat route to it — a door
+  // with no turn hook behind it, so no crisis check, no ceiling and no record.
+  // Keep the agent off it: that route now answers its slug as an unknown agent
+  // and its listing omits it. Before anything that can throw, for the same reason
+  // as the hook above. The seam is carried ahead of Sunrise —
+  // `.context/app/divergences.md` Row 21.
   excludeFromConsumerChat(VOICE_AGENT_SLUG);
 
   // f-slots t-70. The authored slot taxonomy — what the app aims to learn about

@@ -19,8 +19,8 @@ export default function ShellSettingsPage() {
   return (
     <View
       eyebrow="settings"
-      title="How she speaks to you"
-      lede="Filters over her voice, not replacements for it."
+      title="How the replies speak to you"
+      lede="Filters over Lelañea Fulton’s voice, not replacements for it."
       note="Adjustable here, or mid-conversation — “that was too much, be plainer with me” works as a sentence."
     >
       <SettingsView />

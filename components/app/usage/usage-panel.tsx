@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
  * What this month cost, and the shape of how it was spent (f-budget t-94).
  *
  * The page this replaces was a placeholder whose copy had become false in two
- * ways: it said Lelañea was not calling a model yet (she is, since §10), and it
+ * ways: it said the app was not calling a model yet (it is, since §10), and it
  * promised "a budget you set", which is the commercial phase's and not this
  * one's. Both are now gone rather than reworded.
  *

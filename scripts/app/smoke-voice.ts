@@ -6,20 +6,21 @@
  * mock the provider and the cost log. What no mock proves is that the pieces
  * borrowed from the platform — the upload validator, the audio-capable
  * provider resolved from the seeded rows, `logCost` with the person's id —
- * meet in one process on the real route, and that the seed left her flag on.
+ * meet in one process on the real route, and that the seed left the agent's
+ * flag on.
  *
  * Flow:
  *   1. Sign up a throwaway member, verify it in the database, sign in.
  *   2. GET /api/v1/app/agent/transcribe — must say `available`. `off` fails
- *      (the seed has not run, or an admin turned her flag off); `no_provider`
- *      SKIPS, saying so: this proves nothing until an audio-capable provider
- *      is configured (the owner's dev machine has none — the feature's
- *      at-ship list).
+ *      (the seed has not run, or an admin turned the agent's flag off);
+ *      `no_provider` SKIPS, saying so: this proves nothing until an
+ *      audio-capable provider is configured (the owner's dev machine has none —
+ *      the feature's at-ship list).
  *   3. POST one clip — a second of silence as WAV, generated here so the
  *      script carries no audio file — and get text back (empty is fine for
  *      silence; a string is what is asserted).
  *   4. Assert: exactly one cost row for the member, `operation:
- *      'transcription'`, tagged with her seat; no message row, no file.
+ *      'transcription'`, tagged with the agent's seat; no message row, no file.
  *   5. Remove the member and the row.
  *
  * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed`), and
@@ -134,13 +135,13 @@ async function main(): Promise<void> {
     check(availability.status === 200, `the read answers 200 (${availability.status})`);
     if (state === 'no_provider') {
       console.log(
-        '\nskipped — no audio-capable provider is configured; her flag is on. Configure one and run again (at ship).\n'
+        "\nskipped — no audio-capable provider is configured; the agent's flag is on. Configure one and run again (at ship).\n"
       );
       return;
     }
     check(
       state === 'available',
-      `voice input is available (${String(state)} — "off" means the seed has not run, or an admin turned her flag off)`
+      `voice input is available (${String(state)} — "off" means the seed has not run, or an admin turned the agent's flag off)`
     );
 
     // 3. One clip.
@@ -169,7 +170,7 @@ async function main(): Promise<void> {
     const metadata = rows[0].metadata;
     check(
       isRecord(metadata) && metadata.seat === CONVERSATION_SEAT,
-      `tagged with her seat (${JSON.stringify(metadata)})`
+      `tagged with the agent's seat (${JSON.stringify(metadata)})`
     );
     const messages = await prisma.aiMessage.count({ where: { conversation: { userId: user.id } } });
     check(

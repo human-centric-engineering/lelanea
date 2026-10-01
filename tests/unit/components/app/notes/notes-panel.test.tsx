@@ -6,7 +6,7 @@
  *
  * ## It is mounted beside the real conversation pane, on purpose
  *
- * "Ask her about this" crosses from one pane to the other through
+ * "Ask Lelañea about this" crosses from one pane to the other through
  * `ShellLayoutProvider`, and the only assertion worth making about it is that
  * the words end up in the box a person would then press send on. Mounting a
  * spy on `setAsk` instead would prove the panel called a setter and nothing
@@ -135,7 +135,7 @@ function note(overrides: Partial<Note> = {}): Note {
     withheld: false,
     confidence: 6,
     sourceType: 'inferred',
-    reasoningNote: 'She put this together from two things said in passing.',
+    reasoningNote: 'Put together from two things said in passing.',
     version: 1,
     capturedAt: '2026-09-21T09:15:00.000Z',
     conversationId: 'c1',
@@ -303,8 +303,8 @@ afterEach(() => {
 });
 
 describe('how sure Lelañea is', () => {
-  it('bands the stored 1-10 on HER bands, and clamps rather than throwing', () => {
-    // 8 is where "said it plainly about themselves" starts in her instructions
+  it("bands the stored 1-10 on the AGENT's bands, and clamps rather than throwing", () => {
+    // 8 is where "said it plainly about themselves" starts in the agent's instructions
     // (`.context/app/voice.md`), so an 8 must read as Confident. The first cut
     // put it at 9 and undersold exactly the readings a person was most direct
     // about. Each boundary is asserted from both sides.
@@ -334,7 +334,7 @@ describe('how sure Lelañea is', () => {
 });
 
 describe('what the panel shows', () => {
-  it('carries the reading, how Lelañea knows, and her wording behind the disclosure', async () => {
+  it('carries the reading, how it was known, and the wording behind the disclosure', async () => {
     renderBoth();
 
     expect(await screen.findByText(/Work is going badly/)).toBeTruthy();
@@ -348,7 +348,7 @@ describe('what the panel shows', () => {
     // §3.19: how it was known, how sure, and when — the three facts that now
     // live in the aside, each on its own line rather than run together.
     expect(screen.getByText('Lelañea inferred it')).toBeTruthy();
-    // A 6 is "clearly meant without saying it outright" in her own bands, so
+    // A 6 is "clearly meant without saying it outright" in the agent's own bands, so
     // it reads Fairly sure — not the Not certain the first cut of the bands
     // gave it.
     expect(screen.getByText('Fairly sure')).toBeTruthy();
@@ -635,7 +635,7 @@ describe('answering back', () => {
       ])
     );
     expect(await screen.findByText('It is going fine, actually.')).toBeTruthy();
-    // Never an overwrite: what she wrote is still there underneath.
+    // Never an overwrite: what the agent wrote is still there underneath.
     expect(
       screen.getByText(/Work is going badly and they are thinking about leaving\./)
     ).toBeTruthy();
@@ -670,7 +670,7 @@ describe('answering back', () => {
       status: 409,
       reason: 'kept_out_of_the_record',
       message:
-        'Lelañea keeps what you say about health, feeling and belief out of these notes. Ask her about it instead.',
+        'Lelañea keeps what you say about health, feeling and belief out of these notes. Ask Lelañea about it instead.',
     };
     renderBoth();
     await screen.findByText(/Work is going badly/);
@@ -680,7 +680,7 @@ describe('answering back', () => {
     await userEvent.click(screen.getByRole('button', { name: /save this instead/i }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Ask her about it instead.');
+    expect(alert.textContent).toContain('Ask Lelañea about it instead.');
     // Still editable, with the words the person typed still in the box.
     expect(screen.getByRole('textbox', { name: /your correction/i })).toBeTruthy();
   });

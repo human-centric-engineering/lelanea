@@ -95,7 +95,7 @@ const MODULES = {
   // `shell-account-page.test.tsx` where the session can be stood up. Its
   // metadata is still checked here, with everything else's.
   '/app/account': { Page: null, metadata: accountMeta, placeholder: false },
-  // Her notes is async and reads the session, for the same reason the account
+  // The notes view is async and reads the session, for the same reason the account
   // view does — and its body fetches, so rendering it here would need a shell
   // provider and a `fetch` as well. `tests/unit/components/app/notes/` owns
   // the panel; the metadata row is still checked here with everything else's.

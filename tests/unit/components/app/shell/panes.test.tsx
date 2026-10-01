@@ -196,13 +196,13 @@ describe('the swipe, and what must NOT trigger it', () => {
     // The conversation is on the LEFT in every layout, so the direction means
     // the same thing at every width — that is the whole reason it is worth a
     // gesture rather than only a control. A module route opens on the module,
-    // so right is the way back to her.
+    // so right is the way back to the conversation.
     renderPanes('small');
     swipe(120);
     expect(chat()?.getAttribute('aria-hidden')).toBeNull();
   });
 
-  it('sends her away again on a swipe left', () => {
+  it('sends the conversation away again on a swipe left', () => {
     renderPanes('small');
     swipe(120);
     swipe(-120);
@@ -232,7 +232,7 @@ describe('the swipe, and what must NOT trigger it', () => {
   it('ignores a drag that starts in the composer', () => {
     // Dragging to select what you typed must not navigate away from it.
     renderPanes('small');
-    // Bring her in first: on a module route the conversation starts off-screen
+    // Bring the conversation in first: on a module route the conversation starts off-screen
     // and `inert`, so its composer is not in the accessibility tree at all.
     swipe(120);
     expect(chat()?.getAttribute('aria-hidden')).toBeNull();
@@ -318,7 +318,7 @@ describe('moving between two modules on a phone', () => {
       'small'
     );
 
-    // Bring her in, so the pane is on 'chat' when the route changes.
+    // Bring the conversation in, so the pane is on 'chat' when the route changes.
     const surface = document.querySelector('[data-pane="chat"]')!.parentElement!;
     fireEvent.pointerDown(surface, {
       clientX: 200,

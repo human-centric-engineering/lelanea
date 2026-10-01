@@ -1,6 +1,6 @@
 /**
- * The slot-tools seed: she gets the profile, with the allowlist that bounds what
- * she may read back — and an operator's later decision about either is never
+ * The slot-tools seed: the voice agent gets the profile, with the allowlist that
+ * bounds what it may read back — and an operator's later decision about either is never
  * undone (f-slots t-72).
  *
  * ## `fp4` — the grant and its config are filled once, together
@@ -91,13 +91,13 @@ async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
 }
 
-const HER_ID = 'agent-hers';
+const VOICE_AGENT_ID = 'agent-voice';
 const CAP_READ = 'cap-get-state';
 const CAP_WRITE = 'cap-fill-slot';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  world.agents = [{ id: HER_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
+  world.agents = [{ id: VOICE_AGENT_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
   world.capabilities = [
     { id: CAP_READ, slug: 'get_state' },
     { id: CAP_WRITE, slug: 'fill_slot' },
@@ -123,10 +123,10 @@ describe('what the seed grants', () => {
 });
 
 describe('the allowlist it writes', () => {
-  it('restricts what she reads back and NOT what she writes, so she can still mint', () => {
+  it('restricts what the agent reads back and NOT what it writes, so it can still mint', () => {
     // The whole reason there is no `write` facet: a minted slug has no group, so
     // `facetAllows` refuses it under any named list. A write restriction and the
-    // owner's 20 Sept 2026 ruling that she may invent a slot cannot both hold.
+    // owner's 20 Sept 2026 ruling that the agent may invent a slot cannot both hold.
     // If a `write` key ever appears here, minting has been switched off by
     // accident rather than by decision.
     const config = slotExposureConfig();
@@ -134,7 +134,7 @@ describe('the allowlist it writes', () => {
     expect(config.read.groups.length).toBeGreaterThan(0);
   });
 
-  it('withholds the hidden group from her reads, by deriving rather than listing', () => {
+  it("withholds the hidden group from the agent's reads, by deriving rather than listing", () => {
     // §12: development is a tuning signal, never a grade. Asserted against the
     // taxonomy rather than against the string, so the case still means something
     // if the group is renamed.
@@ -212,7 +212,7 @@ describe('a re-run', () => {
 
   it('grants only the half that is missing, when only one exists', async () => {
     world.grants = [
-      { agentId: HER_ID, capabilityId: CAP_READ, isEnabled: true, customConfig: null },
+      { agentId: VOICE_AGENT_ID, capabilityId: CAP_READ, isEnabled: true, customConfig: null },
     ];
 
     await runSeed();
@@ -226,22 +226,22 @@ describe('a re-run', () => {
 });
 
 describe('when it cannot do its job', () => {
-  it('throws rather than banking success when her agent is missing', async () => {
+  it('throws rather than banking success when the voice agent is missing', async () => {
     world.agents = [];
 
     await expect(runSeed()).rejects.toThrow(/no such agent/);
     expect(world.grants).toEqual([]);
   });
 
-  it('throws rather than banking success when her agent is soft-deleted', async () => {
+  it('throws rather than banking success when the voice agent is soft-deleted', async () => {
     world.agents[0].deletedAt = new Date();
 
     await expect(runSeed()).rejects.toThrow(/no such agent/);
   });
 
   it('throws naming the missing capability, and grants NEITHER half', async () => {
-    // Read before any write: a half-granted state would leave her able to write
-    // what she cannot read, or the reverse, with the unit recorded as applied.
+    // Read before any write: a half-granted state would leave the agent able to
+    // write what it cannot read, or the reverse, with the unit recorded as applied.
     world.capabilities = [{ id: CAP_READ, slug: 'get_state' }];
 
     await expect(runSeed()).rejects.toThrow(/fill_slot/);

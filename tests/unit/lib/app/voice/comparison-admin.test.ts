@@ -168,7 +168,7 @@ beforeEach(() => {
           arm: 'fingerprint',
           agentSlug: 'lelanea-guide',
           fingerprintVersion: '1.0',
-          systemPrompt: 'her prompt v1.0',
+          systemPrompt: 'fingerprint prompt v1.0',
           evaluationRunId: 'run-a1',
         },
       ],
@@ -190,7 +190,7 @@ beforeEach(() => {
           arm: 'fingerprint',
           agentSlug: 'lelanea-guide',
           fingerprintVersion: '1.1',
-          systemPrompt: 'her prompt v1.1',
+          systemPrompt: 'fingerprint prompt v1.1',
           evaluationRunId: 'run-b1',
         },
       ],
@@ -305,8 +305,8 @@ describe('getVoiceComparison', () => {
     expect(detail.columns.map((column) => column.systemPrompt).sort()).toEqual([
       'bare prompt',
       'bare prompt',
-      'her prompt v1.0',
-      'her prompt v1.1',
+      'fingerprint prompt v1.0',
+      'fingerprint prompt v1.1',
     ]);
   });
 
@@ -315,8 +315,9 @@ describe('getVoiceComparison', () => {
   });
 
   it('renders an answer whose scores came back in a shape it does not know', async () => {
-    // A `Json` column will hold anything. The page exists to show her answers, so
-    // a disagreement about a score must not be what stops them being read.
+    // A `Json` column will hold anything. The page exists to show the agent's
+    // answers, so a disagreement about a score must not be what stops them being
+    // read.
     world.results[0].metricScores = 'not an object at all';
 
     const detail = await getVoiceComparison(['cmp-a']);
@@ -330,7 +331,8 @@ describe('rows that do not look the way this file expects', () => {
   /**
    * Every one of these is a `Json` column or a hand-written FK doing what it is
    * allowed to do. None of them should take down the page whose job is to show
-   * her answers — and none of them should be rendered as though it were fine.
+   * the agent's answers — and none of them should be rendered as though it were
+   * fine.
    */
   it('reports a missing run as `unknown` rather than guessing a status', async () => {
     // A non-null id whose row is absent is a race, not a resting state: the FK
@@ -465,7 +467,7 @@ describe('an arm whose run has been deleted', () => {
 
     expect(detail.columns.map((column) => column.systemPrompt).sort()).toEqual([
       'bare prompt',
-      'her prompt v1.0',
+      'fingerprint prompt v1.0',
     ]);
     for (const entry of detail.cases) {
       expect(entry.answers).toHaveLength(2);

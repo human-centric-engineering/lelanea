@@ -2,7 +2,7 @@ import { NOTES_LEDE, NOTES_NOTE, NotesSkeleton } from '@/components/app/notes/no
 import { View } from '@/components/app/views/view';
 
 /**
- * Her notes is the second view under `/app` that waits on anything — it reads
+ * The notes view is the second under `/app` that waits on anything — it reads
  * the session, which makes the route dynamic — so it is the second with a
  * loading boundary. The others render from constants and would show this for a
  * frame and then never again.

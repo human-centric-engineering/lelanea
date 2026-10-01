@@ -2,18 +2,18 @@
  * Does this message say someone may be in danger? Deterministic, and first
  * (f-safety t-58; product description §8.1, §12).
  *
- * Before this, a person telling her they wanted to end their life got whatever
- * the model said, and nothing at all when the model was down. The detection
- * therefore must not depend on a model: it is a phrase list over normalised
- * text, run before the turn is claimed, before the pause check, and before any
- * model is called.
+ * Before this, a person telling the agent they wanted to end their life got
+ * whatever the model said, and nothing at all when the model was down. The
+ * detection therefore must not depend on a model: it is a phrase list over
+ * normalised text, run before the turn is claimed, before the pause check, and
+ * before any model is called.
  *
  * ## Two tiers (owner ruling, 19 Sept 2026)
  *
  * | Tier   | Means                                                     | The turn                                  |
  * | ------ | --------------------------------------------------------- | ----------------------------------------- |
  * | `hard` | unambiguous danger: suicide, self-harm, harming another, immediate risk | is answered with the resource; no model |
- * | `soft` | distress that may be danger                               | the resource goes first, then she answers |
+ * | `soft` | distress that may be danger                               | resource first, then the agent answers    |
  * | `none` | nothing matched                                           | runs as it always did                     |
  *
  * **The list errs towards `hard`.** A negation ("I'm not going to kill myself")

@@ -2,7 +2,7 @@
  * The conversation — read back
  *
  * GET /api/v1/app/conversation?seat=facilitator — the signed-in person's
- * conversation on a seat (§10 t-64): what they said, what she said, and for
+ * conversation on a seat (§10 t-64): what they said, what the agent said, and for
  * every reply the turn row that says what produced it. What the pane renders
  * on load, and what the disclosure drawer reads.
  *
