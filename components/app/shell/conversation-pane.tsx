@@ -119,30 +119,48 @@ export function ConversationPane() {
   });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
   /*
    * Folding unmounts the open pane, and with it whatever inside held focus — the
    * collapse button, the separator, the composer — so focus would fall to
    * `<body>` and the next Tab would start from the top of the page (t-118).
+   * Opening it again unmounts the strip the same way (t-123).
    *
-   * Asked once, of the section, rather than of each control that can fold it:
-   * did it hold focus as it went? React 19 runs a ref's cleanup BEFORE it removes
-   * the node, so `contains` still sees the truth. A fold begun from outside the
-   * pane — the menu toggle at `medium` — leaves focus where it was, and a click
-   * that never focused anything (Safari's buttons) hands nothing on.
+   * Asked once, of whichever surface is going, rather than of each control that
+   * can swap them: did it hold focus as it went? React 19 runs a ref's cleanup
+   * BEFORE it removes the node, so `contains` still sees the truth. A swap begun
+   * from outside the pane — the menu toggle at `medium` — leaves focus where it
+   * was, and a click that never focused anything (Safari's buttons) hands
+   * nothing on.
    */
-  const focusStripOnFold = useRef(false);
+  const handFocusOnSwap = useRef(false);
   const sectionRef = useCallback((node: HTMLElement | null) => {
     if (!node) return;
     return () => {
-      focusStripOnFold.current = node.contains(document.activeElement);
+      handFocusOnSwap.current = node.contains(document.activeElement);
+    };
+  }, []);
+  const stripCallbackRef = useCallback((node: HTMLButtonElement | null) => {
+    stripRef.current = node;
+    if (!node) return;
+    return () => {
+      handFocusOnSwap.current = node.contains(document.activeElement);
     };
   }, []);
 
-  // Before paint, so a screen reader never lands on `<body>` in between.
+  /*
+   * Folding lands on the strip. Opening lands on the collapse button — not the
+   * composer: Enter twice is then a round trip, and a tablet does not raise its
+   * keyboard over half the screen because someone reopened the pane. Where there
+   * is no collapse button — the pane opened by leaving the workspace, or by
+   * narrowing to `small`, where the pane may be `inert` — nothing is handed on.
+   *
+   * Before paint, so a screen reader never lands on `<body>` in between.
+   */
   useLayoutEffect(() => {
-    if (!chatSlim || !focusStripOnFold.current) return;
-    focusStripOnFold.current = false;
-    stripRef.current?.focus();
+    if (!handFocusOnSwap.current) return;
+    handFocusOnSwap.current = false;
+    (chatSlim ? stripRef : collapseRef).current?.focus();
   }, [chatSlim]);
 
   /**
@@ -162,7 +180,7 @@ export function ConversationPane() {
   const inFlow = wsOpen && !carousel;
   const basis = width === 'medium' ? Math.min(chatW, CHAT_MEDIUM) : chatW;
 
-  if (chatSlim) return <Strip ref={stripRef} onOpen={() => setChatSlim(false)} />;
+  if (chatSlim) return <Strip ref={stripCallbackRef} onOpen={() => setChatSlim(false)} />;
 
   return (
     <section
@@ -221,6 +239,7 @@ export function ConversationPane() {
       <div className="flex flex-none items-center gap-2 px-6 pt-3.5 max-[760px]:px-3.5 max-[760px]:pt-3">
         {wsOpen && width !== 'small' ? (
           <button
+            ref={collapseRef}
             type="button"
             onClick={() => setChatSlim(true)}
             aria-label="Collapse the conversation"
