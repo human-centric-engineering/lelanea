@@ -963,7 +963,8 @@ describe('collapsing the conversation', () => {
 
   // Folding unmounts the head, and the button in it that had focus, so without
   // a hand-off focus falls to <body> and the next Tab starts from the top of the
-  // page (t-118). At `medium` this button is the only fold the pane has.
+  // page (t-118). At `medium` this button is the only fold in the pane itself;
+  // expanding the menu parks it too, from outside (below).
   describe.each(['medium', 'large'] as const)('keeps keyboard focus at %s', (width) => {
     it.each([
       ['Enter', '{Enter}'],
@@ -981,16 +982,73 @@ describe('collapsing the conversation', () => {
     });
   });
 
-  it('moves it to the strip on a mouse click too, rather than dropping it on the page', async () => {
-    // A pointer fold unmounts the same button. The strip takes no visible ring
-    // from this — `:focus-visible` follows the pointer — but Tab carries on from
-    // where the person was rather than from the top.
+  it('moves it to the strip on a click that focused the button, rather than dropping it on the page', async () => {
+    // Chromium focuses a button on click, so a pointer fold unmounts focus too.
+    // Tab then carries on from the strip; `:focus-visible` draws no ring there,
+    // because the focus it inherits came from a pointer.
     renderInShell(<ConversationPane />, 'large');
     await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
 
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Open the conversation' })
     );
+  });
+
+  it('moves it to the strip when the arrow keys squeeze the separator past the fold', async () => {
+    const user = userEvent.setup();
+    renderInShell(<ConversationPane />, 'large');
+    screen.getByRole('separator', { name: 'Resize the conversation' }).focus();
+
+    // `Shift` steps are 48px; enough of them from any stored width crosses the fold.
+    for (let i = 0; i < 12 && !screen.queryByRole('button', { name: 'Open the conversation' }); i++)
+      await user.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Open the conversation' })
+    );
+  });
+
+  it('moves it to the strip when a drag folds a separator that held focus', () => {
+    // Whether a pointer drag focuses the separator is the browser's call; when it
+    // has, the fold takes that focus with it like any other.
+    renderInShell(<ConversationPane />, 'large');
+    const handle = screen.getByRole('separator', { name: 'Resize the conversation' });
+    handle.focus();
+
+    fireEvent.pointerDown(handle, { clientX: 500, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 200, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientX: 200, pointerId: 1 });
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Open the conversation' })
+    );
+  });
+
+  it('leaves focus alone when the fold began outside the pane', async () => {
+    // Expanding the menu at `medium` parks the conversation from the nav. The
+    // control that did it is still on screen and still has focus; taking it to
+    // the strip would move the reader somewhere they did not go.
+    function FoldFromOutside() {
+      const { setChatSlim } = useShellLayout();
+      return (
+        <button type="button" onClick={() => setChatSlim(true)}>
+          Fold from outside
+        </button>
+      );
+    }
+    renderInShell(
+      <>
+        <FoldFromOutside />
+        <ConversationPane />
+      </>,
+      'medium'
+    );
+    const outside = screen.getByRole('button', { name: 'Fold from outside' });
+
+    await userEvent.click(outside);
+
+    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
+    expect(document.activeElement).toBe(outside);
   });
 
   it('offers none on the clean view, where there is nothing to give the width to', () => {
