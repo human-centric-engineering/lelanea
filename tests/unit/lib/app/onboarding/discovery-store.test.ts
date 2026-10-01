@@ -92,12 +92,12 @@ function setOf(questions: typeof ALL, coreOnly = false) {
 }
 
 let rows: Row[];
-let node: { nodeKey: string; progress: Record<string, unknown> | null } | null;
+let node: { nodeKey: string; status?: string; progress: Record<string, unknown> | null } | null;
 
 beforeEach(() => {
   vi.clearAllMocks();
   rows = [];
-  node = { nodeKey: ONBOARDING_NODE_KEY, progress: null };
+  node = { nodeKey: ONBOARDING_NODE_KEY, status: 'active', progress: null };
   mocks.getDiscoverySet.mockResolvedValue(setOf(ALL));
   mocks.getSlotHeads.mockImplementation((userId: string, options?: { slotSlugs?: string[] }) =>
     Promise.resolve(
@@ -243,6 +243,37 @@ describe('answerDiscoveryQuestion', () => {
       answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Lost?' })
     ).rejects.toThrow('db down');
     expect(mocks.appendSlotValue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('after the hand-off into Values (t-106)', () => {
+  function handedOff() {
+    if (!node) throw new Error('the fixture has no onboarding node');
+    node.status = 'completed';
+    mocks.getNodeStates.mockImplementation(() =>
+      Promise.resolve([node, { nodeKey: 'values', status: 'active', progress: null }])
+    );
+  }
+
+  it('is not handed off while onboarding is the node they are in', async () => {
+    expect((await getDiscoveryState(USER))?.handedOff).toBe(false);
+  });
+
+  it('reads handed off from the same node states, once Values is entered', async () => {
+    handedOff();
+    expect((await getDiscoveryState(USER))?.handedOff).toBe(true);
+  });
+
+  it('still revises an answer, as a new version, with onboarding completed', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' });
+    handedOff();
+
+    const revised = await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], {
+      words: 'One, since.',
+    });
+
+    expect(revised).toEqual({ outcome: 'written', version: 2 });
+    expect((await getDiscoveryState(USER))?.answers.q01).toEqual({ words: 'One, since.' });
   });
 });
 

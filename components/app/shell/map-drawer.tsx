@@ -112,8 +112,9 @@ type Load =
  * whether or not anyone opens the map. Keyed on the first open instead, and
  * kept for the session: the ETag on the route makes a refetch cheap, but a
  * drawer that re-loads every time it slides in would flash. Structure does not
- * change under a reader; state does once a module can be completed, and when
- * that lands (§15 t-106) a stale `current` is the thing to watch for here.
+ * change under a reader; state does, when they begin the journey (§15 t-106).
+ * So a move on the journey (`journeyMoved`, from the shell) marks what was
+ * fetched stale, and the next open reads it again, or this one if it is open.
  *
  * ## Two kinds of "current"
  *
@@ -130,7 +131,7 @@ type Load =
  * in `drawer.tsx` already counts `a[href]`.
  */
 export function MapDrawerBody() {
-  const { drawer, closeDrawer } = useShellLayout();
+  const { drawer, closeDrawer, journeyMoved } = useShellLayout();
   const pathname = usePathname();
   const [load, setLoad] = useState<Load>({ status: 'idle' });
   const open = drawer === 'map';
@@ -157,6 +158,15 @@ export function MapDrawerBody() {
     };
   }, []);
 
+  // A move on the journey makes the fetched states stale. Declared before the
+  // fetch effect, so on the same commit the flag is cleared before it is read.
+  const seenMove = useRef(journeyMoved);
+  useEffect(() => {
+    if (seenMove.current === journeyMoved) return;
+    seenMove.current = journeyMoved;
+    requested.current = false;
+  }, [journeyMoved]);
+
   useEffect(() => {
     if (!open || requested.current) return;
     requested.current = true;
@@ -177,7 +187,7 @@ export function MapDrawerBody() {
         if (!unpublished) requested.current = false;
         setLoad({ status: unpublished ? 'unpublished' : 'failed' });
       });
-  }, [open]);
+  }, [open, journeyMoved]);
 
   if (load.status === 'idle' || load.status === 'loading') {
     return (

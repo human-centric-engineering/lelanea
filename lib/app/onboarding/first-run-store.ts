@@ -20,6 +20,7 @@
  * a replayed one cannot be taken back.
  */
 
+import type { UserNodeState } from '@prisma/client';
 import { getJourney, getNodeStates } from '@/lib/framework/facilitation/journey/queries';
 import { recordNodeProgress } from '@/lib/framework/facilitation/journey/progress';
 import { JOURNEY_MAP_SLUG, ONBOARDING_NODE_KEY } from '@/lib/app/journey/map-definition';
@@ -43,11 +44,20 @@ export type RecordBeatOutcome = 'recorded' | 'already' | 'failed';
  * a failed read.
  */
 export async function readOnboardingProgress(userId: string): Promise<unknown> {
+  const states = await readJourneyNodeStates(userId);
+  return states.find((state) => state.nodeKey === ONBOARDING_NODE_KEY)?.progress ?? null;
+}
+
+/**
+ * Every node state on the person's journey, or none before it has started.
+ * The discovery state reads the onboarding node's `progress` and whether the
+ * hand-off has happened (t-106) from this one read.
+ */
+export async function readJourneyNodeStates(userId: string): Promise<UserNodeState[]> {
   const viewer = { userId };
   const journey = await getJourney(viewer, { userId, graphSlug: JOURNEY_MAP_SLUG });
-  if (!journey) return null;
-  const states = await getNodeStates(viewer, { journeyId: journey.id, subject: userId });
-  return states.find((state) => state.nodeKey === ONBOARDING_NODE_KEY)?.progress ?? null;
+  if (!journey) return [];
+  return getNodeStates(viewer, { journeyId: journey.id, subject: userId });
 }
 
 async function readLedger(userId: string): Promise<FirstRunProgress> {

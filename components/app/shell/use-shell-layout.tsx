@@ -219,6 +219,14 @@ export interface ShellLayout {
    */
   noteOnboardingFinished: () => void;
   /**
+   * How many times the person's place on the journey has moved since the shell
+   * loaded: today, beginning the journey (t-106). The map drawer keeps what it
+   * fetched for the session, so it reads this to know its states are stale.
+   */
+  journeyMoved: number;
+  /** The person's place on the journey just moved: the map reads it again. */
+  noteJourneyMoved: () => void;
+  /**
    * Words the composer should be holding, put there by something outside the
    * conversation — today, "Ask Lelañea about this" on a note. `null` when there is
    * nothing waiting, which is almost always.
@@ -270,6 +278,14 @@ function nothing(): void {}
  */
 export function useOnboardingFinished(): () => void {
   return useContext(ShellLayoutContext)?.noteOnboardingFinished ?? nothing;
+}
+
+/**
+ * The shell's {@link ShellLayout.noteJourneyMoved}, or a no-op outside the
+ * shell, as {@link useOnboardingFinished} is.
+ */
+export function useJourneyMoved(): () => void {
+  return useContext(ShellLayoutContext)?.noteJourneyMoved ?? nothing;
 }
 
 /**
@@ -327,6 +343,8 @@ export function ShellLayoutProvider({
     setConversationSeat(serverSeat);
   }
   const noteOnboardingFinished = useCallback(() => setConversationSeat(CONVERSATION_SEAT), []);
+  const [journeyMoved, setJourneyMoved] = useState(0);
+  const noteJourneyMoved = useCallback(() => setJourneyMoved((n) => n + 1), []);
   const wsOpen = pathname !== '/app';
 
   const [width, setWidth] = useState<WidthClass>('large');
@@ -781,6 +799,8 @@ export function ShellLayoutProvider({
       noteTurnSettled,
       conversationSeat,
       noteOnboardingFinished,
+      journeyMoved,
+      noteJourneyMoved,
       ask,
       setAsk,
       takeAsk,
@@ -812,6 +832,8 @@ export function ShellLayoutProvider({
       noteTurnSettled,
       conversationSeat,
       noteOnboardingFinished,
+      journeyMoved,
+      noteJourneyMoved,
       ask,
       setAsk,
       takeAsk,

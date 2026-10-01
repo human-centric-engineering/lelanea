@@ -25,6 +25,7 @@ import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BEGIN_JOURNEY_COPY, BeginJourney } from '@/components/app/onboarding/begin-journey';
 import { Drawers } from '@/components/app/shell/drawer';
 import { JOURNEY_MAP_ENDPOINT, TIER_INKS } from '@/components/app/shell/map-drawer';
 import { ShellRail } from '@/components/app/shell/shell-rail';
@@ -37,12 +38,16 @@ import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 import { seededJourneyRows } from '@/tests/helpers/app/content-stores';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
-vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname.current,
+  useRouter: () => ({ push }),
+}));
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }));
+const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/client')>();
-  return { ...actual, apiClient: { ...actual.apiClient, get } };
+  return { ...actual, apiClient: { ...actual.apiClient, get, post } };
 });
 
 /** The real journey, projected the way the route projects it. */
@@ -90,6 +95,7 @@ async function openMap() {
 beforeEach(() => {
   vi.clearAllMocks();
   get.mockResolvedValue(realMap());
+  post.mockResolvedValue({ outcome: 'begun', next: '/app/modules/values' });
 });
 
 describe('MapDrawerBody — what the map holds', () => {
@@ -173,6 +179,37 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(rows()[0].querySelector('i')?.getAttribute('style')).toContain('--color-status-green');
     expect(rows()[1]).toHaveTextContent('in progress');
     expect(rows().filter((r) => r.textContent?.includes('not started'))).toHaveLength(15);
+  });
+
+  it('reads the map again after the person begins the journey, rather than keep a stale current (t-106)', async () => {
+    const withStates = (states: Record<string, JourneyMapView['modules'][number]['state']>) => {
+      const map = realMap();
+      return {
+        ...map,
+        modules: map.modules.map((m) => ({ ...m, state: states[m.slug] ?? m.state })),
+      };
+    };
+    get.mockResolvedValue(withStates({ onboarding: 'current' }));
+    mockPathname.current = '/app';
+    renderInShell(
+      <>
+        <ShellRail />
+        <Drawers />
+        <BeginJourney waiting={false} moduleName="Onboarding" />
+      </>
+    );
+    await openMap();
+    expect(rows()[0]).toHaveTextContent('in progress');
+    await userEvent.keyboard('{Escape}');
+
+    get.mockResolvedValue(withStates({ onboarding: 'done', values: 'current' }));
+    await userEvent.click(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/app/modules/values'));
+
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+    await waitFor(() => expect(rows()[1]).toHaveTextContent('in progress'));
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(rows()[0]).toHaveTextContent('complete');
   });
 
   it('names each arc in its own ink, from a token, and lowercase', async () => {

@@ -8,11 +8,13 @@ import { fallbackModuleName } from '@/lib/app/modules/definitions';
  *
  * - `app`: on `/app`, after the reads. The first sitting asks; once the
  *   person has answered, skipped or left, a return offers the next question
- *   instead. Nothing once every question is answered or skipped. When the
+ *   instead. Once every question is answered or skipped, the step into the
+ *   journey (t-106), and nothing once that is taken. When the
  *   set does not allow partial completion, a return asks again rather than
  *   offering, and there is no way past a question but an answer.
  * - `module`: the area of the module the set names, always, with every
- *   question. Its path and name come from the set, not from here.
+ *   question, and the step into the journey until it is taken. Its path and
+ *   name come from the set, not from here.
  *
  * The state comes in already read (`getDiscoveryState`), because both callers
  * need it for something else first: `/app` to know whether anything is left,
@@ -28,7 +30,7 @@ export function DiscoveryView({
   where: 'app' | 'module';
 }) {
   if (state.set.questions.length === 0) return null;
-  if (where === 'app' && state.position.finished) return null;
+  if (where === 'app' && state.position.finished && state.handedOff) return null;
 
   const partial = state.set.pacing.allowPartialCompletion;
 
@@ -53,6 +55,7 @@ export function DiscoveryView({
       partial={partial}
       moduleHref={`/app/modules/${state.set.moduleSlug}`}
       moduleName={fallbackModuleName(state.set.moduleSlug)}
+      handedOff={state.handedOff}
     />
   );
 }

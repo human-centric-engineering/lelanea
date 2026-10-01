@@ -56,6 +56,12 @@ export const JOURNEY_MAP_SLUG = 'lelanea-journey';
 export const ONBOARDING_NODE_KEY = 'onboarding';
 
 /**
+ * The node onboarding hands the person into when they begin the journey:
+ * Module 01, Values (§3.9, t-106).
+ */
+export const VALUES_NODE_KEY = 'values';
+
+/**
  * The prefix that marks a region node as a tier. One definition: the reader
  * in `map.ts` strips it to find the tier, and a drift between the two would
  * fail every region at once — a whole-shell outage from a one-token change.

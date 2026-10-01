@@ -34,6 +34,9 @@ vi.mock('@/components/app/ui/consent-clearance', () => ({
   useConsentBannerClearance: () => clearance.current,
 }));
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+
 const loggerMock = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }));
 vi.mock('@/lib/logging', () => ({ logger: loggerMock }));
 
@@ -46,6 +49,7 @@ import {
   type DiscoveryQuestionProps,
 } from '@/components/app/onboarding/discovery';
 import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
+import { BEGIN_JOURNEY_COPY } from '@/components/app/onboarding/begin-journey';
 import type { DiscoveryState } from '@/lib/app/onboarding/discovery-store';
 
 const Q1: DiscoveryQuestionProps = {
@@ -88,6 +92,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof Discovery>> = 
     partial: true,
     moduleHref: '/app/modules/onboarding',
     moduleName: 'Onboarding',
+    handedOff: false,
     ...overrides,
   };
 }
@@ -120,12 +125,27 @@ describe('variant "first"', () => {
     expect(screen.queryByRole('heading', { level: 2, name: Q1.text })).toBeNull();
   });
 
-  it('renders nothing once every question is answered or skipped', () => {
+  it('offers the step into the journey once every question is answered or skipped', () => {
+    render(
+      <Discovery
+        {...baseProps({
+          answers: { q1: { words: 'a' }, q3: { words: 'b', branch: 'yes' } },
+          skipped: ['q2', 'q4'],
+        })}
+      />
+    );
+    expect(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin })).toBeInTheDocument();
+    expect(screen.getByText(BEGIN_JOURNEY_COPY.waiting('Onboarding'))).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: Q1.text })).toBeNull();
+  });
+
+  it('renders nothing once the journey has begun', () => {
     const { container } = render(
       <Discovery
         {...baseProps({
           answers: { q1: { words: 'a' }, q3: { words: 'b', branch: 'yes' } },
           skipped: ['q2', 'q4'],
+          handedOff: true,
         })}
       />
     );
@@ -347,12 +367,13 @@ describe('variant "offer"', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('renders nothing once every question is answered or skipped', () => {
+  it('renders nothing once every question is answered or skipped and the journey has begun', () => {
     const { container } = render(
       <Discovery
         {...offerProps({
           answers: { q1: { words: 'a' }, q3: { words: 'b', branch: 'yes' } },
           skipped: ['q2', 'q4'],
+          handedOff: true,
         })}
       />
     );
@@ -364,6 +385,47 @@ describe('variant "module"', () => {
   function moduleProps(overrides: Partial<React.ComponentProps<typeof Discovery>> = {}) {
     return baseProps({ variant: 'module', ...overrides });
   }
+
+  describe('after the hand-off (t-106)', () => {
+    const ALL_DONE = {
+      answers: {
+        q1: { words: 'The quiet.' },
+        q2: { words: 'Slow mornings.' },
+        q3: { words: 'Once.', branch: 'yes' as const },
+        q4: { words: 'Time back.' },
+      },
+      versions: { q1: 1, q2: 1, q3: 1, q4: 1 },
+    };
+
+    it('offers the step into the journey above the questions until it is taken', () => {
+      render(<Discovery {...moduleProps(ALL_DONE)} />);
+      expect(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin })).toBeInTheDocument();
+    });
+
+    it('still opens any answer and saves a revision once the journey has begun', async () => {
+      const user = userEvent.setup();
+      post.mockResolvedValue({ version: 2 });
+      render(<Discovery {...moduleProps({ ...ALL_DONE, handedOff: true })} />);
+
+      expect(screen.queryByRole('button', { name: BEGIN_JOURNEY_COPY.begin })).toBeNull();
+      await user.click(screen.getByRole('button', { name: new RegExp(Q2.text) }));
+      const box = screen.getByLabelText(DISCOVERY_COPY.answerLabel);
+      expect(box).toHaveValue('Slow mornings.');
+      await user.clear(box);
+      await user.type(box, 'Slow mornings, and the walk after.');
+      await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.saveRevision }));
+
+      await waitFor(() =>
+        expect(post).toHaveBeenCalledWith(DISCOVERY_ROUTE, {
+          body: {
+            action: 'answer',
+            questionId: 'q2',
+            answer: 'Slow mornings, and the walk after.',
+          },
+        })
+      );
+    });
+  });
 
   it('lists every question with its status, and opens the editor for the next pending one', () => {
     render(
@@ -563,16 +625,36 @@ describe('DiscoveryView', () => {
       versions: {},
       position: { next: 'q1', skipped: [], finished: false },
       started: false,
+      handedOff: false,
       ...overrides,
     };
   }
 
-  it('renders nothing on /app when the position is finished', () => {
+  it('offers the step into the journey on /app when the position is finished', () => {
+    render(
+      <DiscoveryView
+        userId="user_1"
+        where="app"
+        state={stateFor({
+          answers: { q1: { words: 'a' }, q2: { words: 'b' }, q3: { words: 'c', branch: 'no' } },
+          position: { next: null, skipped: ['q4'], finished: true },
+          started: true,
+        })}
+      />
+    );
+    expect(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin })).toBeInTheDocument();
+  });
+
+  it('renders nothing on /app once the journey has begun', () => {
     const { container } = render(
       <DiscoveryView
         userId="user_1"
         where="app"
-        state={stateFor({ position: { next: null, skipped: [], finished: true }, started: true })}
+        state={stateFor({
+          position: { next: null, skipped: [], finished: true },
+          started: true,
+          handedOff: true,
+        })}
       />
     );
     expect(container.firstChild).toBeNull();
