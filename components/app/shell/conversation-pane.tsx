@@ -118,7 +118,8 @@ export function ConversationPane() {
     onTurnSettled: noteTurnSettled,
   });
   const carousel = width === 'small' && wsOpen;
-  const stripRef = useRef<HTMLButtonElement>(null);
+  const stripRef = useRef<HTMLButtonElement | null>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
   /*
    * Folding unmounts the open pane, and with it whatever inside held focus — the
    * collapse button, the separator, the composer — so focus would fall to
@@ -138,11 +139,30 @@ export function ConversationPane() {
     };
   }, []);
 
+  /*
+   * And the other way round (t-123): opening the pane unmounts the strip, the
+   * same question is asked of it, and focus lands on the collapse button. Not
+   * the composer: Enter twice is then a round trip, and a tablet does not raise
+   * its keyboard over half the screen because someone reopened the pane. Where
+   * there is no collapse button — the window narrowed to `small` while the strip
+   * had focus — nothing is handed on.
+   */
+  const focusPaneOnOpen = useRef(false);
+  const stripCallbackRef = useCallback((node: HTMLButtonElement | null) => {
+    stripRef.current = node;
+    if (!node) return;
+    return () => {
+      stripRef.current = null;
+      focusPaneOnOpen.current = node.contains(document.activeElement);
+    };
+  }, []);
+
   // Before paint, so a screen reader never lands on `<body>` in between.
   useLayoutEffect(() => {
-    if (!chatSlim || !focusStripOnFold.current) return;
-    focusStripOnFold.current = false;
-    stripRef.current?.focus();
+    const handOff = chatSlim ? focusStripOnFold : focusPaneOnOpen;
+    if (!handOff.current) return;
+    handOff.current = false;
+    (chatSlim ? stripRef : collapseRef).current?.focus();
   }, [chatSlim]);
 
   /**
@@ -162,7 +182,7 @@ export function ConversationPane() {
   const inFlow = wsOpen && !carousel;
   const basis = width === 'medium' ? Math.min(chatW, CHAT_MEDIUM) : chatW;
 
-  if (chatSlim) return <Strip ref={stripRef} onOpen={() => setChatSlim(false)} />;
+  if (chatSlim) return <Strip ref={stripCallbackRef} onOpen={() => setChatSlim(false)} />;
 
   return (
     <section
@@ -221,6 +241,7 @@ export function ConversationPane() {
       <div className="flex flex-none items-center gap-2 px-6 pt-3.5 max-[760px]:px-3.5 max-[760px]:pt-3">
         {wsOpen && width !== 'small' ? (
           <button
+            ref={collapseRef}
             type="button"
             onClick={() => setChatSlim(true)}
             aria-label="Collapse the conversation"

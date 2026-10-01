@@ -1064,6 +1064,76 @@ describe('collapsing the conversation', () => {
 });
 
 /**
+ * The other half of t-118's toggle (t-123): opening the pane unmounts the strip
+ * that had focus, so focus fell to <body>. It lands on the collapse button, so
+ * Enter twice is a round trip — and not on the composer, whose textarea would
+ * raise a tablet's on-screen keyboard over half the screen.
+ */
+describe('opening the conversation again', () => {
+  async function foldWithFocusOnStrip(width: 'medium' | 'large') {
+    const user = userEvent.setup();
+    renderInShell(<ConversationPane />, width);
+    screen.getByRole('button', { name: 'Collapse the conversation' }).focus();
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Open the conversation' })
+    );
+    return user;
+  }
+
+  describe.each(['medium', 'large'] as const)('at %s', (width) => {
+    it.each([
+      ['Enter', '{Enter}'],
+      ['Space', ' '],
+    ])('moves focus to the collapse button when %s opens it from the strip', async (_key, keys) => {
+      const user = await foldWithFocusOnStrip(width);
+
+      await user.keyboard(keys);
+
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Collapse the conversation' })
+      );
+    });
+  });
+
+  it('moves focus to the collapse button when Escape opens it at large', async () => {
+    const user = await foldWithFocusOnStrip('large');
+
+    await user.keyboard('{Escape}');
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Collapse the conversation' })
+    );
+  });
+
+  it('leaves focus alone when the pane was opened from outside it', async () => {
+    function ToggleFromOutside() {
+      const { chatSlim, setChatSlim } = useShellLayout();
+      return (
+        <button type="button" onClick={() => setChatSlim(!chatSlim)}>
+          Toggle from outside
+        </button>
+      );
+    }
+    renderInShell(
+      <>
+        <ToggleFromOutside />
+        <ConversationPane />
+      </>,
+      'large'
+    );
+    const outside = screen.getByRole('button', { name: 'Toggle from outside' });
+
+    await userEvent.click(outside);
+    expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
+    await userEvent.click(outside);
+
+    expect(screen.getByRole('button', { name: 'Collapse the conversation' })).toBeTruthy();
+    expect(document.activeElement).toBe(outside);
+  });
+});
+
+/**
  * What the turn offered (f-resources t-77): a chip under the reply, the
  * library's words, that opens the resources drawer pinned to it — live and
  * read back alike, because both paths carry the same shape.
