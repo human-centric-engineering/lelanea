@@ -157,9 +157,9 @@ export function SettingsView() {
 
       <Panel heading="Leanings" sub="Dials, none of them absolute.">
         <p id={leaningsNoteId} className="text-muted-foreground mb-4 text-[13.5px] leading-[1.65]">
-          These are shown but not yet settable — nothing reads them until the conversation is
-          answering you, so they arrive with it. Where they rest here is the shape they take, not a
-          choice anyone has made.
+          These are shown but not yet settable — nothing reads them until the replies are shaped by
+          them, so they arrive with the conversation. Where they rest here is the shape they take,
+          not a choice anyone has made.
         </p>
         <div>
           {LEANINGS.map(([left, right, value], index) => (

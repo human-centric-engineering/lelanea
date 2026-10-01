@@ -4,8 +4,8 @@
  * GET /api/v1/app/usage/turns/:turnId — what produced one of the signed-in
  * person's turns and what it cost (§08 t-56): model, provider, fingerprint
  * version and seat from the turn record; dollars and tokens from the cost log —
- * her reply and every side cost it caused (summary, tools, searches, the
- * embedding of her reply), each row listed.
+ * the reply and every side cost it caused (summary, tools, searches, the
+ * embedding of the reply), each row listed.
  *
  * What f-conversation's per-turn drawer reads.
  *

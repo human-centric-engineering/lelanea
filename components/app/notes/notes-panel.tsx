@@ -501,7 +501,7 @@ function reactKey(key: string | typeof OWN_RUN): string {
 }
 
 const OWN_NOTE =
-  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so the app named them itself.';
+  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so Lelañea named them.';
 
 /**
  * Consecutive notes under one heading. The server has already put them in

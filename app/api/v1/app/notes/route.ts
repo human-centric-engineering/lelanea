@@ -1,11 +1,11 @@
 /**
- * Lelañea's notes — what she holds about me, and my correction to one
+ * Lelañea's notes — what Lelañea holds about me, and my correction to one
  * (f-slots t-73).
  *
  * - `GET /api/v1/app/notes` — every current reading about the signed-in person,
  *   each with its group, confidence, how it was known, when, the conversation
  *   it came from and the version before it. Hidden slots are absent (§12); a
- *   slug she invented has `group: null`; a retired slot's notes are present and
+ *   slug the agent invented has `group: null`; a retired slot's notes are present and
  *   labelled. `?q=`, `?group=` and `?sort=grouped|recent` narrow and order it
  *   (t-79) — over the list `getNotes()` has already cleaned, never around it.
  * - `POST /api/v1/app/notes` — `{ slotSlug, value }`: a new version at
@@ -28,7 +28,7 @@
  * 409 whose message the panel prints verbatim.
  *
  * @see lib/app/slots/notes.ts
- * @see .context/app/slots.md — "Her notes"
+ * @see .context/app/slots.md — "Lelañea's notes"
  */
 
 import type { NextRequest } from 'next/server';
@@ -102,8 +102,8 @@ export const POST = withAuth(async (request: NextRequest, session) => {
     value: body.value,
   });
 
-  // No slug here either, for the reason above: a correction may name a slug she
-  // invented, and that slug is model-authored free text drawn from what the
+  // No slug here either, for the reason above: a correction may name a slug the
+  // agent invented, and that slug is model-authored free text drawn from what the
   // person said. The version is what an operator needs to see a correction
   // happening; the value never reaches a log at all.
   log.info('Note corrected by the person it is about', {

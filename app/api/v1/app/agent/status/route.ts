@@ -16,7 +16,7 @@
  * Install-wide: it says nothing about anybody's turn, only whether the last one
  * worked. See `lib/app/agent/availability.ts`.
  *
- * Authentication: required — only members talk to her.
+ * Authentication: required — only members talk to the agent.
  *
  * Rate limiting: inherited from the `/api/v1/**` section cap.
  *
