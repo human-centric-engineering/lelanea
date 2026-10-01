@@ -35,10 +35,10 @@
  *
  * ## And the third, because a prose edit has no compiler
 
- * §05 t-28 runs a fixed set of questions through her assembled prompt AND
- * through a model carrying no fingerprint, so a change to her core can be heard
- * before it ships. Without a surface the two runs are rows in a table nobody
- * opens — `/admin/app/voice` is where they are read side by side.
+ * §05 t-28 runs a fixed set of questions through the agent's assembled prompt AND
+ * through a model carrying no fingerprint, so a change to the voice core can be
+ * heard before it ships. Without a surface the two runs are rows in a table
+ * nobody opens — `/admin/app/voice` is where they are read side by side.
  *
  * ## And the fourth, because a number that needs a deploy is the wrong shape
  *

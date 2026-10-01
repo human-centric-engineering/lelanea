@@ -1,19 +1,19 @@
 /**
- * Let members speak to her — `enableVoiceInput` on, once (§10 t-67).
+ * Let members speak to the agent — `enableVoiceInput` on, once (§10 t-67).
  *
- * Her agent is created with the platform's default, voice input off, so the
- * member transcribe route refuses and the composer's microphone is not
+ * The voice agent is created with the platform's default, voice input off, so
+ * the member transcribe route refuses and the composer's microphone is not
  * offered. This turns it on for `lelanea-guide`, the way `007-agent-reachable`
- * widens her, and never again.
+ * widens it, and never again.
  *
  * ## The row this writes, and who owns it (`fp4`)
  *
  * **The flag is operator-owned.** Switched on only while it is still off AND
- * her timeline has no entry of this unit's — off with that entry behind it is
- * an admin who turned it off, which a re-run must leave alone. The switch is an
- * entry in her version timeline (the flag is a versioned field), written
- * through the platform's snapshot helpers inside one transaction with the
- * update, as the model pin and the widening are.
+ * the agent's timeline has no entry of this unit's — off with that entry behind
+ * it is an admin who turned it off, which a re-run must leave alone. The switch
+ * is an entry in the agent's version timeline (the flag is a versioned field),
+ * written through the platform's snapshot helpers inside one transaction with
+ * the update, as the model pin and the widening are.
  *
  * The org-wide `voiceInputGloballyEnabled` is not touched: it is an operator's
  * off switch and defaults on.
@@ -46,7 +46,7 @@ const unit: SeedUnit = {
   name: 'app-lelanea/012-agent-voice-input',
   hashInputs: ['../../../lib/app/agent/pins.ts', '../../../lib/app/voice/fingerprint.ts'],
   async run({ prisma, logger }) {
-    logger.info('🎙  Letting members speak to her...');
+    logger.info('🎙  Letting members speak to the agent...');
 
     const admin = await prisma.user.findFirst({
       where: serviceAccountWhere,
@@ -61,7 +61,7 @@ const unit: SeedUnit = {
       select: { id: true, enableVoiceInput: true, createdBy: true },
     });
     if (!agent) {
-      logger.error('agent voice input: her agent does not exist — refusing to record success', {
+      logger.error('agent voice input: the agent does not exist — refusing to record success', {
         slug: VOICE_AGENT_SLUG,
       });
       throw new Error(

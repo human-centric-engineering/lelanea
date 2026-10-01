@@ -43,7 +43,7 @@
  *
  * @see lib/app/resources/suggestion.ts — the shape, import-light for the client
  * @see lib/app/resources/offering.ts — how the agent learns what it may suggest
- * @see .context/app/agent.md — "What she may reach for"
+ * @see .context/app/agent.md — "The four tools the guide holds"
  */
 
 import { z } from 'zod';

@@ -1,11 +1,13 @@
 /**
- * The reachability seed: she becomes `public` and can look in her material —
+ * The reachability seed: the voice agent becomes `public` and can look in
+ * Lelañea Fulton's material —
  * and an operator's later decision about either is never undone (§08 t-54).
  *
  * ## `fp4` — visibility is operator-owned, the grant is filled once
  *
- * Widened only while she is still `internal` AND her timeline holds no entry of
- * this unit's: `internal` with that entry behind it is an admin narrowing her,
+ * Widened only while the agent is still `internal` AND its timeline holds no
+ * entry of this unit's: `internal` with that entry behind it is an admin
+ * narrowing it,
  * which a re-run must leave alone. A grant that exists — switched off included —
  * is an operator's, and is never rewritten.
  *
@@ -134,14 +136,14 @@ async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
 }
 
-const HER_ID = 'agent-hers';
-const her = (): AgentRow => world.agents[0];
+const VOICE_AGENT_ID = 'agent-voice';
+const voiceAgent = (): AgentRow => world.agents[0];
 
 beforeEach(() => {
   vi.clearAllMocks();
   world.agents = [
     {
-      id: HER_ID,
+      id: VOICE_AGENT_ID,
       slug: VOICE_AGENT_SLUG,
       visibility: 'internal',
       createdBy: 'creator',
@@ -158,10 +160,10 @@ describe('a fresh install', () => {
     expect(GRANTED_CAPABILITY_SLUGS).toEqual(['search_knowledge_base']);
   });
 
-  it('makes her public, as an entry in her timeline above her initial configuration', async () => {
+  it('makes the agent public, as an entry in its timeline above its initial configuration', async () => {
     await runSeed();
 
-    expect(her().visibility).toBe('public');
+    expect(voiceAgent().visibility).toBe('public');
     expect(world.versions.map((v) => [v.version, v.changeSummary])).toEqual([
       [1, 'Initial configuration'],
       [2, REACHABLE_CHANGE_SUMMARY],
@@ -172,24 +174,30 @@ describe('a fresh install', () => {
     expect(world.versions[1].createdBy).toBe('service-account');
   });
 
-  it('grants her the search tool, switched on', async () => {
+  it('grants the agent the search tool, switched on', async () => {
     await runSeed();
 
     expect(world.grants).toEqual([
-      { agentId: HER_ID, capabilityId: 'cap-search', isEnabled: true },
+      { agentId: VOICE_AGENT_ID, capabilityId: 'cap-search', isEnabled: true },
     ]);
   });
 
   it('appends to a timeline that already has history, rather than writing v1 again', async () => {
     world.versions = [
       {
-        agentId: HER_ID,
+        agentId: VOICE_AGENT_ID,
         version: 1,
         snapshot: {},
         changeSummary: 'Initial configuration',
         createdBy: 'x',
       },
-      { agentId: HER_ID, version: 2, snapshot: {}, changeSummary: 'Pinned model', createdBy: 'x' },
+      {
+        agentId: VOICE_AGENT_ID,
+        version: 2,
+        snapshot: {},
+        changeSummary: 'Pinned model',
+        createdBy: 'x',
+      },
     ];
 
     await runSeed();
@@ -213,41 +221,41 @@ describe('a re-run', () => {
     expect(client.aiAgent.updateMany).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves her internal when an admin narrowed her after the seed widened her', async () => {
+  it('leaves the agent internal when an admin narrowed it after the seed widened it', async () => {
     await runSeed();
-    expect(her().visibility).toBe('public');
-    her().visibility = 'internal'; // an admin's decision
+    expect(voiceAgent().visibility).toBe('public');
+    voiceAgent().visibility = 'internal'; // an admin's decision
 
     await runSeed();
 
-    expect(her().visibility).toBe('internal');
+    expect(voiceAgent().visibility).toBe('internal');
     expect(world.versions).toHaveLength(2);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('narrowed her since'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('narrowed it since'));
   });
 
   it('leaves a grant an operator switched off switched off', async () => {
-    world.grants = [{ agentId: HER_ID, capabilityId: 'cap-search', isEnabled: false }];
+    world.grants = [{ agentId: VOICE_AGENT_ID, capabilityId: 'cap-search', isEnabled: false }];
 
     await runSeed();
 
     expect(world.grants).toEqual([
-      { agentId: HER_ID, capabilityId: 'cap-search', isEnabled: false },
+      { agentId: VOICE_AGENT_ID, capabilityId: 'cap-search', isEnabled: false },
     ]);
     expect(client.aiAgentCapability.create).not.toHaveBeenCalled();
   });
 
   it('leaves a visibility somebody else chose alone', async () => {
-    her().visibility = 'invite_only';
+    voiceAgent().visibility = 'invite_only';
 
     await runSeed();
 
-    expect(her().visibility).toBe('invite_only');
+    expect(voiceAgent().visibility).toBe('invite_only');
     expect(world.versions).toHaveLength(0);
   });
 });
 
 describe('safe on empty', () => {
-  it('throws, writing nothing, when her agent does not exist', async () => {
+  it('throws, writing nothing, when the voice agent does not exist', async () => {
     world.agents = [];
 
     await expect(runSeed()).rejects.toThrow(/no such agent/);
@@ -258,7 +266,7 @@ describe('safe on empty', () => {
     world.capabilities = [];
 
     await expect(runSeed()).rejects.toThrow(/no such capability/);
-    expect(her().visibility).toBe('internal');
+    expect(voiceAgent().visibility).toBe('internal');
     expect(world.versions).toHaveLength(0);
   });
 });
@@ -271,8 +279,8 @@ describe('the edges', () => {
     expect(world.grants).toHaveLength(0);
   });
 
-  it('writes no timeline entry when an admin changed her between the read and the write', async () => {
-    // Somebody else widens her first: the predicate matches nothing.
+  it('writes no timeline entry when an admin changed the agent between the read and the write', async () => {
+    // Somebody else widens the agent first: the predicate matches nothing.
     client.aiAgent.updateMany.mockResolvedValueOnce({ count: 0 });
 
     await runSeed();
@@ -281,9 +289,9 @@ describe('the edges', () => {
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('changed while this ran'));
   });
 
-  it('carries her knowledge grants into both snapshots, so a restore keeps them', async () => {
+  it("carries the agent's knowledge grants into both snapshots, so a restore keeps them", async () => {
     client.aiAgent.findUniqueOrThrow.mockImplementationOnce(async () => ({
-      ...her(),
+      ...voiceAgent(),
       grantedTags: [{ tagId: 'tag-b' }, { tagId: 'tag-a' }],
       grantedDocuments: [{ documentId: 'doc-1' }],
     }));
@@ -298,8 +306,8 @@ describe('the edges', () => {
     }
   });
 
-  it('versions under her creator when the agent has none recorded', async () => {
-    her().createdBy = null;
+  it("versions under the seed's service account when the agent has no creator recorded", async () => {
+    voiceAgent().createdBy = null;
 
     await runSeed();
 

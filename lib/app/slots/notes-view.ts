@@ -18,7 +18,7 @@
  * invitation to revisit, not for a changelog.
  *
  * @see lib/app/slots/notes.ts — the read and the correction
- * @see .context/app/slots.md — "Her notes"
+ * @see .context/app/slots.md — "Lelañea's notes"
  */
 
 /**
@@ -40,12 +40,12 @@ export const SLOT_WRITE_CAPABILITY = 'fill_slot';
  * ## Two rules of register, both owner corrections (21 September 2026)
  *
  * **Lelañea is named, never pronouned.** Every line says *Lelañea*, not *she*
- * or *her*. The persona is hers and the product uses it, but a panel that calls
- * her "she" throughout starts to read as though somebody else were describing
- * her to you — and this is the one surface where the reader needs to know
- * exactly who is making each claim. (The admin surfaces have the opposite rule
- * and the opposite reason: there she is "the AI", because an operator is
- * looking at configuration.)
+ * or *her*. The persona is Lelañea Fulton's and the product gives it to the
+ * agent, but a panel that pronouns the agent throughout starts to read as
+ * though somebody else were describing it to you — and this is the one surface
+ * where the reader needs to know exactly who is making each claim. (The admin
+ * surfaces have the opposite rule and the opposite reason: there the agent is
+ * "the AI", because an operator is looking at configuration.)
  *
  * **And the reader is "you", never "they".** These lines are read by the person
  * they are about. The taxonomy's own `description` is third-person because its
@@ -95,12 +95,12 @@ export interface NoteHistory {
   capturedAt: string;
 }
 
-/** One reading she is currently holding about the person asking. */
+/** One reading the agent is currently holding about the person asking. */
 export interface Note {
   slotSlug: string;
   /**
-   * What she was looking for, in the taxonomy's own words — the definition's
-   * `description`. `null` for a slug she invented, which has no definition and
+   * What the agent was looking for, in the taxonomy's own words — the
+   * definition's `description`. `null` for a slug the agent invented, which has no definition and
    * so has nothing to be measured against.
    */
   asking: string | null;
@@ -119,12 +119,12 @@ export interface Note {
    * {@link Note.reasoningNote}.
    */
   withheld: boolean;
-  /** 1–10, as she judged it. */
+  /** 1–10, as the agent judged it. */
   confidence: number;
   /** The stored classifier; {@link noteSourceWords} turns it into a sentence. */
   sourceType: string;
   /**
-   * Her one line on how the reading was made — a paraphrase of what was said.
+   * The agent's one line on how the reading was made — a paraphrase of what was said.
    * On a `withheld` note it is the only trace of the words, and is shown as the
    * summary that was kept (owner ruling, t-80): masking at capture covers the
    * value and not this line.
@@ -136,13 +136,13 @@ export interface Note {
   conversationId: string | null;
   /** The definition's sensitivity, or `standard` for an invented slug. */
   sensitivity: string;
-  /** The slot was retired: she is no longer asking about this. */
+  /** The slot was retired: the agent is no longer asking about this. */
   retired: boolean;
   /**
    * Whether this note can be corrected in place. False for a retired slot and
    * for a withheld one — see `.context/app/slots.md`, "Why a withheld note
    * cannot be corrected". A note that cannot be corrected can still be taken
-   * back to her.
+   * back to the agent.
    */
   correctable: boolean;
   /** The version before this one, where there is one. */

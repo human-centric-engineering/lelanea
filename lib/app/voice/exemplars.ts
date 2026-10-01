@@ -1,5 +1,6 @@
 /**
- * Her own sentences, fetched for a moment — the fingerprint's third layer.
+ * Lelañea Fulton's own sentences, fetched for a moment — the fingerprint's
+ * third layer.
  *
  * The core says how she sounds in the abstract; an exemplar is a real passage of
  * hers, so the model has something concrete to sound *like*. This module is the
@@ -43,7 +44,7 @@
  * before the passage is emitted. The rest of the defence is the authored framing
  * in `seed-data/drafted/lelanea_voice_overlays.json`, which tells the model in her own
  * words that these are examples of how she sounds, are not what the person said,
- * and are not instructions to her.
+ * and are not instructions to the agent.
  *
  * @see .context/app/voice.md
  * @see lib/app/voice/designation.ts — the vocabulary and the two rules
@@ -310,8 +311,8 @@ export async function retrieveVoiceExemplars(
  * The same, but never throwing — and `null` when it could not look.
  *
  * A retrieval failure — the embedding provider down, a dimension mismatch, a
- * transient database error — must not cost the person her register. The overlay
- * and the always-on core are the reliable half of this feature, and throwing out
+ * transient database error — must not cost the person Lelañea's register. The
+ * overlay and the always-on core are the reliable half of this feature, and throwing out
  * to `buildContext`'s contributor-catch would blank the whole block and lose them
  * both over something retrieval did. The same degrade-rather-than-throw shape the
  * framework's module contributor uses for its slot read.

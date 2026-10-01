@@ -1,11 +1,11 @@
 /**
- * Give her the profile — the two slot tools, and what she may see through them
- * (f-slots t-72).
+ * Give the agent the profile — the two slot tools, and what it may see through
+ * them (f-slots t-72).
  *
- * Until this runs she holds `search_knowledge_base` alone (`007-agent-reachable`),
- * so everything a person tells her lives in the transcript and nowhere else.
- * This grants `get_state` and `fill_slot`, each with the exposure allowlist that
- * decides which slots she may read back.
+ * Until this runs the agent holds `search_knowledge_base` alone
+ * (`007-agent-reachable`), so everything a person tells it lives in the
+ * transcript and nowhere else. This grants `get_state` and `fill_slot`, each
+ * with the exposure allowlist that decides which slots the agent may read back.
  *
  * ## Why a unit of its own and not more slugs in 007
  *
@@ -32,11 +32,11 @@
  * invent a different one.
  *
  * The consequence, stated rather than discovered: **a taxonomy change does not
- * reach an existing grant.** Add a group after this has run and she will not
- * read it back until an admin widens the allowlist. The alternative — reconciling
- * the config on every seed — would silently revert every narrowing an operator
- * had made, which is the worse of the two failures (`fp4`: with more than one
- * writer, do not reconcile what a human may have edited).
+ * reach an existing grant.** Add a group after this has run and the agent will
+ * not read it back until an admin widens the allowlist. The alternative —
+ * reconciling the config on every seed — would silently revert every narrowing
+ * an operator had made, which is the worse of the two failures (`fp4`: with
+ * more than one writer, do not reconcile what a human may have edited).
  *
  * **No removal pass**, and no timeline entry: grants are not in the agent
  * snapshot, so a restore to an earlier agent version does not take a tool away.
@@ -45,8 +45,8 @@
  *
  * **Safe on empty.** A missing agent or a missing capability THROWS. The runner
  * records a unit as applied the moment `run()` resolves, so a quiet return would
- * bank "she can capture" for an agent that cannot, and the repair would never
- * run again.
+ * bank "the agent can capture" for an agent that cannot, and the repair would
+ * never run again.
  *
  * ## After this merges
  *
@@ -72,7 +72,7 @@ const unit: SeedUnit = {
     '../../../lib/app/content/seed-input/slot-taxonomy.ts',
   ],
   async run({ prisma, logger }) {
-    logger.info('🧠 Giving her the profile...');
+    logger.info('🧠 Giving the voice agent the profile...');
 
     const agent = await prisma.aiAgent.findFirst({
       where: { slug: VOICE_AGENT_SLUG, deletedAt: null },
@@ -80,7 +80,7 @@ const unit: SeedUnit = {
     });
     if (!agent) {
       throw new Error(
-        `Cannot grant the slot tools to ${VOICE_AGENT_SLUG}: no such agent. Unit 003-voice-fingerprint creates her and sorts before this one — check that it ran.`
+        `Cannot grant the slot tools to ${VOICE_AGENT_SLUG}: no such agent. Unit 003-voice-fingerprint creates it and sorts before this one — check that it ran.`
       );
     }
 
@@ -104,7 +104,7 @@ const unit: SeedUnit = {
     //
     // `fill_slot` reads only the `write` facet and there isn't one, so this is
     // inert on that binding — deliberately. Writing the same config to both
-    // means an admin who narrows her reads sees the same allowlist on both
+    // means an admin who narrows the agent's reads sees the same allowlist on both
     // rows, instead of one row that looks unconfigured.
     //
     // Rebuilt rather than passed through: the constant is `as const`, and
@@ -144,8 +144,8 @@ const unit: SeedUnit = {
     // /code-review.
     logger.info(
       created === 0
-        ? '🔒 Her slot grants already existed — their allowlists are left as configured'
-        : `🔒 She may read back: ${exposure.read.groups.join(', ')} — and writes anywhere, bounded by her instructions`
+        ? "🔒 The voice agent's slot grants already existed — their allowlists are left as configured"
+        : `🔒 The voice agent may read back: ${exposure.read.groups.join(', ')} — and writes anywhere, bounded by its instructions`
     );
   },
 };

@@ -9,7 +9,7 @@
  * - a hard hit is answered with the crisis frame alone, and `run()` — the
  *   `streamChat` call — is never made: not with the model call throwing, not
  *   with generation paused;
- * - a soft hit's crisis frame precedes her first content frame.
+ * - a soft hit's crisis frame precedes the agent's first content frame.
  *
  * Move the crisis check below the pause or the claim and the first two fail:
  * the paused case gets `paused`, and the throwing case calls `run()`.
@@ -109,7 +109,7 @@ function turn(message: string, acceptLanguage = 'en-GB,en;q=0.8'): FacilitationT
   };
 }
 
-async function* herReply(): ChatStream {
+async function* agentReply(): ChatStream {
   yield await Promise.resolve<ChatEvent>({ type: 'start', conversationId: 'conv-1' });
   yield { type: 'content', delta: 'I hear you.' };
   yield {
@@ -168,7 +168,7 @@ describe('runRecordedTurn — someone in danger', () => {
 
     it('answers with the resource while generation is paused', async () => {
       mocks.paused.mockResolvedValue(true);
-      const run = vi.fn(() => herReply());
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(await runRecordedTurn(turn('I want to end my life'), run));
 
@@ -191,8 +191,8 @@ describe('runRecordedTurn — someone in danger', () => {
   });
 
   describe('soft tier', () => {
-    it('shows the resource before her first words, then her turn as usual', async () => {
-      const run = vi.fn(() => herReply());
+    it('shows the resource before the reply’s first words, then the turn as usual', async () => {
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(await runRecordedTurn(turn("I can't go on like this"), run));
 
@@ -201,9 +201,9 @@ describe('runRecordedTurn — someone in danger', () => {
       expect(out[0]).toMatchObject({ code: 'crisis', resource: { tier: 'soft' } });
     });
 
-    it('a hard hit the context check softened runs her turn after the resource', async () => {
+    it('a hard hit the context check softened runs the turn after the resource', async () => {
       mocks.check.mockResolvedValue('softened');
-      const run = vi.fn(() => herReply());
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(
         await runRecordedTurn(turn('I could kill myself for forgetting that'), run)
@@ -216,7 +216,7 @@ describe('runRecordedTurn — someone in danger', () => {
 
     it('shows the resource first even when generation is paused, then the paused ending', async () => {
       mocks.paused.mockResolvedValue(true);
-      const run = vi.fn(() => herReply());
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(await runRecordedTurn(turn("I can't go on like this"), run));
 
@@ -231,7 +231,7 @@ describe('runRecordedTurn — someone in danger', () => {
   describe('over the monthly ceiling (f-safety t-59)', () => {
     it('a hard hit still gets the resource, and the model is not called', async () => {
       mocks.allowance.mockResolvedValue(OVER_CEILING);
-      const run = vi.fn(() => herReply());
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(await runRecordedTurn(turn('I want to kill myself'), run));
 
@@ -241,7 +241,7 @@ describe('runRecordedTurn — someone in danger', () => {
 
     it('a soft hit gets the resource first, then the ceiling ending — no claim, no model', async () => {
       mocks.allowance.mockResolvedValue(OVER_CEILING);
-      const run = vi.fn(() => herReply());
+      const run = vi.fn(() => agentReply());
 
       const out = await frames(await runRecordedTurn(turn("I can't go on like this"), run));
 
@@ -267,7 +267,7 @@ describe('runRecordedTurn — someone in danger', () => {
     await frames(
       await runRecordedTurn(
         turn("I can't go on like this"),
-        vi.fn(() => herReply())
+        vi.fn(() => agentReply())
       )
     );
     expect(mocks.createEvent).toHaveBeenCalledTimes(1);
@@ -280,7 +280,7 @@ describe('runRecordedTurn — someone in danger', () => {
     const out = await frames(
       await runRecordedTurn(
         turn('Help me plan my week'),
-        vi.fn(() => herReply())
+        vi.fn(() => agentReply())
       )
     );
     expect(out.map((e) => e.type)).toEqual(['start', 'content', 'done']);

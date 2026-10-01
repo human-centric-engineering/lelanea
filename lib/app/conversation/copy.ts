@@ -7,9 +7,9 @@ import { money } from '@/lib/app/usage/usage-view';
  *
  * One module, so a locale can replace it later rather than being retrofitted
  * across components (product description §11: externalised strings from the
- * first line). Her replies are not here — they are hers. What is here is the
+ * first line). The agent's replies are not here. What is here is the
  * frame around them: the placeholder, the thinking row, the empty transcript,
- * and — since t-65 — what the pane says when she cannot answer.
+ * and — since t-65 — what the pane says when the agent cannot answer.
  *
  * ## The endings, in her register
  *
@@ -56,7 +56,7 @@ export const CONVERSATION_COPY = {
   /** Voice notes were switched off while the pane was open: the control withdraws. */
   micWithdrawn: 'Voice notes are off for now.',
 
-  /** The three-dot row while she has said nothing yet. */
+  /** The three-dot row while the agent has said nothing yet. */
   thinking: 'thinking',
   /** The same row once the first-words deadline has passed. */
   stillThinking: 'still thinking — this is taking a little longer than usual',
@@ -71,12 +71,12 @@ export const CONVERSATION_COPY = {
 
   /** Accessible name of the whole transcript region. */
   transcriptLabel: 'The conversation so far',
-  /** Accessible name of her mark beside a reply. */
+  /** Accessible name of the agent's mark beside a reply. */
   herMark: 'Lelañea',
 
-  /** Accessible name of the row a turn ends on without her. */
+  /** Accessible name of the row a turn ends on without a reply. */
   endingLabel: 'The turn ended',
-  /** How a turn ended without her, in her register, by the ending's code. */
+  /** How a turn ended without a reply, in her register, by the ending's code. */
   endings: {
     unavailable:
       "I can't answer just now.\nWhat you wrote is still in the box — give it a moment, then send it again.\nEverything else here still works.",
@@ -112,7 +112,7 @@ const STILL_WORKS =
  * The frame (`ceilingReachedFrame`, f-safety t-59) carries what was spent, the
  * limit, and when the month resets — the first instant of the next UTC month.
  * Three beats, as the other endings have: what happened, with the figures;
- * when she can answer again; and that nothing else has stopped.
+ * when the agent can answer again; and that nothing else has stopped.
  *
  * **Explain and wait.** No "ask for more", no invitation to reply: there is no
  * mechanism behind either (owner, 22 Sept 2026; `B31`; `agent.md`, "The
@@ -124,10 +124,10 @@ const STILL_WORKS =
  * frame with next month's `resetsAt`, but it is a setting and will be the same
  * on the 1st, so it gets no date.
  *
- * **Without the limit there are no words of hers — `null`.** The row then
+ * **Without the limit there is no ending copy — `null`.** The row then
  * shows the frame's own message, which the server built from figures it knew
  * and which names them and the date truthfully (it asks `isNothingLimit` too).
- * Anything she could say without the limit would say less than that, and
+ * Anything the copy could say without the limit would say less than that, and
  * could not tell a limit of nothing from a month used up (/code-review round 2).
  *
  * **The other figures are optional, one at a time.** `events.ts` validates each

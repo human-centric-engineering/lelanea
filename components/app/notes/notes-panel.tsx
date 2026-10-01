@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * The right-hand half of §3.3's pairing, for the thing §3.19 is about: every
- * reading she holds about the person reading it, with its provenance, and two
+ * reading the agent holds about the person reading it, with its provenance, and two
  * ways to answer back (f-slots t-73).
  *
  * ## Why it re-reads the whole page rather than patching a row
@@ -80,7 +80,7 @@ import { cn } from '@/lib/utils';
  * view is only how this page draws the same response. Switching between cards
  * and a list therefore re-reads nothing — one fetch, two renderings.
  *
- * @see .context/app/slots.md — "Her notes"
+ * @see .context/app/slots.md — "Lelañea's notes"
  * @see .context/app/conversation.md — "What a turn changes on the other side"
  */
 export interface NotesPanelProps {

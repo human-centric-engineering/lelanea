@@ -128,11 +128,11 @@ const ARGS = {
   sourceType: 'unprompted',
 } as never;
 
-/** A context as the dispatcher builds it for one of her turns. */
+/** A context as the dispatcher builds it for one of the agent's turns. */
 function context(overrides: Record<string, unknown> = {}) {
   return {
     userId: USER,
-    agentId: 'agent-hers',
+    agentId: 'agent-voice',
     conversationId: 'conv-1',
     customConfig: null,
     costLogMetadata: { turnId: TURN, seat: 'facilitator' },
@@ -234,7 +234,7 @@ describe('a discovery answer (f-onboarding t-101)', () => {
         message: expect.stringContaining('another name'),
       },
     });
-    // Answered, like every other return, so she still speaks after it.
+    // Answered, like every other return, so the agent still speaks after it.
     expect(result).not.toHaveProperty('skipFollowup');
     expect(framework).not.toHaveBeenCalled();
     expect(world.slotWrites).toEqual([]);
@@ -287,12 +287,12 @@ describe('a turn that writes a slot', () => {
   });
 });
 
-describe('she still speaks after she has recorded', () => {
+describe('the agent still speaks after it has recorded', () => {
   it("drops the framework's `skipFollowup`, so the turn does not end on a tool call", async () => {
-    // Found on a real turn, not reasoned about: her instruction tells her to
-    // record before she answers, the pinned model obliges with a first pass
+    // Found on a real turn, not reasoned about: the agent's instruction tells
+    // it to record before it answers, the pinned model obliges with a first pass
     // carrying nothing but tool calls, and with the follow-up skipped that pass
-    // IS the turn — she records what the person confided and replies with an
+    // IS the turn — the agent records what the person confided and replies with an
     // empty string. The population is non-empty: the framework really does set
     // the flag, which `wroteSilently` carries.
     expect(wroteSilently(1)).toHaveProperty('skipFollowup', true);

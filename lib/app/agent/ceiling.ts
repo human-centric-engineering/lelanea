@@ -1,5 +1,5 @@
 /**
- * Whether a person may start a turn she answers this month (f-safety t-59).
+ * Whether a person may start a turn the agent answers this month (f-safety t-59).
  *
  * §08 stored a monthly ceiling per person and could read what they had spent,
  * but nothing acted on it: a person could spend without limit (`HB9`). This is
@@ -49,9 +49,9 @@ export function nextMonthlyReset(now: Date = new Date()): Date {
 }
 
 /**
- * May this person start a turn she answers? At or over their effective ceiling
- * (their override, else the default), no. A ceiling of zero is a real answer:
- * nothing may be spent.
+ * May this person start a turn the agent answers? At or over their effective
+ * ceiling (their override, else the default), no. A ceiling of zero is a real
+ * answer: nothing may be spent.
  */
 export async function mayStartGeneratedTurn(
   userId: string,

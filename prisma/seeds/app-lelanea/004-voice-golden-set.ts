@@ -40,9 +40,10 @@
  *
  * Its whole system prompt is the authored `control.systemInstructions`, and its
  * three inheritable columns and its `profileId` are reconciled to NULL on every
- * run — not because an operator is likely to attach her profile to the control,
- * but because that specific mistake produces a comparison of her voice with
- * itself that looks exactly like a comparison where the fingerprint did nothing.
+ * run — not because an operator is likely to attach the fingerprint profile to
+ * the control, but because that specific mistake produces a comparison of her
+ * voice with itself that looks exactly like a comparison where the fingerprint
+ * did nothing.
  * `lib/app/voice/comparison.ts` refuses to queue in that state; this keeps the
  * state from persisting.
  *
@@ -81,7 +82,7 @@ import { requireOrgId } from '@/lib/tenancy/context';
  * site — so the test asserts the same string the seed writes.
  *
  * `restricted` rather than the platform default `full`, and it is a second lock
- * rather than the first. The slug is what keeps her corpus contributor off this
+ * rather than the first. The slug is what keeps the corpus contributor off this
  * agent; this is what makes the set it could search empty — the platform's own
  * `system`-scoped reference corpus and nothing else — if a later task ever binds
  * a search tool to every agent on the install.
@@ -282,7 +283,7 @@ const unit: SeedUnit = {
           slug: VOICE_CONTROL_AGENT_SLUG,
           description: goldenSet.control.description,
           systemInstructions: goldenSet.control.systemInstructions,
-          // Empty strings here, as on her own agent: `005-agent-models.ts` pins
+          // Empty strings here, as on the voice agent: `005-agent-models.ts` pins
           // BOTH arms to the same provider and model, which is what keeps the
           // comparison about the voice. Left blank, the two still match — both
           // resolve to the install's default chat model.
@@ -305,11 +306,12 @@ const unit: SeedUnit = {
     if (existingControl.knowledgeAccessMode !== CONTROL_KNOWLEDGE_ACCESS_MODE) {
       corrections.knowledgeAccessMode = CONTROL_KNOWLEDGE_ACCESS_MODE;
     }
-    // The four that make the control a control. An operator who attaches her
-    // profile here, or pastes her persona onto the agent, produces a comparison
-    // of her voice with itself — which looks exactly like a comparison in which
-    // the fingerprint did nothing. `assertArmsComparable` refuses to queue in
-    // that state; this is what stops the state persisting.
+    // The four that make the control a control. An operator who attaches the
+    // fingerprint profile here, or pastes Lelañea Fulton's persona onto the
+    // agent, produces a comparison of her voice with itself — which looks
+    // exactly like a comparison in which the fingerprint did nothing.
+    // `assertArmsComparable` refuses to queue in that state; this is what stops
+    // the state persisting.
     if (existingControl.profileId !== null) corrections.profile = { disconnect: true };
     if (existingControl.persona !== null) corrections.persona = null;
     if (existingControl.guardrails !== null) corrections.guardrails = null;

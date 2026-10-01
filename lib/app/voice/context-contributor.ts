@@ -1,6 +1,6 @@
 /**
- * The block that carries her register and her own sentences into a turn — and
- * the labelling that stops the model mistaking either for something the person
+ * The block that carries Lelañea Fulton's register and her own sentences into
+ * a turn — and the labelling that stops the model mistaking either for something the person
  * said.
  *
  * Registered into Sunrise's prompt-context seam by
@@ -16,7 +16,7 @@
  *    matches.
  * 2. **Her own passages** — retrieved by `lib/app/voice/exemplars.ts` from
  *    voice-designated documents only, each one labelled with its origin.
- * 3. **What she is looking for** — the live slot taxonomy
+ * 3. **What the agent is looking for** — the live slot taxonomy
  *    (`lib/app/slots/vocabulary.ts`), so a capture can name an authored slot
  *    instead of inventing one (f-slots t-72).
  * 4. **What may be offered** — Lelañea Fulton's videos, audio and articles
@@ -37,8 +37,8 @@
  * Caught by /code-review.
  *
  * **Paths that carry no context type still have no list.** The embed widget and
- * a workflow `agent_call` reach her agent without one, so a capture there mints
- * — and a mint is never masked. That residual belongs to the admin setting that
+ * a workflow `agent_call` reach the voice agent without one, so a capture there
+ * mints — and a mint is never masked. That residual belongs to the admin setting that
  * governs minting (idea #33) rather than to a contributor, because no
  * contributor runs on a path that requests none.
  *
@@ -91,8 +91,8 @@
  * `buildContext` hands a contributor the request's `userId` and partitions its
  * cache by it, so a per-user block is available. This one does not use it. A
  * user's voice leanings are a later filter over the overlays and the exemplars,
- * and until that is designed, one person's preference silently reshaping how she
- * sounds is a change nobody asked for and nobody can see.
+ * and until that is designed, one person's preference silently reshaping how her
+ * voice comes across is a change nobody asked for and nobody can see.
  *
  * The cost is a cache partitioned more finely than the answer needs: one
  * embedding per cache miss per user, rather than one per situation. **And per
@@ -300,7 +300,7 @@ export const FACILITATION_CONTEXT_TYPE = 'facilitation';
 /**
  * Which moment a facilitation seat is, where a seat is one moment.
  *
- * `onboarding` is her first contact with someone, which is exactly the
+ * `onboarding` is the guide's first contact with someone, which is exactly the
  * `first-meeting` overlay. `facilitator` is deliberately absent: that seat is
  * every moment after the first, and which one is a fact about the person's
  * journey that no turn carries yet. Guessing one would be this module inventing
@@ -325,9 +325,9 @@ export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
  * nothing another tier holds.
  */
 export async function loadFacilitationVoiceContext(seat: string): Promise<string> {
-  // Hers only. The type is every facilitation seat, and Daybreak has six; a seat
-  // bound to another agent must not be handed her voice. One read, and
-  // `buildContext` caches the block per seat and person for its TTL. Found by
+  // The voice agent's seats only. The type is every facilitation seat, and
+  // Daybreak has six; a seat bound to another agent must not be handed her
+  // voice. One read, and `buildContext` caches the block per seat and person for its TTL. Found by
   // /code-review. An empty body frames an empty block, which says nothing.
   const binding = await getFacilitationBindingByRole(seat);
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';

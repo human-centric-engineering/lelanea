@@ -80,7 +80,7 @@ export function Panes({ children }: { children: React.ReactNode }) {
         // thresholding x alone is what stops a scrolling thumb changing panes.
         if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(event.clientY - from.y)) return;
         // The conversation is on the left in every layout, so the direction
-        // means the same thing everywhere: swipe right to bring her in.
+        // means the same thing everywhere: swipe right to bring the conversation in.
         setPane(dx > 0 ? 'chat' : 'ws');
       }}
     >

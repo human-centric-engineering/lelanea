@@ -1,8 +1,9 @@
 /**
- * Make her reachable — `public`, and able to look in her own material (§08 t-54).
+ * Make the agent reachable — `public`, and able to look in Lelañea Fulton's own
+ * material (§08 t-54).
  *
- * Until this runs she is `internal` with no capabilities, so Daybreak's role
- * route answers 404 on both of her seats: the facilitation surface refuses any
+ * Until this runs the agent is `internal` with no capabilities, so Daybreak's role
+ * route answers 404 on both of its seats: the facilitation surface refuses any
  * agent that is not `public`. f-voice left both on purpose, for the task that
  * built the way in — the turn seam, which makes a turn idempotent, tags its cost
  * with its seat and records what produced it. That seam lands in the same PR as
@@ -11,19 +12,19 @@
  * ## `public` also opens a door that has none of that
  *
  * Sunrise's general consumer chat route serves any `public` agent by slug, and
- * lists her in its agent directory. A turn through it carries no turn id, no
- * seat, no turn record and none of her overlays, and nothing in the leaf can
+ * lists the agent in its agent directory. A turn through it carries no turn id, no
+ * seat, no turn record and none of the voice overlays, and nothing in the leaf can
  * close it: the route consults the authorization seam with no resource, so there
  * is no agent for a policy to refuse. It is recorded on f-safety, which owns
- * ceilings — see `.context/app/agent.md`, "Where else she can be reached".
+ * ceilings — see `.context/app/agent.md`, "Where else the agent can be reached".
  *
  * ## The rows this writes, and who owns them (`fp4`)
  *
  * **Visibility is operator-owned.** Widened only while it is still `internal`
- * AND her timeline has no entry of this unit's — so an admin who narrows her
- * again has made a decision, and the next re-run leaves it alone. The widening
- * is an entry in her version timeline, written through the platform's snapshot
- * helpers inside one transaction with the update, as the model pin is.
+ * AND the agent's timeline has no entry of this unit's — so an admin who narrows
+ * it again has made a decision, and the next re-run leaves it alone. The widening
+ * is an entry in the agent's version timeline, written through the platform's
+ * snapshot helpers inside one transaction with the update, as the model pin is.
  *
  * **The grant is filled once.** A binding that does not exist is created; one
  * that exists is left as it is — including disabled, which is an operator's
@@ -60,7 +61,7 @@ const unit: SeedUnit = {
   name: 'app-lelanea/007-agent-reachable',
   hashInputs: ['../../../lib/app/agent/pins.ts', '../../../lib/app/voice/fingerprint.ts'],
   async run({ prisma, logger }) {
-    logger.info('🚪 Making her reachable...');
+    logger.info('🚪 Making the voice agent reachable...');
 
     const admin = await prisma.user.findFirst({
       where: serviceAccountWhere,
@@ -75,7 +76,7 @@ const unit: SeedUnit = {
       select: { id: true, visibility: true, createdBy: true },
     });
     if (!agent) {
-      logger.error('agent reachable: her agent does not exist — refusing to record success', {
+      logger.error('agent reachable: the agent does not exist — refusing to record success', {
         slug: VOICE_AGENT_SLUG,
       });
       throw new Error(
@@ -83,7 +84,7 @@ const unit: SeedUnit = {
       );
     }
 
-    // Checked before any write, so a missing one leaves her exactly as she was.
+    // Checked before any write, so a missing one leaves the agent as it was.
     const capabilities = await prisma.aiCapability.findMany({
       where: { slug: { in: [...GRANTED_CAPABILITY_SLUGS] } },
       select: { id: true, slug: true },
@@ -130,7 +131,7 @@ const unit: SeedUnit = {
     }
     if (widenedBefore) {
       logger.warn(
-        `${VOICE_AGENT_SLUG} is internal although this seed widened her before — somebody narrowed her since, which is theirs to decide. Left alone; her seats answer 404 until she is public again.`
+        `${VOICE_AGENT_SLUG} is internal although this seed widened it before — somebody narrowed it since, which is theirs to decide. Left alone; its seats answer 404 until it is public again.`
       );
       return;
     }

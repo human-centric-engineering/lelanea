@@ -88,7 +88,7 @@ async function runSeed(): Promise<void> {
   await unit.run({ prisma: prisma as never, logger: logger });
 }
 
-const HER_ID = 'agent-hers';
+const VOICE_AGENT_ID = 'agent-voice';
 
 function seat(role: string): FakeBinding | undefined {
   return world.bindings.find((binding) => binding.role === role);
@@ -96,7 +96,7 @@ function seat(role: string): FakeBinding | undefined {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  world.agents = [{ id: HER_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
+  world.agents = [{ id: VOICE_AGENT_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
   world.bindings = [];
 });
 
@@ -112,10 +112,10 @@ describe('the seats this seed owns', () => {
 });
 
 describe('a fresh install', () => {
-  it('binds her to both seats, as the service account', async () => {
+  it('binds the voice agent to both seats, as the service account', async () => {
     await runSeed();
 
-    for (const role of SEATED_ROLES) expect(seat(role)?.agentId).toBe(HER_ID);
+    for (const role of SEATED_ROLES) expect(seat(role)?.agentId).toBe(VOICE_AGENT_ID);
     expect(world.bindings).toHaveLength(SEATED_ROLES.length);
     expect(bindFacilitationAgent).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'service-account' })
@@ -163,7 +163,7 @@ describe('a seat somebody else holds', () => {
 
     // Population first: this run DID bind, so the survival below is not a seed
     // that bound nobody.
-    expect(seat(FACILITATION_ROLES.onboarding)?.agentId).toBe(HER_ID);
+    expect(seat(FACILITATION_ROLES.onboarding)?.agentId).toBe(VOICE_AGENT_ID);
 
     expect(seat(FACILITATION_ROLES.facilitator)).toMatchObject({
       id: 'theirs',
@@ -188,14 +188,14 @@ describe('an agent that is not there', () => {
   });
 
   it('treats a soft-deleted agent as not there', async () => {
-    world.agents = [{ id: HER_ID, slug: VOICE_AGENT_SLUG, deletedAt: new Date() }];
+    world.agents = [{ id: VOICE_AGENT_ID, slug: VOICE_AGENT_SLUG, deletedAt: new Date() }];
 
     await expect(runSeed()).rejects.toThrow(VOICE_AGENT_SLUG);
   });
 });
 
 describe('the unit re-runs when what it seats changes', () => {
-  it('hashes the pins, her slug, and the seat vocabulary', () => {
+  it("hashes the pins, the agent's slug, and the seat vocabulary", () => {
     expect(unit.hashInputs).toEqual([
       '../../../lib/app/agent/pins.ts',
       '../../../lib/app/voice/fingerprint.ts',

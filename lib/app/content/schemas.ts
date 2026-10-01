@@ -12,7 +12,7 @@
  * The other three are the voice fingerprint's, at the bottom of this file, and
  * they are the exception that proves the rule: the always-on core and the
  * register overlays were DRAFTED from the other six, and the golden set holds
- * prompts a person puts TO her rather than words of hers at all. Each carries a
+ * prompts a person puts TO the agent rather than words of hers at all. Each carries a
  * required `provenance` block saying so, and none of their schemas is looser
  * for it.
  *
@@ -619,7 +619,7 @@ export const voiceFingerprintFileSchema = z.strictObject({
     heading: z.string().min(1),
     lines: voiceLinesSchema,
     /**
-     * What she declines is one thing; HOW she declines it is the other half, and
+     * What the agent declines is one thing; HOW it declines is the other half, and
      * it carries its own heading for the same reason every other block does —
      * the heading is copy the model reads, so it is authored here rather than
      * written into the projection. A string literal in TypeScript would be a
@@ -664,7 +664,7 @@ export const voiceSituationSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/,
  * `layer` is a literal, as the core's is, so the two files can never be handed
  * to the wrong reader. `exemplarQuery` is authored rather than derived from the
  * situation key so retrieval for one moment is deterministic and reviewable —
- * she can read what her material is being searched for, which is the half of
+ * Lelañea Fulton can read what her material is being searched for, which is the half of
  * retrieval nobody usually gets to see.
  */
 export const voiceOverlaysFileSchema = z
@@ -774,10 +774,10 @@ export const GOLDEN_SET_REQUIRED_KINDS = [
   'decline',
   'grounded-claim',
   'retrieval-empty',
-  // f-safety t-60: someone trying to talk her out of role, into therapy, into
-  // reciting her prompt, or into deleting something. These cases prove her
+  // f-safety t-60: someone trying to talk the agent out of role, into therapy,
+  // into reciting its prompt, or into deleting something. These cases prove its
   // refusals the way the others prove her register, and the misuse smoke runs
-  // them against the pinned model with a canary in her prompt.
+  // them against the pinned model with a canary in the agent's prompt.
   'refusal',
 ] as const;
 
@@ -789,13 +789,13 @@ export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];
  * The fixed prompts every change to her voice is heard through before it ships.
  *
  * They are not her words, which is the one thing that makes this file different
- * from the two beside it: a prompt here is what a PERSON says to her. It is
- * authored in the content seam anyway, because the set decides which moments she
- * is ever heard in — and a probe set an engineer can silently retune is the same
+ * from the two beside it: a prompt here is what a PERSON says to the agent. It
+ * is authored in the content seam anyway, because the set decides which moments
+ * her voice is ever heard in — and a probe set an engineer can silently retune is the same
  * failure the feature exists to prevent, one level out.
  *
  * **There is no `expectedOutput` field, deliberately.** Whether an answer reads
- * as her is her judgement on a deployed build; a reference answer here would
+ * as her is Lelañea Fulton's judgement on a deployed build; a reference answer here would
  * invite a grader to score a string comparison and report a number for it. The
  * platform's reference-required graders are therefore unusable against this
  * dataset, which is correct rather than a gap.

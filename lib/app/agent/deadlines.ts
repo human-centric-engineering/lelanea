@@ -2,11 +2,11 @@
  * A turn's two deadlines, and a turn that runs on when its reader goes away
  * (§08 t-55; product description §8.1).
  *
- * Before this a turn with her waited on whatever the provider library defaulted
- * to — 120 seconds a request — and nothing spoke up meanwhile. Now:
+ * Before this a turn with the agent waited on whatever the provider library
+ * defaulted to — 120 seconds a request — and nothing spoke up meanwhile. Now:
  *
  * - **First-words deadline passed, no words yet:** one `still_thinking` warning.
- *   The turn is not touched — a slow answer is still her answer.
+ *   The turn is not touched — a slow answer is still an answer.
  * - **Whole-turn deadline passed:** the model call is aborted, the turn is
  *   settled failed (so its id may run again), and the reader gets the
  *   `timed_out` ending at once — not whenever the aborted stream gets round to
@@ -17,7 +17,7 @@
  *
  * ## The reader is not the turn
  *
- * Owner ruling, 18 Sept 2026: a dropped connection does not stop her answer. So
+ * Owner ruling, 18 Sept 2026: a dropped connection does not stop the answer. So
  * the upstream is pumped by its own loop from the moment the turn starts, and
  * the reader takes frames from a buffer. A reader that leaves — the client
  * disconnected, `sseResponse` stopped iterating — detaches from the buffer and

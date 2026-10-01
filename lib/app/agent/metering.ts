@@ -422,9 +422,9 @@ export async function getMonthToDate(userId: string, now: Date = new Date()): Pr
 /**
  * What a cost row was for, within a turn.
  *
- * `reply` is her answer (every tool-loop pass); the rest are side costs the turn
- * caused. Read from the row's own `operation` and the `kind` / `slug` the
- * platform stamps last, which a caller cannot overwrite.
+ * `reply` is the agent's answer (every tool-loop pass); the rest are side costs
+ * the turn caused. Read from the row's own `operation` and the `kind` / `slug`
+ * the platform stamps last, which a caller cannot overwrite.
  */
 export type TurnCostPart =
   'reply' | 'summary' | 'tool' | 'knowledge_search' | 'reply_embedding' | 'attachment' | 'other';
@@ -466,7 +466,7 @@ export interface TurnMeter extends MeterTotals {
   conversationId: string | null;
   startedAt: Date;
   completedAt: Date | null;
-  /** Her answer's own cost — the `reply` rows. */
+  /** The agent's answer's own cost — the `reply` rows. */
   replyCostUsd: number;
   /** Everything else the turn caused: summary, tools, searches, embedding. */
   sideCostUsd: number;

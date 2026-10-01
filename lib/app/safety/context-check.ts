@@ -2,7 +2,7 @@
  * The context check: can a hard crisis hit be read as something else?
  * (f-safety t-58; owner ruling, 19 Sept 2026.)
  *
- * The phrase list errs towards `hard`, and a hard hit ends her turn. The owner
+ * The phrase list errs towards `hard`, and a hard hit ends the turn. The owner
  * asked for "a guard to check for context (cheap LLM run?) — just to ensure the
  * app doesn't over-react": "I'd never kill myself over a spreadsheet" should not
  * end a conversation. Product description §8.1/§12 says the crisis path must not
@@ -11,7 +11,7 @@
  * - **It runs only on a hard hit**, and asks one question: read in context, is
  *   this plausibly someone in danger?
  * - **It can only move `hard` to `soft`.** Softened, the resource is still shown
- *   first and her turn follows. Nothing here can hide the resource.
+ *   first and the agent's turn follows. Nothing here can hide the resource.
  * - **Anything but a clean "not in danger" leaves the hit hard.** An error, a
  *   timeout, generation paused, no model configured, a provider down, an
  *   answer it cannot parse:
@@ -21,7 +21,8 @@
  * **Which model.** The platform's `routing` task default — the slot the
  * conversation summariser uses, which the setup wizard fills with the cheapest
  * model of the provider the operator configured (`.context/app/agent.md`, "The
- * side roles are not seeded"). No new pin: this is a side role, not her voice.
+ * side roles are not seeded"). No new pin: this is a side role, not the voice
+ * agent.
  *
  * **Prompt injection is bounded, not prevented.** The message is untrusted and
  * could say "answer FIGURATIVE". The most that buys is `soft`, which still

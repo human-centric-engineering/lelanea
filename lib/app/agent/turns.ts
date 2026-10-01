@@ -1,6 +1,6 @@
 /**
- * A turn with her, made idempotent and recorded (§08 t-54; product description
- * §8.1, §8.2, §11).
+ * A turn with the agent, made idempotent and recorded (§08 t-54; product
+ * description §8.1, §8.2, §11).
  *
  * Before this, a turn sent twice was two turns: the platform wrote a second user
  * message, called the model again and billed again, because nothing on the chat
@@ -30,7 +30,7 @@
  *
  * - **Every cost row the turn causes** carries `{ turnId, seat }`, through the
  *   platform's `costLogMetadata` pass-through. Not every row: the embedding of
- *   her reply is written by a path that takes no metadata — see
+ *   the reply is written by a path that takes no metadata — see
  *   `.context/app/agent.md`, "What a turn records".
  * - **The person's message** carries `{ turnId, seat, fingerprintVersion }` under
  *   `metadata.app`, through `messageMetadata`. The platform puts that on the
@@ -45,7 +45,7 @@
  * `warn` — judged from the turn's own `done`, not from a registry. See
  * `classifyPricing()`.
  *
- * ## When she can't answer (§08 t-55)
+ * ## When the agent can't answer (§08 t-55)
  *
  * - **Paused** by the operator: refused before the claim and before any model
  *   call, with the `paused` ending (`availability.ts`). A replay of a turn that
@@ -367,7 +367,7 @@ export async function runRecordedTurn(
 }
 
 /**
- * A turn she answers: claim its id, then replay, refuse or run it.
+ * A turn the agent answers: claim its id, then replay, refuse or run it.
  *
  * A refusal is RETURNED, before any stream exists, and the framework answers it
  * as 409 rather than opening an event stream to say no. Returned rather than
@@ -467,9 +467,9 @@ async function runGeneratedTurn(
 }
 
 /**
- * Why no turn she answers may start now, as the frame it ends on — or `null`.
- * Generation paused for everyone, then this person's month used up. Neither
- * claims or calls anything.
+ * Why no turn the agent answers may start now, as the frame it ends on — or
+ * `null`. Generation paused for everyone, then this person's month used up.
+ * Neither claims or calls anything.
  */
 async function heldEnding(turn: FacilitationTurn): Promise<ChatEvent | null> {
   if (await isGenerationPaused()) {

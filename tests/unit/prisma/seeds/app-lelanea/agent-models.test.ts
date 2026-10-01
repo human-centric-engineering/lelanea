@@ -4,11 +4,11 @@
  *
  * ## 1. `fp4` — three kinds of row, three ownership rules
  *
- * HER provider and model are **operator-owned**: filled only where both are
+ * The VOICE AGENT's provider and model are **operator-owned**: filled only where both are
  * still blank, because production's model is an admin edit and a re-seed that
  * undid it would make the pin impossible to change without a deploy. The
- * CONTROL's **follow hers** — it is an instrument, so a blank control is set to
- * whatever she is on, never to the dev pin on its own account. The matrix row is
+ * CONTROL's **follow the voice agent's** — it is an instrument, so a blank
+ * control is set to whatever the voice agent is on, never to the dev pin on its own account. The matrix row is
  * seed-managed under the platform's `isDefault` protocol.
  *
  * And one thing it must NOT write: the platform's default task models. The
@@ -35,7 +35,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this pins Lelañea's agents
  * ---------------------------------------------------------------------------
- * A fork without her agents should delete this file with the seed.
+ * A fork without Lelañea's agents should delete this file with the seed.
  *
  * @see prisma/seeds/app-lelanea/005-agent-models.ts
  */
@@ -273,7 +273,7 @@ function agent(slug: string): FakeAgent {
   return found;
 }
 
-const hers = (): FakeAgent => agent(VOICE_AGENT_SLUG);
+const voiceAgent = (): FakeAgent => agent(VOICE_AGENT_SLUG);
 const control = (): FakeAgent => agent(VOICE_CONTROL_AGENT_SLUG);
 
 function versionsOf(slug: string): FakeVersion[] {
@@ -301,7 +301,7 @@ describe('a fresh install', () => {
   it('pins both arms to a dated model and an explicit provider, with no fallback', async () => {
     await runSeed();
 
-    for (const arm of [hers(), control()]) {
+    for (const arm of [voiceAgent(), control()]) {
       expect(arm.provider).toBe(PINNED_PROVIDER);
       expect(arm.model).toBe(PINNED_MODEL);
       expect(arm.fallbackProviders).toEqual([]);
@@ -318,18 +318,18 @@ describe('a fresh install', () => {
   it('records each change in the version timeline, over the blank state it replaced', async () => {
     await runSeed();
 
-    const herTimeline = versionsOf(VOICE_AGENT_SLUG);
-    expect(herTimeline.map((version) => version.changeSummary)).toEqual([
+    const voiceTimeline = versionsOf(VOICE_AGENT_SLUG);
+    expect(voiceTimeline.map((version) => version.changeSummary)).toEqual([
       INITIAL_VERSION_SUMMARY,
       PIN_CHANGE_SUMMARY,
     ]);
     // v1 is the state BEFORE the pin — not a second copy of the pinned one.
-    expect(herTimeline[0]?.snapshot.model).toBe('');
-    expect(herTimeline[1]?.snapshot.model).toBe(PINNED_MODEL);
-    expect(herTimeline[1]?.snapshot.provider).toBe(PINNED_PROVIDER);
+    expect(voiceTimeline[0]?.snapshot.model).toBe('');
+    expect(voiceTimeline[1]?.snapshot.model).toBe(PINNED_MODEL);
+    expect(voiceTimeline[1]?.snapshot.provider).toBe(PINNED_PROVIDER);
 
     // The control's entry says what actually happened to it: it was matched to
-    // her, not pinned on its own account.
+    // the voice agent, not pinned on its own account.
     expect(versionsOf(VOICE_CONTROL_AGENT_SLUG).map((version) => version.changeSummary)).toEqual([
       INITIAL_VERSION_SUMMARY,
       CONTROL_FOLLOWS_SUMMARY,
@@ -338,7 +338,7 @@ describe('a fresh install', () => {
 
   it('numbers the pin after whatever history the agent already has', async () => {
     world.versions.push({
-      agentId: hers().id,
+      agentId: voiceAgent().id,
       version: 4,
       snapshot: { model: '' },
       changeSummary: 'Something an admin did',
@@ -394,15 +394,15 @@ describe('a re-run', () => {
   });
 });
 
-describe('the control follows her', () => {
-  it('takes the model an admin chose for her — not the dev pin', async () => {
-    hers().provider = 'anthropic';
-    hers().model = 'claude-sonnet-4';
+describe('the control follows the voice agent', () => {
+  it('takes the model an admin chose for the voice agent — not the dev pin', async () => {
+    voiceAgent().provider = 'anthropic';
+    voiceAgent().model = 'claude-sonnet-4';
 
     await runSeed();
 
-    // Hers is somebody's decision and survives untouched, with no entry.
-    expect(hers()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
+    // The voice agent's model is somebody's decision and survives untouched, with no entry.
+    expect(voiceAgent()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
     expect(versionsOf(VOICE_AGENT_SLUG)).toEqual([]);
 
     // The first version of the seed pinned each arm independently, and wrote the
@@ -418,9 +418,9 @@ describe('the control follows her', () => {
     ['a provider with no model', { provider: 'anthropic', model: '' }],
     ['a model with no provider', { provider: '', model: 'claude-sonnet-4' }],
   ])(
-    'treats %s on her as an edit, guesses nothing, and leaves the control blank',
+    'treats %s on the voice agent as an edit, guesses nothing, and leaves the control blank',
     async (_label, edit) => {
-      Object.assign(hers(), edit);
+      Object.assign(voiceAgent(), edit);
 
       await runSeed();
 
@@ -428,7 +428,7 @@ describe('the control follows her', () => {
       // seed that bailed out early.
       expect(writes.matrixCreate).toBe(1);
 
-      expect(hers()).toMatchObject(edit);
+      expect(voiceAgent()).toMatchObject(edit);
       expect(control()).toMatchObject({ provider: '', model: '' });
       expect(writes.agentUpdate).toBe(0);
       expect(warnings().some((message) => message.includes('different models'))).toBe(true);
@@ -441,16 +441,16 @@ describe('the control follows her', () => {
 
     await runSeed();
 
-    // Population: she WAS pinned in this run.
-    expect(hers().model).toBe(PINNED_MODEL);
+    // Population: the voice agent WAS pinned in this run.
+    expect(voiceAgent().model).toBe(PINNED_MODEL);
 
     expect(control()).toMatchObject({ provider: 'anthropic', model: 'claude-haiku-4.5' });
     expect(versionsOf(VOICE_CONTROL_AGENT_SLUG)).toEqual([]);
     expect(warnings().some((message) => message.includes('different models'))).toBe(true);
   });
 
-  it('says nothing when a control somebody set already matches her', async () => {
-    Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+  it('says nothing when a control somebody set already matches the voice agent', async () => {
+    Object.assign(voiceAgent(), { provider: 'anthropic', model: 'claude-sonnet-4' });
     Object.assign(control(), { provider: 'anthropic', model: 'claude-sonnet-4' });
 
     await runSeed();
@@ -469,12 +469,12 @@ describe('what an operator chose is never written over', () => {
   });
 
   it('reports a fallback list rather than clearing it', async () => {
-    hers().fallbackProviders = ['anthropic'];
+    voiceAgent().fallbackProviders = ['anthropic'];
 
     await runSeed();
 
-    expect(hers().model).toBe(PINNED_MODEL);
-    expect(hers().fallbackProviders).toEqual(['anthropic']);
+    expect(voiceAgent().model).toBe(PINNED_MODEL);
+    expect(voiceAgent().fallbackProviders).toEqual(['anthropic']);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('no fallback'),
       expect.objectContaining({ fallbackProviders: ['anthropic'] })
@@ -530,11 +530,11 @@ describe('what an operator chose is never written over', () => {
     expect(writes.matrixCreate).toBe(0);
     expect(writes.matrixUpdate).toBe(0);
     // Population: the run still pinned.
-    expect(hers().model).toBe(PINNED_MODEL);
+    expect(voiceAgent().model).toBe(PINNED_MODEL);
   });
 });
 
-describe('whether there is anywhere for her turns to go', () => {
+describe("whether there is anywhere for the agent's turns to go", () => {
   const NO_PROVIDER_YET = 'no active provider yet';
 
   describe('a fresh install — no active provider at all', () => {
@@ -545,7 +545,7 @@ describe('whether there is anywhere for her turns to go', () => {
     it('pins anyway — seeding runs before setup, and the runner does not come back', async () => {
       await runSeed();
 
-      expect(hers().model).toBe(PINNED_MODEL);
+      expect(voiceAgent().model).toBe(PINNED_MODEL);
       expect(control().model).toBe(PINNED_MODEL);
     });
 
@@ -560,7 +560,7 @@ describe('whether there is anywhere for her turns to go', () => {
 
       await runSeed();
 
-      expect(hers().model).toBe(PINNED_MODEL);
+      expect(voiceAgent().model).toBe(PINNED_MODEL);
       expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(true);
     });
   });
@@ -578,16 +578,16 @@ describe('whether there is anywhere for her turns to go', () => {
       await expect(runSeed()).rejects.toThrow('/admin/orchestration/agents');
     });
 
-    it('writes nothing at all — she is working, and stays on what she was on', async () => {
+    it('writes nothing at all — the agent is working, and stays on what it was on', async () => {
       await expect(runSeed()).rejects.toThrow();
 
       expect(totalWrites()).toBe(0);
-      expect(hers()).toMatchObject({ provider: '', model: '' });
+      expect(voiceAgent()).toMatchObject({ provider: '', model: '' });
       expect(control()).toMatchObject({ provider: '', model: '' });
     });
 
-    it('passes once an admin has chosen her model — the remedy the error names', async () => {
-      Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+    it("passes once an admin has chosen the agent's model — the remedy the error names", async () => {
+      Object.assign(voiceAgent(), { provider: 'anthropic', model: 'claude-sonnet-4' });
 
       await runSeed();
 
@@ -599,7 +599,7 @@ describe('whether there is anywhere for her turns to go', () => {
     await runSeed();
 
     // Population: the run did the work the warning is about.
-    expect(hers().provider).toBe(PINNED_PROVIDER);
+    expect(voiceAgent().provider).toBe(PINNED_PROVIDER);
     expect(warnings().some((message) => message.includes(NO_PROVIDER_YET))).toBe(false);
   });
 });
@@ -607,14 +607,14 @@ describe('whether there is anywhere for her turns to go', () => {
 describe('a pin somebody undid', () => {
   it('stays undone — blank with a pin entry behind it is a decision, not a fresh agent', async () => {
     await runSeed();
-    // An admin restores her to v1, "Initial configuration": the floating default.
-    Object.assign(hers(), { provider: '', model: '' });
+    // An admin restores the voice agent to v1, "Initial configuration": the floating default.
+    Object.assign(voiceAgent(), { provider: '', model: '' });
     resetWrites();
 
     // …and later a comment changes in a hashed file, so the unit runs again.
     await runSeed();
 
-    expect(hers()).toMatchObject({ provider: '', model: '' });
+    expect(voiceAgent()).toMatchObject({ provider: '', model: '' });
     expect(writes.agentUpdate).toBe(0);
     expect(warnings().some((message) => message.includes('returned to the install default'))).toBe(
       true
@@ -622,9 +622,9 @@ describe('a pin somebody undid', () => {
   });
 
   it('is not confused by history that is not a pin', async () => {
-    // Population for the case above: other entries in her timeline do not count.
+    // Population for the case above: other entries in its timeline do not count.
     world.versions.push({
-      agentId: hers().id,
+      agentId: voiceAgent().id,
       version: 1,
       snapshot: { model: '' },
       changeSummary: 'Something an admin did',
@@ -633,7 +633,7 @@ describe('a pin somebody undid', () => {
 
     await runSeed();
 
-    expect(hers().model).toBe(PINNED_MODEL);
+    expect(voiceAgent().model).toBe(PINNED_MODEL);
   });
 });
 
@@ -644,7 +644,7 @@ describe('an admin who edits something else while the seed is running', () => {
     // top of the run and "restore to v2" quietly undoes the admin's edit.
     beforeAgentWrite = () => {
       beforeAgentWrite = undefined;
-      hers().temperature = 0.2;
+      voiceAgent().temperature = 0.2;
     };
 
     await runSeed();
@@ -652,24 +652,24 @@ describe('an admin who edits something else while the seed is running', () => {
     const timeline = versionsOf(VOICE_AGENT_SLUG);
     expect(timeline.at(-1)?.snapshot.model).toBe(PINNED_MODEL);
     expect(timeline.at(-1)?.snapshot.temperature).toBe(0.2);
-    // v1 is how she was a moment before: the same, minus the pin.
+    // v1 is how the agent was a moment before: the same, minus the pin.
     expect(timeline[0]?.snapshot.temperature).toBe(0.2);
     expect(timeline[0]?.snapshot.model).toBe('');
   });
 });
 
-describe('an admin who chooses her model while the seed is running', () => {
+describe("an admin who chooses the agent's model while the seed is running", () => {
   it('keeps their choice, gets no "pinned" entry, and the control follows THEM', async () => {
-    // Her row is read at the top of the run and written later. Without the
+    // The voice agent's row is read at the top of the run and written later. Without the
     // predicate on the write, this edit is replaced by the dev pin.
     beforeAgentWrite = () => {
       beforeAgentWrite = undefined;
-      Object.assign(hers(), { provider: 'anthropic', model: 'claude-sonnet-4' });
+      Object.assign(voiceAgent(), { provider: 'anthropic', model: 'claude-sonnet-4' });
     };
 
     await runSeed();
 
-    expect(hers()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
+    expect(voiceAgent()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-4' });
     expect(versionsOf(VOICE_AGENT_SLUG)).toEqual([]);
     // Population: the run did write — to the control, which followed what was
     // actually there rather than what the seed had meant to put there.
@@ -688,7 +688,7 @@ describe('an agent that is not there', () => {
   );
 
   it('counts a soft-deleted agent as missing — units 003/004 will not recreate a taken slug', async () => {
-    hers().deletedAt = new Date();
+    voiceAgent().deletedAt = new Date();
 
     await expect(runSeed()).rejects.toThrow(VOICE_AGENT_SLUG);
     expect(totalWrites()).toBe(0);
@@ -700,7 +700,7 @@ describe('an agent that is not there', () => {
     await expect(runSeed()).rejects.toThrow();
 
     expect(totalWrites()).toBe(0);
-    expect(hers().model).toBe('');
+    expect(voiceAgent().model).toBe('');
   });
 });
 
@@ -708,13 +708,17 @@ describe('the two arms of the golden set', () => {
   it('resolve to the same provider and model through the platform’s resolver', async () => {
     await runSeed();
 
-    const [herPair, controlPair] = await Promise.all([
-      resolveAgentProviderAndModel(hers()),
+    const [voicePair, controlPair] = await Promise.all([
+      resolveAgentProviderAndModel(voiceAgent()),
       resolveAgentProviderAndModel(control()),
     ]);
 
-    expect(herPair).toEqual(controlPair);
-    expect(herPair).toEqual({ providerSlug: PINNED_PROVIDER, model: PINNED_MODEL, fallbacks: [] });
+    expect(voicePair).toEqual(controlPair);
+    expect(voicePair).toEqual({
+      providerSlug: PINNED_PROVIDER,
+      model: PINNED_MODEL,
+      fallbacks: [],
+    });
   });
 });
 

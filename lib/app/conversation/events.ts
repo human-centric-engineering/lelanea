@@ -1,5 +1,5 @@
 /**
- * What her seat sends the browser, frame by frame (§10 t-64).
+ * What the guide seat sends the browser, frame by frame (§10 t-64).
  *
  * The leaf's own event schema rather than Sunrise's `parseChatStreamEvent`,
  * for one reason that matters: Zod objects are non-strict, so a field the admin
@@ -7,12 +7,12 @@
  * (`lib/app/safety/resource.ts`) is exactly such a field, and a person in
  * danger would get the flattened `message` instead of the services laid out.
  *
- * What her seat can send is narrower than the platform's full union, because
+ * What the guide seat can send is narrower than the platform's full union, because
  * every frame passes `toClientStream()` first (`lib/app/agent/endings.ts`):
  * `error` carries one of the endings, `crisis` (with its `resource`) or
  * `ceiling_reached` (with its `ceiling` figures), never a platform code;
  * `budget_exceeded_per_turn` never arrives (it becomes an ending); nothing on
- * her seats requires approval. Those variants are therefore not modelled, and
+ * the agent's seats requires approval. Those variants are therefore not modelled, and
  * a frame this schema does not recognise is `null` — ignored, not fatal — so a
  * frame the platform adds tomorrow degrades to nothing rather than to a crash.
  *
@@ -58,8 +58,8 @@ const resourceField = crisisResourceSchema.optional().catch(undefined);
  *
  * Lenient **per field**, not all-or-nothing: each figure that is not one a
  * sentence could state — a negative or non-finite amount, a reset that is not
- * an instant — drops to `undefined` on its own, and the others survive. Her
- * words (`ceilingEnding`) drop only the clause the missing figure fed, so a
+ * an instant — drops to `undefined` on its own, and the others survive. The
+ * ending's words (`ceilingEnding`) drop only the clause the missing figure fed, so a
  * frame with a bad amount still names the reset date (t-96, /code-review). The
  * validation lives here, once; the copy trusts what it is given.
  */

@@ -1,12 +1,12 @@
 /**
- * Whether she can be talked to right now — the operator's pause switch, and
+ * Whether the agent can be talked to right now — the operator's pause switch, and
  * what recent turns say (§08 t-55; product description §8.1).
  *
  * ## The pause switch
  *
- * An incident switch: on, and every turn on her seats is refused before any
- * model call with the `paused` ending, while every read route carries on. It is
- * a Sunrise feature flag, `LELANEA_GENERATION_PAUSED` — DB-backed, so it holds
+ * An incident switch: on, and every turn on the agent's seats is refused before
+ * any model call with the `paused` ending, while every read route carries on. It
+ * is a Sunrise feature flag, `LELANEA_GENERATION_PAUSED` — DB-backed, so it holds
  * across every instance of a serverless deploy, and flipped at `/admin/features`
  * with no deploy. `prisma/seeds/app-lelanea/008-generation-pause-flag.ts` creates
  * it, off, and never writes it again: the switch is operator-owned.
@@ -30,7 +30,7 @@
  * Install-wide and anonymous: it reads one row's status and code, never whose
  * turn it was.
  *
- * @see .context/app/agent.md — "When she can't answer"
+ * @see .context/app/agent.md — "When the agent can't answer"
  */
 
 import { prisma } from '@/lib/db/client';
@@ -48,10 +48,10 @@ export const GENERATION_PAUSED_FLAG_DESCRIPTION =
 export const RECENT_OUTCOME_MS = 5 * 60_000;
 
 /**
- * Failure codes that are about the person's turn, not about whether she can be
- * reached — a message the input guard blocked, a conversation at its cap, a turn
- * over its cost cap, a reply that finished but could not be linked. One of these
- * being the latest outcome says nothing about the model.
+ * Failure codes that are about the person's turn, not about whether the agent can
+ * be reached — a message the input guard blocked, a conversation at its cap, a
+ * turn over its cost cap, a reply that finished but could not be linked. One of
+ * these being the latest outcome says nothing about the model.
  */
 const NOT_AVAILABILITY_CODES: ReadonlySet<string> = new Set([
   REPLY_NOT_LINKED,

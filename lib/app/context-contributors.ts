@@ -14,14 +14,14 @@
  *
  * ## What Lelañea registers
  *
- * Her voice block — the register a moment calls for, plus real passages of her
- * own writing, each labelled by origin so the model can tell her material from
- * the person's — under two context types:
+ * Lelañea Fulton's voice block — the register a moment calls for, plus real
+ * passages of her own writing, each labelled by origin so the model can tell her
+ * material from the person's — under two context types:
  *
  * - `voice` (§05 t-27), keyed on a situation. What the admin chat sends.
  * - `facilitation` (§08 t-54), keyed on a seat. What Daybreak's facilitation
- *   route pins on every turn a person takes with her; the seat is mapped to a
- *   situation in `lib/app/voice/context-contributor.ts`. Daybreak registers
+ *   route pins on every turn a person takes with the agent; the seat is mapped to
+ *   a situation in `lib/app/voice/context-contributor.ts`. Daybreak registers
  *   nothing for this type, so the claim takes nothing from the framework.
  *
  * It is the second and third layers of the voice fingerprint. The first — the

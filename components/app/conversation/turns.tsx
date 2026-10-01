@@ -28,8 +28,8 @@ import { cn } from '@/lib/utils';
  * One turn each way, from the prototype's `renderTurn` (§10 t-64).
  *
  * The person's turn is a right-aligned bubble on the user-bubble tone, 78% of
- * the measure at most. Hers is her mark and a card-toned bubble with a hairline
- * border, `white-space: pre-line` so her paragraphs are hers. Both `rise` in
+ * the measure at most. The reply is the agent's mark and a card-toned bubble with
+ * a hairline border, `white-space: pre-line` so the reply keeps its paragraphs. Both `rise` in
  * over 420ms unless the reader has asked for less motion.
  *
  * Each is an `<article>`, which is what the stub's test used to assert was
@@ -61,7 +61,7 @@ export function UserTurn({ text, rise }: { text: string; rise: boolean }) {
   );
 }
 
-/** Her mark beside a reply: a 30px disc on the card tone with the lotus in it. */
+/** The agent's mark beside a reply: a 30px disc on the card tone with the lotus in it. */
 export function HerMark() {
   return (
     <span
@@ -252,10 +252,10 @@ export function AccountRow({ input }: { input: AccountInput }) {
 }
 
 /**
- * The thinking row: her mark, three breathing dots, and one word. The label
- * changes at the first-words deadline (`still_thinking`) rather than a second
- * row appearing — a slow answer is still her answer, and the row that says
- * she is thinking is the honest place to say it is taking longer.
+ * The thinking row: the agent's mark, three breathing dots, and one word. The
+ * label changes at the first-words deadline (`still_thinking`) rather than a
+ * second row appearing — a slow answer is still an answer, and the row that
+ * says the agent is thinking is the honest place to say it is taking longer.
  */
 export function ThinkingRow({ stillThinking }: { stillThinking: boolean }) {
   const reducedMotion = useReducedMotion();
@@ -350,17 +350,17 @@ export function CrisisRow({ resource, text }: { resource?: CrisisResource; text:
 }
 
 /**
- * How a turn ended without her, in her words (t-65).
+ * How a turn ended without a reply, in her register (t-65).
  *
  * The frame carries the neutral contract copy; where the code is one this
  * pane knows — the four endings, the monthly limit, and the one refusal a
- * person can meet from here — her words replace it (`CONVERSATION_COPY.endings`,
+ * person can meet from here — the pane's own copy replaces it (`CONVERSATION_COPY.endings`,
  * and `ceilingEnding` for the limit, which carries figures and so is a function).
  * A code it does not know keeps the frame's own words, which are always true
  * (`HB10`).
  * Each `\n` in the copy is a beat and gets its own line.
  *
- * A hard crisis frame is not words of hers at all: the authored resource is
+ * A hard crisis frame gets no ending copy at all: the authored resource is
  * laid out instead, and nothing else is said under it.
  */
 export function EndingRow({

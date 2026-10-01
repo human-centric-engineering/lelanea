@@ -98,8 +98,8 @@ export const prismaFake = {
       }) => {
         const rows = world.values.filter((row) => matches(row, where));
         if (orderBy) {
-          // `getSlotHeads` orders freshest first, then slug — and the panel's
-          // "the note she just wrote is at the top of its group" depends on it.
+          // `getSlotHeads` orders freshest first, then slug — and the panel's "the
+          // note the agent just wrote is at the top of its group" depends on it.
           rows.sort(
             (a, b) =>
               b.capturedAt.getTime() - a.capturedAt.getTime() ||
@@ -191,7 +191,7 @@ export function value(
     value: `something about ${slotSlug}`,
     confidence: 6,
     sourceType: 'inferred',
-    reasoningNote: 'She put this together from what was said.',
+    reasoningNote: 'Put together from what was said.',
     provenance: { conversationId: 'conv-1' },
     supersededAt: null,
     capturedAt: new Date(clock),

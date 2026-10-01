@@ -22,14 +22,15 @@
  *
  * ## What Lelañea registers, and why it is here rather than in a tag grant
  *
- * One contributor: her designated corpus, for her own agents only (§05 t-25).
+ * One contributor: Lelañea Fulton's designated corpus, for the voice agents only
+ * (§05 t-25).
  *
  * A document reaches `search_knowledge_base` — the path that can quote it back
  * at someone — only when its purpose is `knowledge` or `both` AND its
  * sensitivity is not `client`. Voice-only material is designated `voice` and is
  * therefore absent from this set entirely; it reaches the prompt through the
- * context contributor instead, labelled by origin, so the model can tell her
- * register from her answers.
+ * context contributor instead, labelled by origin, so the model can tell an
+ * example of her register from material to answer with.
  *
  * The rule has to be composed here, per document, because a tag grant cannot
  * express it: `resolveAgentDocumentAccess` UNIONs each granted tag's documents,

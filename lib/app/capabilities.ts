@@ -20,10 +20,10 @@
  * what is keyed on the old one and would advertise a second tool for the same
  * job — and one of the app's own.
  *
- * - **`search_knowledge_base`** — her search, with each result labelled by whose
- *   material it is (f-safety t-60). The subclass runs the platform's search
- *   unchanged, then adds the label for her agents only. A new slug would lose
- *   the chat handler's citation path, which is keyed on this one.
+ * - **`search_knowledge_base`** — the agent's search, with each result labelled
+ *   by whose material it is (f-safety t-60). The subclass runs the platform's
+ *   search unchanged, then adds the label for the voice agents only. A new slug
+ *   would lose the chat handler's citation path, which is keyed on this one.
  * - **`fill_slot`** — Daybreak's capture, guarded so one turn writes a slot once
  *   (f-slots t-72). The subclass adds the turn-scoped idempotency the framework
  *   cannot have, because the turn id is this leaf's. Everything else — the

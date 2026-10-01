@@ -1,14 +1,14 @@
 /**
- * Attempts on her are seen, and never turn into a fake outage (f-safety t-60).
+ * Attempts on the agent are seen, never turned into a fake outage (f-safety t-60).
  *
- * Two things, both about the platform's inline guards on her seats:
+ * Two things, both about the platform's inline guards on the guide's seats:
  *
- * 1. **Her guards observe; they never block.** `inputGuardMode` and
- *    `outputGuardMode` on her agent are set to `log_only` (`GUARD_MODES`). A
+ * 1. **The agent's guards observe; they never block.** `inputGuardMode` and
+ *    `outputGuardMode` on the voice agent are set to `log_only` (`GUARD_MODES`). A
  *    blocked turn reaches the person as the neutral `unavailable` ending, which
- *    for a heuristic false positive means "she is down" when she is not. The
+ *    for a heuristic false positive means "the agent is down" when it is not. The
  *    agent's column wins over the install default, which is why it is written
- *    onto her.
+ *    onto the agent.
  * 2. **A detection reaches a person.** One Daybreak `escalation` policy per seat
  *    (`ESCALATION_POLICIES`): an input-guard detection notifies a reviewer and
  *    writes an audit entry.
@@ -22,9 +22,9 @@
  * and guard, whether enabled or not. One an operator switched off stays off,
  * and one they edited is never rewritten. No removal pass.
  *
- * The guard-mode write is an entry in her version timeline (both columns are
- * versioned fields), written in one transaction with the update, as the model
- * pin and the widening are.
+ * The guard-mode write is an entry in the agent's version timeline (both
+ * columns are versioned fields), written in one transaction with the update, as
+ * the model pin and the widening are.
  *
  * **Idempotent.** Every write is preceded by a read that makes it unnecessary
  * on a re-run.
@@ -79,7 +79,7 @@ const unit: SeedUnit = {
       select: { id: true, createdBy: true, inputGuardMode: true, outputGuardMode: true },
     });
     if (!agent) {
-      logger.error('misuse observed: her agent does not exist — refusing to record success', {
+      logger.error('misuse observed: the agent does not exist — refusing to record success', {
         slug: VOICE_AGENT_SLUG,
       });
       throw new Error(
@@ -94,7 +94,7 @@ const unit: SeedUnit = {
     );
     for (const field of chosen) {
       logger.warn(
-        `${VOICE_AGENT_SLUG}'s ${field} is "${agent[field]}", not "${GUARD_MODES[field]}" — an operator's choice, left alone. A heuristic hit on her seats will now end the turn with the "unavailable" ending.`
+        `${VOICE_AGENT_SLUG}'s ${field} is "${agent[field]}", not "${GUARD_MODES[field]}" — an operator's choice, left alone. A heuristic hit on its seats will now end the turn with the "unavailable" ending.`
       );
     }
 

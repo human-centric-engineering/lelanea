@@ -41,7 +41,7 @@ const unit: SeedUnit = {
     const availability = await resolveEmbeddingAvailability();
     if (availability === 'none_configured' || availability === 'none_permitted') {
       logger.warn(
-        `⚠️  Knowledge mirror skipped: no embedding provider (${availability}). Her documents are ` +
+        `⚠️  Knowledge mirror skipped: no embedding provider (${availability}). Lelañea Fulton's documents are ` +
           'not in the knowledge base yet. Once a provider is configured, run the cron route: ' +
           'curl -H "Authorization: Bearer $CRON_SECRET" <app>/api/v1/app/cron/knowledge-mirror'
       );

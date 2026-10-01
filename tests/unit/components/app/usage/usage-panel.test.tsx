@@ -220,7 +220,7 @@ describe('what this page no longer claims', () => {
     renderPanel();
     await screen.findByText('used this month');
 
-    // "Lelañea is not calling a model for you yet" — she is, since §10.
+    // "Lelañea is not calling a model for you yet" — it is, since §10.
     expect(screen.queryByText(/not calling a model for you yet/)).not.toBeInTheDocument();
     // "a budget you set" — the commercial phase's, and not being built.
     expect(screen.queryByText(/budget you set/)).not.toBeInTheDocument();

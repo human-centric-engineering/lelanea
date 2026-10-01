@@ -40,7 +40,7 @@ import type { Citation } from '@/types/orchestration';
 
 /** What a source reads: the reply's own data, live or read back. */
 export interface AccountInput {
-  /** When her reply landed — ISO. */
+  /** When the reply landed — ISO. */
   at: string;
   /** Capability slugs the turn called, in order. */
   capabilities: string[];
@@ -62,7 +62,7 @@ export interface AccountPart {
 
 export type AccountSource = (input: AccountInput) => AccountPart | null;
 
-/** The capabilities her seat may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
+/** The capabilities the guide seat may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
@@ -202,7 +202,7 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
- * A capability this account has no words for. Every slug her seat may call has
+ * A capability this account has no words for. Every slug the guide seat may call has
  * one above (`pins-misuse.test.ts` pins the list against
  * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
  * added before its sentence is: named, never hidden.
@@ -300,7 +300,7 @@ const clock = new Intl.DateTimeFormat(undefined, {
   hour12: false,
 });
 
-/** The time her reply landed, as the prototype shows it: `09:12`, in the reader's zone. */
+/** The time the reply landed, as the prototype shows it: `09:12`, in the reader's zone. */
 export function accountTime(at: string): string {
   return clock.format(new Date(at));
 }

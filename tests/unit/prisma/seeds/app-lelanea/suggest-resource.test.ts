@@ -122,11 +122,11 @@ async function runSeed(): Promise<void> {
   await unit.run({ prisma: client as never, logger });
 }
 
-const HER_ID = 'agent-guide';
+const VOICE_AGENT_ID = 'agent-guide';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  world.agents = [{ id: HER_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
+  world.agents = [{ id: VOICE_AGENT_ID, slug: VOICE_AGENT_SLUG, deletedAt: null }];
   world.capabilities = [];
   world.grants = [];
 });
@@ -184,7 +184,7 @@ describe('the grant', () => {
     await runSeed();
 
     expect(world.grants).toEqual([
-      { agentId: HER_ID, capabilityId: world.capabilities[0].id, isEnabled: true },
+      { agentId: VOICE_AGENT_ID, capabilityId: world.capabilities[0].id, isEnabled: true },
     ]);
   });
 

@@ -1,5 +1,5 @@
 /**
- * The browser's side of her notes (f-slots t-73).
+ * The browser's side of the agent's notes (f-slots t-73).
  *
  * Read the page, and send a correction. Kept apart from the store for the
  * reason `notes-view.ts` gives — the panel is a client component and the store
@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { notesSearch, type NotesQuery } from '@/lib/app/slots/notes-query';
 import type { NotesView } from '@/lib/app/slots/notes-view';
 
-/** Her notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
+/** The agent's notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
 export const NOTES_ENDPOINT = '/api/v1/app/notes';
 
 /** Where a person reads them. The nav item and the page both name it here. */
@@ -117,7 +117,7 @@ interface Options {
  * Validated as a unit rather than per note, unlike the transcript: there, a row
  * the client cannot read costs that row and the conversation survives. Here a
  * shape this cannot parse means the contract moved, and showing a partial
- * picture of what she holds — on the one surface whose promise is that it is
+ * picture of what the agent holds — on the one surface whose promise is that it is
  * the whole picture — is worse than saying it could not be read.
  */
 export async function fetchNotes(options: Options = {}): Promise<NotesView> {

@@ -1,10 +1,10 @@
 /**
- * What she is looking for, put in front of her — the taxonomy as the model
+ * What the agent is looking for, put in front of it — the taxonomy as the model
  * reads it (f-slots t-72, security review round 1).
  *
  * ## Why this exists: without it the taxonomy is decoration
  *
- * Granting `fill_slot` is not enough to make her fill an authored slot, because
+ * Granting `fill_slot` is not enough to make the agent fill an authored slot, because
  * **nothing in the platform tells a model which slugs exist.** The tool's
  * advertised schema names one example (`"primary_goal"`, which is not even in
  * this taxonomy) and says "a new slug captures a new fact"; `get_state` returns
@@ -13,7 +13,7 @@
  * taxonomy hangs on no module by design.
  *
  * Measured, on the first real turn of `npm run smoke:app-slot-capture`: told
- * that someone had not spoken to their brother since their father died, she
+ * that someone had not spoken to their brother since their father died, the agent
  * minted `family_communication` and used none of the 50 authored slots that
  * cover exactly that. t-70's taxonomy and t-71's editor were both unreachable
  * from the only path that writes.
@@ -47,23 +47,23 @@
  * Writing the row from a leaf seed would be reverted by the next boot.
  *
  * Mounting it in the prompt instead has one advantage worth keeping: it is read
- * from the database per turn, so an admin's edit in the editor reaches her on
- * her next turn rather than at the next deploy.
+ * from the database per turn, so an admin's edit in the editor reaches the
+ * agent on its next turn rather than at the next deploy.
  *
  * ## Hidden slots are not here
  *
  * `visibility: hidden` slots — the whole `development` group — are left out
- * entirely, which means she cannot fill them. That is the strict reading of
+ * entirely, which means the agent cannot fill them. That is the strict reading of
  * §12: *"Development is a tuning signal, never a grade. It must never rank,
  * score, or display that as a level."* Putting the descriptions of a
- * development scale in her prompt so she could record against it is the first
- * step toward her reasoning out loud about which rung someone is on, and
+ * development scale in the agent's prompt so it could record against it is the
+ * first step toward the agent reasoning out loud about which rung someone is on, and
  * nothing in t-72 needs it. Whoever fills development can decide how, with that
  * risk in front of them.
  *
- * Note the consequence: she may still WRITE a hidden slot if she somehow names
- * one (there is no write facet), she simply is not told they exist. The
- * allowlist's read facet is what guarantees she never reads one back.
+ * Note the consequence: the agent may still WRITE a hidden slot if it somehow
+ * names one (there is no write facet); it simply is not told they exist. The
+ * allowlist's read facet is what guarantees it never reads one back.
  *
  * @see lib/app/voice/context-contributor.ts — the block this is spliced into
  * @see .context/app/slots.md — "Capture"
@@ -76,7 +76,7 @@ import { SLOT_VISIBILITY } from '@/lib/framework/data-slots';
 /**
  * The heading, and the rule that travels with the list.
  *
- * The invention rule is here rather than only in her system instructions
+ * The invention rule is here rather than only in the agent's system instructions
  * because this is where it is read: the list and the licence to go outside it
  * are one thought, and a model weighing "does anything here fit?" is looking at
  * this block, not at a paragraph three sections up. The instructions carry it
@@ -129,8 +129,8 @@ function flatten(value: string): string {
  *
  * Empty rather than a note, on an unseeded database or a failed read: a block
  * saying "the list could not be loaded" would tell the model the list exists
- * and is being withheld, which is an invitation to invent. With no block she
- * behaves as she did before this existed — she invents — and the log line below
+ * and is being withheld, which is an invitation to invent. With no block the
+ * agent behaves as it did before this existed — it invents — and the log line below
  * is how an operator finds out, rather than the profile filling with minted
  * slugs and nobody knowing why.
  *
@@ -146,7 +146,7 @@ export async function slotVocabulary(): Promise<string> {
     // Never throws out to the contributor: `buildContext` catches a failing
     // contributor by blanking the whole context block, which would take her
     // register and her own passages with it. Degrade to no vocabulary.
-    logger.warn('slotVocabulary: could not read the taxonomy; she will not be offered one', {
+    logger.warn('slotVocabulary: could not read the taxonomy; the agent will not be offered one', {
       error: err instanceof Error ? err.message : String(err),
     });
     return '';
@@ -155,7 +155,7 @@ export async function slotVocabulary(): Promise<string> {
   const visible = offered.filter((slot) => slot.visibility !== SLOT_VISIBILITY.hidden);
   if (visible.length === 0) {
     logger.warn(
-      'slotVocabulary: no active, visible slot definitions — she is capturing with no taxonomy in front of her, so anything she records will be a minted slug'
+      'slotVocabulary: no active, visible slot definitions — the agent is capturing with no taxonomy in front of it, so anything it records will be a minted slug'
     );
     return '';
   }

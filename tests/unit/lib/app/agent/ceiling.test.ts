@@ -1,5 +1,5 @@
 /**
- * "May this person start a turn she answers?" (f-safety t-59).
+ * "May this person start a turn the agent answers?" (f-safety t-59).
  *
  * The meter is mocked: what is proved here is the comparison and the reset
  * date. The wiring — no claim, no model call, a replay still served — is in

@@ -3,9 +3,10 @@
  * the real turn seam, against the dev database (f-safety t-58).
  *
  * **Why in-process, not through the route.** The claim under test is that
- * nothing between a person in danger and the resource needs a model: not her
- * turn, and not the context check's side model either. Through a running server
- * the provider key cannot be taken away — it is in that process's environment.
+ * nothing between a person in danger and the resource needs a model: not the
+ * agent's turn, and not the context check's side model either. Through a
+ * running server the provider key cannot be taken away — it is in that
+ * process's environment.
  * Here it can: every `*_API_KEY` is deleted before anything is imported, so the
  * context check's provider cannot be built or cannot answer, and the model call
  * itself is a function that throws. (That the route reaches the turn hook is

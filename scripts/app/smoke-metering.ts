@@ -291,7 +291,7 @@ async function main(): Promise<void> {
       check(near(turn.costUsd, 0.011), `$${turn.costUsd} in all`);
       check(
         near(turn.replyCostUsd, 0.01) && near(turn.sideCostUsd, 0.001),
-        'split into her reply and what it caused'
+        'split into the reply and what it caused'
       );
       check(turn.unpricedRows === 1, 'with the unpriced summary said so');
       check(

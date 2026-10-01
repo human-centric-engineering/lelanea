@@ -1,5 +1,5 @@
 /**
- * Her notes: what reaches the person they are about, and what never does
+ * The agent's notes: what reaches the person they are about, and what never does
  * (f-slots t-73).
  *
  * ## The assertions that fail when the behaviour is wrong (`fp6`)
@@ -115,7 +115,7 @@ describe('what a person is shown', () => {
     ]);
   });
 
-  it('keeps a slug she invented apart from the taxonomy', async () => {
+  it('keeps a slug the agent invented apart from the taxonomy', async () => {
     world.values.push(
       value(ME, 'family_communication', { value: 'has not spoken to his brother' })
     );
@@ -207,13 +207,13 @@ describe('what a person is shown', () => {
     expect(note).toMatchObject({
       confidence: 6,
       sourceType: 'inferred',
-      reasoningNote: 'She put this together from what was said.',
+      reasoningNote: 'Put together from what was said.',
       conversationId: 'conv-1',
     });
     expect(note?.capturedAt).toBeTypeOf('string');
   });
 
-  it('is empty, not broken, for someone she has learned nothing about', async () => {
+  it('is empty, not broken, for someone the agent has learned nothing about', async () => {
     world.values = [];
     await expect(getNotes(ME)).resolves.toEqual({
       notes: [],
@@ -347,7 +347,7 @@ describe('a correction is a new version, never an overwrite', () => {
     expect(JSON.stringify(world.values)).not.toContain('raw health prose');
   });
 
-  it('corrects a note under a slug she coined that the taxonomy rule would reject', async () => {
+  it('corrects a note under a slug the agent coined that the taxonomy rule would reject', async () => {
     // `fill_slot` accepts any slug of 1–120 characters, so a note can sit
     // under one with capitals and a hyphen. The first cut validated
     // corrections with the TAXONOMY rule, and a note like this offered

@@ -1,5 +1,5 @@
 /**
- * The leaf's event schema — every frame her seat sends parses, and the one
+ * The leaf's event schema — every frame the agent's seat sends parses, and the one
  * field Sunrise's parser would strip survives (§10 t-64).
  *
  * @see lib/app/conversation/events.ts
@@ -25,7 +25,7 @@ const resource = {
   version: '1',
 };
 
-describe('every frame her seat sends', () => {
+describe('every frame the agent’s seat sends', () => {
   it.each([
     ['start', { conversationId: 'c1', messageId: 'm1' }],
     ['content', { delta: 'hello ' }],

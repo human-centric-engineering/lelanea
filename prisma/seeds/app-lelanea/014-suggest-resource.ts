@@ -43,7 +43,7 @@
  *
  * @see lib/app/resources/suggest.ts — the handler, and the definition's twin
  * @see lib/app/agent/pins.ts — `RESOURCE_CAPABILITY_SLUGS`
- * @see .context/app/agent.md — "What she may reach for"
+ * @see .context/app/agent.md — "The four tools the guide holds"
  */
 
 import type { SeedUnit } from '@/prisma/runner';

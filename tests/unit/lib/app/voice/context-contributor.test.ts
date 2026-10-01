@@ -7,8 +7,8 @@
  * auto-wired seam in `lib/app/context-contributors.ts` → this leaf's contributor
  * → the overlay selector → the voice-document rule → the search service. A test
  * of `loadVoiceContext()` alone would pass with the seam unfilled, and an unfilled
- * seam is exactly the failure that would leave her sounding generic with every
- * piece of this built.
+ * seam is exactly the failure that would leave the replies sounding generic with
+ * every piece of this built.
  *
  * ## Asserted on the EMITTED BLOCK, not on the loader's return value
  *
@@ -122,7 +122,10 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
-/** Which agent each facilitation seat is bound to — hers unless a case says otherwise. */
+/**
+ * Which agent each facilitation seat is bound to — the corpus agent unless a case
+ * says otherwise.
+ */
 const seats = vi.hoisted(() => ({ boundTo: new Map<string, string>() }));
 vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
   getFacilitationBindingByRole: vi.fn(async (role: string) => {
@@ -215,7 +218,7 @@ import { searchKnowledge } from '@/lib/orchestration/knowledge/search';
 
 const searchKnowledgeMock = searchKnowledge as ReturnType<typeof vi.fn>;
 
-const HER_AGENT = 'agent-hers';
+const CORPUS_AGENT = 'agent-corpus';
 // The AUTHORED file, still the yardstick: it is what the rows are seeded from,
 // so asserting the emitted block against it proves the words survived the move
 // into the database rather than proving the fake agrees with itself (t-88).
@@ -228,7 +231,7 @@ function seedWorld(): void {
   world.searchError = null;
   world.agents = [
     {
-      id: HER_AGENT,
+      id: CORPUS_AGENT,
       slug: `${CORPUS_AGENT_SLUG_PREFIX}guide`,
       knowledgeAccessMode: 'restricted',
     },
@@ -437,7 +440,7 @@ describe('the voice context block', () => {
     const block = await buildContext(VOICE_CONTEXT_TYPE, KNOWN_SITUATION.situation);
     expect(block).toContain('There is a whisper that says there has to be more to this life.');
 
-    const access = await resolveAgentDocumentAccess(HER_AGENT);
+    const access = await resolveAgentDocumentAccess(CORPUS_AGENT);
     if (access.mode !== 'restricted') throw new Error(`expected restricted, got ${access.mode}`);
     // Non-empty first: "doc-voice is absent" is free on an empty set.
     expect(access.documentIds).toContain('doc-knowledge');
@@ -818,7 +821,7 @@ describe('a facilitation seat turn', () => {
   });
 
   it('a seat bound to another agent is not handed her voice', async () => {
-    // Population first: the same seat, bound to her, does carry the block.
+    // Population first: the same seat, bound to the corpus agent, does carry the block.
     expect(await systemPromptFor('onboarding')).toContain(CONTENT.exemplars.originLabel);
     clearContextCache();
     seats.boundTo.set('onboarding', 'someone-else');

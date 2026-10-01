@@ -13,27 +13,27 @@ import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
 /**
- * One of her notes, with the two things a person can do about it (t-73).
+ * One of the agent's notes, with the two things a person can do about it (t-73).
  *
- * ## Everything on the card is a claim she is making, and it says so
+ * ## Everything on the card is a claim the agent is making, and it says so
  *
  * §3.19: *"this is what you said, this is when, this is what I concluded and
- * how confident I am."* So a card carries, in order: what she was looking for,
- * what she concluded, how she came to it, how sure she is, and when — and then
+ * how confident I am."* So a card carries, in order: what the agent was looking
+ * for, what it concluded, how it came to it, how sure it is, and when — and then
  * the previous version where there is one. Nothing here is presented as the
  * person's own words unless `sourceType` says it was.
  *
  * ## A contradiction is a door, not an error (§3.12)
  *
  * The version before this one is shown **beside** it, in a quiet inset with an
- * invitation to take it up with her. Not a warning, not a tone, not a banner:
+ * invitation to take it up with the agent. Not a warning, not a tone, not a banner:
  * the app has no opinion about whether someone changed their mind, and dressing
  * a second reading as a problem would teach people that changing is a fault.
  *
  * ## Correcting, and the one note that cannot be corrected
  *
  * `correctable` is the server's answer and this component does not second-guess
- * it — a retired slot (she is no longer asking) and an Art. 9 slot (the reading
+ * it — a retired slot (the agent is no longer asking) and an Art. 9 slot (the reading
  * was never stored, so there is nothing to correct and a correction would put
  * it at rest) both come back false, with the route refusing the same two
  * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
@@ -89,7 +89,7 @@ export interface NoteCardProps {
  * the record rather than a view of it — which is the thing §3.19 is about.
  *
  * Adjectival rather than a clause: the meta line already opens with who made
- * the reading, so "Lelañea inferred it · Lelañea is not certain" says her name
+ * the reading, so "Lelañea inferred it · Lelañea is not certain" says the name
  * twice in nine words. A capitalised fragment reads as the second of three
  * facts, which is what it is.
  */
@@ -113,9 +113,9 @@ export function confidenceWords(confidence: number): string {
  * ## The top band says "Confident", and never more than that
  *
  * It said "As certain as it gets", which the owner read as arrogant, and it
- * was: the scale's ceiling is her own judgement, not a fact, and a phrase that
+ * was: the scale's ceiling is the agent's own judgement, not a fact, and a phrase that
  * closes the question invites nobody to correct it. Every rung is now a claim
- * she could be wrong about — *Confident · Fairly sure · Not certain · Only a
+ * the agent could be wrong about — *Confident · Fairly sure · Not certain · Only a
  * guess* — which is the register the rest of the panel is in and the posture
  * §3.12 asks for. Owner ruling, 21 September 2026.
  *
@@ -147,18 +147,18 @@ export type CertaintyBand = keyof typeof CERTAINTY;
  * The stored 1–10 to one of four bands. Out-of-range values clamp rather than
  * throw.
  *
- * ## The thresholds are hers, not the panel's
+ * ## The thresholds are the capture's, not the panel's
  *
- * They follow the bands her instructions tell her to WRITE in
+ * They follow the bands the agent's instructions tell it to WRITE in
  * (`VOICE_AGENT_SYSTEM_INSTRUCTIONS`; `.context/app/voice.md`): **8–10** when a
  * person said it plainly about themselves, **5–7** when they clearly meant it
- * without saying it outright, **1–4** when she inferred it. The first cut here
+ * without saying it outright, **1–4** when the agent inferred it. The first cut here
  * was 9 / 7 / 4, chosen without reading those — so a plainly-stated 8 showed as
  * "Fairly sure" in amber, and the panel undersold exactly the readings a person
  * had been most direct about. Found by `/pre-pr`'s docs-against-code step.
  *
  * The display is one band FINER than the capture at the bottom, and that is
- * deliberate: her "inferred" band splits into *Not certain* (3–4) and *Only a
+ * deliberate: the capture's "inferred" band splits into *Not certain* (3–4) and *Only a
  * guess* (1–2), because a 1 and a 4 are different amounts of evidence and the
  * owner asked for colour that tells them apart. The top two bands map one to
  * one, which is the part that has to agree.
@@ -174,8 +174,8 @@ export function certaintyBand(confidence: number): CertaintyBand {
  * Ten notches, the first `confidence` of them filled — a measure, not a meter.
  *
  * Notches rather than a continuous bar because the value is an integer out of
- * ten and a smooth fill implies a precision the scale does not have. She stored
- * "6", not "63%".
+ * ten and a smooth fill implies a precision the scale does not have. The agent
+ * stored "6", not "63%".
  *
  * **It sits directly above the words it measures**, in the aside. It used to
  * float between the reading and the meta line, a row of coloured dashes with
@@ -259,7 +259,7 @@ function excerpt(text: string): string {
  * A withheld note quotes **nothing**, because the value is a sentinel and the
  * question is the taxonomy's third-person wording: one would put
  * `<redacted: special_category>` in someone's own message and the other would
- * put "this person" in it. She has the conversation and knows what she asked.
+ * put "this person" in it. The agent has the conversation and knows what it asked.
  */
 export function askText(note: Note): string {
   if (note.withheld) {
@@ -315,7 +315,7 @@ function Aside({ note }: { note: Note }) {
  * ## One component, because two of them side by side have to agree
  *
  * The card carries two things that are *about* the note rather than part of
- * it: how Lelañea came to the reading, and what she had written before it.
+ * it: how Lelañea came to the reading, and what had been written before it.
  * They were built differently — one a bordered box, the other a washed inset
  * with a coloured edge, open always — and stacked they read as two unrelated
  * kinds of object at two different widths. The owner's note, and it was the
@@ -461,7 +461,7 @@ export function NoteCard({
   const [draft, setDraft] = useState(note.value);
   const [saving, setSaving] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  // Not `correct-${slotSlug}`. A slug she coins can be any string `fill_slot`
+  // Not `correct-${slotSlug}`. A slug the agent coins can be any string `fill_slot`
   // accepts — spaces included — and an id with a space in it silently breaks
   // the label's `htmlFor`, leaving the box unnamed to a screen reader.
   const correctionId = useId();
@@ -498,7 +498,7 @@ export function NoteCard({
    * MODEL: "how their body, energy and sleep stands for this person right now".
    * On a panel read by the person it is about, that is the app calling them
    * "they" — the owner's second correction. It has moved into the disclosure as
-   * a quotation of her wording, where being third-person is honest rather than
+   * a quotation of the taxonomy's wording, where being third-person is honest rather than
    * jarring, and its place is taken by the slug, which is short, neutral and
    * already the thing the note is filed under.
    */
@@ -664,7 +664,7 @@ export function NoteCard({
             <p>{note.reasoningNote}</p>
             {note.asking ? (
               /*
-                Her wording, quoted. Third person inside the quotation marks is
+                The taxonomy's wording, quoted. Third person inside the quotation marks is
                 the taxonomy speaking to a model, which is what it is — the
                 panel is not addressing the reader as "this person".
               */

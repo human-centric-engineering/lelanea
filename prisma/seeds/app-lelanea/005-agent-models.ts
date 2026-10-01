@@ -1,10 +1,12 @@
 /**
- * Pin the model she runs on — and keep the bare control on the same one.
+ * Pin the model the voice agent runs on — and keep the bare control on the
+ * same one.
  *
- * Before this runs her agent has no model of her own. Units 003 and 004 create
- * both agents with an empty provider and model, which the platform resolves at
- * turn time from this install's default chat model: so a change to a platform
- * default would change her voice overnight, and nobody would have decided it.
+ * Before this runs the voice agent has no model of its own. Units 003 and 004
+ * create both agents with an empty provider and model, which the platform
+ * resolves at turn time from this install's default chat model: so a change to
+ * a platform default would change how her voice is reproduced overnight, and
+ * nobody would have decided it.
  * The control floats the same way, which is the only reason the two arms of the
  * golden set have compared like with like so far.
  *
@@ -13,27 +15,28 @@
  *
  * ## Three kinds of row, three ownership rules (`fp4`)
  *
- * **Her provider and model are operator-owned.** This is the dev pin;
+ * **The voice agent's provider and model are operator-owned.** This is the dev pin;
  * production's model is chosen later by evaluation, and that has to be an admin
  * edit rather than a deploy. So the pin is written only where BOTH columns are
  * still blank — the state unit 003 creates — and a value somebody set is never
  * written over, including a half-set one (a provider with no model is an edit
  * too, and guessing the other half would be this seed deciding for them). Nor is
- * a blank she was RETURNED to: this unit leaves exactly one pin entry in her
- * timeline, so blank-with-that-entry is an admin's restore, and stays. The
+ * a blank the agent was RETURNED to: this unit leaves exactly one pin entry in
+ * its timeline, so blank-with-that-entry is an admin's restore, and stays. The
  * consequence, stated rather than discovered: editing `PINNED_MODEL` changes what
  * a fresh install gets and nothing on an install that already has a pin.
  *
- * **The control's provider and model FOLLOW HERS.** It is an instrument, not a
- * second decision: it exists to be asked the same questions on the same model.
- * So a blank control is set to whatever she is on once her row is settled — the
- * dev pin, or the model an admin chose for her — and never to the dev pin on its
- * own account. The first version of this unit pinned each arm independently,
- * and an install where an admin had already chosen her model got a control on a
- * DIFFERENT one, with a timeline entry saying "pinned": a guaranteed mismatch,
- * manufactured by the unit whose job is to prevent one. Caught by /code-review.
- * A control somebody has set is theirs and is left alone; if it differs from
- * hers, that is reported, and `assertArmsComparable` refuses the next run.
+ * **The control's provider and model FOLLOW THE VOICE AGENT'S.** It is an
+ * instrument, not a second decision: it exists to be asked the same questions
+ * on the same model. So a blank control is set to whatever the voice agent is
+ * on once its row is settled — the dev pin, or the model an admin chose for
+ * it — and never to the dev pin on its own account. The first version of this
+ * unit pinned each arm independently, and an install where an admin had already
+ * chosen the voice agent's model got a control on a DIFFERENT one, with a
+ * timeline entry saying "pinned": a guaranteed mismatch, manufactured by the
+ * unit whose job is to prevent one. Caught by /code-review. A control somebody
+ * has set is theirs and is left alone; if it differs from the voice agent's,
+ * that is reported, and `assertArmsComparable` refuses the next run.
  *
  * `fallbackProviders` is never written. The column defaults to empty and "no
  * fallback" is that default left alone; a non-empty list is an operator's, and is
@@ -56,35 +59,36 @@
  * and mirrors the route's legacy case: an agent with no history gets its blank
  * state recorded as v1 first. On a fresh database that is every time, because the
  * platform's `020-agent-initial-versions` sorts BEFORE this directory and so
- * never sees her.
+ * never sees the voice agent.
  *
- * What that does NOT do is take away the way back: restoring v1 returns her to
+ * What that does NOT do is take away the way back: restoring v1 returns it to
  * the floating default, as restoring any agent's first version returns it to how
  * it was created. That is an admin's deliberate act on operator-owned config,
  * and it now leaves an entry of its own.
  *
- * ## Whether there is anywhere for her turns to go
+ * ## Whether there is anywhere for the agent's turns to go
  *
  * An explicit provider is never re-picked and there is no fallback, so a pin to
- * a slug this install cannot reach ends every one of her turns. Two states look
- * alike from here and are not:
+ * a slug this install cannot reach ends every one of the agent's turns. Two
+ * states look alike from here and are not:
  *
  * - **No active provider at all** — a fresh install. `db:seed` always runs before
  *   setup, and the runner records a unit as applied once and does not come back,
  *   so waiting would mean never pinning. The pin is written, and the unit says
  *   loudly that nothing can serve it yet.
- * - **Active providers, none under the pinned slug** — an install that is already
- *   running, on Anthropic, or on OpenAI under a slug of its own. She is WORKING
- *   there, on the install default, and writing the pin would break her with a log
- *   line as the only notice. So the unit writes nothing to her and THROWS, naming
- *   the two ways out: not recorded as applied, tried again on the next seed, and
- *   she keeps answering in the meantime. The cost, accepted: the runner stops at
- *   a throw, so every unit that sorts after this one waits too — the error says
- *   so. The alternative is a unit recorded as applied that pinned nothing. The first version only warned. Caught by
+ * - **Active providers, none under the pinned slug** — an install that is
+ *   already running, on Anthropic, or on OpenAI under a slug of its own. The
+ *   agent is WORKING there, on the install default, and writing the pin would
+ *   break it with a log line as the only notice. So the unit writes nothing to
+ *   it and THROWS, naming the two ways out: not recorded as applied, tried
+ *   again on the next seed, and the agent keeps answering in the meantime. The
+ *   cost, accepted: the runner stops at a throw, so every unit that sorts after
+ *   this one waits too — the error says so. The alternative is a unit recorded
+ *   as applied that pinned nothing. The first version only warned. Caught by
  *   /code-review.
  *
- * Neither applies when somebody has already chosen her model — that provider is
- * theirs to have checked.
+ * Neither applies when somebody has already chosen the agent's model — that
+ * provider is theirs to have checked.
  *
  * ## Idempotent, safe on empty, no timestamp churn
  *
@@ -98,8 +102,8 @@
  * as missing — the slug is unique, so units 003/004 will not recreate it, and
  * unit 006 refuses it too.
  *
- * **The blank check is part of the write.** Her row is read at the top and
- * written later; an admin who chose her model in between would have had it
+ * **The blank check is part of the write.** The agent's row is read at the top
+ * and written later; an admin who chose its model in between would have had it
  * replaced by the dev pin. So the update carries the predicate itself —
  * `provider: ''` and `model: ''` — and a write that matches no row writes no
  * version either. Caught by /code-review.
@@ -214,7 +218,7 @@ async function writeBinding(
         data: {
           agentId: row.id,
           version,
-          // How she was a moment ago: everything as it is now, minus the two
+          // How the agent was a moment ago: everything as it is now, minus the two
           // columns the predicate proved were blank.
           snapshot: asSnapshotJson(
             buildAgentSnapshot({ ...fresh, provider: '', model: '' }, grants)
@@ -264,11 +268,11 @@ const unit: SeedUnit = {
       where: { slug: { in: [VOICE_AGENT_SLUG, VOICE_CONTROL_AGENT_SLUG] }, deletedAt: null },
       include: AGENT_INCLUDE,
     });
-    const hers = agents.find((agent) => agent.slug === VOICE_AGENT_SLUG);
+    const voiceAgent = agents.find((agent) => agent.slug === VOICE_AGENT_SLUG);
     const control = agents.find((agent) => agent.slug === VOICE_CONTROL_AGENT_SLUG);
-    if (!hers || !control) {
+    if (!voiceAgent || !control) {
       const missing = [
-        ...(hers ? [] : [VOICE_AGENT_SLUG]),
+        ...(voiceAgent ? [] : [VOICE_AGENT_SLUG]),
         ...(control ? [] : [VOICE_CONTROL_AGENT_SLUG]),
       ];
       // THROW, not return — see the header.
@@ -280,22 +284,23 @@ const unit: SeedUnit = {
       );
     }
 
-    // ---- Is there anywhere for her turns to go? Asked before ANY write --------
+    // ---- Is there anywhere for the agent's turns to go? Asked before ANY write
     // See the header for why "none at all" and "some, but not this one" get
-    // opposite answers. Only when this unit is about to choose for her.
+    // opposite answers. Only when this unit is about to choose for the agent.
     //
-    // "Blank" alone is not "never chosen". This unit writes exactly one pin entry
-    // into her timeline, so blank WITH that entry means somebody restored her to
-    // the floating default afterwards — an admin's act on operator-owned config,
-    // which the first version of this check re-pinned the next time a comment in
-    // a hashed file changed. Caught by /code-review.
+    // "Blank" alone is not "never chosen". This unit writes exactly one pin
+    // entry into the agent's timeline, so blank WITH that entry means somebody
+    // restored it to the floating default afterwards — an admin's act on
+    // operator-owned config, which the first version of this check re-pinned
+    // the next time a comment in a hashed file changed. Caught by /code-review.
     const wasPinnedBefore =
       (await prisma.aiAgentVersion.findFirst({
-        where: { agentId: hers.id, changeSummary: PIN_CHANGE_SUMMARY },
+        where: { agentId: voiceAgent.id, changeSummary: PIN_CHANGE_SUMMARY },
         select: { version: true },
       })) !== null;
-    const herIsBlank = hers.provider === '' && hers.model === '' && !wasPinnedBefore;
-    if (herIsBlank) {
+    const voiceAgentIsBlank =
+      voiceAgent.provider === '' && voiceAgent.model === '' && !wasPinnedBefore;
+    if (voiceAgentIsBlank) {
       const activeProviders = await prisma.aiProviderConfig.findMany({
         where: { isActive: true },
         select: { slug: true },
@@ -307,12 +312,12 @@ const unit: SeedUnit = {
           active: activeProviders.map((provider) => provider.slug),
         });
         throw new Error(
-          `She is to be pinned to the provider "${PINNED_PROVIDER}", and this install's active providers are ${activeProviders.map((provider) => `"${provider.slug}"`).join(', ')}. Writing the pin would end every one of her turns — there is no fallback, by design — so nothing was written and she is still answering on the install default. Either configure OpenAI under the slug "${PINNED_PROVIDER}", or choose her model in /admin/orchestration/agents (the control will follow it). Then run the seed again — this also stops every seed unit that sorts after this one, until it passes.`
+          `The voice agent is to be pinned to the provider "${PINNED_PROVIDER}", and this install's active providers are ${activeProviders.map((provider) => `"${provider.slug}"`).join(', ')}. Writing the pin would end every one of its turns — there is no fallback, by design — so nothing was written and it is still answering on the install default. Either configure OpenAI under the slug "${PINNED_PROVIDER}", or choose its model in /admin/orchestration/agents (the control will follow it). Then run the seed again — this also stops every seed unit that sorts after this one, until it passes.`
         );
       }
       if (!reachable) {
         logger.warn(
-          `She is being pinned to the provider "${PINNED_PROVIDER}", and this install has no active provider yet — normal on a fresh database, where seeding runs before setup. Until OpenAI is configured under that slug her turns and every golden-set run end with "provider unavailable": there is no fallback, by design.`
+          `The voice agent is being pinned to the provider "${PINNED_PROVIDER}", and this install has no active provider yet — normal on a fresh database, where seeding runs before setup. Until OpenAI is configured under that slug its turns and every golden-set run end with "provider unavailable": there is no fallback, by design.`
         );
       }
     }
@@ -358,7 +363,7 @@ const unit: SeedUnit = {
       }
     }
 
-    for (const agent of [hers, control]) {
+    for (const agent of [voiceAgent, control]) {
       if (agent.fallbackProviders.length > 0) {
         logger.warn(
           `${agent.slug} has fallback providers set. The ruling for §08 is no fallback — a second provider would be asked for the same model string. Left as the operator set it.`,
@@ -367,57 +372,65 @@ const unit: SeedUnit = {
       }
     }
 
-    // ---- Her pin: operator-owned, filled only when blank --------------------
-    let herBinding = { provider: hers.provider, model: hers.model };
-    if (herIsBlank) {
+    // ---- The voice agent's pin: operator-owned, filled only when blank -------
+    let voiceBinding = { provider: voiceAgent.provider, model: voiceAgent.model };
+    if (voiceAgentIsBlank) {
       const pinned = { provider: PINNED_PROVIDER, model: PINNED_MODEL };
-      if (await writeBinding(prisma, hers, pinned, PIN_CHANGE_SUMMARY, admin.id)) {
-        herBinding = pinned;
-        logger.info(`📌 Pinned ${hers.slug} to ${PINNED_PROVIDER} / ${PINNED_MODEL}`);
+      if (await writeBinding(prisma, voiceAgent, pinned, PIN_CHANGE_SUMMARY, admin.id)) {
+        voiceBinding = pinned;
+        logger.info(`📌 Pinned ${voiceAgent.slug} to ${PINNED_PROVIDER} / ${PINNED_MODEL}`);
       } else {
-        // Somebody chose her model between the read and the write. Theirs stands;
-        // re-read it so the control follows what is actually there.
+        // Somebody chose the agent's model between the read and the write.
+        // Theirs stands; re-read it so the control follows what is actually
+        // there.
         const current = await prisma.aiAgent.findUniqueOrThrow({
-          where: { id: hers.id },
+          where: { id: voiceAgent.id },
           select: { provider: true, model: true },
         });
         // The two columns, by name — never the row. What follows is written onto
         // the control, and a binding that carried anything else would go with it.
-        herBinding = { provider: current.provider, model: current.model };
-        logger.info(`⏭  ${hers.slug} was given a model while this ran — left alone`, herBinding);
+        voiceBinding = { provider: current.provider, model: current.model };
+        logger.info(
+          `⏭  ${voiceAgent.slug} was given a model while this ran — left alone`,
+          voiceBinding
+        );
       }
-    } else if (wasPinnedBefore && hers.provider === '' && hers.model === '') {
+    } else if (wasPinnedBefore && voiceAgent.provider === '' && voiceAgent.model === '') {
       logger.warn(
-        `${hers.slug} was pinned by this seed and has since been returned to the install default. That is somebody's decision and is left alone — she floats on whatever the default chat model is until a model is chosen for her in /admin/orchestration/agents.`
+        `${voiceAgent.slug} was pinned by this seed and has since been returned to the install default. That is somebody's decision and is left alone — it floats on whatever the default chat model is until a model is chosen for it in /admin/orchestration/agents.`
       );
     } else {
-      logger.info(`⏭  ${hers.slug} already has a model somebody chose — left alone`, herBinding);
+      logger.info(
+        `⏭  ${voiceAgent.slug} already has a model somebody chose — left alone`,
+        voiceBinding
+      );
     }
 
-    // ---- The control: follows her, whatever she is on -----------------------
-    const herBindingIsWhole = herBinding.provider !== '' && herBinding.model !== '';
+    // ---- The control: follows the voice agent, whatever it is on ------------
+    const voiceBindingIsWhole = voiceBinding.provider !== '' && voiceBinding.model !== '';
     const controlIsBlank = control.provider === '' && control.model === '';
     const controlMatches =
-      control.provider === herBinding.provider && control.model === herBinding.model;
+      control.provider === voiceBinding.provider && control.model === voiceBinding.model;
 
     if (controlMatches) {
-      logger.info(`⏭  ${control.slug} already on her model`);
+      logger.info(`⏭  ${control.slug} already on the voice agent's model`);
     } else if (
       controlIsBlank &&
-      herBindingIsWhole &&
-      (await writeBinding(prisma, control, herBinding, CONTROL_FOLLOWS_SUMMARY, admin.id))
+      voiceBindingIsWhole &&
+      (await writeBinding(prisma, control, voiceBinding, CONTROL_FOLLOWS_SUMMARY, admin.id))
     ) {
       logger.info(
-        `📌 Set ${control.slug} to her model, ${herBinding.provider} / ${herBinding.model}`
+        `📌 Set ${control.slug} to the voice agent's model, ${voiceBinding.provider} / ${voiceBinding.model}`
       );
     } else {
-      // Hers is half-set, or the control is somebody's and differs. Either way
-      // there is no value this unit may write, and the comparison will refuse to
-      // run until a person matches them — so say so here, where it is cheap.
+      // The voice agent's is half-set, or the control is somebody's and
+      // differs. Either way there is no value this unit may write, and the
+      // comparison will refuse to run until a person matches them — so say so
+      // here, where it is cheap.
       logger.warn(
         `The two arms of the voice comparison are on different models, and this seed will not choose between them. Match them in /admin/orchestration/agents, or the next golden-set run is refused.`,
         {
-          [hers.slug]: herBinding,
+          [voiceAgent.slug]: voiceBinding,
           [control.slug]: { provider: control.provider, model: control.model },
         }
       );

@@ -137,7 +137,7 @@ describe('the parts', () => {
   });
 
   it('names a capability it has no words for rather than hiding it', () => {
-    // A slug her seat cannot call today. `get_state` used to stand here and now
+    // A slug the agent's seat cannot call today. `get_state` used to stand here and now
     // has a sentence of its own, which is the whole point of this floor: the day
     // a tool is granted before its words are written, it is named rather than
     // hidden.

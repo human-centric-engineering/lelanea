@@ -256,9 +256,9 @@ describe('assembleTranscript', () => {
   });
 
   it('keeps the rows of a turn still running, and of one whose reply only failed to link', () => {
-    // Her final row is written a moment before the turn row links it; a reload
-    // in that window must not lose the reply. And `reply_not_linked` means she
-    // answered on the stream — the words are in the conversation.
+    // The agent's final row is written a moment before the turn row links it; a
+    // reload in that window must not lose the reply. And `reply_not_linked`
+    // means the agent answered on the stream — the words are in the conversation.
     const running = assemble(
       [user('u1', 'q', 1, 't1'), assistant('a1', 'partial…', 2)],
       [turn('t1', { status: 'running', userMessageId: 'u1', assistantMessageId: null })]
@@ -341,7 +341,7 @@ describe('assembleTranscript', () => {
       id: 'pass2',
       text: 'Let me look. She says…',
       // What the terminal row's traces say answered (t-66). A refused call
-      // is not something the turn did, and the tool row's content is not hers.
+      // is not something the turn did, and the tool row's content is not the reply.
       capabilities: ['search_knowledge_base'],
     });
     expect(JSON.stringify(entries)).not.toContain('a whole chunk');

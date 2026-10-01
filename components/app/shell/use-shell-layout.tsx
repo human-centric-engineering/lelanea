@@ -157,7 +157,7 @@ export interface ShellLayout {
    */
   setModulePlace: (place: ModulePlace | null) => void;
   /**
-   * How many turns have finished having written to her notes, this session.
+   * How many turns have finished having written to the agent's notes, this session.
    *
    * A **counter, not a timestamp and not a boolean.** The panel refreshes on
    * every change, so the value only has to differ from the last one it saw: a
@@ -203,7 +203,7 @@ export interface ShellLayout {
   noteTurnSettled: () => void;
   /**
    * Words the composer should be holding, put there by something outside the
-   * conversation — today, "Ask her about this" on a note. `null` when there is
+   * conversation — today, "Ask Lelañea about this" on a note. `null` when there is
    * nothing waiting, which is almost always.
    *
    * The conversation takes them by calling {@link takeAsk}, and the taking is

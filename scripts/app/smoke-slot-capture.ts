@@ -1,9 +1,9 @@
 /**
- * Smoke: she notes what a person tells her, once — through the real route, in a
- * running app, against the dev database (f-slots t-72).
+ * Smoke: the agent notes what a person tells it, once — through the real route,
+ * in a running app, against the dev database (f-slots t-72).
  *
  * **Why this exists rather than another unit test.** The chain under capture is
- * five things owned by three tiers meeting in one process: the grant her seed
+ * five things owned by three tiers meeting in one process: the grant the seed
  * wrote → Sunrise's dispatcher resolving that binding onto the execution context
  * → this leaf's `fill_slot` subclass being the handler the dispatcher actually
  * holds → Daybreak's exposure allowlist and value engine → a `capability_result`
@@ -20,41 +20,44 @@
  *
  * Flow:
  *   1. Sign up a throwaway member, verify it in the database, sign in.
- *   2. Tell her something the taxonomy covers, in plain words, with a turn id.
+ *   2. Tell the agent something the taxonomy covers, in plain words, with a
+ *      turn id.
  *   2b. Assert: a `framework_slot_value` for that person, carrying the
  *      conversation it came from, a confidence and a `sourceType`; the stream
- *      carried a `capability_result` for `fill_slot`; the account line says she
- *      added something.
+ *      carried a `capability_result` for `fill_slot`; the account line says the
+ *      agent added something.
  *   3. Write one slot TWICE under one turn id, through the real dispatcher
  *      against the real database. Assert one version, not two — the guard, on a
  *      real unique index rather than a fake one — and that a different turn id
  *      writing the same slug still appends, so the guard is keyed on the turn.
  *   3b. Assert a `special_category` slot masks its prose at rest. The taxonomy
  *      ships none (t-84), so the smoke defines its own for the run.
- *   4. Assert what she may NOT read back: `get_state` returns no `development`
- *      slot even with one written, because §12 says that is never a grade.
+ *   4. Assert what the agent may NOT read back: `get_state` returns no
+ *      `development` slot even with one written, because §12 says that is never
+ *      a grade.
  *   5. Remove the member (which cascades the turns, the guard rows and the slot
  *      values), the cost rows, and the smoke's own slot definition.
  *
- * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — she
- * must be public, seated, and hold both slot tools from
+ * Needs: a server (`npm run dev`), the seeds applied (`npm run db:seed` — the
+ * agent must be public, seated, and hold both slot tools from
  * `013-agent-slot-tools`), and a working OpenAI key under the `openai` provider
  * slug. Against the proxied `https://lelanea.test`, Node must trust the local CA
  * from the system store: `NODE_OPTIONS=--use-system-ca npm run
  * smoke:app-slot-capture`. It costs two real model calls — about $0.002.
  *
- * **It changes no shared row.** Unlike `smoke:app-turn` it never touches her
- * provider or the pause switch, so it is safe to run while somebody is using the
- * app.
+ * **It changes no shared row.** Unlike `smoke:app-turn` it never touches the
+ * agent's provider or the pause switch, so it is safe to run while somebody is
+ * using the app.
  *
  * Safety: every row is scoped by the `smoke-test-slots` prefix (the temporary
  * slot definition as `smoke_test_slots_art9`) or by this run's turn ids, and removed on every path, including a sweep at startup for anything
  * an interrupted run stranded. Never touches seed data, never deletes unscoped.
  *
  * **What it cannot prove, and what does:** that the MODEL chooses to capture the
- * right things at the right confidence. That is her voice and her judgement, and
- * it is measured by the golden set (`npm run smoke:app-voice`), re-run with these
- * tools granted. This script asserts the mechanism carries whatever she decides.
+ * right things at the right confidence. That is the agent's judgement, and it
+ * is measured by the golden set (`npm run smoke:app-voice`), re-run with these
+ * tools granted. This script asserts the mechanism carries whatever the agent
+ * decides.
  *
  * FORK NOTE — this runs the real `lib/app/bootstrap` seam (via `initApp()`), it
  * does not assert on it. Step 3 dispatches a capability in this process, so it
@@ -102,9 +105,9 @@ const ART9_SLUG = 'smoke_test_slots_art9';
  * instruction in it.
  *
  * Deliberately not phrased as a request to remember anything: an instruction in
- * user text is data, never a command (§8.6), and a message that ASKED her to
- * record something would prove the wrong thing — that she follows instructions
- * from the body, which is the property the voice layer forbids.
+ * user text is data, never a command (§8.6), and a message that ASKED the agent
+ * to record something would prove the wrong thing — that it follows
+ * instructions from the body, which is the property the voice layer forbids.
  */
 const MESSAGE =
   'I want to be honest with you about where I am. My brother and I have not spoken since our father died two years ago, and it sits under everything else.';
@@ -189,7 +192,7 @@ function answeredOnStream(frames: Frame[]): string[] {
   return answered;
 }
 
-/** Her slot values, newest first. */
+/** The member's slot values, newest first. */
 function slotValuesFor(userId: string) {
   return prisma.slotValue.findMany({
     where: { userId },
@@ -251,12 +254,12 @@ async function main(): Promise<void> {
   registerBuiltInCapabilities();
 
   try {
-    // ---- 0. The grant her seed wrote, read off the real database -------------
+    // ---- 0. The grant the seed wrote, read off the real database -------------
     //
     // Asked before anything is spent. A missing grant means `013` has not run
     // here, and every assertion below would fail for that reason with a message
     // about slot values instead.
-    console.log('0. Her grants');
+    console.log("0. The agent's grants");
     const agent = await prisma.aiAgent.findFirst({
       where: { slug: VOICE_AGENT_SLUG, deletedAt: null },
       select: {
@@ -280,9 +283,9 @@ async function main(): Promise<void> {
     const captureConfig = bound.get('fill_slot')?.customConfig;
     check(
       isRecord(captureConfig) && captureConfig.write === undefined,
-      'the write half of her allowlist is absent, so she may still mint a slot'
+      'the write half of the allowlist is absent, so the agent may still mint a slot'
     );
-    note(`she may read back: ${SLOT_EXPOSURE_CONFIG.read.groups.join(', ')}`);
+    note(`the agent may read back: ${SLOT_EXPOSURE_CONFIG.read.groups.join(', ')}`);
 
     // ---- 1. A throwaway member ---------------------------------------------
     const signup = await fetch(`${BASE_URL}/api/auth/sign-up/email`, {
@@ -307,7 +310,7 @@ async function main(): Promise<void> {
     });
     console.log(`\n  ✓ signed in as ${EMAIL}`);
 
-    // ---- 2. She is told something that matters ------------------------------
+    // ---- 2. The agent is told something that matters ------------------------
     console.log(`\n1. A turn that says something worth keeping (${TURN_CAPTURE})`);
     const first = await takeTurn(cookie, TURN_CAPTURE, MESSAGE);
     if (first.status !== 200) throw new Error(`turn failed: ${first.status} ${first.raw}`);
@@ -320,30 +323,30 @@ async function main(): Promise<void> {
 
     const answered = answeredOnStream(first.frames);
     note(`the stream reported: ${answered.join(', ') || '(no capability)'}`);
-    // NOT a hard assertion on the model's judgement — whether she reaches for
-    // the tool on this message is her decision, and the golden set is what
-    // measures it. What must hold is the implication: a value in the database
-    // and no frame, or a frame and no value, is the wiring being wrong.
+    // NOT a hard assertion on the model's judgement — whether the agent
+    // reaches for the tool on this message is its decision, and the golden set
+    // is what measures it. What must hold is the implication: a value in the
+    // database and no frame, or a frame and no value, is the wiring being wrong.
     const values = await slotValuesFor(user.id);
     const wroteOnStream = answered.filter((slug) => slug === 'fill_slot').length;
 
     if (values.length === 0) {
       throw new Error(
-        `she captured nothing from a message the taxonomy covers. The wiring may be right and her judgement wrong — check the server log for a fill_slot dispatch. If there is none, she was never told to note things: check VOICE_AGENT_SYSTEM_INSTRUCTIONS reached her row (npm run db:seed re-runs 003) and that the server restarted since. Stream reported: ${answered.join(', ') || 'nothing'}.`
+        `the agent captured nothing from a message the taxonomy covers. The wiring may be right and its judgement wrong — check the server log for a fill_slot dispatch. If there is none, it was never told to note things: check VOICE_AGENT_SYSTEM_INSTRUCTIONS reached its row (npm run db:seed re-runs 003) and that the server restarted since. Stream reported: ${answered.join(', ') || 'nothing'}.`
       );
     }
-    check(values.length > 0, `she noted ${values.length} thing(s)`);
+    check(values.length > 0, `the agent noted ${values.length} thing(s)`);
     check(
       wroteOnStream > 0,
       'the write reached the stream as a capability result, so the account can read it'
     );
     check(
       wroteOnStream === values.length,
-      `every write she made is on the stream (${wroteOnStream} frames, ${values.length} values)`
+      `every write the agent made is on the stream (${wroteOnStream} frames, ${values.length} values)`
     );
 
     // **The assertion the security review bought.** Before the taxonomy was put
-    // in front of her (`lib/app/slots/vocabulary.ts`) she invented
+    // in front of the agent (`lib/app/slots/vocabulary.ts`) it invented
     // `family_communication` here and used none of the 50 authored slots that
     // cover it — which also meant the `special_category` classification could
     // never fire, because masking reads the slot's DEFINITION and an invented
@@ -362,8 +365,8 @@ async function main(): Promise<void> {
     check(
       invented.length === 0,
       invented.length === 0
-        ? 'she filled authored slots, inventing none — she can see the taxonomy'
-        : `she invented ${invented.map((v) => v.slotSlug).join(', ')} — is the vocabulary block reaching her prompt?`
+        ? 'the agent filled authored slots, inventing none — it can see the taxonomy'
+        : `the agent invented ${invented.map((v) => v.slotSlug).join(', ')} — is the vocabulary block reaching its prompt?`
     );
 
     console.log('\n2. What each one carries');
@@ -408,7 +411,7 @@ async function main(): Promise<void> {
         turn: null,
       })
     );
-    note(`the account under her reply reads: "${line}"`);
+    note(`the account under the reply reads: "${line}"`);
     check(
       /what is understood about you/.test(line),
       'the account tells the person something was noted'
@@ -569,8 +572,8 @@ async function main(): Promise<void> {
       'and nothing of the disclosure survives in the stored value'
     );
 
-    // ---- 4. What she may not read back ------------------------------------
-    console.log('\n4. What the allowlist withholds from her');
+    // ---- 4. What the agent may not read back ------------------------------
+    console.log('\n4. What the allowlist withholds from the agent');
     const hiddenGroups = new Set(
       getSlotTaxonomy()
         .slots.filter((slot) => slot.visibility === 'hidden')
@@ -580,7 +583,7 @@ async function main(): Promise<void> {
     for (const group of hiddenGroups) {
       check(
         !SLOT_EXPOSURE_CONFIG.read.groups.includes(group),
-        `"${group}" is left out of her read allowlist — §12, never a grade`
+        `"${group}" is left out of the read allowlist — §12, never a grade`
       );
     }
 
@@ -622,7 +625,7 @@ async function main(): Promise<void> {
     check(readSlugs.length > 0, `get_state read ${readSlugs.length} slot(s) back`);
     check(
       !readSlugs.includes(hidden.slug),
-      `and ${hidden.slug} is not among them — she cannot read it back`
+      `and ${hidden.slug} is not among them — the agent cannot read it back`
     );
     check(
       readSlugs.includes(target.slug),
