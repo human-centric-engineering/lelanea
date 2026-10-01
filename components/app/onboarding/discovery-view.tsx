@@ -1,5 +1,6 @@
 import { Discovery, type DiscoveryQuestionProps } from '@/components/app/onboarding/discovery';
 import type { DiscoveryState } from '@/lib/app/onboarding/discovery-store';
+import { fallbackModuleName } from '@/lib/app/modules/definitions';
 
 /**
  * The discovery questions' server half: the person's state, read on the
@@ -7,8 +8,11 @@ import type { DiscoveryState } from '@/lib/app/onboarding/discovery-store';
  *
  * - `app`: on `/app`, after the reads. The first sitting asks; once the
  *   person has answered, skipped or left, a return offers the next question
- *   instead. Nothing once every question is answered or skipped.
- * - `module`: Onboarding's own area, always, with every question.
+ *   instead. Nothing once every question is answered or skipped. When the
+ *   set does not allow partial completion, a return asks again rather than
+ *   offering, and there is no way past a question but an answer.
+ * - `module`: the area of the module the set names, always, with every
+ *   question. Its path and name come from the set, not from here.
  *
  * The state comes in already read (`getDiscoveryState`), because both callers
  * need it for something else first: `/app` to know whether anything is left,
@@ -23,7 +27,10 @@ export function DiscoveryView({
   state: DiscoveryState;
   where: 'app' | 'module';
 }) {
+  if (state.set.questions.length === 0) return null;
   if (where === 'app' && state.position.finished) return null;
+
+  const partial = state.set.pacing.allowPartialCompletion;
 
   const questions: DiscoveryQuestionProps[] = state.set.questions.map((q) => ({
     id: q.id,
@@ -37,11 +44,15 @@ export function DiscoveryView({
   return (
     <Discovery
       userId={userId}
-      variant={where === 'module' ? 'module' : state.started ? 'offer' : 'first'}
-      preamble={state.set.preamble.text}
+      variant={where === 'module' ? 'module' : state.started && partial ? 'offer' : 'first'}
+      preamble={state.started ? null : state.set.preamble.text}
       questions={questions}
       answers={state.answers}
+      versions={state.versions}
       skipped={state.position.skipped}
+      partial={partial}
+      moduleHref={`/app/modules/${state.set.moduleSlug}`}
+      moduleName={fallbackModuleName(state.set.moduleSlug)}
     />
   );
 }

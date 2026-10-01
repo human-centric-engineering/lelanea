@@ -41,7 +41,12 @@ import { getJourneyMap } from '@/lib/app/journey/map';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
 import { FIRST_RUN_BEATS, pendingBeats } from '@/lib/app/onboarding/first-run';
-import { getFirstRunProgress, recordFirstRunBeat } from '@/lib/app/onboarding/first-run-store';
+import {
+  getFirstRunProgress,
+  readOnboardingProgress,
+  recordFirstRunBeat,
+} from '@/lib/app/onboarding/first-run-store';
+import { discoveryLedgerFrom } from '@/lib/app/onboarding/discovery';
 import {
   answerDiscoveryQuestion,
   getDiscoveryState,
@@ -207,20 +212,27 @@ async function main(): Promise<void> {
     const firstAnswer = first.conditionalFollowUp
       ? ({ words: 'A smoke answer.', branch: 'yes' } as const)
       : { words: 'A smoke answer.' };
+    const answered = await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer);
     check(
-      (await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer)) === 'written',
-      `${first.id} is answered`
+      answered.outcome === 'written' && answered.version === 1,
+      `${first.id} is answered, as version 1`
     );
     check(
-      (await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer)) === 'unchanged',
+      discoveryLedgerFrom(await readOnboardingProgress(user.id)).started,
+      'the first answer marks the first sitting started, on the node'
+    );
+    const again = await answerDiscoveryQuestion(user.id, fresh.set, first, firstAnswer);
+    check(
+      again.outcome === 'unchanged' && again.version === 1,
       'the same answer again writes nothing'
     );
+    const revised = await answerDiscoveryQuestion(user.id, fresh.set, first, {
+      ...firstAnswer,
+      words: 'A revised smoke answer.',
+    });
     check(
-      (await answerDiscoveryQuestion(user.id, fresh.set, first, {
-        ...firstAnswer,
-        words: 'A revised smoke answer.',
-      })) === 'written',
-      'a revision is written'
+      revised.outcome === 'written' && revised.version === 2,
+      'a revision is written, as version 2'
     );
     const values = await prisma.slotValue.findMany({
       where: { userId: user.id, slotSlug: first.slotSlug },
@@ -244,10 +256,12 @@ async function main(): Promise<void> {
     );
     if (second.core) {
       check(
-        (await answerDiscoveryQuestion(user.id, fresh.set, second, {
-          words: 'A smoke answer.',
-          ...(second.conditionalFollowUp && { branch: 'no' as const }),
-        })) === 'written',
+        (
+          await answerDiscoveryQuestion(user.id, fresh.set, second, {
+            words: 'A smoke answer.',
+            ...(second.conditionalFollowUp && { branch: 'no' as const }),
+          })
+        ).outcome === 'written',
         `${second.id} is core, so it is answered rather than skipped`
       );
     } else {

@@ -2,11 +2,13 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { z } from 'zod';
 
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import { FieldHelp } from '@/components/ui/field-help';
 import { APIClientError, apiClient } from '@/lib/api/client';
 import {
   MAX_ANSWER_LENGTH,
@@ -17,21 +19,22 @@ import {
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
+/** What an answer's response says, as far as the surface reads it. */
+const savedSchema = z.object({ version: z.number().int() });
+
 /** The API every answer, skip and leave goes through. */
 export const DISCOVERY_ROUTE = '/api/v1/app/onboarding/discovery';
-
-/** Onboarding's own area, where the questions can always be picked up. */
-export const ONBOARDING_MODULE_PATH = '/app/modules/onboarding';
 
 /**
  * The build's words around her questions: plain, and about the mechanics only.
  * No counts, so a question added or removed never leaves a sentence saying how
- * many there are.
+ * many there are. The module is named by the set, so the lines that name it
+ * take it.
  */
 export const DISCOVERY_COPY = {
   eyebrow: 'onboarding',
-  breakAway:
-    'You don’t have to answer them all at once. Break away whenever you like, and come back to them any time in Onboarding, on the map.',
+  breakAway: (module: string) =>
+    `You don’t have to answer them all at once. Break away whenever you like, and come back to them any time in ${module}, on the map.`,
   offer: 'When you’re ready, here is the next question.',
   answerIt: 'Answer it',
   notNow: 'Not now',
@@ -43,16 +46,19 @@ export const DISCOVERY_COPY = {
   no: 'No',
   yesOrNo: 'Your answer',
   answerLabel: 'Your answer',
+  answerHelpLabel: 'About your answer',
+  answerHelp: (module: string) =>
+    `There is no right length and no right answer: write what is true for you now. You can come back and change it any time in ${module}.`,
   notSaved: 'Not saved.',
   saveFailed: 'Your answer did not save. It is still here, so you can try again.',
   answered: 'answered',
   skipped: 'skipped',
   notYet: 'not yet',
   allBehind:
-    'Every question has been answered or skipped. You can go back to any of them, to answer or change what you wrote.',
+    'Every question has been answered. You can go back to any of them to change what you wrote.',
   skippedWaiting: 'Some questions are waiting for you, whenever you want to come back to them.',
   listLabel: 'The discovery questions',
-  goTo: 'Go to Onboarding',
+  goTo: (module: string) => `Go to ${module}`,
 } as const;
 
 /** One question as the surface shows it: only what it needs, all serialisable. */
@@ -68,21 +74,32 @@ export interface DiscoveryQuestionProps {
 
 /**
  * - `first`: the first sitting, straight after the reads on `/app`. The
- *   preamble, the line about breaking away, and the questions in turn.
+ *   preamble, the line about breaking away, and the questions in turn. Also
+ *   a return to `/app` when the set does not allow partial completion, then
+ *   with no preamble.
  * - `offer`: a later return to `/app`. The next question is offered, not
  *   asked, and "Not now" leaves the conversation.
- * - `module`: Onboarding's own area. Every question, with where each stands;
- *   any can be answered, revised, or picked up after a skip.
+ * - `module`: the module's own area. Every question, with where each stands;
+ *   any can be answered, revised, or picked up after a skip. Once none is
+ *   left unasked, it opens the first one still waiting after a skip.
  */
 export type DiscoveryVariant = 'first' | 'offer' | 'module';
 
 export interface DiscoveryProps {
   userId: string;
   variant: DiscoveryVariant;
-  preamble: string;
+  /** `null` once the person has started: the preamble has done its job. */
+  preamble: string | null;
   questions: readonly DiscoveryQuestionProps[];
   answers: Readonly<Record<string, DiscoveryAnswer>>;
+  /** The slot version of each answer in `answers`, by question id. */
+  versions: Readonly<Record<string, number>>;
   skipped: readonly string[];
+  /** The set allows partial completion: a question can be skipped, the set left. */
+  partial: boolean;
+  /** The area of the module that asks them, and its name. */
+  moduleHref: string;
+  moduleName: string;
 }
 
 /**
@@ -92,13 +109,21 @@ export interface DiscoveryProps {
  * restores it from the router's cache. So a remount would ask again a
  * question just answered, or offer again what was just declined, the way
  * t-103's stepper restarted (`first-run.tsx`). Held at module scope, which
- * lives as long as the page, and laid over what the server said. A reload
- * clears it and reads the server again, which by then has every write.
+ * lives until the app is next loaded (a reload, or a new visit), and laid
+ * over what the server said. A load clears it and reads the server again,
+ * which by then has every write.
+ *
+ * An answer saved here is laid over the server's only while it is the newer
+ * version: one revised since on another device wins, so it is never hidden,
+ * nor written back over, by the older words.
  */
 interface PageLocal {
-  answers: Record<string, DiscoveryAnswer>;
+  answers: Record<string, { answer: DiscoveryAnswer; version: number }>;
   skipped: Set<string>;
-  /** Left, or declined the offer: `/app` shows nothing more on this page. */
+  /**
+   * Left, or declined the offer: `/app` asks nothing more until the app is
+   * next loaded, so moving between `/app` and the modules does not ask again.
+   */
   away: boolean;
 }
 const local = new Map<string, PageLocal>();
@@ -137,12 +162,20 @@ export function Discovery({
   preamble,
   questions,
   answers: fromServer,
+  versions,
   skipped: skippedOnServer,
+  partial,
+  moduleHref,
+  moduleName,
 }: DiscoveryProps) {
-  const [answers, setAnswers] = React.useState<Record<string, DiscoveryAnswer>>(() => ({
-    ...fromServer,
-    ...localFor(userId).answers,
-  }));
+  const [answers, setAnswers] = React.useState<Record<string, DiscoveryAnswer>>(() => {
+    const merged = { ...fromServer };
+    for (const [id, saved] of Object.entries(localFor(userId).answers)) {
+      const onServer = versions[id];
+      if (onServer === undefined || saved.version > onServer) merged[id] = saved.answer;
+    }
+    return merged;
+  });
   const [skipped, setSkipped] = React.useState<ReadonlySet<string>>(
     () => new Set([...skippedOnServer, ...localFor(userId).skipped])
   );
@@ -157,7 +190,10 @@ export function Discovery({
   const clearance = useConsentBannerClearance();
 
   const position = discoveryPosition(questions, new Set(Object.keys(answers)), skipped);
-  const currentId = chosen ?? position.next;
+  // On `/app` the set ends at the last unasked question; in the module's own
+  // area the skipped ones are offered again, first to last.
+  const currentId =
+    chosen ?? position.next ?? (variant === 'module' ? (position.skipped[0] ?? null) : null);
   const current = questions.find((q) => q.id === currentId) ?? null;
 
   React.useEffect(() => {
@@ -171,8 +207,12 @@ export function Discovery({
     setAway(true);
   };
 
-  const onSaved = (question: DiscoveryQuestionProps, answer: DiscoveryAnswer): void => {
-    localFor(userId).answers[question.id] = answer;
+  const onSaved = (
+    question: DiscoveryQuestionProps,
+    answer: DiscoveryAnswer,
+    version: number
+  ): void => {
+    localFor(userId).answers[question.id] = { answer, version };
     moved.current = true;
     setMovedOn(true);
     setAnswers((prev) => ({ ...prev, [question.id]: answer }));
@@ -211,8 +251,13 @@ export function Discovery({
             question={current}
             existing={answers[current.id]}
             headingRef={heading}
+            moduleName={moduleName}
             onSaved={onSaved}
-            onSkip={answers[current.id] || current.core ? undefined : onSkip}
+            onSkip={
+              !partial || answers[current.id] || skipped.has(current.id) || current.core
+                ? undefined
+                : onSkip
+            }
           />
         ) : (
           <p className="text-foreground max-w-prose leading-[1.65]" data-testid="discovery-done">
@@ -251,13 +296,17 @@ export function Discovery({
           'px-6 pt-[clamp(28px,5vw,56px)] pb-16 max-[480px]:px-4'
         )}
       >
-        {variant === 'first' && !movedOn ? (
+        {variant === 'first' && preamble !== null && !movedOn ? (
           <header className="flex flex-col gap-4">
             <Eyebrow as="p">{DISCOVERY_COPY.eyebrow}</Eyebrow>
             <p className="brand-display text-xl leading-[1.5] text-[var(--color-heading)] italic">
               {preamble}
             </p>
-            <p className="text-muted-foreground max-w-prose">{DISCOVERY_COPY.breakAway}</p>
+            {partial ? (
+              <p className="text-muted-foreground max-w-prose">
+                {DISCOVERY_COPY.breakAway(moduleName)}
+              </p>
+            ) : null}
           </header>
         ) : null}
 
@@ -283,8 +332,8 @@ export function Discovery({
               </Button>
             </div>
             <p className="text-muted-foreground text-[13.5px]">
-              <Link href={ONBOARDING_MODULE_PATH} className="underline underline-offset-2">
-                {DISCOVERY_COPY.goTo}
+              <Link href={moduleHref} className="underline underline-offset-2">
+                {DISCOVERY_COPY.goTo(moduleName)}
               </Link>
             </p>
           </section>
@@ -294,9 +343,10 @@ export function Discovery({
             question={current}
             existing={answers[current.id]}
             headingRef={heading}
+            moduleName={moduleName}
             onSaved={onSaved}
-            onSkip={current.core ? undefined : onSkip}
-            onLeave={onLeave}
+            onSkip={!partial || current.core ? undefined : onSkip}
+            onLeave={partial ? onLeave : undefined}
           />
         )}
       </div>
@@ -309,6 +359,7 @@ function QuestionEditor({
   question,
   existing,
   headingRef,
+  moduleName,
   onSaved,
   onSkip,
   onLeave,
@@ -316,7 +367,8 @@ function QuestionEditor({
   question: DiscoveryQuestionProps;
   existing: DiscoveryAnswer | undefined;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
-  onSaved: (question: DiscoveryQuestionProps, answer: DiscoveryAnswer) => void;
+  moduleName: string;
+  onSaved: (question: DiscoveryQuestionProps, answer: DiscoveryAnswer, version: number) => void;
   onSkip?: (question: DiscoveryQuestionProps) => void;
   onLeave?: () => void;
 }) {
@@ -341,7 +393,7 @@ function QuestionEditor({
     setSaving(true);
     setRefusal(null);
     try {
-      await apiClient.post(DISCOVERY_ROUTE, {
+      const saved = await apiClient.post<unknown>(DISCOVERY_ROUTE, {
         body: {
           action: 'answer',
           questionId: question.id,
@@ -349,7 +401,9 @@ function QuestionEditor({
           ...(answer.branch ? { branch: answer.branch } : {}),
         },
       });
-      onSaved(question, answer);
+      // A response without a version still saved: 0 lets the server's copy win.
+      const parsed = savedSchema.safeParse(saved);
+      onSaved(question, answer, parsed.success ? parsed.data.version : 0);
     } catch (caught) {
       logger.warn('Discovery answer did not save', {
         questionId: question.id,
@@ -413,12 +467,17 @@ function QuestionEditor({
 
       {!followUp || prompt ? (
         <div className="flex flex-col gap-2">
-          <label
-            htmlFor={boxId}
-            className={cn(prompt ? 'text-foreground text-[15px] font-medium' : 'sr-only')}
-          >
-            {prompt ?? DISCOVERY_COPY.answerLabel}
-          </label>
+          <span className="flex items-center gap-2">
+            <label htmlFor={boxId} className="text-foreground text-[15px] font-medium">
+              {prompt ?? DISCOVERY_COPY.answerLabel}
+            </label>
+            <FieldHelp
+              ariaLabel={DISCOVERY_COPY.answerHelpLabel}
+              title={DISCOVERY_COPY.answerHelpLabel}
+            >
+              {DISCOVERY_COPY.answerHelp(moduleName)}
+            </FieldHelp>
+          </span>
           <textarea
             id={boxId}
             value={words}

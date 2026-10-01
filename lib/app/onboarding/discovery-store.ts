@@ -6,7 +6,8 @@
  *   with the onboarding module's provenance. A revision appends a version; an
  *   answer identical to the current one writes nothing.
  * - **Skips and the first sitting** are beats on the onboarding node, through
- *   `recordNodeProgress`, as the first run's are. With no journey yet there is
+ *   `recordNodeProgress`, as the first run's are. The first sitting is marked
+ *   started by the first answer, skip or leave, once. With no journey yet there is
  *   no node to record on: the write answers `failed` and the person's place is
  *   only lost for that skip, which comes back on their next visit. The shell
  *   layout's `ensureJourneyStarted` starts the journey on the next entry.
@@ -38,12 +39,19 @@ import {
 } from '@/lib/app/onboarding/discovery-slots';
 import { readOnboardingProgress } from '@/lib/app/onboarding/first-run-store';
 import { logger } from '@/lib/logging';
+import { isRecord } from '@/lib/utils';
 
 /** Everything the questions surface needs, for one person, from server state alone. */
 export interface DiscoveryState {
   set: DiscoverySetToAsk;
   /** The current answers to questions in the set, by question id. */
   answers: Record<string, DiscoveryAnswer>;
+  /**
+   * The slot version each current answer is, by question id. The surface
+   * keeps an answer it saved only while it is newer than the server's, so a
+   * revision made on another device is never hidden by an older one here.
+   */
+  versions: Record<string, number>;
   position: DiscoveryPosition;
   /** The person has been through a first sitting: answered, skipped or left. */
   started: boolean;
@@ -52,10 +60,14 @@ export interface DiscoveryState {
 /**
  * The person's discovery state, or `null` when it could not be read (logged).
  * The shell renders nothing on `null` rather than asking again from the start.
+ * `preloaded` is the set when the caller has already read it.
  */
-export async function getDiscoveryState(userId: string): Promise<DiscoveryState | null> {
+export async function getDiscoveryState(
+  userId: string,
+  preloaded?: DiscoverySetToAsk
+): Promise<DiscoveryState | null> {
   try {
-    const set = await getDiscoverySet();
+    const set = preloaded ?? (await getDiscoverySet());
     const ids = set.questions.map((q) => q.id);
     const [heads, progress] = await Promise.all([
       // `getSlotHeads` reads every head for an empty list, so never pass one.
@@ -67,15 +79,19 @@ export async function getDiscoveryState(userId: string): Promise<DiscoveryState 
     const ledger = discoveryLedgerFrom(progress);
 
     const answers: Record<string, DiscoveryAnswer> = {};
+    const versions: Record<string, number> = {};
     for (const question of set.questions) {
       const head = heads.find((h) => h.slotSlug === question.slotSlug);
-      if (head) answers[question.id] = readAnswer(head.value, !!question.conditionalFollowUp);
+      if (!head) continue;
+      answers[question.id] = readAnswer(head.value, !!question.conditionalFollowUp);
+      versions[question.id] = head.version;
     }
     const answered = new Set(Object.keys(answers));
     const position = discoveryPosition(set.questions, answered, new Set(ledger.skipped));
     return {
       set,
       answers,
+      versions,
       position,
       started: ledger.started || answered.size > 0 || ledger.skipped.length > 0,
     };
@@ -85,12 +101,15 @@ export async function getDiscoveryState(userId: string): Promise<DiscoveryState 
   }
 }
 
-/** What {@link answerDiscoveryQuestion} did. */
-export type AnswerOutcome = 'written' | 'unchanged';
+/** What {@link answerDiscoveryQuestion} did, and the slot version that now holds the answer. */
+export interface AnswerResult {
+  outcome: 'written' | 'unchanged';
+  version: number;
+}
 
 /** Daybreak's `(userId, slotSlug, version)` backstop, hit by a racing save. */
 function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  return isRecord(error) && error.code === 'P2002';
 }
 
 /**
@@ -100,24 +119,29 @@ function isUniqueViolation(error: unknown): boolean {
  *
  * Two saves racing on one question both compute the same next version and
  * the loser hits Daybreak's unique backstop. It is retried once, against the
- * fresh head, so a double-submit lands rather than erroring.
+ * fresh head, so a double-submit lands rather than erroring, and lands as
+ * `unchanged` when the winner wrote the same words.
+ *
+ * A written answer also marks the first sitting started (never throws).
  */
 export async function answerDiscoveryQuestion(
   userId: string,
   set: Pick<DiscoverySetToAsk, 'moduleSlug'>,
   question: Pick<DiscoveryQuestionToAsk, 'id' | 'slotSlug'>,
-  answer: DiscoveryAnswer
-): Promise<AnswerOutcome> {
+  answer: DiscoveryAnswer,
+  retried = false
+): Promise<AnswerResult> {
   const value = answerValue(answer);
   const [head] = await getSlotHeads(userId, { slotSlugs: [question.slotSlug] });
-  if (head?.value === value) return 'unchanged';
+  if (head?.value === value) return { outcome: 'unchanged', version: head.version };
 
   const provenance: SlotValueProvenance = {
     moduleSlug: set.moduleSlug,
     nodeKey: ONBOARDING_NODE_KEY,
   };
-  const write = () =>
-    appendSlotValue({
+  let written: { version: number };
+  try {
+    written = await appendSlotValue({
       userId,
       slotSlug: question.slotSlug,
       value,
@@ -128,13 +152,12 @@ export async function answerDiscoveryQuestion(
       reasoningNote: `The person's own answer to discovery question ${question.id}, written in onboarding.`,
       provenance,
     });
-  try {
-    await write();
   } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
-    await write();
+    if (retried || !isUniqueViolation(error)) throw error;
+    return answerDiscoveryQuestion(userId, set, question, answer, true);
   }
-  return 'written';
+  await markDiscoveryStarted(userId, { action: 'answer', questionId: question.id });
+  return { outcome: 'written', version: written.version };
 }
 
 /** What a beat on the onboarding node did. */
@@ -167,12 +190,36 @@ async function recordBeat(
   }
 }
 
-/** Record that the person skipped `questionId`. It stays unanswered. Never throws. */
-export function skipDiscoveryQuestion(
+/**
+ * Mark the first sitting started, once: the time kept is the person's first
+ * answer, skip or leave. Held on the node rather than derived from answers,
+ * so it survives a change to the Core Set that takes those questions out of
+ * the set. Never throws.
+ */
+async function markDiscoveryStarted(
+  userId: string,
+  context: Record<string, unknown>
+): Promise<DiscoveryBeatOutcome> {
+  try {
+    if (discoveryLedgerFrom(await readOnboardingProgress(userId)).started) return 'recorded';
+  } catch (error) {
+    logger.error('Discovery ledger could not be read', error, { userId, ...context });
+    return 'failed';
+  }
+  return recordBeat(userId, DISCOVERY_STARTED_KEY, context);
+}
+
+/**
+ * Record that the person skipped `questionId`. It stays unanswered. Also marks
+ * the first sitting started. Never throws.
+ */
+export async function skipDiscoveryQuestion(
   userId: string,
   questionId: string
 ): Promise<DiscoveryBeatOutcome> {
-  return recordBeat(userId, skippedKeyFor(questionId), { questionId });
+  const outcome = await recordBeat(userId, skippedKeyFor(questionId), { questionId });
+  if (outcome === 'recorded') await markDiscoveryStarted(userId, { action: 'skip', questionId });
+  return outcome;
 }
 
 /**
@@ -180,13 +227,6 @@ export function skipDiscoveryQuestion(
  * sitting: from then on `/app` offers the next question rather than asking it.
  * Recorded once. Never throws.
  */
-export async function leaveDiscovery(userId: string): Promise<DiscoveryBeatOutcome> {
-  try {
-    // Once: the time kept is when the first sitting ended.
-    if (discoveryLedgerFrom(await readOnboardingProgress(userId)).started) return 'recorded';
-  } catch (error) {
-    logger.error('Discovery ledger could not be read', error, { userId, action: 'leave' });
-    return 'failed';
-  }
-  return recordBeat(userId, DISCOVERY_STARTED_KEY, { action: 'leave' });
+export function leaveDiscovery(userId: string): Promise<DiscoveryBeatOutcome> {
+  return markDiscoveryStarted(userId, { action: 'leave' });
 }

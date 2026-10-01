@@ -139,7 +139,7 @@ describe('answerDiscoveryQuestion', () => {
   it('writes the answer as the slot value, with onboarding provenance, as the person', async () => {
     await expect(
       answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'My ego is loud.' })
-    ).resolves.toBe('written');
+    ).resolves.toEqual({ outcome: 'written', version: 1 });
 
     expect(mocks.appendSlotValue).toHaveBeenCalledWith({
       userId: USER,
@@ -169,7 +169,7 @@ describe('answerDiscoveryQuestion', () => {
     await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
     await expect(
       answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' })
-    ).resolves.toBe('unchanged');
+    ).resolves.toEqual({ outcome: 'unchanged', version: 1 });
     expect(mocks.appendSlotValue).toHaveBeenCalledTimes(1);
   });
 
@@ -188,7 +188,28 @@ describe('answerDiscoveryQuestion', () => {
     );
     await expect(
       answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Raced.' })
-    ).resolves.toBe('written');
+    ).resolves.toEqual({ outcome: 'written', version: 1 });
+    expect(mocks.appendSlotValue).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes nothing on the retry when the racing save wrote the same words', async () => {
+    mocks.appendSlotValue.mockImplementationOnce(async (input) => {
+      // The winner lands first, then this save hits the unique backstop.
+      await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: input.value });
+      throw Object.assign(new Error('unique'), { code: 'P2002' });
+    });
+    await expect(
+      answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Twice.' })
+    ).resolves.toEqual({ outcome: 'unchanged', version: 1 });
+    expect(rows.map((r) => [r.value, r.version])).toEqual([['Twice.', 1]]);
+  });
+
+  it('throws when the retry loses the race too', async () => {
+    const unique = () => Object.assign(new Error('unique'), { code: 'P2002' });
+    mocks.appendSlotValue.mockRejectedValueOnce(unique()).mockRejectedValueOnce(unique());
+    await expect(
+      answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Raced.' })
+    ).rejects.toThrow('unique');
     expect(mocks.appendSlotValue).toHaveBeenCalledTimes(2);
   });
 
@@ -268,6 +289,31 @@ describe('getDiscoveryState: resuming from server state alone', () => {
     expect((await getDiscoveryState(USER))?.position.next).toBe('q02');
   });
 
+  it('gives the slot version of each current answer', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' });
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One, again.' });
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[1], { words: 'Two.' });
+    expect((await getDiscoveryState(USER))?.versions).toEqual({ q01: 2, q02: 1 });
+  });
+
+  it('uses a set the caller already read, rather than reading it again', async () => {
+    const state = await getDiscoveryState(USER, setOf([ALL[1]]));
+    expect(mocks.getDiscoverySet).not.toHaveBeenCalled();
+    expect(state?.position.next).toBe('q02');
+  });
+
+  it('stays started after the Core Set takes the answered questions out of the set', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' });
+    await skipDiscoveryQuestion(USER, 'q03');
+
+    // Neither q01 nor q03 is core: switched on, the set has no trace of them.
+    mocks.getDiscoverySet.mockResolvedValue(setOf([ALL[1], ALL[3]], true));
+    const state = await getDiscoveryState(USER);
+    expect(state?.answers).toEqual({});
+    expect(state?.position.skipped).toEqual([]);
+    expect(state?.started).toBe(true);
+  });
+
   it('answers null, not a fresh start, when it cannot read', async () => {
     mocks.getSlotHeads.mockRejectedValue(new Error('db down'));
     await expect(getDiscoveryState(USER)).resolves.toBeNull();
@@ -290,6 +336,45 @@ describe('skipDiscoveryQuestion and leaveDiscovery', () => {
     node = null;
     await expect(skipDiscoveryQuestion(USER, 'q03')).resolves.toBe('failed');
     await expect(leaveDiscovery(USER)).resolves.toBe('failed');
+  });
+
+  it('marks the first sitting started on the first answer, and keeps that time', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' });
+    const first = node?.progress?.discovery_started_at;
+    expect(first).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
+
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[1], { words: 'Two.' });
+    await skipDiscoveryQuestion(USER, 'q03');
+    await leaveDiscovery(USER);
+    expect(node?.progress?.discovery_started_at).toBe(first);
+  });
+
+  it('marks the first sitting started on a skip', async () => {
+    await skipDiscoveryQuestion(USER, 'q03');
+    expect(node?.progress).toEqual({
+      'discovery_skipped_at:q03': expect.any(String),
+      discovery_started_at: expect.any(String),
+    });
+  });
+
+  it('does not mark started for an answer that wrote nothing', async () => {
+    rows.push({
+      slotSlug: 'discovery_q01',
+      value: 'Same.',
+      version: 1,
+      supersededAt: null,
+      provenance: {},
+    });
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
+    expect(mocks.recordNodeProgress).not.toHaveBeenCalled();
+  });
+
+  it('still saves the answer when the started mark cannot be recorded', async () => {
+    mocks.getJourney.mockRejectedValue(new Error('journey down'));
+    await expect(
+      answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' })
+    ).resolves.toEqual({ outcome: 'written', version: 1 });
+    expect(rows).toHaveLength(1);
   });
 
   it('marks the first sitting over, once', async () => {

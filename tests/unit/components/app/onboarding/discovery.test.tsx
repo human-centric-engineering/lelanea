@@ -83,14 +83,18 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof Discovery>> = 
     preamble: 'Before we go further, a few questions worth sitting with.',
     questions: FULL,
     answers: {},
+    versions: {},
     skipped: [],
+    partial: true,
+    moduleHref: '/app/modules/onboarding',
+    moduleName: 'Onboarding',
     ...overrides,
   };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  post.mockResolvedValue({ success: true });
+  post.mockResolvedValue({ version: 1 });
   clearance.current = 0;
   forgetDiscoveryPage();
 });
@@ -102,7 +106,7 @@ describe('variant "first"', () => {
     expect(
       screen.getByText('Before we go further, a few questions worth sitting with.')
     ).toBeInTheDocument();
-    expect(screen.getByText(DISCOVERY_COPY.breakAway)).toBeInTheDocument();
+    expect(screen.getByText(DISCOVERY_COPY.breakAway('Onboarding'))).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: Q1.text })).toBeInTheDocument();
     expect(screen.getByText(Q1.hint as string)).toBeInTheDocument();
   });
@@ -273,6 +277,33 @@ describe('variant "first"', () => {
   });
 });
 
+describe('a set that does not allow partial completion', () => {
+  it('offers no Skip, no Leave, and no break-away line', () => {
+    render(<Discovery {...baseProps({ partial: false })} />);
+    expect(screen.getByRole('heading', { level: 2, name: Q1.text })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.skip })).toBeNull();
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.leave })).toBeNull();
+    expect(screen.queryByText(DISCOVERY_COPY.breakAway('Onboarding'))).toBeNull();
+  });
+
+  it('offers no Skip in the module area either', () => {
+    render(<Discovery {...baseProps({ variant: 'module', partial: false })} />);
+    expect(screen.getByRole('heading', { level: 2, name: Q1.text })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.skip })).toBeNull();
+  });
+});
+
+describe('the answer box', () => {
+  it('has a visible label and a help popover naming the module to come back to', async () => {
+    const user = userEvent.setup();
+    render(<Discovery {...baseProps({ moduleName: 'Beginnings' })} />);
+
+    expect(screen.getByLabelText(DISCOVERY_COPY.answerLabel)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.answerHelpLabel }));
+    expect(await screen.findByText(DISCOVERY_COPY.answerHelp('Beginnings'))).toBeInTheDocument();
+  });
+});
+
 describe('variant "offer"', () => {
   function offerProps(overrides: Partial<React.ComponentProps<typeof Discovery>> = {}) {
     return baseProps({ variant: 'offer', ...overrides });
@@ -294,6 +325,16 @@ describe('variant "offer"', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: Q1.text })).toBeInTheDocument();
     expect(screen.getByLabelText(DISCOVERY_COPY.answerLabel)).toBeInTheDocument();
+  });
+
+  it('links to the module the set names, by its name', () => {
+    render(
+      <Discovery
+        {...offerProps({ moduleHref: '/app/modules/beginnings', moduleName: 'Beginnings' })}
+      />
+    );
+    const link = screen.getByRole('link', { name: DISCOVERY_COPY.goTo('Beginnings') });
+    expect(link).toHaveAttribute('href', '/app/modules/beginnings');
   });
 
   it('Not now renders nothing and posts nothing', async () => {
@@ -377,7 +418,7 @@ describe('variant "module"', () => {
     expect(screen.getByLabelText(Q3.followUp!.ifYes)).toHaveValue('it went badly');
   });
 
-  it('shows allBehind when every question is answered or skipped, with no editor', () => {
+  it('opens the first skipped question once none is left unasked, with no Skip on it', () => {
     render(
       <Discovery
         {...moduleProps({
@@ -387,8 +428,93 @@ describe('variant "module"', () => {
       />
     );
 
+    expect(screen.getByRole('heading', { level: 2, name: Q2.text })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.skip })).toBeNull();
+    expect(screen.queryByText(DISCOVERY_COPY.allBehind)).toBeNull();
+    expect(screen.getByText(DISCOVERY_COPY.skippedWaiting)).toBeInTheDocument();
+  });
+
+  it('moves to the next skipped question when one is answered', async () => {
+    const user = userEvent.setup();
+    render(
+      <Discovery
+        {...moduleProps({
+          answers: { q1: { words: 'a' }, q3: { words: 'b', branch: 'yes' } },
+          skipped: ['q2', 'q4'],
+        })}
+      />
+    );
+
+    await user.type(screen.getByLabelText(DISCOVERY_COPY.answerLabel), 'Quiet mornings.');
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.save }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 2, name: Q4.text })).toBeInTheDocument()
+    );
+  });
+
+  it('shows allBehind when every question is answered, with no editor', () => {
+    render(
+      <Discovery
+        {...moduleProps({
+          answers: {
+            q1: { words: 'a' },
+            q2: { words: 'b' },
+            q3: { words: 'c', branch: 'yes' },
+            q4: { words: 'd' },
+          },
+        })}
+      />
+    );
+
     expect(screen.getByText(DISCOVERY_COPY.allBehind)).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('shows a revision made elsewhere over an older one saved on this page', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValueOnce({ version: 1 });
+    const first = render(<Discovery {...moduleProps()} />);
+
+    await user.type(screen.getByLabelText(DISCOVERY_COPY.answerLabel), 'Written here.');
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.save }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    first.unmount();
+
+    // Revised since on another device: the server now has version 2.
+    render(
+      <Discovery
+        {...moduleProps({
+          answers: { q1: { words: 'Revised on the phone.' } },
+          versions: { q1: 2 },
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: new RegExp(Q1.text) }));
+    expect(screen.getByLabelText(DISCOVERY_COPY.answerLabel)).toHaveValue('Revised on the phone.');
+  });
+
+  it('keeps its own save over the server props it was rendered from', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValueOnce({ version: 2 });
+    const first = render(
+      <Discovery {...moduleProps({ answers: { q1: { words: 'Old.' } }, versions: { q1: 1 } })} />
+    );
+
+    await user.click(screen.getByRole('button', { name: new RegExp(Q1.text) }));
+    const box = screen.getByLabelText(DISCOVERY_COPY.answerLabel);
+    await user.clear(box);
+    await user.type(box, 'New.');
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.saveRevision }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    first.unmount();
+
+    // Back: the router cache restores the props from before the save.
+    render(
+      <Discovery {...moduleProps({ answers: { q1: { words: 'Old.' } }, versions: { q1: 1 } })} />
+    );
+    await user.click(screen.getByRole('button', { name: new RegExp(Q1.text) }));
+    expect(screen.getByLabelText(DISCOVERY_COPY.answerLabel)).toHaveValue('New.');
   });
 
   it('does not ask an answered question again on a remount, even with stale server props', async () => {
@@ -434,6 +560,7 @@ describe('DiscoveryView', () => {
         })),
       },
       answers: {},
+      versions: {},
       position: { next: 'q1', skipped: [], finished: false },
       started: false,
       ...overrides,
@@ -454,14 +581,14 @@ describe('DiscoveryView', () => {
   it('is the "first" variant on /app before the first sitting', () => {
     render(<DiscoveryView userId="user_1" where="app" state={stateFor({ started: false })} />);
     // "first" shows the preamble and the break-away line, and no offer card.
-    expect(screen.getByText(DISCOVERY_COPY.breakAway)).toBeInTheDocument();
+    expect(screen.getByText(DISCOVERY_COPY.breakAway('Onboarding'))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: DISCOVERY_COPY.answerIt })).toBeNull();
   });
 
   it('is the "offer" variant on /app after the first sitting', () => {
     render(<DiscoveryView userId="user_1" where="app" state={stateFor({ started: true })} />);
     expect(screen.getByRole('button', { name: DISCOVERY_COPY.answerIt })).toBeInTheDocument();
-    expect(screen.queryByText(DISCOVERY_COPY.breakAway)).toBeNull();
+    expect(screen.queryByText(DISCOVERY_COPY.breakAway('Onboarding'))).toBeNull();
   });
 
   it('is the "module" variant in Onboarding\'s own area, regardless of position', () => {
@@ -477,6 +604,34 @@ describe('DiscoveryView', () => {
       />
     );
     expect(screen.getByTestId('discovery-module')).toBeInTheDocument();
-    expect(screen.getByText(DISCOVERY_COPY.allBehind)).toBeInTheDocument();
+    // Nothing unasked is left, so the first skipped question is open.
+    expect(screen.getByRole('heading', { level: 2, name: Q2.text })).toBeInTheDocument();
+  });
+
+  it('asks again on a return, without the preamble, when partial completion is off', () => {
+    const state = stateFor({ started: true });
+    state.set.pacing.allowPartialCompletion = false;
+    render(<DiscoveryView userId="user_1" where="app" state={state} />);
+
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.answerIt })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: Q1.text })).toBeInTheDocument();
+    expect(screen.queryByText(state.set.preamble.text)).toBeNull();
+    expect(screen.queryByRole('button', { name: DISCOVERY_COPY.leave })).toBeNull();
+  });
+
+  it('links to the area of the module the set names', () => {
+    const state = stateFor({ started: true });
+    state.set.moduleSlug = 'curiosity-of-self';
+    render(<DiscoveryView userId="user_1" where="app" state={state} />);
+
+    const link = screen.getByRole('link', { name: DISCOVERY_COPY.goTo('Curiosity of self') });
+    expect(link).toHaveAttribute('href', '/app/modules/curiosity-of-self');
+  });
+
+  it('renders nothing for a set with no questions', () => {
+    const state = stateFor();
+    state.set.questions = [];
+    const { container } = render(<DiscoveryView userId="user_1" where="module" state={state} />);
+    expect(container.firstChild).toBeNull();
   });
 });

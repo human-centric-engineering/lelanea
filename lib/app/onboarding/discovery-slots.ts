@@ -328,3 +328,16 @@ export async function getDiscoverySet(): Promise<DiscoverySetToAsk> {
     questions,
   };
 }
+
+/**
+ * The slug of the module that asks the questions, from one narrow read, for a
+ * page that only needs to know whether it is that module. `null` when the set
+ * is not seeded.
+ */
+export async function getDiscoveryModuleSlug(): Promise<string | null> {
+  const set = await prisma.appQuestionSet.findFirst({
+    where: { slug: DISCOVERY_QUESTION_SET_ID },
+    select: { moduleSlug: true },
+  });
+  return set ? moduleSlugFromId(set.moduleSlug) : null;
+}

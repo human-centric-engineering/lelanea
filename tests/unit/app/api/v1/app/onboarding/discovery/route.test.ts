@@ -71,13 +71,18 @@ const Q04 = {
   core: false,
   conditionalFollowUp: { ifYes: 'Describe it.', ifNo: 'Imagine it.' },
 };
-const SET = { moduleSlug: 'onboarding', questions: [Q01, Q02, Q04] };
+const SET = {
+  moduleSlug: 'onboarding',
+  pacing: { rushDiscouraged: true, allowPartialCompletion: true, note: '' },
+  questions: [Q01, Q02, Q04],
+};
+const WHOLE_SET = { ...SET, pacing: { ...SET.pacing, allowPartialCompletion: false } };
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
   slots.getDiscoverySet.mockResolvedValue(SET);
-  store.answerDiscoveryQuestion.mockResolvedValue('written');
+  store.answerDiscoveryQuestion.mockResolvedValue({ outcome: 'written', version: 3 });
   store.skipDiscoveryQuestion.mockResolvedValue('recorded');
   store.leaveDiscovery.mockResolvedValue('recorded');
 });
@@ -91,7 +96,12 @@ describe('POST answer', () => {
   it('writes the caller’s answer to a question in their set', async () => {
     const { status, body } = await post({ action: 'answer', questionId: 'q01', answer: ' Loud. ' });
     expect(status).toBe(200);
-    expect(body.data).toEqual({ action: 'answer', questionId: 'q01', outcome: 'written' });
+    expect(body.data).toEqual({
+      action: 'answer',
+      questionId: 'q01',
+      outcome: 'written',
+      version: 3,
+    });
     expect(store.answerDiscoveryQuestion).toHaveBeenCalledWith('user_test', SET, Q01, {
       words: 'Loud.',
     });
@@ -166,12 +176,29 @@ describe('POST skip and leave', () => {
     expect(body.data).toMatchObject({ recorded: false });
   });
 
-  it('records leaving for the caller, without reading the set', async () => {
+  it('records leaving for the caller', async () => {
     const { status, body } = await post({ action: 'leave' });
     expect(status).toBe(200);
     expect(body.data).toEqual({ action: 'leave', recorded: true });
     expect(store.leaveDiscovery).toHaveBeenCalledWith('user_test');
-    expect(slots.getDiscoverySet).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a skip', { action: 'skip', questionId: 'q01' }],
+    ['a leave', { action: 'leave' }],
+  ])('refuses %s when the set does not allow partial completion', async (_label, request) => {
+    slots.getDiscoverySet.mockResolvedValue(WHOLE_SET);
+    const { status } = await post(request);
+    expect(status).toBe(400);
+    expect(store.skipDiscoveryQuestion).not.toHaveBeenCalled();
+    expect(store.leaveDiscovery).not.toHaveBeenCalled();
+  });
+
+  it('still accepts an answer when the set does not allow partial completion', async () => {
+    slots.getDiscoverySet.mockResolvedValue(WHOLE_SET);
+    const { status } = await post({ action: 'answer', questionId: 'q01', answer: 'x' });
+    expect(status).toBe(200);
+    expect(store.answerDiscoveryQuestion).toHaveBeenCalled();
   });
 });
 
@@ -204,6 +231,7 @@ describe('GET', () => {
     const state = {
       set: SET,
       answers: { q01: { words: 'x' } },
+      versions: { q01: 1 },
       position: { next: 'q02', skipped: [], finished: false },
       started: true,
     };

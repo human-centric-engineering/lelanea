@@ -16,8 +16,8 @@
  * itself is recorded where the first run records its beats, the onboarding
  * node's `progress`, one flat key per question (`discovery_skipped_at:<id>`),
  * because `recordNodeProgress` merges shallowly. So is the first sitting:
- * `discovery_started_at`, when the person first moves past a question or
- * leaves the set.
+ * `discovery_started_at`, recorded once, at the person's first answer, skip
+ * or leave.
  *
  * ## Where the person resumes
  *

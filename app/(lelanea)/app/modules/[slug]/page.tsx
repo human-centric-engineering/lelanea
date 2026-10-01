@@ -10,7 +10,9 @@ import type { JourneyStructure } from '@/lib/app/content';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
 import { getDiscoveryState } from '@/lib/app/onboarding/discovery-store';
+import { getDiscoveryModuleSlug } from '@/lib/app/onboarding/discovery-slots';
 import { getServerSession } from '@/lib/auth/utils';
+import { logger } from '@/lib/logging';
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -91,12 +93,25 @@ export default async function ModulePage({ params }: Params) {
  * one, or revises an answer, whatever `/app` is doing (t-104). `undefined`
  * for every other module, and when the state cannot be read: the module then
  * shows its placeholder, as it did before.
+ *
+ * Which module asks them is one narrow read, checked first, so every other
+ * module's page pays only that and never reads the person's answers.
  */
 async function discoveryFor(slug: string): Promise<React.ReactNode> {
+  let asks: string | null;
+  try {
+    asks = await getDiscoveryModuleSlug();
+  } catch (error) {
+    logger.error('Discovery module could not be read', error, { slug });
+    return undefined;
+  }
+  if (asks !== slug) return undefined;
   const session = await getServerSession();
   if (!session) return undefined;
   const state = await getDiscoveryState(session.user.id);
-  if (!state || state.set.moduleSlug !== slug) return undefined;
+  if (!state || state.set.moduleSlug !== slug || state.set.questions.length === 0) {
+    return undefined;
+  }
   return <DiscoveryView userId={session.user.id} state={state} where="module" />;
 }
 

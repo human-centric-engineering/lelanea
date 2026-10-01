@@ -80,16 +80,31 @@ person wants. Owner ruling, 30 Sept 2026, on where they live:
   back the conversation.
 - **A return to `/app` offers the next question; it does not ask it.** A
   card shows the question with **Answer it** and **Not now**. Not now leaves
-  the conversation for the rest of that page's life, and the next visit
-  offers again.
+  the conversation until the app is next loaded (a reload, or a new visit),
+  so moving between `/app` and the modules does not offer it again; the next
+  visit does.
 - **Onboarding's own area (`/app/modules/onboarding`) always has the whole
   set**, whatever `/app` is doing: continue, pick up a skipped question,
   revise an answer. The module the set names gets the questions in place of
-  its placeholder. Content that belongs to a module is visible in its area.
+  its placeholder, and the surface's link and copy name that module, read
+  from the set. Content that belongs to a module is visible in its area. Once
+  no question is left unasked, the area opens the first one still waiting
+  after a skip; only when every question is answered does it say so.
 - **When every question is answered or skipped, `/app` shows nothing more.**
   Skipped questions wait in Onboarding's area; they are not pushed again.
+- **When the set does not allow partial completion**
+  (`pacing.allowPartialCompletion` off in the admin's Questions panel), there
+  is no Skip, no Leave and no break-away line, and the route refuses a skip
+  or a leave. A return to `/app` asks the next question again rather than
+  offering it, without the preamble.
+- **The answer box** has a `<FieldHelp>`: there is no right length or right
+  answer, and it can be changed any time in the module's area.
 
-**How it is held.** Nothing lives only in the browser:
+**How it is held.** Nothing lives only in the browser. The surface keeps
+what it saved on the page, so a Back navigation that restores older server
+props does not ask again, but an answer it saved is laid over the server's
+only while it is the newer slot version: one revised since on another device
+wins.
 
 - **An answer** is the head value of its question's slot, appended through
   Daybreak's `appendSlotValue` with provenance `{ moduleSlug, nodeKey:
@@ -104,8 +119,10 @@ person wants. Owner ruling, 30 Sept 2026, on where they live:
   one flat key per question like the first run's. The question stays
   unanswered, never blank. **A core question cannot be skipped**: the surface
   offers no Skip, and the route refuses one.
-- **The first sitting ends** (`discovery_started_at`, recorded once) when the
-  person leaves. Any answer or skip also counts as started.
+- **The first sitting is marked started** (`discovery_started_at`, recorded
+  once) at the person's first answer, skip or leave. Held on the node rather
+  than derived from answers, so it survives a Core Set change that takes the
+  answered questions out of the set.
 - **Where a person resumes** is the first question in the **current** set
   that is neither answered nor skipped (owner ruling, 30 Sept 2026). It is
   computed from the slot heads and the node's `progress` on every render, so a
@@ -116,16 +133,22 @@ person wants. Owner ruling, 30 Sept 2026, on where they live:
 refused) takes `answer`, `skip` or `leave`. It refuses a question outside the
 caller's current set, an empty answer (skip it instead), an answer over
 `MAX_ANSWER_LENGTH`, a missing branch on a branching question, and a branch on
-one that does not branch. `GET` answers the caller's whole state. Answers are
-never logged.
+one that does not branch, and a skip or leave when the set does not allow
+partial completion. An answer's response carries the slot `version` that now
+holds it. `GET` answers the caller's whole state. Answers are never logged.
 
 **A skip or leave with no journey yet** answers `recorded: false`. The shell's
 `ensureJourneyStarted` starts the journey on the next entry, and the skipped
 question comes back once. Answers need no journey.
 
-**Proved on a real database** by `npm run smoke:app-onboarding`: an answer,
-its revision as version 2 with onboarding provenance, a skip and a leave on
-the node, and a fresh read resuming after them.
+**The module page reads narrowly.** Every module's page first asks which
+module the set names (`getDiscoveryModuleSlug`, one column); only that
+module's page reads the session and the person's answers.
+
+**Proved on a real database** by `npm run smoke:app-onboarding`: an answer
+that marks the sitting started, its revision as version 2 with onboarding
+provenance, a skip and a leave on the node, and a fresh read resuming after
+them.
 
 ## A discovery answer is a data slot
 

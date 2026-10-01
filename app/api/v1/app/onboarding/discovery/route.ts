@@ -21,6 +21,12 @@
  * - **A skip** leaves the question unanswered. A core question cannot be
  *   skipped (owner ruling, 25 Sept 2026).
  * - **Leave** ends the first sitting.
+ * - **When the set does not allow partial completion**
+ *   (`pacing.allowPartialCompletion` off in the admin), a skip and a leave
+ *   are both refused: every question is answered.
+ *
+ * An answer's response carries the slot `version` that now holds it, which
+ * the surface uses to tell its own save from a newer one made elsewhere.
  *
  * A skip or leave that could not be recorded (no journey yet) is a `200` with
  * `recorded: false`, as the first run's beats are: the shell's next entry
@@ -82,6 +88,13 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
       throw new ForbiddenError('Only a signed-in person can answer the discovery questions.');
     }
     const body = await validateRequestBody(request, discoveryActionSchema);
+    const set = await getDiscoverySet();
+
+    if (body.action !== 'answer' && !set.pacing.allowPartialCompletion) {
+      throw new ValidationError('These questions are answered in full, one after another.', {
+        action: ['Partial completion is not allowed for this set'],
+      });
+    }
 
     if (body.action === 'leave') {
       const outcome = await leaveDiscovery(userId);
@@ -89,7 +102,6 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
       return successResponse({ action: body.action, recorded: outcome === 'recorded' });
     }
 
-    const set = await getDiscoverySet();
     const question = set.questions.find((q) => q.id === body.questionId);
     if (!question) {
       throw new ValidationError('That question is not in your current set.', {
@@ -123,13 +135,13 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
         branch: ['Not asked on this question'],
       });
     }
-    const outcome = await answerDiscoveryQuestion(userId, set, question, {
+    const { outcome, version } = await answerDiscoveryQuestion(userId, set, question, {
       words: body.answer,
       ...(body.branch !== undefined && { branch: body.branch }),
     });
     // The words themselves are never logged.
     log.info('Discovery question answered', { userId, questionId: question.id, outcome });
-    return successResponse({ action: body.action, questionId: question.id, outcome });
+    return successResponse({ action: body.action, questionId: question.id, outcome, version });
   } catch (error) {
     return handleAPIError(error);
   }
