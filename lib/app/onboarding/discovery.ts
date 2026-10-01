@@ -177,3 +177,19 @@ export function discoveryPosition(
     finished: next === null,
   };
 }
+
+/** The minimum of a set `asksIn` needs. */
+export interface AskingSet {
+  moduleSlug: string;
+  questions: readonly unknown[];
+}
+
+/**
+ * Whether `set` asks any questions in the area of the module `slug`. Lives
+ * here rather than on the module page: the page sits in a route group the
+ * framework boundary check reads as core, where the set's field names are
+ * framework vocabulary.
+ */
+export function asksIn(set: AskingSet, slug: string): boolean {
+  return set.moduleSlug === slug && set.questions.length > 0;
+}

@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  asksIn,
   DISCOVERY_STARTED_KEY,
   MAX_ANSWER_LENGTH,
   answerValue,
@@ -121,5 +122,18 @@ describe('discoveryActionSchema', () => {
   it('accepts an answer at exactly the limit', () => {
     const body = { action: 'answer', questionId: 'q01', answer: 'x'.repeat(MAX_ANSWER_LENGTH) };
     expect(discoveryActionSchema.safeParse(body).success).toBe(true);
+  });
+});
+
+describe('asksIn', () => {
+  const set = { moduleSlug: 'onboarding', questions: [{ id: 'q1' }] };
+
+  it('is true only in the area of the module the set names', () => {
+    expect(asksIn(set, 'onboarding')).toBe(true);
+    expect(asksIn(set, 'values')).toBe(false);
+  });
+
+  it('is false when the set has no questions, even in its own module', () => {
+    expect(asksIn({ ...set, questions: [] }, 'onboarding')).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ import type { JourneyStructure } from '@/lib/app/content';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
 import { getDiscoveryState } from '@/lib/app/onboarding/discovery-store';
+import { asksIn } from '@/lib/app/onboarding/discovery';
 import { getDiscoveryModuleSlug } from '@/lib/app/onboarding/discovery-slots';
 import { getServerSession } from '@/lib/auth/utils';
 import { logger } from '@/lib/logging';
@@ -109,9 +110,7 @@ async function discoveryFor(slug: string): Promise<React.ReactNode> {
   const session = await getServerSession();
   if (!session) return undefined;
   const state = await getDiscoveryState(session.user.id);
-  if (!state || state.set.moduleSlug !== slug || state.set.questions.length === 0) {
-    return undefined;
-  }
+  if (!state || !asksIn(state.set, slug)) return undefined;
   return <DiscoveryView userId={session.user.id} state={state} where="module" />;
 }
 
