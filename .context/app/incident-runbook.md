@@ -83,14 +83,20 @@ Details: [`agent.md` → The pause switch](./agent.md#the-pause-switch).
 
 **`/admin/orchestration/agents` → the guide agent (`lelanea-guide`) →
 visibility `internal`.** The facilitation surface serves only a `public` agent
-(`resolveFacilitationSurface`), so both of its seats answer **404**. A re-seed
-leaves it narrowed: visibility is operator-owned, and seed `007` widens the
-agent only once ([`agent.md`](./agent.md#how-the-agent-is-reached)). Set it
-back to `public` to restore it.
+(`resolveFacilitationSurface`), so both of its seats answer **404** — and each
+person's transcript reads back **empty** while it is narrowed. Nothing is
+deleted; the history returns with the agent. A re-seed leaves it narrowed:
+visibility is operator-owned, and seed `007` widens the agent only once
+([`agent.md`](./agent.md#how-the-agent-is-reached)). Set it back to `public` to
+restore it.
 
-- **Not the Active switch.** The guide is a system agent, and the admin refuses
-  to deactivate one ("System agents cannot be deactivated"). The switch looks
-  like the lever and does nothing.
+- **A version restore reopens it.** Visibility is a versioned field, and
+  restoring an earlier version of the agent (the natural way to undo a tampered
+  prompt) writes back the `public` that version held. **Check visibility after
+  every restore** while the agent is meant to be off its seats.
+- **Not the Active switch.** The guide is a system agent: the admin shows its
+  Active switch disabled ("System agents cannot be deactivated"), and the API
+  refuses the change. Visibility is the lever.
 - **Prefer the pause.** A 404 ends a conversation silently. The pause tells the
   person, in plain words, what happened. Take the agent off a seat only when it
   must not be reachable at all: the agent compromised, or its prompt or tools
