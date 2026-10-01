@@ -161,6 +161,7 @@ export function MapDrawerBody() {
   // A move on the journey makes the fetched states stale. Declared before the
   // fetch effect, so on the same commit the flag is cleared before it is read.
   const seenMove = useRef(journeyMoved);
+  const latest = useRef(0);
   useEffect(() => {
     if (seenMove.current === journeyMoved) return;
     seenMove.current = journeyMoved;
@@ -170,14 +171,17 @@ export function MapDrawerBody() {
   useEffect(() => {
     if (!open || requested.current) return;
     requested.current = true;
+    // Only the latest request may land: one started before a move on the
+    // journey can answer after the one started for it, with the old states.
+    const request = ++latest.current;
     setLoad({ status: 'loading' });
     apiClient
       .get<JourneyMapView>(JOURNEY_MAP_ENDPOINT)
       .then((map) => {
-        if (mounted.current) setLoad({ status: 'loaded', map });
+        if (mounted.current && request === latest.current) setLoad({ status: 'loaded', map });
       })
       .catch((error: unknown) => {
-        if (!mounted.current) return;
+        if (!mounted.current || request !== latest.current) return;
         // A 404 is the honest pre-seed state, not a failure to report as one.
         const unpublished = error instanceof APIClientError && error.status === 404;
         // A failure is retried on the next open — "try again in a moment" is a

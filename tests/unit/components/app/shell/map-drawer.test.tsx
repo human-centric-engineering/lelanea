@@ -212,6 +212,42 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(rows()[0]).toHaveTextContent('complete');
   });
 
+  it('keeps the newer map when the read from before the move answers last (t-106 review)', async () => {
+    const withStates = (states: Record<string, JourneyMapView['modules'][number]['state']>) => {
+      const map = realMap();
+      return {
+        ...map,
+        modules: map.modules.map((m) => ({ ...m, state: states[m.slug] ?? m.state })),
+      };
+    };
+    let answerOld: (map: JourneyMapView) => void = () => undefined;
+    get.mockImplementationOnce(
+      () =>
+        new Promise<JourneyMapView>((resolve) => {
+          answerOld = resolve;
+        })
+    );
+    get.mockResolvedValueOnce(withStates({ onboarding: 'done', values: 'current' }));
+    mockPathname.current = '/app';
+    renderInShell(
+      <>
+        <ShellRail />
+        <Drawers />
+        <BeginJourney waiting={false} moduleName="Onboarding" />
+      </>
+    );
+    // The map is open and still loading when the journey is begun.
+    await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
+    await userEvent.click(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin }));
+    await waitFor(() => expect(rows()[1]).toHaveTextContent('in progress'));
+
+    answerOld(withStates({ onboarding: 'current' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rows()[0]).toHaveTextContent('complete');
+    expect(rows()[1]).toHaveTextContent('in progress');
+  });
+
   it('names each arc in its own ink, from a token, and lowercase', async () => {
     // The design names its tiers in their own colour. Both tables are tokens —
     // `TIER_INKS` is the one that carries TEXT and is measured for it; see the
