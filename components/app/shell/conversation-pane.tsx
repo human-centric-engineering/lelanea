@@ -118,51 +118,51 @@ export function ConversationPane() {
     onTurnSettled: noteTurnSettled,
   });
   const carousel = width === 'small' && wsOpen;
-  const stripRef = useRef<HTMLButtonElement | null>(null);
+  const stripRef = useRef<HTMLButtonElement>(null);
+  const sectionNode = useRef<HTMLElement>(null);
   const collapseRef = useRef<HTMLButtonElement>(null);
   /*
    * Folding unmounts the open pane, and with it whatever inside held focus — the
    * collapse button, the separator, the composer — so focus would fall to
    * `<body>` and the next Tab would start from the top of the page (t-118).
+   * Opening it again unmounts the strip the same way (t-123).
    *
-   * Asked once, of the section, rather than of each control that can fold it:
-   * did it hold focus as it went? React 19 runs a ref's cleanup BEFORE it removes
-   * the node, so `contains` still sees the truth. A fold begun from outside the
-   * pane — the menu toggle at `medium` — leaves focus where it was, and a click
-   * that never focused anything (Safari's buttons) hands nothing on.
+   * Asked once, of whichever surface is going, rather than of each control that
+   * can swap them: did it hold focus as it went? React 19 runs a ref's cleanup
+   * BEFORE it removes the node, so `contains` still sees the truth. A swap begun
+   * from outside the pane — the menu toggle at `medium` — leaves focus where it
+   * was, and a click that never focused anything (Safari's buttons) hands
+   * nothing on.
    */
-  const focusStripOnFold = useRef(false);
+  const handFocusOnSwap = useRef(false);
   const sectionRef = useCallback((node: HTMLElement | null) => {
+    sectionNode.current = node;
     if (!node) return;
     return () => {
-      focusStripOnFold.current = node.contains(document.activeElement);
+      handFocusOnSwap.current = node.contains(document.activeElement);
     };
   }, []);
-
-  /*
-   * And the other way round (t-123): opening the pane unmounts the strip, the
-   * same question is asked of it, and focus lands on the collapse button. Not
-   * the composer: Enter twice is then a round trip, and a tablet does not raise
-   * its keyboard over half the screen because someone reopened the pane. Where
-   * there is no collapse button — the window narrowed to `small` while the strip
-   * had focus — nothing is handed on.
-   */
-  const focusPaneOnOpen = useRef(false);
   const stripCallbackRef = useCallback((node: HTMLButtonElement | null) => {
     stripRef.current = node;
     if (!node) return;
     return () => {
-      stripRef.current = null;
-      focusPaneOnOpen.current = node.contains(document.activeElement);
+      handFocusOnSwap.current = node.contains(document.activeElement);
     };
   }, []);
 
-  // Before paint, so a screen reader never lands on `<body>` in between.
+  /*
+   * Folding lands on the strip. Opening lands on the collapse button — not the
+   * composer: Enter twice is then a round trip, and a tablet does not raise its
+   * keyboard over half the screen because someone reopened the pane. With no
+   * collapse button (the pane opened by leaving the workspace, or by narrowing
+   * to `small`), on the pane itself, so the next Tab is its first control.
+   *
+   * Before paint, so a screen reader never lands on `<body>` in between.
+   */
   useLayoutEffect(() => {
-    const handOff = chatSlim ? focusStripOnFold : focusPaneOnOpen;
-    if (!handOff.current) return;
-    handOff.current = false;
-    (chatSlim ? stripRef : collapseRef).current?.focus();
+    if (!handFocusOnSwap.current) return;
+    handFocusOnSwap.current = false;
+    (chatSlim ? stripRef.current : (collapseRef.current ?? sectionNode.current))?.focus();
   }, [chatSlim]);
 
   /**
@@ -187,6 +187,9 @@ export function ConversationPane() {
   return (
     <section
       ref={sectionRef}
+      // Focusable from script only: where opening the pane has no collapse
+      // button to land on, it lands here (t-123).
+      tabIndex={-1}
       aria-label="Conversation"
       // The carousel hides the off-screen pane from assistive technology; above
       // 900px both panes are genuinely on screen together.
@@ -201,7 +204,7 @@ export function ConversationPane() {
       data-pane="chat"
       style={inFlow ? { flexBasis: `${basis}px` } : undefined}
       className={cn(
-        'relative flex min-w-0 flex-col bg-[var(--color-background)]',
+        'relative flex min-w-0 flex-col bg-[var(--color-background)] outline-none',
         inFlow ? 'flex-none border-r border-[var(--color-divider)]' : 'flex-1',
         // `!carousel`, and this is not belt-and-braces: `cn` is `twMerge`, so a
         // later class in the same group REPLACES an earlier one. Emitted

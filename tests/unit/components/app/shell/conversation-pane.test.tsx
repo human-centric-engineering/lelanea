@@ -1106,6 +1106,24 @@ describe('opening the conversation again', () => {
     );
   });
 
+  it('lands on the pane itself when there is no collapse button to land on', async () => {
+    // Back to `/app` with the strip focused: the workspace closes, the pane
+    // opens to the full width, and the full-width view has no collapse button.
+    const user = userEvent.setup();
+    const { rerender } = renderInShell(<ConversationPane />, 'large');
+    screen.getByRole('button', { name: 'Collapse the conversation' }).focus();
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Open the conversation' })
+    );
+
+    mockPathname.current = '/app';
+    rerender(<ConversationPane />);
+
+    expect(screen.queryByRole('button', { name: 'Collapse the conversation' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Conversation' }));
+  });
+
   it('leaves focus alone when the pane was opened from outside it', async () => {
     function ToggleFromOutside() {
       const { chatSlim, setChatSlim } = useShellLayout();
