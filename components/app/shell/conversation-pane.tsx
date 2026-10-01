@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { Composer } from '@/components/app/conversation/composer';
 import { Transcript } from '@/components/app/conversation/transcript';
@@ -12,7 +12,6 @@ import { StatusLine } from '@/components/app/conversation/turns';
 import { useConversation } from '@/components/app/conversation/use-conversation';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 import {
-  CHAT_FOLD,
   CHAT_MAX,
   CHAT_MEDIUM,
   CHAT_MIN,
@@ -120,11 +119,29 @@ export function ConversationPane() {
   });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
-  const foldByKeyboard = useRef(false);
+  /*
+   * Folding unmounts the open pane, and with it whatever inside held focus — the
+   * collapse button, the separator, the composer — so focus would fall to
+   * `<body>` and the next Tab would start from the top of the page (t-118).
+   *
+   * Asked once, of the section, rather than of each control that can fold it:
+   * did it hold focus as it went? React 19 runs a ref's cleanup BEFORE it removes
+   * the node, so `contains` still sees the truth. A fold begun from outside the
+   * pane — the menu toggle at `medium` — leaves focus where it was, and a click
+   * that never focused anything (Safari's buttons) hands nothing on.
+   */
+  const focusStripOnFold = useRef(false);
+  const sectionRef = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    return () => {
+      focusStripOnFold.current = node.contains(document.activeElement);
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!chatSlim || !foldByKeyboard.current) return;
-    foldByKeyboard.current = false;
+  // Before paint, so a screen reader never lands on `<body>` in between.
+  useLayoutEffect(() => {
+    if (!chatSlim || !focusStripOnFold.current) return;
+    focusStripOnFold.current = false;
     stripRef.current?.focus();
   }, [chatSlim]);
 
@@ -149,6 +166,7 @@ export function ConversationPane() {
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Conversation"
       // The carousel hides the off-screen pane from assistive technology; above
       // 900px both panes are genuinely on screen together.
@@ -303,13 +321,7 @@ export function ConversationPane() {
         from; with the conversation filling the frame there is nothing to size
         it against. The prototype hides it the same way (`#app.no-ws`).
       */}
-      {wsOpen && width === 'large' ? (
-        <ResizeHandle
-          onFold={() => {
-            foldByKeyboard.current = true;
-          }}
-        />
-      ) : null}
+      {wsOpen && width === 'large' ? <ResizeHandle /> : null}
     </section>
   );
 }
@@ -366,7 +378,7 @@ const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void }>(functi
  * padding: a browser that refuses capture still tracks the pointer through the
  * move handler, so the drag degrades rather than dying.
  */
-function ResizeHandle({ onFold }: { onFold: () => void }) {
+function ResizeHandle() {
   const { chatW, setChatWidth } = useShellLayout();
   const pendingDetach = useRef<(() => void) | null>(null);
   useEffect(
@@ -456,15 +468,9 @@ function ResizeHandle({ onFold }: { onFold: () => void }) {
         event.preventDefault();
         const step = event.shiftKey ? STEP_SHIFT : STEP;
         const delta = event.key === 'ArrowLeft' ? -step : step;
-        const target = startFrom() + delta;
-
-        // Squeezing past the fold unmounts this very element — the pane takes
-        // its folded early return and the separator goes with it — so focus
-        // would land on `<body>` and a keyboard reader would be back at the top
-        // of the document with no idea the pane had collapsed. Hand focus to the
-        // strip, which is the control that brings it back.
-        if (target < CHAT_FOLD) onFold();
-        setChatWidth(target);
+        // Squeezing past the fold unmounts this very element; the pane hands
+        // focus to the strip, as it does for any fold that takes focus with it.
+        setChatWidth(startFrom() + delta);
       }}
       className={cn(
         'absolute top-0 -right-[3px] bottom-0 z-30 w-1.5 cursor-col-resize',
