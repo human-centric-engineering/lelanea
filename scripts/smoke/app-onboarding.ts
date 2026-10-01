@@ -14,10 +14,13 @@
  * row, and not replayed. Then the discovery questions (t-104): an answer
  * appended as a slot value with onboarding provenance, revised as a second
  * version, a skip and a leave on the same node, and a fresh read resuming
- * after them.
+ * after them. Then a real turn (t-105): an answer with a word worth listening
+ * for, and the facilitator seat asked to quote it, through the real context
+ * block and the real model — the wiring no unit test can prove.
  *
  * Needs a seeded database: the map published (`001-journey-map`) and the
- * gate's documents present. Skips (exit 0, says so) with no database, and fails
+ * gate's documents present, and a provider for her pinned model (step 8
+ * spends one small turn). Skips (exit 0, says so) with no database, and fails
  * with a clear message when the map is not published.
  *
  * Self-cleaning: creates one `smoke-app-onboarding-*` user and removes it and
@@ -56,8 +59,16 @@ import {
 import { recordNodeProgress } from '@/lib/framework/facilitation/journey/progress';
 import { NODE_STATE_STATUS } from '@/lib/framework/facilitation/journey/vocabulary';
 import { getPublishedMapVersion } from '@/lib/framework/facilitation/map/version-service';
+import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
+import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
+import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { drainStreamChat } from '@/lib/orchestration/evaluations/drain-stream-chat';
+import { runAsOrg } from '@/lib/tenancy/context';
+import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const PREFIX = 'smoke-app-onboarding';
+/** An answer with a word no reply would use by accident. */
+const MIRRORED_WORDS = 'On the lighthouse steps at dawn, before anyone needs me.';
 const stamp = Date.now();
 
 async function dbReachable(): Promise<boolean> {
@@ -84,6 +95,10 @@ async function cleanup(userId: string): Promise<void> {
   await prisma.userJourney.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.appAcknowledgement.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.slotValue.deleteMany({ where: { userId } }).catch(() => undefined);
+  // The real turn (step 8): its messages, its cost and its conversation.
+  await prisma.aiMessage.deleteMany({ where: { conversation: { userId } } }).catch(() => undefined);
+  await prisma.aiCostLog.deleteMany({ where: { userId } }).catch(() => undefined);
+  await prisma.aiConversation.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.user.deleteMany({ where: { id: userId } }).catch(() => undefined);
 }
 
@@ -283,6 +298,35 @@ async function main(): Promise<void> {
       (await getFirstRunProgress(user.id))?.initiationShown === true,
       'the first run’s beats survive the discovery beats on the same node'
     );
+
+    console.log('\n8. A real turn quotes the person back (t-105)');
+    const quoted = await answerDiscoveryQuestion(user.id, fresh.set, third, {
+      words: MIRRORED_WORDS,
+      ...(third.conditionalFollowUp && { branch: 'yes' as const }),
+    });
+    check(quoted.outcome === 'written', `${third.id} is answered with words to listen for`);
+    const turn = await runAsOrg(INSTALL_ORG_ID, () =>
+      drainStreamChat({
+        agentSlug: VOICE_AGENT_SLUG,
+        userId: user.id,
+        contextType: FACILITATION_CONTEXT_TYPE,
+        contextId: CONVERSATION_SEAT,
+        message:
+          'In the onboarding questions I wrote something about where I feel most like myself. What did I write? Quote my own words back to me.',
+      })
+    );
+    if (turn.errorCode) {
+      throw new Error(`the turn did not run: ${turn.errorCode} ${turn.errorMessage ?? ''}`);
+    }
+    console.log(`    the reply: ${turn.assistantText.replace(/\s+/g, ' ').slice(0, 240)}`);
+    check(
+      /lighthouse/i.test(turn.assistantText),
+      'the reply contains words from the person’s stored answer'
+    );
+    // The platform embeds the turn's messages and logs that cost after the
+    // stream ends, fire-and-forget. Let it land before the cleanup removes the
+    // conversation under it, or it logs a foreign-key failure that reads like ours.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     console.log('\n✓ smoke:app-onboarding passed');
   } finally {

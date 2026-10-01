@@ -150,6 +150,46 @@ that marks the sitting started, its revision as version 2 with onboarding
 provenance, a skip and a leave on the node, and a fresh read resuming after
 them.
 
+## The conversation mirrors the answers back (t-105)
+
+**Which seat.** While the discovery questions are ahead of a person, the
+conversation pane talks to the `onboarding` seat (register `first-meeting`).
+Once every question in the current set is answered or skipped, it talks to the
+`facilitator` seat. The shell layout reads it server-side
+(`lib/app/onboarding/conversation-seat.ts`) and hands it to
+`ShellLayoutProvider`. When the last question is answered in the workspace, the
+questions surface moves the pane on in the browser (`useOnboardingFinished`),
+because a layout is not re-rendered by moving between its pages. A state that
+could not be read gives the facilitator seat. Each seat has its own transcript.
+
+**The answers in the turn.** `lib/app/onboarding/answers-context.ts` puts the
+person's current answers into every facilitation turn on a seat bound to the
+voice agent, quoted line by line under their question. On the onboarding seat
+the framing is the phase's own: mirror their words, don't assess, never push
+the pace. After it, the answers are the baseline to quote from.
+
+- **One block per turn.** A request carries one context tuple, so the answers
+  are composed into `loadFacilitationVoiceContext` rather than registered as a
+  contributor of their own. Registering one would replace the voice block.
+- **Theirs only.** Read by the request's `userId`, which the facilitation route
+  sets from the session and `buildContext` keys its cache on. The admin
+  `voice` path carries none. A written answer drops the person's cached block,
+  so the next turn has the new words.
+- **Masked stays masked.** A head value that is Daybreak's redaction sentinel is
+  named as kept private, and nothing of it is supplied.
+- **Bounded.** 1,500 characters per answer, 6,000 across the block. Past that
+  the block says so and names `get_state` for the rest.
+
+**Proved on a real database and model** by `npm run smoke:app-onboarding`
+step 8: a stored answer, then a facilitator turn asked to quote it.
+
+**The golden set** has a `mirroring` kind. Its case puts the person's words in
+the prompt, because the comparison sends no context type. A fresh install gets
+it from the seed file. An install that already has the set adds a case of that
+kind on the Voice page (start a new version first if the current one has run).
+Until then, the editor refuses an edit that leaves no `mirroring` case, and
+says so.
+
 ## A discovery answer is a data slot
 
 Owner ruling at claim (journalled on §15): the questions behave like data slots.
