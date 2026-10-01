@@ -36,7 +36,7 @@ import {
   contentRetiredEndpoint,
 } from '@/lib/app/content/admin/endpoint';
 import type { ResourceAdminRow, ResourcesAdminView } from '@/lib/app/content/admin/resources';
-import { SUPPORTED_VIDEO_HOSTS } from '@/lib/app/content/video-hosts';
+import { SUPPORTED_VIDEO_HOSTS, VIDEO_LINK_EXAMPLES } from '@/lib/app/content/video-hosts';
 import { RESOURCE_KINDS, type ResourceKind } from '@/lib/app/content/resource-view';
 
 type Kind = ResourceKind;
@@ -206,7 +206,7 @@ function ResourceFields({
           label="Link"
           help={
             draft.kind === 'video'
-              ? `A ${SUPPORTED_VIDEO_HOSTS.join(' or ')} link, which plays in the page: https://www.youtube.com/watch?v=… or https://youtu.be/….`
+              ? `A ${SUPPORTED_VIDEO_HOSTS.join(' or ')} link, which plays in the page: ${VIDEO_LINK_EXAMPLES.join(' or ')}.`
               : 'Where it opens: an http or https address.'
           }
         >

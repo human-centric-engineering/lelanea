@@ -32,6 +32,8 @@ export function readResourcesFile(): ResourcesFile {
   const schema = buildResourcesFileSchema({
     moduleIds: new Set(JOURNEY_MODULES.map((module) => module.id)),
     documentIds: new Set(readFoundationalDocumentsFile().documents.map((d) => d.id)),
+    // Every video the seed writes is new, so each must play in the page (t-119).
+    requirePlayableVideos: true,
   });
   return schema.parse(rawResources);
 }

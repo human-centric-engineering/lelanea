@@ -55,11 +55,7 @@ import { z } from 'zod';
 
 import type { DeepReadonly } from '@/lib/app/content/journey-view';
 import type { ModuleTier } from '@/lib/app/content/schemas';
-import {
-  isPlayableVideoLink,
-  UNSUPPORTED_VIDEO_LINK_MESSAGE,
-  type VideoPlayer,
-} from '@/lib/app/content/video-hosts';
+import { videoLinkRefusal, type VideoPlayer } from '@/lib/app/content/video-hosts';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
 // ============================================================================
@@ -120,11 +116,13 @@ export const resourceIdSchema = z
 const linkSchema = z.url({ protocol: /^https?$/ });
 
 /**
- * A video or an audio piece as it is stored: a length as `m:ss`, and a link.
+ * A video or an audio piece: a length as `m:ss`, and a link.
  *
- * What every stored row is read back against. A video entered before t-119 may
- * have a link no host plays; it is still served, without a player, so it is
- * held to this and not to {@link videoSchema}.
+ * The shape every row is written and read with. Whether a video's link plays
+ * in the page is a separate rule, `videoLinkRefusal` (`video-hosts.ts`), applied
+ * where a link is set or changed: the admin's store, an import's plan, and the
+ * seed. A video entered before t-119 with a link no host plays still has this
+ * shape, so it is still served (with no player), exported and editable.
  */
 export const storedTimedSchema = z.strictObject({
   id: resourceIdSchema,
@@ -137,13 +135,8 @@ export const storedTimedSchema = z.strictObject({
   href: linkSchema,
 });
 
-/**
- * A video as it may be written: its link must be one a supported host plays in
- * the page (`video-hosts.ts`), so every video an admin or the seed adds plays.
- */
-export const videoSchema = storedTimedSchema.extend({
-  href: linkSchema.refine(isPlayableVideoLink, { message: UNSUPPORTED_VIDEO_LINK_MESSAGE }),
-});
+/** A video's shape. Its link's playability is `videoLinkRefusal`'s, where it is set. */
+export const videoSchema = storedTimedSchema;
 
 /** An audio piece: a length as `m:ss`, and a link. */
 export const audioSchema = storedTimedSchema;
@@ -215,6 +208,13 @@ const resourcesFileBase = z.strictObject({
 export function buildResourcesFileSchema(known: {
   moduleIds: ReadonlySet<string>;
   documentIds: ReadonlySet<string>;
+  /**
+   * Refuse a video whose link no host plays. The seed sets it: every video it
+   * writes is new. Export and import do not: an export must carry a video
+   * entered before t-119, and an import's plan holds only the links it sets or
+   * changes to the rule (`planResourcesImport`).
+   */
+  requirePlayableVideos?: boolean;
 }): z.ZodType<ResourcesFile> {
   const isKey = (key: string): boolean =>
     known.moduleIds.has(key) || FIXED_RESOURCE_KEYS.some((k) => k === key);
@@ -223,6 +223,10 @@ export function buildResourcesFileSchema(known: {
 
   return resourcesFileBase.superRefine((file, ctx) => {
     for (const [index, video] of file.videos.entries()) {
+      const refusal = known.requirePlayableVideos ? videoLinkRefusal(null, video.href) : null;
+      if (refusal !== null) {
+        ctx.addIssue({ code: 'custom', path: ['videos', index, 'href'], message: refusal });
+      }
       if (video.relatesTo !== null && !isPieceKey(video.relatesTo)) {
         ctx.addIssue({
           code: 'custom',

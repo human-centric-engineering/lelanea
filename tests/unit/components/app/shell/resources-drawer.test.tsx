@@ -506,6 +506,9 @@ describe('to watch, to listen and to read', () => {
     );
     expect(frame).toHaveAttribute('title', 'Why values come first');
     expect(within(lightbox).getByText('6:12 · what why-values is for')).toBeInTheDocument();
+    // Focus lands on the close button, not the iframe: a keypress inside a
+    // cross-origin frame never reaches this page, so Escape would be lost.
+    expect(within(lightbox).getByRole('button', { name: 'Close' })).toHaveFocus();
   });
 
   it('closes the lightbox with its button, stopping the video and returning focus to the card', async () => {

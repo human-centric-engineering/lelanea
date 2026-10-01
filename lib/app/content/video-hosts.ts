@@ -36,10 +36,16 @@ export interface VideoPlayer {
 /** The hosts a video link may name today, as an admin reads them. */
 export const SUPPORTED_VIDEO_HOSTS = ['YouTube'] as const;
 
+/** The link forms an admin may paste, as the form's help and the refusal show them. */
+export const VIDEO_LINK_EXAMPLES = [
+  'https://www.youtube.com/watch?v=…',
+  'https://youtu.be/…',
+] as const;
+
 /** The admin's refusal for a link no host resolves. */
 export const UNSUPPORTED_VIDEO_LINK_MESSAGE = `A video link must be a ${SUPPORTED_VIDEO_HOSTS.join(
   ' or '
-)} link, such as https://www.youtube.com/watch?v=… or https://youtu.be/…, so it can play in the page.`;
+)} link, such as ${VIDEO_LINK_EXAMPLES.join(' or ')}, so it can play in the page.`;
 
 /** The origin the YouTube player is embedded from: the privacy-enhanced one. */
 export const YOUTUBE_EMBED_ORIGIN = 'https://www.youtube-nocookie.com';
@@ -106,7 +112,23 @@ export function resolveVideoPlayer(href: string): VideoPlayer | null {
   };
 }
 
-/** Whether a video link can play in the page: what the admin requires of a new or edited video. */
+/** Whether a video link can play in the page. */
 export function isPlayableVideoLink(href: string): boolean {
   return resolveVideoPlayer(href) !== null;
+}
+
+/**
+ * The refusal for a video link being written, or `null` when it may be.
+ *
+ * **Only a link being set or changed is held to it.** A video entered before
+ * t-119 may have a link no host plays. It is still served (with no player), so
+ * it must stay exportable, and an admin must be able to correct its title
+ * without inventing a new link. So the rule applies when a video is created,
+ * or its link changes, and not to every write that carries the link unchanged.
+ *
+ * @param before - the video's stored link, or `null` for a new video
+ */
+export function videoLinkRefusal(before: string | null, next: string): string | null {
+  if (before !== null && before === next) return null;
+  return isPlayableVideoLink(next) ? null : UNSUPPORTED_VIDEO_LINK_MESSAGE;
 }

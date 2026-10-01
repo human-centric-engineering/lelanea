@@ -433,7 +433,7 @@ describe('resources', () => {
         subtitle: 'For the start.',
         relatesTo: null,
         duration: '6:12',
-        href: 'https://example.com/video',
+        href: 'https://youtu.be/videovideo1',
       },
       EDITOR
     );
@@ -446,7 +446,7 @@ describe('resources', () => {
         subtitle: 'For the start.',
         relatesTo: null,
         duration: '6:12',
-        href: 'https://example.com/video',
+        href: 'https://youtu.be/videovideo1',
       },
       1,
       EDITOR
@@ -526,7 +526,7 @@ describe('resources', () => {
         subtitle: 'x',
         relatesTo: null,
         duration: '1:00',
-        href: 'https://example.com/a',
+        href: 'https://youtu.be/aaaaaaaaaaa',
       },
       EDITOR
     );
@@ -538,7 +538,7 @@ describe('resources', () => {
         subtitle: 'x',
         relatesTo: null,
         duration: '1:00',
-        href: 'https://example.com/a',
+        href: 'https://youtu.be/aaaaaaaaaaa',
       },
       1,
       EDITOR

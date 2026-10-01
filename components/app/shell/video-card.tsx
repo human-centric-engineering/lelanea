@@ -2,6 +2,7 @@
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Play, X } from 'lucide-react';
+import { useRef } from 'react';
 
 import type { ResourceVideoView } from '@/lib/app/content/resources';
 import type { VideoPlayer } from '@/lib/app/content/video-hosts';
@@ -26,7 +27,10 @@ import { cn } from '@/lib/utils';
  * beside it is live. So it is a real modal dialog (Radix): focus moves in and
  * is trapped, and on close it returns to the card. The prototype's Escape chain
  * puts the lightbox first, so Escape closes the lightbox and leaves the drawer
- * open. Radix listens on `document` in the capture phase and the shell in the
+ * open. On open, focus goes to the close button, not the first tabbable element
+ * Radix would pick: that is the iframe, and a keypress inside a cross-origin
+ * frame never reaches this page. Once a reader clicks into the player, Escape
+ * is YouTube's; the close button and the scrim still close it. Radix listens on `document` in the capture phase and the shell in the
  * bubble phase, so stopping the event in `onEscapeKeyDown` is enough
  * (`account-menu.tsx` has the same collision).
  *
@@ -46,6 +50,7 @@ export function VideoCard({
   video: Pick<ResourceVideoView, 'title' | 'subtitle' | 'duration'>;
   player: VideoPlayer;
 }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
   return (
     <DialogPrimitive.Root>
       <DialogPrimitive.Trigger asChild>
@@ -123,6 +128,14 @@ export function VideoCard({
         />
         <DialogPrimitive.Content
           onEscapeKeyDown={(event) => event.stopPropagation()}
+          // Radix would focus the first tabbable thing inside: the iframe. Focus
+          // in a cross-origin frame takes the keyboard with it, so Escape would
+          // go to YouTube and never close the lightbox. The close button keeps
+          // the keyboard here, and Tab still reaches the player.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            closeRef.current?.focus();
+          }}
           className={cn(
             // Centred and no wider than the frame, so the scrim around it is
             // outside the dialog and a click there closes it.
@@ -153,6 +166,7 @@ export function VideoCard({
                 </DialogPrimitive.Description>
               </div>
               <DialogPrimitive.Close
+                ref={closeRef}
                 aria-label="Close"
                 className={cn(
                   'flex h-10 w-10 flex-none items-center justify-center rounded-full',

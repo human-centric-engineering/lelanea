@@ -32,6 +32,8 @@
  * Full guide: CUSTOMIZATION.md §4 · .context/security/overview.md
  */
 
+import { YOUTUBE_EMBED_ORIGIN } from '@/lib/app/content/video-hosts';
+
 /**
  * Extra `frame-src` origins. Empty = platform default (`'self'` only).
  *
@@ -40,4 +42,4 @@
  * `lib/app/content/video-hosts.ts`, never from the stored link. A second
  * video host adds its player's origin here, and nothing broader.
  */
-export const appFrameSrc: string[] = ['https://www.youtube-nocookie.com'];
+export const appFrameSrc: string[] = [YOUTUBE_EMBED_ORIGIN];

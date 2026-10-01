@@ -466,6 +466,76 @@ describe('imports that are refused', () => {
   });
 });
 
+describe('a video from before videos had to play in the page (t-119)', () => {
+  /** A video an admin added before t-119: its link is one no host plays. */
+  function insertOlderVideo() {
+    const collection = db.current!.rows('appResourceCollection')[0];
+    if (!collection) throw new Error('the resource library is not seeded');
+    db.current!.insert('appResource', {
+      slug: 'older-video',
+      collectionSlug: collection.slug,
+      collectionId: collection.id,
+      kind: 'video',
+      position: 0,
+      title: 'An older video',
+      subtitle: 'From before',
+      duration: '3:10',
+      href: 'https://vimeo.com/76979871',
+    });
+  }
+
+  it('can still have its title corrected, keeping its link', async () => {
+    insertOlderVideo();
+
+    const result = await resources.updateResource(
+      'older-video',
+      { ...video, title: 'An older video, corrected', href: 'https://vimeo.com/76979871' },
+      1,
+      EDITOR
+    );
+
+    expect(result.changed).toContain('title');
+    expect(db.current!.rows('appResource').find((row) => row.slug === 'older-video')).toMatchObject(
+      { title: 'An older video, corrected', href: 'https://vimeo.com/76979871' }
+    );
+  });
+
+  it('is refused a new link that still does not play, naming the hosts', async () => {
+    insertOlderVideo();
+
+    await expect(
+      resources.updateResource('older-video', { ...video, href: 'https://vimeo.com/1' }, 1, EDITOR)
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/must be a YouTube link/),
+    });
+  });
+
+  it('is exported, and the export re-imports without a refusal', async () => {
+    insertOlderVideo();
+
+    const file = await resources.exportResourcesFile();
+    expect(file.videos.map((v) => v.id)).toContain('older-video');
+
+    const preview = await resources.previewResourcesImport(file, false);
+    expect(preview.refusals).toEqual([]);
+  });
+
+  it('refuses an import that changes it to another link no host plays', async () => {
+    insertOlderVideo();
+    const file = await resources.exportResourcesFile();
+    file.videos = file.videos.map((v) =>
+      v.id === 'older-video' ? { ...v, href: 'https://vimeo.com/2' } : v
+    );
+
+    const preview = await resources.previewResourcesImport(file, false);
+
+    expect(preview.refusals.join('\n')).toMatch(
+      /"older-video": A video link must be a YouTube link/
+    );
+  });
+});
+
 describe('small rules', () => {
   it('refuses to remove the last question, which the file format cannot hold', async () => {
     for (const row of db.current!.rows('appDiscoveryQuestion').filter((q) => q.slug !== 'q01')) {

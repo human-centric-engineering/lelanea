@@ -434,7 +434,7 @@ describe('items', () => {
         subtitle: 'One.',
         relatesTo: null,
         duration: '1:00',
-        href: 'https://example.com/a',
+        href: 'https://youtu.be/aaaaaaaaaaa',
       },
       'editor'
     );
