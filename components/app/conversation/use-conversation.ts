@@ -403,6 +403,8 @@ export function useConversation(options: Options = {}): ConversationState {
          * transcript as their bubble instead, so they are never nowhere.
          */
         const end = (ending: EndingEntry, options: { keepId: boolean }) => {
+          // Let go, as `finish` says: not this pane's ending, nor its id to keep.
+          if (controller.signal.aborted) return;
           const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
           if (boxed) setDraft(message);
           if (options.keepId) kept.current = { turnId, message };

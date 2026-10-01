@@ -41,12 +41,15 @@ vi.mock('@/components/app/ui/consent-clearance', () => ({ useConsentBannerCleara
 
 /** Every URL the pane fetched, in order. */
 const calls: string[] = [];
+/** The turn ids posted, in order. */
+const turnIds: string[] = [];
 
 /** When set, a turn's stream stays open until the test closes it. */
 const held = { stream: null as ReadableStreamDefaultController<Uint8Array> | null, hold: false };
 
 beforeEach(() => {
   calls.length = 0;
+  turnIds.length = 0;
   held.hold = false;
   held.stream = null;
   window.localStorage.clear();
@@ -55,8 +58,14 @@ beforeEach(() => {
   setViewport('large');
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(url);
+      if (typeof init?.body === 'string') {
+        const parsed: unknown = JSON.parse(init.body);
+        if (typeof parsed === 'object' && parsed !== null && 'turnId' in parsed) {
+          turnIds.push(String(parsed.turnId));
+        }
+      }
       if (url.startsWith('/api/v1/app/conversation')) {
         const seat = new URL(url, 'http://x').searchParams.get('seat');
         return new Response(
@@ -203,6 +212,46 @@ describe('a turn still being answered when the seat moves on', () => {
     held.hold = false;
     await sendATurn(user);
     await waitFor(() => expect(turnsOn('facilitator')).toHaveLength(1));
+  });
+});
+
+describe('an old turn whose stream just stops after the move', () => {
+  it('ends nothing here, and its id is never retried on the new seat', async () => {
+    const user = userEvent.setup();
+    held.hold = true;
+    render(
+      <ShellLayoutProvider conversationSeat="onboarding">
+        <ConversationPane />
+        {questions()}
+      </ShellLayoutProvider>
+    );
+    await waitFor(() => expect(transcriptReads()).toHaveLength(1));
+    await sendATurn(user);
+    await waitFor(() => expect(turnsOn('onboarding')).toHaveLength(1));
+
+    await user.type(screen.getByLabelText(DISCOVERY_COPY.answerLabel), 'The quiet.');
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.save }));
+    await waitFor(() =>
+      expect(transcriptReads().at(-1)).toBe('/api/v1/app/conversation?seat=facilitator')
+    );
+
+    try {
+      held.stream?.close();
+    } catch {
+      // Already cancelled by the abort.
+    }
+    await waitFor(() => expect(screen.queryByText(CONVERSATION_COPY.loading)).toBeNull());
+
+    expect(screen.queryByRole('article', { name: CONVERSATION_COPY.endingLabel })).toBeNull();
+
+    // The words may still be in the box (they were never confirmed received),
+    // but sending them is a new turn on this seat, never the old one's id.
+    held.hold = false;
+    await user.clear(screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel }));
+    await sendATurn(user);
+    await waitFor(() => expect(turnsOn('facilitator')).toHaveLength(1));
+    expect(turnIds).toHaveLength(2);
+    expect(turnIds[1]).not.toBe(turnIds[0]);
   });
 });
 
