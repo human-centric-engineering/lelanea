@@ -291,7 +291,7 @@ describe('both panels have an edge in both themes', () => {
     // mode is a 1.06:1 fill difference, while dark gets a visible border — the
     // two themes differing structurally rather than chromatically.
     renderSettings();
-    for (const name of ['Light and dark', 'Her leanings']) {
+    for (const name of ['Light and dark', 'Leanings']) {
       const panel = screen.getByRole('heading', { name }).closest('section');
       expect(panel?.className, name).toContain('shadow-[var(--shadow-rest)]');
     }
@@ -301,7 +301,7 @@ describe('both panels have an edge in both themes', () => {
 describe('the theme panel and the leanings are separate things', () => {
   it('keeps the theme control out of the leanings', () => {
     renderSettings();
-    const leanings = screen.getByRole('heading', { name: 'Her leanings' }).closest('section');
+    const leanings = screen.getByRole('heading', { name: 'Leanings' }).closest('section');
     expect(leanings).toBeTruthy();
     expect(within(leanings as HTMLElement).queryByRole('button', { name: 'Dark' })).toBeNull();
   });

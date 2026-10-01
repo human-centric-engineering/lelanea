@@ -91,25 +91,25 @@ const lookedUp: AccountSource = (input) => {
 };
 
 /**
- * Looked at what she already understands about the person (§11 t-72).
+ * Looked at what is already understood about the person (§11 t-72).
  *
  * Said without naming a slot, and that is not vagueness. The line is what a
  * member reads, `development` slots are hidden from them by §12 — "a tuning
  * signal, never a grade" — and this source cannot tell which slugs a read
- * covered anyway: the frame carries the capability, not its result. "What she
- * understands about you" is true of all of it and discloses none of it.
+ * covered anyway: the frame carries the capability, not its result. "What is
+ * understood about you" is true of all of it and discloses none of it.
  */
 const readTheProfile: AccountSource = (input) => {
   if (!input.capabilities.includes(READ_THE_PROFILE)) return null;
   return {
     key: 'read_profile',
-    line: 'Looked at what she already understands about you',
-    detail: 'Looked at what she already understands about you.',
+    line: 'Looked at what is already understood about you',
+    detail: 'Looked at what is already understood about you.',
   };
 };
 
 /**
- * Wrote something new into what she understands about the person (§11 t-72).
+ * Wrote something new into what is understood about the person (§11 t-72).
  *
  * **This is the guardrail's own line** — "nothing is understood invisibly". A
  * capture is a silent tool (D5): the model is told not to announce it, and
@@ -135,8 +135,8 @@ const wroteToProfile: AccountSource = (input) => {
   if (!input.capabilities.includes(WRITE_THE_PROFILE)) return null;
   return {
     key: 'wrote_profile',
-    line: 'Added something to what she understands about you',
-    detail: 'Added something to what she understands about you. You can see it, and correct it.',
+    line: 'Added something to what is understood about you',
+    detail: 'Added something to what is understood about you. You can see it, and correct it.',
   };
 };
 

@@ -410,7 +410,7 @@ async function main(): Promise<void> {
     );
     note(`the account under her reply reads: "${line}"`);
     check(
-      /what she understands about you/.test(line),
+      /what is understood about you/.test(line),
       'the account tells the person something was noted'
     );
     for (const value of values) {

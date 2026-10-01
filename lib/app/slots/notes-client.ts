@@ -132,7 +132,7 @@ export async function fetchNotes(options: Options = {}): Promise<NotesView> {
   if (!response.ok) throw await refusalOf(response);
   const parsed = notesEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) {
-    throw new NotesRefused(response.status, 'malformed', 'Her notes could not be read.');
+    throw new NotesRefused(response.status, 'malformed', 'The notes could not be read.');
   }
   return parsed.data.data;
 }

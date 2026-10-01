@@ -107,7 +107,7 @@ export const PINNED_MODEL_MATRIX_ROW = {
   modelId: PINNED_MODEL,
   name: PINNED_MODEL_INFO.name,
   description:
-    'The dated snapshot of GPT-4o Mini that the voice golden set was signed off on. Pinned for her agent and the bare control so neither moves when the alias does.',
+    'The dated snapshot of GPT-4o Mini that the voice golden set was signed off on. Pinned for the voice agent and the bare control so neither moves when the alias does.',
   capabilities: PINNED_MODEL_CAPABILITIES,
   tierRole: 'infrastructure',
   reasoningDepth: 'medium',
@@ -115,7 +115,7 @@ export const PINNED_MODEL_MATRIX_ROW = {
   costEfficiency: 'very_high',
   contextLength: 'n_a', // never a bucket the model does not fit — see above
   toolUse: 'moderate',
-  bestRole: 'Her pinned voice model (dev)',
+  bestRole: 'The voice agent’s pinned model (dev)',
   costPerMillionTokens: null, // never a blended rate — see above
 } as const;
 

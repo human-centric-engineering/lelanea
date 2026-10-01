@@ -59,7 +59,7 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   {
     href: '/app',
     label: 'The conversation',
-    hint: 'Just her, and nothing else',
+    hint: 'Nothing but the conversation',
     icon: MessageCircle,
   },
   {

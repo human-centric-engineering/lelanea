@@ -99,7 +99,7 @@ export const NOTES_LEDE =
   'Everything Lelañea holds about you, where each of it came from, and how certain it is.';
 
 export const NOTES_NOTE =
-  'These are Lelañea’s readings, not your words back. She can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation.';
+  'These are Lelañea’s readings, not your words back. They can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation.';
 
 /** How long typing rests before the search is sent and the URL updated. */
 export const SEARCH_PAUSE_MS = 300;
@@ -501,7 +501,7 @@ function reactKey(key: string | typeof OWN_RUN): string {
 }
 
 const OWN_NOTE =
-  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so she named them herself.';
+  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so the app named them itself.';
 
 /**
  * Consecutive notes under one heading. The server has already put them in

@@ -34,7 +34,7 @@ export const CONVERSATION_COPY = {
   placeholder: 'What would you like to talk about today?',
   hint: 'shift + return for a new line',
   send: 'Send',
-  sendBusy: 'Send — waiting for her reply',
+  sendBusy: 'Send — waiting for the reply',
   /**
    * The microphone (t-67). Its accessible name says what happens to the
    * recording — nothing — because that is the fact a person would want
@@ -66,7 +66,8 @@ export const CONVERSATION_COPY = {
   /** While the transcript is being read back. */
   loading: 'Finding where you left off…',
   /** The transcript could not be read; the composer still works. */
-  unreadable: 'Your earlier conversation could not be read just now. You can still talk to her.',
+  unreadable:
+    'Your earlier conversation could not be read just now. You can still carry on the conversation.',
 
   /** Accessible name of the whole transcript region. */
   transcriptLabel: 'The conversation so far',

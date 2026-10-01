@@ -274,8 +274,8 @@ Modules instructed (§13) add a source; the row does not change.
 | The turn…                             | Line                                               | Detail                                                                           |
 | ------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------- |
 | called `search_knowledge_base`        | Looked something up in her material                | …and drew on N passages of it. (the citations on the reply)                      |
-| called `get_state`                    | Looked at what she already understands about you   | the same                                                                         |
-| called `fill_slot`                    | Added something to what she understands about you  | …You can see it, and correct it.                                                 |
+| called `get_state`                    | Looked at what is already understood about you     | the same                                                                         |
+| called `fill_slot`                    | Added something to what is understood about you    | …You can see it, and correct it.                                                 |
 | called `suggest_resource` (t-77)      | Pointed you to “<title>”                           | …— a video / an audio piece / an article of hers you can open beside this reply. |
 | …for an id the library has since lost | Offered something that is no longer in her library | the same                                                                         |
 | called a capability with no words yet | Used <slug, as words>                              | the same — named, never hidden                                                   |
