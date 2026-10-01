@@ -16,9 +16,10 @@
  *
  * - `videos`, `audio` and `articles`: what each is for, in her words, and which key it
  *   belongs beside (`relatesTo`; `null` for a piece that belongs to everything).
- *   A video or an audio piece links out. An article is a foundational document or a link, never
- *   both. **No thumbnails**: nothing exists to show, and an invented one is what
- *   D6 forbids.
+ *   A video plays in the page from a supported host (`video-hosts.ts`, YouTube
+ *   first), with that host's own still; nothing invented, which D6 forbids. An
+ *   audio piece links out. An article is a foundational document or a link,
+ *   never both.
  * - `words`: per key, a quote and a few short paragraphs — **verbatim excerpts
  *   of a source this repository already holds**, each citing that source.
  *   Nothing here is drafted in her register. The drawer's eyebrow says these are
@@ -54,6 +55,11 @@ import { z } from 'zod';
 
 import type { DeepReadonly } from '@/lib/app/content/journey-view';
 import type { ModuleTier } from '@/lib/app/content/schemas';
+import {
+  isPlayableVideoLink,
+  UNSUPPORTED_VIDEO_LINK_MESSAGE,
+  type VideoPlayer,
+} from '@/lib/app/content/video-hosts';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
 // ============================================================================
@@ -113,7 +119,14 @@ export const resourceIdSchema = z
  */
 const linkSchema = z.url({ protocol: /^https?$/ });
 
-export const videoSchema = z.strictObject({
+/**
+ * A video or an audio piece as it is stored: a length as `m:ss`, and a link.
+ *
+ * What every stored row is read back against. A video entered before t-119 may
+ * have a link no host plays; it is still served, without a player, so it is
+ * held to this and not to {@link videoSchema}.
+ */
+export const storedTimedSchema = z.strictObject({
   id: resourceIdSchema,
   title: z.string().trim().min(1),
   /** What it is for, in her words — the line under the title. */
@@ -124,8 +137,16 @@ export const videoSchema = z.strictObject({
   href: linkSchema,
 });
 
-/** An audio piece is held to what a video is: a length as `m:ss`, and a link. */
-export const audioSchema = videoSchema;
+/**
+ * A video as it may be written: its link must be one a supported host plays in
+ * the page (`video-hosts.ts`), so every video an admin or the seed adds plays.
+ */
+export const videoSchema = storedTimedSchema.extend({
+  href: linkSchema.refine(isPlayableVideoLink, { message: UNSUPPORTED_VIDEO_LINK_MESSAGE }),
+});
+
+/** An audio piece: a length as `m:ss`, and a link. */
+export const audioSchema = storedTimedSchema;
 
 const articleBase = z.strictObject({
   id: resourceIdSchema,
@@ -296,8 +317,12 @@ export interface ResourcesCollectionMeta {
   provenance: DeepReadonly<ResourcesProvenance>;
 }
 
-/** A video as served: the authored shape, and how many times it has been written. */
-export type ResourceVideoView = ResourceVideo & { revision: number };
+/**
+ * A video as served: the authored shape, how many times it has been written,
+ * and how to show and play it — `null` for a link no supported host resolves,
+ * which a client shows as a card that opens the link.
+ */
+export type ResourceVideoView = ResourceVideo & { revision: number; player: VideoPlayer | null };
 /** An audio piece as served. */
 export type ResourceAudioView = ResourceAudio & { revision: number };
 /** An article as served. */

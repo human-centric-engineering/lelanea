@@ -248,7 +248,9 @@ function video(id: string, relatesTo: string | null): ResourcesFile['videos'][nu
     subtitle: 'for',
     relatesTo,
     duration: '4:20',
-    href: 'https://example.com/' + id,
+    // A video must be a link a host plays in the page (t-119): a YouTube id
+    // is eleven characters, so the fixture's id is padded to one.
+    href: 'https://youtu.be/' + id.padEnd(11, '-').slice(0, 11),
   };
 }
 
@@ -386,7 +388,7 @@ describe('a malformed file fails, naming the fault', () => {
     expect(ok).toBe(false);
     expect(messages.join('\n')).toMatch(/protocol|URL/i);
     expect(
-      parse(fixture({ videos: [{ ...video('y', null), href: 'https://example.com/y' }] })).ok
+      parse(fixture({ videos: [{ ...video('y', null), href: 'https://youtu.be/yyyyyyyyyyy' }] })).ok
     ).toBe(true);
   });
 
@@ -497,7 +499,7 @@ describe('a stored row is held to the file’s rules on the way out', () => {
 
   it('round-trips the fixture: what the seed writes is what the store serves', () => {
     const file = fixture();
-    expect(base.videos.map(({ revision: _r, ...video }) => video)).toEqual(file.videos);
+    expect(base.videos.map(({ revision: _r, player: _p, ...video }) => video)).toEqual(file.videos);
     expect(base.articles.map(({ revision: _r, ...article }) => article)).toEqual(file.articles);
   });
 

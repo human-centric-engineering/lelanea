@@ -90,8 +90,30 @@ function timed(host: string, id: string, title: string, duration: string) {
   };
 }
 
-const video = (id: string, title: string, duration: string) =>
-  timed('videos.example', id, title, duration);
+/**
+ * A video a supported host plays: a YouTube id padded from the fixture's id,
+ * and the player the server would serve for it, written out rather than
+ * derived, so a change to how a player is built shows up here as a diff.
+ */
+function video(id: string, title: string, duration: string) {
+  const youtubeId = id.padEnd(11, '-').slice(0, 11);
+  return {
+    ...timed('youtu.be', youtubeId, title, duration),
+    id,
+    subtitle: `what ${id} is for`,
+    player: {
+      host: 'youtube' as const,
+      id: youtubeId,
+      thumbnailUrl: `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0&playsinline=1`,
+    },
+  };
+}
+
+/** A video whose link no host plays (entered before t-119): served with no player. */
+function linkOnlyVideo(id: string, title: string, duration: string) {
+  return { ...timed('videos.example', id, title, duration), player: null };
+}
 const audio = (id: string, title: string, duration: string) =>
   timed('audio.example', id, title, duration);
 
@@ -215,6 +237,18 @@ function renderDrawers(pathname = '/app/modules/values') {
 
 const panel = () => screen.getByRole('dialog', { name: 'Resources' });
 const openResources = () => userEvent.click(screen.getByRole('button', { name: /Resources/ }));
+
+/**
+ * The video lightbox renders an iframe, and happy-dom would load it: a real
+ * request, which the network guard in `tests/setup.ts` rightly refuses. What is
+ * under test is the iframe's `src`, not YouTube, so frames are not navigated.
+ */
+const happyDom = (
+  globalThis as {
+    happyDOM?: { settings: { navigation: { disableChildFrameNavigation: boolean } } };
+  }
+).happyDOM;
+if (happyDom) happyDom.settings.navigation.disableChildFrameNavigation = true;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -412,16 +446,26 @@ describe('her words', () => {
 });
 
 describe('to watch, to listen and to read', () => {
-  it('renders two cards and three rows from a full selection', async () => {
+  it('renders two picture cards and three rows from a full selection', async () => {
     renderDrawers();
     await openResources();
     await within(panel()).findByText(/anchor/);
 
     const watch = within(panel()).getByRole('heading', { name: 'to watch' }).closest('section')!;
-    const videos = within(watch).getAllByRole('link');
+    // A video that plays in the page is a button that opens the lightbox, not
+    // a link out.
+    expect(within(watch).queryByRole('link')).toBeNull();
+    const videos = within(watch).getAllByRole('button');
     expect(videos).toHaveLength(2);
     expect(videos[0]).toHaveTextContent('Why values come first');
+    expect(videos[0]).toHaveTextContent('what why-values is for');
     expect(videos[0]).toHaveTextContent('6:12');
+    expect(videos[0]).toHaveAttribute('aria-haspopup', 'dialog');
+    // The host's own still, served by the API: never one the client invents.
+    expect(videos[0]?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://i.ytimg.com/vi/why-values-/hqdefault.jpg'
+    );
 
     const read = within(panel()).getByRole('heading', { name: 'to read' }).closest('section')!;
     expect(read.querySelectorAll('li')).toHaveLength(3);
@@ -447,13 +491,74 @@ describe('to watch, to listen and to read', () => {
     expect(within(watch).queryByText('A quiet hour')).toBeNull();
   });
 
-  it('opens a video in a new tab, safely', async () => {
+  it('plays a video in a lightbox, from the served embed and nothing else', async () => {
     renderDrawers();
     await openResources();
-    const card = await within(panel()).findByRole('link', { name: /Why values come first/ });
-    expect(card).toHaveAttribute('href', 'https://videos.example/why-values');
+    await userEvent.click(
+      await within(panel()).findByRole('button', { name: /Why values come first/ })
+    );
+
+    const lightbox = await screen.findByRole('dialog', { name: 'Why values come first' });
+    const frame = lightbox.querySelector('iframe');
+    expect(frame).toHaveAttribute(
+      'src',
+      'https://www.youtube-nocookie.com/embed/why-values-?autoplay=1&rel=0&playsinline=1'
+    );
+    expect(frame).toHaveAttribute('title', 'Why values come first');
+    expect(within(lightbox).getByText('6:12 · what why-values is for')).toBeInTheDocument();
+  });
+
+  it('closes the lightbox with its button, stopping the video and returning focus to the card', async () => {
+    renderDrawers();
+    await openResources();
+    const card = await within(panel()).findByRole('button', { name: /Why values come first/ });
+    await userEvent.click(card);
+    const lightbox = await screen.findByRole('dialog', { name: 'Why values come first' });
+
+    await userEvent.click(within(lightbox).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Why values come first' })).toBeNull()
+    );
+    // The iframe is gone with it — that is what stops the video.
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(card).toHaveFocus();
+  });
+
+  it('closes only the lightbox on Escape, leaving the drawer open under it', async () => {
+    renderDrawers();
+    await openResources();
+    const card = await within(panel()).findByRole('button', { name: /Why values come first/ });
+    await userEvent.click(card);
+    await screen.findByRole('dialog', { name: 'Why values come first' });
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Why values come first' })).toBeNull()
+    );
+    expect(document.querySelector('iframe')).toBeNull();
+    // The prototype's Escape chain: the lightbox is the first rung, and one
+    // press takes one rung. The drawer is still open and its card has focus.
+    expect(panel()).not.toHaveAttribute('inert');
+    expect(card).toHaveFocus();
+  });
+
+  it('opens a video no host plays in a new tab, safely, as a card with no still', async () => {
+    serve({
+      values: emptySelection({
+        videos: [linkOnlyVideo('old-film', 'An older video', '3:10')],
+      }),
+    });
+    renderDrawers();
+    await openResources();
+
+    const card = await within(panel()).findByRole('link', { name: /An older video/ });
+    expect(card).toHaveAttribute('href', 'https://videos.example/old-film');
     expect(card).toHaveAttribute('target', '_blank');
     expect(card).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(card.querySelector('img')).toBeNull();
+    expect(within(panel()).queryByRole('button', { name: /An older video/ })).toBeNull();
   });
 
   it('opens an external article in a new tab, and a read in the shell', async () => {

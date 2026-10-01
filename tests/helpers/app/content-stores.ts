@@ -314,7 +314,7 @@ export function videoRow(
     relatesTo: null,
     duration: '6:12',
     readingTime: null,
-    href: 'https://example.com/video',
+    href: 'https://youtu.be/videovideo1',
     documentSlug: null,
     ...overrides,
   };

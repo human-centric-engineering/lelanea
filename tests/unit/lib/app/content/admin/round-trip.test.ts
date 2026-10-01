@@ -148,7 +148,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
         subtitle: 'a',
         relatesTo: null,
         duration: '1:00',
-        href: 'https://example.com/a',
+        href: 'https://youtu.be/aaaaaaaaaaa',
       },
       EDITOR
     );
@@ -160,7 +160,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
         subtitle: 'b',
         relatesTo: null,
         duration: '2:00',
-        href: 'https://example.com/b',
+        href: 'https://youtu.be/bbbbbbbbbbb',
       },
       EDITOR
     );
@@ -172,7 +172,7 @@ describe('a fresh export, re-imported, plans no writes', () => {
         subtitle: 'c',
         relatesTo: null,
         duration: '3:00',
-        href: 'https://example.com/c',
+        href: 'https://youtu.be/ccccccccccc',
       },
       EDITOR
     );
@@ -346,7 +346,7 @@ describe('importing', () => {
         subtitle: 'k',
         relatesTo: null,
         duration: '1:00',
-        href: 'https://example.com/k',
+        href: 'https://youtu.be/kkkkkkkkkkk',
       },
       EDITOR
     );
