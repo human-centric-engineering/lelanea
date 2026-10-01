@@ -168,6 +168,46 @@ describe('beginJourney', () => {
     expect(engine.events).toEqual([]);
   });
 
+  it('answers unavailable when there is no journey to transition', async () => {
+    mocks.getJourney.mockResolvedValue(null);
+
+    await expect(beginJourney(USER)).resolves.toBe('unavailable');
+    expect(mocks.applyJourneyTransition).not.toHaveBeenCalled();
+  });
+
+  it('answers failed when the journey could not be started', async () => {
+    mocks.ensureJourneyStarted.mockResolvedValue('failed');
+
+    await expect(beginJourney(USER)).resolves.toBe('failed');
+    expect(engine.events).toEqual([]);
+  });
+
+  it('answers unavailable when the journey vanishes before Values is entered', async () => {
+    mocks.applyJourneyTransition.mockResolvedValueOnce(null);
+
+    await expect(beginJourney(USER)).resolves.toBe('unavailable');
+    expect(engine.states).toEqual([{ nodeKey: 'onboarding', status: 'active' }]);
+  });
+
+  it('answers unavailable when onboarding cannot be completed for another reason', async () => {
+    mocks.applyJourneyTransition
+      .mockImplementationOnce(transition)
+      .mockResolvedValueOnce({ ok: false, rejection: { code: 'unknown_node', message: 'gone' } });
+
+    await expect(beginJourney(USER)).resolves.toBe('unavailable');
+  });
+
+  it('counts a racing press that completed onboarding first as done, not a failure', async () => {
+    engine.states.push({ nodeKey: 'values', status: 'active' });
+    mocks.applyJourneyTransition.mockResolvedValueOnce({
+      ok: false,
+      rejection: { code: 'not_active', message: 'not active' },
+    });
+
+    // Nothing written by this call: it reads as already, and offers nothing more.
+    await expect(beginJourney(USER)).resolves.toBe('already');
+  });
+
   it('answers failed, never throws, when a read fails', async () => {
     mocks.getDiscoveryState.mockResolvedValue(null);
     await expect(beginJourney(USER)).resolves.toBe('failed');
