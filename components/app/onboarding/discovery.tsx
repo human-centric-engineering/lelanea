@@ -253,11 +253,27 @@ export function Discovery({
 
   // Every question answered or skipped, and the journey not yet begun: the
   // hand-off into Values is offered (t-106).
+  // A skip is posted without waiting, so the server may not have one this
+  // page counts (still in flight, or it failed). Beginning is judged on the
+  // server's state, so those are sent again, and waited on, first. Recording a
+  // skip twice is the same as once. A failure is left to the begin route,
+  // which then says not yet, and the step can be pressed again.
+  const resendSkips = async (): Promise<void> => {
+    const onServer = new Set(skippedOnServer);
+    const unsent = [...skipped].filter((id) => !onServer.has(id) && !answers[id]);
+    await Promise.allSettled(
+      unsent.map((questionId) =>
+        apiClient.post(DISCOVERY_ROUTE, { body: { action: 'skip', questionId } })
+      )
+    );
+  };
+
   const beginStep =
     position.finished && !begun ? (
       <BeginJourney
         waiting={position.skipped.length > 0}
         moduleName={moduleName}
+        beforeBegin={resendSkips}
         onBegun={() => {
           localFor(userId).begun = true;
         }}

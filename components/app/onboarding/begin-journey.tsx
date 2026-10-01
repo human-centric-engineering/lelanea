@@ -49,12 +49,15 @@ export const BEGIN_JOURNEY_COPY = {
 export function BeginJourney({
   waiting,
   moduleName,
+  beforeBegin,
   onBegun,
 }: {
   /** Skipped questions are still unanswered. */
   waiting: boolean;
   /** The module that holds the questions, by name. */
   moduleName: string;
+  /** Awaited before the post: whatever the server must have first. */
+  beforeBegin?: () => Promise<void>;
   /** Called once the journey has begun, before navigating. */
   onBegun?: () => void;
 }) {
@@ -68,6 +71,7 @@ export function BeginJourney({
     setBusy(true);
     setFailed(false);
     try {
+      await beforeBegin?.();
       const answer = begunSchema.parse(await apiClient.post<unknown>(BEGIN_JOURNEY_ROUTE));
       onBegun?.();
       journeyMoved();

@@ -49,7 +49,7 @@ import {
   type DiscoveryQuestionProps,
 } from '@/components/app/onboarding/discovery';
 import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
-import { BEGIN_JOURNEY_COPY } from '@/components/app/onboarding/begin-journey';
+import { BEGIN_JOURNEY_COPY, BEGIN_JOURNEY_ROUTE } from '@/components/app/onboarding/begin-journey';
 import type { DiscoveryState } from '@/lib/app/onboarding/discovery-store';
 
 const Q1: DiscoveryQuestionProps = {
@@ -137,6 +137,36 @@ describe('variant "first"', () => {
     expect(screen.getByRole('button', { name: BEGIN_JOURNEY_COPY.begin })).toBeInTheDocument();
     expect(screen.getByText(BEGIN_JOURNEY_COPY.waiting('Onboarding'))).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 2, name: Q1.text })).toBeNull();
+  });
+
+  it('sends a skip the server never got again, before it begins the journey (t-106 review)', async () => {
+    const user = userEvent.setup();
+    // Everything else behind them: q2 is the last question, and its skip fails.
+    post.mockImplementation((route: string) =>
+      Promise.resolve(
+        route === BEGIN_JOURNEY_ROUTE
+          ? { outcome: 'begun', next: '/app/modules/values' }
+          : { recorded: true }
+      )
+    );
+    post.mockRejectedValueOnce(new Error('offline'));
+    render(
+      <Discovery
+        {...baseProps({
+          answers: { q1: { words: 'a' }, q3: { words: 'b', branch: 'yes' }, q4: { words: 'c' } },
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.skip }));
+    await user.click(await screen.findByRole('button', { name: BEGIN_JOURNEY_COPY.begin }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/app/modules/values'));
+    const routes = post.mock.calls.map(([route, init]) => [route, init?.body] as const);
+    expect(routes).toEqual([
+      [DISCOVERY_ROUTE, { action: 'skip', questionId: 'q2' }],
+      [DISCOVERY_ROUTE, { action: 'skip', questionId: 'q2' }],
+      [BEGIN_JOURNEY_ROUTE, undefined],
+    ]);
   });
 
   it('renders nothing once the journey has begun', () => {
