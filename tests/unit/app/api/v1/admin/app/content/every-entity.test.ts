@@ -442,7 +442,7 @@ describe('resources', () => {
       save(
         req('PUT', '/resources/resource/f-plays', {
           ...video,
-          href: 'https://example.com/a-film.mp4',
+          href: 'https://example.com/a-video.mp4',
           revision: 1,
         }),
         item('resources', 'resource', 'f-plays')

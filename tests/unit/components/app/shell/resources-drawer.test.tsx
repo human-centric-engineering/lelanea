@@ -547,14 +547,14 @@ describe('to watch, to listen and to read', () => {
   it('opens a video no host plays in a new tab, safely, as a card with no still', async () => {
     serve({
       values: emptySelection({
-        videos: [linkOnlyVideo('old-film', 'An older video', '3:10')],
+        videos: [linkOnlyVideo('old-video', 'An older video', '3:10')],
       }),
     });
     renderDrawers();
     await openResources();
 
     const card = await within(panel()).findByRole('link', { name: /An older video/ });
-    expect(card).toHaveAttribute('href', 'https://videos.example/old-film');
+    expect(card).toHaveAttribute('href', 'https://videos.example/old-video');
     expect(card).toHaveAttribute('target', '_blank');
     expect(card).toHaveAttribute('rel', 'noopener noreferrer');
     expect(card.querySelector('img')).toBeNull();
