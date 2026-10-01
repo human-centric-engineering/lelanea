@@ -4,20 +4,24 @@ Description §3.9: the app welcomes, orients, gates and listens, then hands the
 person into the journey. §15 builds it one piece at a time, and this doc grows
 with it. What exists so far:
 
-| Piece                                 | Where                                        | Task  |
-| ------------------------------------- | -------------------------------------------- | ----- |
-| The discovery questions as data slots | `lib/app/onboarding/discovery-slots.ts`      | t-101 |
-| The names those slots use             | `lib/app/onboarding/discovery-slot-names.ts` | t-101 |
-| The Core Set switch                   | `lib/app/onboarding/discovery-config.ts`     | t-101 |
-| Weights                               | the questions editor, `/admin/app/content`   | t-101 |
-| The journey, started at the gate      | `lib/app/journey/start.ts`                   | t-102 |
-| The Onboarding module, `active`       | migration + seed `021-activate-onboarding`   | t-102 |
-| The Initiation, then the reads        | `components/app/onboarding/first-run*.tsx`   | t-103 |
-| What has been shown, per person       | `lib/app/onboarding/first-run*.ts`           | t-103 |
-| The reads in the shell                | `app/(lelanea)/app/read/[id]/page.tsx`       | t-103 |
-| The questions, asked and resumable    | `components/app/onboarding/discovery*.tsx`   | t-104 |
-| Answers, skips, where a person is     | `lib/app/onboarding/discovery*.ts`           | t-104 |
-| The write route                       | `app/api/v1/app/onboarding/discovery`        | t-104 |
+| Piece                                 | Where                                                                            | Task  |
+| ------------------------------------- | -------------------------------------------------------------------------------- | ----- |
+| The discovery questions as data slots | `lib/app/onboarding/discovery-slots.ts`                                          | t-101 |
+| The names those slots use             | `lib/app/onboarding/discovery-slot-names.ts`                                     | t-101 |
+| The Core Set switch                   | `lib/app/onboarding/discovery-config.ts`                                         | t-101 |
+| Weights                               | the questions editor, `/admin/app/content`                                       | t-101 |
+| The journey, started at the gate      | `lib/app/journey/start.ts`                                                       | t-102 |
+| The Onboarding module, `active`       | migration + seed `021-activate-onboarding`                                       | t-102 |
+| The Initiation, then the reads        | `components/app/onboarding/first-run*.tsx`                                       | t-103 |
+| What has been shown, per person       | `lib/app/onboarding/first-run*.ts`                                               | t-103 |
+| The reads in the shell                | `app/(lelanea)/app/read/[id]/page.tsx`                                           | t-103 |
+| The questions, asked and resumable    | `components/app/onboarding/discovery*.tsx`                                       | t-104 |
+| Answers, skips, where a person is     | `lib/app/onboarding/discovery*.ts`                                               | t-104 |
+| The write route                       | `app/api/v1/app/onboarding/discovery`                                            | t-104 |
+| The answers in the conversation       | `lib/app/onboarding/answers-context.ts`                                          | t-105 |
+| Begin the journey: into Values        | `lib/app/onboarding/hand-off.ts`                                                 | t-106 |
+| The step, and its route               | `components/app/onboarding/begin-journey.tsx`, `app/api/v1/app/onboarding/begin` | t-106 |
+| The Values module, `active`           | migration + seed `022-activate-values`                                           | t-106 |
 
 ## The journey starts when the gate passes
 
@@ -28,7 +32,7 @@ mechanics are in [`journey.md`](./journey.md#a-persons-journey-starts-at-the-gat
 **Onboarding is the one `active` module.** Daybreak's engine enters only a
 node whose module is live, and module rows are born `draft`. Owner ruling,
 30 Sept 2026: activate Onboarding only, and each other module when its
-content lands (Values with t-106). The migration
+content lands (Values, now active with t-106: see below). The migration
 `20261005100000_app_activate_onboarding_module` moves existing databases and
 the seed unit `021-activate-onboarding` moves a fresh one, each only from
 `draft`. From then on status is the operator's, at Framework → Modules.
@@ -189,6 +193,41 @@ not required: a set already stored in an install has none, and a required kind
 would refuse every edit to it. A fresh install gets the case from the seed
 file. An install that already has the set can add one on the Voice page (start
 a new version first if the current one has run).
+
+## Begin the journey: the hand-off into Values (t-106)
+
+§3.9 ends onboarding with a hand-off into Module 01. **Once every question in
+the current set is answered or skipped** (the Core Set or the whole set,
+whichever is on; skipped questions are allowed), the questions surface offers
+**Begin the journey**: on `/app` in place of the questions, and in
+Onboarding's area above them. The step says any skipped questions are still
+waiting in Onboarding, and that Values is not written yet.
+
+- **Pressing it** posts `POST /api/v1/app/onboarding/begin` (`withAuth`, API
+  keys refused), which runs `beginJourney`: Values entered, onboarding
+  completed (see [`journey.md`](./journey.md#onboarding-hands-the-person-into-values-15-t-106)).
+  It answers `next: /app/modules/values`, and the client goes there and tells
+  the shell the journey moved, so the map re-reads.
+- **Refused** with a `400` while a question is ahead, a `409` when the engine
+  refuses (Values not live, the map unpublished). Repeating it is `already`,
+  with no write.
+- **Offered until both halves are done**, read on every render as
+  `DiscoveryState.handedOff`, from the same node-state read the ledger uses. A
+  hand-off begun in this page is not offered again on a Back navigation.
+- **The answers stay revisable** in Onboarding's area afterwards (the authored
+  module says `produces.revisitable: true`). Nothing about the questions reads
+  the node's status: answers are slot values, and `recordNodeProgress` still
+  takes a skip on a completed node.
+- **The conversation** is already on the facilitator seat by then (t-105). The
+  `after` framing in `answers-context.ts` tells the AI to open the first
+  conversation after onboarding on something the person wrote. That the AI
+  speaks first, unprompted, is t-122 (owner ruling, 1 Oct 2026): nothing in
+  Sunrise or Daybreak can start a turn without a message from the person.
+
+**Proved on a real database** by `npm run smoke:app-onboarding` step 9:
+refused with questions ahead, then onboarding completed and Values entered by
+the real engine, read back by the map as done and current, repeated with no new
+event, and an answer revised afterwards.
 
 ## A discovery answer is a data slot
 

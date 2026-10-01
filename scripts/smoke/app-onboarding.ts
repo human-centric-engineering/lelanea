@@ -16,9 +16,14 @@
  * version, a skip and a leave on the same node, and a fresh read resuming
  * after them. Then a real turn (t-105): an answer with a word worth listening
  * for, and the facilitator seat asked to quote it, through the real context
- * block and the real model — the wiring no unit test can prove.
+ * block and the real model — the wiring no unit test can prove. Then the
+ * hand-off (t-106): refused with questions ahead, then, once every one is
+ * answered or skipped, onboarding completed and Values entered by the real
+ * engine (which needs Values live), read back by the map, repeated with no new
+ * event, and an answer still revised afterwards.
  *
- * Needs a seeded database: the map published (`001-journey-map`) and the
+ * Needs a seeded, migrated database: the map published (`001-journey-map`),
+ * Onboarding and Values active (their activation migrations or seeds), and the
  * gate's documents present, and a provider for her pinned model (step 8
  * spends one small turn). Skips (exit 0, says so) with no database, and fails
  * with a clear message when the map is not published.
@@ -39,7 +44,11 @@
 import { prisma } from '@/lib/db/client';
 import { ACKNOWLEDGEMENT_KINDS } from '@/lib/app/gateway/kinds';
 import { getGateStatus, recordAcknowledgement } from '@/lib/app/gateway/acknowledgements';
-import { JOURNEY_MAP_SLUG, ONBOARDING_NODE_KEY } from '@/lib/app/journey/map-definition';
+import {
+  JOURNEY_MAP_SLUG,
+  ONBOARDING_NODE_KEY,
+  VALUES_NODE_KEY,
+} from '@/lib/app/journey/map-definition';
 import { getJourneyMap } from '@/lib/app/journey/map';
 import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
@@ -56,6 +65,7 @@ import {
   leaveDiscovery,
   skipDiscoveryQuestion,
 } from '@/lib/app/onboarding/discovery-store';
+import { beginJourney } from '@/lib/app/onboarding/hand-off';
 import { recordNodeProgress } from '@/lib/framework/facilitation/journey/progress';
 import { NODE_STATE_STATUS } from '@/lib/framework/facilitation/journey/vocabulary';
 import { getPublishedMapVersion } from '@/lib/framework/facilitation/map/version-service';
@@ -327,6 +337,56 @@ async function main(): Promise<void> {
     // stream ends, fire-and-forget. Let it land before the cleanup removes the
     // conversation under it, or it logs a foreign-key failure that reads like ours.
     await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    console.log('\n9. The hand-off: begin the journey, into Values (t-106)');
+    check(
+      (await beginJourney(user.id)) === 'not_finished',
+      'with questions still ahead, beginning is refused'
+    );
+    const ahead = await getDiscoveryState(user.id);
+    if (ahead === null) throw new Error('the discovery state could not be read');
+    for (const question of ahead.set.questions) {
+      if (ahead.answers[question.id] || ahead.position.skipped.includes(question.id)) continue;
+      if (question.core || !ahead.set.pacing.allowPartialCompletion) {
+        await answerDiscoveryQuestion(user.id, ahead.set, question, {
+          words: 'A smoke answer.',
+          ...(question.conditionalFollowUp && { branch: 'no' as const }),
+        });
+      } else {
+        await skipDiscoveryQuestion(user.id, question.id);
+      }
+    }
+    const done = await getDiscoveryState(user.id);
+    check(
+      done !== null && done.position.finished && !done.handedOff,
+      'every question answered or skipped, and not yet handed off'
+    );
+    check((await beginJourney(user.id)) === 'begun', 'the journey is begun');
+    const after9 = await prisma.userNodeState.findMany({ where: { journeyId } });
+    const statusOf = (key: string) => after9.find((s) => s.nodeKey === key)?.status;
+    check(statusOf(ONBOARDING_NODE_KEY) === NODE_STATE_STATUS.completed, 'onboarding is completed');
+    check(statusOf(VALUES_NODE_KEY) === NODE_STATE_STATUS.active, 'Values is entered');
+    const drawer = await getJourneyMap(user.id);
+    const stateOf = (slug: string) => drawer?.modules.find((m) => m.slug === slug)?.state;
+    check(
+      stateOf(ONBOARDING_NODE_KEY) === 'done' && stateOf(VALUES_NODE_KEY) === 'current',
+      'the map reads onboarding done and Values current'
+    );
+    check((await getDiscoveryState(user.id))?.handedOff === true, 'the state reads handed off');
+    const eventsAfter = await prisma.journeyEvent.count({ where: { journeyId } });
+    check((await beginJourney(user.id)) === 'already', 'beginning again answers already');
+    check(
+      (await prisma.journeyEvent.count({ where: { journeyId } })) === eventsAfter,
+      'and writes no event'
+    );
+    const revisedAfter = await answerDiscoveryQuestion(user.id, fresh.set, first, {
+      ...firstAnswer,
+      words: 'Revised after the hand-off.',
+    });
+    check(
+      revisedAfter.outcome === 'written' && revisedAfter.version === 3,
+      'an answer is still revised after the hand-off, as version 3'
+    );
 
     console.log('\n✓ smoke:app-onboarding passed');
   } finally {
