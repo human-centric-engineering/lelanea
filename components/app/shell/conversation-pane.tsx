@@ -120,11 +120,17 @@ export function ConversationPane() {
   });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
-  const foldByKeyboard = useRef(false);
+  /*
+   * Set by a fold that unmounts the control holding focus — the collapse button,
+   * or the separator squeezed past the fold — so focus moves to the strip rather
+   * than falling to `<body>` (t-118). A pointer drag leaves it unset: the
+   * separator never takes focus from one, so there is nothing to hand on.
+   */
+  const focusStripOnFold = useRef(false);
 
   useEffect(() => {
-    if (!chatSlim || !foldByKeyboard.current) return;
-    foldByKeyboard.current = false;
+    if (!chatSlim || !focusStripOnFold.current) return;
+    focusStripOnFold.current = false;
     stripRef.current?.focus();
   }, [chatSlim]);
 
@@ -204,7 +210,15 @@ export function ConversationPane() {
         {wsOpen && width !== 'small' ? (
           <button
             type="button"
-            onClick={() => setChatSlim(true)}
+            /*
+             * Enter and Space arrive here as a click, and so does the mouse. Both
+             * hand focus to the strip: from a pointer `:focus-visible` draws no
+             * ring, and Tab carries on from the strip rather than the page top.
+             */
+            onClick={() => {
+              focusStripOnFold.current = true;
+              setChatSlim(true);
+            }}
             aria-label="Collapse the conversation"
             title="Collapse the conversation"
             className={cn(
@@ -306,7 +320,7 @@ export function ConversationPane() {
       {wsOpen && width === 'large' ? (
         <ResizeHandle
           onFold={() => {
-            foldByKeyboard.current = true;
+            focusStripOnFold.current = true;
           }}
         />
       ) : null}

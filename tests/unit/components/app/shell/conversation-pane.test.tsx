@@ -961,6 +961,38 @@ describe('collapsing the conversation', () => {
     expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeTruthy();
   });
 
+  // Folding unmounts the head, and the button in it that had focus, so without
+  // a hand-off focus falls to <body> and the next Tab starts from the top of the
+  // page (t-118). At `medium` this button is the only fold the pane has.
+  describe.each(['medium', 'large'] as const)('keeps keyboard focus at %s', (width) => {
+    it.each([
+      ['Enter', '{Enter}'],
+      ['Space', ' '],
+    ])('moves it to the strip when %s folds the pane', async (_key, keys) => {
+      const user = userEvent.setup();
+      renderInShell(<ConversationPane />, width);
+      screen.getByRole('button', { name: 'Collapse the conversation' }).focus();
+
+      await user.keyboard(keys);
+
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Open the conversation' })
+      );
+    });
+  });
+
+  it('moves it to the strip on a mouse click too, rather than dropping it on the page', async () => {
+    // A pointer fold unmounts the same button. The strip takes no visible ring
+    // from this — `:focus-visible` follows the pointer — but Tab carries on from
+    // where the person was rather than from the top.
+    renderInShell(<ConversationPane />, 'large');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Open the conversation' })
+    );
+  });
+
   it('offers none on the clean view, where there is nothing to give the width to', () => {
     mockPathname.current = '/app';
     renderInShell(<ConversationPane />, 'large');
