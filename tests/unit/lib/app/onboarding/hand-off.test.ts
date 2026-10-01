@@ -128,7 +128,6 @@ describe('beginJourney', () => {
 
     await expect(beginJourney(USER)).resolves.toBe('not_finished');
     expect(engine.events).toEqual([]);
-    expect(mocks.ensureJourneyStarted).not.toHaveBeenCalled();
   });
 
   it('allows skipped questions: finished means answered or skipped', async () => {
@@ -154,32 +153,14 @@ describe('beginJourney', () => {
     expect(engine.events).toEqual([{ nodeKey: 'onboarding', kind: 'complete' }]);
   });
 
-  it('starts a journey the backstop has not started yet, then begins it', async () => {
-    mocks.ensureJourneyStarted.mockResolvedValue('started');
-
-    await expect(beginJourney(USER)).resolves.toBe('begun');
-    expect(mocks.ensureJourneyStarted).toHaveBeenCalledWith(USER);
-  });
-
-  it('answers unavailable when the map is not published', async () => {
-    mocks.ensureJourneyStarted.mockResolvedValue('unpublished');
-
-    await expect(beginJourney(USER)).resolves.toBe('unavailable');
-    expect(engine.events).toEqual([]);
-  });
-
-  it('answers unavailable when there is no journey to transition', async () => {
+  it('never starts a journey: with none, it refuses and writes nothing (t-106 review round 3)', async () => {
+    // Starting one belongs to passing the gate. Starting one here would let a
+    // person who never acknowledged it in through the API.
     mocks.getJourney.mockResolvedValue(null);
 
     await expect(beginJourney(USER)).resolves.toBe('unavailable');
     expect(mocks.applyJourneyTransition).not.toHaveBeenCalled();
-  });
-
-  it('answers failed when the journey could not be started', async () => {
-    mocks.ensureJourneyStarted.mockResolvedValue('failed');
-
-    await expect(beginJourney(USER)).resolves.toBe('failed');
-    expect(engine.events).toEqual([]);
+    expect(mocks.ensureJourneyStarted).not.toHaveBeenCalled();
   });
 
   it('answers unavailable when the journey vanishes before Values is entered', async () => {

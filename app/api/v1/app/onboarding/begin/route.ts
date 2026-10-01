@@ -10,9 +10,10 @@
  * - **Only once the discovery set is behind them**: every question in the
  *   caller's current set answered or skipped. Otherwise a `400`.
  * - **Repeating it writes nothing**: `{ outcome: 'already' }`.
- * - **A transition the engine refuses** (Values not live, the map not
- *   published) is a `409`. Nothing is left half-done that a press again
- *   would not finish.
+ * - **No journey yet, or a transition the engine refuses** (Values not
+ *   live) is a `409`. It never starts a journey: that belongs to passing the
+ *   gate, which the shell layout checks. Nothing is left half-done that a
+ *   press again would not finish.
  *
  * The answer names where the person goes next, so the client does not keep a
  * second copy of the path.

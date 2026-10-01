@@ -208,9 +208,12 @@ waiting in Onboarding, and that Values is not written yet.
   completed (see [`journey.md`](./journey.md#onboarding-hands-the-person-into-values-15-t-106)).
   It answers `next: /app/modules/values`, and the client goes there and tells
   the shell the journey moved, so the map re-reads.
-- **Refused** with a `400` while a question is ahead, a `409` when the engine
-  refuses (Values not live, the map unpublished). Repeating it is `already`,
+- **Refused** with a `400` while a question is ahead, a `409` with no journey
+  or when the engine refuses (Values not live). Repeating it is `already`,
   with no write.
+- **It never starts a journey.** Starting one belongs to passing the gate,
+  and only the shell layout checks the gate before its backstop does it. The
+  step renders only inside that shell, so a person who can see it has one.
 - **Offered until both halves are done**, read on every render as
   `DiscoveryState.handedOff`, from the same node-state read the ledger uses. A
   hand-off begun in this page is not offered again on a Back navigation.

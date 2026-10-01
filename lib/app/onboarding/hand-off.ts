@@ -43,7 +43,6 @@ import {
   ONBOARDING_NODE_KEY,
   VALUES_NODE_KEY,
 } from '@/lib/app/journey/map-definition';
-import { ensureJourneyStarted } from '@/lib/app/journey/start';
 import { getDiscoveryState } from '@/lib/app/onboarding/discovery-store';
 import { handedOffFrom } from '@/lib/app/onboarding/hand-off-state';
 import { logger } from '@/lib/logging';
@@ -55,8 +54,9 @@ import { logger } from '@/lib/logging';
  * - `already` — both were done before; nothing written.
  * - `not_finished` — a question in the current set is neither answered nor
  *   skipped; nothing written.
- * - `unavailable` — the engine refused a transition (Values not live, or no
- *   journey that could be started); nothing more written.
+ * - `unavailable` — no journey to move on (it starts at the gate, never
+ *   here), or the engine refused a transition (Values not live); nothing
+ *   more written.
  * - `failed` — a read or a framework call threw; logged.
  */
 export type BeginJourneyOutcome = 'begun' | 'already' | 'not_finished' | 'unavailable' | 'failed';
@@ -74,12 +74,9 @@ export async function beginJourney(userId: string): Promise<BeginJourneyOutcome>
     if (discovery === null) return 'failed';
     if (!discovery.position.finished) return 'not_finished';
 
-    // A person past the gate whose journey never started (the backstop has
-    // not run yet) gets it here, rather than a refusal they cannot act on.
-    const started = await ensureJourneyStarted(userId);
-    if (started === 'unpublished') return 'unavailable';
-    if (started === 'failed') return 'failed';
-
+    // Never starts a journey. Starting one belongs to passing the gate, and
+    // only the gate's callers check it: the shell layout's backstop starts
+    // the journey of anyone past it before this step can render.
     const journey = await getJourney(viewer, key);
     if (!journey) return 'unavailable';
     const states = await getNodeStates(viewer, { journeyId: journey.id, subject: userId });
