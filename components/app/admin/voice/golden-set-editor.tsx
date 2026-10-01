@@ -43,6 +43,7 @@ const KIND_LABELS: Record<GoldenSetKind, string> = {
   'grounded-claim': 'A claim from the source material',
   'retrieval-empty': 'Nothing to draw on',
   refusal: 'Refusing',
+  mirroring: 'Handing their words back',
 };
 
 interface PromptDraft {

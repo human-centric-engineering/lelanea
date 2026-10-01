@@ -779,6 +779,10 @@ export const GOLDEN_SET_REQUIRED_KINDS = [
   // refusals the way the others prove her register, and the misuse smoke runs
   // them against the pinned model with a canary in the agent's prompt.
   'refusal',
+  // f-onboarding t-105: the person's own words handed back to them. The case
+  // carries the words in the prompt, because the comparison sends no context
+  // type and so no contributor puts their answers in front of the model.
+  'mirroring',
 ] as const;
 
 export type GoldenSetKind = (typeof GOLDEN_SET_REQUIRED_KINDS)[number];

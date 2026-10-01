@@ -381,7 +381,7 @@ describe('a stored case that is not the shape the seed writes', () => {
 
     expect(after.malformed).toEqual([0]);
     expect(after.prompts.map((p) => p.key)).not.toContain('first-hello');
-    expect(after.prompts).toHaveLength(8);
+    expect(after.prompts).toHaveLength(goldenSet.prompts.length - 1);
   });
 
   it('blocks every prompt edit until an import repairs it', async () => {

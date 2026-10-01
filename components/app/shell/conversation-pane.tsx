@@ -100,6 +100,7 @@ export function ConversationPane() {
     modulePlace,
     noteSlotsWritten,
     noteTurnSettled,
+    conversationSeat,
     ask,
     takeAsk,
   } = useShellLayout();
@@ -111,6 +112,9 @@ export function ConversationPane() {
   // question in the box here. None is layout, and all live there because the
   // panes are siblings (see `modulePlace`).
   const conversation = useConversation({
+    // The onboarding seat while the discovery questions are ahead of the
+    // person, the facilitator seat after (t-105). Each has its own transcript.
+    seat: conversationSeat,
     onSlotsWritten: noteSlotsWritten,
     onTurnSettled: noteTurnSettled,
   });
