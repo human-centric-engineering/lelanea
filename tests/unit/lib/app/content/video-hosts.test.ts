@@ -32,7 +32,9 @@ describe('a YouTube link', () => {
     ['a short link with a start time', `https://youtu.be/${ID}?t=30`],
     ['an embed link', `https://www.youtube.com/embed/${ID}`],
     ['a privacy-enhanced embed link', `https://www.youtube-nocookie.com/embed/${ID}`],
-    ['a Shorts link', `https://www.youtube.com/shorts/${ID}`],
+    ['a YouTube Music link', `https://music.youtube.com/watch?v=${ID}`],
+    ['a short link on www', `https://www.youtu.be/${ID}`],
+    ['an older /v/ link', `https://www.youtube.com/v/${ID}`],
     ['a live link', `https://www.youtube.com/live/${ID}`],
     ['an upper-case host', `https://WWW.YOUTUBE.COM/watch?v=${ID}`],
   ])('resolves %s to its id', (_what, href) => {
@@ -70,6 +72,12 @@ describe('a start time in the link', () => {
     ['minutes and seconds', `https://youtu.be/${ID}?t=1m30s`, '&start=90'],
     ['hours, minutes and seconds', `https://youtu.be/${ID}?t=1h2m3s`, '&start=3723'],
     ['an embed link’s start', `https://www.youtube.com/embed/${ID}?start=45`, '&start=45'],
+    ['a #t= fragment', `https://www.youtube.com/watch?v=${ID}#t=1m30s`, '&start=90'],
+    [
+      'a start when the t beside it is not a time',
+      `https://www.youtube.com/embed/${ID}?start=45&t=x`,
+      '&start=45',
+    ],
   ])('is carried into the embed from %s', (_what, href, start) => {
     expect(resolveVideoPlayer(href)?.embedUrl).toBe(embed(start));
   });
@@ -98,6 +106,8 @@ describe('a link no host plays', () => {
     ['an id with a character YouTube never uses', 'https://youtu.be/dQw4w9WgX.Q'],
     ['an id carrying markup', `https://www.youtube.com/watch?v=${ID}"><script>`],
     ['an embed path with no id', 'https://www.youtube.com/embed/'],
+    // Vertical, and the frame is 16:9: refused until a frame can take its shape.
+    ['a Shorts link', `https://www.youtube.com/shorts/${ID}`],
     // YouTube's own words in the id's place: eleven characters, but no video.
     [
       'a playlist embed',

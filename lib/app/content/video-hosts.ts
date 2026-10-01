@@ -58,12 +58,19 @@ const YOUTUBE_HOSTS = new Set([
   'youtube.com',
   'www.youtube.com',
   'm.youtube.com',
+  'music.youtube.com',
   'youtube-nocookie.com',
   'www.youtube-nocookie.com',
 ]);
 
-/** The path forms whose second segment is the id: `/embed/<id>`, `/shorts/<id>`, `/live/<id>`. */
-const YOUTUBE_ID_PATHS = new Set(['embed', 'shorts', 'live']);
+/**
+ * The path forms whose second segment is the id: `/embed/<id>`, `/live/<id>`,
+ * and the older `/v/<id>`. Not `/shorts/<id>`: a Short is vertical, and the
+ * card and the lightbox are the design's 16:9, so it would play as a strip
+ * between black bars. It is refused until a frame takes its shape from the
+ * video.
+ */
+const YOUTUBE_ID_PATHS = new Set(['embed', 'live', 'v']);
 
 /**
  * YouTube's own words in the id's place, eleven characters like an id:
@@ -73,19 +80,29 @@ const YOUTUBE_ID_PATHS = new Set(['embed', 'shorts', 'live']);
  */
 const YOUTUBE_RESERVED_IDS = new Set(['videoseries', 'live_stream']);
 
-/**
- * Where the video should start, in whole seconds, from the link's `t` or
- * `start`: `90`, `90s`, `1m30s` or `1h2m3s`. `null` for none, or for anything
- * else, so nothing but digits reaches the embed.
- */
-function startSecondsFrom(url: URL): number | null {
-  const raw = url.searchParams.get('t') ?? url.searchParams.get('start');
-  if (raw === null) return null;
+/** One start time as YouTube writes it: `90`, `90s`, `1m30s` or `1h2m3s`. */
+function secondsOf(raw: string | null): number | null {
+  if (raw === null || raw === '') return null;
   const match = /^(?:(\d{1,2})h)?(?:(\d{1,3})m)?(?:(\d{1,5})s?)?$/.exec(raw);
-  if (!match || raw === '') return null;
+  if (!match) return null;
   const [, h, m, s] = match;
   const seconds = Number(h ?? 0) * 3600 + Number(m ?? 0) * 60 + Number(s ?? 0);
   return seconds > 0 ? seconds : null;
+}
+
+/**
+ * Where the video should start, in whole seconds: the link's `t` or `start`
+ * query, or a `#t=` fragment (YouTube's older share form). The first of those
+ * that reads as a time wins. `null` for none, so nothing but digits reaches
+ * the embed.
+ */
+function startSecondsFrom(url: URL): number | null {
+  const fragment = new URLSearchParams(url.hash.replace(/^#/, ''));
+  for (const raw of [url.searchParams.get('t'), url.searchParams.get('start'), fragment.get('t')]) {
+    const seconds = secondsOf(raw);
+    if (seconds !== null) return seconds;
+  }
+  return null;
 }
 
 /** The id a YouTube link names, or `null` when it names none. */
@@ -93,7 +110,7 @@ function youtubeIdFrom(url: URL): string | null {
   const host = url.hostname.toLowerCase();
   const segments = url.pathname.split('/').filter(Boolean);
   let candidate: string | null | undefined;
-  if (host === 'youtu.be') {
+  if (host === 'youtu.be' || host === 'www.youtu.be') {
     candidate = segments[0];
   } else if (YOUTUBE_HOSTS.has(host)) {
     if (segments.length === 1 && segments[0] === 'watch') candidate = url.searchParams.get('v');
