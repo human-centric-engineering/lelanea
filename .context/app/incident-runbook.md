@@ -81,11 +81,16 @@ Details: [`agent.md` → The pause switch](./agent.md#the-pause-switch).
 
 ### Take the agent off a seat
 
-**`/admin/orchestration/agents` → the guide agent (`lelanea-guide`) → Active
-off.** An inactive agent gives no facilitation surface
-(`resolveFacilitationSurface`), so both of its seats answer **404**. Setting its
-visibility to anything other than `public` has the same effect.
+**`/admin/orchestration/agents` → the guide agent (`lelanea-guide`) →
+visibility `internal`.** The facilitation surface serves only a `public` agent
+(`resolveFacilitationSurface`), so both of its seats answer **404**. A re-seed
+leaves it narrowed: visibility is operator-owned, and seed `007` widens the
+agent only once ([`agent.md`](./agent.md#how-the-agent-is-reached)). Set it
+back to `public` to restore it.
 
+- **Not the Active switch.** The guide is a system agent, and the admin refuses
+  to deactivate one ("System agents cannot be deactivated"). The switch looks
+  like the lever and does nothing.
 - **Prefer the pause.** A 404 ends a conversation silently. The pause tells the
   person, in plain words, what happened. Take the agent off a seat only when it
   must not be reachable at all: the agent compromised, or its prompt or tools
