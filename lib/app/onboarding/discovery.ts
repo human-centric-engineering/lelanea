@@ -188,7 +188,8 @@ export interface AskingSet {
  * Whether `set` asks any questions in the area of the module `slug`. Lives
  * here rather than on the module page: the page sits in a route group the
  * framework boundary check reads as core, where the set's field names are
- * framework vocabulary.
+ * framework vocabulary. A workaround: daybreak#285 asks for a leaf seam in
+ * that check, and on the sync that lands it this can go back inline.
  */
 export function asksIn(set: AskingSet, slug: string): boolean {
   return set.moduleSlug === slug && set.questions.length > 0;
