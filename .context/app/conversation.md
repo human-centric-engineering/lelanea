@@ -36,8 +36,10 @@ app/api/v1/app/conversation/route.ts           GET — the transcript, read back
 ## The transcript read — `GET /api/v1/app/conversation?seat=`
 
 Member only, `no-store`, `ownership: self`. `seat` defaults to `facilitator`
-— the seat the pane speaks to in release 1 — and accepts `onboarding` for the
-feature that owns it; anything else is a 400. No conversation yet is an empty
+and accepts `onboarding`; anything else is a 400. The pane always names one:
+the `onboarding` seat while the discovery questions are ahead of the person,
+`facilitator` after (f-onboarding t-105, see
+[`onboarding.md`](./onboarding.md#the-conversation-mirrors-the-answers-back-t-105)). No conversation yet is an empty
 transcript with `conversationId: null`, **not a 404**: the pane renders either
 way.
 
