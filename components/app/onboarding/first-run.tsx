@@ -84,7 +84,8 @@ function record(userId: string, beat: FirstRunBeat): void {
 /**
  * The first-run sequence: the Initiation, then each read offered in turn
  * (t-103, §3.9). Renders over the conversation on `/app` until every beat is
- * behind the person, then renders nothing, which leaves the conversation.
+ * behind the person, then renders `children`: the discovery questions
+ * (t-104), or nothing, which leaves the conversation.
  *
  * `steps` is only what is still to come. The server worked that out from the
  * onboarding node's ledger, so a reload resumes at the first beat not yet
@@ -100,9 +101,12 @@ function record(userId: string, beat: FirstRunBeat): void {
 export function FirstRun({
   userId,
   steps: fromServer,
+  children,
 }: {
   userId: string;
   steps: readonly FirstRunStep[];
+  /** What follows the last beat: the discovery questions (t-104). */
+  children?: React.ReactNode;
 }) {
   // Fixed for this mount: filtering on every render would shift the list
   // under `index` as each beat is passed.
@@ -129,7 +133,7 @@ export function FirstRun({
   }, [opened]);
 
   const step = steps[index];
-  if (!step) return null;
+  if (!step) return <>{children}</>;
 
   const next = (): void => {
     record(userId, step.beat);

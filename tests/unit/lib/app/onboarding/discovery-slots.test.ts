@@ -49,6 +49,7 @@ const loggerMock = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn(), info: vi.f
 vi.mock('@/lib/logging', () => ({ logger: loggerMock }));
 
 import {
+  getDiscoveryModuleSlug,
   getDiscoverySet,
   loadDiscoveryModuleSlots,
   registerJourneyModules,
@@ -508,5 +509,23 @@ describe('which questions a person is asked', () => {
 
     expect(asked.preamble.text).toBe('Not to be rushed.');
     expect(asked.pacing.allowPartialCompletion).toBe(true);
+  });
+});
+
+describe('which module asks them, read narrowly', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('is the set’s module, as a module slug, from a read of that one column', async () => {
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue({ moduleSlug: 'module_00_onboarding' });
+    await expect(getDiscoveryModuleSlug()).resolves.toBe('onboarding');
+    expect(prismaMock.appQuestionSet.findFirst).toHaveBeenCalledWith({
+      where: { slug: 'onboarding_discovery_questions' },
+      select: { moduleSlug: true },
+    });
+  });
+
+  it('is null when the set is not seeded', async () => {
+    prismaMock.appQuestionSet.findFirst.mockResolvedValue(null);
+    await expect(getDiscoveryModuleSlug()).resolves.toBeNull();
   });
 });

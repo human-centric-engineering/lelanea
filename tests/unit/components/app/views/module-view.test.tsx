@@ -94,6 +94,17 @@ describe('ModuleView', () => {
     expect(screen.getByText(/This module is not written yet/)).toBeInTheDocument();
   });
 
+  it('shows what a module has written in place of the placeholder, keeping the rest (t-104)', () => {
+    renderInShell(
+      <ModuleView {...VALUES}>
+        <p>The questions</p>
+      </ModuleView>
+    );
+    expect(screen.getByText('The questions')).toBeInTheDocument();
+    expect(screen.queryByText('module placeholder')).toBeNull();
+    expect(screen.getByText(VALUES.tierIntent)).toBeInTheDocument();
+  });
+
   it('disables "Talk about this part" with the composer’s reason', () => {
     renderInShell(<ModuleView {...VALUES} />);
     const talk = screen.getByRole('button', { name: /Talk about this part/ });

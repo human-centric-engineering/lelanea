@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 
+import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
 import { FirstRunView } from '@/components/app/onboarding/first-run-view';
+import { getDiscoveryState } from '@/lib/app/onboarding/discovery-store';
 import { pendingBeats } from '@/lib/app/onboarding/first-run';
 import { getFirstRunProgress } from '@/lib/app/onboarding/first-run-store';
 import { getServerSession } from '@/lib/auth/utils';
@@ -18,7 +20,7 @@ export const metadata: Metadata = { title: 'The conversation' };
 
 /**
  * The shell's clean view — and it renders nothing, on purpose, once the
- * person's first run is behind them.
+ * person's first run and discovery questions are behind them.
  *
  * `/app` is the conversation with no module beside it, and the conversation is
  * `ConversationPane`, which the layout renders for every route in this group.
@@ -44,19 +46,40 @@ export const metadata: Metadata = { title: 'The conversation' };
  *
  * What is still to come is read from the onboarding node's ledger on every
  * render, so a reload resumes where the person left off. A ledger that could
- * not be read renders nothing: see `first-run-store.ts`. The session is read
- * again rather than trusted from the layout, as the account page does, because
- * this renders the person's name.
+ * not be read renders nothing: see `first-run-store.ts`.
+ *
+ * ## Then the discovery questions (t-104)
+ *
+ * After the last read, the first sitting of the discovery questions, which the
+ * person can leave at any question. On a later visit the next question is
+ * offered rather than asked, and once every one is answered or skipped this
+ * renders nothing. The questions are always in Onboarding's own area too
+ * (`/app/modules/onboarding`). State that could not be read renders nothing,
+ * as the ledger does.
+ *
+ * The session is read again rather than trusted from the layout, as the
+ * account page does, because this renders the person's name.
  */
 export default async function ShellHomePage() {
   const session = await getServerSession();
   if (!session) return null;
 
-  const progress = await getFirstRunProgress(session.user.id);
+  const userId = session.user.id;
+  const [progress, discovery] = await Promise.all([
+    getFirstRunProgress(userId),
+    getDiscoveryState(userId),
+  ]);
   if (progress === null) return null;
 
-  const pending = pendingBeats(progress);
-  if (pending.length === 0) return null;
+  const questions =
+    discovery === null ? null : <DiscoveryView userId={userId} state={discovery} where="app" />;
 
-  return <FirstRunView userId={session.user.id} pending={pending} userName={session.user.name} />;
+  const pending = pendingBeats(progress);
+  if (pending.length === 0) return questions;
+
+  return (
+    <FirstRunView userId={userId} pending={pending} userName={session.user.name}>
+      {questions}
+    </FirstRunView>
+  );
 }
