@@ -89,6 +89,14 @@ describe('the authored golden set', () => {
     }
   });
 
+  it('carries a mirroring case, which the file schema allows but never requires (t-105)', () => {
+    expect(getVoiceGoldenSet().prompts.some((prompt) => prompt.kind === 'mirroring')).toBe(true);
+    // The fixture covers only the required kinds, and still parses.
+    const fixtureKinds: string[] = validGoldenSetFile().prompts.map((prompt) => prompt.kind);
+    expect(fixtureKinds).not.toContain('mirroring');
+    expect(voiceGoldenSetFileSchema.safeParse(validGoldenSetFile()).success).toBe(true);
+  });
+
   it('still says it is awaiting her sign-off', () => {
     // MEANT to be edited, once, on the day she signs the set off — exactly like
     // its two siblings. Until then the file says what it is, and this pins that

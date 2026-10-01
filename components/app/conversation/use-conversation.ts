@@ -237,6 +237,33 @@ export function useConversation(options: Options = {}): ConversationState {
       });
   }, [fetchImpl]);
 
+  // A new seat is a different conversation (t-105: onboarding, then the
+  // facilitator). Start it from nothing — no entries, no turn, no ending — and
+  // loading, so nothing can be sent into the old one's transcript while the new
+  // one is read. Adjusted during render rather than in an effect, so the old
+  // seat's transcript is never painted under the new seat.
+  const [seatShown, setSeatShown] = useState(seat);
+  if (seatShown !== seat) {
+    setSeatShown(seat);
+    setEntries([]);
+    setLive(null);
+    setUnreadable(false);
+    setPhase('loading');
+  }
+  // ...and let go of the old seat's turn. It carries on server-side and is
+  // recorded in ITS transcript (§08 t-55); here it must not finish into the new
+  // one, and its id must not be retried on another seat. Runs on unmount too,
+  // which aborts exactly as the effect below already does.
+  useEffect(
+    () => () => {
+      inFlight.current?.abort();
+      inFlight.current = null;
+      busy.current = false;
+      kept.current = null;
+    },
+    [seat]
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     fetchTranscript(seat, { signal: controller.signal, fetchImpl })
@@ -316,7 +343,12 @@ export function useConversation(options: Options = {}): ConversationState {
         suggestions: [],
       });
 
+      // A turn let go — the pane unmounted, or the seat moved on (t-105) — is
+      // no longer this pane's: whatever its stream still delivers is dropped
+      // here rather than trusted to stop, because a body read does not always
+      // end when its request is aborted.
       const finish = (outcome: ConversationEntry[]) => {
+        if (controller.signal.aborted) return;
         setEntries((previous) => [...previous, ...outcome]);
         setLive(null);
         setPhase('idle');
@@ -385,6 +417,7 @@ export function useConversation(options: Options = {}): ConversationState {
         };
 
         const apply = (event: ConversationEvent) => {
+          if (controller.signal.aborted) return;
           switch (event.type) {
             case 'start':
               // The server has the words: now they may leave the box.

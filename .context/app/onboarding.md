@@ -184,11 +184,11 @@ the pace. After it, the answers are the baseline to quote from.
 step 8: a stored answer, then a facilitator turn asked to quote it.
 
 **The golden set** has a `mirroring` kind. Its case puts the person's words in
-the prompt, because the comparison sends no context type. A fresh install gets
-it from the seed file. An install that already has the set adds a case of that
-kind on the Voice page (start a new version first if the current one has run).
-Until then, the editor refuses an edit that leaves no `mirroring` case, and
-says so.
+the prompt, because the comparison sends no context type. The kind is allowed,
+not required: a set already stored in an install has none, and a required kind
+would refuse every edit to it. A fresh install gets the case from the seed
+file. An install that already has the set can add one on the Voice page (start
+a new version first if the current one has run).
 
 ## A discovery answer is a data slot
 

@@ -42,8 +42,13 @@ vi.mock('@/components/app/ui/consent-clearance', () => ({ useConsentBannerCleara
 /** Every URL the pane fetched, in order. */
 const calls: string[] = [];
 
+/** When set, a turn's stream stays open until the test closes it. */
+const held = { stream: null as ReadableStreamDefaultController<Uint8Array> | null, hold: false };
+
 beforeEach(() => {
   calls.length = 0;
+  held.hold = false;
+  held.stream = null;
   window.localStorage.clear();
   forgetDiscoveryPage();
   post.mockResolvedValue({ version: 1 });
@@ -66,6 +71,17 @@ beforeEach(() => {
         return new Response(JSON.stringify({ success: true, data: { voiceInput: 'off' } }));
       }
       if (url.includes('/chat/stream')) {
+        if (held.hold) {
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              held.stream = controller;
+            },
+          });
+          return new Response(body, {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        }
         return new Response('event: done\ndata: {}\n\n', {
           status: 200,
           headers: { 'content-type': 'text/event-stream' },
@@ -146,6 +162,47 @@ describe('the last question answered', () => {
     await sendATurn(user);
     await waitFor(() => expect(turnsOn('facilitator')).toHaveLength(1));
     expect(turnsOn('onboarding')).toHaveLength(0);
+  });
+});
+
+describe('a turn still being answered when the seat moves on', () => {
+  it('does not finish into the new seat’s transcript, and the new seat starts empty', async () => {
+    const user = userEvent.setup();
+    held.hold = true;
+    render(
+      <ShellLayoutProvider conversationSeat="onboarding">
+        <ConversationPane />
+        {questions()}
+      </ShellLayoutProvider>
+    );
+    await waitFor(() => expect(transcriptReads()).toHaveLength(1));
+    await sendATurn(user);
+    await waitFor(() => expect(turnsOn('onboarding')).toHaveLength(1));
+    expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('hello');
+
+    await user.type(screen.getByLabelText(DISCOVERY_COPY.answerLabel), 'The quiet.');
+    await user.click(screen.getByRole('button', { name: DISCOVERY_COPY.save }));
+    await waitFor(() =>
+      expect(transcriptReads().at(-1)).toBe('/api/v1/app/conversation?seat=facilitator')
+    );
+
+    // The old turn's stream ends after the move. Nothing of it lands here.
+    const encoder = new TextEncoder();
+    try {
+      held.stream?.enqueue(encoder.encode('event: content\ndata: {"delta":"late words"}\n\n'));
+      held.stream?.enqueue(encoder.encode('event: done\ndata: {}\n\n'));
+      held.stream?.close();
+    } catch {
+      // Already cancelled by the abort, which is the point.
+    }
+    await waitFor(() => expect(screen.queryByText(CONVERSATION_COPY.loading)).toBeNull());
+    expect(screen.queryByRole('article', { name: 'You said' })).toBeNull();
+    expect(screen.queryByText('late words')).toBeNull();
+
+    // And the composer is free for the new seat.
+    held.hold = false;
+    await sendATurn(user);
+    await waitFor(() => expect(turnsOn('facilitator')).toHaveLength(1));
   });
 });
 
