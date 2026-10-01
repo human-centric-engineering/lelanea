@@ -727,20 +727,21 @@ nothing). `words` is per key — a `quote` and a few short
 words of its own reads. An article is a foundational document (`documentId`) or
 a link (`href`), never both, as a union.
 
-**An audio piece plays inline in its card (t-120).** Its first supported source
-is a direct `https` link to an `.mp3` or `.m4a` file (`lib/app/content/audio-hosts.ts`),
-played by the browser's own `<audio>` with the card's controls: play/pause, a
-progress bar, elapsed and total time. `preload="none"`, so nothing downloads
-until play; one piece plays at a time; closing the drawer or moving to
-something else stops it. The rule for writing one is the video's: a link being
-set or changed must be a file (`audioFieldsRefusal`), and one carried unchanged
-is not re-checked. Each served piece carries `player` (`src`, `type`), or `null`
-for a link that is not a file, which the drawer shows as a card that opens it.
-**Where a file can play from is the CSP's `media-src`**, fixed at
-`'self' blob:` by Sunrise with no app seam (asked on sunrise#841). A file on
-another origin is refused by the browser, and the card then says it could not
-be played and offers the link. When her audio host is chosen, its origin is
-added through that seam, or a fork fix recorded in `divergences.md`.
+**An audio piece plays inline in its card (t-120).** A direct `https` link to an
+`.mp3` or `.m4a` file (`lib/app/content/audio-hosts.ts`) is played by the
+browser's own `<audio>` with the card's controls: play/pause, a progress bar,
+elapsed and total time. Any other audio link is accepted too (owner ruling): an
+episode page on a podcast site opens in a new tab, as every audio link did
+before. So unlike a video, nothing is refused for its host. Each served piece
+carries `player` (`src`, `type`), or `null` for a link that is not a file.
+`preload="none"`, so nothing downloads until play; one thing plays at a time
+(starting a piece or opening a video stops the rest, `media-playback.ts`);
+closing the drawer stops it. **Where a file can play from is the CSP's
+`media-src`**, fixed at `'self' blob:` by Sunrise with no app seam (asked on
+sunrise#841). A file on another origin is refused by the browser, and the card
+then says it could not be played and offers the link. When her audio host is
+chosen, its origin is added through that seam, or a fork fix recorded in
+`divergences.md`.
 
 **A video plays in the page, from a host that can play it (t-119).** Where her
 videos will be hosted is undecided, so `lib/app/content/video-hosts.ts` resolves

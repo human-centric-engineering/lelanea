@@ -1,22 +1,14 @@
 'use client';
 
 import { ExternalLink, Headphones, Pause, Play } from 'lucide-react';
-import { usePathname } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { announcePlay, onOtherPlay } from '@/components/app/shell/media-playback';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { TIMED_CARD_CLASS } from '@/components/app/shell/video-card';
 import type { AudioPlayer } from '@/lib/app/content/audio-hosts';
 import type { ResourceAudioView } from '@/lib/app/content/resources';
 import { cn } from '@/lib/utils';
-
-/**
- * Says "this card started playing", so every other card can stop: one piece
- * plays at a time. A window event rather than shared state, because the cards
- * are siblings in a list the drawer re-renders, and none of them owns the
- * others.
- */
-const PLAY_EVENT = 'lelanea:audio-play';
 
 /** `754` → `12:34`; `3723` → `1:02:03`. */
 export function formatClock(seconds: number): string {
@@ -43,11 +35,17 @@ export function formatClock(seconds: number): string {
  *
  * ## When it stops
  *
- * Starting one piece pauses any other (`PLAY_EVENT`). Closing the drawer
- * pauses it: the panel stays mounted when closed, so its sound would otherwise
- * carry on behind the work. So does moving to something else in the
- * workspace, because the drawer follows what is open and a piece belonging to
- * everything would otherwise keep playing under the next module's words.
+ * Starting a piece, or opening a video, pauses any other (`media-playback.ts`),
+ * announced only once playback has actually started, so a play the browser
+ * declines stops nothing. Closing the drawer pauses it: the panel stays mounted
+ * when closed, so its sound would otherwise carry on behind the work. Moving to
+ * something else in the workspace unmounts the card when the drawer's pieces
+ * change, and a media element taken out of the page stops. When they do not
+ * change (a piece belonging to everything, beside a page with nothing of its
+ * own), it keeps playing, which is what a reader moving on with it would want.
+ *
+ * The drawer keys the card by its file, so an edited link starts a fresh card
+ * rather than carrying the old file's length or failure.
  *
  * ## No captions yet
  *
@@ -76,24 +74,18 @@ export function AudioCard({
   const [length, setLength] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const { drawer } = useShellLayout();
-  const pathname = usePathname();
 
-  // Another card started: stop this one.
-  useEffect(() => {
-    const onOtherPlay = (event: Event) => {
-      if (event instanceof CustomEvent && event.detail !== piece.id) audioRef.current?.pause();
-    };
-    window.addEventListener(PLAY_EVENT, onOtherPlay);
-    return () => window.removeEventListener(PLAY_EVENT, onOtherPlay);
-  }, [piece.id]);
+  // Another piece started, or a video opened: stop this one.
+  useEffect(() => onOtherPlay(piece.id, () => audioRef.current?.pause()), [piece.id]);
 
-  // The drawer closed, or the reader moved on to something else.
+  // The drawer closed.
   useEffect(() => {
     if (drawer !== 'resources') audioRef.current?.pause();
   }, [drawer]);
-  useEffect(() => {
-    audioRef.current?.pause();
-  }, [pathname]);
+
+  const takeLength = (seconds: number) => {
+    if (Number.isFinite(seconds) && seconds > 0) setLength(seconds);
+  };
 
   const toggle = () => {
     const audio = audioRef.current;
@@ -102,9 +94,9 @@ export function AudioCard({
       audio.pause();
       return;
     }
-    window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: piece.id }));
     // A rejected play() is either the file failing, which the `error` event
-    // reports, or the browser declining, which leaves the button as it was.
+    // reports, or the browser declining, which leaves the button as it was and
+    // stops nothing, since only an actual start is announced.
     audio.play()?.catch(() => undefined);
   };
 
@@ -131,14 +123,17 @@ export function AudioCard({
         ref={audioRef}
         src={player.src}
         preload="none"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          announcePlay(piece.id);
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) => {
-          const seconds = event.currentTarget.duration;
-          if (Number.isFinite(seconds)) setLength(seconds);
-        }}
+        // Some files report no finite length at first (`Infinity`) and give
+        // it later, so both events are read.
+        onLoadedMetadata={(event) => takeLength(event.currentTarget.duration)}
+        onDurationChange={(event) => takeLength(event.currentTarget.duration)}
         onError={() => {
           setFailed(true);
           setPlaying(false);
@@ -159,8 +154,9 @@ export function AudioCard({
           <button
             type="button"
             onClick={toggle}
+            // The label says the state ("Pause …" while it plays), so no
+            // `aria-pressed`: a toggle's name must not change with its state.
             aria-label={`${playing ? 'Pause' : 'Play'} ${piece.title}`}
-            aria-pressed={playing}
             className={cn(
               'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
               'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]',

@@ -8,6 +8,10 @@
  * `<audio>` element and our own controls. A host-specific player, or upload in
  * the admin, is a later entry here (Hub idea #41).
  *
+ * **Any other audio link is still accepted** (owner ruling, t-120 review): an
+ * episode page on a podcast site or Spotify opens in a new tab, as every audio
+ * link did before. Unlike a video, nothing is refused for its host.
+ *
  * **The CSP decides where it can actually play from.** `media-src` is fixed at
  * `'self' blob:` in Sunrise's `lib/security/headers.ts`, with no app seam, so a
  * file on another origin is refused by the browser until its origin is allowed.
@@ -29,19 +33,19 @@
 export interface AudioPlayer {
   /** The file's URL, as stored: `https`, ending `.mp3` or `.m4a`. */
   src: string;
-  /** Its media type, for the `<source>` a client may want to declare. */
+  /**
+   * Its media type. The web card does not need it (the browser sniffs the
+   * file); a native client choosing a player may.
+   */
   type: 'audio/mpeg' | 'audio/mp4';
 }
 
 /** The file types an audio link may name today, as an admin reads them. */
 export const SUPPORTED_AUDIO_FILES = ['.mp3', '.m4a'] as const;
 
-/** The admin's refusal for an audio link that is not one. */
-export const UNSUPPORTED_AUDIO_LINK_MESSAGE = `An audio link must be an https link to an audio file ending ${SUPPORTED_AUDIO_FILES.join(
-  ' or '
-)}, such as https://…/episode.mp3, so it can play in the page.`;
-
-const TYPE_BY_EXTENSION: Readonly<Record<string, AudioPlayer['type']>> = {
+const TYPE_BY_EXTENSION: Readonly<
+  Record<(typeof SUPPORTED_AUDIO_FILES)[number], AudioPlayer['type']>
+> = {
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
 };
@@ -58,30 +62,10 @@ export function resolveAudioPlayer(href: string): AudioPlayer | null {
     return null;
   }
   // `https` only: a page served over https will not play `http` media, so an
-  // `http` link would be accepted here and then fail in every browser.
+  // `http` file is shown as a card that opens it, not a player that cannot.
   if (url.protocol !== 'https:') return null;
   const path = url.pathname.toLowerCase();
   const extension = SUPPORTED_AUDIO_FILES.find((ext) => path.endsWith(ext));
   if (extension === undefined) return null;
-  const type = TYPE_BY_EXTENSION[extension];
-  if (type === undefined) return null;
-  return { src: url.href, type };
-}
-
-/**
- * The refusal for an audio piece's link being written, or `null` when it may
- * be: `null` unless the resource is an audio piece with a link that is new or
- * changed. A link carried unchanged is not re-checked, so an audio piece
- * entered before t-120 still exports and can have its title corrected. The
- * same rule as `videoFieldsRefusal`, asked by the same callers.
- *
- * @param before - the resource as stored, or `null` for a new one
- */
-export function audioFieldsRefusal(
-  before: { href: string | null } | null,
-  next: { kind: string; href: string | null }
-): string | null {
-  if (next.kind !== 'audio' || next.href === null) return null;
-  if (before !== null && before.href === next.href) return null;
-  return resolveAudioPlayer(next.href) === null ? UNSUPPORTED_AUDIO_LINK_MESSAGE : null;
+  return { src: url.href, type: TYPE_BY_EXTENSION[extension] };
 }

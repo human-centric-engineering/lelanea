@@ -1,6 +1,6 @@
 /**
- * Unit Tests: which audio links play inline, and the rule for writing one
- * (f-resources t-120).
+ * Unit Tests: which audio links play inline (f-resources t-120). Any other
+ * audio link is accepted and opens in a new tab; this is only which ones play.
  *
  * An audio piece's `<audio src>` is its stored link, so what is accepted must
  * be a direct `https` link to an `.mp3` or `.m4a` file and nothing that only
@@ -12,11 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import {
-  audioFieldsRefusal,
-  resolveAudioPlayer,
-  UNSUPPORTED_AUDIO_LINK_MESSAGE,
-} from '@/lib/app/content/audio-hosts';
+import { resolveAudioPlayer } from '@/lib/app/content/audio-hosts';
 
 describe('an audio link that plays inline', () => {
   it.each([
@@ -46,36 +42,5 @@ describe('an audio link that does not', () => {
     ['something that is not a URL', 'one.mp3'],
   ])('resolves %s to no player', (_what, href) => {
     expect(resolveAudioPlayer(href)).toBeNull();
-  });
-});
-
-describe('the rule for writing an audio link', () => {
-  const FILE = 'https://cdn.example/one.mp3';
-  const PAGE = 'https://soundcloud.com/her/an-episode';
-
-  it('refuses a new audio piece whose link is not a file, naming what is wanted', () => {
-    expect(audioFieldsRefusal(null, { kind: 'audio', href: PAGE })).toBe(
-      UNSUPPORTED_AUDIO_LINK_MESSAGE
-    );
-    expect(UNSUPPORTED_AUDIO_LINK_MESSAGE).toMatch(/\.mp3 or \.m4a/);
-  });
-
-  it('accepts a new audio piece whose link is a file', () => {
-    expect(audioFieldsRefusal(null, { kind: 'audio', href: FILE })).toBeNull();
-  });
-
-  it('leaves an older piece’s link alone when it is carried unchanged', () => {
-    expect(audioFieldsRefusal({ href: PAGE }, { kind: 'audio', href: PAGE })).toBeNull();
-  });
-
-  it('refuses changing an older piece’s link to another that is not a file', () => {
-    expect(
-      audioFieldsRefusal({ href: PAGE }, { kind: 'audio', href: 'https://example.com/x' })
-    ).toBe(UNSUPPORTED_AUDIO_LINK_MESSAGE);
-  });
-
-  it('has nothing to say about a video or an article', () => {
-    expect(audioFieldsRefusal(null, { kind: 'video', href: PAGE })).toBeNull();
-    expect(audioFieldsRefusal(null, { kind: 'article', href: PAGE })).toBeNull();
   });
 });

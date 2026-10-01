@@ -663,10 +663,7 @@ describe('an audio piece that is a file', () => {
     await within(panel()).findByText(/anchor/);
 
     expect(within(listen()).queryByRole('link')).toBeNull();
-    expect(within(listen()).getByRole('button', { name: 'Play A quiet hour' })).toHaveAttribute(
-      'aria-pressed',
-      'false'
-    );
+    expect(within(listen()).getByRole('button', { name: 'Play A quiet hour' })).toBeInTheDocument();
     expect(audioElement()).toHaveAttribute('src', 'https://audio.example/a-quiet-hour.mp3');
     // Nothing is downloaded until play: the length shown is the admin's, and
     // there is nothing to seek in yet.
@@ -686,7 +683,9 @@ describe('an audio piece that is a file', () => {
 
     expect(audioElement().paused).toBe(false);
     const pause = within(listen()).getByRole('button', { name: 'Pause A quiet hour' });
-    expect(pause).toHaveAttribute('aria-pressed', 'true');
+    // The label says the state; a toggle that also carried aria-pressed would
+    // read "Pause …, pressed" while it plays.
+    expect(pause).not.toHaveAttribute('aria-pressed');
 
     await userEvent.click(pause);
 
@@ -740,6 +739,43 @@ describe('an audio piece that is a file', () => {
 
     expect(first.paused).toBe(true);
     expect(second.paused).toBe(false);
+  });
+
+  it('stops when a video is opened', async () => {
+    renderDrawers();
+    await openResources();
+    await userEvent.click(
+      await within(panel()).findByRole('button', { name: 'Play A quiet hour' })
+    );
+    const element = audioElement();
+    expect(element.paused).toBe(false);
+
+    await userEvent.click(within(panel()).getByRole('button', { name: /Why values come first/ }));
+
+    await screen.findByRole('dialog', { name: 'Why values come first' });
+    expect(element.paused).toBe(true);
+  });
+
+  it('stops nothing when its own play is declined', async () => {
+    serve({
+      values: {
+        ...fullSelection(),
+        audio: [
+          audio('first-piece', 'First piece', '3:00'),
+          audio('second-piece', 'Second piece', '4:00'),
+        ],
+      },
+    });
+    renderDrawers();
+    await openResources();
+    await userEvent.click(await within(panel()).findByRole('button', { name: 'Play First piece' }));
+    const [first, second] = Array.from(listen().querySelectorAll('audio'));
+    // The browser declines the second: no play event, a rejected promise.
+    second.play = () => Promise.reject(new DOMException('declined', 'NotAllowedError'));
+
+    await userEvent.click(within(listen()).getByRole('button', { name: 'Play Second piece' }));
+
+    expect(first.paused).toBe(false);
   });
 
   it('stops when the drawer closes', async () => {

@@ -18,8 +18,9 @@
  *   belongs beside (`relatesTo`; `null` for a piece that belongs to everything).
  *   A video plays in the page from a supported host (`video-hosts.ts`, YouTube
  *   first), with that host's own still; nothing invented, which D6 forbids. An
- *   audio piece links out. An article is a foundational document or a link,
- *   never both.
+ *   audio piece that is a direct file plays inline (`audio-hosts.ts`), and any
+ *   other audio link opens in a new tab. An article is a foundational document
+ *   or a link, never both.
  * - `words`: per key, a quote and a few short paragraphs — **verbatim excerpts
  *   of a source this repository already holds**, each citing that source.
  *   Nothing here is drafted in her register. The drawer's eyebrow says these are
@@ -55,7 +56,7 @@ import { z } from 'zod';
 
 import type { DeepReadonly } from '@/lib/app/content/journey-view';
 import type { ModuleTier } from '@/lib/app/content/schemas';
-import { audioFieldsRefusal, type AudioPlayer } from '@/lib/app/content/audio-hosts';
+import type { AudioPlayer } from '@/lib/app/content/audio-hosts';
 import { videoLinkRefusal, type VideoPlayer } from '@/lib/app/content/video-hosts';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 
@@ -207,13 +208,13 @@ export function buildResourcesFileSchema(known: {
   moduleIds: ReadonlySet<string>;
   documentIds: ReadonlySet<string>;
   /**
-   * Refuse a video or an audio piece whose link does not play in the page. The
-   * seed sets it: every piece it writes is new. Export and import do not: an
-   * export must carry a piece entered before t-119 / t-120, and an import's
-   * plan holds only the links it sets or changes to the rule
-   * (`planResourcesImport`).
+   * Refuse a video whose link no host plays. The seed sets it: every video it
+   * writes is new. Export and import do not: an export must carry a video
+   * entered before t-119, and an import's plan holds only the links it sets or
+   * changes to the rule (`planResourcesImport`). Audio has no such rule: any
+   * link is accepted, and a direct file plays inline (t-120).
    */
-  requirePlayableLinks?: boolean;
+  requirePlayableVideos?: boolean;
 }): z.ZodType<ResourcesFile> {
   const isKey = (key: string): boolean =>
     known.moduleIds.has(key) || FIXED_RESOURCE_KEYS.some((k) => k === key);
@@ -222,7 +223,7 @@ export function buildResourcesFileSchema(known: {
 
   return resourcesFileBase.superRefine((file, ctx) => {
     for (const [index, video] of file.videos.entries()) {
-      const refusal = known.requirePlayableLinks ? videoLinkRefusal(null, video.href) : null;
+      const refusal = known.requirePlayableVideos ? videoLinkRefusal(null, video.href) : null;
       if (refusal !== null) {
         ctx.addIssue({ code: 'custom', path: ['videos', index, 'href'], message: refusal });
       }
@@ -235,12 +236,6 @@ export function buildResourcesFileSchema(known: {
       }
     }
     for (const [index, piece] of file.audio.entries()) {
-      const refusal = known.requirePlayableLinks
-        ? audioFieldsRefusal(null, { kind: 'audio', href: piece.href })
-        : null;
-      if (refusal !== null) {
-        ctx.addIssue({ code: 'custom', path: ['audio', index, 'href'], message: refusal });
-      }
       if (piece.relatesTo !== null && !isPieceKey(piece.relatesTo)) {
         ctx.addIssue({
           code: 'custom',
@@ -332,7 +327,6 @@ export interface ResourcesCollectionMeta {
  * which a client shows as a card that opens the link.
  */
 export type ResourceVideoView = ResourceVideo & { revision: number; player: VideoPlayer | null };
-/** An audio piece as served. */
 /**
  * An audio piece as served, with how to play it inline — `null` for a link
  * that is not a direct `https` audio file, which a client shows as a card that

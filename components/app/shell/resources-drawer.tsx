@@ -409,7 +409,8 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
           // A direct audio file plays inline in its card (t-120); any other
           // link (entered before then) opens in a new tab.
           piece.player ? (
-            <AudioCard piece={piece} player={piece.player} />
+            // Keyed by its file, so an edited link starts a fresh card.
+            <AudioCard key={piece.player.src} piece={piece} player={piece.player} />
           ) : (
             <TimedLinkCard item={piece} Icon={Headphones} />
           )

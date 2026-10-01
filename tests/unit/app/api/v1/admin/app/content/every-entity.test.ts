@@ -452,7 +452,7 @@ describe('resources', () => {
     expect(JSON.stringify(swapped.error)).toMatch(/must be a YouTube link/);
   });
 
-  it('refuses an audio piece whose link is not an audio file, and takes one that is (t-120)', async () => {
+  it('takes any audio link, a file or an episode page, refusing none for its host (t-120)', async () => {
     const audio = { ...video, kind: 'audio', duration: '12:05' };
     const page = await call(
       create(
@@ -464,8 +464,8 @@ describe('resources', () => {
         entity('resources', 'resource')
       )
     );
-    expect(page.status).toBe(400);
-    expect(JSON.stringify(page.error)).toMatch(/must be an https link to an audio file/);
+    // An episode page opens in a new tab; only a direct file plays inline.
+    expect(page.status).toBe(201);
 
     const file = await call(
       create(

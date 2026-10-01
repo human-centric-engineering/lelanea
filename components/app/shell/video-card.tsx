@@ -4,6 +4,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Play, X } from 'lucide-react';
 import { useRef } from 'react';
 
+import { announcePlay } from '@/components/app/shell/media-playback';
 import type { ResourceVideoView } from '@/lib/app/content/resources';
 import type { VideoPlayer } from '@/lib/app/content/video-hosts';
 import { cn } from '@/lib/utils';
@@ -93,7 +94,8 @@ export function VideoCard({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   return (
-    <DialogPrimitive.Root>
+    // Opening the lightbox stops any audio playing in the drawer.
+    <DialogPrimitive.Root onOpenChange={(open) => open && announcePlay(player.embedUrl)}>
       <DialogPrimitive.Trigger asChild>
         <button
           type="button"
