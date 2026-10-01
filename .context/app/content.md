@@ -724,9 +724,23 @@ that belongs to everything — never `default`, which the schema refuses on a
 piece: it is the `words` fallback, and a piece tagged with it would show for
 nothing). `words` is per key — a `quote` and a few short
 `paragraphs` — with `default` required, because it is what every key without
-words of its own reads. A video or an audio piece links out (`href`); an article is a foundational
-document (`documentId`) or a link (`href`), never both, as a union. No
-thumbnails: nothing exists to show.
+words of its own reads. An article is a foundational document (`documentId`) or
+a link (`href`), never both, as a union. An audio piece links out (`href`) until
+it plays inline (t-120).
+
+**A video plays in the page, from a host that can play it (t-119).** Where her
+videos will be hosted is undecided, so `lib/app/content/video-hosts.ts` resolves
+a link per host, and YouTube is the first. A video an admin or the seed writes
+must be a link a host resolves (`videoSchema`), and is refused otherwise with a
+message naming the hosts. The read path holds a row only to `storedTimedSchema`,
+so a video entered before t-119 is still served, with `player: null`, and the
+drawer shows it as a card that opens its link. Each served video carries
+`player` (`host`, the validated `id`, `thumbnailUrl`, `embedUrl`), so no client
+parses links. The embed and the still are built from the validated id alone,
+never from the stored link, which is the condition for allowing the player's
+origin in `appFrameSrc` (`lib/app/csp.ts`: exactly
+`https://www.youtube-nocookie.com`). A second host is an entry in
+`video-hosts.ts` plus its player's origin there; see idea #41 on the Hub.
 
 **"In her own words" means verbatim, and a test proves it.** Every `words`
 entry cites its `source` — a foundational document id, or a step of the Values
