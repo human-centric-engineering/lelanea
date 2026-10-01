@@ -730,11 +730,13 @@ it plays inline (t-120).
 
 **A video plays in the page, from a host that can play it (t-119).** Where her
 videos will be hosted is undecided, so `lib/app/content/video-hosts.ts` resolves
-a link per host, and YouTube is the first. A video an admin or the seed writes
-must be a link a host resolves (`videoSchema`), and is refused otherwise with a
-message naming the hosts. The read path holds a row only to `storedTimedSchema`,
-so a video entered before t-119 is still served, with `player: null`, and the
-drawer shows it as a card that opens its link. Each served video carries
+a link per host, and YouTube is the first. A video link being **set or
+changed** must be one a host resolves (`videoLinkRefusal`), and is refused
+otherwise with a message naming the hosts: in the admin's create, save and
+restore, in an import's plan, and in the seed. A link carried unchanged is not
+re-checked, so a video entered before t-119 is still served (with
+`player: null`, which the drawer shows as a card that opens its link), still
+exports, and can still have its title corrected. Each served video carries
 `player` (`host`, the validated `id`, `thumbnailUrl`, `embedUrl`), so no client
 parses links. The embed and the still are built from the validated id alone,
 never from the stored link, which is the condition for allowing the player's
