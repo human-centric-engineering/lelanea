@@ -55,9 +55,16 @@ export function formatClock(seconds: number): string {
  * The drawer offers this card only for a file the page may play
  * (`canPlayInPage`), so the CSP is not the usual cause. A file can still be
  * gone, or the network can drop. Then the card says it could not be played
- * here and offers the link, moving keyboard focus to that link if it was on
- * the play button, so a keyboard reader is not dropped to the top of the page.
- * Reopening the drawer lets it try again.
+ * here and offers the link. Keyboard focus on the play button or the progress
+ * bar, which the failure replaces, moves to that link, so a keyboard reader is
+ * not dropped to the top of the page. The failure is announced through a
+ * status line that is always mounted and only changes its text: a live region
+ * that arrives already holding its words is not read out. Closing the drawer
+ * resets a failed piece, so reopening it lets the piece try again.
+ *
+ * The drawer refetches when its key changes, and also when a suggestion's pin
+ * is cleared by navigating, so following a link after opening the drawer from
+ * a suggestion stops the piece too.
  */
 export function AudioCard({
   piece,
@@ -67,7 +74,7 @@ export function AudioCard({
   player: AudioPlayer;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const openRef = useRef<HTMLAnchorElement>(null);
   const focusOpenOnFail = useRef(false);
   const progressId = useId();
@@ -80,13 +87,23 @@ export function AudioCard({
   // Another piece started, or a video opened: stop this one.
   useEffect(() => onOtherPlay(piece.id, () => audioRef.current?.pause()), [piece.id]);
 
-  // The drawer closed: stop. It opened again: a failed piece may try again.
+  // The drawer closed: stop. A piece that failed is reset, so it reopens able
+  // to try again: `load()` clears the element's error (a failed element would
+  // otherwise refuse play() at once, silently), and the time starts over.
   useEffect(() => {
-    if (drawer !== 'resources') audioRef.current?.pause();
-    else setFailed(false);
+    if (drawer === 'resources') return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    if (audio.error) {
+      audio.load();
+      setFailed(false);
+      setCurrent(0);
+      setLength(null);
+    }
   }, [drawer]);
 
-  // The play button that had focus is gone; give focus to the link that replaced it.
+  // The control that had focus is gone; give focus to the link that replaced it.
   useEffect(() => {
     if (failed && focusOpenOnFail.current) {
       focusOpenOnFail.current = false;
@@ -118,12 +135,21 @@ export function AudioCard({
     // The shared card frame, without its hover lift: this card is not one
     // thing to click but a player with controls inside it.
     <div
+      ref={cardRef}
       className={cn(
         'px-[13px] pt-[11px] pb-3',
         TIMED_CARD_CLASS,
         'hover:translate-y-0 hover:shadow-none'
       )}
     >
+      {/*
+        Always mounted, so the change of text is what a screen reader hears.
+        `aria-live` without `role="status"`: the drawer's own status line is
+        the panel's one status.
+      */}
+      <span aria-live="polite" className="sr-only">
+        {failed ? `${piece.title} could not be played here.` : ''}
+      </span>
       {/*
         No <track>: there are no captions or transcripts for her audio yet, and
         an empty track would satisfy the rule while helping nobody. A
@@ -144,7 +170,9 @@ export function AudioCard({
         onLoadedMetadata={(event) => takeLength(event.currentTarget.duration)}
         onDurationChange={(event) => takeLength(event.currentTarget.duration)}
         onError={() => {
-          focusOpenOnFail.current = document.activeElement === buttonRef.current;
+          // Focus on the play button or the progress bar, both of which the
+          // failure replaces, moves to the link; anywhere else it stays.
+          focusOpenOnFail.current = cardRef.current?.contains(document.activeElement) ?? false;
           setFailed(true);
           setPlaying(false);
         }}
@@ -156,7 +184,6 @@ export function AudioCard({
           </span>
         ) : (
           <button
-            ref={buttonRef}
             type="button"
             onClick={toggle}
             // The label says the state ("Pause …" while it plays), so no
@@ -184,7 +211,7 @@ export function AudioCard({
       </div>
 
       {failed ? (
-        <p role="status" className="text-muted-foreground mt-2.5 text-[12px] leading-[1.5]">
+        <p className="text-muted-foreground mt-2.5 text-[12px] leading-[1.5]">
           This could not be played here.{' '}
           <a
             ref={openRef}

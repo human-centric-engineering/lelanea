@@ -209,7 +209,7 @@ function ResourceFields({
             draft.kind === 'video'
               ? `A ${SUPPORTED_VIDEO_HOSTS.join(' or ')} link, which plays in the page: ${VIDEO_LINK_EXAMPLES.join(' or ')}.`
               : draft.kind === 'audio'
-                ? `A direct https link to the audio file, ending ${SUPPORTED_AUDIO_FILES.join(' or ')}, plays in the page (once its host is allowed to serve media to the app). Any other link, such as an episode page, opens in a new tab.`
+                ? `Any link. A direct https link to an audio file (ending ${SUPPORTED_AUDIO_FILES.join(' or ')}) plays in the page when it is on the app's own site or a host the app allows; none is allowed yet, so for now a file elsewhere opens in a new tab, as any other link (an episode page) does.`
                 : 'Where it opens: an http or https address.'
           }
         >

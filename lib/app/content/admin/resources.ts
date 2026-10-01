@@ -385,13 +385,12 @@ export async function listWordsHistory(key: string): Promise<RevisionEntry<Words
 // ─── Resource writes ────────────────────────────────────────────────────────
 
 /**
- * Throw unless a resource's link may be written: a new video, or one whose
- * link changes, must have a link a supported host plays in the page (t-119). A
- * link carried unchanged is not re-checked, so a video entered before then can
- * still have its title corrected. Audio takes any link: a direct file plays
- * inline, anything else opens in a new tab (owner ruling, t-120).
+ * Throw unless a video's link may be written: a new video, or one whose link
+ * changes, must have a link a supported host plays in the page (t-119). A link
+ * carried unchanged is not re-checked, so a video entered before then can still
+ * have its title corrected. Only videos: audio takes any link (t-120).
  */
-function assertPlayableLink(before: ResourceFields | null, next: ResourceFields): void {
+function assertPlayableVideoLink(before: ResourceFields | null, next: ResourceFields): void {
   const refusal = videoFieldsRefusal(before, next);
   if (refusal !== null) throw new ValidationError(refusal);
 }
@@ -415,7 +414,7 @@ async function writeResource(
         `"${id}" is ${aKind(before.kind)}. Videos, audio and articles are offered in different places, so add a new one instead.`
       );
     }
-    assertPlayableLink(before, next);
+    assertPlayableVideoLink(before, next);
     const documentId = await assertServable(tx, id, next);
     const changed = resourceDiff(before, next);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
@@ -627,7 +626,7 @@ export async function createResource(
       ...contentFromEdit(edit),
       retired: false,
     };
-    assertPlayableLink(null, fields);
+    assertPlayableVideoLink(null, fields);
     const documentId = await assertServable(tx, id, fields);
     const resource = await tx.appResource.create({
       data: {

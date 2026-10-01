@@ -843,14 +843,19 @@ describe('an audio piece that is a file', () => {
     );
   });
 
-  it('tries again when the drawer is reopened after a failure', async () => {
+  it('tries again when the drawer is reopened after a failure, reloading the file', async () => {
     renderDrawers();
     await openResources();
     await within(panel()).findByText(/anchor/);
+    const element = audioElement();
+    const load = vi.spyOn(element, 'load');
+    // As a browser leaves an element whose file failed: `error` is set, and
+    // play() would now refuse at once without trying again.
+    Object.defineProperty(element, 'error', { configurable: true, value: { code: 4 } });
     act(() => {
-      audioElement().dispatchEvent(new Event('error'));
+      element.dispatchEvent(new Event('error'));
     });
-    expect(within(listen()).getByText(/could not be played here/)).toBeInTheDocument();
+    expect(within(listen()).getByText('This could not be played here.')).toBeInTheDocument();
 
     await userEvent.click(within(panel()).getByRole('button', { name: /close/i }));
     await openResources();
@@ -860,6 +865,43 @@ describe('an audio piece that is a file', () => {
         within(listen()).getByRole('button', { name: 'Play A quiet hour' })
       ).toBeInTheDocument()
     );
+    expect(load).toHaveBeenCalled();
+    expect(within(listen()).getByText('0:00 / 12:05')).toBeInTheDocument();
+  });
+
+  it('moves focus to the link when the progress bar it was on is replaced by a failure', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+    const element = audioElement();
+    Object.defineProperty(element, 'duration', { configurable: true, value: 725 });
+    act(() => {
+      element.dispatchEvent(new Event('loadedmetadata'));
+    });
+    within(listen()).getByRole('slider', { name: 'Position in A quiet hour' }).focus();
+
+    act(() => {
+      element.dispatchEvent(new Event('error'));
+    });
+
+    await waitFor(() =>
+      expect(within(listen()).getByRole('link', { name: /Open it/ })).toHaveFocus()
+    );
+  });
+
+  it('announces the failure through a live line that was already there', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+    const live = listen().querySelector('[aria-live="polite"]');
+    expect(live).toHaveTextContent('');
+
+    act(() => {
+      audioElement().dispatchEvent(new Event('error'));
+    });
+
+    expect(listen().querySelector('[aria-live="polite"]')).toBe(live);
+    expect(live).toHaveTextContent('A quiet hour could not be played here.');
   });
 
   it('says when the file will not play here, and offers the link', async () => {
@@ -872,7 +914,7 @@ describe('an audio piece that is a file', () => {
     });
 
     expect(within(listen()).queryByRole('button', { name: /Play A quiet hour/ })).toBeNull();
-    expect(within(listen()).getByText(/could not be played here/)).toBeInTheDocument();
+    expect(within(listen()).getByText('This could not be played here.')).toBeInTheDocument();
     const open = within(listen()).getByRole('link', { name: /Open it/ });
     expect(open).toHaveAttribute('href', `${window.location.origin}/uploads/a-quiet-hour.mp3`);
     expect(open).toHaveAttribute('target', '_blank');
