@@ -452,6 +452,34 @@ describe('resources', () => {
     expect(JSON.stringify(swapped.error)).toMatch(/must be a YouTube link/);
   });
 
+  it('refuses an audio piece whose link is not an audio file, and takes one that is (t-120)', async () => {
+    const audio = { ...video, kind: 'audio', duration: '12:05' };
+    const page = await call(
+      create(
+        req('POST', '/resources/resource', {
+          id: 'f-page',
+          ...audio,
+          href: 'https://soundcloud.com/her/an-episode',
+        }),
+        entity('resources', 'resource')
+      )
+    );
+    expect(page.status).toBe(400);
+    expect(JSON.stringify(page.error)).toMatch(/must be an https link to an audio file/);
+
+    const file = await call(
+      create(
+        req('POST', '/resources/resource', {
+          id: 'f-file',
+          ...audio,
+          href: 'https://cdn.example/episodes/one.mp3',
+        }),
+        entity('resources', 'resource')
+      )
+    );
+    expect(file.status).toBe(201);
+  });
+
   it('adds, edits, retires, restores and reorders videos, with every refusal named', async () => {
     expect(
       (

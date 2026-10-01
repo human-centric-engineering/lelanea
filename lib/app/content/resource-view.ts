@@ -33,6 +33,7 @@ import {
   type ResourceWords,
   type ResourceWordsView,
 } from '@/lib/app/content/resources';
+import { resolveAudioPlayer } from '@/lib/app/content/audio-hosts';
 import { resolveVideoPlayer } from '@/lib/app/content/video-hosts';
 
 // ============================================================================
@@ -152,7 +153,8 @@ export function toVideo(row: ResourceRow): ResourceVideoView {
 
 /** A stored audio piece, validated — held to what a video is. @throws as `toVideo`. */
 export function toAudio(row: ResourceRow): ResourceAudioView {
-  return toTimed(row, 'audio');
+  const piece = toTimed(row, 'audio');
+  return { ...piece, player: resolveAudioPlayer(piece.href) };
 }
 
 /**

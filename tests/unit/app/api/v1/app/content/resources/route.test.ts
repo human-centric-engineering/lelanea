@@ -32,7 +32,12 @@ vi.mock('@/lib/app/content/resource-store', async () =>
 import { auth } from '@/lib/auth/config';
 import { GET as getLibrary } from '@/app/api/v1/app/content/resources/route';
 import { GET as getSelection } from '@/app/api/v1/app/content/resources/[key]/route';
-import { fakeJourneyStore, fakeResourceStore, videoRow } from '@/tests/helpers/app/content-stores';
+import {
+  audioRow,
+  fakeJourneyStore,
+  fakeResourceStore,
+  videoRow,
+} from '@/tests/helpers/app/content-stores';
 
 const journey = fakeJourneyStore();
 const resources = fakeResourceStore();
@@ -63,6 +68,7 @@ interface SelectionBody {
     words: { quote: string; paragraphs: string[] };
     wordsAreOwn: boolean;
     videos: { id: string; player: unknown }[];
+    audio: { id: string; player: unknown }[];
     articles: { id: string }[];
   };
 }
@@ -304,6 +310,23 @@ describe('the rows are what is served (t-87)', () => {
         },
       ],
       ['links-out', null],
+    ]);
+  });
+
+  it('serves each audio piece’s player, and none for a link that is not a file (t-120)', async () => {
+    resources.addResource(
+      audioRow('a-file', { relatesTo: 'module_01_values', href: 'https://cdn.example/one.mp3' })
+    );
+    resources.addResource(
+      audioRow('a-page', { relatesTo: 'module_01_values', href: 'https://soundcloud.com/x' })
+    );
+    const { request, context } = selectionRequest('values');
+
+    const body = (await (await getSelection(request, context)).json()) as SelectionBody;
+
+    expect(body.data.audio.map((piece) => [piece.id, piece.player])).toEqual([
+      ['a-file', { src: 'https://cdn.example/one.mp3', type: 'audio/mpeg' }],
+      ['a-page', null],
     ]);
   });
 

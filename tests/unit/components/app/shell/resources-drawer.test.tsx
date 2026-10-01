@@ -114,8 +114,20 @@ function video(id: string, title: string, duration: string) {
 function linkOnlyVideo(id: string, title: string, duration: string) {
   return { ...timed('videos.example', id, title, duration), player: null };
 }
-const audio = (id: string, title: string, duration: string) =>
-  timed('audio.example', id, title, duration);
+/** An audio piece that is a direct file: it plays inline, with the player the server serves. */
+function audio(id: string, title: string, duration: string) {
+  const href = `https://audio.example/${id}.mp3`;
+  return {
+    ...timed('audio.example', id, title, duration),
+    href,
+    player: { src: href, type: 'audio/mpeg' as const },
+  };
+}
+
+/** An audio link that is not a file (entered before t-120): served with no player. */
+function linkOnlyAudio(id: string, title: string, duration: string) {
+  return { ...timed('audio.example', id, title, duration), player: null };
+}
 
 /** Her words on values, two videos, one audio piece, three articles — the full panel. */
 function fullSelection(): ResourcesSelection {
@@ -233,6 +245,13 @@ function renderDrawers(pathname = '/app/modules/values') {
       <Drawers />
     </>
   );
+}
+
+/** A range input's change, as a browser fires it: React reads the value on `input`. */
+function fireChange(input: HTMLElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 const panel = () => screen.getByRole('dialog', { name: 'Resources' });
@@ -472,7 +491,13 @@ describe('to watch, to listen and to read', () => {
     expect(read.querySelectorAll('li')).toHaveLength(3);
   });
 
-  it('renders audio under to listen, apart from the videos, opening in a new tab', async () => {
+  it('renders an audio link that is not a file under to listen, opening in a new tab', async () => {
+    serve({
+      values: {
+        ...fullSelection(),
+        audio: [linkOnlyAudio('a-quiet-hour', 'A quiet hour', '12:05')],
+      },
+    });
     renderDrawers();
     await openResources();
     await within(panel()).findByText(/anchor/);
@@ -620,6 +645,135 @@ describe('to watch, to listen and to read', () => {
     await openResources();
     await within(panel()).findByText('A different quote.');
     expect(within(panel()).queryByText(WORDS_ON_VALUES.quote)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audio plays inline in its card (t-120)
+// ---------------------------------------------------------------------------
+
+describe('an audio piece that is a file', () => {
+  const listen = () =>
+    within(panel()).getByRole('heading', { name: 'to listen' }).closest('section')!;
+  const audioElement = () => listen().querySelector('audio')!;
+
+  it('is a player in its card that has fetched nothing yet', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+
+    expect(within(listen()).queryByRole('link')).toBeNull();
+    expect(within(listen()).getByRole('button', { name: 'Play A quiet hour' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(audioElement()).toHaveAttribute('src', 'https://audio.example/a-quiet-hour.mp3');
+    // Nothing is downloaded until play: the length shown is the admin's, and
+    // there is nothing to seek in yet.
+    expect(audioElement()).toHaveAttribute('preload', 'none');
+    expect(within(listen()).getByText('0:00 / 12:05')).toBeInTheDocument();
+    expect(
+      within(listen()).getByRole('slider', { name: 'Position in A quiet hour' })
+    ).toBeDisabled();
+  });
+
+  it('plays and pauses from its button', async () => {
+    renderDrawers();
+    await openResources();
+    const play = await within(panel()).findByRole('button', { name: 'Play A quiet hour' });
+
+    await userEvent.click(play);
+
+    expect(audioElement().paused).toBe(false);
+    const pause = within(listen()).getByRole('button', { name: 'Pause A quiet hour' });
+    expect(pause).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(pause);
+
+    expect(audioElement().paused).toBe(true);
+    expect(within(listen()).getByRole('button', { name: 'Play A quiet hour' })).toBeInTheDocument();
+  });
+
+  it('shows the file’s own length and where it is, and seeks from the bar', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+    const element = audioElement();
+
+    Object.defineProperty(element, 'duration', { configurable: true, value: 725 });
+    act(() => {
+      element.dispatchEvent(new Event('loadedmetadata'));
+    });
+    element.currentTime = 83;
+    act(() => {
+      element.dispatchEvent(new Event('timeupdate'));
+    });
+
+    expect(within(listen()).getByText('1:23 / 12:05')).toBeInTheDocument();
+    const bar = within(listen()).getByRole('slider', { name: 'Position in A quiet hour' });
+    expect(bar).toBeEnabled();
+    expect(bar).toHaveAttribute('aria-valuetext', '1:23 of 12:05');
+
+    act(() => {
+      fireChange(bar, '300');
+    });
+    expect(element.currentTime).toBe(300);
+  });
+
+  it('plays one piece at a time', async () => {
+    serve({
+      values: {
+        ...fullSelection(),
+        audio: [
+          audio('first-piece', 'First piece', '3:00'),
+          audio('second-piece', 'Second piece', '4:00'),
+        ],
+      },
+    });
+    renderDrawers();
+    await openResources();
+    await userEvent.click(await within(panel()).findByRole('button', { name: 'Play First piece' }));
+    const [first, second] = Array.from(listen().querySelectorAll('audio'));
+    expect(first.paused).toBe(false);
+
+    await userEvent.click(within(listen()).getByRole('button', { name: 'Play Second piece' }));
+
+    expect(first.paused).toBe(true);
+    expect(second.paused).toBe(false);
+  });
+
+  it('stops when the drawer closes', async () => {
+    renderDrawers();
+    await openResources();
+    await userEvent.click(
+      await within(panel()).findByRole('button', { name: 'Play A quiet hour' })
+    );
+    const element = audioElement();
+    expect(element.paused).toBe(false);
+
+    // The panel stays mounted when closed, so its sound would carry on behind
+    // the work if nothing stopped it.
+    await userEvent.click(within(panel()).getByRole('button', { name: /close/i }));
+
+    await waitFor(() => expect(element.paused).toBe(true));
+    expect(element.isConnected).toBe(true);
+  });
+
+  it('says when the file will not play here, and offers the link', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+
+    act(() => {
+      audioElement().dispatchEvent(new Event('error'));
+    });
+
+    expect(within(listen()).queryByRole('button', { name: /Play A quiet hour/ })).toBeNull();
+    expect(within(listen()).getByText(/could not be played here/)).toBeInTheDocument();
+    const open = within(listen()).getByRole('link', { name: /Open it/ });
+    expect(open).toHaveAttribute('href', 'https://audio.example/a-quiet-hour.mp3');
+    expect(open).toHaveAttribute('target', '_blank');
+    expect(open).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });
 
