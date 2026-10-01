@@ -62,7 +62,7 @@ export interface AccountPart {
 
 export type AccountSource = (input: AccountInput) => AccountPart | null;
 
-/** The capabilities the guide seat may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
+/** The capabilities the guide agent may call, each with a sentence below (`HER_CAPABILITY_SLUGS`). */
 const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
@@ -202,7 +202,7 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
- * A capability this account has no words for. Every slug the guide seat may call has
+ * A capability this account has no words for. Every slug the guide agent may call has
  * one above (`pins-misuse.test.ts` pins the list against
  * {@link NAMED_CAPABILITIES}), so this is the honest floor for the day one is
  * added before its sentence is: named, never hidden.

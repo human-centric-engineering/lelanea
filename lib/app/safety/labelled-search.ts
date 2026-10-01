@@ -22,7 +22,7 @@
  * (`extractCitations`, `{ ...raw, marker }`). The test asserts that composed
  * message.
  *
- * **Only for the voice agents.** Other agents on the install get the platform's
+ * **Only for the corpus agents (`lelanea-`).** Other agents on the install get the platform's
  * result unchanged. "Not Lelañea's material" means nothing to an agent that is
  * not a voice agent, so the label would be noise. The one exception is below:
  * when the agent itself cannot be looked up, every result is marked unverified.

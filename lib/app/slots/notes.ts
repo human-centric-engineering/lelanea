@@ -1,5 +1,5 @@
 /**
- * The agent's notes, as the person they are about reads them — and corrects one
+ * Lelañea's notes, as the person they are about reads them — and corrects one
  * (f-slots t-73; product description §3.3, §3.12, §3.19, §12).
  *
  * t-72 made the agent write what it learns. Until this module there was nowhere to

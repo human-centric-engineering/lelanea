@@ -46,7 +46,7 @@
  * remembered to come back and add a string (`HB9`). The prefix is live the moment
  * the first `lelanea-…` agent is created, with nothing to remember.
  *
- * ## The voice agents carry no purpose tag grants, and that is load-bearing
+ * ## The corpus agents carry no purpose tag grants, and that is load-bearing
  *
  * It is tempting to also grant `purpose-knowledge` through Sunrise's agent form
  * as a belt-and-braces measure. That would break the rule rather than reinforce
@@ -108,7 +108,7 @@ export const APP_SCOPE = 'app';
  */
 export { CORPUS_AGENT_SLUG_PREFIX };
 
-/** Is this one of the voice agents — i.e. one the corpus rule should widen? */
+/** Is this one of the corpus agents (`lelanea-`) — i.e. one the corpus rule should widen? */
 export function isCorpusAgent(slug: string | null | undefined): boolean {
   return typeof slug === 'string' && slug.startsWith(CORPUS_AGENT_SLUG_PREFIX);
 }
@@ -235,7 +235,7 @@ export async function resolveVoiceDocumentIds(): Promise<string[]> {
 }
 
 /**
- * The access contributor itself: her corpus, for the voice agents, and nothing for
+ * The access contributor itself: her corpus, for the corpus agents, and nothing for
  * anyone else's.
  *
  * Returns an empty contribution for an agent that is not a voice agent —

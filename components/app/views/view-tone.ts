@@ -43,7 +43,7 @@ import { USAGE_PAGE } from '@/lib/app/usage/usage-view';
  */
 export const VIEW_TONES: Readonly<Record<string, string>> = {
   '/app/journey': 'var(--color-status-green)',
-  // The agent's notes take the blue, which no other destination uses. The band is a
+  // Lelañea's notes take the blue, which no other destination uses. The band is a
   // SURFACE, so the raw hue is the right half of the rule — the -ink siblings
   // are for type (see `shell.md`, "Coloured type is a different table"). It is
   // deliberately not the secondary ink that usage, account and workspace share:

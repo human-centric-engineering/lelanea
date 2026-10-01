@@ -1,5 +1,5 @@
 /**
- * What the guide seat sends the browser, frame by frame (§10 t-64).
+ * What the guide agent sends the browser, frame by frame (§10 t-64).
  *
  * The leaf's own event schema rather than Sunrise's `parseChatStreamEvent`,
  * for one reason that matters: Zod objects are non-strict, so a field the admin
@@ -7,7 +7,7 @@
  * (`lib/app/safety/resource.ts`) is exactly such a field, and a person in
  * danger would get the flattened `message` instead of the services laid out.
  *
- * What the guide seat can send is narrower than the platform's full union, because
+ * What the guide agent can send is narrower than the platform's full union, because
  * every frame passes `toClientStream()` first (`lib/app/agent/endings.ts`):
  * `error` carries one of the endings, `crisis` (with its `resource`) or
  * `ceiling_reached` (with its `ceiling` figures), never a platform code;

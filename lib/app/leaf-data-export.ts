@@ -145,7 +145,7 @@ export function initLeafSubjectSources(): void {
         // fact already covered.
         model: 'AppVoiceComparison',
         reason:
-          'A record that somebody listened to Lela\u00f1ea\u2019s fixed set of test questions to check that the replies sound like her \u2014 which version of her voice, and when. It holds no information about any person.',
+          'A record that somebody listened to Lela\u00f1ea\u2019s fixed set of test questions to check that the replies sound like Lela\u00f1ea Fulton \u2014 which version of her voice, and when. It holds no information about any person.',
       },
       {
         model: 'AppVoiceComparisonArm',

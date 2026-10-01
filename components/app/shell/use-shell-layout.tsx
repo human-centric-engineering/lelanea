@@ -157,7 +157,7 @@ export interface ShellLayout {
    */
   setModulePlace: (place: ModulePlace | null) => void;
   /**
-   * How many turns have finished having written to the agent's notes, this session.
+   * How many turns have finished having written to Lelañea's notes, this session.
    *
    * A **counter, not a timestamp and not a boolean.** The panel refreshes on
    * every change, so the value only has to differ from the last one it saw: a

@@ -13,7 +13,7 @@ import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
 /**
- * One of the agent's notes, with the two things a person can do about it (t-73).
+ * One of Lelañea's notes, with the two things a person can do about it (t-73).
  *
  * ## Everything on the card is a claim the agent is making, and it says so
  *

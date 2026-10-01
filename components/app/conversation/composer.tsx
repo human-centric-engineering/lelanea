@@ -18,7 +18,7 @@ export interface ComposerProps {
   voiceInput?: VoiceInputState | null;
   /**
    * Words handed to the box from outside the conversation — "Ask Lelañea about
-   * this" on one of the agent's notes (t-73). `null` when nothing is waiting.
+   * this" on one of Lelañea's notes (t-73). `null` when nothing is waiting.
    *
    * They go through the same `insertAtCaret` the microphone uses, and that is
    * the point of the prop rather than a second path: three rounds of review

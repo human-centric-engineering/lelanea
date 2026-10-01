@@ -1,5 +1,5 @@
 /**
- * The browser's side of the agent's notes (f-slots t-73).
+ * The browser's side of Lelañea's notes (f-slots t-73).
  *
  * Read the page, and send a correction. Kept apart from the store for the
  * reason `notes-view.ts` gives — the panel is a client component and the store
@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { notesSearch, type NotesQuery } from '@/lib/app/slots/notes-query';
 import type { NotesView } from '@/lib/app/slots/notes-view';
 
-/** The agent's notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
+/** Lelañea's notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
 export const NOTES_ENDPOINT = '/api/v1/app/notes';
 
 /** Where a person reads them. The nav item and the page both name it here. */
@@ -132,7 +132,7 @@ export async function fetchNotes(options: Options = {}): Promise<NotesView> {
   if (!response.ok) throw await refusalOf(response);
   const parsed = notesEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) {
-    throw new NotesRefused(response.status, 'malformed', 'The notes could not be read.');
+    throw new NotesRefused(response.status, 'malformed', 'Lelañea’s notes could not be read.');
   }
   return parsed.data.data;
 }

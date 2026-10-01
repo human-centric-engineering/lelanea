@@ -61,7 +61,7 @@ import type { VoiceFingerprintCore } from '@/lib/app/content';
 import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/designation';
 
 /**
- * The profile the voice agents inherit from.
+ * The profile the corpus agents (`lelanea-`) inherit from.
  *
  * A profile rather than the agent's own columns because the core is one artefact
  * shared by every agent that speaks as her — the guide, and whatever the

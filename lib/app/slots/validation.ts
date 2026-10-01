@@ -205,7 +205,7 @@ export const MAX_MINTED_SLUG_LENGTH = 120;
 export const MAX_NOTE_LENGTH = 2000;
 
 /**
- * A member correcting one of the agent's notes (t-73).
+ * A member correcting one of Lelañea's notes (t-73).
  *
  * Not a definition schema, and it is here for the reason the header gives: the
  * panel is a client component and imports these bounds, so the schema cannot

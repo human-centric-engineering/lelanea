@@ -59,7 +59,7 @@
  * rule while quietly admitting the material the owner deferred (`B31` — the
  * dishonest fourth option).
  *
- * So the voice agents carry NO purpose or sensitivity tag grants, and the set is
+ * So the corpus agents carry NO purpose or sensitivity tag grants, and the set is
  * composed live by the access contributor in
  * `lib/app/knowledge-access-contributors.ts`. That is also what the platform
  * recommends: `resolveAgentDocumentAccess`'s own docblock warns that
@@ -95,7 +95,7 @@
  * where a transitive `pg` import is a broken bundle rather than a slow one.
  * Caught by /code-review on the t-26 branch.
  *
- * A prefix rather than an allowlist constant because the voice agents did not exist
+ * A prefix rather than an allowlist constant because the corpus agents did not exist
  * when the rule was written: an allowlist would have shipped empty and left the
  * mechanism dark until somebody remembered to add a string (`HB9`).
  */

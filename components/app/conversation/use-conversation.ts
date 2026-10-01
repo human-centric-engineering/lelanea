@@ -168,7 +168,7 @@ export interface ConversationState {
 interface Options {
   seat?: string;
   /**
-   * A turn ended having written to the agent's notes (t-73). Called **once per turn**,
+   * A turn ended having written to Lelañea's notes (t-73). Called **once per turn**,
    * whatever the turn wrote and however it ended — the panel re-reads the whole
    * page, so three notes is still one refresh, and a turn that wrote and then
    * failed has still written.

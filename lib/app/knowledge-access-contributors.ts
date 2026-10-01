@@ -22,7 +22,7 @@
  *
  * ## What Lelañea registers, and why it is here rather than in a tag grant
  *
- * One contributor: Lelañea Fulton's designated corpus, for the voice agents only
+ * One contributor: Lelañea Fulton's designated corpus, for the corpus agents only
  * (§05 t-25).
  *
  * A document reaches `search_knowledge_base` — the path that can quote it back
