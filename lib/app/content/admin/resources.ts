@@ -385,18 +385,14 @@ export async function listWordsHistory(key: string): Promise<RevisionEntry<Words
 // ─── Resource writes ────────────────────────────────────────────────────────
 
 /**
- * The refusal for a resource's link being written, or `null`: a new video, or
- * one whose link changes, must have a link a supported host plays in the page
- * (t-119). A link carried unchanged is not re-checked, so a video entered before
- * then can still have its title corrected. Audio takes any link: a direct file
- * plays inline, anything else opens in a new tab (owner ruling, t-120).
+ * Throw unless a resource's link may be written: a new video, or one whose
+ * link changes, must have a link a supported host plays in the page (t-119). A
+ * link carried unchanged is not re-checked, so a video entered before then can
+ * still have its title corrected. Audio takes any link: a direct file plays
+ * inline, anything else opens in a new tab (owner ruling, t-120).
  */
-function linkRefusal(before: ResourceFields | null, next: ResourceFields): string | null {
-  return videoFieldsRefusal(before, next);
-}
-
 function assertPlayableLink(before: ResourceFields | null, next: ResourceFields): void {
-  const refusal = linkRefusal(before, next);
+  const refusal = videoFieldsRefusal(before, next);
   if (refusal !== null) throw new ValidationError(refusal);
 }
 
@@ -1009,7 +1005,7 @@ export function planResourcesImport(
   // (t-119). One it carries unchanged is not re-checked, so a library holding a
   // video from before then still round-trips.
   for (const change of [...resources.creates, ...resources.updates]) {
-    const refusal = change.after ? linkRefusal(change.before ?? null, change.after) : null;
+    const refusal = change.after ? videoFieldsRefusal(change.before ?? null, change.after) : null;
     if (refusal !== null) refusals.push(`"${change.key}": ${refusal}`);
   }
   for (const change of resources.updates) {

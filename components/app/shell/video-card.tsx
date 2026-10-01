@@ -22,6 +22,12 @@ export const TIMED_CARD_CLASS = cn(
   'focus-visible:outline-[var(--color-ring)]'
 );
 
+/** The round glyph or control at the left of a timed card: a 36px disc on the pill wash. */
+export const TIMED_DISC_CLASS = cn(
+  'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
+  'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
+);
+
 /**
  * The lightbox fades in over the design's 260ms. `starting:` is CSS
  * `@starting-style`, so a dialog that mounts open still has something to

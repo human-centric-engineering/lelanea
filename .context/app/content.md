@@ -738,10 +738,13 @@ carries `player` (`src`, `type`), or `null` for a link that is not a file.
 (starting a piece or opening a video stops the rest, `media-playback.ts`);
 closing the drawer stops it. **Where a file can play from is the CSP's
 `media-src`**, fixed at `'self' blob:` by Sunrise with no app seam (asked on
-sunrise#841). A file on another origin is refused by the browser, and the card
-then says it could not be played and offers the link. When her audio host is
-chosen, its origin is added through that seam, or a fork fix recorded in
-`divergences.md`.
+sunrise#841). So the API serves a player for a file on any origin (a native
+client has no CSP), but the web drawer offers one only where the page may play
+it (`canPlayInPage`: its own origin, or `AUDIO_MEDIA_ORIGINS`, empty today) and
+shows a card that opens the link otherwise. When her audio host is chosen, its
+origin goes into `AUDIO_MEDIA_ORIGINS` and into the policy, through that seam or
+a fork fix recorded in `divergences.md`, and the two must name the same
+origins.
 
 **A video plays in the page, from a host that can play it (t-119).** Where her
 videos will be hosted is undecided, so `lib/app/content/video-hosts.ts` resolves

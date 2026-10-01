@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { announcePlay, onOtherPlay } from '@/components/app/shell/media-playback';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { TIMED_CARD_CLASS } from '@/components/app/shell/video-card';
+import { TIMED_CARD_CLASS, TIMED_DISC_CLASS } from '@/components/app/shell/video-card';
 import type { AudioPlayer } from '@/lib/app/content/audio-hosts';
 import type { ResourceAudioView } from '@/lib/app/content/resources';
 import { cn } from '@/lib/utils';
@@ -35,17 +35,14 @@ export function formatClock(seconds: number): string {
  *
  * ## When it stops
  *
- * Starting a piece, or opening a video, pauses any other (`media-playback.ts`),
- * announced only once playback has actually started, so a play the browser
- * declines stops nothing. Closing the drawer pauses it: the panel stays mounted
- * when closed, so its sound would otherwise carry on behind the work. Moving to
- * something else in the workspace unmounts the card when the drawer's pieces
- * change, and a media element taken out of the page stops. When they do not
- * change (a piece belonging to everything, beside a page with nothing of its
- * own), it keeps playing, which is what a reader moving on with it would want.
- *
- * The drawer keys the card by its file, so an edited link starts a fresh card
- * rather than carrying the old file's length or failure.
+ * Starting a piece, or opening a video, pauses any other (`media-playback.ts`).
+ * A piece announces itself on `playing`, when sound has actually started, so a
+ * play the browser declines or a file that fails stops nothing. Closing the
+ * drawer pauses it: the panel stays mounted when closed, so its sound would
+ * otherwise carry on behind the work. Moving to something else in the
+ * workspace stops it too: the drawer shows its loading state for the new key,
+ * which takes the card out of the page, and a media element taken out of the
+ * page stops.
  *
  * ## No captions yet
  *
@@ -55,10 +52,12 @@ export function formatClock(seconds: number): string {
  *
  * ## When the file will not play
  *
- * The browser refuses media from an origin the CSP does not allow (sunrise#841
- * is the ask for an app seam), and a link can simply be gone. Either way the
- * card says it could not be played here and offers the link, rather than a
- * play button that does nothing.
+ * The drawer offers this card only for a file the page may play
+ * (`canPlayInPage`), so the CSP is not the usual cause. A file can still be
+ * gone, or the network can drop. Then the card says it could not be played
+ * here and offers the link, moving keyboard focus to that link if it was on
+ * the play button, so a keyboard reader is not dropped to the top of the page.
+ * Reopening the drawer lets it try again.
  */
 export function AudioCard({
   piece,
@@ -68,6 +67,9 @@ export function AudioCard({
   player: AudioPlayer;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const openRef = useRef<HTMLAnchorElement>(null);
+  const focusOpenOnFail = useRef(false);
   const progressId = useId();
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -78,10 +80,19 @@ export function AudioCard({
   // Another piece started, or a video opened: stop this one.
   useEffect(() => onOtherPlay(piece.id, () => audioRef.current?.pause()), [piece.id]);
 
-  // The drawer closed.
+  // The drawer closed: stop. It opened again: a failed piece may try again.
   useEffect(() => {
     if (drawer !== 'resources') audioRef.current?.pause();
+    else setFailed(false);
   }, [drawer]);
+
+  // The play button that had focus is gone; give focus to the link that replaced it.
+  useEffect(() => {
+    if (failed && focusOpenOnFail.current) {
+      focusOpenOnFail.current = false;
+      openRef.current?.focus();
+    }
+  }, [failed]);
 
   const takeLength = (seconds: number) => {
     if (Number.isFinite(seconds) && seconds > 0) setLength(seconds);
@@ -123,10 +134,8 @@ export function AudioCard({
         ref={audioRef}
         src={player.src}
         preload="none"
-        onPlay={() => {
-          setPlaying(true);
-          announcePlay(piece.id);
-        }}
+        onPlay={() => setPlaying(true)}
+        onPlaying={() => announcePlay(piece.id)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
@@ -135,31 +144,26 @@ export function AudioCard({
         onLoadedMetadata={(event) => takeLength(event.currentTarget.duration)}
         onDurationChange={(event) => takeLength(event.currentTarget.duration)}
         onError={() => {
+          focusOpenOnFail.current = document.activeElement === buttonRef.current;
           setFailed(true);
           setPlaying(false);
         }}
       />
       <div className="flex items-start gap-3">
         {failed ? (
-          <span
-            aria-hidden="true"
-            className={cn(
-              'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-              'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
-            )}
-          >
+          <span aria-hidden="true" className={TIMED_DISC_CLASS}>
             <Headphones size={15} strokeWidth={1.6} />
           </span>
         ) : (
           <button
+            ref={buttonRef}
             type="button"
             onClick={toggle}
             // The label says the state ("Pause …" while it plays), so no
             // `aria-pressed`: a toggle's name must not change with its state.
             aria-label={`${playing ? 'Pause' : 'Play'} ${piece.title}`}
             className={cn(
-              'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-              'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]',
+              TIMED_DISC_CLASS,
               'transition-colors duration-200 ease-[var(--ease-brand)] hover:bg-[var(--color-pill-hover)]',
               'motion-reduce:transition-none',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
@@ -183,6 +187,7 @@ export function AudioCard({
         <p role="status" className="text-muted-foreground mt-2.5 text-[12px] leading-[1.5]">
           This could not be played here.{' '}
           <a
+            ref={openRef}
             href={piece.href}
             target="_blank"
             rel="noopener noreferrer"
@@ -207,8 +212,12 @@ export function AudioCard({
             disabled={length === null}
             aria-valuetext={`${formatClock(current)} of ${total}`}
             onChange={(event) => {
+              // The bar follows the hand at once; `timeupdate` confirms it once
+              // the seek lands. Without this a drag snaps back to the old place.
+              const seconds = Number(event.target.value);
+              setCurrent(seconds);
               const audio = audioRef.current;
-              if (audio) audio.currentTime = Number(event.target.value);
+              if (audio) audio.currentTime = seconds;
             }}
             className={cn(
               'h-1 min-w-0 flex-1 cursor-pointer accent-[var(--color-primary)]',

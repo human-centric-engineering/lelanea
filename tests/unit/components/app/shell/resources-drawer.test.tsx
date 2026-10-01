@@ -114,9 +114,13 @@ function video(id: string, title: string, duration: string) {
 function linkOnlyVideo(id: string, title: string, duration: string) {
   return { ...timed('videos.example', id, title, duration), player: null };
 }
-/** An audio piece that is a direct file: it plays inline, with the player the server serves. */
+/**
+ * An audio piece that is a direct file on the page's own origin, which the
+ * CSP's `media-src 'self'` lets it play: it plays inline, with the player the
+ * server serves.
+ */
 function audio(id: string, title: string, duration: string) {
-  const href = `https://audio.example/${id}.mp3`;
+  const href = `${window.location.origin}/uploads/${id}.mp3`;
   return {
     ...timed('audio.example', id, title, duration),
     href,
@@ -664,7 +668,10 @@ describe('an audio piece that is a file', () => {
 
     expect(within(listen()).queryByRole('link')).toBeNull();
     expect(within(listen()).getByRole('button', { name: 'Play A quiet hour' })).toBeInTheDocument();
-    expect(audioElement()).toHaveAttribute('src', 'https://audio.example/a-quiet-hour.mp3');
+    expect(audioElement()).toHaveAttribute(
+      'src',
+      `${window.location.origin}/uploads/a-quiet-hour.mp3`
+    );
     // Nothing is downloaded until play: the length shown is the admin's, and
     // there is nothing to seek in yet.
     expect(audioElement()).toHaveAttribute('preload', 'none');
@@ -717,6 +724,8 @@ describe('an audio piece that is a file', () => {
       fireChange(bar, '300');
     });
     expect(element.currentTime).toBe(300);
+    // The bar and the time follow the hand at once, before the seek lands.
+    expect(within(listen()).getByText('5:00 / 12:05')).toBeInTheDocument();
   });
 
   it('plays one piece at a time', async () => {
@@ -795,6 +804,64 @@ describe('an audio piece that is a file', () => {
     expect(element.isConnected).toBe(true);
   });
 
+  it('is a link, not a player, for a file on an origin the page may not play from', async () => {
+    serve({
+      values: {
+        ...fullSelection(),
+        audio: [
+          {
+            ...audio('off-site', 'An off-site file', '3:00'),
+            href: 'https://cdn.example/off-site.mp3',
+            player: { src: 'https://cdn.example/off-site.mp3', type: 'audio/mpeg' as const },
+          },
+        ],
+      },
+    });
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+
+    // The browser would refuse it (media-src 'self'), so no player is offered.
+    expect(listen().querySelector('audio')).toBeNull();
+    const card = within(listen()).getByRole('link', { name: /An off-site file/ });
+    expect(card).toHaveAttribute('href', 'https://cdn.example/off-site.mp3');
+    expect(card).toHaveAttribute('target', '_blank');
+  });
+
+  it('moves focus to the link when the play button it was on is replaced by a failure', async () => {
+    renderDrawers();
+    await openResources();
+    const play = await within(panel()).findByRole('button', { name: 'Play A quiet hour' });
+    play.focus();
+
+    act(() => {
+      audioElement().dispatchEvent(new Event('error'));
+    });
+
+    await waitFor(() =>
+      expect(within(listen()).getByRole('link', { name: /Open it/ })).toHaveFocus()
+    );
+  });
+
+  it('tries again when the drawer is reopened after a failure', async () => {
+    renderDrawers();
+    await openResources();
+    await within(panel()).findByText(/anchor/);
+    act(() => {
+      audioElement().dispatchEvent(new Event('error'));
+    });
+    expect(within(listen()).getByText(/could not be played here/)).toBeInTheDocument();
+
+    await userEvent.click(within(panel()).getByRole('button', { name: /close/i }));
+    await openResources();
+
+    await waitFor(() =>
+      expect(
+        within(listen()).getByRole('button', { name: 'Play A quiet hour' })
+      ).toBeInTheDocument()
+    );
+  });
+
   it('says when the file will not play here, and offers the link', async () => {
     renderDrawers();
     await openResources();
@@ -807,7 +874,7 @@ describe('an audio piece that is a file', () => {
     expect(within(listen()).queryByRole('button', { name: /Play A quiet hour/ })).toBeNull();
     expect(within(listen()).getByText(/could not be played here/)).toBeInTheDocument();
     const open = within(listen()).getByRole('link', { name: /Open it/ });
-    expect(open).toHaveAttribute('href', 'https://audio.example/a-quiet-hour.mp3');
+    expect(open).toHaveAttribute('href', `${window.location.origin}/uploads/a-quiet-hour.mp3`);
     expect(open).toHaveAttribute('target', '_blank');
     expect(open).toHaveAttribute('rel', 'noopener noreferrer');
   });

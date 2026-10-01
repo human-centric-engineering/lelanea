@@ -15,9 +15,9 @@
  * **The CSP decides where it can actually play from.** `media-src` is fixed at
  * `'self' blob:` in Sunrise's `lib/security/headers.ts`, with no app seam, so a
  * file on another origin is refused by the browser until its origin is allowed.
- * That ask is on sunrise#841. When a host is chosen, its origin is added there,
- * or in a fork fix if Sunrise has not shipped the seam. The card says so when a
- * file will not play, and offers the link.
+ * That ask is on sunrise#841. So the web card offers a player only where the
+ * page may play the file ({@link canPlayInPage}), and a link elsewhere; if a
+ * file it does offer still fails, the card says so and offers the link.
  *
  * Unlike a video's embed, the `<audio>` source IS the stored link: a file has
  * no id to rebuild it from. What makes that safe is that it is held to `https`
@@ -38,6 +38,33 @@ export interface AudioPlayer {
    * file); a native client choosing a player may.
    */
   type: 'audio/mpeg' | 'audio/mp4';
+}
+
+/**
+ * The origins, besides the page's own, that the web app may play audio from:
+ * the `media-src` this app adds to the CSP. **Empty today**, because Sunrise's
+ * `media-src` is fixed at `'self' blob:` with no app seam (sunrise#841). When
+ * her audio host is chosen, its origin goes here AND into the policy, through
+ * that seam or a fork fix, and the two must name the same origins.
+ *
+ * The API still serves a player for a file on any origin: a native client has
+ * no CSP. The web card asks {@link canPlayInPage} and shows a link instead of
+ * a player that the browser would refuse.
+ */
+export const AUDIO_MEDIA_ORIGINS: readonly string[] = [];
+
+/**
+ * Whether this page may play the file: its own origin, or one in
+ * {@link AUDIO_MEDIA_ORIGINS}.
+ */
+export function canPlayInPage(src: string, pageOrigin: string): boolean {
+  let origin: string;
+  try {
+    origin = new URL(src).origin;
+  } catch {
+    return false;
+  }
+  return origin === pageOrigin || AUDIO_MEDIA_ORIGINS.includes(origin);
 }
 
 /** The file types an audio link may name today, as an admin reads them. */

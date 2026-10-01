@@ -8,10 +8,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
 import { AudioCard } from '@/components/app/shell/audio-card';
-import { TIMED_CARD_CLASS, VideoCard } from '@/components/app/shell/video-card';
+import { TIMED_CARD_CLASS, TIMED_DISC_CLASS, VideoCard } from '@/components/app/shell/video-card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { FoundationalDocumentIndex } from '@/lib/app/content/document-view';
+import { canPlayInPage } from '@/lib/app/content/audio-hosts';
 import type { ResourcesSelection } from '@/lib/app/content/resources';
 import type { LucideIcon } from 'lucide-react';
 import { MODULES_PATH_PREFIX } from '@/lib/app/journey/paths';
@@ -406,11 +407,12 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         empty="Nothing to listen to yet. Her audio lands here as the programme opens."
         items={audio}
         renderItem={(piece) =>
-          // A direct audio file plays inline in its card (t-120); any other
-          // link (entered before then) opens in a new tab.
-          piece.player ? (
-            // Keyed by its file, so an edited link starts a fresh card.
-            <AudioCard key={piece.player.src} piece={piece} player={piece.player} />
+          // A direct audio file this page may play plays inline in its card
+          // (t-120). Any other link, or a file on an origin the CSP's
+          // media-src does not allow yet, opens in a new tab rather than
+          // offering a player the browser would refuse.
+          piece.player && canPlayInPage(piece.player.src, window.location.origin) ? (
+            <AudioCard piece={piece} player={piece.player} />
           ) : (
             <TimedLinkCard item={piece} Icon={Headphones} />
           )
@@ -604,13 +606,7 @@ function TimedLinkCard({
         TIMED_CARD_CLASS
       )}
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-          'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
-        )}
-      >
+      <span aria-hidden="true" className={TIMED_DISC_CLASS}>
         <Icon size={15} strokeWidth={1.6} />
       </span>
       <span className="min-w-0 flex-1">

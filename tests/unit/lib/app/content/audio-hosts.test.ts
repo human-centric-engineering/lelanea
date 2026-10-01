@@ -12,7 +12,11 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { resolveAudioPlayer } from '@/lib/app/content/audio-hosts';
+import {
+  AUDIO_MEDIA_ORIGINS,
+  canPlayInPage,
+  resolveAudioPlayer,
+} from '@/lib/app/content/audio-hosts';
 
 describe('an audio link that plays inline', () => {
   it.each([
@@ -42,5 +46,27 @@ describe('an audio link that does not', () => {
     ['something that is not a URL', 'one.mp3'],
   ])('resolves %s to no player', (_what, href) => {
     expect(resolveAudioPlayer(href)).toBeNull();
+  });
+});
+
+describe('where the web page may play a file from', () => {
+  const PAGE = 'https://lelanea.example';
+
+  it('plays a file on the page’s own origin', () => {
+    expect(canPlayInPage(`${PAGE}/uploads/one.mp3`, PAGE)).toBe(true);
+  });
+
+  it('does not play a file on another origin while none is allowed', () => {
+    // Pinned: the list is the media-src this app adds, and Sunrise gives it no
+    // seam yet (sunrise#841). Adding an origin here without adding it to the
+    // CSP would offer a player the browser refuses.
+    expect(AUDIO_MEDIA_ORIGINS).toEqual([]);
+    expect(canPlayInPage('https://cdn.example/one.mp3', PAGE)).toBe(false);
+  });
+
+  it('does not take a look-alike for the page’s origin', () => {
+    expect(canPlayInPage('https://lelanea.example.evil/one.mp3', PAGE)).toBe(false);
+    expect(canPlayInPage('http://lelanea.example/one.mp3', PAGE)).toBe(false);
+    expect(canPlayInPage('not a url', PAGE)).toBe(false);
   });
 });
