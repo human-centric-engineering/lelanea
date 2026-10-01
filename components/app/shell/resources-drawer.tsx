@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
-import { VideoCard } from '@/components/app/shell/video-card';
+import { TIMED_CARD_CLASS, VideoCard } from '@/components/app/shell/video-card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { FoundationalDocumentIndex } from '@/lib/app/content/document-view';
@@ -589,13 +589,8 @@ function TimedLinkCard({
       {...EXTERNAL}
       title={`${item.title} · ${item.duration}`}
       className={cn(
-        'flex items-start gap-3 rounded-[16px] border border-[var(--color-card-border)]',
-        'bg-[var(--color-card)] px-[13px] py-[11px] no-underline hover:no-underline',
-        'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
-        'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
-        'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-        'focus-visible:outline-[var(--color-ring)]'
+        'flex items-start gap-3 px-[13px] py-[11px] no-underline hover:no-underline',
+        TIMED_CARD_CLASS
       )}
     >
       <span

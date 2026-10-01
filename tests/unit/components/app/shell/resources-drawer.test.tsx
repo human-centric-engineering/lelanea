@@ -462,10 +462,11 @@ describe('to watch, to listen and to read', () => {
     expect(videos[0]).toHaveTextContent('6:12');
     expect(videos[0]).toHaveAttribute('aria-haspopup', 'dialog');
     // The host's own still, served by the API: never one the client invents.
-    expect(videos[0]?.querySelector('img')).toHaveAttribute(
-      'src',
-      'https://i.ytimg.com/vi/why-values-/hqdefault.jpg'
-    );
+    const still = videos[0]?.querySelector('img');
+    expect(still).toHaveAttribute('src', 'https://i.ytimg.com/vi/why-values-/hqdefault.jpg');
+    // Google's still is fetched as soon as the card shows; the app's origin
+    // stays out of that request.
+    expect(still).toHaveAttribute('referrerpolicy', 'no-referrer');
 
     const read = within(panel()).getByRole('heading', { name: 'to read' }).closest('section')!;
     expect(read.querySelectorAll('li')).toHaveLength(3);

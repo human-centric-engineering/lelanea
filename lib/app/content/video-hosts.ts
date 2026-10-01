@@ -65,6 +65,29 @@ const YOUTUBE_HOSTS = new Set([
 /** The path forms whose second segment is the id: `/embed/<id>`, `/shorts/<id>`, `/live/<id>`. */
 const YOUTUBE_ID_PATHS = new Set(['embed', 'shorts', 'live']);
 
+/**
+ * YouTube's own words in the id's place, eleven characters like an id:
+ * `/embed/videoseries?list=…` embeds a playlist and `/embed/live_stream?channel=…`
+ * a channel's live stream. Neither names a video, so neither has a still or
+ * plays from an id alone.
+ */
+const YOUTUBE_RESERVED_IDS = new Set(['videoseries', 'live_stream']);
+
+/**
+ * Where the video should start, in whole seconds, from the link's `t` or
+ * `start`: `90`, `90s`, `1m30s` or `1h2m3s`. `null` for none, or for anything
+ * else, so nothing but digits reaches the embed.
+ */
+function startSecondsFrom(url: URL): number | null {
+  const raw = url.searchParams.get('t') ?? url.searchParams.get('start');
+  if (raw === null) return null;
+  const match = /^(?:(\d{1,2})h)?(?:(\d{1,3})m)?(?:(\d{1,5})s?)?$/.exec(raw);
+  if (!match || raw === '') return null;
+  const [, h, m, s] = match;
+  const seconds = Number(h ?? 0) * 3600 + Number(m ?? 0) * 60 + Number(s ?? 0);
+  return seconds > 0 ? seconds : null;
+}
+
 /** The id a YouTube link names, or `null` when it names none. */
 function youtubeIdFrom(url: URL): string | null {
   const host = url.hostname.toLowerCase();
@@ -78,7 +101,9 @@ function youtubeIdFrom(url: URL): string | null {
       candidate = segments[1];
     }
   }
-  return candidate && YOUTUBE_ID.test(candidate) ? candidate : null;
+  return candidate && YOUTUBE_ID.test(candidate) && !YOUTUBE_RESERVED_IDS.has(candidate)
+    ? candidate
+    : null;
 }
 
 /**
@@ -99,6 +124,9 @@ export function resolveVideoPlayer(href: string): VideoPlayer | null {
 
   const id = youtubeIdFrom(url);
   if (id === null) return null;
+  // A start time in the link is kept, as it was when the card opened the link
+  // itself: an admin pointing at the part of a long talk that matters.
+  const start = startSecondsFrom(url);
   return {
     host: 'youtube',
     id,
@@ -108,7 +136,9 @@ export function resolveVideoPlayer(href: string): VideoPlayer | null {
     thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
     // `rel=0` keeps the suggestions at the end to the same channel;
     // `playsinline` stops iOS taking the video full screen on play.
-    embedUrl: `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?autoplay=1&rel=0&playsinline=1`,
+    embedUrl: `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?autoplay=1&rel=0&playsinline=1${
+      start === null ? '' : `&start=${start}`
+    }`,
   };
 }
 
@@ -131,4 +161,19 @@ export function isPlayableVideoLink(href: string): boolean {
 export function videoLinkRefusal(before: string | null, next: string): string | null {
   if (before !== null && before === next) return null;
   return isPlayableVideoLink(next) ? null : UNSUPPORTED_VIDEO_LINK_MESSAGE;
+}
+
+/**
+ * {@link videoLinkRefusal} for a resource's stored fields: `null` unless the
+ * resource is a video with a link. The one place the store's writes and an
+ * import's plan both ask, so the two cannot apply different rules.
+ *
+ * @param before - the resource as stored, or `null` for a new one
+ */
+export function videoFieldsRefusal(
+  before: { href: string | null } | null,
+  next: { kind: string; href: string | null }
+): string | null {
+  if (next.kind !== 'video' || next.href === null) return null;
+  return videoLinkRefusal(before?.href ?? null, next.href);
 }

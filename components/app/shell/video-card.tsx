@@ -9,6 +9,29 @@ import type { VideoPlayer } from '@/lib/app/content/video-hosts';
 import { cn } from '@/lib/utils';
 
 /**
+ * The frame every video and audio card shares: the prototype's `.videocard`
+ * corner, ground, hover lift and focus ring. The drawer's link cards use it too.
+ */
+export const TIMED_CARD_CLASS = cn(
+  'rounded-[16px] border border-[var(--color-card-border)] bg-[var(--color-card)]',
+  'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
+  'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
+  'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
+  'focus-visible:outline-[var(--color-ring)]'
+);
+
+/**
+ * The lightbox fades in over the design's 260ms. `starting:` is CSS
+ * `@starting-style`, so a dialog that mounts open still has something to
+ * transition from; no animation plugin is loaded. Closing unmounts at once.
+ */
+const FADE_IN = cn(
+  'transition-opacity duration-[260ms] ease-[var(--ease-brand)] starting:opacity-0',
+  'motion-reduce:transition-none'
+);
+
+/**
  * A video in the resources drawer: the design's picture card, which opens a
  * lightbox playing it in the page (`lelanea.html`, `.videocard` and
  * `#lightbox`; f-resources t-119).
@@ -42,7 +65,25 @@ import { cn } from '@/lib/utils';
  * The design's lightbox and the still's frame are near-black with light text
  * whatever the theme, as a cinema is: the `--color-cinema*` tokens in
  * `app/brand-theme.css`, declared once for both themes.
+ *
+ * ## Radix's primitives, not `components/ui/dialog`
+ *
+ * That wrapper draws a light panel at `z-50` with its own corner close button.
+ * The lightbox is a bare frame on a dark scrim, above the drawer, with the
+ * design's close button in its caption row, so it composes the primitives
+ * directly. It keeps everything the wrapper's primitives give: focus scope,
+ * scroll lock, labelling.
+ *
+ * ## The still is Google's, fetched when the card shows
+ *
+ * The card's still comes from `i.ytimg.com` as soon as the drawer lists the
+ * video, before anyone presses play, which the privacy-enhanced player does not
+ * change. `referrerPolicy="no-referrer"` keeps the app's origin out of that
+ * request. Keeping the reader's IP out of it would mean serving stills from
+ * our own origin, which is a decision for when her hosting is chosen
+ * (idea #41).
  */
+
 export function VideoCard({
   video,
   player,
@@ -57,15 +98,7 @@ export function VideoCard({
         <button
           type="button"
           title={`${video.title} · ${video.duration}`}
-          className={cn(
-            'group block w-full overflow-hidden rounded-[16px] text-left',
-            'border border-[var(--color-card-border)] bg-[var(--color-card)]',
-            'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
-            'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
-            'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-            'focus-visible:outline-[var(--color-ring)]'
-          )}
+          className={cn('group block w-full overflow-hidden text-left', TIMED_CARD_CLASS)}
         >
           <span className="relative block aspect-video w-full overflow-hidden bg-[var(--color-cinema)]">
             {/*
@@ -78,6 +111,7 @@ export function VideoCard({
               src={player.thumbnailUrl}
               alt=""
               loading="lazy"
+              referrerPolicy="no-referrer"
               decoding="async"
               className="absolute inset-0 h-full w-full object-cover group-hover:brightness-105"
             />
@@ -119,12 +153,7 @@ export function VideoCard({
 
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
-          className={cn(
-            'fixed inset-0 z-[80] bg-[var(--color-cinema-scrim)]',
-            'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-            'motion-reduce:animate-none'
-          )}
+          className={cn('fixed inset-0 z-[80] bg-[var(--color-cinema-scrim)]', FADE_IN)}
         />
         <DialogPrimitive.Content
           onEscapeKeyDown={(event) => event.stopPropagation()}
@@ -139,11 +168,17 @@ export function VideoCard({
           className={cn(
             // Centred and no wider than the frame, so the scrim around it is
             // outside the dialog and a click there closes it.
-            'fixed top-1/2 left-1/2 z-[80] w-[calc(100%-2rem)] max-w-[880px] -translate-x-1/2 -translate-y-1/2',
-            'focus:outline-none sm:w-[calc(100%-4rem)]',
-            'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-            'motion-reduce:animate-none'
+            //
+            // Its width is capped by the viewport's HEIGHT too: a 16:9 frame
+            // plus the caption row must fit, or on a phone held sideways the
+            // caption and its close button fall below the screen, where the
+            // scroll lock leaves them out of reach. 7rem is the caption row and
+            // a margin above and below.
+            'fixed top-1/2 left-1/2 z-[80] -translate-x-1/2 -translate-y-1/2',
+            'w-[min(calc(100%-2rem),880px,calc((100dvh-7rem)*16/9))]',
+            'sm:w-[min(calc(100%-4rem),880px,calc((100dvh-7rem)*16/9))]',
+            'focus:outline-none',
+            FADE_IN
           )}
         >
           <div>

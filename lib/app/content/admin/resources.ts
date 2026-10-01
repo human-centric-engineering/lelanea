@@ -62,7 +62,7 @@ import {
   type ResourceRow,
   type ResourceWordsRow,
 } from '@/lib/app/content/resource-view';
-import { videoLinkRefusal } from '@/lib/app/content/video-hosts';
+import { videoFieldsRefusal } from '@/lib/app/content/video-hosts';
 import { resourcesFileFromLibrary, resourcesSeedFromFile } from '@/lib/app/content/content-files';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
 import {
@@ -391,8 +391,7 @@ export async function listWordsHistory(key: string): Promise<RevisionEntry<Words
  * have its title corrected. See `videoLinkRefusal`.
  */
 function assertPlayableVideoLink(before: ResourceFields | null, next: ResourceFields): void {
-  if (next.kind !== 'video' || next.href === null) return;
-  const refusal = videoLinkRefusal(before?.href ?? null, next.href);
+  const refusal = videoFieldsRefusal(before, next);
   if (refusal !== null) throw new ValidationError(refusal);
 }
 
@@ -1005,9 +1004,7 @@ export function planResourcesImport(
   // (t-119). One it carries unchanged is not re-checked, so a library holding a
   // video from before then still round-trips.
   for (const change of [...resources.creates, ...resources.updates]) {
-    const after = change.after;
-    if (after?.kind !== 'video' || after.href === null) continue;
-    const refusal = videoLinkRefusal(change.before?.href ?? null, after.href);
+    const refusal = change.after ? videoFieldsRefusal(change.before ?? null, change.after) : null;
     if (refusal !== null) refusals.push(`"${change.key}": ${refusal}`);
   }
   for (const change of resources.updates) {

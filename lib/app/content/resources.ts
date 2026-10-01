@@ -135,9 +135,6 @@ export const storedTimedSchema = z.strictObject({
   href: linkSchema,
 });
 
-/** A video's shape. Its link's playability is `videoLinkRefusal`'s, where it is set. */
-export const videoSchema = storedTimedSchema;
-
 /** An audio piece: a length as `m:ss`, and a link. */
 export const audioSchema = storedTimedSchema;
 
@@ -190,7 +187,7 @@ const resourcesFileBase = z.strictObject({
     provenance: provenanceSchema,
     notes: z.array(z.string().min(1)),
   }),
-  videos: z.array(videoSchema),
+  videos: z.array(storedTimedSchema),
   audio: z.array(audioSchema),
   articles: z.array(articleSchema),
   /** `default` is required: it is what every key without words of its own reads. */

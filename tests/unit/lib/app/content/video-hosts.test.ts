@@ -60,6 +60,30 @@ describe('a YouTube link', () => {
   });
 });
 
+describe('a start time in the link', () => {
+  const embed = (start: string) =>
+    `${YOUTUBE_EMBED_ORIGIN}/embed/${ID}?autoplay=1&rel=0&playsinline=1${start}`;
+
+  it.each([
+    ['seconds', `https://youtu.be/${ID}?t=90`, '&start=90'],
+    ['seconds with an s', `https://www.youtube.com/watch?v=${ID}&t=90s`, '&start=90'],
+    ['minutes and seconds', `https://youtu.be/${ID}?t=1m30s`, '&start=90'],
+    ['hours, minutes and seconds', `https://youtu.be/${ID}?t=1h2m3s`, '&start=3723'],
+    ['an embed link’s start', `https://www.youtube.com/embed/${ID}?start=45`, '&start=45'],
+  ])('is carried into the embed from %s', (_what, href, start) => {
+    expect(resolveVideoPlayer(href)?.embedUrl).toBe(embed(start));
+  });
+
+  it.each([
+    ['zero', `https://youtu.be/${ID}?t=0`],
+    ['words', `https://youtu.be/${ID}?t=soon`],
+    ['an injected parameter', `https://youtu.be/${ID}?t=30%26list%3DPLx`],
+    ['a negative number', `https://youtu.be/${ID}?t=-5`],
+  ])('is dropped when it is %s, so nothing but digits reaches the embed', (_what, href) => {
+    expect(resolveVideoPlayer(href)?.embedUrl).toBe(embed(''));
+  });
+});
+
 describe('a link no host plays', () => {
   it.each([
     ['another host', 'https://vimeo.com/76979871'],
@@ -74,6 +98,15 @@ describe('a link no host plays', () => {
     ['an id with a character YouTube never uses', 'https://youtu.be/dQw4w9WgX.Q'],
     ['an id carrying markup', `https://www.youtube.com/watch?v=${ID}"><script>`],
     ['an embed path with no id', 'https://www.youtube.com/embed/'],
+    // YouTube's own words in the id's place: eleven characters, but no video.
+    [
+      'a playlist embed',
+      'https://www.youtube.com/embed/videoseries?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG',
+    ],
+    [
+      'a channel live-stream embed',
+      'https://www.youtube.com/embed/live_stream?channel=UC1234567890',
+    ],
     ['a javascript: link', `javascript:alert('https://youtu.be/${ID}')`],
     ['a data: link', 'data:text/html,<p>hi</p>'],
     ['something that is not a URL', 'youtu.be/dQw4w9WgXcQ'],
