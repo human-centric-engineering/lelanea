@@ -623,7 +623,7 @@ Every frame from the agent's seats reaches the browser through `toClientStream()
   transcript on reload. `output_blocked` is not here: that is the reply refused,
   and a re-run can answer differently. The status read skips all of them.
 - **The copy is neutral on purpose.** The words in Lelañea Fulton's register, and the
-  banner, are f-conversation's — see [`conversation.md`](./conversation.md#when-the-agent-cant-answer-in-the-pane).
+  banner, are f-conversation's — see [`conversation.md`](./conversation.md#when-the-agent-cant-answer--in-the-pane).
 - **One more code, `crisis`, is not an ending of this kind.** It is built by the
   crisis path ahead of everything above — before the pause, the claim and the
   model — and carries the resource a person in danger is shown: as an `error`

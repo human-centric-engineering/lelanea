@@ -112,7 +112,7 @@ resume-by-context is the route's.
 message, and stays bound to the words. That is what makes "try again" safe
 (§08 t-54): a failed or timed-out turn re-runs under it, a completed one
 replays with no second model call. See
-[When the agent can't answer](#when-the-agent-cant-answer-in-the-pane) for the retry.
+[When the agent can't answer](#when-the-agent-cant-answer--in-the-pane) for the retry.
 
 **A refusal is not a stream.** `404` (no surface), `409` (`TURN_IN_FLIGHT`,
 `TURN_ID_REUSED`) and `429` arrive as JSON envelopes; `streamTurn` reads the
