@@ -62,6 +62,7 @@ import {
   type ResourceRow,
   type ResourceWordsRow,
 } from '@/lib/app/content/resource-view';
+import { videoFieldsRefusal } from '@/lib/app/content/video-hosts';
 import { resourcesFileFromLibrary, resourcesSeedFromFile } from '@/lib/app/content/content-files';
 import { JOURNEY_MODULES } from '@/lib/app/journey/roster';
 import {
@@ -383,6 +384,17 @@ export async function listWordsHistory(key: string): Promise<RevisionEntry<Words
 
 // ─── Resource writes ────────────────────────────────────────────────────────
 
+/**
+ * Throw unless a video's link may be written: a new video, or one whose link
+ * changes, must have a link a supported host plays in the page (t-119). A link
+ * carried unchanged is not re-checked, so a video entered before then can still
+ * have its title corrected. See `videoLinkRefusal`.
+ */
+function assertPlayableVideoLink(before: ResourceFields | null, next: ResourceFields): void {
+  const refusal = videoFieldsRefusal(before, next);
+  if (refusal !== null) throw new ValidationError(refusal);
+}
+
 async function writeResource(
   id: string,
   toNext: (before: ResourceFields) => ResourceFields,
@@ -402,6 +414,7 @@ async function writeResource(
         `"${id}" is ${aKind(before.kind)}. Videos, audio and articles are offered in different places, so add a new one instead.`
       );
     }
+    assertPlayableVideoLink(before, next);
     const documentId = await assertServable(tx, id, next);
     const changed = resourceDiff(before, next);
     if (changed.length === 0) return { changed, changes: {}, revision: row.revision };
@@ -613,6 +626,7 @@ export async function createResource(
       ...contentFromEdit(edit),
       retired: false,
     };
+    assertPlayableVideoLink(null, fields);
     const documentId = await assertServable(tx, id, fields);
     const resource = await tx.appResource.create({
       data: {
@@ -986,6 +1000,13 @@ export function planResourcesImport(
       : 'keep',
   });
   resources.skippedRetired.push(...namedRetired);
+  // A video the file adds, or whose link it changes, must play in the page
+  // (t-119). One it carries unchanged is not re-checked, so a library holding a
+  // video from before then still round-trips.
+  for (const change of [...resources.creates, ...resources.updates]) {
+    const refusal = change.after ? videoFieldsRefusal(change.before ?? null, change.after) : null;
+    if (refusal !== null) refusals.push(`"${change.key}": ${refusal}`);
+  }
   for (const change of resources.updates) {
     if (change.before && change.after && change.before.kind !== change.after.kind) {
       refusals.push(

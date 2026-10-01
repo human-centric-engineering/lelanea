@@ -62,7 +62,7 @@ interface SelectionBody {
     tier: string | null;
     words: { quote: string; paragraphs: string[] };
     wordsAreOwn: boolean;
-    videos: { id: string }[];
+    videos: { id: string; player: unknown }[];
     articles: { id: string }[];
   };
 }
@@ -277,6 +277,34 @@ describe('the rows are what is served (t-87)', () => {
 
     expect(library.data.videos.map((video) => video.id)).toEqual(['the-quiet']);
     expect(selection.data.videos.map((video) => video.id)).toEqual(['the-quiet']);
+  });
+
+  it('serves each video’s player, and none for a link no host plays (t-119)', async () => {
+    resources.addResource(
+      videoRow('plays', { relatesTo: 'module_01_values', href: 'https://youtu.be/dQw4w9WgXcQ' })
+    );
+    // Entered before a video had to play in the page: still served, so it
+    // still shows, but with no player to put in an iframe.
+    resources.addResource(
+      videoRow('links-out', { relatesTo: 'module_01_values', href: 'https://vimeo.com/76979871' })
+    );
+    const { request, context } = selectionRequest('values');
+
+    const body = (await (await getSelection(request, context)).json()) as SelectionBody;
+
+    expect(body.data.videos.map((video) => [video.id, video.player])).toEqual([
+      [
+        'plays',
+        {
+          host: 'youtube',
+          id: 'dQw4w9WgXcQ',
+          thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+          embedUrl:
+            'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0&playsinline=1',
+        },
+      ],
+      ['links-out', null],
+    ]);
   });
 
   it('names the drawer from the module row, so an edited title reaches it', async () => {

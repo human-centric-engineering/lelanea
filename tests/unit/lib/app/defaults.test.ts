@@ -45,8 +45,8 @@
  * `leaf-bootstrap.ts` (the seventeen journey modules, the waitlist's
  * erasure hook, the facilitation turn hook and her consumer-chat exclusion), `leaf-data-export.ts` (the
  * waitlist's Art. 15 declaration and collector), `leaf-admin-nav.ts` (the
- * "Lelañea" sidebar section) and `context-contributors.ts` (her voice block)
- * assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
+ * "Lelañea" sidebar section), `context-contributors.ts` (her voice block) and
+ * `csp.ts` (the YouTube player's origin) assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
  * its row still asserts only that its init returns cleanly — the resolver
  * exports no way to read its registry back, and adding one would be an edit to a
  * Sunrise-owned file for a test's convenience; it is pinned by registration in
@@ -1178,9 +1178,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/csp.ts',
     risk: 'a stray origin would widen the iframe policy on every install',
-    // These values are spliced straight into a response header, so an
-    // accidental default here is a security change, not a cosmetic one.
-    assert: () => expect(appFrameSrc).toEqual([]),
+    // PINNED, not deleted (`HB2`). §14 t-119 fills this with ONE origin: the
+    // privacy-enhanced YouTube player the resources drawer's video lightbox
+    // embeds. These values are spliced straight into a response header, so
+    // anything beyond that one origin is a security change, not a cosmetic one.
+    assert: () => expect(appFrameSrc).toEqual(['https://www.youtube-nocookie.com']),
   },
   {
     // PINNED (Daybreak fills this bridge). Upstream ships all three lists empty

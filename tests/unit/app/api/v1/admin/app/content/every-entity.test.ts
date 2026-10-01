@@ -413,8 +413,44 @@ describe('resources', () => {
     subtitle: 'For the start.',
     relatesTo: 'module_01_values',
     duration: '6:12',
-    href: 'https://example.com/f',
+    href: 'https://youtu.be/ffffffffff1',
   };
+
+  it('refuses a video whose link no host plays in the page, naming the hosts (t-119)', async () => {
+    const vimeo = await call(
+      create(
+        req('POST', '/resources/resource', {
+          id: 'f-vimeo',
+          ...video,
+          href: 'https://vimeo.com/76979871',
+        }),
+        entity('resources', 'resource')
+      )
+    );
+    expect(vimeo.status).toBe(400);
+    expect(JSON.stringify(vimeo.error)).toMatch(/must be a YouTube link/);
+
+    // A saved video is held to the same rule, so an edit cannot swap in a link
+    // that will not play.
+    await call(
+      create(
+        req('POST', '/resources/resource', { id: 'f-plays', ...video }),
+        entity('resources', 'resource')
+      )
+    );
+    const swapped = await call(
+      save(
+        req('PUT', '/resources/resource/f-plays', {
+          ...video,
+          href: 'https://example.com/a-video.mp4',
+          revision: 1,
+        }),
+        item('resources', 'resource', 'f-plays')
+      )
+    );
+    expect(swapped.status).toBe(400);
+    expect(JSON.stringify(swapped.error)).toMatch(/must be a YouTube link/);
+  });
 
   it('adds, edits, retires, restores and reorders videos, with every refusal named', async () => {
     expect(
@@ -790,7 +826,7 @@ describe('imports through the route', () => {
           subtitle: 'l',
           relatesTo: null,
           duration: '1:00',
-          href: 'https://example.com/l',
+          href: 'https://youtu.be/lllllllllll',
         }),
         entity('resources', 'resource')
       )
@@ -807,7 +843,7 @@ describe('imports through the route', () => {
         subtitle: 'a',
         relatesTo: null,
         duration: '2:00',
-        href: 'https://example.com/a',
+        href: 'https://youtu.be/aaaaaaaaaaa',
       },
     ];
     audit.logAdminAction.mockClear();

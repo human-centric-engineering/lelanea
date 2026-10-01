@@ -309,6 +309,20 @@
   --color-pill-hover: rgba(111, 115, 118, 0.13);
   --color-scrim: rgba(17, 24, 26, 0.42);
 
+  /* ---- The cinema: the video lightbox, dark in both themes -------------- */
+  /* The prototype's `.videocard` frame and `#lightbox` are near-black with
+     light text whatever the theme, as a cinema is, so these are declared once
+     and shared (f-resources t-119). `-fade` is the still's bottom gradient,
+     `-veil` the play disc over it, `-scrim` the lightbox ground and the
+     length chip. */
+  --color-cinema: #11181a;
+  --color-cinema-ink: #f3f0ec;
+  --color-cinema-scrim: rgba(8, 11, 12, 0.78);
+  --color-cinema-veil: rgba(17, 24, 26, 0.62);
+  --color-cinema-fade: rgba(17, 24, 26, 0.42);
+  --color-cinema-line: rgba(243, 240, 236, 0.3);
+  --color-cinema-hover: rgba(243, 240, 236, 0.12);
+
   /* ---- The one data hue, stepped for this ground ------------------------ */
   --color-bar: #0b80a0;
   --color-bar-idle: rgba(11, 128, 160, 0.16);

@@ -3,8 +3,11 @@
  *
  * Each edit schema is built from the schema the store already validates the
  * row with on every read (`storedDocumentBlocksSchema`, `storedPhasesSchema`,
- * `videoSchema` …), so the editor cannot save something the read path would then
- * refuse, and the admin reads the same message the seed would give.
+ * `storedTimedSchema` …), so the editor cannot save something the read path would then
+ * refuse, and the admin reads the same message the seed would give. A video's
+ * link has one rule beyond its shape, that it plays in the page (t-119); the
+ * store applies it where a link is set or changed (`videoLinkRefusal`), not
+ * here, because an unchanged link from before then must still save.
  *
  * **No schema here admits an id.** A document id is its API path and the key
  * the gate maps an acknowledgement kind to; a module or tier id is the roster's;
@@ -35,7 +38,7 @@ import {
 } from '@/lib/app/content/question-view';
 import {
   audioSchema,
-  videoSchema,
+  storedTimedSchema,
   provenanceSchema,
   articleSchema,
   relatesToSchema,
@@ -206,7 +209,7 @@ const [articleByDocument, articleByLink] = articleSchema.options;
  * other is a new resource.
  */
 export const resourceEditSchema = z.union([
-  videoSchema.omit({ id: true }).extend({ kind: z.literal('video') }),
+  storedTimedSchema.omit({ id: true }).extend({ kind: z.literal('video') }),
   audioSchema.omit({ id: true }).extend({ kind: z.literal('audio') }),
   articleByDocument.omit({ id: true }).extend({ kind: z.literal('article') }),
   articleByLink.omit({ id: true }).extend({ kind: z.literal('article') }),

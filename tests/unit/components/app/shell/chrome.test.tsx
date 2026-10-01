@@ -32,11 +32,14 @@ const SHELL_DIR = join(process.cwd(), 'components/app/shell');
  */
 const EXEMPT = new Set([
   'rounded-full', // the avatar disc, the send disc, and the map's status dots
-  'rounded-[20px]', // the composer card
+  'rounded-[20px]', // the composer card, and the video lightbox's frame (`.lightbox-frame`)
   'rounded-[18px]', // the resources panel's words card
   'rounded-[16px]', // the resources panel's video card — the prototype's `.videocard`
   'rounded-[14px]', // the resources panel's reading row — the prototype's `.readrow`
   'rounded-[9px]', // the tooltip bubble, which lives in components/app/ui
+  // The video card's length chip: the prototype's `.dur` is 5px, which is the
+  // icon highlight's value, so it takes 6px rather than read as one.
+  'rounded-[6px]',
   'rounded-t-sm', // the ≤900px pane switch's sliding underline — a rule, not a box
 ]);
 

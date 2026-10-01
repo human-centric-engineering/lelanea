@@ -679,7 +679,13 @@ export function ShellLayoutProvider({ children }: { children: React.ReactNode })
   /**
    * The Escape chain, in the prototype's order, minus the two rungs that are not
    * ours: the entry bloom dismisses itself on a timer and has no dismiss
-   * gesture, and there is no lightbox in the app shell.
+   * gesture, and the video lightbox (`video-card.tsx`, t-119) closes itself.
+   * It is a Radix dialog, which listens on `document` in the CAPTURE phase, and
+   * its `onEscapeKeyDown` in `video-card.tsx` stops the event there — Radix
+   * itself does not — so this BUBBLE-phase listener never sees an Escape the
+   * lightbox took. Removing that handler, or moving this to the capture phase
+   * or onto `window`, would let one Escape close the lightbox and the drawer
+   * under it.
    *
    * The order is the point — each rung is "the most recently opened thing that
    * is covering something" — so it is expressed as a single ordered walk rather

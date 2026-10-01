@@ -275,7 +275,7 @@ describe('resources', () => {
     subtitle: id,
     relatesTo: null,
     duration: '1:00',
-    href: `https://example.com/${id}`,
+    href: `https://youtu.be/${id.padEnd(11, '-').slice(0, 11)}`,
   });
 
   /** Two videos stored; the file names only the second, and drops a words key. */

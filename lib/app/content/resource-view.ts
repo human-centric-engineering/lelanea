@@ -9,19 +9,21 @@
  * they share one id namespace. The rules the old file's schema held by shape
  * are checked here, on every write and every read: a video or an audio piece has a
  * duration and a link and nothing else; an article has a reading time and exactly one of a link
- * and a document. Each row is run through the same `videoSchema` or
- * `articleSchema` the file was, so a row an admin writes (t-91) is held to the
- * same rules the seed was.
+ * and a document. Each row is run through `storedTimedSchema` or
+ * `articleSchema`, the shapes the seed and the admin (t-91) both write. A video
+ * is read with its link's player resolved (`video-hosts.ts`), so every client
+ * gets the still and the embed from the server rather than parsing links.
  *
  * @see lib/app/content/resource-store.ts — the reads and writes
  * @see lib/app/content/resources.ts — the schemas and the selection
  */
 
 import {
-  videoSchema,
+  storedTimedSchema,
   provenanceSchema,
   articleSchema,
   wordsSchema,
+  type ResourceAudio,
   type ResourceAudioView,
   type ResourceVideo,
   type ResourceVideoView,
@@ -31,6 +33,7 @@ import {
   type ResourceWords,
   type ResourceWordsView,
 } from '@/lib/app/content/resources';
+import { resolveVideoPlayer } from '@/lib/app/content/video-hosts';
 
 // ============================================================================
 // Rows
@@ -115,14 +118,14 @@ export function wordsToRow(key: string, words: ResourceWords): Omit<ResourceWord
  *
  * @throws naming the row and the rule it broke.
  */
-function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceVideoView {
+function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceAudio & { revision: number } {
   const label = kind === 'video' ? 'a video' : 'an audio piece';
   if (row.kind !== kind || row.readingTime !== null || row.documentSlug !== null) {
     throw new Error(
       `Resource "${row.slug}" is not a well-formed ${kind === 'video' ? 'video' : 'audio piece'}`
     );
   }
-  const parsed = videoSchema.safeParse({
+  const parsed = storedTimedSchema.safeParse({
     id: row.slug,
     title: row.title,
     subtitle: row.subtitle,
@@ -138,9 +141,13 @@ function toTimed(row: ResourceRow, kind: 'video' | 'audio'): ResourceVideoView {
   return { ...parsed.data, revision: row.revision };
 }
 
-/** A stored video, validated. @throws naming the row and the rule it broke. */
+/**
+ * A stored video, validated, with its player resolved — `null` when no
+ * supported host plays its link. @throws naming the row and the rule it broke.
+ */
 export function toVideo(row: ResourceRow): ResourceVideoView {
-  return toTimed(row, 'video');
+  const video = toTimed(row, 'video');
+  return { ...video, player: resolveVideoPlayer(video.href) };
 }
 
 /** A stored audio piece, validated — held to what a video is. @throws as `toVideo`. */

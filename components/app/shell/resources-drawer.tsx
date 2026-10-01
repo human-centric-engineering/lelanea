@@ -3,10 +3,11 @@
 import { ExternalLink, FileText, Headphones, Play } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { TIER_INKS } from '@/components/app/shell/map-drawer';
 import { useShellLayout } from '@/components/app/shell/use-shell-layout';
+import { TIMED_CARD_CLASS, VideoCard } from '@/components/app/shell/video-card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
 import type { FoundationalDocumentIndex } from '@/lib/app/content/document-view';
@@ -303,12 +304,12 @@ const ROW_LINK_CLASS = cn(
  *
  * The card carries her `quote` and `paragraphs` as the API serves them — every
  * paragraph its own element, never re-flowed into prose, because the source
- * files carry her cadence as data (`content.md`). A video or an audio piece is a card with its
- * title, what it is for, and its length, and it opens its link in a new tab;
- * there is **no thumbnail and no inline player**, because nothing exists to
- * show and where her videos and audio will be hosted is not decided (reconciliation ruling
- * 3 on f-resources). An article is a row that opens its link, or the page the
- * site renders its document on.
+ * files carry her cadence as data (`content.md`). A video is the design's
+ * picture card, with its host's own still, and plays in a lightbox in the page
+ * (`video-card.tsx`, t-119). YouTube is the first host, and a video whose link
+ * no host plays opens its link instead. An audio piece is a card that opens its
+ * link in a new tab until it plays inline (t-120). An article is a row that
+ * opens its link, or the page the site renders its document on.
  *
  * ## The empty states stay honest
  *
@@ -386,7 +387,15 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         eyebrow="to watch"
         empty="Nothing to watch yet. Her videos land here as the programme opens."
         items={videos}
-        Icon={Play}
+        renderItem={(video) =>
+          // A video a supported host plays is the designed picture card; one
+          // whose link no host resolves (entered before t-119) opens its link.
+          video.player ? (
+            <VideoCard video={video} player={video.player} />
+          ) : (
+            <TimedLinkCard item={video} Icon={Play} />
+          )
+        }
       />
 
       <TimedSection
@@ -394,7 +403,7 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
         eyebrow="to listen"
         empty="Nothing to listen to yet. Her audio lands here as the programme opens."
         items={audio}
-        Icon={Headphones}
+        renderItem={(piece) => <TimedLinkCard item={piece} Icon={Headphones} />}
       />
 
       <section aria-labelledby="resources-to-read" className="flex flex-col gap-2.5">
@@ -526,22 +535,22 @@ function ReadsSection({ load }: { load: ReadsLoad }) {
 }
 
 /**
- * A section of things with a length and a link — the videos, or the audio. One
- * component, because the two are the same shape and differ only in their
- * glyph and what the section is called.
+ * A section of things with a length — the videos, or the audio: its eyebrow,
+ * its honest empty state, and each item drawn by the caller, since a video that
+ * plays in the page and an audio piece that links out are different cards.
  */
-function TimedSection({
+function TimedSection<T extends { id: string }>({
   id,
   eyebrow,
   empty,
   items,
-  Icon,
+  renderItem,
 }: {
   id: string;
   eyebrow: string;
   empty: string;
-  items: ResourcesSelection['videos'];
-  Icon: LucideIcon;
+  items: readonly T[];
+  renderItem: (item: T) => ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-2.5">
@@ -553,52 +562,57 @@ function TimedSection({
       ) : (
         <ul className="m-0 flex list-none flex-col gap-3.5 p-0">
           {items.map((item) => (
-            <li key={item.id}>
-              {/*
-                The prototype's `.videocard` minus its 16:9 still — a card,
-                not a thumbnail with a caption, because there is no still to
-                show and a stock one is what D6 forbids. The glyph says what
-                kind of thing it is; the duration says how long.
-              */}
-              <a
-                href={item.href}
-                {...EXTERNAL}
-                title={`${item.title} · ${item.duration}`}
-                className={cn(
-                  'flex items-start gap-3 rounded-[16px] border border-[var(--color-card-border)]',
-                  'bg-[var(--color-card)] px-[13px] py-[11px] no-underline hover:no-underline',
-                  'transition-[box-shadow,transform] duration-[220ms] ease-[var(--ease-brand)]',
-                  'hover:-translate-y-px hover:shadow-[var(--shadow-rest)]',
-                  'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid',
-                  'focus-visible:outline-[var(--color-ring)]'
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
-                    'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
-                  )}
-                >
-                  <Icon size={15} strokeWidth={1.6} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] leading-[1.35] font-medium text-[var(--color-heading)]">
-                    {item.title}
-                  </span>
-                  <span className="text-muted-foreground mt-[3px] block text-[12px] leading-[1.5]">
-                    {item.subtitle}
-                  </span>
-                </span>
-                <span className="text-muted-foreground mt-1 flex-none text-[11.5px] tabular-nums">
-                  {item.duration}
-                </span>
-              </a>
-            </li>
+            <li key={item.id}>{renderItem(item)}</li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * A video or an audio piece that opens its link in a new tab: the prototype's
+ * `.videocard` without a still, because there is none to show and a stock one
+ * is what D6 forbids. The glyph says what kind of thing it is; the duration
+ * says how long. Every audio piece until t-120, and a video no host plays.
+ */
+function TimedLinkCard({
+  item,
+  Icon,
+}: {
+  item: { title: string; subtitle: string; duration: string; href: string };
+  Icon: LucideIcon;
+}) {
+  return (
+    <a
+      href={item.href}
+      {...EXTERNAL}
+      title={`${item.title} · ${item.duration}`}
+      className={cn(
+        'flex items-start gap-3 px-[13px] py-[11px] no-underline hover:no-underline',
+        TIMED_CARD_CLASS
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full',
+          'bg-[var(--color-pill)] text-[var(--color-secondary-ink)]'
+        )}
+      >
+        <Icon size={15} strokeWidth={1.6} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] leading-[1.35] font-medium text-[var(--color-heading)]">
+          {item.title}
+        </span>
+        <span className="text-muted-foreground mt-[3px] block text-[12px] leading-[1.5]">
+          {item.subtitle}
+        </span>
+      </span>
+      <span className="text-muted-foreground mt-1 flex-none text-[11.5px] tabular-nums">
+        {item.duration}
+      </span>
+    </a>
   );
 }
