@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 
+import { BeginJourney } from '@/components/app/onboarding/begin-journey';
 import { useOnboardingFinished } from '@/components/app/shell/use-shell-layout';
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
@@ -101,6 +102,8 @@ export interface DiscoveryProps {
   /** The area of the module that asks them, and its name. */
   moduleHref: string;
   moduleName: string;
+  /** The person has begun the journey: no "Begin the journey" step (t-106). */
+  handedOff: boolean;
 }
 
 /**
@@ -126,13 +129,15 @@ interface PageLocal {
    * next loaded, so moving between `/app` and the modules does not ask again.
    */
   away: boolean;
+  /** Began the journey here: the step is not offered again on a Back navigation. */
+  begun: boolean;
 }
 const local = new Map<string, PageLocal>();
 
 function localFor(userId: string): PageLocal {
   let entry = local.get(userId);
   if (!entry) {
-    entry = { answers: {}, skipped: new Set(), away: false };
+    entry = { answers: {}, skipped: new Set(), away: false, begun: false };
     local.set(userId, entry);
   }
   return entry;
@@ -168,6 +173,7 @@ export function Discovery({
   partial,
   moduleHref,
   moduleName,
+  handedOff,
 }: DiscoveryProps) {
   const [answers, setAnswers] = React.useState<Record<string, DiscoveryAnswer>>(() => {
     const merged = { ...fromServer };
@@ -182,6 +188,7 @@ export function Discovery({
   );
   const [away, setAway] = React.useState(() => variant !== 'module' && localFor(userId).away);
   const [offerTaken, setOfferTaken] = React.useState(false);
+  const begun = handedOff || localFor(userId).begun;
   /** The question the module view has open, when the person chose one. */
   const [chosen, setChosen] = React.useState<string | null>(null);
   /** The person has moved past a question here: the preamble has done its job. */
@@ -244,6 +251,35 @@ export function Discovery({
       });
   };
 
+  // Every question answered or skipped, and the journey not yet begun: the
+  // hand-off into Values is offered (t-106).
+  // A skip is posted without waiting, so the server may not have one this
+  // page counts (still in flight, or it failed). Beginning is judged on the
+  // server's state, so those are sent again, and waited on, first. Recording a
+  // skip twice is the same as once. A failure is left to the begin route,
+  // which then says not yet, and the step can be pressed again.
+  const resendSkips = async (): Promise<void> => {
+    const onServer = new Set(skippedOnServer);
+    const unsent = [...skipped].filter((id) => !onServer.has(id) && !answers[id]);
+    await Promise.allSettled(
+      unsent.map((questionId) =>
+        apiClient.post(DISCOVERY_ROUTE, { body: { action: 'skip', questionId } })
+      )
+    );
+  };
+
+  const beginStep =
+    position.finished && !begun ? (
+      <BeginJourney
+        waiting={position.skipped.length > 0}
+        moduleName={moduleName}
+        beforeBegin={resendSkips}
+        onBegun={() => {
+          localFor(userId).begun = true;
+        }}
+      />
+    ) : null;
+
   const onLeave = (): void => {
     goAway();
     apiClient.post(DISCOVERY_ROUTE, { body: { action: 'leave' } }).catch((caught: unknown) => {
@@ -254,6 +290,7 @@ export function Discovery({
   if (variant === 'module') {
     return (
       <div className="flex max-w-[52rem] flex-col gap-6" data-testid="discovery-module">
+        {beginStep}
         {current ? (
           <QuestionEditor
             key={current.id}
@@ -289,7 +326,9 @@ export function Discovery({
 
   // On `/app`, the set ends when every question is answered or skipped. The
   // skipped ones wait in Onboarding's area; they are not pushed here again.
-  if (away || !current) return null;
+  // What is left is the step into the journey, until it is taken.
+  if (!current && !beginStep) return null;
+  if (current && away) return null;
 
   const offering = variant === 'offer' && !offerTaken;
 
@@ -305,7 +344,8 @@ export function Discovery({
           'px-6 pt-[clamp(28px,5vw,56px)] pb-16 max-[480px]:px-4'
         )}
       >
-        {variant === 'first' && preamble !== null && !movedOn ? (
+        {!current ? beginStep : null}
+        {current && variant === 'first' && preamble !== null && !movedOn ? (
           <header className="flex flex-col gap-4">
             <Eyebrow as="p">{DISCOVERY_COPY.eyebrow}</Eyebrow>
             <p className="brand-display text-xl leading-[1.5] text-[var(--color-heading)] italic">
@@ -319,7 +359,7 @@ export function Discovery({
           </header>
         ) : null}
 
-        {offering ? (
+        {!current ? null : offering ? (
           <section className="flex flex-col gap-4" data-testid="discovery-offer-card">
             <Eyebrow as="p">{DISCOVERY_COPY.eyebrow}</Eyebrow>
             <p className="text-foreground max-w-prose">{DISCOVERY_COPY.offer}</p>

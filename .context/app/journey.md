@@ -98,7 +98,7 @@ break every URL the day a module is renumbered.
 node keys, the journey API's routes and anything else that must meet the
 registry by slug call it rather than re-deriving it.
 
-## Status: every row is born `draft`; Onboarding alone is `active`
+## Status: every row is born `draft`; Onboarding and Values are `active`
 
 `syncRegisteredModules()` writes no status; the schema default is `draft`, and
 status is operator-owned from then on. Liveness matters in one place: the
@@ -110,9 +110,13 @@ Owner ruling, 30 Sept 2026: **Onboarding only**, and each other module when its
 content lands (Values with t-106). It is a one-off move from `draft`, never a
 reconcile: the migration `20261005100000_app_activate_onboarding_module` for
 existing databases, and the write-once seed unit `021-activate-onboarding` for a
-fresh one. **Do not make a seed reconcile status**: it would clobber an
-operator's choice on every run. Activate the next module the same way, with its
-own migration.
+fresh one. Values followed with the hand-off (t-106), the same way:
+`20261006100000_app_activate_values_module` and seed `022-activate-values`.
+**Do not make a seed reconcile status**: it would clobber an operator's choice
+on every run. Activate the next module the same way, with its own migration.
+
+An operator who sets Values back to `draft` makes "Begin the journey" refuse
+(a 409, nothing written): the engine will not enter a module that is not live.
 
 ## The map (decision A6)
 
@@ -214,6 +218,20 @@ a journey while the map is unpublished (`createJourney` does not check the
 slug, so such a journey would be silently inert). It never throws: a failure
 is logged and the next shell entry retries. `onFirstArrival` is not wired
 (ruling at planning); the app renders the welcome itself.
+
+## Onboarding hands the person into Values (§15 t-106)
+
+`beginJourney(userId)` (`lib/app/onboarding/hand-off.ts`) is "Begin the
+journey": it **enters `values`, then completes `onboarding`**, both through
+`applyJourneyTransition`, each only when not already done. Values first, so a
+Values that is not live refuses before onboarding is closed. Repeating it
+writes nothing (`already`); one that failed between the two is finished by the
+next press. The person has begun once Values has a state and onboarding is no
+longer active (`handedOffFrom`). The map drawer then reads `done` and
+`current` from those states, as it always could; what is new is that the
+drawer re-reads after the move (`journeyMoved` in the shell), because it keeps
+what it fetched for the session. The rules around the questions are in
+[`onboarding.md`](./onboarding.md#begin-the-journey-the-hand-off-into-values-t-106).
 
 **The tier tone is a swatch, not the label's colour.** The task said "label
 coloured by tier tone"; `shell.md` measured exactly that pattern at 3.17:1 and

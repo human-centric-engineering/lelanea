@@ -39,7 +39,11 @@ import {
   type DiscoveryQuestionToAsk,
   type DiscoverySetToAsk,
 } from '@/lib/app/onboarding/discovery-slots';
-import { readOnboardingProgress } from '@/lib/app/onboarding/first-run-store';
+import {
+  readJourneyNodeStates,
+  readOnboardingProgress,
+} from '@/lib/app/onboarding/first-run-store';
+import { handedOffFrom } from '@/lib/app/onboarding/hand-off-state';
 import { READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
@@ -60,6 +64,8 @@ export interface DiscoveryState {
   position: DiscoveryPosition;
   /** The person has been through a first sitting: answered, skipped or left. */
   started: boolean;
+  /** The person has begun the journey: onboarding handed them into Values (t-106). */
+  handedOff: boolean;
 }
 
 /**
@@ -74,13 +80,14 @@ export async function getDiscoveryState(
   try {
     const set = preloaded ?? (await getDiscoverySet());
     const ids = set.questions.map((q) => q.id);
-    const [heads, progress] = await Promise.all([
+    const [heads, states] = await Promise.all([
       // `getSlotHeads` reads every head for an empty list, so never pass one.
       ids.length === 0
         ? Promise.resolve([])
         : getSlotHeads(userId, { slotSlugs: set.questions.map((q) => q.slotSlug) }),
-      readOnboardingProgress(userId),
+      readJourneyNodeStates(userId),
     ]);
+    const progress = states.find((s) => s.nodeKey === ONBOARDING_NODE_KEY)?.progress ?? null;
     const ledger = discoveryLedgerFrom(progress);
 
     const answers: Record<string, DiscoveryAnswer> = {};
@@ -99,6 +106,7 @@ export async function getDiscoveryState(
       versions,
       position,
       started: ledger.started || answered.size > 0 || ledger.skipped.length > 0,
+      handedOff: handedOffFrom(states),
     };
   } catch (error) {
     logger.error('Discovery state could not be read', error, { userId });

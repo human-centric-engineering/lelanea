@@ -186,6 +186,14 @@ describe('the framing, by seat', () => {
     expect(block).toContain(ANSWERS_FRAMING.after.heading);
     expect(block).toContain('> The quiet.');
   });
+
+  it('tells the facilitator to open the first conversation after onboarding on their words (t-106)', () => {
+    const opening = ANSWERS_FRAMING.after.lines.find((line) => /only just begun/.test(line));
+    expect(opening).toMatch(/open by picking up something they wrote/);
+
+    expect(composeAnswersContext('facilitator', one)).toContain(opening);
+    expect(composeAnswersContext('onboarding', one)).not.toContain(opening);
+  });
 });
 
 describe('quoting and bounds', () => {

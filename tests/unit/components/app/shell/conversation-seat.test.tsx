@@ -35,7 +35,10 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/client')>();
   return { ...actual, apiClient: { ...actual.apiClient, post } };
 });
-vi.mock('next/navigation', () => ({ usePathname: () => '/app' }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/app',
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => true }));
 vi.mock('@/components/app/ui/consent-clearance', () => ({ useConsentBannerClearance: () => 0 }));
 
@@ -119,6 +122,7 @@ function questions() {
       partial
       moduleHref="/app/modules/onboarding"
       moduleName="Onboarding"
+      handedOff={false}
     />
   );
 }
