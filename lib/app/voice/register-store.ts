@@ -26,8 +26,9 @@
  * ## Failing towards guiding
  *
  * Every read is guarded and logged. A module whose config cannot be read is
- * read as its starting register, and a crisis check that fails is read as a
- * crisis: when this cannot tell, it steers gently, because teaching someone
+ * read as its starting register, and a crisis check that fails steers to
+ * guiding (source `fallback`, not `safety`: nothing claims a crisis that was
+ * not read): when this cannot tell, it steers gently, because teaching someone
  * who is struggling costs more than guiding someone who is not.
  *
  * @see lib/app/voice/register.ts — the rules
@@ -88,8 +89,12 @@ async function readModuleRegister(moduleSlug: string): Promise<Register> {
   }
 }
 
-/** Whether a crisis was recorded for the person within the hold. A failed read is a yes. */
-async function hadRecentCrisis(userId: string, now: Date): Promise<boolean> {
+/**
+ * Whether a crisis was recorded for the person within the hold, or `unknown`
+ * when the read fails: steered like a crisis, never recorded as one, so the
+ * account does not tell the person something hard happened when it did not.
+ */
+async function hadRecentCrisis(userId: string, now: Date): Promise<boolean | 'unknown'> {
   try {
     const since = new Date(now.getTime() - SAFETY_HOLD_HOURS * 60 * 60 * 1000);
     const crisis = await prisma.appSafetyEvent.findFirst({
@@ -101,7 +106,7 @@ async function hadRecentCrisis(userId: string, now: Date): Promise<boolean> {
     logger.error('resolveRegister: the crisis check failed; steering to guiding', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return true;
+    return 'unknown';
   }
 }
 

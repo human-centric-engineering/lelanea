@@ -48,10 +48,12 @@ export type Register = (typeof REGISTERS)[number];
 export const DEFAULT_REGISTER: Register = 'guiding';
 
 /**
- * Why a turn was steered to its register: the person's module, a crisis, or
- * the person asking for it (t-126, `register-lean.ts`).
+ * Why a turn was steered to its register: the person's module, a crisis, the
+ * person asking for it (t-126, `register-lean.ts`), or `fallback`: the crisis
+ * check could not be read, so it steered gently without claiming a crisis
+ * happened.
  */
-export const REGISTER_SOURCES = ['module', 'safety', 'asked'] as const;
+export const REGISTER_SOURCES = ['module', 'safety', 'asked', 'fallback'] as const;
 export type RegisterSource = (typeof REGISTER_SOURCES)[number];
 
 /**
@@ -93,8 +95,12 @@ export function registerConfigField(
 export interface RegisterInputs {
   /** The person's current module's register, or null when there is no module. */
   moduleRegister: Register | null;
-  /** A crisis on their conversation within {@link SAFETY_HOLD_HOURS}. */
-  recentCrisis: boolean;
+  /**
+   * A crisis on their conversation within {@link SAFETY_HOLD_HOURS}, or
+   * `unknown` when that could not be read. Unknown steers like a crisis (the
+   * safe direction) but is not recorded as one.
+   */
+  recentCrisis: boolean | 'unknown';
   /** What the person asked for, while it holds (t-126), or null. */
   lean: Register | null;
 }
@@ -112,6 +118,7 @@ export interface RegisterChoice {
  * still guiding, from safety: the crisis is the reason that holds.
  */
 export function selectRegister(inputs: RegisterInputs): RegisterChoice {
+  if (inputs.recentCrisis === 'unknown') return { register: 'guiding', source: 'fallback' };
   if (inputs.recentCrisis) return { register: 'guiding', source: 'safety' };
   if (inputs.lean !== null) return { register: inputs.lean, source: 'asked' };
   return { register: inputs.moduleRegister ?? DEFAULT_REGISTER, source: 'module' };

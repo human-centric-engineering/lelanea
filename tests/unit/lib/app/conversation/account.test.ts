@@ -361,6 +361,8 @@ describe('the register (f-registers t-125)', () => {
       'Began in a guiding register: gentle, and holding space, because you asked for it.',
     ],
     ['teaching', null, 'Began in a teaching register: direct, and asking you to look further.'],
+    // An unread crisis check: steered gently, and no reason claimed (code review).
+    ['guiding', 'fallback', 'Began in a guiding register: gentle, and holding space.'],
   ] as const)('%s from %s', (register, registerSource, sentence) => {
     expect(registerSentence(turn({ register, registerSource }))).toBe(sentence);
   });

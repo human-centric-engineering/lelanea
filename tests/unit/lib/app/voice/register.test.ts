@@ -31,6 +31,9 @@ describe('selectRegister', () => {
     [null, false, 'teaching', 'teaching', 'asked'],
     ['guiding', true, 'teaching', 'guiding', 'safety'],
     ['teaching', true, 'guiding', 'guiding', 'safety'],
+    // A crisis check that could not be read steers like one, and says so.
+    ['teaching', 'unknown', null, 'guiding', 'fallback'],
+    ['guiding', 'unknown', 'teaching', 'guiding', 'fallback'],
   ] as const)(
     'module %s, crisis %s, lean %s → %s from %s',
     (moduleRegister, recentCrisis, lean, register, source) => {
@@ -86,6 +89,7 @@ describe('reading a stored value', () => {
     expect(parseRegister(null)).toBeNull();
     expect(parseRegisterSource('safety')).toBe('safety');
     expect(parseRegisterSource('asked')).toBe('asked');
+    expect(parseRegisterSource('fallback')).toBe('fallback');
     expect(parseRegisterSource('whim')).toBeNull();
   });
 });

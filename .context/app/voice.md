@@ -298,8 +298,10 @@ leanings. Owner rulings, 2 Oct 2026, are journalled on f-registers.
 - **The person's current module** is their most recently active node on the
   journey (`readCurrentModuleSlug`; node keys are module slugs on our map).
 - **A crisis holds it at guiding** for `SAFETY_HOLD_HOURS` (24), whatever the
-  module says, including the soft-crisis turn it happens in. A read that fails
-  fails towards guiding.
+  module says, including the soft-crisis turn it happens in. A crisis check
+  that cannot be read also steers to guiding, but as source `fallback`, not
+  `safety`: the account under the reply then gives no reason, rather than
+  telling the person something hard happened when nothing was read.
 - **The AI moves off it within a reply** when the moment calls for it. That is
   the overlays' own authored instruction, not code, and nothing records that it
   did: the record says where the turn **began**.

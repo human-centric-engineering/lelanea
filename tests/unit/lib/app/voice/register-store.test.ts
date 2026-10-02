@@ -146,12 +146,14 @@ describe('resolveRegister', () => {
     expect(crisis).not.toHaveBeenCalled();
   });
 
-  it('fails towards guiding: a crisis check that throws is read as a crisis', async () => {
+  it('fails towards guiding when the crisis check throws, without recording a crisis', async () => {
     crisis.mockRejectedValue(new Error('pool exhausted'));
 
+    // Guiding, as a crisis would be, but `fallback`: the account must not tell
+    // the person something hard happened when the record was never read.
     await expect(resolveRegister('u1', 'facilitator')).resolves.toMatchObject({
       register: 'guiding',
-      source: 'safety',
+      source: 'fallback',
     });
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('crisis check failed'),
