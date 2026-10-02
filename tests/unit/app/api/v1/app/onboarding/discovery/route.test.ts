@@ -25,6 +25,9 @@ vi.mock('@/lib/app/onboarding/discovery-store', () => store);
 const slots = vi.hoisted(() => ({ getDiscoverySet: vi.fn() }));
 vi.mock('@/lib/app/onboarding/discovery-slots', () => slots);
 
+const gate = vi.hoisted(() => ({ hasPassedGate: vi.fn() }));
+vi.mock('@/lib/app/gateway/gate', () => gate);
+
 import { GET, POST } from '@/app/api/v1/app/onboarding/discovery/route';
 import { auth } from '@/lib/auth/config';
 import { API_KEY_SESSION_ID_PREFIX } from '@/lib/auth/api-keys';
@@ -81,6 +84,7 @@ const WHOLE_SET = { ...SET, pacing: { ...SET.pacing, allowPartialCompletion: fal
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
+  gate.hasPassedGate.mockResolvedValue(true);
   slots.getDiscoverySet.mockResolvedValue(SET);
   store.answerDiscoveryQuestion.mockResolvedValue({ outcome: 'written', version: 3 });
   store.skipDiscoveryQuestion.mockResolvedValue('recorded');
@@ -217,6 +221,36 @@ describe('who may call', () => {
     const { status } = await post({ action: 'answer', questionId: 'q01', answer: 'x' });
     expect(status).toBe(403);
     expect(store.answerDiscoveryQuestion).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an answer', { action: 'answer', questionId: 'q01', answer: 'x' }],
+    ['a skip', { action: 'skip', questionId: 'q01' }],
+    ['a leave', { action: 'leave' }],
+  ])('refuses %s from someone not past the gate, writing nothing (t-124)', async (_, body) => {
+    gate.hasPassedGate.mockResolvedValue(false);
+    const { status } = await post(body);
+    expect(status).toBe(403);
+    expect(gate.hasPassedGate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'user_test', email: 'member@example.com', emailVerified: true })
+    );
+    expect(store.answerDiscoveryQuestion).not.toHaveBeenCalled();
+    expect(store.skipDiscoveryQuestion).not.toHaveBeenCalled();
+    expect(store.leaveDiscovery).not.toHaveBeenCalled();
+  });
+
+  it('lets someone past the gate write, asking the gate about the caller', async () => {
+    const { status } = await post({ action: 'answer', questionId: 'q01', answer: 'x' });
+    expect(status).toBe(200);
+    expect(gate.hasPassedGate).toHaveBeenCalledWith(expect.objectContaining({ id: 'user_test' }));
+    expect(store.answerDiscoveryQuestion).toHaveBeenCalled();
+  });
+
+  it('reads the GET without asking the gate: reading your own answers writes nothing', async () => {
+    store.getDiscoveryState.mockResolvedValue({ position: { next: null, finished: true } });
+    gate.hasPassedGate.mockResolvedValue(false);
+    const response = await GET(createRequest(undefined, 'GET'));
+    expect(response.status).toBe(200);
   });
 
   it('refuses a signed-out GET', async () => {

@@ -35,7 +35,11 @@
  * words.
  *
  * Authentication: `withAuth`. The POST refuses an API key, as the first run's
- * does: these are a person's own answers, which a key cannot give.
+ * does: these are a person's own answers, which a key cannot give. It also
+ * refuses (`403`, nothing written) anyone not past the gate (`hasPassedGate`,
+ * the shell layout's own check): an answer given before accepting the terms it
+ * is given under is not one to keep (t-124). The surface never shows the
+ * questions before the gate; this closes the API.
  *
  * Rate limiting: inherited from the `/api/v1/**` section cap.
  */
@@ -47,6 +51,7 @@ import { successResponse } from '@/lib/api/responses';
 import { ForbiddenError, ValidationError, handleAPIError } from '@/lib/api/errors';
 import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
+import { hasPassedGate } from '@/lib/app/gateway/gate';
 import { discoveryActionSchema } from '@/lib/app/onboarding/discovery';
 import { getDiscoverySet } from '@/lib/app/onboarding/discovery-slots';
 import {
@@ -86,6 +91,9 @@ export const POST = withAuth(async (request: NextRequest, session: AuthSession) 
   try {
     if (isApiKeySession(session)) {
       throw new ForbiddenError('Only a signed-in person can answer the discovery questions.');
+    }
+    if (!(await hasPassedGate(session.user))) {
+      throw new ForbiddenError('The discovery questions open once you have passed the gate.');
     }
     const body = await validateRequestBody(request, discoveryActionSchema);
     const set = await getDiscoverySet();
