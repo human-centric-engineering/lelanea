@@ -34,6 +34,7 @@ import {
   GUARD_MODES,
   HER_CAPABILITY_SLUGS,
   READ_ONLY_CAPABILITY_SLUGS,
+  REGISTER_CAPABILITY_SLUGS,
   RESOURCE_CAPABILITY_SLUGS,
   SELF_WRITE_CAPABILITY_SLUGS,
   SLOT_CAPABILITY_SLUGS,
@@ -71,6 +72,8 @@ const WRITE_CAPABILITY_SLUGS = [
   'request_transition',
   'record_feedback',
   'submit_proposal',
+  // Lelañea (f-registers t-126): a person's own lean on their own journey node.
+  'set_register',
 ];
 
 /**
@@ -87,16 +90,27 @@ const WRITE_CAPABILITY_SLUGS = [
  * list ever grows past a couple of entries the exception has become the rule
  * and the ceiling needs restating again rather than widening again.
  */
-const SANCTIONED_SELF_WRITES = ['fill_slot'];
+const SANCTIONED_SELF_WRITES = [
+  'fill_slot',
+  // f-registers t-126, argued in `SELF_WRITE_CAPABILITY_SLUGS`: the caller's
+  // own lean on their own node, cleared by tombstone, never deleted, and beaten
+  // by a crisis, so it cannot be used to push someone who is struggling.
+  'set_register',
+];
 
 describe('the agent’s tools', () => {
-  it('are exactly what the three seeds grant, and nothing else', () => {
+  it('are exactly what the four seeds grant, and nothing else', () => {
     expect(
-      [...GRANTED_CAPABILITY_SLUGS, ...SLOT_CAPABILITY_SLUGS, ...RESOURCE_CAPABILITY_SLUGS].sort()
+      [
+        ...GRANTED_CAPABILITY_SLUGS,
+        ...SLOT_CAPABILITY_SLUGS,
+        ...RESOURCE_CAPABILITY_SLUGS,
+        ...REGISTER_CAPABILITY_SLUGS,
+      ].sort()
     ).toEqual([...HER_CAPABILITY_SLUGS].sort());
   });
 
-  it('never include anything that writes, bar the one sanctioned self-write', () => {
+  it('never include anything that writes, bar the sanctioned self-writes', () => {
     // The population is non-empty, so an empty intersection means something.
     expect(HER_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
     expect(WRITE_CAPABILITY_SLUGS.length).toBeGreaterThan(0);
@@ -105,6 +119,7 @@ describe('the agent’s tools', () => {
       ...GRANTED_CAPABILITY_SLUGS,
       ...SLOT_CAPABILITY_SLUGS,
       ...RESOURCE_CAPABILITY_SLUGS,
+      ...REGISTER_CAPABILITY_SLUGS,
     ];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
       if (SANCTIONED_SELF_WRITES.includes(slug)) continue;

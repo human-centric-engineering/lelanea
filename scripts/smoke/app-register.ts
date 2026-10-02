@@ -9,7 +9,9 @@
  * the context block the real `buildContext` frames for the facilitator seat
  * carries that register's overlay; that the `done` frame and the transcript
  * read say the same register; and that the same question, asked once the
- * module says guiding, gets a reply in the other register. Then a crisis
+ * module says guiding, gets a reply in the other register. Then the person
+ * asks to be met gently (t-126): the AI records the lean, and the next turn is
+ * guiding because they asked. Then a crisis
  * recorded for the person holds the next turn at guiding whatever the module
  * says.
  *
@@ -21,7 +23,7 @@
  * Needs a seeded, migrated database (the map published, Onboarding and Values
  * active, the gate's documents, the guiding and teaching overlays from
  * `20261007100100_app_voice_register_overlays`) and a provider for her pinned
- * model: three small turns. Skips (exit 0, says so) with no database.
+ * model: six small turns. Skips (exit 0, says so) with no database.
  *
  * Self-cleaning: creates one `smoke-app-register-*` user and removes it and
  * every row keyed on it, on every path, and puts Values' config back exactly
@@ -150,6 +152,18 @@ async function takeTurn(userId: string, turnId: string, message: string) {
   return { text, done: done as ChatEvent & { register?: string; registerSource?: string }, row };
 }
 
+/**
+ * A fresh conversation for the next question. Asked twice in one conversation,
+ * the model reads its first answer and repeats it, which compares the history
+ * rather than the register. Turn rows are kept: the record is what is asserted.
+ */
+async function freshConversation(userId: string): Promise<void> {
+  // The platform embeds and costs a turn after its stream; let that land first.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await prisma.aiMessage.deleteMany({ where: { conversation: { userId } } });
+  await prisma.aiConversation.deleteMany({ where: { userId } });
+}
+
 /** The facilitator block a turn's prompt carries, as `buildContext` frames it. */
 async function facilitatorBlock(userId: string): Promise<string> {
   clearContextCache();
@@ -228,6 +242,7 @@ async function main(): Promise<void> {
       where: { id: values.id },
       data: { config: { register: 'guiding' } },
     });
+    await freshConversation(user.id);
     const guiding = await takeTurn(user.id, `${PREFIX}-${stamp}-guiding`, QUESTION);
     console.log(`    the reply: ${guiding.text.replace(/\s+/g, ' ').slice(0, 400)}`);
     check(
@@ -251,7 +266,38 @@ async function main(): Promise<void> {
       'with Values at its start, the teaching overlay alone'
     );
 
-    console.log('\n5. Something hard holds it at guiding, whatever the module says');
+    console.log('\n5. The person asks to be met gently (t-126)');
+    // Values back at its start, so the ask is what moves it.
+    await prisma.module.update({ where: { id: values.id }, data: { config: {} } });
+    await freshConversation(user.id);
+    const asked = await takeTurn(
+      user.id,
+      `${PREFIX}-${stamp}-ask`,
+      'Please be gentle with me today. I can’t take being pushed right now.'
+    );
+    console.log(`    the reply: ${asked.text.replace(/\s+/g, ' ').slice(0, 300)}`);
+    const reply = asked.row?.assistantMessageId
+      ? await prisma.aiMessage.findUnique({ where: { id: asked.row.assistantMessageId } })
+      : null;
+    check(
+      JSON.stringify(reply?.provenance ?? {}).includes('set_register'),
+      'the AI called set_register when the person asked'
+    );
+    const node = await prisma.userNodeState.findFirst({
+      where: { journey: { userId: user.id }, nodeKey: VALUES_NODE_KEY },
+    });
+    check(
+      JSON.stringify(node?.progress ?? {}).includes('"registerLean"'),
+      'the lean is on the Values node’s own ledger'
+    );
+    const after = await takeTurn(user.id, `${PREFIX}-${stamp}-after-ask`, QUESTION);
+    console.log(`    the next reply: ${after.text.replace(/\s+/g, ' ').slice(0, 300)}`);
+    check(
+      after.row?.register === 'guiding' && after.row.registerSource === 'asked',
+      'the next turn in Values is guiding, because they asked'
+    );
+
+    console.log('\n6. Something hard holds it at guiding, whatever the module says');
     await prisma.appSafetyEvent.create({
       data: {
         kind: 'crisis',
@@ -268,7 +314,7 @@ async function main(): Promise<void> {
       'the next turn in Values is guiding, from safety'
     );
 
-    console.log('\n6. The transcript says what the stream said');
+    console.log('\n7. The transcript says what the stream said');
     const session = {
       user: { id: user.id, role: DEFAULT_USER_ROLE },
       principal: { userId: user.id, role: DEFAULT_USER_ROLE, credential: 'session' },
@@ -285,7 +331,7 @@ async function main(): Promise<void> {
     );
     check(
       JSON.stringify(registers) === JSON.stringify(['teaching', 'guiding', 'guiding']),
-      `the three replies read back as teaching, guiding, guiding (${registers.join(', ')})`
+      `this conversation's replies read back as teaching, guiding, guiding (${registers.join(', ')})`
     );
 
     console.log('\n✓ smoke:app-register passed');

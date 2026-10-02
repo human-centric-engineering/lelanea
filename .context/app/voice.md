@@ -322,12 +322,35 @@ core-only in that register; the Voice page names the seat as what selects it.
 under a live reply, a replay and a reload all say the same sentence
 (`registerSentence`, in the detail, not the one-liner).
 
-**What it does to the pinned model is modest.** Run
-`npm run smoke:app-register` and read the two replies: the wiring is proved,
-but with the drafted overlays the teaching reply opens more plainly and asks
-the question underneath, while both still tend to ask more than one question.
-The wording is a draft awaiting her review (idea #46), and it is rows: tuning
-it is an edit on the Voice page, not code.
+**The person can lean (t-126).** "Be gentle with me today" makes the AI call
+`set_register` (`lib/app/voice/register-capability.ts`), which writes the
+caller's own lean onto their current module node's `progress` ledger, under
+`registerLean`, through Daybreak's `recordNodeProgress`
+(`lib/app/voice/register-lean.ts`). It holds for a sitting (`LEAN_HOLD_HOURS`,
+12): the facilitator conversation is resumed rather than ended, so a sitting
+is what "for now" can mean. "Go back to normal" writes a `null` tombstone.
+Moving to another module leaves it behind. Precedence (`selectRegister`):
+**crisis, then the lean, then the module.** The tool is the facilitator
+seat's only (it reads the seat the turn seam stamps on the dispatch), is a
+sanctioned self-write in `pins.ts` with its argument written out, and the
+account says "Noted how you asked to be spoken to". Its row and grant reach
+existing databases by `20261007100200_app_set_register_capability`; seed
+`023-set-register` re-applies the code-owned fields.
+
+Not a data slot, which the plan named first: a global slot is a row of the
+admin-edited taxonomy (renamable, deletable, listed in the vocabulary the AI
+captures into), kept as a permanent fact. A lean is a request about how to be
+met for a while; the module's own node ledger is the element that says so, and
+it is exported and erased with the journey.
+
+**What it does to the pinned model.** `npm run smoke:app-register` asks the
+same question in Values at teaching and at guiding, each in a fresh
+conversation (asked twice in one, the model repeats its first answer, which
+compares the history rather than the register). The teaching reply names the
+conflict plainly and asks the question underneath; the guiding reply receives
+first and does not press. Both still tend to ask more than one question. The
+wording is a draft awaiting her review (idea #46), and it is rows: tuning it
+is an edit on the Voice page, not code.
 
 ## Where the overlays live: the database (t-88)
 

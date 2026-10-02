@@ -36,12 +36,18 @@ const running = vi.mocked(prisma.appTurn.findFirst);
 
 const NOW = new Date('2026-10-02T12:00:00Z');
 
-function node(nodeKey: string, status: string, lastActiveAt: string | null) {
+function node(
+  nodeKey: string,
+  status: string,
+  lastActiveAt: string | null,
+  progress: unknown = null
+) {
   return {
     nodeKey,
     status,
     lastActiveAt: lastActiveAt ? new Date(lastActiveAt) : null,
     firstEnteredAt: null,
+    progress,
   } as unknown as Awaited<ReturnType<typeof readJourneyNodeStates>>[number];
 }
 
@@ -164,6 +170,44 @@ describe('resolveRegister', () => {
       expect.stringContaining('module config could not be read'),
       expect.objectContaining({ moduleSlug: 'values' })
     );
+  });
+
+  describe('what the person asked for (t-126)', () => {
+    const asked = (register: string, askedAt: string) =>
+      nodes.mockResolvedValue([
+        node('values', 'active', '2026-10-02T09:00:00Z', {
+          registerLean: { register, askedAt },
+        }),
+      ]);
+
+    it('beats the module while it holds, read off the module’s own node', async () => {
+      asked('guiding', '2026-10-02T11:00:00Z');
+
+      await expect(resolveRegister('u1', 'facilitator', { now: NOW })).resolves.toEqual({
+        register: 'guiding',
+        source: 'asked',
+        moduleSlug: 'values',
+      });
+    });
+
+    it('lapses after a sitting, back to the module', async () => {
+      asked('guiding', '2026-10-01T23:00:00Z');
+
+      await expect(resolveRegister('u1', 'facilitator', { now: NOW })).resolves.toMatchObject({
+        register: 'teaching',
+        source: 'module',
+      });
+    });
+
+    it('is beaten by a crisis, so asking to be pushed never pushes someone struggling', async () => {
+      asked('teaching', '2026-10-02T11:00:00Z');
+      crisis.mockResolvedValue({ id: 'e1' } as never);
+
+      await expect(resolveRegister('u1', 'facilitator', { now: NOW })).resolves.toMatchObject({
+        register: 'guiding',
+        source: 'safety',
+      });
+    });
   });
 
   it('uses the default with no journey to read, and never throws', async () => {

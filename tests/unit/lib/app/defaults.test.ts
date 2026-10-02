@@ -359,25 +359,35 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         await import('@/lib/app/safety/labelled-search');
       const { GuardedFillSlotCapability } = await import('@/lib/app/slots/capture');
       const { SuggestResourceCapability } = await import('@/lib/app/resources/suggest');
+      const { SetRegisterCapability } = await import('@/lib/app/voice/register-capability');
       const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
       __resetRegistrationForTests();
       registerBuiltInCapabilities();
       const search = capabilityDispatcher.getHandler('search_knowledge_base');
       const capture = capabilityDispatcher.getHandler('fill_slot');
       const suggest = capabilityDispatcher.getHandler('suggest_resource');
+      const register = capabilityDispatcher.getHandler('set_register');
       const ours = registerSpy.mock.calls.filter(([capability]) =>
         [
           LabelledSearchKnowledgeCapability,
           GuardedFillSlotCapability,
           SuggestResourceCapability,
+          SetRegisterCapability,
         ].some((cls) => capability instanceof cls)
       );
-      const appHandlers = ['search_knowledge_base', 'fill_slot', 'suggest_resource'];
+      const appHandlers = [
+        'search_knowledge_base',
+        'fill_slot',
+        'suggest_resource',
+        'set_register',
+      ];
       registerSpy.mockRestore();
       expect(search).toBeInstanceOf(LabelledSearchKnowledgeCapability);
       expect(capture).toBeInstanceOf(GuardedFillSlotCapability);
       expect(suggest).toBeInstanceOf(SuggestResourceCapability);
-      expect(ours).toHaveLength(3);
+      // f-registers t-126.
+      expect(register).toBeInstanceOf(SetRegisterCapability);
+      expect(ours).toHaveLength(4);
       expect(appHandlers.every((slug) => capabilityDispatcher.has(slug))).toBe(true);
       expect(initAppCapabilities()).toBeUndefined();
     },

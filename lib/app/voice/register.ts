@@ -17,9 +17,11 @@
  * - **The AI moves off it within a turn** when the moment calls for it. That
  *   is the overlays' authored instruction, not this module's: each register's
  *   overlay says when to set it down for the other.
+ * - **The person can lean** (t-126): "be gentle with me today" moves the
+ *   default for a sitting (`register-lean.ts`). It beats the module.
  * - **Something hard always comes first.** A crisis on the person's
  *   conversation in the last {@link SAFETY_HOLD_HOURS} hours holds the register
- *   at `guiding`, whatever the module says. This is the one deterministic
+ *   at `guiding`, whatever the module or the person's lean says. This is the one deterministic
  *   bound: teaching is never steered onto someone who has just been shown a
  *   crisis line.
  *
@@ -45,8 +47,11 @@ export type Register = (typeof REGISTERS)[number];
 /** Where nothing else is known: the safe direction. */
 export const DEFAULT_REGISTER: Register = 'guiding';
 
-/** Why a turn was steered to its register. */
-export const REGISTER_SOURCES = ['module', 'safety'] as const;
+/**
+ * Why a turn was steered to its register: the person's module, a crisis, or
+ * the person asking for it (t-126, `register-lean.ts`).
+ */
+export const REGISTER_SOURCES = ['module', 'safety', 'asked'] as const;
 export type RegisterSource = (typeof REGISTER_SOURCES)[number];
 
 /**
@@ -90,6 +95,8 @@ export interface RegisterInputs {
   moduleRegister: Register | null;
   /** A crisis on their conversation within {@link SAFETY_HOLD_HOURS}. */
   recentCrisis: boolean;
+  /** What the person asked for, while it holds (t-126), or null. */
+  lean: Register | null;
 }
 
 /** The register a turn is steered to, and why. */
@@ -99,11 +106,14 @@ export interface RegisterChoice {
 }
 
 /**
- * The register for a turn. Pure, so the precedence is a table test:
- * a recent crisis beats the module; the module beats the default.
+ * The register for a turn. Pure, so the precedence is a table test: a recent
+ * crisis beats what the person asked for; what they asked for beats the
+ * module; the module beats the default. A lean for guiding during a crisis is
+ * still guiding, from safety: the crisis is the reason that holds.
  */
 export function selectRegister(inputs: RegisterInputs): RegisterChoice {
   if (inputs.recentCrisis) return { register: 'guiding', source: 'safety' };
+  if (inputs.lean !== null) return { register: inputs.lean, source: 'asked' };
   return { register: inputs.moduleRegister ?? DEFAULT_REGISTER, source: 'module' };
 }
 

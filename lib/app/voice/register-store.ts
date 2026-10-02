@@ -1,6 +1,7 @@
 /**
- * The reads behind a turn's register (f-registers t-125): where the person is
- * on their journey, what that module's config says, and whether something
+ * The reads behind a turn's register (f-registers t-125, t-126): where the
+ * person is on their journey, what that module's config says, what the
+ * person asked for (their lean, on that module's node), and whether something
  * hard happened recently. The rules are `register.ts`; this is the database
  * half, and it is server-only.
  *
@@ -47,6 +48,7 @@ import {
   type Register,
   type RegisterChoice,
 } from '@/lib/app/voice/register';
+import { leanInForce } from '@/lib/app/voice/register-lean';
 
 /**
  * The module the person is in now: the active node they were most recently in.
@@ -54,13 +56,21 @@ import {
  * no journey, or no node active.
  */
 export async function readCurrentModuleSlug(userId: string): Promise<string | null> {
+  return (await readCurrentModuleNode(userId))?.nodeKey ?? null;
+}
+
+/** The current module's node state: its key and its `progress` ledger (where a lean lives). */
+async function readCurrentModuleNode(
+  userId: string
+): Promise<{ nodeKey: string; progress: unknown } | null> {
   const active = (await readJourneyNodeStates(userId)).filter(
     (state) => state.status === NODE_STATE_STATUS.active
   );
   const when = (state: (typeof active)[number]) =>
     (state.lastActiveAt ?? state.firstEnteredAt)?.getTime() ?? 0;
   active.sort((a, b) => when(b) - when(a));
-  return active[0]?.nodeKey ?? null;
+  const current = active[0];
+  return current ? { nodeKey: current.nodeKey, progress: current.progress } : null;
 }
 
 /** The module's register as its config stores it, or where it starts. */
@@ -129,8 +139,13 @@ export async function resolveRegister(
   const now = options.now ?? new Date();
 
   let moduleSlug: string | null = null;
+  // What the person asked for, read off the same node (t-126). Unreadable is
+  // none: the module's register is the fallback, and a crisis still beats it.
+  let lean: Register | null = null;
   try {
-    moduleSlug = await readCurrentModuleSlug(userId);
+    const node = await readCurrentModuleNode(userId);
+    moduleSlug = node?.nodeKey ?? null;
+    lean = node === null ? null : leanInForce(node.progress, now);
   } catch (err) {
     logger.error('resolveRegister: the journey could not be read; using the default register', {
       error: err instanceof Error ? err.message : String(err),
@@ -141,7 +156,7 @@ export async function resolveRegister(
     moduleSlug === null ? Promise.resolve(null) : readModuleRegister(moduleSlug),
     options.crisisNow === true ? Promise.resolve(true) : hadRecentCrisis(userId, now),
   ]);
-  return { ...selectRegister({ moduleRegister, recentCrisis }), moduleSlug };
+  return { ...selectRegister({ moduleRegister, recentCrisis, lean }), moduleSlug };
 }
 
 /**

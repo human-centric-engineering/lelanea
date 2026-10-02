@@ -173,6 +173,17 @@ export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state',
 export const RESOURCE_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['suggest_resource'];
 
 /**
+ * What the register seed grants: the agent may remember how a person asked to
+ * be spoken to, for a sitting (f-registers t-126).
+ *
+ * Its own list because its own seed grants it
+ * (`prisma/seeds/app-lelanea/023-set-register.ts`) and its own migration
+ * brings existing databases the row and the grant. The tool's description says
+ * when to reach for it: only when the person asks.
+ */
+export const REGISTER_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['set_register'];
+
+/**
  * The capabilities the agent holds that only read (f-safety t-60).
  *
  * `search_knowledge_base` reads chunks. It is mounted in this leaf as
@@ -229,7 +240,25 @@ export const READ_ONLY_CAPABILITY_SLUGS = [
  * before, against the restated rule. Read the capability's `execute()` first,
  * and write the argument down as this one is written down.
  */
-export const SELF_WRITE_CAPABILITY_SLUGS = [SLOT_WRITE_CAPABILITY] as const;
+export const SELF_WRITE_CAPABILITY_SLUGS = [
+  SLOT_WRITE_CAPABILITY,
+  // Remembers how the person asked to be spoken to, for a sitting (f-registers
+  // t-126, `lib/app/voice/register-capability.ts`). Admitted under the same
+  // rule, argued the same way:
+  //
+  // - **Own journey only.** It writes `context.userId`'s lean onto their own
+  //   current module node, through Daybreak's `recordNodeProgress`, which is
+  //   `canWrite`-guarded as that person. Its only argument is a register; no
+  //   user, node or module is named by the model.
+  // - **Never deletes.** Clearing a lean writes a `null` tombstone into the
+  //   node's ledger (`jsonb ||` cannot delete); the row and every other key on
+  //   it are untouched, and a lean lapses on its own after a sitting.
+  // - **Sends and spends nothing.** No message, no cost.
+  // - **Cannot push someone who is struggling.** A crisis beats any lean
+  //   (`selectRegister`), so talking the agent into "teach me harder" never
+  //   steers teaching onto a person who has just been shown a crisis line.
+  'set_register',
+] as const;
 
 /**
  * Every capability the agent may ever hold: what reads, plus the sanctioned

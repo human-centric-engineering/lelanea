@@ -16,6 +16,8 @@
 import { SuggestResourceCapability } from '@/lib/app/resources/suggest';
 import type { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
 import { SUGGEST_RESOURCE_IMPL } from '@/prisma/seeds/app-lelanea/014-suggest-resource';
+import { SetRegisterCapability } from '@/lib/app/voice/register-capability';
+import { SET_REGISTER_IMPL } from '@/prisma/seeds/app-lelanea/023-set-register';
 
 export const APP_CAPABILITY_PAIRS: {
   slug: string;
@@ -26,5 +28,10 @@ export const APP_CAPABILITY_PAIRS: {
     slug: 'suggest_resource',
     seeded: SUGGEST_RESOURCE_IMPL,
     instance: new SuggestResourceCapability(),
+  },
+  {
+    slug: 'set_register',
+    seeded: SET_REGISTER_IMPL,
+    instance: new SetRegisterCapability(),
   },
 ];

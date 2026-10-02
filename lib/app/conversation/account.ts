@@ -67,6 +67,7 @@ const SEARCH_HER_MATERIAL = 'search_knowledge_base';
 const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
 const OFFERED_A_RESOURCE = 'suggest_resource';
+const NOTED_HOW_TO_SPEAK = 'set_register';
 
 /** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
 const NAMED_CAPABILITIES = new Set([
@@ -74,6 +75,7 @@ const NAMED_CAPABILITIES = new Set([
   READ_THE_PROFILE,
   WRITE_THE_PROFILE,
   OFFERED_A_RESOURCE,
+  NOTED_HOW_TO_SPEAK,
 ]);
 
 /** Looked something up in her material — and how many passages it drew on. */
@@ -193,6 +195,23 @@ const pointedTo: AccountSource = (input) => {
   };
 };
 
+/**
+ * Noted how the person asked to be spoken to (f-registers t-126).
+ *
+ * The person asked; this says it was heard, and that it can be changed the same
+ * way. No register named: the frame carries the call, not its argument, and
+ * the next reply's own register sentence says where it began.
+ */
+const notedHowToSpeak: AccountSource = (input) => {
+  if (!input.capabilities.includes(NOTED_HOW_TO_SPEAK)) return null;
+  return {
+    key: 'noted_register',
+    line: 'Noted how you asked to be spoken to',
+    detail:
+      'Noted how you asked to be spoken to, for the rest of this sitting. Say so again to change it.',
+  };
+};
+
 /** "a video", "two videos", "three articles" — small counts as words; `''` for none. */
 function count(n: number, one: string, many: string): string {
   if (n === 0) return '';
@@ -228,6 +247,7 @@ export const ACCOUNT_SOURCES: readonly AccountSource[] = [
   readTheProfile,
   wroteToProfile,
   pointedTo,
+  notedHowToSpeak,
   otherCapability,
 ];
 
@@ -305,9 +325,11 @@ export function registerSentence(turn: TurnAccount | null): string | null {
   const why =
     turn.registerSource === 'safety'
       ? ', because something hard came up recently'
-      : turn.registerSource === 'module'
-        ? ', where this part of the journey starts'
-        : '';
+      : turn.registerSource === 'asked'
+        ? ', because you asked for it'
+        : turn.registerSource === 'module'
+          ? ', where this part of the journey starts'
+          : '';
   return `Began ${how}${why}.`;
 }
 

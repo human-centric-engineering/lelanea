@@ -284,21 +284,24 @@ applies, so the tool sees only what t-25's designation rule lets it quote.
 The members' way in is `POST /api/v1/framework/facilitation/{onboarding|facilitator}/chat/stream`,
 body `{ message, turnId? }`.
 
-### The four tools the guide holds
+### The tools the guide holds
 
-Three seeds, because they grant different things. 007 grants a slug and nothing
+Four seeds, because they grant different things. 007 grants a slug and nothing
 else; 013's two bindings each carry an exposure allowlist, and that config has
 to be written **with** the binding — a grant created first and configured second
 is permissive in between; 014 creates the capability's own row as well as the
 grant, because `suggest_resource` is the app's tool rather than Daybreak's or
-Sunrise's, and a row with no grant is a tool nobody holds.
+Sunrise's, and a row with no grant is a tool nobody holds. 023 does the same
+for `set_register` (f-registers t-126), with its own migration,
+`20261007100200_app_set_register_capability`.
 
-| Tool                    | Seed | Does                                                                             |
-| ----------------------- | ---- | -------------------------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in Lelañea Fulton's material, each result labelled by whose it is          |
-| `get_state`             | 013  | reads back what is already understood about this person                          |
-| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                           |
-| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77) |
+| Tool                    | Seed | Does                                                                                                                                                                                                |
+| ----------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in Lelañea Fulton's material, each result labelled by whose it is                                                                                                                             |
+| `get_state`             | 013  | reads back what is already understood about this person                                                                                                                                             |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                                                                                                                                              |
+| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77)                                                                                                                    |
+| `set_register`          | 023  | remembers, for a sitting, how the person asked to be spoken to (t-126); a sanctioned self-write, see [`voice.md`](./voice.md#guiding-and-teaching-the-facilitator-seats-register-f-registers-t-125) |
 
 **014 reaches a fresh database; a migration reaches every existing one.** The
 seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)
