@@ -210,6 +210,9 @@ interface Options {
   fetchImpl?: typeof fetch;
 }
 
+/** How many times an opening that did not land reads the transcript again (t-122). */
+export const MAX_OPENING_RECHECKS = 2;
+
 export function useConversation(options: Options = {}): ConversationState {
   const seat = options.seat ?? CONVERSATION_SEAT;
   const fetchImpl = options.fetchImpl;
@@ -235,6 +238,10 @@ export function useConversation(options: Options = {}): ConversationState {
   const [voiceInput, setVoiceInput] = useState<VoiceInputState | null>(null);
   // The transcript read said the AI's opening is owed (t-122).
   const [openingOwed, setOpeningOwed] = useState(false);
+  // Aborted when the seat changes: what was read for one seat is not the next's.
+  const seatScope = useRef(new AbortController());
+  // How many times an opening that did not land has read the transcript again.
+  const openingRechecks = useRef(0);
 
   // The in-flight request, so an unmount ends it. The turn itself carries on
   // server-side and is recorded (§08 t-55): closing the tab loses nothing.
@@ -287,6 +294,10 @@ export function useConversation(options: Options = {}): ConversationState {
       inFlight.current = null;
       busy.current = false;
       kept.current = null;
+      // A re-read for the old seat's opening must not land in the new seat.
+      seatScope.current.abort();
+      seatScope.current = new AbortController();
+      openingRechecks.current = 0;
     },
     [seat]
   );
@@ -296,7 +307,9 @@ export function useConversation(options: Options = {}): ConversationState {
     fetchTranscript(seat, { signal: controller.signal, fetchImpl })
       .then((transcript) => {
         setEntries(transcript.entries);
-        setOpeningOwed(transcript.opening === true);
+        // Only ever raised here: a slower first read must not cancel an
+        // opening a newer read already found owed. The seat change clears it.
+        if (transcript.opening === true) setOpeningOwed(true);
         setPhase('idle');
       })
       .catch((error: unknown) => {
@@ -444,7 +457,7 @@ export function useConversation(options: Options = {}): ConversationState {
          * holding a newer thought is left alone, and the words stay in the
          * transcript as their bubble instead, so they are never nowhere.
          */
-        const end = (ending: EndingEntry, options: { keepId: boolean }) => {
+        const end = (ending: EndingEntry, options: { keepId: boolean; recheck?: boolean }) => {
           // Let go, as `finish` says: not this pane's ending, nor its id to keep.
           if (controller.signal.aborted) return;
           if (message === null) {
@@ -453,9 +466,15 @@ export function useConversation(options: Options = {}): ConversationState {
             // empty conversation explaining a turn they never took.
             logger.warn('Conversation opening did not land', { code: ending.code });
             finish([]);
-            // A connection that dropped: the turn runs on server-side, so read
-            // again — the reply if it landed, the opening again if not.
-            if (ending.code === ENDING_UNAVAILABLE) recheckOpening();
+            // A connection that dropped, or an opening still in flight past
+            // the client's patience: the turn runs on server-side, so read
+            // again — the reply if it landed, the opening again if not. A few
+            // times at most, and never after an ending the server chose (an
+            // error frame, a refusal): asking again would only meet it again.
+            if (options.recheck && openingRechecks.current < MAX_OPENING_RECHECKS) {
+              openingRechecks.current += 1;
+              recheckOpening(seatScope.current.signal);
+            }
           } else {
             const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
             if (boxed) setDraft(message);
@@ -617,7 +636,7 @@ export function useConversation(options: Options = {}): ConversationState {
                 code: ENDING_UNAVAILABLE,
                 message: ENDING_MESSAGES.unavailable,
               },
-              { keepId: true }
+              { keepId: true, recheck: true }
             );
           }
         } catch (error: unknown) {
@@ -633,7 +652,11 @@ export function useConversation(options: Options = {}): ConversationState {
           }
           end(
             { kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable },
-            { keepId: refused !== TURN_ID_REUSED }
+            {
+              keepId: refused !== TURN_ID_REUSED,
+              // No answer at all, or one still being answered: worth a read.
+              recheck: refused === null || refused === TURN_IN_FLIGHT,
+            }
           );
         }
       })();
@@ -685,6 +708,7 @@ export function useConversation(options: Options = {}): ConversationState {
   useEffect(() => {
     if (checkOpening === openingChecked.current) return;
     openingChecked.current = checkOpening;
+    openingRechecks.current = 0;
     const controller = new AbortController();
     recheckOpening(controller.signal);
     return () => controller.abort();

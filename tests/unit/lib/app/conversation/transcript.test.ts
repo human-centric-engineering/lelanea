@@ -131,6 +131,7 @@ function turn(
     errorCode: string | null;
     modelId: string | null;
     fingerprintVersion: string | null;
+    startedAt: Date;
   }> = {}
 ) {
   return {
@@ -469,6 +470,60 @@ describe('assembleTranscript — the opening (t-122)', () => {
       turnId: OPENING_TURN_ID,
       turn: { turnId: OPENING_TURN_ID, status: 'completed' },
     });
+  });
+  it('keeps only the latest attempt’s rows when the opening ran again', () => {
+    // A first attempt failed after a tool pass; the second ran whole. Neither
+    // has a row of the person's to scope it by: the turn row's start does.
+    const messages = [
+      assistant('frag', 'Let me look at what you wrote', 1),
+      assistant('a1', 'You wrote about the lighthouse steps.', 30),
+    ];
+    // The population: the fragment is in the fixture, before any user row.
+    expect(messages[0].id).toBe('frag');
+
+    const entries = assemble(messages, [
+      turn(OPENING_TURN_ID, {
+        attempts: 2,
+        userMessageId: null,
+        assistantMessageId: 'a1',
+        startedAt: at(25),
+      }),
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: 'a1', text: 'You wrote about the lighthouse steps.' });
+  });
+
+  it('shows nothing for an opening that failed with no reply linked', () => {
+    const entries = assemble(
+      [assistant('frag', 'Let me look at what you wrote', 1)],
+      [
+        turn(OPENING_TURN_ID, {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+        }),
+      ]
+    );
+    expect(entries).toEqual([]);
+  });
+
+  it('scopes only the rows before the person’s first message', () => {
+    // A later turn's own passes are the later turn's, whatever the opening says.
+    const entries = assemble(
+      [assistant('a1', 'Opening.', 3), user('u1', 'Hello', 10, 't1'), assistant('a2', 'Hi.', 12)],
+      [
+        turn(OPENING_TURN_ID, {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+        }),
+        turn('t1', { userMessageId: 'u1', assistantMessageId: 'a2' }),
+      ]
+    );
+    expect(entries.map((e) => e.id)).toEqual(['u1', 'a2']);
   });
 });
 

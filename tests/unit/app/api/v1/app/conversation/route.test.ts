@@ -153,7 +153,7 @@ describe('the opening flag (t-122)', () => {
     expect(body.data.opening).toBe(false);
   });
 
-  it('is false, without asking, once anything is in the transcript', async () => {
+  it('is false once anything is in the transcript, whatever the rules say', async () => {
     openingDue.mockResolvedValue(true);
     store.set(`${ME}:facilitator`, {
       seat: 'facilitator',
@@ -162,7 +162,6 @@ describe('the opening flag (t-122)', () => {
     });
     const body = await (await GET(request())).json();
     expect(body.data.opening).toBe(false);
-    expect(openingDue).not.toHaveBeenCalled();
   });
 
   it('is absent on the onboarding seat: the opening is the facilitator’s', async () => {

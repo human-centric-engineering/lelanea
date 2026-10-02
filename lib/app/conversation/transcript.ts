@@ -30,7 +30,11 @@
  *
  * The AI's opening after onboarding (t-122, `opening.ts`) has no user row at
  * all: the agent opens it. Its reply stands first, joined to its turn row by
- * `assistantMessageId` like any other.
+ * `assistantMessageId` like any other. With no row of the person's to scope
+ * it, the two corrections above are made for it by its turn row instead: of
+ * the assistant rows before the person's first message, only those since its
+ * latest attempt began are its reply, and none are, when it failed with no
+ * reply linked.
  *
  * ## Which conversation
  *
@@ -55,7 +59,8 @@ import { conversationVisibilityWhere } from '@/lib/orchestration/access/conversa
 import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
-import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { openingWindowStart, REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
@@ -269,15 +274,31 @@ export function assembleTranscript(
     pendingReply = null;
   };
 
+  // The AI's opening, which has no user row to scope its own (t-122).
+  const opening = turns.find((turn) => turn.turnId === OPENING_TURN_ID);
+  const openingSince = opening ? openingWindowStart(opening.startedAt) : null;
+  const openingLeftNothing =
+    opening !== undefined &&
+    opening.status === 'failed' &&
+    opening.assistantMessageId === null &&
+    opening.errorCode !== REPLY_NOT_LINKED;
+  let personSpoke = false;
+
   for (const row of messages) {
     if (row.role === 'assistant') {
       // The platform's own marker for a turn that ended without a reply. Not a
       // reply; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
+      // Before the person's first message, every row is the opening's: an
+      // earlier attempt's fragments, or a failed one's, are not its reply.
+      if (!personSpoke && openingSince !== null) {
+        if (openingLeftNothing || row.createdAt < openingSince) continue;
+      }
       (pendingReply ??= { rows: [] }).rows.push(row);
       continue;
     }
     if (row.role !== 'user') continue;
+    personSpoke = true;
     flushReply();
 
     const turnId = turnIdOf(row.metadata);

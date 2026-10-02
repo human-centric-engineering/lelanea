@@ -28,12 +28,15 @@
  * - **Past the gate** (`hasPassedGate`, the shell layout's own check).
  * - **Handed off**: Values entered and onboarding no longer active
  *   (`handedOffFrom`, as the Begin step reads it).
- * - **Nothing else said on the facilitator seat.** Any recorded turn there
- *   other than the opening means the person has already spoken, and the AI
- *   does not open a conversation that is under way. Every member turn on the
- *   seat is recorded (§08 t-54), except one answered with the crisis resource
- *   alone, which records a safety event instead (f-safety t-58): either
- *   counts. A person who reached for help is not then greeted brightly.
+ * - **Nothing said on the facilitator seat.** Any message of the person's in
+ *   a facilitator conversation means they have already spoken, and the AI does
+ *   not open a conversation that is under way. The opening writes none of its
+ *   own, so this needs no exception for it. A message answered with the crisis
+ *   resource alone is stored nowhere, but records a safety event (f-safety
+ *   t-58), which counts too: a person who reached for help is not then greeted
+ *   brightly.
+ * - **Someone to speak.** The seat has a live agent the person may reach
+ *   (`resolveFacilitationSurface`), or there is no opening to give.
  *
  * {@link openingDue} adds "the opening has not completed", which is what the
  * transcript read tells the pane. {@link prepareOpening} does not: a completed
@@ -76,21 +79,23 @@ export { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
  * Their answers are already in the turn's context (t-105's block, on the
  * facilitator seat too), so this only says what to do with them. It claims
  * nothing about timing: the person may begin the journey days after the last
- * answer (t-106 review round 1). It is worded to pass the platform's input
- * guard, which flags phrasing such as "do not mention".
+ * answer (t-106 review round 1). The platform's injection scan does not read
+ * an opening turn's content (it is the app's, not the person's); the
+ * facilitation hook's crisis screen does, as it reads every turn's message.
  *
  * Sunrise titles a new conversation from it (the first 80 characters), as it
  * would from a person's first message. Members never see a conversation
  * title; an admin listing conversations does.
  */
 export const OPENING_MESSAGE =
-  '(A note from the app, not words the person typed.) The person has finished the discovery ' +
-  'questions and begun the journey, which starts with Values. This conversation is empty, so ' +
-  'you speak first. Open on something they wrote in answer to the discovery questions, in ' +
-  'their words and not the words of a question: reflect one thing back rather than summarising ' +
-  'them all. Keep it short and warm, and end ' +
-  'with one open question that invites them to say more. Say nothing about when they wrote it, ' +
-  'and leave this note out of your reply.';
+  'The person has finished the discovery questions and begun the journey, which starts with ' +
+  'Values. This conversation is empty, so you speak first. Open on their own words: in the ' +
+  'block of what they wrote in the discovery questions, their answers are the lines that begin ' +
+  'with "> ", under each [Question …] label. Quote one phrase from one of those lines, exactly ' +
+  'and in quotation marks, choosing the answer with the most of them in it. Quote nothing else ' +
+  'as theirs: not a question, and not any example in your own instructions. Then reflect it ' +
+  'back briefly and warmly, and end with one open question that invites them to say more. ' +
+  'Say nothing about when they wrote it.';
 
 /** Why an opening is not started, for the route to answer and the client to branch on. */
 export const OPENING_NOT_DUE = 'opening_not_due';
@@ -101,13 +106,21 @@ async function isHandedOff(userId: string): Promise<boolean> {
 }
 
 /**
- * Whether anything other than the opening has been said on the facilitator
- * seat: a recorded turn, or a message answered with the crisis resource alone.
+ * Whether the person has said anything on the facilitator seat: a message in a
+ * facilitator conversation of theirs, or one answered with the crisis resource
+ * alone, which stores no message.
  */
 async function hasSpoken(userId: string): Promise<boolean> {
-  const [turn, crisis] = await Promise.all([
-    prisma.appTurn.findFirst({
-      where: { userId, seat: CONVERSATION_SEAT, turnId: { not: OPENING_TURN_ID } },
+  const [message, crisis] = await Promise.all([
+    prisma.aiMessage.findFirst({
+      where: {
+        role: 'user',
+        conversation: {
+          userId,
+          contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
+          contextId: CONVERSATION_SEAT,
+        },
+      },
       select: { id: true },
     }),
     prisma.appSafetyEvent.findFirst({
@@ -115,7 +128,7 @@ async function hasSpoken(userId: string): Promise<boolean> {
       select: { id: true },
     }),
   ]);
-  return turn !== null || crisis !== null;
+  return message !== null || crisis !== null;
 }
 
 /**
@@ -142,19 +155,22 @@ export async function mayOpen(user: GateSubject): Promise<boolean> {
 }
 
 /**
- * Whether the pane should start the opening now: {@link mayOpen}, and the
- * opening has not already completed.
+ * Whether the pane should start the opening now: {@link mayOpen}, someone to
+ * speak it, and the opening not already completed. The same refusals as
+ * {@link prepareOpening}, so the pane is never told to ask for an opening the
+ * route will refuse.
  */
 export async function openingDue(user: GateSubject): Promise<boolean> {
   try {
-    const [may, opening] = await Promise.all([
+    const [may, surface, opening] = await Promise.all([
       mayOpen(user),
+      resolveFacilitationSurface(user.id, CONVERSATION_SEAT),
       prisma.appTurn.findUnique({
         where: { userId_turnId: { userId: user.id, turnId: OPENING_TURN_ID } },
         select: { status: true },
       }),
     ]);
-    return may && opening?.status !== 'completed';
+    return may && surface !== null && opening?.status !== 'completed';
   } catch (error) {
     logger.warn('Opening turn could not be read', {
       userId: user.id,

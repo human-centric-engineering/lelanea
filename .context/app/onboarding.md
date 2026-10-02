@@ -264,10 +264,13 @@ agent open a turn with no user message:
   New words need a new id (bump its version), and an old opening then counts
   as having spoken, so nobody is opened twice.
 - **When it is owed** (`openingDue`): past the gate, handed off
-  (`handedOffFrom`), nothing else said on the facilitator seat, and the
-  opening not yet completed. "Said" is a recorded turn, or a crisis safety
-  event: a message answered with the resource alone records no turn, and a
-  person who reached for help is not then greeted brightly. Someone who typed
+  (`handedOffFrom`), nothing said on the facilitator seat, an agent there to
+  speak, and the opening not yet completed. "Said" is any message of the
+  person's in a facilitator conversation (the opening writes none, so it
+  needs no exception), or a crisis safety event: a message answered with the
+  resource alone is stored nowhere, and a person who reached for help is not
+  then greeted brightly. The route refuses on the same terms, so the pane is
+  never told to ask for an opening the route will refuse. Someone who typed
   to the facilitator before pressing Begin has already spoken and is not
   opened on.
 - **No chat sub-caps on the route.** They bound model calls, and the ledger
@@ -279,12 +282,28 @@ agent open a turn with no user message:
   thinking row shows and the composer waits. One still running elsewhere (a
   reload, a second tab) is asked again every few seconds until it lands as a
   replay. One that does not land leaves nothing behind: no ending row, nothing
-  in the box. A connection that drops mid-opening reads the transcript again
-  at once, adopting the reply if the turn completed server-side.
+  in the box. A connection that drops mid-opening, or an opening still in
+  flight past the client's patience, reads the transcript again, adopting the
+  reply if the turn completed server-side; at most twice, and never after an
+  ending the server chose (an error frame, a refusal), which asking again
+  would only meet again.
+- **What it is told** (`OPENING_MESSAGE`) points at the answer lines by their
+  `> ` marker and forbids quoting a question or an example from her own
+  instructions as theirs. Without that, the pinned model, given thin answers,
+  quoted a question's wording or an example from the voice prompt as
+  something the person had said.
+- **The transcript scopes it by its turn row.** With no row of the person's
+  to bound it, the assistant rows before their first message are the
+  opening's only from its latest attempt's start, and none are when it failed
+  with no reply linked. The ledger's reply lookup reaches a few seconds
+  before the claim for such a turn (`NO_USER_ROW_GRACE_MS`), against clock
+  skew.
 
 **Proved on a real database** by `npm run smoke:app-onboarding` step 10: the
 opening owed after the hand-off, run through the real hook and model, quoting
-the person, no row stored in their name, then asked again and replayed
+the person exactly (every quoted span is in one of their answers, which
+step 10 gives the texture of a person's), no row stored in their name, then
+asked again and replayed
 with no second model call, and no longer owed.
 
 ## A discovery answer is a data slot

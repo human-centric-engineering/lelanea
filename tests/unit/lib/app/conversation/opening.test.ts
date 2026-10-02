@@ -12,7 +12,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  findFirst: vi.fn(),
+  messageFindFirst: vi.fn(),
   findUnique: vi.fn(),
   safetyFindFirst: vi.fn(),
   hasPassedGate: vi.fn(),
@@ -24,7 +24,8 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    appTurn: { findFirst: h.findFirst, findUnique: h.findUnique },
+    appTurn: { findUnique: h.findUnique },
+    aiMessage: { findFirst: h.messageFindFirst },
     appSafetyEvent: { findFirst: h.safetyFindFirst },
   },
 }));
@@ -70,7 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.hasPassedGate.mockResolvedValue(true);
   h.readJourneyNodeStates.mockResolvedValue(HANDED_OFF);
-  h.findFirst.mockResolvedValue(null);
+  h.messageFindFirst.mockResolvedValue(null);
   h.safetyFindFirst.mockResolvedValue(null);
   h.findUnique.mockResolvedValue(null);
   h.resolveFacilitationSurface.mockResolvedValue(SURFACE);
@@ -81,8 +82,11 @@ describe('mayOpen', () => {
   it('is true past the gate, handed off, with nothing else said on the facilitator seat', async () => {
     await expect(mayOpen(USER)).resolves.toBe(true);
     expect(h.hasPassedGate).toHaveBeenCalledWith(USER);
-    expect(h.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1', seat: 'facilitator', turnId: { not: OPENING_TURN_ID } },
+    expect(h.messageFindFirst).toHaveBeenCalledWith({
+      where: {
+        role: 'user',
+        conversation: { userId: 'user-1', contextType: 'facilitation', contextId: 'facilitator' },
+      },
       select: { id: true },
     });
   });
@@ -103,8 +107,8 @@ describe('mayOpen', () => {
     await expect(mayOpen(USER)).resolves.toBe(false);
   });
 
-  it('is false once the person has spoken on the facilitator seat', async () => {
-    h.findFirst.mockResolvedValue({ id: 'turn-row' });
+  it('is false once the person has a message in a facilitator conversation, ledgered or not', async () => {
+    h.messageFindFirst.mockResolvedValue({ id: 'message-row' });
     await expect(mayOpen(USER)).resolves.toBe(false);
   });
 
@@ -142,6 +146,11 @@ describe('openingDue', () => {
     await expect(openingDue(USER)).resolves.toBe(false);
   });
 
+  it('is not owed with no agent to speak it: the route would refuse', async () => {
+    h.resolveFacilitationSurface.mockResolvedValue(null);
+    await expect(openingDue(USER)).resolves.toBe(false);
+  });
+
   it('is not owed where mayOpen says no', async () => {
     h.hasPassedGate.mockResolvedValue(false);
     await expect(openingDue(USER)).resolves.toBe(false);
@@ -160,7 +169,7 @@ describe('prepareOpening', () => {
   });
 
   it('refuses as not due, resolving nothing', async () => {
-    h.findFirst.mockResolvedValue({ id: 'turn-row' });
+    h.messageFindFirst.mockResolvedValue({ id: 'message-row' });
     await expect(prepareOpening(USER)).resolves.toEqual({ ready: false, reason: OPENING_NOT_DUE });
     expect(h.resolveFacilitationSurface).not.toHaveBeenCalled();
   });
@@ -214,14 +223,5 @@ describe('runOpening', () => {
         costLogMetadata: { turnId: OPENING_TURN_ID },
       })
     );
-  });
-});
-
-describe('OPENING_MESSAGE', () => {
-  it('passes the platform’s input guard', async () => {
-    const { scanForInjection } = await vi.importActual<
-      typeof import('@/lib/orchestration/chat/input-guard')
-    >('@/lib/orchestration/chat/input-guard');
-    expect(scanForInjection(OPENING_MESSAGE).flagged).toBe(false);
   });
 });

@@ -16,7 +16,10 @@ import path from 'node:path';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useConversation } from '@/components/app/conversation/use-conversation';
+import {
+  MAX_OPENING_RECHECKS,
+  useConversation,
+} from '@/components/app/conversation/use-conversation';
 
 vi.mock('@/lib/logging', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -818,6 +821,51 @@ describe('the AI speaks first, once (t-122)', () => {
       latest().close();
     });
     await waitFor(() => expect(openingRequests).toHaveLength(2));
+  });
+
+  it('does not ask again after an ending the server chose: it would only meet it again', async () => {
+    openingOwed = true;
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    const readsBefore = transcriptReads();
+    // The provider is down: an error frame, with the opening still owed.
+    await failTurn('unavailable');
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(transcriptReads()).toBe(readsBefore);
+    expect(openingRequests).toHaveLength(1);
+  });
+
+  it('does not ask again after a refusal it cannot change', async () => {
+    openingOwed = true;
+    refuseOpening = refusal(404, 'NOT_FOUND');
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(transcriptReads()).toBe(1);
+    expect(openingRequests).toHaveLength(1);
+  });
+
+  it('reads again at most a few times when the connection keeps dropping', async () => {
+    openingOwed = true;
+    renderHook(() => useConversation({ fetchImpl }));
+    for (let lap = 1; lap <= MAX_OPENING_RECHECKS + 1; lap++) {
+      await waitFor(() => expect(openingRequests).toHaveLength(lap));
+      await act(async () => {
+        latest().close();
+      });
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    // The first ask, then one per re-read: bounded, never a loop.
+    expect(openingRequests).toHaveLength(MAX_OPENING_RECHECKS + 1);
+    expect(transcriptReads()).toBe(MAX_OPENING_RECHECKS + 1);
   });
 
   it('holds a message sent while the opening is being answered', async () => {

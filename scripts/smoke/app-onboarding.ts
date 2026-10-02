@@ -414,6 +414,29 @@ async function main(): Promise<void> {
       data: { emailVerified: true },
     });
     const subject = { id: verified.id, email: verified.email, emailVerified: true };
+    // A person's answers, not a smoke's: the filler written above gives the
+    // model nothing of theirs to open on, which is not what it will meet.
+    const lived = await getDiscoveryState(user.id);
+    if (lived === null) throw new Error('the discovery state could not be read');
+    const LIVED_WORDS = [
+      'My grandmother taught me to bake bread on Sunday mornings.',
+      'I go quiet when people raise their voices, and I hate that I do.',
+      'Walking the dog before work is the only time my head is clear.',
+      'I left a job I was good at because it made me unkind.',
+      'Music, always. I sing in the car with the windows up.',
+    ];
+    let lap = 0;
+    for (const question of lived.set.questions) {
+      const words = lived.answers[question.id]?.words;
+      if (!words || /lighthouse/i.test(words)) continue;
+      await answerDiscoveryQuestion(user.id, lived.set, question, {
+        words: LIVED_WORDS[lap++ % LIVED_WORDS.length],
+        ...(question.conditionalFollowUp && { branch: 'yes' as const }),
+      });
+    }
+    const answerText = Object.values((await getDiscoveryState(user.id))?.answers ?? {})
+      .map((answer) => answer.words.toLowerCase())
+      .join('\n');
     check(await openingDue(subject), 'after the hand-off, the opening is owed');
     const prepared = await prepareOpening(subject);
     if (!prepared.ready) throw new Error(`the opening was not ready: ${prepared.reason}`);
@@ -435,9 +458,14 @@ async function main(): Promise<void> {
     if (opened.ended !== 'done') throw new Error(`the opening did not complete: ${opened.ended}`);
     console.log(`    the opening: ${opened.text.replace(/\s+/g, ' ').slice(0, 240)}`);
     check(opened.text.trim().length > 0, 'the AI spoke first');
+    // Whatever it quotes as theirs is theirs: every quoted span is in an answer.
+    const quotes = [...opened.text.matchAll(/["“]([^"”]{3,})["”]/g)].map((m) =>
+      m[1].toLowerCase().replace(/[.,!?]+$/, '')
+    );
+    check(quotes.length > 0, 'it quoted the person');
     check(
-      /lighthouse|dawn|smoke answer|revised after the hand-off/i.test(opened.text),
-      'it opened on the person’s own answers, not a question’s words'
+      quotes.every((quote) => answerText.includes(quote)),
+      'and every quote is the person’s own words, never a question’s'
     );
     const openingRow = await prisma.appTurn.findUnique({
       where: { userId_turnId: { userId: user.id, turnId: OPENING_TURN_ID } },

@@ -293,10 +293,26 @@ export interface TurnOutcome {
  * the same writer as the reply — falling back to the claim's start when the turn
  * has no user message id.
  */
+/**
+ * How far before its claim a turn with no message of the person's reaches back
+ * for its reply. The AI's opening (t-122) is opened by the agent, so there is
+ * no row of the person's to bound the window by, only the claim's `startedAt`,
+ * which is this server's clock. The grace absorbs a skew against the clock that
+ * stamped the reply; a turn with no user row is the first in its conversation,
+ * so the wider window takes in nothing else.
+ */
+export const NO_USER_ROW_GRACE_MS = 5_000;
+
+/** Where a turn with no row of the person's begins, as the reply lookups read it. */
+export function openingWindowStart(startedAt: Date): Date {
+  return new Date(startedAt.getTime() - NO_USER_ROW_GRACE_MS);
+}
+
 async function turnWindowStart(
   turn: Pick<AppTurn, 'userId' | 'startedAt' | 'conversationId' | 'userMessageId'>
 ): Promise<Date> {
-  if (!turn.userMessageId || !turn.conversationId) return turn.startedAt;
+  if (!turn.conversationId) return turn.startedAt;
+  if (!turn.userMessageId) return openingWindowStart(turn.startedAt);
   const message = await prisma.aiMessage.findFirst({
     where: {
       id: turn.userMessageId,
