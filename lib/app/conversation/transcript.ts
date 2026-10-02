@@ -28,12 +28,9 @@
  *   `metadata.error: true`. That is not her voice; it is dropped, and the turn
  *   row's `errorCode` says what happened instead.
  *
- * And one of Lelañea's own: **the opening's kickoff is never shown**
- * (f-onboarding t-122). The AI speaks first after onboarding through a turn
- * whose user row is a message the app wrote (`opening.ts`), not the person.
- * The row is dropped, and the reply stands first in the conversation. A
- * failed opening retried writes the kickoff again; whatever the earlier
- * attempt left behind goes with it, as a retried member turn's does.
+ * The AI's opening after onboarding (t-122, `opening.ts`) has no user row at
+ * all: the agent opens it. Its reply stands first, joined to its turn row by
+ * `assistantMessageId` like any other.
  *
  * ## Which conversation
  *
@@ -63,7 +60,6 @@ import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
-import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 
 export { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 
@@ -235,9 +231,6 @@ export function assembleTranscript(
   let pendingReply: { rows: MessageRow[] } | null = null;
   // The turn row the current user row opened, if the seam recorded one.
   let currentTurn: TurnRow | undefined;
-  // Where the entries stood at the opening's first kickoff row, so a retried
-  // opening drops what its earlier attempt left behind.
-  let openingAt: number | null = null;
 
   const flushReply = () => {
     if (!pendingReply || pendingReply.rows.length === 0) return;
@@ -289,12 +282,6 @@ export function assembleTranscript(
 
     const turnId = turnIdOf(row.metadata);
     currentTurn = byUserMessage.get(row.id);
-    if (turnId === OPENING_TURN_ID) {
-      // The app's words, never shown. Its reply flushes as any reply does.
-      if (openingAt === null) openingAt = entries.length;
-      else entries.splice(openingAt);
-      continue;
-    }
     // The most recent thing the person said — looked for past any reply rows,
     // because a tool-using turn that failed at its second pass has already
     // left its first pass's row behind, and that fragment is not a reason to

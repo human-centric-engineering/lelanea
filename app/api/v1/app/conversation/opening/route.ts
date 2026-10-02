@@ -18,9 +18,12 @@
  * Authentication: `withAuth`. Refuses an API key: the opening is spoken to a
  * person, in their own conversation.
  *
- * Rate limiting: the `/api/v1/**` section cap, plus the chat sub-caps the role
- * route applies (per person, and the agent's own RPM), so this cannot be used to
- * spend past them.
+ * Rate limiting: the `/api/v1/**` section cap only. The chat sub-caps the role
+ * route applies are deliberately not here: they exist to bound model calls, and
+ * the ledger already bounds this route to one per person (a repeat is a 409 or
+ * a replay). Charging them would let the pane's polling of an opening still in
+ * flight use up the person's chat allowance, so their first real message met a
+ * 429 (t-122 review round 1).
  */
 
 import { after } from 'next/server';
@@ -30,11 +33,6 @@ import { sseResponse } from '@/lib/api/sse';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/api/errors';
 import { getRouteLogger } from '@/lib/api/context';
 import { getRequestId, getVisitorId } from '@/lib/logging/context';
-import {
-  agentChatLimiter,
-  consumerChatLimiter,
-  createRateLimitResponse,
-} from '@/lib/security/rate-limit';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { OPENING_NOT_DUE, prepareOpening, runOpening } from '@/lib/app/conversation/opening';
 
@@ -44,8 +42,6 @@ export const POST = withAuth(
       throw new ForbiddenError('Only a signed-in person can be spoken to.');
     }
     const userId = session.user.id;
-    const userLimit = consumerChatLimiter.check(userId);
-    if (!userLimit.success) return createRateLimitResponse(userLimit);
 
     const log = await getRouteLogger(request);
     const prepared = await prepareOpening(session.user);
@@ -57,15 +53,8 @@ export const POST = withAuth(
       throw new ConflictError('There is no opening to give.', { reason: OPENING_NOT_DUE });
     }
 
-    const { surface } = prepared;
-    const agentLimit = agentChatLimiter.check(
-      `${surface.agentId}:${userId}`,
-      surface.rateLimitRpm ?? undefined
-    );
-    if (!agentLimit.success) return createRateLimitResponse(agentLimit);
-
     log.info('Opening started', { userId, seat: CONVERSATION_SEAT });
-    const events = await runOpening(surface, {
+    const events = await runOpening(prepared.surface, {
       user: session.user,
       requestId: await getRequestId(),
       visitorId: await getVisitorId(),

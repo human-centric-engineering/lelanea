@@ -14,24 +14,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   findFirst: vi.fn(),
   findUnique: vi.fn(),
+  safetyFindFirst: vi.fn(),
   hasPassedGate: vi.fn(),
-  getJourney: vi.fn(),
-  getNodeStates: vi.fn(),
+  readJourneyNodeStates: vi.fn(),
   resolveFacilitationSurface: vi.fn(),
   runFacilitationTurn: vi.fn(),
   streamChat: vi.fn(),
 }));
 
 vi.mock('@/lib/db/client', () => ({
-  prisma: { appTurn: { findFirst: h.findFirst, findUnique: h.findUnique } },
+  prisma: {
+    appTurn: { findFirst: h.findFirst, findUnique: h.findUnique },
+    appSafetyEvent: { findFirst: h.safetyFindFirst },
+  },
 }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/app/gateway/gate', () => ({ hasPassedGate: h.hasPassedGate }));
-vi.mock('@/lib/framework/facilitation/journey/queries', () => ({
-  getJourney: h.getJourney,
-  getNodeStates: h.getNodeStates,
+vi.mock('@/lib/app/onboarding/first-run-store', () => ({
+  readJourneyNodeStates: h.readJourneyNodeStates,
 }));
 vi.mock('@/lib/framework/facilitation/agents/surface', () => ({
   FACILITATION_SURFACE_CONTEXT_TYPE: 'facilitation',
@@ -67,9 +69,9 @@ const HANDED_OFF = [
 beforeEach(() => {
   vi.clearAllMocks();
   h.hasPassedGate.mockResolvedValue(true);
-  h.getJourney.mockResolvedValue({ id: 'journey-1' });
-  h.getNodeStates.mockResolvedValue(HANDED_OFF);
+  h.readJourneyNodeStates.mockResolvedValue(HANDED_OFF);
   h.findFirst.mockResolvedValue(null);
+  h.safetyFindFirst.mockResolvedValue(null);
   h.findUnique.mockResolvedValue(null);
   h.resolveFacilitationSurface.mockResolvedValue(SURFACE);
   h.runFacilitationTurn.mockResolvedValue('the-stream');
@@ -85,19 +87,19 @@ describe('mayOpen', () => {
     });
   });
 
-  it('is false before the gate, reading nothing else', async () => {
+  it('is false before the gate', async () => {
     h.hasPassedGate.mockResolvedValue(false);
     await expect(mayOpen(USER)).resolves.toBe(false);
-    expect(h.getJourney).not.toHaveBeenCalled();
   });
 
   it('is false while onboarding is still active', async () => {
-    h.getNodeStates.mockResolvedValue([{ nodeKey: 'onboarding', status: 'active' }]);
+    h.readJourneyNodeStates.mockResolvedValue([{ nodeKey: 'onboarding', status: 'active' }]);
     await expect(mayOpen(USER)).resolves.toBe(false);
+    expect(h.readJourneyNodeStates).toHaveBeenCalledWith('user-1');
   });
 
   it('is false with no journey', async () => {
-    h.getJourney.mockResolvedValue(null);
+    h.readJourneyNodeStates.mockResolvedValue([]);
     await expect(mayOpen(USER)).resolves.toBe(false);
   });
 
@@ -106,8 +108,17 @@ describe('mayOpen', () => {
     await expect(mayOpen(USER)).resolves.toBe(false);
   });
 
+  it('is false once the person was answered with the crisis resource there, which records no turn', async () => {
+    h.safetyFindFirst.mockResolvedValue({ id: 'safety-row' });
+    await expect(mayOpen(USER)).resolves.toBe(false);
+    expect(h.safetyFindFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', seat: 'facilitator' },
+      select: { id: true },
+    });
+  });
+
   it('is false, not a throw, when a read fails', async () => {
-    h.getNodeStates.mockRejectedValue(new Error('db down'));
+    h.readJourneyNodeStates.mockRejectedValue(new Error('db down'));
     await expect(mayOpen(USER)).resolves.toBe(false);
   });
 });
@@ -131,10 +142,14 @@ describe('openingDue', () => {
     await expect(openingDue(USER)).resolves.toBe(false);
   });
 
-  it('is not owed where mayOpen says no, without reading the opening', async () => {
+  it('is not owed where mayOpen says no', async () => {
     h.hasPassedGate.mockResolvedValue(false);
     await expect(openingDue(USER)).resolves.toBe(false);
-    expect(h.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('is not owed, not a throw, when the opening cannot be read', async () => {
+    h.findUnique.mockRejectedValue(new Error('db down'));
+    await expect(openingDue(USER)).resolves.toBe(false);
   });
 });
 
@@ -157,7 +172,7 @@ describe('prepareOpening', () => {
 });
 
 describe('runOpening', () => {
-  it('runs a facilitator turn under the opening’s id, with the app’s words', async () => {
+  it('runs a turn the agent opens, under the opening’s id, with the app’s words', async () => {
     const signal = new AbortController().signal;
     const keepAlive = vi.fn();
     const events = await runOpening(SURFACE, {
@@ -185,9 +200,12 @@ describe('runOpening', () => {
     // the facilitator surface, with whatever the hook adds.
     const run = h.runFacilitationTurn.mock.calls[0][1] as (extras: object) => unknown;
     run({ costLogMetadata: { turnId: OPENING_TURN_ID } });
+    // `openingTurn`, never `message`: nothing is stored as the person's words.
+    const request = h.streamChat.mock.calls[0][0] as Record<string, unknown>;
+    expect(request).not.toHaveProperty('message');
     expect(h.streamChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: OPENING_MESSAGE,
+        openingTurn: { content: OPENING_MESSAGE },
         agentSlug: 'lelanea',
         userId: 'user-1',
         contextType: 'facilitation',

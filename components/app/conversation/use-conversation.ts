@@ -99,7 +99,8 @@ import type { Citation } from '@/types/orchestration';
  * person's (the words are the app's, and never shown); nothing goes into the
  * box; and an opening that does not complete leaves nothing behind — the
  * person can simply speak, and the next read offers it again if it is still
- * owed. One still running (a reload, a second tab) is asked again every few
+ * owed. A connection that drops mid-opening reads the transcript again at
+ * once: the turn ran on server-side, so the reply is adopted, or asked for. One still running (a reload, a second tab) is asked again every few
  * seconds, showing the thinking row, until it lands as a replay.
  *
  * **The status read** is asked once on mount and again after every ending,
@@ -335,6 +336,37 @@ export function useConversation(options: Options = {}): ConversationState {
     return () => controller.abort();
   }, [fetchImpl]);
 
+  // What the transcript holds, readable from a read that lands later.
+  const entriesRef = useRef(entries);
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
+
+  /**
+   * Read the transcript again for the AI's opening (t-122), while the pane
+   * still has nothing in it. An opening that landed meanwhile is adopted; one
+   * still owed is asked for. A pane already holding a conversation has nothing
+   * to ask.
+   */
+  const recheckOpening = useCallback(
+    (signal?: AbortSignal) => {
+      if (seat !== CONVERSATION_SEAT || entriesRef.current.length > 0) return;
+      fetchTranscript(seat, { signal, fetchImpl })
+        .then((transcript) => {
+          if (signal?.aborted || busy.current || entriesRef.current.length > 0) return;
+          if (transcript.entries.length > 0) setEntries(transcript.entries);
+          else if (transcript.opening === true) setOpeningOwed(true);
+        })
+        .catch((error: unknown) => {
+          if (signal?.aborted) return;
+          logger.warn('Opening could not be checked', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    },
+    [seat, fetchImpl]
+  );
+
   /**
    * Run one turn to its end: a member's (`message`, posted with `turnId`), or
    * the AI's opening (`message: null`, t-122). The caller has set `busy`.
@@ -421,6 +453,9 @@ export function useConversation(options: Options = {}): ConversationState {
             // empty conversation explaining a turn they never took.
             logger.warn('Conversation opening did not land', { code: ending.code });
             finish([]);
+            // A connection that dropped: the turn runs on server-side, so read
+            // again — the reply if it landed, the opening again if not.
+            if (ending.code === ENDING_UNAVAILABLE) recheckOpening();
           } else {
             const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
             if (boxed) setDraft(message);
@@ -603,7 +638,7 @@ export function useConversation(options: Options = {}): ConversationState {
         }
       })();
     },
-    [seat, fetchImpl, refreshStatus]
+    [seat, fetchImpl, refreshStatus, recheckOpening]
   );
 
   const send = useCallback(
@@ -650,20 +685,10 @@ export function useConversation(options: Options = {}): ConversationState {
   useEffect(() => {
     if (checkOpening === openingChecked.current) return;
     openingChecked.current = checkOpening;
-    if (seat !== CONVERSATION_SEAT) return;
     const controller = new AbortController();
-    fetchTranscript(seat, { signal: controller.signal, fetchImpl })
-      .then((transcript) => {
-        if (transcript.opening === true) setOpeningOwed(true);
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        logger.warn('Opening could not be checked', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
+    recheckOpening(controller.signal);
     return () => controller.abort();
-  }, [checkOpening, seat, fetchImpl]);
+  }, [checkOpening, recheckOpening]);
 
   const revealed = useCallback((turnId: string) => {
     setEntries((previous) => {

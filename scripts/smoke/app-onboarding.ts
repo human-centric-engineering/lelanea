@@ -22,8 +22,8 @@
  * engine (which needs Values live), read back by the map, repeated with no new
  * event, and an answer still revised afterwards. Then the opening (t-122): owed
  * after the hand-off, run through the real turn hook and the real model, its
- * kickoff hidden from the transcript read, and asked again as a replay with no
- * second model call.
+ * agent opening the turn with no row in the person's name, and asked again as
+ * a replay with no second model call.
  *
  * Needs a seeded, migrated database: the map published (`001-journey-map`),
  * Onboarding and Values active (their activation migrations or seeds), and the
@@ -463,7 +463,13 @@ async function main(): Promise<void> {
     );
     check(
       !JSON.stringify(read.entries).includes(OPENING_MESSAGE.slice(0, 40)),
-      'the kickoff never appears in the transcript'
+      'the app’s instruction never appears in the transcript'
+    );
+    check(
+      (await prisma.aiMessage.count({
+        where: { conversation: { userId: user.id }, role: 'user' },
+      })) === 0,
+      'and nothing is stored as the person’s words: the agent opened the turn'
     );
     check(!(await openingDue(subject)), 'the opening is no longer owed');
     // The platform logs the turn's embedding cost after the stream; let it land.

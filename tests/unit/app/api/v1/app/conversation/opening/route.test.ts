@@ -3,8 +3,8 @@
  *
  * The service is mocked: when the opening is owed, and the turn it runs, are
  * `tests/unit/lib/app/conversation/opening.test.ts`. Here: who may call, that
- * nothing in the request reaches the opening's words, the chat sub-caps, and
- * how each refusal answers.
+ * nothing in the request reaches the opening's words, that the chat sub-caps
+ * are not charged, and how each refusal answers.
  */
 
 import type { NextRequest } from 'next/server';
@@ -85,8 +85,8 @@ function createSession(sessionId = 'session_test') {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
-  h.consumerCheck.mockReturnValue({ success: true });
-  h.agentCheck.mockReturnValue({ success: true });
+  h.consumerCheck.mockReturnValue({ success: false });
+  h.agentCheck.mockReturnValue({ success: false });
   h.prepareOpening.mockResolvedValue({ ready: true, surface: SURFACE });
   h.runOpening.mockResolvedValue('the-stream');
   h.sseResponse.mockReturnValue(new Response('data: {}\n\n', { status: 200 }));
@@ -142,20 +142,11 @@ describe('POST /api/v1/app/conversation/opening', () => {
     expect(h.runOpening).not.toHaveBeenCalled();
   });
 
-  it('applies the per-person chat cap before anything is read', async () => {
-    h.consumerCheck.mockReturnValue({ success: false });
-    const response = await POST(createRequest());
-    expect(response.status).toBe(429);
-    expect(h.consumerCheck).toHaveBeenCalledWith('user_test');
-    expect(h.prepareOpening).not.toHaveBeenCalled();
-  });
-
-  it('applies the agent’s own cap, keyed on the agent and the person', async () => {
-    h.agentCheck.mockReturnValue({ success: false });
-    const response = await POST(createRequest());
-    expect(response.status).toBe(429);
-    expect(h.agentCheck).toHaveBeenCalledWith('agent-1:user_test', 12);
-    expect(h.runOpening).not.toHaveBeenCalled();
+  it('charges no chat sub-cap: the ledger bounds the model calls, and polling must not spend the person’s allowance', async () => {
+    await POST(createRequest());
+    await POST(createRequest());
+    expect(h.consumerCheck).not.toHaveBeenCalled();
+    expect(h.agentCheck).not.toHaveBeenCalled();
   });
 
   it('refuses an API key: the opening is spoken to a person', async () => {

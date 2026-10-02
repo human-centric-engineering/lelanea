@@ -43,12 +43,19 @@ function openTurn() {
 
 /** Whether the transcript read says the AI's opening is owed (t-122). */
 let openingOwed = false;
+/** What the transcript read returns. */
+let transcriptEntries: unknown[] = [];
 
 const emptyTranscript = () =>
   new Response(
     JSON.stringify({
       success: true,
-      data: { seat: 'facilitator', conversationId: null, entries: [], opening: openingOwed },
+      data: {
+        seat: 'facilitator',
+        conversationId: null,
+        entries: transcriptEntries,
+        opening: openingOwed,
+      },
     }),
     { status: 200 }
   );
@@ -124,6 +131,7 @@ beforeEach(() => {
   voiceInput = 'off';
   voiceDown = false;
   openingOwed = false;
+  transcriptEntries = [];
   openingRequests.length = 0;
   refuseOpening = null;
   vi.mocked(fetchImpl).mockClear();
@@ -771,6 +779,47 @@ describe('the AI speaks first, once (t-122)', () => {
     expect(result.current.draft).toBe('');
   });
 
+  it('reads again when the opening’s connection drops, adopting the reply that landed', async () => {
+    openingOwed = true;
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+
+    // The turn ran on server-side and completed; the read now has it.
+    openingOwed = false;
+    transcriptEntries = [
+      {
+        kind: 'reply',
+        id: 'a1',
+        text: 'You wrote about the lighthouse steps.',
+        at: '2026-10-02T10:00:00.000Z',
+        turnId: 'app_opening_v1',
+        citations: [],
+        capabilities: [],
+        turn: null,
+      },
+    ];
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().push('content', { delta: 'You wrote ab' });
+      latest().close();
+    });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.entries[0]).toMatchObject({ kind: 'reply', id: 'a1' });
+    expect(result.current.live).toBeNull();
+  });
+
+  it('asks for the opening again when the connection drops before it landed', async () => {
+    openingOwed = true;
+    renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().close();
+    });
+    await waitFor(() => expect(openingRequests).toHaveLength(2));
+  });
+
   it('holds a message sent while the opening is being answered', async () => {
     openingOwed = true;
     const { result } = renderHook(() => useConversation({ fetchImpl }));
@@ -815,10 +864,11 @@ describe('the AI speaks first, once (t-122)', () => {
 
     openingOwed = true;
     rerender({ check: 1 });
-    await waitFor(() => expect(transcriptReads()).toBe(2));
     await act(async () => {
       await Promise.resolve();
     });
+    // A pane holding a conversation does not even ask.
+    expect(transcriptReads()).toBe(1);
     expect(openingRequests).toHaveLength(0);
   });
 });
