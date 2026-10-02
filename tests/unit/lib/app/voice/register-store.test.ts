@@ -257,3 +257,59 @@ describe('registerForPrompt', () => {
     expect(running).not.toHaveBeenCalled();
   });
 });
+
+describe('the fallbacks a failure takes', () => {
+  it('orders by first entry when a node has never been active since', async () => {
+    nodes.mockResolvedValue([
+      {
+        nodeKey: 'boundaries',
+        status: 'active',
+        lastActiveAt: null,
+        firstEnteredAt: new Date('2026-10-02T10:00:00Z'),
+        progress: null,
+      },
+      {
+        nodeKey: 'values',
+        status: 'active',
+        lastActiveAt: null,
+        firstEnteredAt: null,
+        progress: null,
+      },
+    ] as never);
+
+    await expect(readCurrentModuleSlug('u1')).resolves.toBe('boundaries');
+  });
+
+  it('reads a config that is not an object as saying nothing', async () => {
+    config.mockResolvedValue(storedConfig(null));
+
+    await expect(resolveRegister('u1', 'facilitator')).resolves.toMatchObject({
+      register: 'teaching',
+    });
+  });
+
+  it('logs a thrown non-Error as a string, on every read', async () => {
+    nodes.mockRejectedValueOnce('journey reset');
+    await resolveRegister('u1', 'facilitator');
+    expect(logger.error).toHaveBeenCalledWith(expect.any(String), { error: 'journey reset' });
+
+    config.mockRejectedValueOnce('config reset');
+    crisis.mockRejectedValueOnce('crisis reset');
+    await resolveRegister('u1', 'facilitator');
+    expect(logger.error).toHaveBeenCalledWith(expect.any(String), {
+      moduleSlug: 'values',
+      error: 'config reset',
+    });
+    expect(logger.error).toHaveBeenCalledWith(expect.any(String), { error: 'crisis reset' });
+
+    running.mockRejectedValueOnce('row reset');
+    await registerForPrompt('u1', 'facilitator');
+    expect(logger.error).toHaveBeenCalledWith(expect.any(String), { error: 'row reset' });
+  });
+
+  it('has no register to give when deciding again finds none', async () => {
+    running.mockResolvedValue(null);
+
+    await expect(registerForPrompt('', 'facilitator')).resolves.toBeNull();
+  });
+});
