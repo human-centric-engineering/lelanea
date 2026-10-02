@@ -157,7 +157,7 @@ export async function* streamOpening(
     } catch (error) {
       const inFlight = error instanceof TurnRefused && error.code === TURN_IN_FLIGHT;
       if (!inFlight || attempt >= OPENING_RETRIES || options.signal?.aborted) throw error;
-      await new Promise((resolve) => setTimeout(resolve, retryMs));
+      await pause(retryMs, options.signal);
       if (options.signal?.aborted) throw error;
       continue;
     }
@@ -166,6 +166,19 @@ export async function* streamOpening(
     yield* frames;
     return;
   }
+}
+
+/** Wait `ms`, or less if `signal` aborts first: a pane let go stops waiting at once. */
+function pause(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    }
+  });
 }
 
 async function* streamFrom(

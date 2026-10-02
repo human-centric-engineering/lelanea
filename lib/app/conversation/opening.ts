@@ -37,6 +37,10 @@
  *   brightly.
  * - **Someone to speak.** The seat has a live agent the person may reach
  *   (`resolveFacilitationSurface`), or there is no opening to give.
+ * - **Not given up on.** An opening that failed {@link MAX_OPENING_ATTEMPTS}
+ *   times is not run again: each attempt is a model call, and a cause that
+ *   keeps failing it (an outage, a reply that cannot be linked) would
+ *   otherwise be paid for on every load. The person can simply speak.
  *
  * {@link openingDue} adds "the opening has not completed", which is what the
  * transcript read tells the pane. {@link prepareOpening} does not: a completed
@@ -47,8 +51,10 @@
  *
  * The ledger refuses an id reused for a different message, so new words need a
  * new id: bump the version in {@link OPENING_TURN_ID}. Someone who was opened
- * under the old id then has a recorded turn that is not the current opening,
- * which reads as "already spoken", so nobody is opened twice.
+ * under the old id then has a recorded turn on the seat that is not the
+ * current opening, which `hasSpoken` reads as "already spoken", so nobody is
+ * opened twice. What reads an opening's rows matches every version
+ * (`isOpeningTurnId`).
  *
  * @see lib/app/agent/turns.ts — the hook the turn goes through
  * @see app/api/v1/app/conversation/opening/route.ts — the route the pane calls
@@ -97,6 +103,9 @@ export const OPENING_MESSAGE =
   'back briefly and warmly, and end with one open question that invites them to say more. ' +
   'Say nothing about when they wrote it.';
 
+/** How many attempts a failed opening gets before it is given up on. */
+export const MAX_OPENING_ATTEMPTS = 3;
+
 /** Why an opening is not started, for the route to answer and the client to branch on. */
 export const OPENING_NOT_DUE = 'opening_not_due';
 
@@ -107,11 +116,16 @@ async function isHandedOff(userId: string): Promise<boolean> {
 
 /**
  * Whether the person has said anything on the facilitator seat: a message in a
- * facilitator conversation of theirs, or one answered with the crisis resource
- * alone, which stores no message.
+ * facilitator conversation of theirs, one answered with the crisis resource
+ * alone, which stores no message, or any recorded turn there that is not the
+ * current opening — an earlier version's opening included.
  */
 async function hasSpoken(userId: string): Promise<boolean> {
-  const [message, crisis] = await Promise.all([
+  const [turn, message, crisis] = await Promise.all([
+    prisma.appTurn.findFirst({
+      where: { userId, seat: CONVERSATION_SEAT, turnId: { not: OPENING_TURN_ID } },
+      select: { id: true },
+    }),
     prisma.aiMessage.findFirst({
       where: {
         role: 'user',
@@ -128,7 +142,7 @@ async function hasSpoken(userId: string): Promise<boolean> {
       select: { id: true },
     }),
   ]);
-  return message !== null || crisis !== null;
+  return turn !== null || message !== null || crisis !== null;
 }
 
 /**
@@ -139,12 +153,14 @@ async function hasSpoken(userId: string): Promise<boolean> {
  */
 export async function mayOpen(user: GateSubject): Promise<boolean> {
   try {
-    const [passed, handedOff, spoken] = await Promise.all([
+    const [passed, handedOff, spoken, opening] = await Promise.all([
       hasPassedGate(user),
       isHandedOff(user.id),
       hasSpoken(user.id),
+      readOpening(user.id),
     ]);
-    return passed && handedOff && !spoken;
+    const givenUp = opening?.status === 'failed' && opening.attempts >= MAX_OPENING_ATTEMPTS;
+    return passed && handedOff && !spoken && !givenUp;
   } catch (error) {
     logger.warn('Opening eligibility could not be read', {
       userId: user.id,
@@ -152,6 +168,14 @@ export async function mayOpen(user: GateSubject): Promise<boolean> {
     });
     return false;
   }
+}
+
+/** The current opening's ledger row, if it has one. */
+function readOpening(userId: string) {
+  return prisma.appTurn.findUnique({
+    where: { userId_turnId: { userId, turnId: OPENING_TURN_ID } },
+    select: { status: true, attempts: true },
+  });
 }
 
 /**
@@ -165,10 +189,7 @@ export async function openingDue(user: GateSubject): Promise<boolean> {
     const [may, surface, opening] = await Promise.all([
       mayOpen(user),
       resolveFacilitationSurface(user.id, CONVERSATION_SEAT),
-      prisma.appTurn.findUnique({
-        where: { userId_turnId: { userId: user.id, turnId: OPENING_TURN_ID } },
-        select: { status: true },
-      }),
+      readOpening(user.id),
     ]);
     return may && surface !== null && opening?.status !== 'completed';
   } catch (error) {

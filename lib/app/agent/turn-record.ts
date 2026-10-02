@@ -42,6 +42,7 @@ import type { Citation } from '@/types/orchestration';
 import { isRecord } from '@/lib/utils';
 import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
+import { isOpeningTurnId } from '@/lib/app/conversation/opening-id';
 
 /**
  * How long past the whole-turn deadline a `running` claim is still honoured.
@@ -289,17 +290,13 @@ export interface TurnOutcome {
 }
 
 /**
- * When a turn's messages begin: the person's own message for it, as stamped by
- * the same writer as the reply — falling back to the claim's start when the turn
- * has no user message id.
- */
-/**
- * How far before its claim a turn with no message of the person's reaches back
- * for its reply. The AI's opening (t-122) is opened by the agent, so there is
- * no row of the person's to bound the window by, only the claim's `startedAt`,
- * which is this server's clock. The grace absorbs a skew against the clock that
- * stamped the reply; a turn with no user row is the first in its conversation,
- * so the wider window takes in nothing else.
+ * How far before its claim the AI's opening (t-122) reaches back for its reply.
+ * The agent opens that turn, so there is no row of the person's to bound the
+ * window by, only the claim's `startedAt`, which is this server's clock. The
+ * grace absorbs a skew against the clock that stamped the reply; an opening is
+ * the first turn in its conversation, so the wider window takes in nothing
+ * else. Only an opening gets it: a member turn whose user message id failed to
+ * record keeps the claim's start, or it could take in the previous reply.
  */
 export const NO_USER_ROW_GRACE_MS = 5_000;
 
@@ -308,11 +305,17 @@ export function openingWindowStart(startedAt: Date): Date {
   return new Date(startedAt.getTime() - NO_USER_ROW_GRACE_MS);
 }
 
+/**
+ * When a turn's messages begin: the person's own message for it, as stamped by
+ * the same writer as the reply. With no user message id, the claim's start —
+ * reached back by {@link NO_USER_ROW_GRACE_MS} for the AI's opening only.
+ */
 async function turnWindowStart(
-  turn: Pick<AppTurn, 'userId' | 'startedAt' | 'conversationId' | 'userMessageId'>
+  turn: Pick<AppTurn, 'userId' | 'turnId' | 'startedAt' | 'conversationId' | 'userMessageId'>
 ): Promise<Date> {
-  if (!turn.conversationId) return turn.startedAt;
-  if (!turn.userMessageId) return openingWindowStart(turn.startedAt);
+  if (!turn.userMessageId || !turn.conversationId) {
+    return isOpeningTurnId(turn.turnId) ? openingWindowStart(turn.startedAt) : turn.startedAt;
+  }
   const message = await prisma.aiMessage.findFirst({
     where: {
       id: turn.userMessageId,
@@ -345,7 +348,8 @@ async function turnWindowStart(
  * Returns the status it wrote, or null when the attempt had been superseded.
  */
 export async function recordTurnCompleted(
-  turn: TurnAttempt & Pick<AppTurn, 'userId' | 'startedAt' | 'conversationId' | 'userMessageId'>,
+  turn: TurnAttempt &
+    Pick<AppTurn, 'userId' | 'turnId' | 'startedAt' | 'conversationId' | 'userMessageId'>,
   outcome: TurnOutcome
 ): Promise<'completed' | 'failed' | null> {
   const owned = { conversation: { userId: turn.userId } } as const;
@@ -433,7 +437,7 @@ export interface TurnReply {
 export async function readTurnReply(
   turn: Pick<
     AppTurn,
-    'userId' | 'startedAt' | 'assistantMessageId' | 'conversationId' | 'userMessageId'
+    'userId' | 'turnId' | 'startedAt' | 'assistantMessageId' | 'conversationId' | 'userMessageId'
   >
 ): Promise<TurnReply | null> {
   if (!turn.assistantMessageId || !turn.conversationId) return null;

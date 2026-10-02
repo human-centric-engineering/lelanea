@@ -207,6 +207,17 @@ describe('streamOpening (t-122)', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it('stops waiting the moment the caller lets it go, mid-pause', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT'));
+    const started = Date.now();
+    const done = collect(streamOpening({ fetchImpl, retryMs: 60_000, signal: controller.signal }));
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    controller.abort();
+    await expect(done).rejects.toBeInstanceOf(TurnRefused);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
   it('stops asking once the caller lets it go', async () => {
     const controller = new AbortController();
     const fetchImpl = vi.fn(async () => {

@@ -269,8 +269,12 @@ agent open a turn with no user message:
   person's in a facilitator conversation (the opening writes none, so it
   needs no exception), or a crisis safety event: a message answered with the
   resource alone is stored nowhere, and a person who reached for help is not
-  then greeted brightly. The route refuses on the same terms, so the pane is
-  never told to ask for an opening the route will refuse. Someone who typed
+  then greeted brightly. Any other recorded turn on the seat counts as well,
+  an earlier version's opening included, so bumping the id opens nobody
+  twice. An opening that has failed `MAX_OPENING_ATTEMPTS` (3) times is given
+  up on: each attempt is a model call, and a cause that keeps failing it would
+  otherwise be paid for on every load. The route refuses on the same terms,
+  so the pane is never told to ask for an opening the route will refuse. Someone who typed
   to the facilitator before pressing Begin has already spoken and is not
   opened on.
 - **No chat sub-caps on the route.** They bound model calls, and the ledger
@@ -282,11 +286,11 @@ agent open a turn with no user message:
   thinking row shows and the composer waits. One still running elsewhere (a
   reload, a second tab) is asked again every few seconds until it lands as a
   replay. One that does not land leaves nothing behind: no ending row, nothing
-  in the box. A connection that drops mid-opening, or an opening still in
-  flight past the client's patience, reads the transcript again, adopting the
-  reply if the turn completed server-side; at most twice, and never after an
-  ending the server chose (an error frame, a refusal), which asking again
-  would only meet again.
+  in the box. A connection that drops mid-opening reads the transcript again,
+  adopting the reply if the turn completed server-side; at most twice, and
+  never after an ending the server chose (an error frame, a refusal, an
+  opening still in flight past the client's patience), which asking again
+  would only meet again while the composer waited.
 - **What it is told** (`OPENING_MESSAGE`) points at the answer lines by their
   `> ` marker and forbids quoting a question or an example from her own
   instructions as theirs. Without that, the pinned model, given thin answers,
@@ -295,9 +299,11 @@ agent open a turn with no user message:
 - **The transcript scopes it by its turn row.** With no row of the person's
   to bound it, the assistant rows before their first message are the
   opening's only from its latest attempt's start, and none are when it failed
-  with no reply linked. The ledger's reply lookup reaches a few seconds
-  before the claim for such a turn (`NO_USER_ROW_GRACE_MS`), against clock
-  skew.
+  with no reply linked. The read takes the opening's row even while its
+  conversation id is unset (a re-run clears it at the claim), and matches
+  every version of the id (`isOpeningTurnId`). The ledger's reply lookup
+  reaches a few seconds before the claim for an opening only
+  (`NO_USER_ROW_GRACE_MS`), against clock skew.
 
 **Proved on a real database** by `npm run smoke:app-onboarding` step 10: the
 opening owed after the hand-off, run through the real hook and model, quoting

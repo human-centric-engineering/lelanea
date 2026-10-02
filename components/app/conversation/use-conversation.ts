@@ -99,8 +99,9 @@ import type { Citation } from '@/types/orchestration';
  * person's (the words are the app's, and never shown); nothing goes into the
  * box; and an opening that does not complete leaves nothing behind — the
  * person can simply speak, and the next read offers it again if it is still
- * owed. A connection that drops mid-opening reads the transcript again at
- * once: the turn ran on server-side, so the reply is adopted, or asked for. One still running (a reload, a second tab) is asked again every few
+ * owed. A connection that drops mid-opening reads the transcript again, at
+ * most {@link MAX_OPENING_RECHECKS} times: the turn ran on server-side, so the
+ * reply is adopted, or asked for. One still running (a reload, a second tab) is asked again every few
  * seconds, showing the thinking row, until it lands as a replay.
  *
  * **The status read** is asked once on mount and again after every ending,
@@ -466,11 +467,12 @@ export function useConversation(options: Options = {}): ConversationState {
             // empty conversation explaining a turn they never took.
             logger.warn('Conversation opening did not land', { code: ending.code });
             finish([]);
-            // A connection that dropped, or an opening still in flight past
-            // the client's patience: the turn runs on server-side, so read
+            // A connection that dropped: the turn runs on server-side, so read
             // again — the reply if it landed, the opening again if not. A few
             // times at most, and never after an ending the server chose (an
-            // error frame, a refusal): asking again would only meet it again.
+            // error frame, a refusal, an opening still in flight past the
+            // client's patience): asking again would only meet it again, and
+            // keep the composer waiting while it did.
             if (options.recheck && openingRechecks.current < MAX_OPENING_RECHECKS) {
               openingRechecks.current += 1;
               recheckOpening(seatScope.current.signal);
@@ -654,8 +656,8 @@ export function useConversation(options: Options = {}): ConversationState {
             { kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable },
             {
               keepId: refused !== TURN_ID_REUSED,
-              // No answer at all, or one still being answered: worth a read.
-              recheck: refused === null || refused === TURN_IN_FLIGHT,
+              // No answer at all: the request may never have arrived.
+              recheck: refused === null,
             }
           );
         }

@@ -53,12 +53,12 @@ export const GET = withAuth(async (request, session) => {
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
   const seat = query.seat ?? CONVERSATION_SEAT;
 
-  // Read together; whether the opening is owed only matters on an empty transcript.
-  const [transcript, due] = await Promise.all([
-    readTranscript(session, seat),
-    seat === CONVERSATION_SEAT ? openingDue(session.user) : Promise.resolve(null),
-  ]);
-  if (due !== null) transcript.opening = transcript.entries.length === 0 && due;
+  const transcript = await readTranscript(session, seat);
+  // Asked only of an empty transcript: a conversation under way has no opening
+  // owed, and most reads are of one (t-122 review round 3).
+  if (seat === CONVERSATION_SEAT) {
+    transcript.opening = transcript.entries.length === 0 && (await openingDue(session.user));
+  }
 
   log.info('Own conversation read', {
     userId: session.user.id,

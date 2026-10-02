@@ -509,6 +509,23 @@ describe('assembleTranscript — the opening (t-122)', () => {
     expect(entries).toEqual([]);
   });
 
+  it('reads an earlier version’s opening as an opening, and goes by the latest', () => {
+    const entries = assemble(
+      [assistant('frag', 'Let me look', 1), assistant('a1', 'You wrote about bread.', 30)],
+      [
+        turn('app_opening_v0', {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+          startedAt: at(0),
+        }),
+        turn(OPENING_TURN_ID, { userMessageId: null, assistantMessageId: 'a1', startedAt: at(25) }),
+      ]
+    );
+    expect(entries.map((e) => e.id)).toEqual(['a1']);
+  });
+
   it('scopes only the rows before the person’s first message', () => {
     // A later turn's own passes are the later turn's, whatever the opening says.
     const entries = assemble(
@@ -568,9 +585,18 @@ describe('readTranscript', () => {
     // Through the platform's visibility helper, composed with AND and narrowed
     // to the owner: the shared and ownerless arms cannot widen a transcript.
     expect(where.conversation.AND).toEqual([{ OR: [{ userId: ME }] }, { userId: ME }]);
+    // Under the caller's id: this conversation's turns, and the opening's
+    // row on this seat while a re-run has its conversation id unset (t-122).
     expect(findTurns.mock.calls[0][0].where).toEqual({
       userId: ME,
-      conversationId: CONVERSATION,
+      OR: [
+        { conversationId: CONVERSATION },
+        {
+          seat: CONVERSATION_SEAT,
+          conversationId: null,
+          turnId: { startsWith: 'app_opening_' },
+        },
+      ],
     });
     expect(transcript.conversationId).toBe(CONVERSATION);
     expect(transcript.entries).toHaveLength(2);

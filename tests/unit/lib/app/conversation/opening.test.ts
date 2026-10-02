@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   messageFindFirst: vi.fn(),
+  turnFindFirst: vi.fn(),
   findUnique: vi.fn(),
   safetyFindFirst: vi.fn(),
   hasPassedGate: vi.fn(),
@@ -24,7 +25,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    appTurn: { findUnique: h.findUnique },
+    appTurn: { findFirst: h.turnFindFirst, findUnique: h.findUnique },
     aiMessage: { findFirst: h.messageFindFirst },
     appSafetyEvent: { findFirst: h.safetyFindFirst },
   },
@@ -49,6 +50,7 @@ import {
   OPENING_MESSAGE,
   OPENING_NOT_DUE,
   OPENING_TURN_ID,
+  MAX_OPENING_ATTEMPTS,
   mayOpen,
   openingDue,
   prepareOpening,
@@ -72,6 +74,7 @@ beforeEach(() => {
   h.hasPassedGate.mockResolvedValue(true);
   h.readJourneyNodeStates.mockResolvedValue(HANDED_OFF);
   h.messageFindFirst.mockResolvedValue(null);
+  h.turnFindFirst.mockResolvedValue(null);
   h.safetyFindFirst.mockResolvedValue(null);
   h.findUnique.mockResolvedValue(null);
   h.resolveFacilitationSurface.mockResolvedValue(SURFACE);
@@ -121,6 +124,22 @@ describe('mayOpen', () => {
     });
   });
 
+  it('is false once any other turn is recorded there, an earlier version’s opening included', async () => {
+    h.turnFindFirst.mockResolvedValue({ id: 'old-opening' });
+    await expect(mayOpen(USER)).resolves.toBe(false);
+    expect(h.turnFindFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', seat: 'facilitator', turnId: { not: OPENING_TURN_ID } },
+      select: { id: true },
+    });
+  });
+
+  it('gives up on an opening that has failed every attempt it gets', async () => {
+    h.findUnique.mockResolvedValue({ status: 'failed', attempts: MAX_OPENING_ATTEMPTS });
+    await expect(mayOpen(USER)).resolves.toBe(false);
+    h.findUnique.mockResolvedValue({ status: 'failed', attempts: MAX_OPENING_ATTEMPTS - 1 });
+    await expect(mayOpen(USER)).resolves.toBe(true);
+  });
+
   it('is false, not a throw, when a read fails', async () => {
     h.readJourneyNodeStates.mockRejectedValue(new Error('db down'));
     await expect(mayOpen(USER)).resolves.toBe(false);
@@ -132,7 +151,7 @@ describe('openingDue', () => {
     await expect(openingDue(USER)).resolves.toBe(true);
     expect(h.findUnique).toHaveBeenCalledWith({
       where: { userId_turnId: { userId: 'user-1', turnId: OPENING_TURN_ID } },
-      select: { status: true },
+      select: { status: true, attempts: true },
     });
   });
 

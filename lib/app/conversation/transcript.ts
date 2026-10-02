@@ -60,7 +60,7 @@ import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { openingWindowStart, REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
-import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
+import { isOpeningTurnId, OPENING_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
@@ -274,8 +274,11 @@ export function assembleTranscript(
     pendingReply = null;
   };
 
-  // The AI's opening, which has no user row to scope its own (t-122).
-  const opening = turns.find((turn) => turn.turnId === OPENING_TURN_ID);
+  // The AI's opening, which has no user row to scope its own (t-122): the
+  // latest, should the words ever have been versioned.
+  const opening = turns
+    .filter((turn) => isOpeningTurnId(turn.turnId))
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
   const openingSince = opening ? openingWindowStart(opening.startedAt) : null;
   const openingLeftNothing =
     opening !== undefined &&
@@ -375,7 +378,16 @@ export async function readTranscript(
       },
     }),
     prisma.appTurn.findMany({
-      where: { userId, conversationId },
+      // The opening's row too when its conversation id is not set: a re-run
+      // clears it at the claim, and a run that failed before starting never
+      // set it. Without its row, an earlier attempt's fragments read as a reply.
+      where: {
+        userId,
+        OR: [
+          { conversationId },
+          { seat, conversationId: null, turnId: { startsWith: OPENING_TURN_ID_PREFIX } },
+        ],
+      },
       select: {
         turnId: true,
         seat: true,
