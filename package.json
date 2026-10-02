@@ -71,6 +71,7 @@
     "smoke:export": "tsx --env-file=.env.local scripts/smoke/export.ts",
     "smoke:app-journey-map": "tsx --env-file=.env.local scripts/smoke/app-journey-map.ts",
     "smoke:app-onboarding": "tsx --env-file=.env.local scripts/smoke/app-onboarding.ts",
+    "smoke:app-register": "tsx --env-file=.env.local scripts/smoke/app-register.ts",
     "smoke:voice-comparison": "tsx --env-file=.env.local scripts/smoke/voice-comparison.ts",
     "smoke:app-turn": "tsx --env-file=.env.local scripts/app/smoke-turn.ts",
     "smoke:app-metering": "tsx --env-file=.env.local scripts/app/smoke-metering.ts",

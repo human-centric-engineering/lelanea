@@ -101,6 +101,11 @@ import {
   toClientStream,
 } from '@/lib/app/agent/endings';
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
+import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
+import { parseRegister, parseRegisterSource } from '@/lib/app/voice/register';
+import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
+import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
+import { prisma } from '@/lib/db/client';
 import { crisisFrame } from '@/lib/app/safety/resource';
 import { preferredLanguageTag } from '@/lib/app/waitlist/locale';
 import {
@@ -181,13 +186,59 @@ async function* replay(turn: AppTurn): ChatStream {
   if (reply.citations.length > 0) yield { type: 'citations', citations: reply.citations };
   const inputTokens = turn.inputTokens ?? 0;
   const outputTokens = turn.outputTokens ?? 0;
-  yield {
-    type: 'done',
-    tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
-    costUsd: turn.costUsd ?? 0,
-    ...(turn.providerSlug ? { provider: turn.providerSlug } : {}),
-    ...(turn.modelId ? { model: turn.modelId } : {}),
-  };
+  yield withRegister(
+    {
+      type: 'done',
+      tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+      costUsd: turn.costUsd ?? 0,
+      ...(turn.providerSlug ? { provider: turn.providerSlug } : {}),
+      ...(turn.modelId ? { model: turn.modelId } : {}),
+    },
+    turn
+  );
+}
+
+/**
+ * The `done` frame with the turn's register on it (f-registers t-125), so the
+ * account under a live reply says what a reload will. The platform's frame has
+ * no field for it; the leaf's own event schema reads it
+ * (`lib/app/conversation/events.ts`), and nothing between strips it. A turn
+ * with no register passes the frame through as it was.
+ */
+function withRegister(done: Extract<ChatEvent, { type: 'done' }>, turn: AppTurn): ChatEvent {
+  const register = parseRegister(turn.register);
+  if (register === null) return done;
+  const source = parseRegisterSource(turn.registerSource);
+  return Object.assign({}, done, { register, ...(source ? { registerSource: source } : {}) });
+}
+
+/** The register the person's last turn on the seat was claimed with, or null. Never throws. */
+async function readLastRegister(userId: string, seat: string): Promise<string | null> {
+  if (!hasRegister(seat)) return null;
+  try {
+    const last = await prisma.appTurn.findFirst({
+      where: { userId, seat },
+      orderBy: { startedAt: 'desc' },
+      select: { register: true },
+    });
+    return last?.register ?? null;
+  } catch {
+    // Unknown is "changed": dropping the cache costs a rebuild, keeping a
+    // stale one costs the wrong register.
+    return null;
+  }
+}
+
+/** Drop the person's cached context block on the seat. Never throws. */
+function dropContext(userId: string, seat: string): void {
+  try {
+    invalidateContext(FACILITATION_CONTEXT_TYPE, seat, { userId });
+  } catch (err) {
+    logger.warn('Turn could not drop the cached context; it may carry the last register', {
+      seat,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
@@ -231,6 +282,8 @@ async function* recorded(turn: AppTurn, events: ChatStream, disarm: () => boolea
       } else if (event.type === 'done') {
         if (ownsSettle()) await settleCompleted(turn, event);
         settled = true;
+        yield withRegister(event, turn);
+        continue;
       } else if (event.type === 'error' || event.type === 'budget_exceeded_per_turn') {
         // Not while the aborted call ends past the deadline: that is its own
         // `aborted`, and the deadline has already ended the turn.
@@ -359,7 +412,7 @@ export async function runRecordedTurn(
     return only(crisisFrame(crisis.resource));
   }
 
-  const result = await runGeneratedTurn(turn, run);
+  const result = await runGeneratedTurn(turn, run, { crisisNow: crisis.resource !== null });
   // A refusal carries no stream, so it shows no resource — and records none.
   if (crisis.resource === null || isRefusal(result)) return result;
   await recordCrisisShown(crisis, who);
@@ -381,7 +434,8 @@ export async function runRecordedTurn(
  */
 async function runGeneratedTurn(
   turn: FacilitationTurn,
-  run: FacilitationTurnRun
+  run: FacilitationTurnRun,
+  options: { crisisNow: boolean } = { crisisNow: false }
 ): Promise<ChatStream | FacilitationTurnRefusal> {
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
@@ -396,8 +450,12 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const deadlines = await getAgentDeadlines();
-  const fingerprintVersion = await readAgentFingerprintVersion(turn.agentSlug);
+  const [deadlines, fingerprintVersion, register, lastRegister] = await Promise.all([
+    getAgentDeadlines(),
+    readAgentFingerprintVersion(turn.agentSlug),
+    resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
+    readLastRegister(turn.userId, turn.role),
+  ]);
   const claim = await claimTurn(
     {
       userId: turn.userId,
@@ -407,9 +465,15 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    fingerprintVersion,
+    { fingerprintVersion, register },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
+  // The context block is cached per person for a minute, built for the last
+  // turn's register. A turn steered elsewhere drops it, so the prompt reads
+  // this turn's (`register-store.ts`, "Decided once, at the claim").
+  if (claim.kind === 'claimed' && register !== null && register.register !== lastRegister) {
+    dropContext(turn.userId, turn.role);
+  }
 
   switch (claim.kind) {
     case 'mismatch':

@@ -90,13 +90,15 @@
  * what a model actually reads, and a labelling regression that only showed up in
  * the framing would pass a test written against the former.
  *
- * ## Her voice is the same for every user, on purpose
+ * ## Her voice is the same for every user, except where they are
  *
  * `buildContext` hands a contributor the request's `userId` and partitions its
- * cache by it, so a per-user block is available. The voice half of this one
- * does not use it; only the discovery answers (5, above) are per person. A
- * user's voice leanings are a later filter over the overlays and the exemplars,
- * and until that is designed, one person's preference silently reshaping how her
+ * cache by it, so a per-user block is available. Two things in it are per
+ * person: the discovery answers (5, above), and on the facilitator seat which
+ * register's overlay is chosen (f-registers t-125). That is where the person
+ * IS, not what they prefer, and it is disclosed under every reply. A user's
+ * voice leanings are a later filter over the overlays and the exemplars, and
+ * until that is designed, one person's preference silently reshaping how her
  * voice comes across is a change nobody asked for and nobody can see.
  *
  * The cost is a cache partitioned more finely than the answer needs: one
@@ -126,6 +128,7 @@ import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 import { loadResourceOffering } from '@/lib/app/resources/offering';
 import { loadAnswersContext } from '@/lib/app/onboarding/answers-context';
 import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
+import { registerForPrompt } from '@/lib/app/voice/register-store';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -309,11 +312,10 @@ export const FACILITATION_CONTEXT_TYPE = 'facilitation';
  *
  * `onboarding` is the guide's first contact with someone, which is exactly the
  * `first-meeting` overlay. `facilitator` is deliberately absent: that seat is
- * every moment after the first, and which one is a fact about the person's
- * journey that no turn carries yet. Guessing one would be this module inventing
- * a register — the overlays' own rule is *do not invent a register for a
- * situation you have not been given* — so the facilitator seat gets the
- * core-only block until a turn can say which moment it is.
+ * every moment after the first, so it is not one situation. Its overlay is the
+ * person's register instead — guiding or teaching, from the module they are in
+ * (f-registers t-125, `register-store.ts`) — and the core-only block only when
+ * that cannot be read.
  *
  * A `Map`, not an object literal: the key is a URL segment, and
  * `{…}['__proto__']` is not `undefined`.
@@ -321,6 +323,20 @@ export const FACILITATION_CONTEXT_TYPE = 'facilitation';
 export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
   ['onboarding', 'first-meeting'],
 ]);
+
+/**
+ * The overlay a seat's turn is given: the seat's own moment, or on the
+ * facilitator seat the register the turn was claimed with. The register's
+ * overlays are named by the register (`guiding`, `teaching`), so a register is
+ * a situation like any other and brings its own exemplar query.
+ * `registerForPrompt` never throws; a seat with no situation and no register
+ * gets the core-only block.
+ */
+async function situationFor(seat: string, userId: string): Promise<string> {
+  const situation = SEAT_SITUATIONS.get(seat);
+  if (situation !== undefined) return situation;
+  return (await registerForPrompt(userId, seat)) ?? '';
+}
 
 /**
  * The voice block for a facilitation seat turn (§08 t-54), and the person's own
@@ -350,7 +366,7 @@ export async function loadFacilitationVoiceContext(
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
 
   // `loadVoiceContext` carries the taxonomy as well, for every path — see there.
-  const voice = await loadVoiceContext(SEAT_SITUATIONS.get(seat) ?? '');
+  const voice = await loadVoiceContext(await situationFor(seat, request.userId ?? ''));
 
   // Guarded for the reason the overlay read is: a throw from a contributor
   // blanks the WHOLE block, taking the taxonomy with it. A turn without the

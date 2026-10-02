@@ -24,6 +24,7 @@ import { z } from 'zod';
 
 import { parseSseBlock } from '@/lib/api/sse-parser';
 import { citationSchema } from '@/lib/validations/orchestration';
+import { REGISTER_SOURCES, registerSchema } from '@/lib/app/voice/register';
 
 const crisisServiceSchema = z.object({
   name: z.string(),
@@ -111,6 +112,9 @@ export const conversationEventSchema = z.discriminatedUnion('type', [
     provider: z.string().optional(),
     model: z.string().optional(),
     finishReason: z.enum(['stop', 'tool_use', 'length', 'error']).optional(),
+    /** The leaf's own: the register the turn was steered to (f-registers t-125). */
+    register: registerSchema.optional().catch(undefined),
+    registerSource: z.enum(REGISTER_SOURCES).optional().catch(undefined),
   }),
   z.object({
     type: z.literal('error'),

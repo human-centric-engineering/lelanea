@@ -27,6 +27,7 @@
  * id rather than mint another (t-65).
  */
 
+import { REGISTER_SOURCES, registerSchema } from '@/lib/app/voice/register';
 import { z } from 'zod';
 
 import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conversation/events';
@@ -345,6 +346,11 @@ const accountSchema = z.object({
   modelId: z.string().nullable(),
   providerSlug: z.string().nullable(),
   fingerprintVersion: z.string().nullable(),
+  // Absent before t-125 (a mixed-version window), and lenient: a value the
+  // client cannot read says nothing about the register rather than dropping
+  // the reply.
+  register: registerSchema.nullable().default(null).catch(null),
+  registerSource: z.enum(REGISTER_SOURCES).nullable().default(null).catch(null),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
   costUsd: z.number().nullable(),

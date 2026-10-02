@@ -78,6 +78,22 @@ vi.mock('@/lib/db/client', async () => {
   };
   return { prisma: { appSafetyEvent: { create: mocks.createEvent }, ...crisisTables } };
 });
+/**
+ * The register the claim is stamped with (f-registers t-125): what the module
+ * says, unless the turn is showing a crisis resource. Its reads are
+ * `register-store.test.ts`'s; here, only whether the seam tells it.
+ */
+vi.mock('@/lib/app/voice/register-store', () => ({
+  hasRegister: (seat: string) => seat === 'facilitator',
+  resolveRegister: vi.fn(
+    async (_userId: string, seat: string, options?: { crisisNow?: boolean }) =>
+      seat !== 'facilitator'
+        ? null
+        : options?.crisisNow
+          ? { register: 'guiding', source: 'safety', moduleSlug: 'values' }
+          : { register: 'teaching', source: 'module', moduleSlug: 'values' }
+  ),
+}));
 vi.mock('@/lib/app/agent/turn-record', () => ({
   claimTurn: mocks.claimTurn,
   classifyPricing: vi.fn(async () => 'priced'),
@@ -199,6 +215,22 @@ describe('runRecordedTurn — someone in danger', () => {
       expect(run).toHaveBeenCalledTimes(1);
       expect(out.map((e) => e.type)).toEqual(['warning', 'start', 'content', 'done']);
       expect(out[0]).toMatchObject({ code: 'crisis', resource: { tier: 'soft' } });
+    });
+
+    it('steers the turn it happens in to guiding, though its record is written after (t-125)', async () => {
+      const run = vi.fn(() => agentReply());
+      const onFacilitator = { ...turn("I can't go on like this"), role: 'facilitator' };
+
+      // Population first: the same seat, with nothing hard said, is teaching.
+      await frames(await runRecordedTurn({ ...onFacilitator, message: 'Hello.' }, run));
+      expect(mocks.claimTurn.mock.calls[0][1]).toMatchObject({
+        register: { register: 'teaching', source: 'module' },
+      });
+
+      await frames(await runRecordedTurn(onFacilitator, run));
+      expect(mocks.claimTurn.mock.calls[1][1]).toMatchObject({
+        register: { register: 'guiding', source: 'safety' },
+      });
     });
 
     it('a hard hit the context check softened runs the turn after the resource', async () => {

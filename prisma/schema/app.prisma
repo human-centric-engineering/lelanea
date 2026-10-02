@@ -533,6 +533,13 @@ model AppTurn {
   /// null when the prompt carries no marker, which is the honest answer for an
   /// agent that does not inherit her core.
   fingerprintVersion String?
+  /// Guiding or teaching: the register the turn was steered to, decided at
+  /// claim (f-registers t-125). Null on a seat with no register, and on a turn
+  /// claimed before registers existed. The prompt reads it back from here.
+  register           String?
+  /// Why: `module` (the person's current module's config) or `safety` (a
+  /// crisis on this turn or within the hold).
+  registerSource     String?
   conversationId     String?
   userMessageId      String?
   assistantMessageId String?

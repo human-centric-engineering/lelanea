@@ -68,7 +68,7 @@ arm nor an admin's ownerless arm can widen a transcript.
 { kind: 'user',  id, text, at, turnId: string | null }
 { kind: 'reply', id, text, at, turnId, citations, turn: TurnAccount | null }
 // TurnAccount: turnId, seat, status, attempts, modelId, providerSlug,
-//   fingerprintVersion, inputTokens, outputTokens, costUsd (null = unpriced,
+//   fingerprintVersion, register, registerSource, inputTokens, outputTokens, costUsd (null = unpriced,
 //   never 0), pricing, errorCode, startedAt, completedAt
 ```
 
@@ -174,8 +174,10 @@ the authored shape drops to `undefined` and the frame still arrives, because
 | `done`                     | the live turn folds into `entries` as a reply, with an account built from the frame; the notes panel is told, if the turn wrote (t-73)                                                                          |
 | `error`                    | an `ending` entry: the words back in the box, bound to the turn id, and the ending's words where the reply would have been (below); a hard `crisis` frame lays the resource out instead                         |
 
-The account built live from `done` carries model, provider, tokens and
-`costUsd`; `fingerprintVersion` and `pricing` are `null` until the read route
+The account built live from `done` carries model, provider, tokens,
+`costUsd`, and the turn's `register` and `registerSource` (the leaf's own
+fields on the frame, f-registers t-125; the detail's "Began in a … register"
+sentence); `fingerprintVersion` and `pricing` are `null` until the read route
 has them on reload — the frame does not carry either. A `costUsd` of `0` on
 the frame (what a replay says for an unpriced turn) is recorded as `null`,
 never `0`: zero reads as free, and only the turn row knows.

@@ -117,7 +117,7 @@ describe('an edit reaches the next turn', () => {
 
     expect(await loadVoiceContext('grief')).toContain('Do not reach for meaning on their behalf.');
     const added = (await overlays.getOverlaysAdminView()).overlays.at(-1)!;
-    expect(added).toMatchObject({ situation: 'grief', position: 5, status: 'draft', revision: 1 });
+    expect(added).toMatchObject({ situation: 'grief', position: 7, status: 'draft', revision: 1 });
   });
 });
 
@@ -288,6 +288,8 @@ describe('deleting a situation', () => {
       ['discovery', 1],
       ['values', 2],
       ['difficulty', 3],
+      ['guiding', 4],
+      ['teaching', 5],
     ]);
   });
 
@@ -298,6 +300,13 @@ describe('deleting a situation', () => {
 
     expect(firstMeeting.selectedBy).toHaveLength(2);
     expect(values.selectedBy).toEqual(['the admin chat, when it is asked for this situation']);
+    // A register's overlay is chosen by the facilitator seat, not pinned to it (t-125).
+    for (const register of ['guiding', 'teaching']) {
+      const row = view.overlays.find((r) => r.situation === register)!;
+      expect(row.selectedBy[0]).toBe(
+        `the facilitator seat, whenever a turn is steered to the ${register} register`
+      );
+    }
   });
 
   it('keeps a move from undoing a sign-off: the order decides nothing a model reads', async () => {
@@ -311,7 +320,7 @@ describe('deleting a situation', () => {
   });
 
   it('refuses to delete the last one', async () => {
-    for (const situation of ['first-meeting', 'discovery', 'values']) {
+    for (const situation of ['first-meeting', 'discovery', 'values', 'guiding', 'teaching']) {
       await overlays.deleteOverlay(situation, (await editOf(situation)).revision, EDITOR);
     }
     const { revision } = await editOf('difficulty');
@@ -361,9 +370,11 @@ describe('the file round-trip', () => {
       'first-meeting',
       'discovery',
       'difficulty',
+      'guiding',
+      'teaching',
       'values',
     ]);
-    expect(stored.map((row) => row.position)).toEqual([1, 2, 3, 4]);
+    expect(stored.map((row) => row.position)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('removes it when asked, and only then', async () => {
@@ -380,6 +391,8 @@ describe('the file round-trip', () => {
       'first-meeting',
       'discovery',
       'difficulty',
+      'guiding',
+      'teaching',
     ]);
   });
 
@@ -478,7 +491,7 @@ describe('a stored row the schemas no longer accept', () => {
     expect(view.seeded).toBe(true);
     expect(view.unservable).toMatch(/failed validation on read/);
     expect(view.set).toBeNull();
-    expect(view.overlays).toHaveLength(4);
+    expect(view.overlays).toHaveLength(6);
   });
 
   it('refuses to export overlays when a stored row no longer fits the file schema', async () => {
@@ -725,7 +738,7 @@ describe('a set-level change through the file round-trip', () => {
     const created = (await overlays.getOverlaysAdminView()).overlays.find(
       (o) => o.situation === 'grief'
     );
-    expect(created).toMatchObject({ status: 'draft', revision: 1, position: 5 });
+    expect(created).toMatchObject({ status: 'draft', revision: 1, position: 7 });
   });
 });
 

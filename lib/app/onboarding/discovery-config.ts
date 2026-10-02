@@ -25,16 +25,24 @@ import { z } from 'zod';
 export const DISCOVERY_DEFAULT_MODULE_ID = 'module_00_onboarding';
 
 /**
- * Strict, like every module schema here: an unknown key is refused rather than
- * stored beside the real one and read as saved.
+ * The switch's field, as a shape: the module's config is this beside the
+ * register every module carries (`lib/app/modules/definitions.ts`, t-125).
  */
-export const discoveryConfigSchema = z.strictObject({
+export const discoveryConfigShape = {
   coreSetOnly: z
     .boolean()
     .default(false)
     .describe(
       'Ask only the Core Set: the discovery questions weighted 100. When off, every question is asked. If it is on and no question is weighted 100, every question is asked.'
     ),
-});
+};
+
+/**
+ * The switch as this module reads it. Not strict, unlike the module's own
+ * schema: the stored config also holds the module's register, which is not
+ * this reader's, and a strict parse would refuse every config that has one.
+ * The module's schema is what refuses an unknown key, on every save.
+ */
+export const discoveryConfigSchema = z.object(discoveryConfigShape);
 
 export type DiscoveryConfig = z.infer<typeof discoveryConfigSchema>;

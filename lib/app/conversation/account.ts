@@ -286,9 +286,36 @@ export function costSentence(turn: TurnAccount | null): string | null {
   return null;
 }
 
-/** The detail, one sentence to a line: what it did, then what it cost. */
+/**
+ * The register the reply was steered to, as a sentence (f-registers t-125), or
+ * null for a turn that had none.
+ *
+ * In the detail, not the one-liner: the line says what the turn DID, and every
+ * reply on the seat has a register, so it would crowd out the thing that
+ * changes. Said as where it began, because that is what is known: the AI may
+ * move off it within the reply when the moment calls for it, and nothing
+ * records that it did.
+ */
+export function registerSentence(turn: TurnAccount | null): string | null {
+  if (!turn?.register) return null;
+  const how =
+    turn.register === 'teaching'
+      ? 'in a teaching register: direct, and asking you to look further'
+      : 'in a guiding register: gentle, and holding space';
+  const why =
+    turn.registerSource === 'safety'
+      ? ', because something hard came up recently'
+      : turn.registerSource === 'module'
+        ? ', where this part of the journey starts'
+        : '';
+  return `Began ${how}${why}.`;
+}
+
+/** The detail, one sentence to a line: what it did, how it spoke, then what it cost. */
 export function accountDetail(input: AccountInput, parts: AccountPart[]): string {
   const lines = parts.length === 0 ? [`${NOTHING_WRITTEN}.`] : parts.map((part) => part.detail);
+  const register = registerSentence(input.turn);
+  if (register) lines.push(register);
   const cost = costSentence(input.turn);
   if (cost) lines.push(cost);
   return lines.join('\n');

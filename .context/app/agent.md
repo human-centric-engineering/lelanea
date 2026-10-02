@@ -378,6 +378,7 @@ carried in Daybreak's route: [`divergences.md`](./divergences.md) Row 18,
 | `turnId`, `clientSupplied`               | the client's id, or one minted here (`srv_…`) when it sent none                      |
 | `seat`, `agentSlug`                      | where the turn was taken, and who answered                                           |
 | `fingerprintVersion`                     | the voice version, read from the agent's **composed** prompt at claim — null if none |
+| `register`, `registerSource`             | guiding or teaching, and `module` or `safety`, decided at claim (f-registers t-125)  |
 | `modelId`, `providerSlug`                | what the platform reported on `done`                                                 |
 | `inputTokens`, `outputTokens`, `costUsd` | the chat call; `costUsd` is null when `pricing` is `unpriced`                        |
 | `pricing`                                | `priced`, `unpriced` or `local`                                                      |

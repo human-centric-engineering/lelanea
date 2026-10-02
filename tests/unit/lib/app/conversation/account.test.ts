@@ -17,6 +17,7 @@ import {
   accountTime,
   costSentence,
   NOTHING_WRITTEN,
+  registerSentence,
   type AccountInput,
 } from '@/lib/app/conversation/account';
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
@@ -29,6 +30,8 @@ const turn = (fields: Partial<TurnAccount> = {}): TurnAccount => ({
   modelId: 'gpt-4o-mini-2024-07-18',
   providerSlug: 'openai',
   fingerprintVersion: 'v1',
+  register: null,
+  registerSource: null,
   inputTokens: 3_812,
   outputTokens: 240,
   costUsd: 0.0123,
@@ -332,6 +335,46 @@ describe('the detail', () => {
       'Looked something up in her material and drew on 1 passage of it.\n' +
         'This turn used about 4,100 tokens and cost $0.01.'
     );
+  });
+});
+
+describe('the register (f-registers t-125)', () => {
+  it.each([
+    [
+      'teaching',
+      'module',
+      'Began in a teaching register: direct, and asking you to look further, where this part of the journey starts.',
+    ],
+    [
+      'guiding',
+      'module',
+      'Began in a guiding register: gentle, and holding space, where this part of the journey starts.',
+    ],
+    [
+      'guiding',
+      'safety',
+      'Began in a guiding register: gentle, and holding space, because something hard came up recently.',
+    ],
+    ['teaching', null, 'Began in a teaching register: direct, and asking you to look further.'],
+  ] as const)('%s from %s', (register, registerSource, sentence) => {
+    expect(registerSentence(turn({ register, registerSource }))).toBe(sentence);
+  });
+
+  it('says nothing for a turn with no register, or no turn', () => {
+    expect(registerSentence(turn())).toBeNull();
+    expect(registerSentence(null)).toBeNull();
+  });
+
+  it('sits in the detail between what the turn did and what it cost, never in the line', () => {
+    const data = input({ turn: turn({ register: 'teaching', registerSource: 'module' }) });
+    const parts = accountParts(data);
+
+    expect(accountLine(parts)).toBe(NOTHING_WRITTEN);
+    expect(accountDetail(data, parts).split('\n')).toEqual([
+      `${NOTHING_WRITTEN}.`,
+      expect.stringMatching(/^Began in a teaching register/),
+      expect.stringMatching(/^This turn used/),
+    ]);
   });
 });
 

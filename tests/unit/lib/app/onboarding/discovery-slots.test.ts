@@ -226,12 +226,16 @@ describe('the module that asks them declares them', () => {
     ]);
     expect(describeConfigSchema(onboarding!.configSchema)).toEqual([
       expect.objectContaining({ key: 'coreSetOnly', type: 'boolean', default: false }),
+      expect.objectContaining({ key: 'register', type: 'enum', default: 'guiding' }),
     ]);
     const others = getRegisteredModules().filter((other) => other.slug !== 'onboarding');
     expect(others.length).toBeGreaterThan(0);
     for (const other of others) {
       expect(other.slotDefinitions).toBeUndefined();
-      expect(describeConfigSchema(other.configSchema)).toEqual([]);
+      // Every module carries its register (t-125); only Onboarding has the switch.
+      expect(describeConfigSchema(other.configSchema).map((field) => field.key)).toEqual([
+        'register',
+      ]);
     }
   });
 
@@ -315,7 +319,9 @@ describe('the module that asks them declares them', () => {
     expect(getRegisteredModules()).toHaveLength(17);
     expect(getRegisteredModule('onboarding')?.slotDefinitions).toBeUndefined();
     // The switch still has its schema, so the Config tab and the stored value stay valid.
-    expect(describeConfigSchema(getRegisteredModule('onboarding')!.configSchema)).toHaveLength(1);
+    expect(
+      describeConfigSchema(getRegisteredModule('onboarding')!.configSchema).map((f) => f.key)
+    ).toEqual(['coreSetOnly', 'register']);
   });
 
   it('re-registers and runs Daybreak’s slot sync after a question write', async () => {
