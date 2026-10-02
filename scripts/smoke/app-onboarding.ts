@@ -86,6 +86,7 @@ import {
 } from '@/lib/app/conversation/opening';
 import { readTranscript } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
+import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const PREFIX = 'smoke-app-onboarding';
@@ -446,8 +447,8 @@ async function main(): Promise<void> {
       'the opening is a completed turn on the facilitator seat'
     );
     const session = {
-      user: { id: user.id, role: 'USER' },
-      principal: { userId: user.id, role: 'USER', credential: 'session' },
+      user: { id: user.id, role: DEFAULT_USER_ROLE },
+      principal: { userId: user.id, role: DEFAULT_USER_ROLE, credential: 'session' },
       unattributedReads: {
         conversation: false,
         dataset: false,
