@@ -20,7 +20,10 @@
  * hand-off (t-106): refused with questions ahead, then, once every one is
  * answered or skipped, onboarding completed and Values entered by the real
  * engine (which needs Values live), read back by the map, repeated with no new
- * event, and an answer still revised afterwards.
+ * event, and an answer still revised afterwards. Then the opening (t-122): owed
+ * after the hand-off, run through the real turn hook and the real model, its
+ * kickoff hidden from the transcript read, and asked again as a replay with no
+ * second model call.
  *
  * Needs a seeded, migrated database: the map published (`001-journey-map`),
  * Onboarding and Values active (their activation migrations or seeds), and the
@@ -74,6 +77,15 @@ import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { drainStreamChat } from '@/lib/orchestration/evaluations/drain-stream-chat';
 import { runAsOrg } from '@/lib/tenancy/context';
+import {
+  openingDue,
+  OPENING_MESSAGE,
+  OPENING_TURN_ID,
+  prepareOpening,
+  runOpening,
+} from '@/lib/app/conversation/opening';
+import { readTranscript } from '@/lib/app/conversation/transcript';
+import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 
 const PREFIX = 'smoke-app-onboarding';
@@ -108,6 +120,8 @@ async function cleanup(userId: string): Promise<void> {
   // The real turn (step 8): its messages, its cost and its conversation.
   await prisma.aiMessage.deleteMany({ where: { conversation: { userId } } }).catch(() => undefined);
   await prisma.aiCostLog.deleteMany({ where: { userId } }).catch(() => undefined);
+  // The opening (step 10) is a recorded turn.
+  await prisma.appTurn.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.aiConversation.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.user.deleteMany({ where: { id: userId } }).catch(() => undefined);
 }
@@ -387,6 +401,88 @@ async function main(): Promise<void> {
       revisedAfter.outcome === 'written' && revisedAfter.version === 3,
       'an answer is still revised after the hand-off, as version 3'
     );
+
+    console.log('\n10. The AI opens the first conversation, once (t-122)');
+    // Step 8 spoke to the facilitator through the platform directly; a person
+    // who never did is the one the opening is for, so that conversation goes.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await prisma.aiMessage.deleteMany({ where: { conversation: { userId: user.id } } });
+    await prisma.aiConversation.deleteMany({ where: { userId: user.id } });
+    const verified = await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true },
+    });
+    const subject = { id: verified.id, email: verified.email, emailVerified: true };
+    check(await openingDue(subject), 'after the hand-off, the opening is owed');
+    const prepared = await prepareOpening(subject);
+    if (!prepared.ready) throw new Error(`the opening was not ready: ${prepared.reason}`);
+    const drainOpening = async () => {
+      const events = await runAsOrg(INSTALL_ORG_ID, () =>
+        runOpening(prepared.surface, { user: subject })
+      );
+      let text = '';
+      let ended: string | null = null;
+      for await (const event of events) {
+        if (event.type === 'content') text += event.delta;
+        if (event.type === 'content_reset') text = '';
+        if (event.type === 'done') ended = 'done';
+        if (event.type === 'error') ended = `error ${event.code}`;
+      }
+      return { text, ended };
+    };
+    const opened = await drainOpening();
+    if (opened.ended !== 'done') throw new Error(`the opening did not complete: ${opened.ended}`);
+    console.log(`    the opening: ${opened.text.replace(/\s+/g, ' ').slice(0, 240)}`);
+    check(opened.text.trim().length > 0, 'the AI spoke first');
+    check(
+      /lighthouse|dawn|smoke answer|revised after the hand-off/i.test(opened.text),
+      'it opened on the person’s own answers, not a question’s words'
+    );
+    const openingRow = await prisma.appTurn.findUnique({
+      where: { userId_turnId: { userId: user.id, turnId: OPENING_TURN_ID } },
+    });
+    check(
+      openingRow?.status === 'completed' && openingRow.seat === CONVERSATION_SEAT,
+      'the opening is a completed turn on the facilitator seat'
+    );
+    const session = {
+      user: { id: user.id, role: 'USER' },
+      principal: { userId: user.id, role: 'USER', credential: 'session' },
+      unattributedReads: {
+        conversation: false,
+        dataset: false,
+        execution: false,
+        experiment: false,
+      },
+    } as unknown as AuthenticatedSession;
+    const read = await readTranscript(session, CONVERSATION_SEAT);
+    check(
+      read.entries.length === 1 && read.entries[0].kind === 'reply',
+      'the transcript reads one entry: the AI’s reply'
+    );
+    check(
+      !JSON.stringify(read.entries).includes(OPENING_MESSAGE.slice(0, 40)),
+      'the kickoff never appears in the transcript'
+    );
+    check(!(await openingDue(subject)), 'the opening is no longer owed');
+    // The platform logs the turn's embedding cost after the stream; let it land.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const costsBefore = await prisma.aiCostLog.count({ where: { userId: user.id } });
+    const replayed = await drainOpening();
+    check(
+      replayed.ended === 'done' && replayed.text === opened.text,
+      'asked again, it replays the reply'
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    check(
+      (await prisma.aiCostLog.count({ where: { userId: user.id } })) === costsBefore,
+      'with no second model call'
+    );
+    const rows = await prisma.appTurn.findMany({
+      where: { userId: user.id, turnId: OPENING_TURN_ID },
+    });
+    check(rows.length === 1 && rows[0].attempts === 1, 'and one opening on the ledger, run once');
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     console.log('\n✓ smoke:app-onboarding passed');
   } finally {

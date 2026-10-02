@@ -41,11 +41,14 @@ function openTurn() {
   };
 }
 
+/** Whether the transcript read says the AI's opening is owed (t-122). */
+let openingOwed = false;
+
 const emptyTranscript = () =>
   new Response(
     JSON.stringify({
       success: true,
-      data: { seat: 'facilitator', conversationId: null, entries: [] },
+      data: { seat: 'facilitator', conversationId: null, entries: [], opening: openingOwed },
     }),
     { status: 200 }
   );
@@ -62,10 +65,20 @@ let statusReads = 0;
 let statusDown = false;
 let voiceInput = 'off';
 let voiceDown = false;
+/** Each request to the opening route, with whatever body it carried. */
+const openingRequests: (BodyInit | null | undefined)[] = [];
+let refuseOpening: Response | null = null;
 
 const fetchImpl = vi.fn(
   async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (href === '/api/v1/app/conversation/opening') {
+      openingRequests.push(init?.body);
+      if (refuseOpening) return refuseOpening;
+      const turn = openTurn();
+      turns.push(turn);
+      return turn.response;
+    }
     if (href.startsWith('/api/v1/app/conversation')) return emptyTranscript();
     if (href.startsWith('/api/v1/app/agent/status')) {
       statusReads += 1;
@@ -110,6 +123,9 @@ beforeEach(() => {
   statusDown = false;
   voiceInput = 'off';
   voiceDown = false;
+  openingOwed = false;
+  openingRequests.length = 0;
+  refuseOpening = null;
   vi.mocked(fetchImpl).mockClear();
 });
 
@@ -681,5 +697,128 @@ describe('every finished turn tells the spend meter, once', () => {
 
     hook.unmount();
     expect(onTurnSettled).not.toHaveBeenCalled();
+  });
+});
+
+describe('the AI speaks first, once (t-122)', () => {
+  const transcriptReads = () =>
+    vi
+      .mocked(fetchImpl)
+      .mock.calls.filter(
+        ([url]) => typeof url === 'string' && url.startsWith('/api/v1/app/conversation?')
+      ).length;
+
+  it('asks for the opening when the read says it is owed, showing no words of the person’s', async () => {
+    openingOwed = true;
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    // No body: nothing the client holds reaches the opening's words.
+    expect(openingRequests[0]).toBeUndefined();
+    await waitFor(() => expect(result.current.live?.opening).toBe(true));
+    expect(result.current.live?.userText).toBe('');
+
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().push('content', { delta: 'You wrote about the lighthouse steps.' });
+      latest().push('done', {});
+      latest().close();
+    });
+
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0]).toMatchObject({
+      kind: 'reply',
+      text: 'You wrote about the lighthouse steps.',
+      turnId: 'app_opening_v1',
+    });
+    expect(result.current.draft).toBe('');
+    // Once: nothing asks again by itself.
+    expect(openingRequests).toHaveLength(1);
+  });
+
+  it('does not ask when the read says it is not owed', async () => {
+    await loaded();
+    expect(openingRequests).toHaveLength(0);
+  });
+
+  it('does not ask on the onboarding seat, whatever the read says', async () => {
+    openingOwed = true;
+    const hook = renderHook(() => useConversation({ seat: 'onboarding', fetchImpl }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    expect(openingRequests).toHaveLength(0);
+  });
+
+  it('leaves nothing behind when the opening does not land', async () => {
+    openingOwed = true;
+    refuseOpening = refusal(409, 'opening_not_due');
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(result.current.live).toBeNull();
+    expect(result.current.entries).toEqual([]);
+    expect(result.current.draft).toBe('');
+  });
+
+  it('leaves nothing behind when the opening ends without a reply', async () => {
+    openingOwed = true;
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    await failTurn('paused');
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(result.current.entries).toEqual([]);
+    expect(result.current.draft).toBe('');
+  });
+
+  it('holds a message sent while the opening is being answered', async () => {
+    openingOwed = true;
+    const { result } = renderHook(() => useConversation({ fetchImpl }));
+    await waitFor(() => expect(result.current.live?.opening).toBe(true));
+    const before = turns.length;
+    act(() => result.current.send('hello'));
+    expect(turns).toHaveLength(before);
+    expect(sentIds).toEqual([]);
+  });
+
+  it('asks the read again when the journey moves, and opens if it is now owed', async () => {
+    const { result, rerender } = renderHook(
+      ({ check }: { check: number }) => useConversation({ fetchImpl, checkOpening: check }),
+      { initialProps: { check: 0 } }
+    );
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(transcriptReads()).toBe(1);
+    expect(openingRequests).toHaveLength(0);
+
+    // The hand-off happened: the next read says the opening is owed.
+    openingOwed = true;
+    rerender({ check: 1 });
+
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    expect(transcriptReads()).toBe(2);
+  });
+
+  it('does not open over a conversation already under way, even if a read says so', async () => {
+    const { result, rerender } = renderHook(
+      ({ check }: { check: number }) => useConversation({ fetchImpl, checkOpening: check }),
+      { initialProps: { check: 0 } }
+    );
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    act(() => result.current.send('hello'));
+    await act(async () => {
+      latest().push('start', { conversationId: 'c1' });
+      latest().push('content', { delta: 'Hi.' });
+      latest().push('done', {});
+      latest().close();
+    });
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+
+    openingOwed = true;
+    rerender({ check: 1 });
+    await waitFor(() => expect(transcriptReads()).toBe(2));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(openingRequests).toHaveLength(0);
   });
 });

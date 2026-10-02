@@ -26,11 +26,13 @@ components/app/conversation/
   use-typed-text.ts                            the word-at-a-time reveal
   turns.module.css                             `rise` and the thinking dots' `breathe`
 lib/app/conversation/
-  client.ts                                    streamTurn() · fetchTranscript() · mintTurnId()
+  client.ts                                    streamTurn() · streamOpening() · fetchTranscript() · mintTurnId()
   events.ts                                    the leaf SSE event schema
   transcript.ts                                readTranscript() · assembleTranscript()
+  opening.ts · opening-id.ts                   the AI's opening after onboarding (t-122)
   copy.ts                                      every word the pane says of its own
 app/api/v1/app/conversation/route.ts           GET — the transcript, read back
+app/api/v1/app/conversation/opening/route.ts   POST — the AI's opening, streamed (t-122)
 ```
 
 ## The transcript read — `GET /api/v1/app/conversation?seat=`
@@ -61,7 +63,7 @@ arm nor an admin's ownerless arm can widen a transcript.
 **The shape:**
 
 ```ts
-{ seat, conversationId: string | null, entries: TranscriptEntry[] }
+{ seat, conversationId: string | null, entries: TranscriptEntry[], opening?: boolean }
 
 { kind: 'user',  id, text, at, turnId: string | null }
 { kind: 'reply', id, text, at, turnId, citations, turn: TurnAccount | null }
@@ -69,6 +71,10 @@ arm nor an admin's ownerless arm can widen a transcript.
 //   fingerprintVersion, inputTokens, outputTokens, costUsd (null = unpriced,
 //   never 0), pricing, errorCode, startedAt, completedAt
 ```
+
+`opening` is on the facilitator seat only: whether the pane should ask for the
+AI's opening now — true only on an empty transcript, and only when `openingDue`
+says so ([`onboarding.md`](./onboarding.md#the-ai-opens-the-first-conversation-t-122)).
 
 `turn` is `null` on a reply written before the seam existed. A tool-using
 turn writes one assistant row per pass; consecutive assistant rows become one
@@ -100,7 +106,12 @@ second request with the same id gets", "The deadlines"):
   its final row is written a moment before the link. Pre-seam rows have no turn
   row and are kept.
 
-Both are pure (`assembleTranscript`) and pinned in
+And one of Lelañea's own: **the opening's kickoff is never shown** (t-122).
+The AI's opening is a turn whose user row the app wrote; a user row under
+`OPENING_TURN_ID` is dropped, and a retried opening drops what its earlier
+attempt left behind.
+
+All are pure (`assembleTranscript`) and pinned in
 `tests/unit/lib/app/conversation/transcript.test.ts` against fixtures that
 first show the thing corrected is there.
 
@@ -529,6 +540,9 @@ the chrome's words.
 | `tests/unit/components/app/conversation/use-typed-text.test.tsx`   | The pace, the half-word held back, the pace kept across fast chunks, a replaced text starting over, reduced motion whole                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `tests/unit/components/app/shell/conversation-pane.test.tsx`       | Enter sends and Shift+Enter does not; the box clears on `start`; the thinking row until first words and its label at `still_thinking`; status strings never shown; reduced motion; `inert` off-screen; each ending in the pane's words and never the frame's; the monthly limit with its figures and date, no control beside it, and a sentence when the figures did not parse; the same words sent again as the same id; `TURN_IN_FLIGHT`; a hard frame's every service and the words in the box; a soft frame's resource then the agent's turn; the status line for `paused` / `unavailable`, cleared on `available`; the account row collapsed, opening with `aria-expanded`, the same live and read back, only once the reply is shown, absent on an ending |
 | `tests/unit/components/app/conversation/use-conversation.test.tsx` | The id sent, then equal on the retry, for each retryable ending; `not_sent` and `TURN_ID_REUSED` drop it; `TURN_IN_FLIGHT` mints nothing; a newer draft kept; the status read on mount and after an ending, no timer in the source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `tests/unit/lib/app/conversation/opening.test.ts`                  | When the opening is owed (the gate, the hand-off, nothing else said, not yet completed); the turn it runs carries the app's words under the opening's id; the words pass the input guard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `tests/unit/app/api/v1/app/conversation/opening/route.test.ts`     | No body read; `opening_not_due` and no surface; the chat sub-caps; API keys and signed-out callers refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `tests/unit/components/app/conversation/transcript.test.tsx`       | A live opening shows the thinking row and no bubble of the person's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tests/unit/lib/app/conversation/copy.test.ts`                     | `ceilingEnding`: the three beats; spend past the limit stated as it is; the reset read in UTC; a $0 limit with no date; no figures at all; each unusable figure dropping only its own clause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `tests/unit/lib/app/agent/endings.test.ts`                         | Each named refusal code maps to `not_sent`; every other platform code does not; no platform text in any frame                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `scripts/app/smoke-turn.ts` (steps 3c, 4, 6)                       | After a real turn, `/api/v1/app/conversation` returns that turn joined to its row; the down-and-back turn through the pane's own client — the plain ending as it parses it, then the same id running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |

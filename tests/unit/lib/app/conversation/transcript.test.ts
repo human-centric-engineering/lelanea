@@ -42,6 +42,7 @@ import {
   readTranscript,
 } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
+import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 import { toResourcesLibrary } from '@/lib/app/content/resource-view';
 import {
   fakeResourceStore,
@@ -444,6 +445,62 @@ describe('assembleTranscript', () => {
       [turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' })]
     );
     expect(entries[1]).toMatchObject({ kind: 'reply', citations: [citation] });
+  });
+});
+
+describe('assembleTranscript — the opening (t-122)', () => {
+  const KICKOFF = 'A note from the app, not words the person typed.';
+
+  it('never shows the kickoff: the AI’s reply stands first', () => {
+    const messages = [
+      user('k1', KICKOFF, 1, OPENING_TURN_ID),
+      assistant('a1', 'You wrote about the lighthouse steps.', 3),
+      user('u1', 'Yes, that place.', 10, 't1'),
+      assistant('a2', 'Tell me more.', 12),
+    ];
+    // The population: the kickoff row is in the fixture.
+    expect(messages.some((m) => m.content === KICKOFF)).toBe(true);
+
+    const entries = assemble(messages, [
+      turn(OPENING_TURN_ID, { userMessageId: 'k1', assistantMessageId: 'a1' }),
+      turn('t1', { userMessageId: 'u1', assistantMessageId: 'a2' }),
+    ]);
+
+    expect(entries.map((e) => e.id)).toEqual(['a1', 'u1', 'a2']);
+    expect(entries[0]).toMatchObject({
+      kind: 'reply',
+      turnId: OPENING_TURN_ID,
+      turn: { turnId: OPENING_TURN_ID, status: 'completed' },
+    });
+    expect(JSON.stringify(entries)).not.toContain(KICKOFF);
+  });
+
+  it('drops what a failed attempt left behind when the opening ran again', () => {
+    const messages = [
+      user('k1', KICKOFF, 1, OPENING_TURN_ID),
+      assistant('frag', 'You wrote ab', 2),
+      user('k2', KICKOFF, 10, OPENING_TURN_ID),
+      assistant('a1', 'You wrote about the lighthouse steps.', 12),
+    ];
+    const entries = assemble(messages, [
+      turn(OPENING_TURN_ID, { attempts: 2, userMessageId: 'k2', assistantMessageId: 'a1' }),
+    ]);
+    expect(entries.map((e) => e.id)).toEqual(['a1']);
+  });
+
+  it('shows nothing for an opening that failed and was never run again', () => {
+    const entries = assemble(
+      [user('k1', KICKOFF, 1, OPENING_TURN_ID), assistant('frag', 'You wrote ab', 2)],
+      [
+        turn(OPENING_TURN_ID, {
+          status: 'failed',
+          userMessageId: 'k1',
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+        }),
+      ]
+    );
+    expect(entries).toEqual([]);
   });
 });
 

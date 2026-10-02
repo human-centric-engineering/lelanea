@@ -33,6 +33,7 @@ import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conver
 import type { Transcript, TranscriptEntry } from '@/lib/app/conversation/transcript';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resourceSuggestionSchema } from '@/lib/app/resources/suggestion';
+import { TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 
 /** The seam's request shape on Daybreak's role route. */
 export function streamRouteFor(seat: string): string {
@@ -42,6 +43,9 @@ export function streamRouteFor(seat: string): string {
 export function transcriptRouteFor(seat: string): string {
   return `/api/v1/app/conversation?seat=${encodeURIComponent(seat)}`;
 }
+
+/** The AI's opening after onboarding (t-122): no body, the words are the server's. */
+export const OPENING_ROUTE = '/api/v1/app/conversation/opening';
 
 /** Whether a turn sent now can be expected to be answered (§08 t-55). Install-wide. */
 export const STATUS_ROUTE = '/api/v1/app/agent/status';
@@ -115,13 +119,66 @@ export interface TurnRequest {
  * type from the platform is not a broken turn.
  */
 export async function* streamTurn(request: TurnRequest): AsyncGenerator<ConversationEvent> {
-  const fetchImpl = request.fetchImpl ?? fetch;
-  const response = await fetchImpl(streamRouteFor(request.seat), {
+  yield* streamFrom(
+    request.fetchImpl ?? fetch,
+    streamRouteFor(request.seat),
+    JSON.stringify({ message: request.message, turnId: request.turnId }),
+    request.signal
+  );
+}
+
+/** How often, and how many times, an opening still running elsewhere is asked again. */
+export const OPENING_RETRY_MS = 3_000;
+export const OPENING_RETRIES = 20;
+
+/**
+ * Ask for the AI's opening and yield its frames (t-122). The same frames a
+ * turn streams, and the same {@link TurnRefused} before the first one: an
+ * opening not owed is refused with `opening_not_due`. Sends no body: nothing
+ * here reaches the opening's words.
+ *
+ * One still running — a reload, or a second tab, while it is answered — is
+ * refused `turn_in_flight`, and is asked again every {@link OPENING_RETRY_MS},
+ * up to {@link OPENING_RETRIES} times, until the ledger answers with the
+ * completed reply. A member's turn is never retried here: its in-flight
+ * refusal is the person's to retry.
+ */
+export async function* streamOpening(
+  options: { signal?: AbortSignal; fetchImpl?: typeof fetch; retryMs?: number } = {}
+): AsyncGenerator<ConversationEvent> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const retryMs = options.retryMs ?? OPENING_RETRY_MS;
+  for (let attempt = 0; ; attempt++) {
+    const frames = streamFrom(fetchImpl, OPENING_ROUTE, undefined, options.signal);
+    let first: IteratorResult<ConversationEvent>;
+    try {
+      // A refusal is thrown before the first frame, so read that far here.
+      first = await frames.next();
+    } catch (error) {
+      const inFlight = error instanceof TurnRefused && error.code === TURN_IN_FLIGHT;
+      if (!inFlight || attempt >= OPENING_RETRIES || options.signal?.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
+      if (options.signal?.aborted) throw error;
+      continue;
+    }
+    if (first.done) return;
+    yield first.value;
+    yield* frames;
+    return;
+  }
+}
+
+async function* streamFrom(
+  fetchImpl: typeof fetch,
+  url: string,
+  body: string | undefined,
+  signal: AbortSignal | undefined
+): AsyncGenerator<ConversationEvent> {
+  const response = await fetchImpl(url, {
     method: 'POST',
     credentials: 'include',
-    signal: request.signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: request.message, turnId: request.turnId }),
+    signal,
+    ...(body !== undefined && { headers: { 'Content-Type': 'application/json' }, body }),
   });
 
   if (!response.ok || !response.body) throw await refusalOf(response);
@@ -156,6 +213,7 @@ const transcriptEnvelopeSchema = z.object({
     seat: z.string(),
     conversationId: z.string().nullable(),
     entries: z.array(z.unknown()),
+    opening: z.boolean().optional(),
   }),
 });
 
@@ -324,11 +382,17 @@ function validateEntries(data: {
   seat: string;
   conversationId: string | null;
   entries: unknown[];
+  opening?: boolean;
 }): Transcript {
   const entries: TranscriptEntry[] = [];
   for (const raw of data.entries) {
     const parsed = entrySchema.safeParse(raw);
     if (parsed.success) entries.push(parsed.data);
   }
-  return { seat: data.seat, conversationId: data.conversationId, entries };
+  return {
+    seat: data.seat,
+    conversationId: data.conversationId,
+    entries,
+    ...(data.opening !== undefined && { opening: data.opening }),
+  };
 }

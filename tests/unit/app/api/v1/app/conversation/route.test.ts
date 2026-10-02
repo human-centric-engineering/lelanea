@@ -17,7 +17,8 @@ import { mockAuthenticatedUser, mockUnauthenticatedUser } from '@/tests/helpers/
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const OTHER = 'cmu7other0000000000000000';
 
-const { store, readTranscript, routeLog } = vi.hoisted(() => ({
+const { store, readTranscript, routeLog, openingDue } = vi.hoisted(() => ({
+  openingDue: vi.fn(),
   store: new Map<string, { seat: string; conversationId: string | null; entries: unknown[] }>(),
   readTranscript: vi.fn(),
   routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -30,6 +31,8 @@ vi.mock('@/lib/app/conversation/transcript', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/app/conversation/transcript')>();
   return { ...actual, readTranscript };
 });
+
+vi.mock('@/lib/app/conversation/opening', () => ({ openingDue }));
 
 import { auth } from '@/lib/auth/config';
 import { GET } from '@/app/api/v1/app/conversation/route';
@@ -47,6 +50,7 @@ beforeEach(() => {
     return store.get(`${session.user.id}:${seat}`) ?? { seat, conversationId: null, entries: [] };
   });
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
+  openingDue.mockResolvedValue(false);
 });
 
 describe('GET /api/v1/app/conversation', () => {
@@ -133,5 +137,38 @@ describe('GET /api/v1/app/conversation', () => {
       'Own conversation read',
       expect.objectContaining({ entries: 1, resumed: true })
     );
+  });
+});
+
+describe('the opening flag (t-122)', () => {
+  it('says the opening is owed on an empty facilitator transcript the opening rules allow', async () => {
+    openingDue.mockResolvedValue(true);
+    const body = await (await GET(request())).json();
+    expect(body.data.opening).toBe(true);
+    expect(openingDue).toHaveBeenCalledWith(expect.objectContaining({ id: ME }));
+  });
+
+  it('is false when the opening rules say no', async () => {
+    const body = await (await GET(request())).json();
+    expect(body.data.opening).toBe(false);
+  });
+
+  it('is false, without asking, once anything is in the transcript', async () => {
+    openingDue.mockResolvedValue(true);
+    store.set(`${ME}:facilitator`, {
+      seat: 'facilitator',
+      conversationId: 'c-mine',
+      entries: [{ kind: 'reply', id: 'r1', text: 'Hello', at: 'now', turnId: 'o' }],
+    });
+    const body = await (await GET(request())).json();
+    expect(body.data.opening).toBe(false);
+    expect(openingDue).not.toHaveBeenCalled();
+  });
+
+  it('is absent on the onboarding seat: the opening is the facilitator’s', async () => {
+    openingDue.mockResolvedValue(true);
+    const body = await (await GET(request('/api/v1/app/conversation?seat=onboarding'))).json();
+    expect(body.data).not.toHaveProperty('opening');
+    expect(openingDue).not.toHaveBeenCalled();
   });
 });

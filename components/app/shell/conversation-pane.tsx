@@ -100,6 +100,7 @@ export function ConversationPane() {
     noteSlotsWritten,
     noteTurnSettled,
     conversationSeat,
+    journeyMoved,
     ask,
     takeAsk,
   } = useShellLayout();
@@ -116,6 +117,9 @@ export function ConversationPane() {
     seat: conversationSeat,
     onSlotsWritten: noteSlotsWritten,
     onTurnSettled: noteTurnSettled,
+    // Beginning the journey moves it, and is what makes the AI's opening owed
+    // (t-122): the hook asks again whether to open.
+    checkOpening: journeyMoved,
   });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
