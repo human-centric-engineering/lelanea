@@ -42,6 +42,7 @@ import {
   readTranscript,
 } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
+import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 import { toResourcesLibrary } from '@/lib/app/content/resource-view';
 import {
   fakeResourceStore,
@@ -130,6 +131,7 @@ function turn(
     errorCode: string | null;
     modelId: string | null;
     fingerprintVersion: string | null;
+    startedAt: Date;
   }> = {}
 ) {
   return {
@@ -447,6 +449,101 @@ describe('assembleTranscript', () => {
   });
 });
 
+describe('assembleTranscript — the opening (t-122)', () => {
+  it('puts the AI’s opening first, with no row of the person’s, joined to its turn', () => {
+    // The agent opens the turn (`openingTurn`): the platform stores no user row.
+    const entries = assemble(
+      [
+        assistant('a1', 'You wrote about the lighthouse steps.', 3),
+        user('u1', 'Yes, that place.', 10, 't1'),
+        assistant('a2', 'Tell me more.', 12),
+      ],
+      [
+        turn(OPENING_TURN_ID, { userMessageId: null, assistantMessageId: 'a1' }),
+        turn('t1', { userMessageId: 'u1', assistantMessageId: 'a2' }),
+      ]
+    );
+
+    expect(entries.map((e) => e.id)).toEqual(['a1', 'u1', 'a2']);
+    expect(entries[0]).toMatchObject({
+      kind: 'reply',
+      turnId: OPENING_TURN_ID,
+      turn: { turnId: OPENING_TURN_ID, status: 'completed' },
+    });
+  });
+  it('keeps only the latest attempt’s rows when the opening ran again', () => {
+    // A first attempt failed after a tool pass; the second ran whole. Neither
+    // has a row of the person's to scope it by: the turn row's start does.
+    const messages = [
+      assistant('frag', 'Let me look at what you wrote', 1),
+      assistant('a1', 'You wrote about the lighthouse steps.', 30),
+    ];
+    // The population: the fragment is in the fixture, before any user row.
+    expect(messages[0].id).toBe('frag');
+
+    const entries = assemble(messages, [
+      turn(OPENING_TURN_ID, {
+        attempts: 2,
+        userMessageId: null,
+        assistantMessageId: 'a1',
+        startedAt: at(25),
+      }),
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: 'a1', text: 'You wrote about the lighthouse steps.' });
+  });
+
+  it('shows nothing for an opening that failed with no reply linked', () => {
+    const entries = assemble(
+      [assistant('frag', 'Let me look at what you wrote', 1)],
+      [
+        turn(OPENING_TURN_ID, {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+        }),
+      ]
+    );
+    expect(entries).toEqual([]);
+  });
+
+  it('reads an earlier version’s opening as an opening, and goes by the latest', () => {
+    const entries = assemble(
+      [assistant('frag', 'Let me look', 1), assistant('a1', 'You wrote about bread.', 30)],
+      [
+        turn('app_opening_v0', {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+          startedAt: at(0),
+        }),
+        turn(OPENING_TURN_ID, { userMessageId: null, assistantMessageId: 'a1', startedAt: at(25) }),
+      ]
+    );
+    expect(entries.map((e) => e.id)).toEqual(['a1']);
+  });
+
+  it('scopes only the rows before the person’s first message', () => {
+    // A later turn's own passes are the later turn's, whatever the opening says.
+    const entries = assemble(
+      [assistant('a1', 'Opening.', 3), user('u1', 'Hello', 10, 't1'), assistant('a2', 'Hi.', 12)],
+      [
+        turn(OPENING_TURN_ID, {
+          status: 'failed',
+          userMessageId: null,
+          assistantMessageId: null,
+          errorCode: 'timed_out',
+        }),
+        turn('t1', { userMessageId: 'u1', assistantMessageId: 'a2' }),
+      ]
+    );
+    expect(entries.map((e) => e.id)).toEqual(['u1', 'a2']);
+  });
+});
+
 describe('readTranscript', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -488,9 +585,18 @@ describe('readTranscript', () => {
     // Through the platform's visibility helper, composed with AND and narrowed
     // to the owner: the shared and ownerless arms cannot widen a transcript.
     expect(where.conversation.AND).toEqual([{ OR: [{ userId: ME }] }, { userId: ME }]);
+    // Under the caller's id: this conversation's turns, and the opening's
+    // row on this seat while a re-run has its conversation id unset (t-122).
     expect(findTurns.mock.calls[0][0].where).toEqual({
       userId: ME,
-      conversationId: CONVERSATION,
+      OR: [
+        { conversationId: CONVERSATION },
+        {
+          seat: CONVERSATION_SEAT,
+          conversationId: null,
+          turnId: { startsWith: 'app_opening_' },
+        },
+      ],
     });
     expect(transcript.conversationId).toBe(CONVERSATION);
     expect(transcript.entries).toHaveLength(2);

@@ -11,6 +11,10 @@
  * No conversation yet is an empty transcript with `conversationId: null`, not
  * a 404 — the pane renders either way.
  *
+ * On the facilitator seat the answer also carries `opening`: whether the pane
+ * should ask the AI to speak first (`POST …/conversation/opening`, t-122).
+ * Only when nothing is in the transcript; `openingDue` says the rest.
+ *
  * Authentication: required. Rate limiting: inherited from the `/api/v1/**`
  * section cap. Caching: `no-store` — a turn may be settling as this is read.
  *
@@ -25,6 +29,7 @@ import { getRouteLogger } from '@/lib/api/context';
 import { validateQueryParams } from '@/lib/api/validation';
 import { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { readTranscript } from '@/lib/app/conversation/transcript';
+import { openingDue } from '@/lib/app/conversation/opening';
 
 const querySchema = z.object({
   seat: z
@@ -49,12 +54,18 @@ export const GET = withAuth(async (request, session) => {
   const seat = query.seat ?? CONVERSATION_SEAT;
 
   const transcript = await readTranscript(session, seat);
+  // Asked only of an empty transcript: a conversation under way has no opening
+  // owed, and most reads are of one (t-122 review round 3).
+  if (seat === CONVERSATION_SEAT) {
+    transcript.opening = transcript.entries.length === 0 && (await openingDue(session.user));
+  }
 
   log.info('Own conversation read', {
     userId: session.user.id,
     seat,
     entries: transcript.entries.length,
     resumed: transcript.conversationId !== null,
+    opening: transcript.opening ?? false,
   });
 
   return successResponse(transcript, undefined, { headers: { 'Cache-Control': 'no-store' } });

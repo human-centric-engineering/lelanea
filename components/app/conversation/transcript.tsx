@@ -140,7 +140,10 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
       : [reply];
   });
   if (live) {
-    nodes.push(<UserTurn key={`user:live:${live.turnId}`} text={live.userText} rise />);
+    // The AI's opening has no words of the person's to show (t-122).
+    if (!live.opening) {
+      nodes.push(<UserTurn key={`user:live:${live.turnId}`} text={live.userText} rise />);
+    }
     if (live.crisisText) {
       nodes.push(
         <CrisisRow

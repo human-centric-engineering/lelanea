@@ -22,6 +22,7 @@ with it. What exists so far:
 | Begin the journey: into Values        | `lib/app/onboarding/hand-off.ts`                                                 | t-106 |
 | The step, and its route               | `components/app/onboarding/begin-journey.tsx`, `app/api/v1/app/onboarding/begin` | t-106 |
 | The Values module, `active`           | migration + seed `022-activate-values`                                           | t-106 |
+| The AI opens the first conversation   | `lib/app/conversation/opening.ts`, `app/api/v1/app/conversation/opening`         | t-122 |
 
 ## The journey starts when the gate passes
 
@@ -103,6 +104,13 @@ person wants. Owner ruling, 30 Sept 2026, on where they live:
   offering it, without the preamble.
 - **The answer box** has a `<FieldHelp>`: there is no right length or right
   answer, and it can be changed any time in the module's area.
+- **Only past the gate.** The write route refuses an answer, a skip or a
+  leave (`403`, nothing written) from anyone the shell layout would send to
+  the gate (`hasPassedGate`, `lib/app/gateway/gate.ts`, t-124). The surface
+  never shows the questions before the gate; this closes the API, where an
+  answer could otherwise be given before the terms it is given under are
+  accepted. The first-run route needs no such check: it writes only on a
+  journey, and only passing the gate starts one.
 
 **How it is held.** Nothing lives only in the browser. The surface keeps
 what it saved on the page, so a Back navigation that restores older server
@@ -221,16 +229,88 @@ waiting in Onboarding, and that Values is not written yet.
   module says `produces.revisitable: true`). Nothing about the questions reads
   the node's status: answers are slot values, and `recordNodeProgress` still
   takes a skip on a completed node.
-- **The conversation** is already on the facilitator seat by then (t-105). The
-  `after` framing in `answers-context.ts` tells the AI to open the first
-  conversation after onboarding on something the person wrote. That the AI
-  speaks first, unprompted, is t-122 (owner ruling, 1 Oct 2026): nothing in
-  Sunrise or Daybreak can start a turn without a message from the person.
+- **The conversation** is already on the facilitator seat by then (t-105),
+  and the AI speaks first: see the next section.
 
 **Proved on a real database** by `npm run smoke:app-onboarding` step 9:
 refused with questions ahead, then onboarding completed and Values entered by
 the real engine, read back by the map as done and current, repeated with no new
 event, and an answer revised afterwards.
+
+## The AI opens the first conversation (t-122)
+
+Owner ruling, 1 Oct 2026: after the hand-off the AI speaks first, on the
+person's own words. `lib/app/conversation/opening.ts` builds it out of the
+pieces a turn already has, and Sunrise's `openingTurn` (#474), which lets the
+agent open a turn with no user message:
+
+- **A turn like any other.** `POST /api/v1/app/conversation/opening` runs a
+  facilitator turn through `runFacilitationTurn` (divergence Row 18), so it is
+  metered, deadlined and recorded on `app_turn` as a member's is. What steers
+  it is `OPENING_MESSAGE`, written on the server and passed as
+  `openingTurn.content`; the route reads no body, so nothing a client sends
+  reaches it. The answers it opens on are already in context: t-105's block
+  rides on the facilitator seat too.
+- **Nothing in the person's name.** `openingTurn` is injected as a system
+  message and never stored as a user row, so the person's transcript, the
+  model's later history, their export and Sunrise's analytics hold only the
+  AI's reply. (A first build sent the instruction as the person's message and
+  filtered it out of one reader; review round 1 found the seam.) Sunrise still
+  titles the new conversation from it, which only an admin sees.
+- **Once per person, keyed on the turn id.** Every opening runs under
+  `OPENING_TURN_ID`, and the ledger is unique on (person, turn id): a second
+  request while it runs is `turn_in_flight`, one after it completed replays
+  the recorded reply with no model call, one after it failed runs it again.
+  New words need a new id (bump its version), and an old opening then counts
+  as having spoken, so nobody is opened twice.
+- **When it is owed** (`openingDue`): past the gate, handed off
+  (`handedOffFrom`), nothing said on the facilitator seat, an agent there to
+  speak, and the opening not yet completed. "Said" is any message of the
+  person's in a facilitator conversation (the opening writes none, so it
+  needs no exception), or a crisis safety event: a message answered with the
+  resource alone is stored nowhere, and a person who reached for help is not
+  then greeted brightly. Any other recorded turn on the seat counts as well,
+  an earlier version's opening included, so bumping the id opens nobody
+  twice. An opening that has failed `MAX_OPENING_ATTEMPTS` (3) times is given
+  up on: each attempt is a model call, and a cause that keeps failing it would
+  otherwise be paid for on every load. The route refuses on the same terms,
+  so the pane is never told to ask for an opening the route will refuse. Someone who typed
+  to the facilitator before pressing Begin has already spoken and is not
+  opened on.
+- **No chat sub-caps on the route.** They bound model calls, and the ledger
+  already holds this to one per person; charging them let the pane's polling
+  of an opening in flight spend the person's chat allowance.
+- **The pane** reads `opening` off the transcript read (facilitator seat,
+  empty transcript only) and asks when idle; it asks the read again when the
+  shell's journey-moved count changes, which Begin bumps. While it runs the
+  thinking row shows and the composer waits. One still running elsewhere (a
+  reload, a second tab) is asked again every few seconds until it lands as a
+  replay. One that does not land leaves nothing behind: no ending row, nothing
+  in the box. A connection that drops mid-opening reads the transcript again,
+  adopting the reply if the turn completed server-side; at most twice, and
+  never after an ending the server chose (an error frame, a refusal, an
+  opening still in flight past the client's patience), which asking again
+  would only meet again while the composer waited.
+- **What it is told** (`OPENING_MESSAGE`) points at the answer lines by their
+  `> ` marker and forbids quoting a question or an example from her own
+  instructions as theirs. Without that, the pinned model, given thin answers,
+  quoted a question's wording or an example from the voice prompt as
+  something the person had said.
+- **The transcript scopes it by its turn row.** With no row of the person's
+  to bound it, the assistant rows before their first message are the
+  opening's only from its latest attempt's start, and none are when it failed
+  with no reply linked. The read takes the opening's row even while its
+  conversation id is unset (a re-run clears it at the claim), and matches
+  every version of the id (`isOpeningTurnId`). The ledger's reply lookup
+  reaches a few seconds before the claim for an opening only
+  (`NO_USER_ROW_GRACE_MS`), against clock skew.
+
+**Proved on a real database** by `npm run smoke:app-onboarding` step 10: the
+opening owed after the hand-off, run through the real hook and model, quoting
+the person exactly (every quoted span is in one of their answers, which
+step 10 gives the texture of a person's), no row stored in their name, then
+asked again and replayed
+with no second model call, and no longer owed.
 
 ## A discovery answer is a data slot
 
@@ -398,6 +478,9 @@ carry the outcome, and the history dialog is shared by every content
 collection. The next question save, import or boot repairs either.
 
 ## Anti-patterns
+
+- **Letting a client say what the opening says.** Its words are the
+  server's; the route reads no body.
 
 - **Grading a discovery question `special_category`** to protect it. That
   destroys the answer. See above.

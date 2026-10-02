@@ -82,3 +82,13 @@ export async function gateRedirectFor(user: GateSubject): Promise<string | null>
   const status = await getGateStatus(user.id);
   return status.complete ? null : BEGIN_ROUTE;
 }
+
+/**
+ * Whether this person is past the gate — the same answer the shell layout acts
+ * on. For a route that writes something only someone past the gate may write:
+ * the surface never shows such a write before the gate, but the API is reachable
+ * by anyone signed in (t-124).
+ */
+export async function hasPassedGate(user: GateSubject): Promise<boolean> {
+  return (await gateRedirectFor(user)) === null;
+}

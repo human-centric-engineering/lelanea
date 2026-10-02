@@ -245,4 +245,16 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'may this caller see", which is not the question — the caller never sees ' +
       'the conversation, only the seat label of their own spend. §08 t-56.',
   },
+  {
+    path: 'lib/app/conversation/opening.ts',
+    disposition: 'by-design',
+    reason:
+      'whether a member has said anything on the facilitator seat, before the AI ' +
+      'opens the conversation for them: one `findFirst` for a user-role message in ' +
+      'a facilitation conversation whose `userId` is the member — selecting only ' +
+      'the id, never a word. Called from the opening route with the session’s own ' +
+      'user, and from the transcript read the same way; the question is about the ' +
+      'member’s own rows only, so an ownerless or shared thread matching nothing ' +
+      'is the right answer, not a gap. f-onboarding t-122.',
+  },
 ];

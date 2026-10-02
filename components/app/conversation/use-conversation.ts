@@ -8,6 +8,7 @@ import {
   fetchVoiceInput,
   type GenerationStatus,
   mintTurnId,
+  streamOpening,
   streamTurn,
   TurnRefused,
   type VoiceInputState,
@@ -18,6 +19,7 @@ import type {
   CrisisResource,
 } from '@/lib/app/conversation/events';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
+import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 import type { TranscriptEntry } from '@/lib/app/conversation/transcript';
 import {
   ENDING_CRISIS,
@@ -87,6 +89,21 @@ import type { Citation } from '@/types/orchestration';
  * On a retry the earlier attempt's ending row is removed: the retry
  * supersedes it, as the transcript read collapses the attempts to one.
  *
+ * ## The AI speaks first, once (t-122)
+ *
+ * When the transcript read says `opening`, the hook asks for the AI's opening
+ * (`streamOpening`) as soon as the transcript is idle and empty, and asks the
+ * read again whenever `checkOpening` changes — the shell bumps it when the
+ * journey moves, which is when the hand-off happens. The opening is a live
+ * turn like any other, with three differences: there is no bubble of the
+ * person's (the words are the app's, and never shown); nothing goes into the
+ * box; and an opening that does not complete leaves nothing behind — the
+ * person can simply speak, and the next read offers it again if it is still
+ * owed. A connection that drops mid-opening reads the transcript again, at
+ * most {@link MAX_OPENING_RECHECKS} times: the turn ran on server-side, so the
+ * reply is adopted, or asked for. One still running (a reload, a second tab) is asked again every few
+ * seconds, showing the thinking row, until it lands as a replay.
+ *
  * **The status read** is asked once on mount and again after every ending,
  * never on a timer. `paused` and `unavailable` put a line above the composer;
  * `available`, or a turn that completes, clears it.
@@ -142,6 +159,8 @@ export interface LiveTurn {
   resource?: CrisisResource;
   /** The same frame's `message` — the whole resource as text — shown when `resource` did not parse. */
   crisisText?: string;
+  /** The AI's opening (t-122): there are no words of the person's to show. */
+  opening?: true;
 }
 
 export interface ConversationState {
@@ -182,14 +201,23 @@ interface Options {
    * and does not call it.
    */
   onTurnSettled?: () => void;
+  /**
+   * Ask the transcript read again whether the AI's opening is owed (t-122),
+   * whenever this changes. The shell passes its journey-moved count: beginning
+   * the journey is what makes the opening owed.
+   */
+  checkOpening?: number;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
 }
 
+/** How many times an opening that did not land reads the transcript again (t-122). */
+export const MAX_OPENING_RECHECKS = 2;
+
 export function useConversation(options: Options = {}): ConversationState {
   const seat = options.seat ?? CONVERSATION_SEAT;
   const fetchImpl = options.fetchImpl;
-  const { onSlotsWritten, onTurnSettled } = options;
+  const { onSlotsWritten, onTurnSettled, checkOpening } = options;
   // Read through a ref so `send` does not have to be rebuilt when a parent
   // passes a fresh closure — the whole callback list below is a dependency of
   // the composer's `onSend`, and this one changes on every render of the pane.
@@ -209,6 +237,12 @@ export function useConversation(options: Options = {}): ConversationState {
   const [unreadable, setUnreadable] = useState(false);
   const [status, setStatus] = useState<GenerationStatus | null>(null);
   const [voiceInput, setVoiceInput] = useState<VoiceInputState | null>(null);
+  // The transcript read said the AI's opening is owed (t-122).
+  const [openingOwed, setOpeningOwed] = useState(false);
+  // Aborted when the seat changes: what was read for one seat is not the next's.
+  const seatScope = useRef(new AbortController());
+  // How many times an opening that did not land has read the transcript again.
+  const openingRechecks = useRef(0);
 
   // The in-flight request, so an unmount ends it. The turn itself carries on
   // server-side and is recorded (§08 t-55): closing the tab loses nothing.
@@ -248,6 +282,7 @@ export function useConversation(options: Options = {}): ConversationState {
     setEntries([]);
     setLive(null);
     setUnreadable(false);
+    setOpeningOwed(false);
     setPhase('loading');
   }
   // ...and let go of the old seat's turn. It carries on server-side and is
@@ -260,6 +295,10 @@ export function useConversation(options: Options = {}): ConversationState {
       inFlight.current = null;
       busy.current = false;
       kept.current = null;
+      // A re-read for the old seat's opening must not land in the new seat.
+      seatScope.current.abort();
+      seatScope.current = new AbortController();
+      openingRechecks.current = 0;
     },
     [seat]
   );
@@ -269,6 +308,9 @@ export function useConversation(options: Options = {}): ConversationState {
     fetchTranscript(seat, { signal: controller.signal, fetchImpl })
       .then((transcript) => {
         setEntries(transcript.entries);
+        // Only ever raised here: a slower first read must not cancel an
+        // opening a newer read already found owed. The seat change clears it.
+        if (transcript.opening === true) setOpeningOwed(true);
         setPhase('idle');
       })
       .catch((error: unknown) => {
@@ -308,39 +350,55 @@ export function useConversation(options: Options = {}): ConversationState {
     return () => controller.abort();
   }, [fetchImpl]);
 
-  const send = useCallback(
-    (text?: string) => {
-      const message = (text ?? draft).trim();
-      if (!message || busy.current || phase === 'loading') return;
-      busy.current = true;
+  // What the transcript holds, readable from a read that lands later.
+  const entriesRef = useRef(entries);
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
 
-      // The same words as the turn that ended: the same id, so the seam
-      // replays or re-runs it. Anything else is a new turn.
-      const retry = kept.current?.message === message ? kept.current.turnId : null;
-      const turnId = retry ?? mintTurnId();
-      kept.current = null;
+  /**
+   * Read the transcript again for the AI's opening (t-122), while the pane
+   * still has nothing in it. An opening that landed meanwhile is adopted; one
+   * still owed is asked for. A pane already holding a conversation has nothing
+   * to ask.
+   */
+  const recheckOpening = useCallback(
+    (signal?: AbortSignal) => {
+      if (seat !== CONVERSATION_SEAT || entriesRef.current.length > 0) return;
+      fetchTranscript(seat, { signal, fetchImpl })
+        .then((transcript) => {
+          if (signal?.aborted || busy.current || entriesRef.current.length > 0) return;
+          if (transcript.entries.length > 0) setEntries(transcript.entries);
+          else if (transcript.opening === true) setOpeningOwed(true);
+        })
+        .catch((error: unknown) => {
+          if (signal?.aborted) return;
+          logger.warn('Opening could not be checked', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    },
+    [seat, fetchImpl]
+  );
+
+  /**
+   * Run one turn to its end: a member's (`message`, posted with `turnId`), or
+   * the AI's opening (`message: null`, t-122). The caller has set `busy`.
+   */
+  const run = useCallback(
+    (turnId: string, message: string | null) => {
       const controller = new AbortController();
       inFlight.current = controller;
 
       setPhase('sending');
-      if (retry) {
-        // The retry supersedes the earlier attempt's row (and its bubble, if
-        // the words had stayed in the transcript).
-        setEntries((previous) =>
-          previous.filter(
-            (entry) =>
-              !(entry.kind === 'ending' && entry.turnId === retry) &&
-              !(entry.kind === 'user' && entry.id === `live:${retry}`)
-          )
-        );
-      }
       setLive({
         turnId,
-        userText: message,
+        userText: message ?? '',
         replyText: '',
         stillThinking: false,
         capabilities: [],
         suggestions: [],
+        ...(message === null && { opening: true as const }),
       });
 
       // A turn let go — the pane unmounted, or the seat moved on (t-105) — is
@@ -386,13 +444,11 @@ export function useConversation(options: Options = {}): ConversationState {
         let resource: CrisisResource | undefined;
         let crisisText: string | undefined;
         let citations: Citation[] = [];
-        const userEntry: TranscriptEntry = {
-          kind: 'user',
-          id: `live:${turnId}`,
-          text: message,
-          at: startedAt,
-          turnId,
-        };
+        // The person's words, for the transcript. The opening has none.
+        const userEntries: TranscriptEntry[] =
+          message === null
+            ? []
+            : [{ kind: 'user', id: `live:${turnId}`, text: message, at: startedAt, turnId }];
 
         /**
          * A turn that ended without a reply. The words go back into the box —
@@ -402,13 +458,31 @@ export function useConversation(options: Options = {}): ConversationState {
          * holding a newer thought is left alone, and the words stay in the
          * transcript as their bubble instead, so they are never nowhere.
          */
-        const end = (ending: EndingEntry, options: { keepId: boolean }) => {
+        const end = (ending: EndingEntry, options: { keepId: boolean; recheck?: boolean }) => {
           // Let go, as `finish` says: not this pane's ending, nor its id to keep.
           if (controller.signal.aborted) return;
-          const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
-          if (boxed) setDraft(message);
-          if (options.keepId) kept.current = { turnId, message };
-          finish(boxed ? [ending] : [userEntry, ending]);
+          if (message === null) {
+            // An opening that did not land leaves nothing: no words of the
+            // person's to give back, and an ending row would stand in an
+            // empty conversation explaining a turn they never took.
+            logger.warn('Conversation opening did not land', { code: ending.code });
+            finish([]);
+            // A connection that dropped: the turn runs on server-side, so read
+            // again — the reply if it landed, the opening again if not. A few
+            // times at most, and never after an ending the server chose (an
+            // error frame, a refusal, an opening still in flight past the
+            // client's patience): asking again would only meet it again, and
+            // keep the composer waiting while it did.
+            if (options.recheck && openingRechecks.current < MAX_OPENING_RECHECKS) {
+              openingRechecks.current += 1;
+              recheckOpening(seatScope.current.signal);
+            }
+          } else {
+            const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
+            if (boxed) setDraft(message);
+            if (options.keepId) kept.current = { turnId, message };
+            finish(boxed ? [ending] : [...userEntries, ending]);
+          }
           // A turn that captured and then ended without a reply has still written:
           // the note is in the profile, and a panel left stale until the next
           // turn would be showing the person less than the app holds. The
@@ -423,7 +497,9 @@ export function useConversation(options: Options = {}): ConversationState {
           switch (event.type) {
             case 'start':
               // The server has the words: now they may leave the box.
-              setDraft((current) => (current.trim() === message ? '' : current));
+              if (message !== null) {
+                setDraft((current) => (current.trim() === message ? '' : current));
+              }
               setPhase('thinking');
               return;
             case 'content':
@@ -482,7 +558,7 @@ export function useConversation(options: Options = {}): ConversationState {
               // that the consequence appears beside the words, not after them.
               settled();
               finish([
-                userEntry,
+                ...userEntries,
                 {
                   kind: 'reply',
                   streamed: true,
@@ -537,15 +613,14 @@ export function useConversation(options: Options = {}): ConversationState {
           }
         };
 
+        const frames = () =>
+          message === null
+            ? streamOpening({ signal: controller.signal, fetchImpl })
+            : streamTurn({ seat, message, turnId, signal: controller.signal, fetchImpl });
+
         try {
           let ended = false;
-          for await (const event of streamTurn({
-            seat,
-            message,
-            turnId,
-            signal: controller.signal,
-            fetchImpl,
-          })) {
+          for await (const event of frames()) {
             apply(event);
             if (event.type === 'done' || event.type === 'error') {
               ended = true;
@@ -563,7 +638,7 @@ export function useConversation(options: Options = {}): ConversationState {
                 code: ENDING_UNAVAILABLE,
                 message: ENDING_MESSAGES.unavailable,
               },
-              { keepId: true }
+              { keepId: true, recheck: true }
             );
           }
         } catch (error: unknown) {
@@ -574,16 +649,72 @@ export function useConversation(options: Options = {}): ConversationState {
           // `TURN_ID_REUSED` — which this client cannot produce — drops the id.
           const refused = error instanceof TurnRefused ? error.code : null;
           const code = refused === TURN_IN_FLIGHT ? TURN_IN_FLIGHT : ENDING_UNAVAILABLE;
-          logger.warn('Conversation turn did not run', { seat, code: refused ?? code });
+          if (message !== null) {
+            logger.warn('Conversation turn did not run', { seat, code: refused ?? code });
+          }
           end(
             { kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable },
-            { keepId: refused !== TURN_ID_REUSED }
+            {
+              keepId: refused !== TURN_ID_REUSED,
+              // No answer at all: the request may never have arrived.
+              recheck: refused === null,
+            }
           );
         }
       })();
     },
-    [draft, phase, seat, fetchImpl, refreshStatus]
+    [seat, fetchImpl, refreshStatus, recheckOpening]
   );
+
+  const send = useCallback(
+    (text?: string) => {
+      const message = (text ?? draft).trim();
+      if (!message || busy.current || phase === 'loading') return;
+      busy.current = true;
+
+      // The same words as the turn that ended: the same id, so the seam
+      // replays or re-runs it. Anything else is a new turn.
+      const retry = kept.current?.message === message ? kept.current.turnId : null;
+      const turnId = retry ?? mintTurnId();
+      kept.current = null;
+
+      if (retry) {
+        // The retry supersedes the earlier attempt's row (and its bubble, if
+        // the words had stayed in the transcript).
+        setEntries((previous) =>
+          previous.filter(
+            (entry) =>
+              !(entry.kind === 'ending' && entry.turnId === retry) &&
+              !(entry.kind === 'user' && entry.id === `live:${retry}`)
+          )
+        );
+      }
+      run(turnId, message);
+    },
+    [draft, phase, run]
+  );
+
+  // The AI's opening (t-122): once the transcript is idle and still empty.
+  // `openingOwed` is cleared as it starts, so it is asked for once per read.
+  useEffect(() => {
+    if (!openingOwed || phase !== 'idle' || entries.length > 0 || busy.current) return;
+    if (seat !== CONVERSATION_SEAT) return;
+    setOpeningOwed(false);
+    busy.current = true;
+    run(OPENING_TURN_ID, null);
+  }, [openingOwed, phase, entries.length, seat, run]);
+
+  // Ask again whether it is owed when the shell says the journey moved. Not on
+  // mount: the transcript read above already answered that.
+  const openingChecked = useRef(checkOpening);
+  useEffect(() => {
+    if (checkOpening === openingChecked.current) return;
+    openingChecked.current = checkOpening;
+    openingRechecks.current = 0;
+    const controller = new AbortController();
+    recheckOpening(controller.signal);
+    return () => controller.abort();
+  }, [checkOpening, recheckOpening]);
 
   const revealed = useCallback((turnId: string) => {
     setEntries((previous) => {

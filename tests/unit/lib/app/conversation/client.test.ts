@@ -10,7 +10,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   fetchGenerationStatus,
   fetchTranscript,
+  OPENING_RETRIES,
+  OPENING_ROUTE,
   STATUS_ROUTE,
+  streamOpening,
   streamTurn,
   TurnRefused,
 } from '@/lib/app/conversation/client';
@@ -150,6 +153,84 @@ describe('streamTurn', () => {
   });
 });
 
+describe('streamOpening (t-122)', () => {
+  const refusal = (status: number, code: string, reason?: string) =>
+    new Response(
+      JSON.stringify({
+        success: false,
+        error: { code, message: 'no', ...(reason && { details: { reason } }) },
+      }),
+      { status, headers: { 'content-type': 'application/json' } }
+    );
+
+  it('posts no body to the opening route: the words are the server’s', async () => {
+    const fetchImpl = vi.fn(async () =>
+      streamed([sse('content', { delta: 'You wrote' }), sse('done', {})])
+    );
+
+    const frames = await collect(streamOpening({ fetchImpl }));
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(OPENING_ROUTE);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(init.body).toBeUndefined();
+    expect(frames.map((f) => f.type)).toEqual(['content', 'done']);
+  });
+
+  it('asks again while the opening is still running elsewhere, until it lands', async () => {
+    const fetchImpl = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT'))
+      .mockResolvedValueOnce(refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT'))
+      .mockResolvedValueOnce(streamed([sse('content', { delta: 'Hello' }), sse('done', {})]));
+
+    const frames = await collect(streamOpening({ fetchImpl, retryMs: 1 }));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(frames.map((f) => f.type)).toEqual(['content', 'done']);
+  });
+
+  it('gives up after its retries, with the in-flight refusal', async () => {
+    const fetchImpl = vi.fn(async () => refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT'));
+    await expect(collect(streamOpening({ fetchImpl, retryMs: 1 }))).rejects.toMatchObject({
+      code: 'TURN_IN_FLIGHT',
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(OPENING_RETRIES + 1);
+  });
+
+  it('does not ask again when the opening is not owed', async () => {
+    const fetchImpl = vi.fn(async () => refusal(409, 'CONFLICT', 'opening_not_due'));
+    await expect(collect(streamOpening({ fetchImpl, retryMs: 1 }))).rejects.toMatchObject({
+      code: 'opening_not_due',
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting the moment the caller lets it go, mid-pause', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT'));
+    const started = Date.now();
+    const done = collect(streamOpening({ fetchImpl, retryMs: 60_000, signal: controller.signal }));
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    controller.abort();
+    await expect(done).rejects.toBeInstanceOf(TurnRefused);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('stops asking once the caller lets it go', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => {
+      controller.abort();
+      return refusal(409, 'CONFLICT', 'TURN_IN_FLIGHT');
+    });
+    await expect(
+      collect(streamOpening({ fetchImpl, retryMs: 1, signal: controller.signal }))
+    ).rejects.toBeInstanceOf(TurnRefused);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('fetchTranscript', () => {
   const entry = {
     kind: 'reply',
@@ -186,6 +267,22 @@ describe('fetchTranscript', () => {
     expect(transcript.entries).toHaveLength(1);
     expect(transcript.entries[0]).toMatchObject({ kind: 'reply', id: 'a1' });
     expect(transcript.conversationId).toBe('c1');
+  });
+
+  it('carries the opening flag when the read sends one (t-122)', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { seat: 'facilitator', conversationId: null, entries: [], opening: true },
+          }),
+          { status: 200 }
+        )
+    );
+    await expect(fetchTranscript('facilitator', { fetchImpl })).resolves.toMatchObject({
+      opening: true,
+    });
   });
 
   it('throws on a refusal', async () => {

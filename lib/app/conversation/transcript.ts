@@ -28,6 +28,14 @@
  *   `metadata.error: true`. That is not her voice; it is dropped, and the turn
  *   row's `errorCode` says what happened instead.
  *
+ * The AI's opening after onboarding (t-122, `opening.ts`) has no user row at
+ * all: the agent opens it. Its reply stands first, joined to its turn row by
+ * `assistantMessageId` like any other. With no row of the person's to scope
+ * it, the two corrections above are made for it by its turn row instead: of
+ * the assistant rows before the person's first message, only those since its
+ * latest attempt began are its reply, and none are, when it failed with no
+ * reply linked.
+ *
  * ## Which conversation
  *
  * The one the next turn would resume — `resolveFacilitationSurface`, the same
@@ -51,7 +59,8 @@ import { conversationVisibilityWhere } from '@/lib/orchestration/access/conversa
 import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
-import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { openingWindowStart, REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { isOpeningTurnId, OPENING_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
 import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
@@ -120,6 +129,11 @@ export interface Transcript {
   /** Null when nothing has been said yet. */
   conversationId: string | null;
   entries: TranscriptEntry[];
+  /**
+   * Whether the pane should ask for the AI's opening now (t-122). Set by the
+   * read route, on the facilitator seat only; absent elsewhere.
+   */
+  opening?: boolean;
 }
 
 /** `metadata.app` on the person's row, as the turn seam writes it. */
@@ -260,15 +274,34 @@ export function assembleTranscript(
     pendingReply = null;
   };
 
+  // The AI's opening, which has no user row to scope its own (t-122): the
+  // latest, should the words ever have been versioned.
+  const opening = turns
+    .filter((turn) => isOpeningTurnId(turn.turnId))
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+  const openingSince = opening ? openingWindowStart(opening.startedAt) : null;
+  const openingLeftNothing =
+    opening !== undefined &&
+    opening.status === 'failed' &&
+    opening.assistantMessageId === null &&
+    opening.errorCode !== REPLY_NOT_LINKED;
+  let personSpoke = false;
+
   for (const row of messages) {
     if (row.role === 'assistant') {
       // The platform's own marker for a turn that ended without a reply. Not a
       // reply; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
+      // Before the person's first message, every row is the opening's: an
+      // earlier attempt's fragments, or a failed one's, are not its reply.
+      if (!personSpoke && openingSince !== null) {
+        if (openingLeftNothing || row.createdAt < openingSince) continue;
+      }
       (pendingReply ??= { rows: [] }).rows.push(row);
       continue;
     }
     if (row.role !== 'user') continue;
+    personSpoke = true;
     flushReply();
 
     const turnId = turnIdOf(row.metadata);
@@ -345,7 +378,16 @@ export async function readTranscript(
       },
     }),
     prisma.appTurn.findMany({
-      where: { userId, conversationId },
+      // The opening's row too when its conversation id is not set: a re-run
+      // clears it at the claim, and a run that failed before starting never
+      // set it. Without its row, an earlier attempt's fragments read as a reply.
+      where: {
+        userId,
+        OR: [
+          { conversationId },
+          { seat, conversationId: null, turnId: { startsWith: OPENING_TURN_ID_PREFIX } },
+        ],
+      },
       select: {
         turnId: true,
         seat: true,

@@ -22,6 +22,7 @@ vi.mock('@/lib/app/gateway/acknowledgements', () => ({ getGateStatus }));
 import {
   BEGIN_ROUTE,
   gateRedirectFor,
+  hasPassedGate,
   isEmailVerificationRequired,
   VERIFY_EMAIL_ROUTE,
   verificationRedirectFor,
@@ -99,5 +100,22 @@ describe('gateRedirectFor', () => {
 
     expect(target).toMatch(new RegExp(`^${VERIFY_EMAIL_ROUTE}`));
     expect(getGateStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('hasPassedGate (t-124)', () => {
+  it('is false while any kind is outstanding', async () => {
+    getGateStatus.mockResolvedValue({ complete: false, kinds: [], outstanding: ['disclaimer'] });
+    await expect(hasPassedGate(VERIFIED)).resolves.toBe(false);
+    expect(getGateStatus).toHaveBeenCalledWith('user-1');
+  });
+
+  it('is false for an unverified address while verification is required', async () => {
+    env.REQUIRE_EMAIL_VERIFICATION = true;
+    await expect(hasPassedGate(UNVERIFIED)).resolves.toBe(false);
+  });
+
+  it('is true for a verified, fully acknowledged person', async () => {
+    await expect(hasPassedGate(VERIFIED)).resolves.toBe(true);
   });
 });
