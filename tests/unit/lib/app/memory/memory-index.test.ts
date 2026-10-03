@@ -228,7 +228,7 @@ const {
   listMemoryEntriesForSubject,
   MAX_SEARCH_RESULTS,
   MAX_BACKFILL_ATTEMPTS,
-  __resetBackfillFailuresForTests,
+  __resetMemoryIndexForTests,
 } = await import('@/lib/app/memory/memory-index');
 
 let clock = 0;
@@ -270,7 +270,7 @@ beforeEach(() => {
   world.sql = [];
   clock = 0;
   vi.clearAllMocks();
-  __resetBackfillFailuresForTests();
+  __resetMemoryIndexForTests();
   getActiveEmbeddingModelSummary.mockResolvedValue(null);
   embedText.mockReset();
   embedText.mockImplementation(async (text: string) => {
@@ -353,12 +353,24 @@ describe('indexing a message', () => {
     expect(world.embeddings).toHaveLength(1);
   });
 
-  it('refuses a vector the column cannot hold, and stores nothing', async () => {
+  it('pays once for a vector it cannot store, then never uses that model again', async () => {
+    // No active model: the platform's fallback, whose size only its answer tells.
     said('m1', MY_FATHER);
+    said('m2', THEIR_FATHER);
     world.dimension = 768;
-    await expect(indexMessage({ userId: ME }, 'm1')).rejects.toThrow(/768 dimensions/);
+    expect(await indexMessage({ userId: ME }, 'm1')).toBe('skipped');
     expect(prismaFake.$executeRaw).not.toHaveBeenCalled();
     expect(world.embeddings).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    expect(await indexMessage({ userId: ME }, 'm2')).toBe('skipped');
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(embedText).toHaveBeenCalledTimes(1);
+
+    // A different active model is asked afresh.
+    world.dimension = DIM;
+    getActiveEmbeddingModelSummary.mockResolvedValue({ modelId: 'small', dimensions: DIM });
+    expect(await indexMessage({ userId: ME }, 'm2')).toBe('indexed');
   });
 
   it('never fails the turn: a queued index that throws is logged and dropped', async () => {
@@ -407,7 +419,8 @@ describe('the backfill', () => {
     expect(indexable(backfill.text)).toEqual(indexable(read!.text));
   });
 
-  it('gives up on a message the embedder never takes, so it cannot hold back older ones', async () => {
+  it('gives up on a message the embedder never takes, once others prove it is the message', async () => {
+    said('oldest', 'I started a new job in the city this spring');
     said('older', MY_FATHER);
     said('poison', THEIR_FATHER);
     embedText.mockImplementation(async (text: string) => {
@@ -422,13 +435,38 @@ describe('the backfill', () => {
       };
     });
 
-    for (let run = 1; run <= MAX_BACKFILL_ATTEMPTS; run++) {
-      expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1 });
+    // It never holds the others back: the run tries past it.
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 2, failed: 1 });
+    expect(world.embeddings.map((e) => e.messageId).sort()).toEqual(['older', 'oldest']);
+
+    // Each later run fails on it alone, which proves nothing about it: no blame.
+    embedText.mockClear();
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1 });
+    expect(embedText).toHaveBeenCalledTimes(1);
+
+    // Blamed only when a message after it in the run embeds (an older one, the
+    // run being newest first); given up on at the limit.
+    for (let run = 2; run <= MAX_BACKFILL_ATTEMPTS; run++) {
+      said(`older-${run}`, `a different thing said long ago, number ${run}`).createdAt = new Date(
+        run
+      );
+      expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 1 });
     }
-    expect(world.embeddings).toEqual([]);
-    // Given up on: the next run reaches the older message.
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 0 });
-    expect(world.embeddings.map((e) => e.messageId)).toEqual(['older']);
+    embedText.mockClear();
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it('blames no message for an outage, however long, and takes them all once it ends', async () => {
+    said('a', MY_FATHER);
+    said('b', THEIR_FATHER);
+    said('c', 'I started a new job in the city this spring');
+    world.embedFails = true;
+    for (let run = 0; run < MAX_BACKFILL_ATTEMPTS * 3; run++) {
+      expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2 });
+    }
+    world.embedFails = false;
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 3, failed: 0 });
   });
 
   it('does nothing, and spends nothing, while the model is the wrong size', async () => {
@@ -439,13 +477,13 @@ describe('the backfill', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it('stops at the first failure rather than failing the whole batch the same way', async () => {
+  it('stops at the second failure in a row rather than failing the whole batch the same way', async () => {
     said('a', MY_FATHER);
     said('b', THEIR_FATHER);
+    said('c', 'I started a new job in the city this spring');
     world.embedFails = true;
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1 });
-    expect(embedText).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2 });
+    expect(embedText).toHaveBeenCalledTimes(2);
   });
 });
 

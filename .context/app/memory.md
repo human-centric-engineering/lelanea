@@ -45,19 +45,23 @@ tool results and conversations outside the seats are never embedded.
   logged and left for the backfill.
 - **By the backfill.** `app:memory-index-backfill` (`lib/app/jobs.ts`, per org,
   every 5 minutes) embeds a batch of messages that have no row: everything said
-  before the index existed, and anything the turn path missed. It stops at the
-  first failure, since that is almost always the embedder. A message that has
-  failed `MAX_BACKFILL_ATTEMPTS` runs is left out after that (counted in
-  process memory, so a restart gives it three more), so one the embedder never
-  takes cannot hold back every older one.
-- **Not while the model is the wrong size.** The embedder charges a call
-  whether or not its vector can be stored, so both paths ask the active model's
-  size first (`getActiveEmbeddingModelSummary`) and embed nothing unless it is
-  the column's 1536.
+  before the index existed, and anything the turn path missed. A failure is
+  blamed on a message only when the next message embeds: two failures in a row
+  mean the embedder is down, so the run stops and blames nobody, and an outage
+  of any length leaves nothing behind. A message blamed `MAX_BACKFILL_ATTEMPTS`
+  times is left out (counted in process memory, so a restart gives it three
+  more), so one the embedder never takes cannot hold back the rest.
+- **Not with a model the index cannot store.** The embedder charges a call
+  whether or not its vector can be stored. Both paths ask the active model's
+  recorded size first (`getActiveEmbeddingModelSummary`). With no model active
+  the platform's fallback chain does not guarantee a size, so the first vector
+  of the wrong size is the answer: that model is remembered for the life of the
+  process and not used again.
 
-The "is this indexable" test is one SQL predicate (`INDEXABLE`) both paths use.
-Testing length in JS on one path and in SQL on the other would let a message
-the two measure differently hold a backfill slot forever.
+The "is this indexable" test is one SQL predicate both paths use, written out
+in each and held equal by a unit test. Testing length in JS on one path and in
+SQL on the other would let a message the two measure differently hold a
+backfill slot forever.
 
 Each embedding is costed by Sunrise's embedder, attributed to the person and
 the conversation, with `kind: memory_embedding` (a search's query embedding is

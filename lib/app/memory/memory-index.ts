@@ -127,15 +127,31 @@ async function readIndexableMessage(
 }
 
 /**
- * Whether the active embedding model answers in the size the column holds.
+ * Embedding models seen answering in a size the column cannot hold, keyed by the
+ * active model's id (`fallback` when none is active). In process memory: a
+ * restart costs one more call per model, and nothing else.
+ */
+const unstorableModels = new Set<string>();
+
+/**
+ * Whether the index should embed with the model the platform will use now, and
+ * the key a mismatch is remembered under.
+ *
  * Asked BEFORE embedding, because the embedder costs the call to the person
  * whether or not the vector can be stored: a model of another size would charge
- * every turn and store nothing. No active model means the platform's fallback,
- * which is 1536.
+ * every turn and store nothing. The active model's recorded size answers it
+ * when there is one. With none active the platform falls back down a chain
+ * whose size is not guaranteed (a local model answers in its own), so only the
+ * first answer can tell; {@link indexMessage} remembers a mismatch here, and
+ * nothing is embedded with that model again.
  */
-async function embeddingFits(): Promise<boolean> {
+async function embeddingFit(): Promise<{ ok: boolean; key: string }> {
   const active = await getActiveEmbeddingModelSummary();
-  return active === null || active.dimensions === MEMORY_EMBEDDING_DIMENSION;
+  const key = active?.modelId ?? 'fallback';
+  const ok =
+    !unstorableModels.has(key) &&
+    (active === null || active.dimensions === MEMORY_EMBEDDING_DIMENSION);
+  return { ok, key };
 }
 
 /** What the turn path knows about the message it hands over. */
@@ -154,7 +170,8 @@ export interface IndexOptions {
  * stores nothing.
  *
  * Throws when the embedder does; {@link queueMessageIndex} is the caller that
- * must not.
+ * must not. A vector of the wrong size is not a throw: it is `skipped`, and the
+ * model is not used again.
  */
 export async function indexMessage(
   subject: MemorySubject,
@@ -169,7 +186,8 @@ export async function indexMessage(
 
   const message = await readIndexableMessage(subject, messageId);
   if (!message) return 'skipped';
-  if (!(await embeddingFits())) return 'skipped';
+  const fit = await embeddingFit();
+  if (!fit.ok) return 'skipped';
 
   const text = message.content.slice(0, MAX_INDEXED_CHARS);
   const { embedding, model, provider, dimensions } = await embedText(text, 'document', {
@@ -183,9 +201,14 @@ export async function indexMessage(
     },
   });
   if (embedding.length !== MEMORY_EMBEDDING_DIMENSION) {
-    throw new Error(
-      `The embedding model answered in ${embedding.length} dimensions; the memory index stores ${MEMORY_EMBEDDING_DIMENSION}.`
-    );
+    // Paid for once, and never again with this model (see embeddingFit).
+    unstorableModels.add(fit.key);
+    logger.warn('Memory index stopped using an embedding model it cannot store', {
+      model,
+      dimension: embedding.length,
+      stores: MEMORY_EMBEDDING_DIMENSION,
+    });
+    return 'skipped';
   }
 
   const inserted = await prisma.$executeRaw`
@@ -231,21 +254,20 @@ export interface MemoryBackfillResult {
 /** How many messages one backfill run takes on. */
 export const MEMORY_BACKFILL_BATCH = 25;
 
-/** After this many failed runs, a message is left out of the backfill. */
+/** After this many proven failures, a message is left out of the backfill. */
 export const MAX_BACKFILL_ATTEMPTS = 3;
 
 /**
- * Messages the backfill has failed on, and how often. A message the embedder
- * rejects every time (too long in tokens for its limit, say) would otherwise be
- * the newest unindexed message on every run, stop the run, and hold back every
- * older one for good. In process memory, like the job clock: a restart gives
- * each one another three tries, which costs a few calls and nothing else.
+ * Messages the embedder failed on while it was taking others, and how often. In
+ * process memory, like the job clock: a restart gives each one three more
+ * tries, which costs a few calls and nothing else.
  */
 const backfillFailures = new Map<string, number>();
 
-/** For tests: forget every recorded failure. */
-export function __resetBackfillFailuresForTests(): void {
+/** For tests: forget every recorded failure and every unstorable model. */
+export function __resetMemoryIndexForTests(): void {
   backfillFailures.clear();
+  unstorableModels.clear();
 }
 
 /**
@@ -253,11 +275,15 @@ export function __resetBackfillFailuresForTests(): void {
  * that the turn path missed. One org per call (the job runs per org), newest
  * first, a batch at a time.
  *
- * **Stops at the first failure.** A failure is almost always the embedder (no
- * provider, a provider down), and every other message in the batch would fail
- * the same way and log the same warning. The next run starts again. A message
- * that fails {@link MAX_BACKFILL_ATTEMPTS} runs is left out after that, so one
- * the embedder will never take cannot hold back the rest.
+ * **A failure is blamed on a message only when the next message embeds.** One
+ * failure might be the embedder (no provider, a provider down) or the message
+ * (too long in tokens for the model, say), and the two need opposite answers.
+ * So after a failure the run tries the next message. If that one fails too,
+ * the embedder is down: the run stops, and nobody is blamed, so an outage of
+ * any length leaves nothing behind it. If it embeds, the first failure was the
+ * message's: it counts, the run carries on, and after
+ * {@link MAX_BACKFILL_ATTEMPTS} such failures the message is left out, so it
+ * cannot hold back the rest.
  *
  * Does nothing while the active embedding model answers in a size the column
  * cannot hold: every call would be charged and nothing stored.
@@ -266,7 +292,7 @@ export async function backfillMemoryIndex(
   batchSize: number = MEMORY_BACKFILL_BATCH
 ): Promise<MemoryBackfillResult> {
   const orgId = requireOrgId();
-  if (!(await embeddingFits())) {
+  if (!(await embeddingFit()).ok) {
     logger.warn(
       'Memory backfill skipped: the active embedding model is not the size the index stores',
       {
@@ -300,22 +326,31 @@ export async function backfillMemoryIndex(
   `;
 
   let indexed = 0;
+  let failed = 0;
+  // The last message that failed, not yet known to be its own fault.
+  let suspect: string | null = null;
   for (const message of missing) {
     try {
       if ((await indexMessage({ userId: message.userId }, message.id)) === 'indexed') indexed++;
       backfillFailures.delete(message.id);
+      if (suspect) {
+        backfillFailures.set(suspect, (backfillFailures.get(suspect) ?? 0) + 1);
+        suspect = null;
+      }
     } catch (err) {
-      const attempts = (backfillFailures.get(message.id) ?? 0) + 1;
-      backfillFailures.set(message.id, attempts);
-      logger.warn('Memory backfill stopped: a message could not be embedded', {
+      failed++;
+      logger.warn('Memory backfill could not embed a message', {
         messageId: message.id,
-        attempts,
         error: err instanceof Error ? err.message : String(err),
       });
-      return { indexed, failed: 1 };
+      if (suspect) {
+        logger.warn('Memory backfill stopped: the embedder is failing');
+        break;
+      }
+      suspect = message.id;
     }
   }
-  return { indexed, failed: 0 };
+  return { indexed, failed };
 }
 
 /** How a search is bounded. */
