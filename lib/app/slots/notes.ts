@@ -75,9 +75,13 @@
  * of `runId` applies to us, and we still land in the same missing cell from the
  * other side — many slugs, one user, one version back.
  *
- * Per-answer deletion has no path at all — erasure takes the account or nothing
- * (gap 5). Filed as **t-78 on `f-memory`**, which owns deletion propagation,
- * with the framework half raised as a paragraph on `daybreak#156`.
+ * ## A removed note is a placeholder, and every read here knows it (t-78)
+ *
+ * `delete-note.ts` wipes a note's versions in place rather than deleting them,
+ * so they still arrive here. {@link isRemoved} is checked before anything is
+ * shaped: a removed head reaches the wire as `removed: true` with no value, no
+ * reasoning and no conversation, and cannot be corrected. Its stored text is
+ * the marker written for the AI, and it never reaches the person.
  *
  * @see lib/app/slots/notes-view.ts — the wire shape
  * @see .context/app/slots.md — "Lelañea's notes"

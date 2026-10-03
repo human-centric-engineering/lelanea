@@ -1,7 +1,7 @@
 /**
  * The browser's side of Lelañea's notes (f-slots t-73).
  *
- * Read the page, and send a correction. Kept apart from the store for the
+ * Read the page, send a correction, remove a note. Kept apart from the store for the
  * reason `notes-view.ts` gives — the panel is a client component and the store
  * reaches `@/lib/db/client` — and apart from `notes-view.ts` so the wire *shape*
  * stays importable by the server without dragging a `fetch` wrapper with it.
