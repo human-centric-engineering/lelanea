@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -151,10 +151,16 @@ export function Lotus({
    * Playing: the stretch between `open` rising and the last petal settling,
    * when the canvas is up. Driven by the same clock as `onOpened`, so the
    * canvas comes down exactly when the caller is told.
+   *
+   * LAYOUT effects, here and for the canvas's first paint below, so the hand-
+   * over happens before the browser paints. As passive effects the frame after
+   * `open` rose showed the open SVG, the next a hidden SVG over an unpainted
+   * canvas, and only then the bud — a flash of the finished bloom and a blank
+   * before every opening (code review, t-134).
    */
   const [playing, setPlaying] = useState(false);
   const wasOpen = useRef(settled);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const rising = settled && !wasOpen.current;
     wasOpen.current = settled;
     if (!settled || reducedMotion) {
@@ -171,11 +177,16 @@ export function Lotus({
   const { width, height } = lotusFrameSize(size, frame);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!playing) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return; // the open SVG below stands in
+    if (!canvas || !ctx) {
+      // No 2D context (lost, or none to give): stop playing, so the open SVG
+      // shows instead of a hidden SVG over an empty canvas for the whole opening.
+      setPlaying(false);
+      return;
+    }
 
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * ratio);

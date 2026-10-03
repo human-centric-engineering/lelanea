@@ -102,6 +102,27 @@ function stamenStrokes(): Element[] {
   return [...document.querySelectorAll('svg path[fill="none"]')];
 }
 
+/**
+ * happy-dom has no 2D context. Stand one in that records repaints — every
+ * frame starts with `clearRect` — and answers every other call harmlessly.
+ */
+let clearRect = vi.fn();
+const noop = () => undefined;
+function stubCanvas() {
+  clearRect = vi.fn();
+  const gradient = { addColorStop: vi.fn() };
+  const ctx = new Proxy(
+    { clearRect, createLinearGradient: () => gradient, createRadialGradient: () => gradient },
+    // One shared no-op, not a `vi.fn()` per access: a full opening is ~190
+    // frames of thousands of calls, and a mock each ran the worker out of memory.
+    { get: (target, key) => (key in target ? target[key as keyof typeof target] : noop) }
+  );
+  return vi
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+}
+const clearRectCalls = () => clearRect.mock.calls.length;
+
 describe('Lotus', () => {
   describe('the flower', () => {
     it('is the bud while closed: every petal folded, no stamens yet', () => {
@@ -295,6 +316,7 @@ describe('Lotus', () => {
       // same clock as `onOpened`. The SVG stays in the DOM throughout — hidden,
       // not removed — so what remains is the identical open picture.
       vi.useFakeTimers();
+      const getContext = stubCanvas();
       render(<Lotus />);
       act(() => void vi.advanceTimersByTime(0));
 
@@ -307,28 +329,32 @@ describe('Lotus', () => {
       expect(document.querySelector('canvas')).toBeNull();
       expect(svg().style.visibility).toBe('visible');
       expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+      getContext.mockRestore();
+    });
+
+    it('shows the open SVG when there is no canvas to paint on', () => {
+      // A lost or unavailable 2D context must not leave a hidden SVG over an
+      // empty canvas for the whole opening.
+      vi.useFakeTimers();
+      render(<Lotus />);
+      act(() => void vi.advanceTimersByTime(0));
+
+      expect(bloom()).toHaveAttribute('data-open', 'true');
+      expect(bloom()).not.toHaveAttribute('data-playing');
+      expect(svg().style.visibility).toBe('visible');
     });
 
     it('paints frames onto the canvas while it plays', () => {
-      // happy-dom has no 2D context, so stand one in and count the repaints:
-      // the loop must paint the bud at once and keep painting as time passes.
+      // The loop must paint the bud at once and keep painting as time passes.
       vi.useFakeTimers();
-      const clearRect = vi.fn();
-      const gradient = { addColorStop: vi.fn() };
-      const ctx = new Proxy(
-        { clearRect, createLinearGradient: () => gradient, createRadialGradient: () => gradient },
-        { get: (target, key) => (key in target ? target[key as keyof typeof target] : vi.fn()) }
-      );
-      const getContext = vi
-        .spyOn(HTMLCanvasElement.prototype, 'getContext')
-        .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+      const getContext = stubCanvas();
       render(<Lotus />);
       act(() => void vi.advanceTimersByTime(0));
-      const first = clearRect.mock.calls.length;
+      const first = clearRectCalls();
       expect(first).toBeGreaterThan(0);
 
       act(() => void vi.advanceTimersByTime(500));
-      expect(clearRect.mock.calls.length).toBeGreaterThan(first);
+      expect(clearRectCalls()).toBeGreaterThan(first);
       getContext.mockRestore();
     });
 
@@ -343,12 +369,14 @@ describe('Lotus', () => {
 
     it('does not breathe while the opening is still playing', () => {
       vi.useFakeTimers();
+      const getContext = stubCanvas();
       render(<Lotus idle />);
       act(() => void vi.advanceTimersByTime(0));
 
       expect(bloom().className.split(/\s+/)).toEqual(['relative', 'inline-block']);
       act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
       expect(bloom().className.split(/\s+/)).not.toEqual(['relative', 'inline-block']);
+      getContext.mockRestore();
     });
   });
 
@@ -418,11 +446,13 @@ describe('Lotus', () => {
       // The negative control: every case above would pass for free if the hook
       // returned `true` unconditionally.
       vi.useFakeTimers();
+      const getContext = stubCanvas();
       render(<Lotus />);
       act(() => void vi.advanceTimersByTime(0));
 
       expect(bloom()).not.toHaveAttribute('data-reduced-motion');
       expect(document.querySelector('canvas')).not.toBeNull();
+      getContext.mockRestore();
     });
 
     it('survives an environment with no matchMedia at all', () => {
