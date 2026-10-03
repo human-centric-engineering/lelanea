@@ -18,7 +18,10 @@ import { z } from 'zod';
 import { notesSearch, type NotesQuery } from '@/lib/app/slots/notes-query';
 import type { NotesView } from '@/lib/app/slots/notes-view';
 
-/** Lelañea's notes: `GET` reads them, `POST { slotSlug, value }` corrects one. */
+/**
+ * Lelañea's notes: `GET` reads them, `POST { slotSlug, value }` corrects one,
+ * `DELETE { slotSlug }` removes one.
+ */
 export const NOTES_ENDPOINT = '/api/v1/app/notes';
 
 /** Where a person reads them. The nav item and the page both name it here. */
@@ -69,6 +72,7 @@ const historySchema = z.object({
   version: z.number(),
   value: z.string(),
   withheld: z.boolean(),
+  removed: z.boolean(),
   sourceType: z.string(),
   confidence: z.number(),
   capturedAt: z.string(),
@@ -79,6 +83,7 @@ const noteSchema = z.object({
   asking: z.string().nullable(),
   value: z.string(),
   withheld: z.boolean(),
+  removed: z.boolean(),
   confidence: z.number(),
   sourceType: z.string(),
   reasoningNote: z.string(),
@@ -88,6 +93,7 @@ const noteSchema = z.object({
   sensitivity: z.string(),
   retired: z.boolean(),
   correctable: z.boolean(),
+  removable: z.boolean(),
   previous: historySchema.nullable(),
   group: z.string().nullable(),
 });
@@ -162,6 +168,35 @@ export async function correctNote(
   const parsed = correctedEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) {
     throw new NotesRefused(response.status, 'malformed', 'The correction could not be confirmed.');
+  }
+  return parsed.data.data;
+}
+
+const removedEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ versions: z.number() }),
+});
+
+/**
+ * Remove a note, every version of it (t-78). Throws {@link NotesRefused} with a
+ * message meant to be printed when the route says no.
+ */
+export async function removeNote(
+  slotSlug: string,
+  options: Options = {}
+): Promise<{ versions: number }> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(NOTES_ENDPOINT, {
+    method: 'DELETE',
+    credentials: 'include',
+    signal: options.signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slotSlug }),
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = removedEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new NotesRefused(response.status, 'malformed', 'The removal could not be confirmed.');
   }
   return parsed.data.data;
 }

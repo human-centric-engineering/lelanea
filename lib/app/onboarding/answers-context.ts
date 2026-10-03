@@ -53,6 +53,7 @@ import { getDiscoveryQuestions } from '@/lib/app/content/question-store';
 import { getSlotHeads } from '@/lib/framework/data-slots';
 import { FACILITATION_ROLES } from '@/lib/framework/facilitation/agents/roles';
 import { discoverySlotSlug } from '@/lib/app/onboarding/discovery-slot-names';
+import { isRemoved } from '@/lib/app/slots/removed';
 
 /** The longest single answer supplied, in characters. Longer ones are cut, and marked. */
 export const ANSWER_CHARS = 1_500;
@@ -75,6 +76,11 @@ export interface AnswerForContext {
   question: string;
   /** The stored head value, exactly as written. */
   value: string;
+  /**
+   * The person removed this answer from their notes (t-78). `value` is then
+   * the placeholder's text, which the block never quotes as their words.
+   */
+  removed?: boolean;
 }
 
 /**
@@ -109,6 +115,8 @@ export const ANSWERS_FRAMING = {
     none: null,
   },
   masked: 'Kept private. Nothing of this answer is shown here; do not guess at it.',
+  removed:
+    'They removed this answer. Do not ask what it said, and do not bring it up unless they do.',
   cut: '[cut here: the answer goes on]',
   overBudget:
     'More answers are not shown here, to keep this short. get_state reads every one in full.',
@@ -153,6 +161,10 @@ export function composeAnswersContext(seat: string, answers: readonly AnswerForC
   let spent = 0;
   for (const answer of [...answers].sort((a, b) => a.number - b.number)) {
     const label = `[Question ${answer.number} · ${questionLine(answer.question)}]`;
+    if (answer.removed) {
+      parts.push(`${label}\n${ANSWERS_FRAMING.removed}`);
+      continue;
+    }
     if (MASKED.test(answer.value.trim())) {
       parts.push(`${label}\n${ANSWERS_FRAMING.masked}`);
       continue;
@@ -183,10 +195,15 @@ export async function readAnswersForContext(userId: string): Promise<AnswerForCo
   const heads = await getSlotHeads(userId, {
     slotSlugs: set.questions.map((question) => discoverySlotSlug(question.id)),
   });
-  const bySlug = new Map(heads.map((head) => [head.slotSlug, head.value]));
+  const bySlug = new Map(heads.map((head) => [head.slotSlug, head]));
   return set.questions.flatMap((question) => {
-    const value = bySlug.get(discoverySlotSlug(question.id));
-    return value === undefined ? [] : [{ number: question.number, question: question.text, value }];
+    const head = bySlug.get(discoverySlotSlug(question.id));
+    if (head === undefined) return [];
+    const answer = { number: question.number, question: question.text, value: head.value };
+    // Marked rather than dropped: the owner's ruling is that the AI is told a
+    // note was removed (3 Oct 2026), and an answer that silently vanished from
+    // the block would read as one never given — an invitation to ask again.
+    return [isRemoved(head) ? { ...answer, removed: true } : answer];
   });
 }
 

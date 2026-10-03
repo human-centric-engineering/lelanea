@@ -44,6 +44,7 @@ import {
   readOnboardingProgress,
 } from '@/lib/app/onboarding/first-run-store';
 import { handedOffFrom } from '@/lib/app/onboarding/hand-off-state';
+import { isRemoved } from '@/lib/app/slots/removed';
 import { READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
@@ -94,7 +95,9 @@ export async function getDiscoveryState(
     const versions: Record<string, number> = {};
     for (const question of set.questions) {
       const head = heads.find((h) => h.slotSlug === question.slotSlug);
-      if (!head) continue;
+      // A removed answer (t-78) is unanswered again: its placeholder holds
+      // nothing of theirs, and the question is theirs to answer afresh.
+      if (!head || isRemoved(head)) continue;
       answers[question.id] = readAnswer(head.value, !!question.conditionalFollowUp);
       versions[question.id] = head.version;
     }

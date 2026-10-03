@@ -7,7 +7,7 @@ import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
-import { correctNote, NotesRefused } from '@/lib/app/slots/notes-client';
+import { correctNote, NotesRefused, removeNote } from '@/lib/app/slots/notes-client';
 import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,14 @@ import { cn } from '@/lib/utils';
  * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
  * card**, including those, because it is the door that still works: `HB10` —
  * the guard ships with its remedy.
+ *
+ * ## Removing, and what a removed note leaves (t-78)
+ *
+ * "Remove this note" is offered on every note the person can see, and asks
+ * once, in place, before it acts — a removal cannot be undone, and the second
+ * step says what it does and does not touch. A removed note stays on the page
+ * as a placeholder that says when it was removed and never what it said: the
+ * owner's ruling (3 Oct 2026), and the same promise the AI is held to.
  */
 
 /**
@@ -65,6 +73,8 @@ export interface NoteCardProps {
   onAsk: (text: string) => void;
   /** A correction landed; the panel re-reads the page. */
   onCorrected: () => void;
+  /** A removal landed; the panel re-reads the page. Falls back to `onCorrected`. */
+  onRemoved?: () => void;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
   /**
@@ -239,6 +249,29 @@ export const WITHHELD_WORDS = 'Lelañea kept a summary of this rather than your 
  * alone, because the fold this names exists only once the card is open.
  */
 export const WITHHELD_POINTER = 'It is under “How Lelañea came to this”.';
+
+/**
+ * What a removed note says in place of itself — `when` is the moment it was
+ * removed. Exported because the list row says the same thing.
+ */
+export function removedWords(when: string): string {
+  return `You removed this note on ${formatWhen(when)}.`;
+}
+
+/**
+ * The second line on a removed note: what the AI knows now. It is the marker
+ * `lib/app/slots/removed.ts` writes, in the reader's terms.
+ */
+export const REMOVED_POINTER = 'Lelañea knows a note was removed here, but not what it said.';
+
+/**
+ * What the confirmation says before anything happens. It names the one thing a
+ * removal does not reach yet — the conversation — because a person who wanted
+ * something gone should not find it still quoted there and think the removal
+ * failed.
+ */
+export const REMOVE_CONFIRM =
+  'This removes the note and every earlier version of it. Lelañea will know a note was removed here, but not what it said. The conversation it came from is not changed.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -446,6 +479,7 @@ export function NoteCard({
   note,
   onAsk,
   onCorrected,
+  onRemoved,
   fetchImpl,
   heading,
   onFold,
@@ -465,6 +499,9 @@ export function NoteCard({
   // accepts — spaces included — and an id with a space in it silently breaks
   // the label's `htmlFor`, leaving the box unnamed to a screen reader.
   const correctionId = useId();
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removalRefusal, setRemovalRefusal] = useState<string | null>(null);
 
   const save = async () => {
     const value = draft.trim();
@@ -488,6 +525,28 @@ export function NoteCard({
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (removing) return;
+    setRemoving(true);
+    setRemovalRefusal(null);
+    try {
+      await removeNote(note.slotSlug, { fetchImpl });
+      setConfirmingRemoval(false);
+      (onRemoved ?? onCorrected)();
+    } catch (error: unknown) {
+      setRemovalRefusal(
+        error instanceof NotesRefused
+          ? error.message
+          : 'That could not be removed just now. Try again in a moment.'
+      );
+      logger.warn('A note removal was refused', {
+        code: error instanceof NotesRefused ? error.code : 'unknown',
+      });
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -571,8 +630,23 @@ export function NoteCard({
         itself was 320px wide. `@container` asks the only question that matters:
         is THIS card wide enough for two columns.
       */}
-      <div className="grid gap-x-8 gap-y-4 @min-[32rem]:grid-cols-[minmax(0,1fr)_11rem]">
-        {/*
+      {note.removed ? (
+        /*
+          A placeholder, and only that (t-78). No aside: a removed note has no
+          certainty or source left to report, and showing "Only a guess · 1 of 10"
+          for something the person took back would read as a judgement on it.
+          No controls either — there is nothing left to correct, ask about or
+          remove.
+        */
+        <div className="flex max-w-[34rem] flex-col gap-1.5">
+          <p className="text-muted-foreground text-[15px] leading-[1.6]">
+            {removedWords(note.capturedAt)}
+          </p>
+          <p className="text-muted-foreground text-[13px] leading-[1.6]">{REMOVED_POINTER}</p>
+        </div>
+      ) : (
+        <div className="grid gap-x-8 gap-y-4 @min-[32rem]:grid-cols-[minmax(0,1fr)_11rem]">
+          {/*
           No measure of its own, and that is deliberate now.
 
           The ragged right edges this column was built to fix came from putting
@@ -584,9 +658,9 @@ export function NoteCard({
           this column takes what the grid gives it and every block in it ends on
           the same edge, which was the point.
         */}
-        <div className="flex min-w-0 flex-col gap-3">
-          {note.withheld ? (
-            /*
+          <div className="flex min-w-0 flex-col gap-3">
+            {note.withheld ? (
+              /*
               The stored value is a sentinel, so the card says what actually
               happened instead of printing it. This is the classification doing
               its job — `.context/app/slots.md`, "Capture" — and reading it as a
@@ -598,31 +672,31 @@ export function NoteCard({
               trio, measured there — and the words on it stay `--color-heading`,
               which is darker than the ink that pairing normally uses.
             */
-            <p
-              className={cn(
-                // `pr-3.5` and not just `pl-3.5`: the left edge is a rule and
-                // the right one is the box's own, so the text ran flush into it
-                // and the last word of every line sat on the corner.
-                'rounded-md border-l-2 py-2 pr-3.5 pl-3.5 text-[15px] leading-[1.6]',
-                'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
-                'text-[var(--color-heading)]'
-              )}
-            >
-              {WITHHELD_WORDS} {WITHHELD_POINTER}
-            </p>
-          ) : (
-            <p
-              className={cn(
-                'text-[15.5px] leading-[1.65] whitespace-pre-line',
-                'text-[var(--color-heading)]'
-              )}
-            >
-              {note.value}
-            </p>
-          )}
+              <p
+                className={cn(
+                  // `pr-3.5` and not just `pl-3.5`: the left edge is a rule and
+                  // the right one is the box's own, so the text ran flush into it
+                  // and the last word of every line sat on the corner.
+                  'rounded-md border-l-2 py-2 pr-3.5 pl-3.5 text-[15px] leading-[1.6]',
+                  'border-[var(--color-status-blue)] bg-[var(--color-status-blue-bg)]',
+                  'text-[var(--color-heading)]'
+                )}
+              >
+                {WITHHELD_WORDS} {WITHHELD_POINTER}
+              </p>
+            ) : (
+              <p
+                className={cn(
+                  'text-[15.5px] leading-[1.65] whitespace-pre-line',
+                  'text-[var(--color-heading)]'
+                )}
+              >
+                {note.value}
+              </p>
+            )}
 
-          {note.previous ? (
-            /*
+            {note.previous ? (
+              /*
               Folded, and quieter than it was. It was an always-open washed
               inset that competed with the reading above it for attention —
               which gets the emphasis backwards, because the current reading is
@@ -632,49 +706,53 @@ export function NoteCard({
               decide whether to open it without opening it, and the count of
               anything older rides there too rather than inside.
             */
-            <Disclosure
-              tone="history"
-              summary={
-                <>
-                  <span className="text-[var(--color-heading)]">Before this</span>
-                  {' · '}
-                  {noteSourceWords(note.previous.sourceType)},{' '}
-                  {formatWhen(note.previous.capturedAt)}
+              <Disclosure
+                tone="history"
+                summary={
+                  <>
+                    <span className="text-[var(--color-heading)]">Before this</span>
+                    {' · '}
+                    {noteSourceWords(note.previous.sourceType)},{' '}
+                    {formatWhen(note.previous.capturedAt)}
+                    {older > 0
+                      ? ` · ${older === 1 ? '1 older reading' : `${older} older readings`} as well`
+                      : ''}
+                  </>
+                }
+              >
+                <p className="whitespace-pre-line text-[var(--color-heading)]">
+                  {note.previous.removed
+                    ? 'A note you removed. Nothing of it is kept.'
+                    : note.previous.withheld
+                      ? 'Something Lelañea noted without keeping your exact words.'
+                      : note.previous.value}
+                </p>
+                <p>
+                  Kept, not replaced.
                   {older > 0
-                    ? ` · ${older === 1 ? '1 older reading' : `${older} older readings`} as well`
+                    ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
                     : ''}
-                </>
-              }
-            >
-              <p className="whitespace-pre-line text-[var(--color-heading)]">
-                {note.previous.withheld
-                  ? 'Something Lelañea noted without keeping your exact words.'
-                  : note.previous.value}
-              </p>
-              <p>
-                Kept, not replaced.
-                {older > 0
-                  ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
-                  : ''}
-              </p>
-            </Disclosure>
-          ) : null}
+                </p>
+              </Disclosure>
+            ) : null}
 
-          <Disclosure plain summary="How Lelañea came to this">
-            <p>{note.reasoningNote}</p>
-            {note.asking ? (
-              /*
+            <Disclosure plain summary="How Lelañea came to this">
+              <p>{note.reasoningNote}</p>
+              {note.asking ? (
+                /*
                 The taxonomy's wording, quoted. Third person inside the quotation marks is
                 the taxonomy speaking to a model, which is what it is — the
                 panel is not addressing the reader as "this person".
               */
-              <p>
-                <span className="text-[var(--color-heading)]">What Lelañea was looking for: </span>“
-                {note.asking}”
-              </p>
-            ) : null}
-            {note.conversationId ? (
-              /*
+                <p>
+                  <span className="text-[var(--color-heading)]">
+                    What Lelañea was looking for:{' '}
+                  </span>
+                  “{note.asking}”
+                </p>
+              ) : null}
+              {note.conversationId ? (
+                /*
                 The id is not shown and is not a link. There is no member-facing
                 route that opens one exchange yet — the journey view is still a
                 placeholder — and a link to nowhere, or a cuid printed as
@@ -682,15 +760,16 @@ export function NoteCard({
                 from talking. When the journey lands, this is the line that
                 becomes a link.
               */
-              <p>Drawn from something you said in conversation.</p>
-            ) : null}
-          </Disclosure>
+                <p>Drawn from something you said in conversation.</p>
+              ) : null}
+            </Disclosure>
+          </div>
+
+          <Aside note={note} />
         </div>
+      )}
 
-        <Aside note={note} />
-      </div>
-
-      {editing ? (
+      {note.removed ? null : editing ? (
         <div className="mt-4">
           <label className="sr-only" htmlFor={correctionId}>
             Your correction
@@ -769,8 +848,61 @@ export function NoteCard({
           <Button size="sm" variant="ghost" className={PILL} onClick={() => onAsk(askText(note))}>
             Ask Lelañea about this
           </Button>
+          {note.removable && !confirmingRemoval ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className={PILL}
+              onClick={() => {
+                setRemovalRefusal(null);
+                setConfirmingRemoval(true);
+              }}
+            >
+              Remove this note
+            </Button>
+          ) : null}
         </div>
       )}
+
+      {confirmingRemoval && !note.removed && !editing ? (
+        /*
+          In place rather than a dialog: the reader is looking at the note, and
+          the question is about the note. The destructive fill is on the act
+          itself and nowhere else, so "Keep it" is the quiet way out.
+        */
+        <div className="mt-3.5 max-w-[34rem]" role="group" aria-label="Remove this note?">
+          <p className="text-[13.5px] leading-[1.6] text-[var(--color-heading)]">
+            {REMOVE_CONFIRM}
+          </p>
+          {removalRefusal ? (
+            <Banner tone="error" className="mt-2.5" lead="Not removed.">
+              {removalRefusal}
+            </Banner>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={removing}
+              onClick={() => void remove()}
+            >
+              {removing ? 'Removing…' : 'Remove it'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={PILL}
+              disabled={removing}
+              onClick={() => {
+                setConfirmingRemoval(false);
+                setRemovalRefusal(null);
+              }}
+            >
+              Keep it
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

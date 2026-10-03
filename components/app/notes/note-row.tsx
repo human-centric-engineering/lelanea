@@ -7,6 +7,7 @@ import {
   confidenceWords,
   formatWhen,
   noteTag,
+  removedWords,
   WITHHELD_WORDS,
 } from '@/components/app/notes/note-card';
 import type { Note } from '@/lib/app/slots/notes-view';
@@ -50,13 +51,17 @@ export function NoteRow({ note, heading, onOpen, focusOnMount }: NoteRowProps) {
     if (focusOnMount) ref.current?.focus();
   }, [focusOnMount]);
 
-  const details = [
-    heading,
-    noteTag(note),
-    note.retired ? 'no longer asked about' : null,
-    `${confidenceWords(note.confidence)} · ${note.confidence} of 10`,
-    formatWhen(note.capturedAt),
-  ].filter(Boolean);
+  // A removed note (t-78) has no certainty left to report, and its date is in
+  // its own sentence, so its details line is just where it was filed.
+  const details = note.removed
+    ? [heading, noteTag(note)].filter(Boolean)
+    : [
+        heading,
+        noteTag(note),
+        note.retired ? 'no longer asked about' : null,
+        `${confidenceWords(note.confidence)} · ${note.confidence} of 10`,
+        formatWhen(note.capturedAt),
+      ].filter(Boolean);
 
   return (
     <button
@@ -75,10 +80,10 @@ export function NoteRow({ note, heading, onOpen, focusOnMount }: NoteRowProps) {
       <span
         className={cn(
           'block text-[14.5px] leading-[1.6] whitespace-pre-line',
-          note.withheld ? 'text-muted-foreground' : 'text-[var(--color-heading)]'
+          note.withheld || note.removed ? 'text-muted-foreground' : 'text-[var(--color-heading)]'
         )}
       >
-        {note.withheld ? WITHHELD_WORDS : note.value}
+        {note.removed ? removedWords(note.capturedAt) : note.withheld ? WITHHELD_WORDS : note.value}
       </span>
       <span className="text-muted-foreground mt-1 block text-[12px] leading-[1.5]">
         {details.join(' · ')}

@@ -99,6 +99,7 @@ import { getSlotDefinition } from '@/lib/framework/data-slots/queries';
 import { redactedString } from '@/lib/security/redact';
 import type { Note, NoteHistory, NotesView } from '@/lib/app/slots/notes-view';
 import { queryNotes, type NotesQuery } from '@/lib/app/slots/notes-query';
+import { isRemoved } from '@/lib/app/slots/removed';
 
 /** What masking leaves behind for an Art. 9 slot. Compared, never constructed twice. */
 const WITHHELD = redactedString('special_category');
@@ -201,17 +202,23 @@ async function readPreviousVersions(
   });
 
   return new Map(
-    rows.map((row) => [
-      row.slotSlug,
-      {
-        version: row.version,
-        value: row.value,
-        withheld: row.value === WITHHELD,
-        sourceType: row.sourceType,
-        confidence: row.confidence,
-        capturedAt: row.capturedAt.toISOString(),
-      },
-    ])
+    rows.map((row) => {
+      // A removed version reaches the wire with nothing of its placeholder
+      // text: that text is written for the AI, not the person (t-78).
+      const removed = isRemoved(row);
+      return [
+        row.slotSlug,
+        {
+          version: row.version,
+          value: removed ? '' : row.value,
+          withheld: !removed && row.value === WITHHELD,
+          removed,
+          sourceType: row.sourceType,
+          confidence: row.confidence,
+          capturedAt: row.capturedAt.toISOString(),
+        },
+      ];
+    })
   );
 }
 
@@ -263,25 +270,34 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
     // note blanked out while its slot was special-category stays a sentinel
     // after the slot moves (t-84 moved the nine health slots to `sensitive`),
     // and printing it raw would show someone `<redacted: …>` as their own note.
-    const withheld = head.value === WITHHELD;
+    // A removed head is a placeholder (t-78): it is shown as one, and nothing
+    // of its stored text reaches the wire — that text is the marker written
+    // for the AI. `capturedAt` is when it was removed.
+    const removed = isRemoved(head);
+    const withheld = !removed && head.value === WITHHELD;
 
     return {
       slotSlug: head.slotSlug,
       asking: definition?.description ?? null,
-      value: head.value,
+      value: removed ? '' : head.value,
       withheld,
+      removed,
       confidence: head.confidence,
       sourceType: head.sourceType,
-      reasoningNote: head.reasoningNote,
+      reasoningNote: removed ? '' : head.reasoningNote,
       version: head.version,
       capturedAt: head.capturedAt.toISOString(),
-      conversationId: conversationOf(head.provenance),
+      conversationId: removed ? null : conversationOf(head.provenance),
       sensitivity,
       retired,
       // Not `!withheld`: an Art. 9 slot whose head somehow holds prose is still
       // a slot whose corrections cannot be stored, and the reason is the
       // classification rather than what one row happens to contain.
-      correctable: !retired && sensitivity !== SLOT_SENSITIVITY.special_category,
+      correctable: !removed && !retired && sensitivity !== SLOT_SENSITIVITY.special_category,
+      // Any note the person can see is theirs to remove — retired and Art. 9
+      // ones included, since removing is how the kept summary of an Art. 9
+      // note goes too. Only a note already removed has nothing left to take.
+      removable: !removed,
       previous: previous.get(head.slotSlug) ?? null,
       // An open-mode mint has no definition, and so no group.
       group: definition?.group ?? null,
@@ -289,6 +305,30 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
   });
 
   return queryNotes(notes, query);
+}
+
+/**
+ * What both tiers say about one slug, read before any head lookup so a hidden
+ * slot takes the same path whether or not it has ever been filled. Shared by
+ * the correction and the removal (`delete-note.ts`), which must refuse a hidden
+ * slug identically — the route answering differently for one would disclose
+ * that it exists and is filled.
+ */
+export async function readSlotVerdict(slotSlug: string): Promise<{
+  definition: Awaited<ReturnType<typeof getSlotDefinition>>;
+  ours: { visibility: string; sensitivity: string } | null;
+  isHidden: boolean;
+}> {
+  const definition = await getSlotDefinition(slotSlug);
+  // Both tiers, as in the read — see `ourVerdicts` for why the union.
+  const ours = await prisma.appSlotDefinition.findFirst({
+    where: { slug: slotSlug },
+    select: { visibility: true, sensitivity: true },
+  });
+  const isHidden =
+    definition?.visibility === SLOT_VISIBILITY.hidden ||
+    ours?.visibility === SLOT_VISIBILITY.hidden;
+  return { definition, ours, isHidden };
 }
 
 export interface NoteCorrection {
@@ -322,20 +362,13 @@ export interface CorrectedNote {
  * contradiction a door (§3.12) rather than a loss.
  */
 export async function correctNote(input: NoteCorrection): Promise<CorrectedNote> {
-  const definition = await getSlotDefinition(input.slotSlug);
-
-  // Both tiers, as in the read — and before the head lookup, so a hidden slot
-  // takes the same path whether or not it has ever been filled.
-  const ours = await prisma.appSlotDefinition.findFirst({
-    where: { slug: input.slotSlug },
-    select: { visibility: true, sensitivity: true },
-  });
-  const isHidden =
-    definition?.visibility === SLOT_VISIBILITY.hidden ||
-    ours?.visibility === SLOT_VISIBILITY.hidden;
+  const { definition, ours, isHidden } = await readSlotVerdict(input.slotSlug);
 
   const [head] = isHidden ? [] : await getSlotHeads(input.userId, { slotSlugs: [input.slotSlug] });
-  if (!head) {
+  // A removed note is not there to correct: its placeholder holds nothing of
+  // the person's, and "that's not right" about a blank has no meaning. The same
+  // 404 as an absent one, so the panel and the route agree (t-78).
+  if (!head || isRemoved(head)) {
     throw new NotFoundError('There is no note under that heading to correct.');
   }
 

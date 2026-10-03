@@ -12,16 +12,21 @@
  *   `sourceType: user_confirmed`, never an overwrite. Refused for a slug with no
  *   note of the caller's own, for a hidden one (the same 404, deliberately), for
  *   a retired one and for one whose words are kept out of the record.
+ * - `DELETE /api/v1/app/notes` — `{ slotSlug }`: remove that note, every version
+ *   of it, leaving a placeholder that says when and never what (t-78). The slug
+ *   is in the body, not the path, because the route logger records the URL.
+ *   Refused with the correction's own 404 for a hidden slug and for one with
+ *   nothing to remove.
  *
  * One enriched read: the panel fetches this and nothing else, and re-fetches it
- * whole after a turn writes or after a correction. There is no per-note route,
- * because there is no per-note question.
+ * whole after a turn writes, a correction or a removal. There is no per-note
+ * route, because there is no per-note question.
  *
  * Authentication: required. Rate limiting: inherited from the `/api/v1/**`
- * section cap in `proxy.ts` — no per-flow sub-cap, since both are small reads
- * and a single-row insert on the caller's own rows. Caching: `no-store` — a
- * note can land mid-turn, and the whole point of the panel is that it shows
- * that.
+ * section cap in `proxy.ts` — no per-flow sub-cap, since these are a small
+ * read, a single-row insert and a single-slug update, all on the caller's own
+ * rows. Caching: `no-store` — a note can land mid-turn, and the whole point of
+ * the panel is that it shows that.
  *
  * Errors are thrown, not returned: `withAuth` routes an `APIError` through
  * `handleAPIError`, which is what turns the store's `ConflictError` into the
@@ -38,8 +43,9 @@ import { successResponse } from '@/lib/api/responses';
 import { validateQueryParams, validateRequestBody } from '@/lib/api/validation';
 import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
 import { correctNote, getNotes } from '@/lib/app/slots/notes';
+import { deleteNote } from '@/lib/app/slots/delete-note';
 import { notesQuerySchema } from '@/lib/app/slots/notes-query';
-import { slotCorrectionSchema } from '@/lib/app/slots/validation';
+import { noteRemovalSchema, slotCorrectionSchema } from '@/lib/app/slots/validation';
 
 /**
  * Ownership: self-scoped by construction — see `RouteOwnership` in
@@ -56,7 +62,7 @@ const OWNERSHIP: WithAuthOptions = {
   ownership: {
     decidedBy: 'self',
     because:
-      "Both handlers are keyed on the caller's own id — the read filters slot values on it and the correction appends under it. Nothing in either request names another subject.",
+      "Every handler is keyed on the caller's own id — the read filters slot values on it, the correction appends under it and the removal overwrites only rows carrying it. Nothing in any request names another subject.",
   },
 };
 
@@ -112,4 +118,19 @@ export const POST = withAuth(async (request: NextRequest, session) => {
   });
 
   return successResponse(corrected, undefined, { status: 201 });
+}, OWNERSHIP);
+
+export const DELETE = withAuth(async (request: NextRequest, session) => {
+  const log = await getRouteLogger(request);
+  const body = await validateRequestBody(request, noteRemovalSchema);
+  const removed = await deleteNote({ userId: session.user.id, slotSlug: body.slotSlug });
+
+  // No slug, for the reason the correction gives. How many versions went is
+  // what an operator needs to see a removal happening.
+  log.info('Note removed by the person it is about', {
+    userId: session.user.id,
+    versions: removed.versions,
+  });
+
+  return successResponse(removed);
 }, OWNERSHIP);

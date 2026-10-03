@@ -235,14 +235,17 @@ export const MAX_NOTE_LENGTH = 2000;
  * already one of their heads — the accepted set is precisely "slugs you
  * already have a note under".
  */
+/**
+ * The slug a member's request names. As long as a slug the agent coined can be,
+ * because a note under one is as much theirs to correct or remove as any other.
+ */
+const memberSlotSlugSchema = z
+  .string()
+  .min(1, 'A slot slug cannot be empty.')
+  .max(MAX_MINTED_SLUG_LENGTH, `A slot slug is longer than ${MAX_MINTED_SLUG_LENGTH} characters.`);
+
 export const slotCorrectionSchema = z.strictObject({
-  slotSlug: z
-    .string()
-    .min(1, 'A slot slug cannot be empty.')
-    .max(
-      MAX_MINTED_SLUG_LENGTH,
-      `A slot slug is longer than ${MAX_MINTED_SLUG_LENGTH} characters.`
-    ),
+  slotSlug: memberSlotSlugSchema,
   value: z
     .string()
     .trim()
@@ -251,6 +254,16 @@ export const slotCorrectionSchema = z.strictObject({
 });
 
 export type SlotCorrection = z.infer<typeof slotCorrectionSchema>;
+
+/**
+ * `DELETE /api/v1/app/notes` — `{ slotSlug }`: remove that note, every version
+ * (t-78). In the body rather than the path because the route logger records
+ * the URL, and a slug the agent coined is free text drawn from what the person
+ * said.
+ */
+export const noteRemovalSchema = z.strictObject({ slotSlug: memberSlotSlugSchema });
+
+export type NoteRemovalRequest = z.infer<typeof noteRemovalSchema>;
 
 export type SlotDefinitionUpdate = z.infer<typeof slotDefinitionUpdateSchema>;
 export type SlotDefinitionCreate = z.infer<typeof slotDefinitionCreateSchema>;

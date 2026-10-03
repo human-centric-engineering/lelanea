@@ -64,6 +64,10 @@ export const NOTE_SOURCES: Readonly<Record<string, string>> = {
   inferred: 'Lelañea inferred it',
   user_confirmed: 'You corrected this yourself',
   synthesised: 'Lelañea drew it together from other things already noted',
+  // `REMOVED_SOURCE_TYPE` (`removed.ts`), spelled out here because this module
+  // imports nothing. A removed note's card says this itself; the line is for the
+  // "Before this" fold, where a removed earlier version is named this way.
+  removed_by_person: 'You removed this',
 };
 
 /**
@@ -90,6 +94,8 @@ export interface NoteHistory {
   /** Withheld the same way the head is — see {@link Note.withheld}. */
   value: string;
   withheld: boolean;
+  /** The person removed this version; `value` is empty. See {@link Note.removed}. */
+  removed: boolean;
   sourceType: string;
   confidence: number;
   capturedAt: string;
@@ -119,6 +125,14 @@ export interface Note {
    * {@link Note.reasoningNote}.
    */
   withheld: boolean;
+  /**
+   * The person removed this note (t-78). Every version of it was wiped in
+   * place, so `value`, `reasoningNote` and `conversationId` are empty, and
+   * `capturedAt` is when it was removed. The card says so rather than showing
+   * a blank — the placeholder is the owner's ruling (3 Oct 2026): someone can
+   * see that something was removed, and when, never what.
+   */
+  removed: boolean;
   /** 1–10, as the agent judged it. */
   confidence: number;
   /** The stored classifier; {@link noteSourceWords} turns it into a sentence. */
@@ -145,6 +159,11 @@ export interface Note {
    * back to the agent.
    */
   correctable: boolean;
+  /**
+   * Whether the person can remove this note. Every note they can see except one
+   * already removed — retired and Art. 9 notes included (`notes.ts`).
+   */
+  removable: boolean;
   /** The version before this one, where there is one. */
   previous: NoteHistory | null;
   /**

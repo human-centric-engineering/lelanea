@@ -22,6 +22,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { correctNote, fetchNotes, NotesRefused } from '@/lib/app/slots/notes-client';
 import { noteGroupTitle, noteSourceWords, NOTE_SOURCES } from '@/lib/app/slots/notes-view';
+import { REMOVED_SOURCE_TYPE } from '@/lib/app/slots/removed';
+import { SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots/vocabulary';
 
 /** A `fetch` that answers exactly this, whatever it is asked. */
 function answering(body: string, init: ResponseInit = { status: 200 }): typeof fetch {
@@ -150,7 +152,15 @@ describe('putting a stored classifier into words', () => {
     // would degrade silently to the fallback below.
     expect(noteSourceWords('inferred')).toBe('Lelañea inferred it');
     expect(noteSourceWords('user_confirmed')).toBe('You corrected this yourself');
-    expect(Object.keys(NOTE_SOURCES)).toHaveLength(7);
+    // Every classifier the framework ships, plus the one this app writes when a
+    // person removes a note (t-78) — and nothing else.
+    expect(Object.keys(NOTE_SOURCES).sort()).toEqual(
+      [...Object.values(SLOT_SOURCE_TYPE), REMOVED_SOURCE_TYPE].sort()
+    );
+  });
+
+  it('names a removed version as the person’s own act', () => {
+    expect(noteSourceWords(REMOVED_SOURCE_TYPE)).toBe('You removed this');
   });
 
   it('reads an unknown one as itself, capitalised, rather than as a shrug', () => {
