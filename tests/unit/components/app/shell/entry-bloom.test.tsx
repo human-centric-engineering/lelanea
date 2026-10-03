@@ -151,8 +151,9 @@ describe('EntryBloom — the lotus rises as it opens', () => {
     const rise = screen.getByTestId('entry-bloom-rise');
     expect(rise.className).toMatch(/rise/);
     expect(rise.style.animationDuration).toBe(`1000ms, ${LOTUS_OPENED_MS + FADE_MS}ms`);
-    // Far bigger than the old 168px bloom: a fluid lotus up to 680px wide.
-    expect(rise.className).toContain('w-[min(86vw,680px)]');
+    // Far bigger than the old 168px bloom: a fluid lotus up to 680px wide,
+    // capped by height too so a short screen does not crop it as it rises.
+    expect(rise.className).toContain('w-[min(86vw,680px,120dvh)]');
     expect(rise.querySelector('[data-open]')).toHaveStyle({ width: '100%' });
   });
 

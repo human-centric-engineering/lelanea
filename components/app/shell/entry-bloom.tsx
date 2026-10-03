@@ -174,10 +174,11 @@ export function EntryBloom() {
         fading out with the cover (owner, 3 Oct 2026). The drift is a deliberate
         exception to §6.5's 4–8px translation limit, asked for by name; reduced
         motion gets neither the drift nor the fade-in (the module's media query).
-        No breath: it is leaving, not resting.
+        No breath: it is leaving, not resting. Capped by height as well as
+        width (120dvh), so a landscape phone does not crop it as it rises.
       */}
       <div
-        className={cn('w-[min(86vw,680px)]', styles.rise)}
+        className={cn('w-[min(86vw,680px,120dvh)]', styles.rise)}
         style={{
           animationDuration: `${FADE_IN_MS}ms, ${DRIFT_MS}ms`,
           // Held until JavaScript is alive, which is when the petals start to
