@@ -427,12 +427,21 @@ export async function getMonthToDate(userId: string, now: Date = new Date()): Pr
  * the platform stamps last, which a caller cannot overwrite.
  */
 export type TurnCostPart =
-  'reply' | 'summary' | 'tool' | 'knowledge_search' | 'reply_embedding' | 'attachment' | 'other';
+  | 'reply'
+  | 'summary'
+  | 'tool'
+  | 'knowledge_search'
+  | 'reply_embedding'
+  | 'memory'
+  | 'attachment'
+  | 'other';
 
 export function classifyCostRow(row: { operation: string; kind: string | null }): TurnCostPart {
   if (row.kind === 'conversation_summary') return 'summary';
   if (row.kind === 'knowledge_search') return 'knowledge_search';
   if (row.kind === 'message_embedding') return 'reply_embedding';
+  // f-memory t-129: the person's message into their memory index, and a search of it.
+  if (row.kind === 'memory_embedding' || row.kind === 'memory_search') return 'memory';
   if (row.operation === 'tool_call') return 'tool';
   if (row.operation === 'vision') return 'attachment';
   if (row.operation === 'chat') return 'reply';

@@ -127,6 +127,7 @@ import type {
   FacilitationTurnRun,
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+import { queueMessageIndex } from '@/lib/app/memory/memory-index';
 
 /** Error codes a refused turn carries, for a client to branch on (`turn-codes.ts`, import-light). */
 export { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
@@ -279,6 +280,12 @@ async function* recorded(turn: AppTurn, events: ChatStream, disarm: () => boolea
           conversationId: event.conversationId,
           userMessageId: event.messageId ?? null,
         };
+        // The person's words, into their memory index (f-memory t-129). Off the
+        // reply's path: it never waits on the embedding, and a miss is the
+        // backfill's to pick up. An agent-opened turn has no message to embed.
+        if (event.messageId) {
+          queueMessageIndex({ userId: turn.userId }, event.messageId, { turnId: turn.turnId });
+        }
       } else if (event.type === 'done') {
         if (ownsSettle()) await settleCompleted(turn, event);
         settled = true;

@@ -369,6 +369,8 @@ describe('classifying a turn cost row', () => {
     [{ operation: 'tool_call', kind: null }, 'tool'],
     [{ operation: 'embedding', kind: 'knowledge_search' }, 'knowledge_search'],
     [{ operation: 'embedding', kind: 'message_embedding' }, 'reply_embedding'],
+    [{ operation: 'embedding', kind: 'memory_embedding' }, 'memory'],
+    [{ operation: 'embedding', kind: 'memory_search' }, 'memory'],
     [{ operation: 'vision', kind: null }, 'attachment'],
     [{ operation: 'evaluation', kind: null }, 'other'],
   ])('%o is %s', (row, part) => {

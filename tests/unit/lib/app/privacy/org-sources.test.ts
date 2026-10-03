@@ -1,7 +1,7 @@
 /**
  * Lelañea's org-export sources (t-112): which rows each one reads.
  *
- * `leafOrgSources()` declares all 37 app tables as the org's data. What the
+ * `leafOrgSources()` declares all 38 app tables as the org's data. What the
  * defaults test does not see is what each source's `fetch` actually asks the
  * database for, and that is where an org export would go wrong: reading
  * another table, or reading another org's rows. So every source is called
@@ -14,7 +14,7 @@
  * FORK NOTE — this reads the real `lib/app/leaf-data-export.ts`, not a mock.
  * It has to: the seam's own sources are the thing under test, so a mock would
  * assert the mock. It is Lelañea's seam and Lelañea's test; a fork of Lelañea
- * that changes `leafOrgSources()` updates the count of 37 and the model named
+ * that changes `leafOrgSources()` updates the count of 38 and the model named
  * in the single-source cases here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -69,7 +69,7 @@ beforeEach(() => {
 describe('each source reads its own table', () => {
   it('queries exactly the delegate its model names, once', async () => {
     const { sources } = leafOrgSources();
-    expect(sources).toHaveLength(37);
+    expect(sources).toHaveLength(38);
     for (const source of sources) {
       calls.clear();
       await source.fetch({ orgId: 'install' });

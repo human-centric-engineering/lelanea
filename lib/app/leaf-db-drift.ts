@@ -11,7 +11,7 @@
  * applied to the local database by the time you read the generated SQL.
  */
 
-import { registerAppDriftProbe, constraintExists } from '@/lib/db/drift-probes';
+import { registerAppDriftProbe, constraintExists, indexExists } from '@/lib/db/drift-probes';
 
 /**
  * t-115. Every `app_*` table with an `orgId` column: each carries
@@ -40,6 +40,7 @@ export const APP_ORG_OWNED_TABLES = [
   'app_journey_tier',
   'app_journey_tier_revision',
   'app_knowledge_designation',
+  'app_memory_embedding',
   'app_question_set',
   'app_question_set_revision',
   'app_resource',
@@ -241,6 +242,40 @@ export function registerLeafDriftProbes(): void {
       probe: constraintExists(`${table}_editorId_fkey`, 'ON DELETE SET NULL'),
     });
   }
+
+  // f-memory t-129. The per-person index (`app_memory_embedding`). Every
+  // object below is what makes "an embedding goes with its source" true (owner
+  // ruling 2), and none is visible to Prisma. Each action is asserted, not just
+  // the existence: re-created with `NO ACTION`, the user FK makes `eraseUser()`
+  // fail with `P2003` for anyone who ever spoke, and the message FK makes every
+  // message, exchange and conversation deletion fail the same way. With
+  // `SET NULL`, the vector of a deleted message would outlive it, searchable.
+  registerAppDriftProbe({
+    name: 'app_memory_embedding_userId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_memory_embedding',
+    probe: constraintExists('app_memory_embedding_userId_fkey', 'ON DELETE CASCADE'),
+  });
+  registerAppDriftProbe({
+    name: 'app_memory_embedding_messageId_fkey (hand-written FK → the message table)',
+    kind: 'FK constraint',
+    table: 'app_memory_embedding',
+    probe: constraintExists('app_memory_embedding_messageId_fkey', 'ON DELETE CASCADE'),
+  });
+  registerAppDriftProbe({
+    // A `message` row without its id would have no cascade to follow it.
+    name: 'app_memory_embedding_source_check (every row names its source)',
+    kind: 'CHECK constraint',
+    table: 'app_memory_embedding',
+    probe: constraintExists('app_memory_embedding_source_check', '"messageId" IS NOT NULL'),
+  });
+  registerAppDriftProbe({
+    // Without it a search still answers, by a sequential scan over every vector.
+    name: 'idx_app_memory_embedding (HNSW memory embedding)',
+    kind: 'HNSW index',
+    table: 'app_memory_embedding',
+    probe: indexExists('idx_app_memory_embedding', 'hnsw'),
+  });
 
   // t-115. Every app_* table refuses a row with no org. A CHECK, because
   // Prisma cannot model one, so `migrate dev` would drop it. A row with no org
