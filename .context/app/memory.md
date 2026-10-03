@@ -46,7 +46,14 @@ tool results and conversations outside the seats are never embedded.
 - **By the backfill.** `app:memory-index-backfill` (`lib/app/jobs.ts`, per org,
   every 5 minutes) embeds a batch of messages that have no row: everything said
   before the index existed, and anything the turn path missed. It stops at the
-  first failure, since that is almost always the embedder.
+  first failure, since that is almost always the embedder. A message that has
+  failed `MAX_BACKFILL_ATTEMPTS` runs is left out after that (counted in
+  process memory, so a restart gives it three more), so one the embedder never
+  takes cannot hold back every older one.
+- **Not while the model is the wrong size.** The embedder charges a call
+  whether or not its vector can be stored, so both paths ask the active model's
+  size first (`getActiveEmbeddingModelSummary`) and embed nothing unless it is
+  the column's 1536.
 
 The "is this indexable" test is one SQL predicate (`INDEXABLE`) both paths use.
 Testing length in JS on one path and in SQL on the other would let a message
@@ -54,8 +61,11 @@ the two measure differently hold a backfill slot forever.
 
 Each embedding is costed by Sunrise's embedder, attributed to the person and
 the conversation, with `kind: memory_embedding` (a search's query embedding is
-`memory_search`). Both count against the person's monthly ceiling and show as
-the `memory` part of a turn's cost (`classifyCostRow`, `metering.ts`).
+`memory_search`). Both count against the person's monthly ceiling. An
+embedding made on the turn path carries the turn's `turnId`, so the per-turn
+meter counts it as that turn's `memory` part (`classifyCostRow`,
+`metering.ts`); a backfilled one belongs to no turn and counts only in the
+month.
 
 ## Who can find it
 

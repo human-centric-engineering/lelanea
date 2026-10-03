@@ -283,7 +283,9 @@ async function* recorded(turn: AppTurn, events: ChatStream, disarm: () => boolea
         // The person's words, into their memory index (f-memory t-129). Off the
         // reply's path: it never waits on the embedding, and a miss is the
         // backfill's to pick up. An agent-opened turn has no message to embed.
-        if (event.messageId) queueMessageIndex({ userId: turn.userId }, event.messageId);
+        if (event.messageId) {
+          queueMessageIndex({ userId: turn.userId }, event.messageId, { turnId: turn.turnId });
+        }
       } else if (event.type === 'done') {
         if (ownsSettle()) await settleCompleted(turn, event);
         settled = true;

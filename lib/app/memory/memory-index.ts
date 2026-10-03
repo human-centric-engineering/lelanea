@@ -55,7 +55,7 @@ import type { AppMemoryEmbedding } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
-import { embedText } from '@/lib/orchestration/knowledge/embedder';
+import { embedText, getActiveEmbeddingModelSummary } from '@/lib/orchestration/knowledge/embedder';
 import { requireOrgId } from '@/lib/tenancy/context';
 import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/agents/surface';
 
@@ -127,6 +127,24 @@ async function readIndexableMessage(
 }
 
 /**
+ * Whether the active embedding model answers in the size the column holds.
+ * Asked BEFORE embedding, because the embedder costs the call to the person
+ * whether or not the vector can be stored: a model of another size would charge
+ * every turn and store nothing. No active model means the platform's fallback,
+ * which is 1536.
+ */
+async function embeddingFits(): Promise<boolean> {
+  const active = await getActiveEmbeddingModelSummary();
+  return active === null || active.dimensions === MEMORY_EMBEDDING_DIMENSION;
+}
+
+/** What the turn path knows about the message it hands over. */
+export interface IndexOptions {
+  /** The turn the message opened, so its embedding is counted in that turn's cost. */
+  turnId?: string;
+}
+
+/**
  * Embed one of the person's messages and store the vector.
  *
  * Idempotent: a message already indexed is not embedded again, and two
@@ -140,7 +158,8 @@ async function readIndexableMessage(
  */
 export async function indexMessage(
   subject: MemorySubject,
-  messageId: string
+  messageId: string,
+  options: IndexOptions = {}
 ): Promise<IndexOutcome> {
   const existing = await prisma.appMemoryEmbedding.findFirst({
     where: { messageId, userId: subject.userId },
@@ -150,12 +169,18 @@ export async function indexMessage(
 
   const message = await readIndexableMessage(subject, messageId);
   if (!message) return 'skipped';
+  if (!(await embeddingFits())) return 'skipped';
 
   const text = message.content.slice(0, MAX_INDEXED_CHARS);
   const { embedding, model, provider, dimensions } = await embedText(text, 'document', {
     userId: subject.userId,
     conversationId: message.conversationId,
-    metadata: { kind: MEMORY_EMBEDDING_COST_KIND, messageId },
+    // `turnId` is what the per-turn meter matches a cost row on (`metering.ts`).
+    metadata: {
+      kind: MEMORY_EMBEDDING_COST_KIND,
+      messageId,
+      ...(options.turnId ? { turnId: options.turnId } : {}),
+    },
   });
   if (embedding.length !== MEMORY_EMBEDDING_DIMENSION) {
     throw new Error(
@@ -184,8 +209,12 @@ export async function indexMessage(
  * never wait on an embedding, and must never fail because one did. A miss here
  * is picked up by the backfill.
  */
-export function queueMessageIndex(subject: MemorySubject, messageId: string): void {
-  void indexMessage(subject, messageId).catch((err: unknown) => {
+export function queueMessageIndex(
+  subject: MemorySubject,
+  messageId: string,
+  options: IndexOptions = {}
+): void {
+  void indexMessage(subject, messageId, options).catch((err: unknown) => {
     logger.warn('Memory index could not embed a message; the backfill will retry it', {
       messageId,
       error: err instanceof Error ? err.message : String(err),
@@ -202,6 +231,23 @@ export interface MemoryBackfillResult {
 /** How many messages one backfill run takes on. */
 export const MEMORY_BACKFILL_BATCH = 25;
 
+/** After this many failed runs, a message is left out of the backfill. */
+export const MAX_BACKFILL_ATTEMPTS = 3;
+
+/**
+ * Messages the backfill has failed on, and how often. A message the embedder
+ * rejects every time (too long in tokens for its limit, say) would otherwise be
+ * the newest unindexed message on every run, stop the run, and hold back every
+ * older one for good. In process memory, like the job clock: a restart gives
+ * each one another three tries, which costs a few calls and nothing else.
+ */
+const backfillFailures = new Map<string, number>();
+
+/** For tests: forget every recorded failure. */
+export function __resetBackfillFailuresForTests(): void {
+  backfillFailures.clear();
+}
+
 /**
  * Embed the person's messages that were stored before the index existed, or
  * that the turn path missed. One org per call (the job runs per org), newest
@@ -209,12 +255,29 @@ export const MEMORY_BACKFILL_BATCH = 25;
  *
  * **Stops at the first failure.** A failure is almost always the embedder (no
  * provider, a provider down), and every other message in the batch would fail
- * the same way and log the same warning. The next run starts again.
+ * the same way and log the same warning. The next run starts again. A message
+ * that fails {@link MAX_BACKFILL_ATTEMPTS} runs is left out after that, so one
+ * the embedder will never take cannot hold back the rest.
+ *
+ * Does nothing while the active embedding model answers in a size the column
+ * cannot hold: every call would be charged and nothing stored.
  */
 export async function backfillMemoryIndex(
   batchSize: number = MEMORY_BACKFILL_BATCH
 ): Promise<MemoryBackfillResult> {
   const orgId = requireOrgId();
+  if (!(await embeddingFits())) {
+    logger.warn(
+      'Memory backfill skipped: the active embedding model is not the size the index stores',
+      {
+        dimension: MEMORY_EMBEDDING_DIMENSION,
+      }
+    );
+    return { indexed: 0, failed: 0 };
+  }
+  const given = [...backfillFailures]
+    .filter(([, attempts]) => attempts >= MAX_BACKFILL_ATTEMPTS)
+    .map(([id]) => id);
   const missing = await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
     SELECT m.id, c."userId"
       FROM ai_message m
@@ -231,6 +294,7 @@ export async function backfillMemoryIndex(
        AND c."contextType" = ${FACILITATION_SURFACE_CONTEXT_TYPE}
        AND LENGTH(BTRIM(m.content, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
        AND e.id IS NULL
+       AND m.id <> ALL(${given}::text[])
      ORDER BY m."createdAt" DESC
      LIMIT ${batchSize}
   `;
@@ -239,9 +303,13 @@ export async function backfillMemoryIndex(
   for (const message of missing) {
     try {
       if ((await indexMessage({ userId: message.userId }, message.id)) === 'indexed') indexed++;
+      backfillFailures.delete(message.id);
     } catch (err) {
+      const attempts = (backfillFailures.get(message.id) ?? 0) + 1;
+      backfillFailures.set(message.id, attempts);
       logger.warn('Memory backfill stopped: a message could not be embedded', {
         messageId: message.id,
+        attempts,
         error: err instanceof Error ? err.message : String(err),
       });
       return { indexed, failed: 1 };

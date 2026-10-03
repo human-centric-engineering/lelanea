@@ -1118,7 +1118,9 @@ describe('the person\u2019s words, into their memory index', () => {
 
     // Queued even though the reply failed: what the person said is stored either way.
     expect(queueMessageIndex).toHaveBeenCalledTimes(1);
-    expect(queueMessageIndex).toHaveBeenCalledWith({ userId: 'user-1' }, 'm1');
+    expect(queueMessageIndex).toHaveBeenCalledWith({ userId: 'user-1' }, 'm1', {
+      turnId: expect.any(String),
+    });
   });
 
   it('queues nothing for a turn with no message of the person\u2019s', async () => {

@@ -93,7 +93,10 @@ function parseVector(literal: unknown): number[] {
   return String(literal).slice(1, -1).split(',').map(Number);
 }
 
-const { embedText } = vi.hoisted(() => ({ embedText: vi.fn() }));
+const { embedText, getActiveEmbeddingModelSummary } = vi.hoisted(() => ({
+  embedText: vi.fn(),
+  getActiveEmbeddingModelSummary: vi.fn(),
+}));
 const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
 
 function sqlOf(
@@ -122,11 +125,12 @@ const prismaFake = {
   $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const { text, values: v } = sqlOf(strings, values);
     if (text.includes('LEFT JOIN app_memory_embedding')) {
-      // backfill: [orgId, seat, min, limit]
-      const [orgId, seat, min, limit] = v;
+      // backfill: [orgId, seat, min, given-up ids, limit]
+      const [orgId, seat, min, given, limit] = v;
       expect(seat).toBe(SEAT);
       return world.messages
         .filter((m) => m.orgId === orgId && conversationOf(m)?.userId && isIndexable(m, min))
+        .filter((m) => !(given as string[]).includes(m.id))
         .filter((m) => !world.embeddings.some((e) => e.messageId === m.id))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, Number(limit))
@@ -207,7 +211,10 @@ const prismaFake = {
 };
 
 vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
-vi.mock('@/lib/orchestration/knowledge/embedder', () => ({ embedText }));
+vi.mock('@/lib/orchestration/knowledge/embedder', () => ({
+  embedText,
+  getActiveEmbeddingModelSummary,
+}));
 vi.mock('@/lib/logging', () => ({
   logger: { warn, info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
@@ -220,6 +227,8 @@ const {
   forgetMemory,
   listMemoryEntriesForSubject,
   MAX_SEARCH_RESULTS,
+  MAX_BACKFILL_ATTEMPTS,
+  __resetBackfillFailuresForTests,
 } = await import('@/lib/app/memory/memory-index');
 
 let clock = 0;
@@ -261,6 +270,8 @@ beforeEach(() => {
   world.sql = [];
   clock = 0;
   vi.clearAllMocks();
+  __resetBackfillFailuresForTests();
+  getActiveEmbeddingModelSummary.mockResolvedValue(null);
   embedText.mockReset();
   embedText.mockImplementation(async (text: string) => {
     if (world.embedFails) throw new Error('no embedding provider');
@@ -312,6 +323,26 @@ describe('indexing a message', () => {
     expect(await indexMessage({ userId: ME }, 'kept')).toBe('indexed');
     expect(world.embeddings.map((e) => e.messageId)).toEqual(['kept']);
     expect(embedText).toHaveBeenCalledTimes(1);
+  });
+
+  it('tags the embedding with the turn it came from, so the turn’s cost counts it', async () => {
+    said('m1', MY_FATHER);
+    await indexMessage({ userId: ME }, 'm1', { turnId: 'turn-7' });
+    expect(embedText).toHaveBeenCalledWith(MY_FATHER, 'document', {
+      userId: ME,
+      conversationId: 'conv-user-me-facilitation',
+      metadata: { kind: 'memory_embedding', messageId: 'm1', turnId: 'turn-7' },
+    });
+  });
+
+  it('spends nothing while the active model answers in a size the index cannot hold', async () => {
+    said('m1', MY_FATHER);
+    getActiveEmbeddingModelSummary.mockResolvedValue({ modelId: 'big', dimensions: 3072 });
+    expect(await indexMessage({ userId: ME }, 'm1')).toBe('skipped');
+    expect(embedText).not.toHaveBeenCalled();
+
+    getActiveEmbeddingModelSummary.mockResolvedValue({ modelId: 'small', dimensions: 1536 });
+    expect(await indexMessage({ userId: ME }, 'm1')).toBe('indexed');
   });
 
   it('does not embed a message twice', async () => {
@@ -374,6 +405,38 @@ describe('the backfill', () => {
     })())!;
     expect(indexable(read!.text)).toHaveLength(3);
     expect(indexable(backfill.text)).toEqual(indexable(read!.text));
+  });
+
+  it('gives up on a message the embedder never takes, so it cannot hold back older ones', async () => {
+    said('older', MY_FATHER);
+    said('poison', THEIR_FATHER);
+    embedText.mockImplementation(async (text: string) => {
+      if (text === THEIR_FATHER) throw new Error('maximum context length exceeded');
+      return {
+        embedding: bag(text),
+        model: world.model,
+        provider: 'fake',
+        dimensions: DIM,
+        inputTokens: 1,
+        costUsd: 0,
+      };
+    });
+
+    for (let run = 1; run <= MAX_BACKFILL_ATTEMPTS; run++) {
+      expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1 });
+    }
+    expect(world.embeddings).toEqual([]);
+    // Given up on: the next run reaches the older message.
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 0 });
+    expect(world.embeddings.map((e) => e.messageId)).toEqual(['older']);
+  });
+
+  it('does nothing, and spends nothing, while the model is the wrong size', async () => {
+    said('m1', MY_FATHER);
+    getActiveEmbeddingModelSummary.mockResolvedValue({ modelId: 'big', dimensions: 3072 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(embedText).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('stops at the first failure rather than failing the whole batch the same way', async () => {
