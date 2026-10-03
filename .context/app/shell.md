@@ -24,22 +24,22 @@ one that breaks something silently.
 └──────────┴──────────────────────────┴────────────────────────┴──────┘
 ```
 
-| Piece        | File                                                  | What it is                                                             |
-| ------------ | ----------------------------------------------------- | ---------------------------------------------------------------------- |
-| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame     |
-| Nav          | `components/app/shell/shell-nav.tsx`                  | Six destinations + the account menu; 234px, or 64px slim               |
-| Account menu | `components/app/shell/account-menu.tsx`               | The footer's popover: account, settings, usage, admin, theme, sign out |
-| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; `recently` and the spend meter, and ≤900 the burger and switch   |
-| Spend meter  | `components/app/shell/spend-meter.tsx`                | This month against the ceiling, opening `/app/usage`; above 900px      |
-| Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone      |
-| Conversation | `components/app/shell/conversation-pane.tsx`          | Resizable 330–660, folds at 296 to a 56px strip                        |
-| Workspace    | `components/app/shell/workspace.tsx`                  | Where the route's view renders                                         |
-| Rail         | `components/app/shell/shell-rail.tsx`                 | Map and Resources, as buttons that open the drawers                    |
-| Drawers      | `components/app/shell/drawer.tsx`                     | Rendered **inside `Panes`**: under the topbar, clear of the rail       |
-| Chrome       | `components/app/shell/chrome.ts`                      | One radius for every icon highlight, so four of them cannot drift      |
-| Focus traps  | `components/app/shell/focusable.ts` + the two drawers | One shared `FOCUSABLE` selector, so both traps hold the same list      |
-| Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, once per session (`sessionStorage`, `lelanea.bloom.seen`)   |
-| Tooltip      | `components/app/ui/tipped.tsx`                        | The bubble on any icon-only control; never fires on touch              |
+| Piece        | File                                                  | What it is                                                                                    |
+| ------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Layout       | `app/(lelanea)/app/layout.tsx`                        | Session + acknowledgement gate, maintenance wrapper, `h-dvh` frame                            |
+| Nav          | `components/app/shell/shell-nav.tsx`                  | Six destinations + the account menu; 234px, or 64px slim                                      |
+| Account menu | `components/app/shell/account-menu.tsx`               | The footer's popover: account, settings, usage, admin, theme, sign out                        |
+| Topbar       | `components/app/shell/shell-topbar.tsx`               | 58px; `recently` and the spend meter, and ≤900 the burger and switch                          |
+| Spend meter  | `components/app/shell/spend-meter.tsx`                | This month against the ceiling, opening `/app/usage`; above 900px                             |
+| Panes        | `components/app/shell/panes.tsx`                      | Holds both middle columns, the swipe gesture, and the view's tone                             |
+| Conversation | `components/app/shell/conversation-pane.tsx`          | Resizable 330–660, folds at 296 to a 56px strip                                               |
+| Workspace    | `components/app/shell/workspace.tsx`                  | Where the route's view renders                                                                |
+| Rail         | `components/app/shell/shell-rail.tsx`                 | Map and Resources, as buttons that open the drawers                                           |
+| Drawers      | `components/app/shell/drawer.tsx`                     | Rendered **inside `Panes`**: under the topbar, clear of the rail                              |
+| Chrome       | `components/app/shell/chrome.ts`                      | One radius for every icon highlight, so four of them cannot drift                             |
+| Focus traps  | `components/app/shell/focusable.ts` + the two drawers | One shared `FOCUSABLE` selector, so both traps hold the same list                             |
+| Entry bloom  | `components/app/shell/entry-bloom.tsx`                | The lotus, on every full load — refresh and return included (t-132); skip with a click or Esc |
+| Tooltip      | `components/app/ui/tipped.tsx`                        | The bubble on any icon-only control; never fires on touch                                     |
 
 Its own route group, because `app/(protected)/layout.tsx` is a header over a
 single `container mx-auto` main — a centred document column, which is the

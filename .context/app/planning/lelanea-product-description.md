@@ -598,7 +598,7 @@ The signature element. A bloom of three petal tiers over sage ripples, with a bu
 - **Opening:** 2200ms, staggered inner to outer, from a near-upright cluster out to rest.
 - **Idle:** a 4s breath, scaling between 1.0 and 1.015.
 
-It opens **once per session** and is ambient thereafter. It is the first thing a new user sees, and the animation is the app's opening gesture rather than a loading state.
+It opens **once per session** and is ambient thereafter. *(Superseded in t-132: it now opens on every full page load, refresh and return included, and a click or Escape skips it.)* It is the first thing a new user sees, and the animation is the app's opening gesture rather than a loading state.
 
 ### 6.10 Copy and casing
 

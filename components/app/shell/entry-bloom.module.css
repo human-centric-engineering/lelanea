@@ -1,0 +1,21 @@
+/* The entry bloom's fail-safe.
+ *
+ * The cover is server-rendered so it is there from the first paint. If the
+ * page's scripts never run, nothing in React would ever take it away, and the
+ * app would sit behind it. Until the component has mounted, this fades it out
+ * by itself; the delay is set inline from `LOTUS_OPENED_MS`, so it cannot drift
+ * from the bloom's own length. Once JavaScript is alive the class is removed and
+ * the component's clock decides.
+ *
+ * `visibility` as well as `opacity`: a transparent cover still takes clicks.
+ */
+.failsafe {
+  animation: lift 420ms ease-out forwards;
+}
+
+@keyframes lift {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
