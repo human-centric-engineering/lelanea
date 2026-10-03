@@ -33,6 +33,8 @@ async function newDocument() {
 }
 
 const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+/** The cover's fade-out. */
+const FADE_MS = 900;
 
 beforeEach(async () => {
   await newDocument();
@@ -57,7 +59,7 @@ async function settle() {
     vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
   });
   await act(async () => {
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(FADE_MS + 50);
   });
 }
 
@@ -123,7 +125,7 @@ describe('EntryBloom — on every full page load', () => {
     expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
 
     await act(async () => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(FADE_MS + 50);
     });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
@@ -143,6 +145,36 @@ describe('EntryBloom — on every full page load', () => {
   });
 });
 
+describe('EntryBloom — the lotus rises as it opens', () => {
+  it('is large, and fades in and drifts up for the whole opening and fade', () => {
+    render(<EntryBloom />);
+    const rise = screen.getByTestId('entry-bloom-rise');
+    expect(rise.className).toMatch(/rise/);
+    expect(rise.style.animationDuration).toBe(`1000ms, ${LOTUS_OPENED_MS + FADE_MS}ms`);
+    // Far bigger than the old 168px bloom: a fluid lotus up to 680px wide.
+    expect(rise.className).toContain('w-[min(86vw,680px)]');
+    expect(rise.querySelector('[data-open]')).toHaveStyle({ width: '100%' });
+  });
+
+  it('holds the rise until the bloom starts, so they move together', () => {
+    // On the server — before JavaScript — the rise is paused at its start.
+    expect(renderToString(<EntryBloom />)).toMatch(/animation-play-state:paused/);
+    render(<EntryBloom />);
+    expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('running');
+  });
+
+  it('does not breathe — it is leaving, not resting', async () => {
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+    });
+    const bloom = screen.getByTestId('entry-bloom-rise').querySelector('[data-open]');
+    expect(bloom?.className.split(/\s+/)).toEqual(['relative', 'inline-block']);
+    vi.useRealTimers();
+  });
+});
+
 describe('EntryBloom — always gets out of the way', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -154,7 +186,7 @@ describe('EntryBloom — always gets out of the way', () => {
     fireEvent.click(screen.getByTestId('entry-bloom'));
     expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
     await act(async () => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(FADE_MS + 50);
     });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
@@ -165,7 +197,7 @@ describe('EntryBloom — always gets out of the way', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
     await act(async () => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(FADE_MS + 50);
     });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });

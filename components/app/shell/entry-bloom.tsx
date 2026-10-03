@@ -9,8 +9,17 @@ import { cn } from '@/lib/utils';
 
 import styles from '@/components/app/shell/entry-bloom.module.css';
 
-/** The fade this adds once the last petal has settled. */
-const FADE_MS = 420;
+/** The fade once the last petal has settled — long enough to read as a fade-out, not a cut. */
+const FADE_MS = 900;
+
+/** The lotus fades in over this long as it starts to rise. */
+const FADE_IN_MS = 1000;
+
+/**
+ * It drifts up through the whole opening and on through the fade-out, so it
+ * is still rising as it disappears rather than stopping and then vanishing.
+ */
+const DRIFT_MS = LOTUS_OPENED_MS + FADE_MS;
 
 /**
  * If JavaScript never arrives, CSS lifts the cover on its own this long after
@@ -160,7 +169,27 @@ export function EntryBloom() {
       data-testid="entry-bloom"
       data-hydrated={hydrated ? 'true' : undefined}
     >
-      <Lotus size={168} autoOpen idle water onOpened={() => setPhase('leaving')} />
+      {/*
+        Large, fading in and drifting slowly up the screen while it opens, then
+        fading out with the cover (owner, 3 Oct 2026). The drift is a deliberate
+        exception to §6.5's 4–8px translation limit, asked for by name; reduced
+        motion gets neither the drift nor the fade-in (the module's media query).
+        No breath: it is leaving, not resting.
+      */}
+      <div
+        className={cn('w-[min(86vw,680px)]', styles.rise)}
+        style={{
+          animationDuration: `${FADE_IN_MS}ms, ${DRIFT_MS}ms`,
+          // Held until JavaScript is alive, which is when the petals start to
+          // move: run from the first paint, a slow page finished the rise
+          // before the bloom had opened. Until then the lotus is not yet shown
+          // (the fade-in's start state) over the plain cover.
+          animationPlayState: hydrated ? 'running' : 'paused',
+        }}
+        data-testid="entry-bloom-rise"
+      >
+        <Lotus size={520} autoOpen idle={false} water fluid onOpened={() => setPhase('leaving')} />
+      </div>
     </div>
   );
 }
