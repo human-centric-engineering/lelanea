@@ -20,8 +20,10 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-import { correctNote, fetchNotes, NotesRefused } from '@/lib/app/slots/notes-client';
+import { correctNote, fetchNotes, NotesRefused, removeNote } from '@/lib/app/slots/notes-client';
 import { noteGroupTitle, noteSourceWords, NOTE_SOURCES } from '@/lib/app/slots/notes-view';
+import { REMOVED_SOURCE_TYPE } from '@/lib/app/slots/removed';
+import { SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots/vocabulary';
 
 /** A `fetch` that answers exactly this, whatever it is asked. */
 function answering(body: string, init: ResponseInit = { status: 200 }): typeof fetch {
@@ -62,6 +64,48 @@ describe('a server that answers the wrong shape', () => {
       correctNote({ slotSlug: 'life_work', value: 'x' }, { fetchImpl: answering(body) })
     ).rejects.toMatchObject({ code: 'malformed' });
   });
+
+  it('rejects a note missing `removed` or `removable` (t-78 widened the contract)', async () => {
+    // A server still on the pre-removal contract — every other field present,
+    // but the two t-78 added are not. The schema has to know about them, or a
+    // card would render with `note.removed` and `note.removable` as
+    // `undefined`, which is falsy for `removable` (hiding the control
+    // silently) and falsy-but-wrong for `removed` (never the placeholder).
+    const fullNote: Record<string, unknown> = {
+      slotSlug: 'life_work',
+      asking: null,
+      value: 'Work is going badly.',
+      withheld: false,
+      removed: false,
+      confidence: 8,
+      sourceType: 'direct',
+      reasoningNote: 'Said plainly.',
+      version: 1,
+      capturedAt: '2026-09-21T09:15:00.000Z',
+      conversationId: null,
+      sensitivity: 'standard',
+      retired: false,
+      correctable: true,
+      removable: true,
+      previous: null,
+      group: 'life_areas',
+    };
+    const envelopeWith = (note: Record<string, unknown>) =>
+      JSON.stringify({
+        success: true,
+        data: { notes: [note], groups: [], own: 0, total: 1, matched: 1 },
+      });
+
+    const { removed: _removed, ...withoutRemoved } = fullNote;
+    await expect(
+      fetchNotes({ fetchImpl: answering(envelopeWith(withoutRemoved)) })
+    ).rejects.toMatchObject({ code: 'malformed' });
+
+    const { removable: _removable, ...withoutRemovable } = fullNote;
+    await expect(
+      fetchNotes({ fetchImpl: answering(envelopeWith(withoutRemovable)) })
+    ).rejects.toMatchObject({ code: 'malformed' });
+  });
 });
 
 describe('what it asks for', () => {
@@ -84,6 +128,55 @@ describe('what it asks for', () => {
       // `grouped` is the default, so the plain page is the plain URL.
       '/api/v1/app/notes',
     ]);
+  });
+});
+
+describe('removing a note (t-78)', () => {
+  it('sends a DELETE with the slug as the body, with credentials, and returns the version count', async () => {
+    const fetchImpl = answering(JSON.stringify({ success: true, data: { versions: 3 } }));
+
+    const result = await removeNote('life_work', { fetchImpl });
+
+    expect(result).toEqual({ versions: 3 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(fetchImpl).mock.calls[0];
+    expect(url).toBe('/api/v1/app/notes');
+    expect(init?.method).toBe('DELETE');
+    expect(init?.credentials).toBe('include');
+    expect(JSON.parse(init?.body as string)).toEqual({ slotSlug: 'life_work' });
+  });
+
+  it('throws a `NotesRefused` carrying the route’s message and code on a refusal', async () => {
+    const body = JSON.stringify({
+      success: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'There is no note under that heading to remove.',
+        details: { reason: 'already_removed' },
+      },
+    });
+
+    const failed = removeNote('life_work', { fetchImpl: answering(body, { status: 409 }) });
+
+    await expect(failed).rejects.toBeInstanceOf(Error);
+    await expect(failed).rejects.toMatchObject({
+      name: 'NotesRefused',
+      status: 409,
+      code: 'already_removed',
+      message: 'There is no note under that heading to remove.',
+    });
+  });
+
+  it('throws a `NotesRefused` with code "malformed" on a 200 it cannot read the answer from', async () => {
+    // `versions` missing from an otherwise-`success` body. Treating this as a
+    // success would tell the panel the removal landed on the strength of a
+    // response it could not actually confirm.
+    const body = JSON.stringify({ success: true, data: {} });
+
+    await expect(removeNote('life_work', { fetchImpl: answering(body) })).rejects.toMatchObject({
+      name: 'NotesRefused',
+      code: 'malformed',
+    });
   });
 });
 
@@ -150,7 +243,15 @@ describe('putting a stored classifier into words', () => {
     // would degrade silently to the fallback below.
     expect(noteSourceWords('inferred')).toBe('Lelañea inferred it');
     expect(noteSourceWords('user_confirmed')).toBe('You corrected this yourself');
-    expect(Object.keys(NOTE_SOURCES)).toHaveLength(7);
+    // Every classifier the framework ships, plus the one this app writes when a
+    // person removes a note (t-78) — and nothing else.
+    expect(Object.keys(NOTE_SOURCES).sort()).toEqual(
+      [...Object.values(SLOT_SOURCE_TYPE), REMOVED_SOURCE_TYPE].sort()
+    );
+  });
+
+  it('names a removed version as the person’s own act', () => {
+    expect(noteSourceWords(REMOVED_SOURCE_TYPE)).toBe('You removed this');
   });
 
   it('reads an unknown one as itself, capitalised, rather than as a shrug', () => {

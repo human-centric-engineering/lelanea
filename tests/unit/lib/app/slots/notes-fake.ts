@@ -32,6 +32,7 @@ export interface ValueRow {
   slotSlug: string;
   version: number;
   value: string;
+  valueJson?: unknown;
   confidence: number;
   sourceType: string;
   reasoningNote: string;
@@ -59,6 +60,8 @@ export const world = {
   projections: [] as DefinitionRow[],
   /** Ours — the taxonomy an admin edits. Only `visibility` is read from it. */
   ours: [] as { slug: string; visibility: string; sensitivity?: string }[],
+  /** `app_turn_slot_write`, with the turn's owner flattened onto each row. */
+  ledger: [] as { turnId: string; userId: string; slotSlug: string; version: number }[],
   nextId: 0,
 };
 
@@ -80,6 +83,10 @@ function matches(row: ValueRow, where: Record<string, unknown>): boolean {
     if (typeof condition === 'object') {
       const operators = condition as Record<string, unknown>;
       if ('in' in operators) return (operators.in as unknown[]).includes(actual);
+      // The removal's "every version not already a placeholder" (t-78).
+      if ('not' in operators && Object.keys(operators).length === 1) {
+        return actual !== operators.not;
+      }
       throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
     }
     return actual === condition;
@@ -123,11 +130,62 @@ export const prismaFake = {
         return { ...row };
       }
     ),
+    // The removal's one write (t-78): every matching row overwritten with the
+    // same fields. Only the fields a removal sends are modelled; anything else
+    // throws, so a later write cannot quietly pass through as a no-op.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => {
+        const allowed = new Set([
+          'value',
+          'valueJson',
+          'confidence',
+          'sourceType',
+          'reasoningNote',
+          'provenance',
+          'capturedAt',
+          'slotSlug',
+        ]);
+        for (const key of Object.keys(data)) {
+          if (!allowed.has(key)) throw new Error(`the fake does not model writing ${key}`);
+        }
+        const rows = world.values.filter((row) => matches(row, where));
+        for (const row of rows) Object.assign(row, data);
+        return { count: rows.length };
+      }
+    ),
     create: vi.fn(async ({ data }: { data: Omit<ValueRow, 'id' | 'supersededAt'> }) => {
       const row: ValueRow = { id: `v${++world.nextId}`, supersededAt: null, ...data };
       world.values.push(row);
       return { ...row };
     }),
+  },
+  appTurnSlotWrite: {
+    // The removal's ledger move (t-78): `{ slotSlug, turn: { userId } }` and
+    // nothing else, so a later query of another shape fails loudly.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { slotSlug: string; turn: { userId: string } };
+        data: { slotSlug: string };
+      }) => {
+        if (Object.keys(where).sort().join() !== 'slotSlug,turn' || !where.turn.userId) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        const rows = world.ledger.filter(
+          (row) => row.slotSlug === where.slotSlug && row.userId === where.turn.userId
+        );
+        for (const row of rows) row.slotSlug = data.slotSlug;
+        return { count: rows.length };
+      }
+    ),
   },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
@@ -204,6 +262,7 @@ export function resetWorld(): void {
   world.values = [];
   world.projections = [];
   world.ours = [];
+  world.ledger = [];
   world.nextId = 0;
   clock = 0;
 }

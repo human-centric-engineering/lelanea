@@ -21,7 +21,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** Each person's slot heads, keyed by user id. */
 const slots = vi.hoisted(() => ({
-  heads: new Map<string, { slotSlug: string; value: string }[]>(),
+  heads: new Map<string, { slotSlug: string; value: string; sourceType?: string }[]>(),
   fail: false,
 }));
 
@@ -75,6 +75,7 @@ const { VOICE_AGENT_SLUG } = await import('@/lib/app/voice/fingerprint');
 const { buildContext, clearContextCache, registerContextContributor } =
   await import('@/lib/orchestration/chat/context-builder');
 const { redactedString } = await import('@/lib/security/redact');
+const { REMOVED_SOURCE_TYPE, REMOVED_VALUE } = await import('@/lib/app/slots/removed');
 
 const ALICE = 'user-alice';
 const BOB = 'user-bob';
@@ -155,6 +156,34 @@ describe('a masked answer', () => {
     expect(block).not.toContain('<redacted');
     // The unmasked answer beside it is still supplied.
     expect(block).toContain('> Something to come home to.');
+  });
+});
+
+describe('a removed answer (t-78)', () => {
+  it('is named as removed, and the placeholder is never quoted as their words', async () => {
+    slots.heads.set(ALICE, [
+      { slotSlug: 'discovery_q01', value: REMOVED_VALUE, sourceType: REMOVED_SOURCE_TYPE },
+      { slotSlug: 'discovery_q02', value: 'Something to come home to.' },
+    ]);
+
+    const block = await loadFacilitationVoiceContext('facilitator', { userId: ALICE });
+
+    // Marked, not dropped: a question that silently vanished would read as one
+    // never answered, and invite the AI to ask it again.
+    expect(block).toContain(`[Question 1 · What brought you here?]\n${ANSWERS_FRAMING.removed}`);
+    expect(block).not.toContain(`> ${REMOVED_VALUE}`);
+    // The answer beside it is still quoted.
+    expect(block).toContain('> Something to come home to.');
+  });
+
+  it('keys on how it was stored, not on its words', async () => {
+    // Someone who typed the marker's own words as an answer gets them quoted
+    // back, as anything else they wrote would be.
+    slots.heads.set(ALICE, [{ slotSlug: 'discovery_q01', value: REMOVED_VALUE }]);
+
+    const block = await loadFacilitationVoiceContext('facilitator', { userId: ALICE });
+
+    expect(block).not.toContain(ANSWERS_FRAMING.removed);
   });
 });
 

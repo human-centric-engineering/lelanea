@@ -1073,16 +1073,80 @@ Dev only; nothing runs it.
   what the person said and durable app logs are not erasure-covered — the same
   reasoning `capture.ts` gives for its own.
 
+## Removing a note (f-memory t-78)
+
+A person can remove any note they can see, from its card: **Remove this note**,
+then a second step that says what it does and does not touch, then **Remove it**.
+`DELETE /api/v1/app/notes` with `{ slotSlug }`. The slug is in the body because
+the route logger records the URL.
+
+**Every version is wiped in place, and leaves a placeholder** (owner ruling,
+3 Oct 2026). The words, the typed value, the reasoning and the provenance go.
+Each row keeps its version number, stamped `sourceType: removed_by_person`, with
+`capturedAt` moved to the moment of removal. The card then says _You removed this
+note on …_ and nothing else: no certainty, no controls. The rows stay for two
+reasons, both in `lib/app/slots/removed.ts`:
+
+- the panel counts history as `version - 1`, and
+- Daybreak's `appendSlotValue` numbers the next capture from the head, so the
+  placeholder **stays the head**. A head that stopped being one would make the
+  next reading of that slug a second version 1. `npm run smoke:app-delete-note`
+  proves the next capture lands as N+1 against the real unique index.
+
+**A heading Lelañea made up goes too.** A slug with no definition in either
+tier was coined by the AI from what the person said (`leaving_my_husband`), so
+keeping it would leave the note's gist on the head, beside the marker. Its
+versions move together to an opaque `removed_<random>` slug, and the person's
+`app_turn_slot_write` rows follow, in one transaction. The card tags it
+_removed note_. A later reading under the old heading starts its own chain at 1.
+A taxonomy slug is an admin's wording, not the person's, and it stays. Found by
+`/code-review`.
+
+**What the AI is told** (ruling 5): that a note was removed, never what. The
+placeholder's text is a marker written for the AI, and that is what `get_state`
+and a module's context print where the reading was. The discovery-answers block
+names a removed answer as removed rather than quoting the marker, and onboarding
+treats it as unanswered, so the person can answer it afresh. A journey gate
+compares the typed value as a scalar; the placeholder's is an object, so it
+matches no gate. Every reader keys on `isRemoved()` (the `sourceType`), never
+on the text, so nobody makes a note read as removed by typing the marker's
+words.
+
+**Who may remove what.** The same refusal as the correction: a hidden slug and
+a slug with nothing left to remove get the same 404, so the route can't be
+used to learn that a hidden slot is filled. Retired and Art. 9 notes are
+removable. Removing is how an Art. 9 note's kept summary goes too.
+
+**What a removal does not reach yet.**
+
+- **The conversation it came from.** What the person said is still in the
+  transcript, and the AI can still read it. Offering to remove that exchange is
+  the exchange-deletion task on `f-memory` (ruling 4). The card's second step
+  says so plainly, so nobody finds their words still quoted and thinks the
+  removal failed.
+- **`app_turn_slot_write`** rows are kept on purpose. They hold a turn id, a
+  slug and a version, no words, and they are the only link the exchange
+  offer can start from.
+- **Embeddings.** None exist for a slot value yet. The task that first embeds
+  anything owns the rule that a vector goes with its source.
+
+**This writes Daybreak's table directly**, a stopgap the owner ruled for:
+`lib/app/slots/delete-note.ts` is the one function, `divergences.md` Row 26 is
+the ledger entry, and
+[`daybreak#286`](https://github.com/human-centric-engineering/daybreak/issues/286)
+asks for the real removal. Delete the function when one lands.
+
+### What it changes about erasure (Art. 17)
+
+Before this, erasure was all or nothing: `eraseUser()` and the FK cascade.
+Now a person can erase one note themselves, with no request to an operator.
+The placeholder rows stay in their subject-access export (`SlotValue` is
+exported whole by Daybreak's manifest). They show _that_ something was removed
+and when, which is the record the ruling keeps, and nothing of what it said.
+Account erasure is unchanged and takes the placeholders with everything else.
+
 ## What is not here yet
 
-- **Deleting one note.** There is no per-answer deletion at any tier: erasure
-  takes the account or nothing. Filed as **t-78 on `f-memory`**, which owns
-  deletion propagation — deleting the reading is the easy half, and the
-  embedding that carries it is the reason it hangs there rather than here. The
-  framework half is a paragraph on
-  [`daybreak#156`](https://github.com/human-centric-engineering/daybreak/issues/156),
-  offered rather than assumed: `values.ts` is insert-only by design, and whether
-  it should expose a removal is a product decision as much as an API one.
 - **Admin control over minting** — whether the agent may invent a slot at all,
   against admin-authored guidance, or only by proposing one for approval. Owner
   ruling 20 Sept 2026 that this should be a three-mode setting; captured as its
