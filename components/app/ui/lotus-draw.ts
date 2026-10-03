@@ -179,12 +179,16 @@ function waterShapes(waterIn: number): LotusShape[] {
       strokeWidth: 0.8,
     });
   }
+  // Sized to sit inside the water frame: measured with the rest of the water
+  // (below), a glow larger than the pads and ripples would grow every frame —
+  // and clipped by a frame it overhung, it showed a straight edge on a dark
+  // ground and popped in at the canvas-to-SVG hand-over (code review, t-134).
   shapes.push({
     kind: 'glow',
     cx: 0,
-    cy: -35,
-    rx: 150,
-    ry: 95,
+    cy: -25,
+    rx: 140,
+    ry: 62,
     colour: '--color-lotus-halation',
     opacity: r2(waterIn),
   });
@@ -361,7 +365,7 @@ export function measureLotusFrames(): LotusFrames {
   const bloomWidth = bloom.x1 - bloom.x0;
   let every = bloom;
   for (let ms = 0; ms < LOTUS_OPENED_MS; ms += 250) every = union(every, flowerBounds(ms));
-  const water = bounds(waterShapes(1), ['fill', 'ring']);
+  const water = bounds(waterShapes(1), ['fill', 'ring', 'glow']);
   const glyph = flowerBounds(LOTUS_GLYPH_MS);
   return {
     animated: {

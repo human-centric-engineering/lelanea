@@ -107,6 +107,20 @@ describe('lotusFrames', () => {
     }
   });
 
+  it('holds the whole of the water — halation included — inside the water frames', () => {
+    // A glow overhanging its frame is clipped: a straight edge on a dark
+    // ground in the baked mark, and a pop at the canvas-to-SVG hand-over.
+    const glow = drawLotus(LOTUS_OPENED_MS, { water: true }).find((s) => s.kind === 'glow');
+    if (glow?.kind !== 'glow') throw new Error('no halation drawn');
+    for (const frame of [lotusFrames().still.water, lotusFrames().animated.water]) {
+      const [x, y, w, h] = frame.box;
+      expect(glow.cx - glow.rx).toBeGreaterThanOrEqual(x);
+      expect(glow.cx + glow.rx).toBeLessThanOrEqual(x + w);
+      expect(glow.cy - glow.ry).toBeGreaterThanOrEqual(y);
+      expect(glow.cy + glow.ry).toBeLessThanOrEqual(y + h);
+    }
+  });
+
   it('crops the still frame to the open bloom, without the bud’s headroom', () => {
     const still = lotusFrames().still.tight.box;
     const animated = lotusFrames().animated.tight.box;
