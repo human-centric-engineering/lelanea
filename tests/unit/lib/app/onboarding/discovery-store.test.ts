@@ -20,6 +20,7 @@ interface Row {
   version: number;
   supersededAt: Date | null;
   provenance: unknown;
+  sourceType?: string;
 }
 
 const mocks = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ import {
   leaveDiscovery,
   skipDiscoveryQuestion,
 } from '@/lib/app/onboarding/discovery-store';
+import { REMOVED_SOURCE_TYPE, REMOVED_VALUE } from '@/lib/app/slots/removed';
 
 const USER = 'user_1';
 
@@ -349,6 +351,23 @@ describe('getDiscoveryState: resuming from server state alone', () => {
     await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One, again.' });
     await answerDiscoveryQuestion(USER, setOf(ALL), ALL[1], { words: 'Two.' });
     expect((await getDiscoveryState(USER))?.versions).toEqual({ q01: 2, q02: 1 });
+  });
+
+  it('reads an answer the person removed from their notes as unanswered again (t-78)', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One.' });
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[1], { words: 'Two.' });
+    // What `deleteNote` leaves: the head wiped in place, its version kept.
+    const head = rows.find((r) => r.slotSlug === 'discovery_q01' && r.supersededAt === null);
+    Object.assign(head!, { value: REMOVED_VALUE, sourceType: REMOVED_SOURCE_TYPE });
+
+    const state = await getDiscoveryState(USER);
+
+    expect(Object.keys(state?.answers ?? {})).toEqual(['q02']);
+    expect(state?.versions).toEqual({ q02: 1 });
+    expect(state?.position.next).toBe('q01');
+    // Answering it afresh is a new version after the placeholder.
+    const again = await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'One, anew.' });
+    expect(again).toEqual({ outcome: 'written', version: 2 });
   });
 
   it('uses a set the caller already read, rather than reading it again', async () => {

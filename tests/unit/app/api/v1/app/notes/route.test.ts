@@ -26,7 +26,7 @@ const ME = 'cmjbv4i3x00003wsloputgwul';
 /** Somebody else, with notes of their own. */
 const THEM = 'cmu7other0000000000000000';
 
-const { store, notes, routeLog } = vi.hoisted(() => {
+const { store, notes, removal, routeLog } = vi.hoisted(() => {
   const store = new Map<string, string>();
   return {
     store,
@@ -41,6 +41,18 @@ const { store, notes, routeLog } = vi.hoisted(() => {
         matched: store.has(userId) ? 1 : 0,
       })),
       correctNote: vi.fn(async ({ slotSlug }: { slotSlug: string }) => ({ slotSlug, version: 2 })),
+    },
+    removal: {
+      // Keyed by person, like the read: removing takes only the caller's own
+      // entry, so a route that carried the wrong id would empty the wrong one.
+      deleteNote: vi.fn(async ({ userId }: { userId: string }) => {
+        if (!store.has(userId)) {
+          const { NotFoundError } = await import('@/lib/api/errors');
+          throw new NotFoundError('There is no note under that heading to remove.');
+        }
+        store.delete(userId);
+        return { versions: 3 };
+      }),
     },
     routeLog: {
       info: vi.fn(),
@@ -60,10 +72,11 @@ vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }))
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 vi.mock('@/lib/api/context', () => ({ getRouteLogger: () => Promise.resolve(routeLog) }));
 vi.mock('@/lib/app/slots/notes', () => notes);
+vi.mock('@/lib/app/slots/delete-note', () => removal);
 
 import { auth } from '@/lib/auth/config';
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
-import { GET, POST } from '@/app/api/v1/app/notes/route';
+import { DELETE, GET, POST } from '@/app/api/v1/app/notes/route';
 
 function read(): NextRequest {
   return new NextRequest('https://lelanea.com/api/v1/app/notes');
@@ -72,6 +85,14 @@ function read(): NextRequest {
 function correct(body: unknown): NextRequest {
   return new NextRequest('https://lelanea.com/api/v1/app/notes', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function remove(body: unknown): NextRequest {
+  return new NextRequest('https://lelanea.com/api/v1/app/notes', {
+    method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -201,6 +222,63 @@ describe('POST /api/v1/app/notes', () => {
     const [, fields] = routeLog.info.mock.calls[0] as [string, Record<string, unknown>];
     expect(fields).toMatchObject({ userId: ME, version: 2 });
     expect(JSON.stringify(fields)).not.toContain('something private');
+    expect(JSON.stringify(fields)).not.toContain('life_work');
+  });
+});
+
+describe('DELETE /api/v1/app/notes', () => {
+  it('removes under the caller’s own id, and only theirs', async () => {
+    const response = await DELETE(remove({ slotSlug: 'life_work' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: { versions: 3 } });
+    expect(removal.deleteNote).toHaveBeenCalledWith({ userId: ME, slotSlug: 'life_work' });
+    // The other person's entry is in the same store and is still there.
+    expect(store.has(ME)).toBe(false);
+    expect(store.get(THEM)).toBe('theirs');
+  });
+
+  it('refuses a body that names a subject', async () => {
+    const response = await DELETE(remove({ slotSlug: 'life_work', userId: THEM }));
+
+    expect(response.status).toBe(400);
+    expect(removal.deleteNote).not.toHaveBeenCalled();
+    expect(store.get(THEM)).toBe('theirs');
+  });
+
+  it('refuses a body with no heading', async () => {
+    const response = await DELETE(remove({ slotSlug: '' }));
+
+    expect(response.status).toBe(400);
+    expect(removal.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it('is closed to a caller with no session', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
+
+    const response = await DELETE(remove({ slotSlug: 'life_work' }));
+
+    expect(response.status).toBe(401);
+    expect(removal.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it('passes a hidden-or-absent refusal through as a 404', async () => {
+    store.delete(ME);
+
+    const response = await DELETE(remove({ slotSlug: 'development_stage' }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { message: 'There is no note under that heading to remove.' },
+    });
+  });
+
+  it('records that a removal happened without recording which note', async () => {
+    await DELETE(remove({ slotSlug: 'life_work' }));
+
+    const [, fields] = routeLog.info.mock.calls[0] as [string, Record<string, unknown>];
+    expect(fields).toMatchObject({ userId: ME, versions: 3 });
     expect(JSON.stringify(fields)).not.toContain('life_work');
   });
 });

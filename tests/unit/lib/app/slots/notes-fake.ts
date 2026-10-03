@@ -32,6 +32,7 @@ export interface ValueRow {
   slotSlug: string;
   version: number;
   value: string;
+  valueJson?: unknown;
   confidence: number;
   sourceType: string;
   reasoningNote: string;
@@ -80,6 +81,10 @@ function matches(row: ValueRow, where: Record<string, unknown>): boolean {
     if (typeof condition === 'object') {
       const operators = condition as Record<string, unknown>;
       if ('in' in operators) return (operators.in as unknown[]).includes(actual);
+      // The removal's "every version not already a placeholder" (t-78).
+      if ('not' in operators && Object.keys(operators).length === 1) {
+        return actual !== operators.not;
+      }
       throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
     }
     return actual === condition;
@@ -121,6 +126,34 @@ export const prismaFake = {
         if (!row) throw new Error('no such row');
         row.supersededAt = data.supersededAt;
         return { ...row };
+      }
+    ),
+    // The removal's one write (t-78): every matching row overwritten with the
+    // same fields. Only the fields a removal sends are modelled; anything else
+    // throws, so a later write cannot quietly pass through as a no-op.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => {
+        const allowed = new Set([
+          'value',
+          'valueJson',
+          'confidence',
+          'sourceType',
+          'reasoningNote',
+          'provenance',
+          'capturedAt',
+        ]);
+        for (const key of Object.keys(data)) {
+          if (!allowed.has(key)) throw new Error(`the fake does not model writing ${key}`);
+        }
+        const rows = world.values.filter((row) => matches(row, where));
+        for (const row of rows) Object.assign(row, data);
+        return { count: rows.length };
       }
     ),
     create: vi.fn(async ({ data }: { data: Omit<ValueRow, 'id' | 'supersededAt'> }) => {
