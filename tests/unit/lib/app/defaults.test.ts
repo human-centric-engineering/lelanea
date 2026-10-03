@@ -100,6 +100,7 @@ vi.mock('@/lib/db/client', () => ({
     // §08 t-54 — the turn record, for the export collector's section key.
     appTurn: { findMany: vi.fn(async () => []) },
     appSafetyEvent: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
+    appMemoryEmbedding: { findMany: vi.fn(async () => []) },
     // f-slots t-70 — the taxonomy the global slot provider reads. Empty is the
     // useful return here: the framework's global pass treats "provider supplied
     // nothing" as a fluke and returns before it opens a transaction, so the
@@ -593,6 +594,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppJourneyTier',
         'AppJourneyTierRevision',
         'AppKnowledgeDesignation',
+        'AppMemoryEmbedding',
         'AppQuestionSet',
         'AppQuestionSetRevision',
         'AppResource',
@@ -662,6 +664,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // it is exported to them (the words never were stored).
       const safety = sources.find((entry) => entry.model === 'AppSafetyEvent');
       expect(safety).toMatchObject({ section: 'safety', disposition: 'export' });
+      // f-memory t-129 — which of a person's messages are in their memory index
+      // is about them, so it is exported to them (never the vectors).
+      const memory = sources.find((entry) => entry.model === 'AppMemoryEmbedding');
+      expect(memory).toMatchObject({ section: 'memory', disposition: 'export' });
       // Eight of ours are excluded, and only those eight. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
@@ -1018,10 +1024,15 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/jobs.ts',
     risk: 'a stray job would run on every install\u2019s maintenance tick',
+    // PINNED, not deleted (`HB2`). f-memory t-129 fills this with ONE job: the
+    // memory index's backfill, per org (no scope declared, so the safe default).
+    // A second job, or this one bypassing the org scope, still fails here.
     assert: () => {
       __resetAppJobsForTests();
       // getAppJobs() triggers the lazy init, so this exercises the REAL seam.
-      expect(getAppJobs()).toEqual([]);
+      const jobs = getAppJobs();
+      expect(jobs.map((job) => job.name)).toEqual(['app:memory-index-backfill']);
+      expect(jobs[0]?.scope).toBeUndefined();
     },
   },
   {
@@ -1244,6 +1255,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // import-graph walk off disk.
         'tests/unit/lib/app/modules/client-safe.test.ts',
         'tests/unit/lib/app/org-id-check-roster.test.ts',
+        'tests/unit/lib/app/memory/index-boundary.test.ts',
       ]);
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
         'lib/framework/facilitation/evaluation/conversation.ts',
@@ -1251,17 +1263,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
-        // LELAÑEA's four, spread after them from `leaf-ci.ts` — pinned here too,
+        // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122; f-memory t-127).
+        // f-onboarding t-122; f-memory t-127, t-129).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
         'lib/app/memory/delete-exchange.ts',
+        'lib/app/memory/memory-index.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(9).fill('by-design')
+        Array<'by-design'>(10).fill('by-design')
       );
     },
   },
@@ -1295,11 +1308,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/resource-vocabulary.test.ts',
         'tests/unit/lib/app/modules/client-safe.test.ts',
         'tests/unit/lib/app/org-id-check-roster.test.ts',
+        'tests/unit/lib/app/memory/index-boundary.test.ts',
       ]);
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
       // §08 t-56 — the meter's seat-only conversation join, by design.
       // t-122 — whether the member has spoken on the facilitator seat, by design.
       // t-127 — deleting the member's own exchanges, owner-scoped, by design.
+      // t-129 — indexing and searching the member's own words, owner-scoped, by design.
       expect(
         leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
       ).toEqual([
@@ -1307,6 +1322,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/agent/metering.ts', 'by-design'],
         ['lib/app/conversation/opening.ts', 'by-design'],
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
+        ['lib/app/memory/memory-index.ts', 'by-design'],
       ]);
     },
   },

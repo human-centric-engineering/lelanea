@@ -131,6 +131,10 @@ vi.mock('@/lib/orchestration/chat/context-builder', async (importOriginal) => ({
 /** The voice agent as the seed leaves it: instructions on it, her voice core on the profile. */
 const HER_PERSONA = 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint_core v1.0';
 
+// f-memory t-129 — the turn hands the person's message to their memory index.
+const { queueMessageIndex } = vi.hoisted(() => ({ queueMessageIndex: vi.fn() }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ queueMessageIndex }));
+
 vi.mock('@/lib/db/client', () => {
   const next = (prefix: string): string => `${prefix}-${++db.seq}`;
   const match = (row: TurnRow, where: Record<string, unknown>): boolean =>
@@ -1096,6 +1100,40 @@ describe('a replay of a turn that used a tool', () => {
         },
       ],
     });
+  });
+});
+
+describe('the person\u2019s words, into their memory index', () => {
+  it('queues the message the turn started with, for the person who took the turn', async () => {
+    queueMessageIndex.mockClear();
+    const turn = turnFor();
+    const result = await runRecordedTurn(turn, () =>
+      (async function* () {
+        yield { type: 'start', conversationId: 'conv-user-1', messageId: 'm1' };
+        yield { type: 'error', code: 'stream_error', message: 'x' };
+      })()
+    );
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
+
+    // Queued even though the reply failed: what the person said is stored either way.
+    expect(queueMessageIndex).toHaveBeenCalledTimes(1);
+    expect(queueMessageIndex).toHaveBeenCalledWith({ userId: 'user-1' }, 'm1');
+  });
+
+  it('queues nothing for a turn with no message of the person\u2019s', async () => {
+    queueMessageIndex.mockClear();
+    const turn = turnFor();
+    const result = await runRecordedTurn(turn, () =>
+      (async function* () {
+        yield { type: 'start', conversationId: 'conv-user-1' };
+        yield { type: 'error', code: 'stream_error', message: 'x' };
+      })()
+    );
+    if ('refused' in result) throw new Error('refused');
+    for await (const _event of result);
+
+    expect(queueMessageIndex).not.toHaveBeenCalled();
   });
 });
 

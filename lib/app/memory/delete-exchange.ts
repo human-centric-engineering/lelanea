@@ -20,7 +20,8 @@
  * ## What it takes
  *
  * - **Every message in that window.** Sunrise's reply embeddings cascade with
- *   them (`ai_message_embedding`), and so will this feature's index.
+ *   them (`ai_message_embedding`), and so do the person's own vectors in the
+ *   memory index (`memory-index.ts`, t-129).
  * - **The turn record**, and its ledger rows with it (`app_turn_slot_write`
  *   cascades). No dollar lives on a turn record: the meter sums Sunrise's
  *   `ai_cost_log`, which keeps the turn's cost (`metering.ts`), so deleting an

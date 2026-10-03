@@ -6,7 +6,7 @@
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
- * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn` and `AppSafetyEvent` here; the guidance below is
+ * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn`, `AppSafetyEvent` and `AppMemoryEmbedding` here; the guidance below is
  * upstream's and still applies to every table added after them.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
@@ -49,6 +49,10 @@ import { findWaitlistEntriesForSubject } from '@/lib/app/waitlist/service';
 import { findAcknowledgementsForSubject } from '@/lib/app/gateway/acknowledgements';
 import { findUserBudgetsForSubject } from '@/lib/app/agent/settings';
 import { findTurnsForSubject } from '@/lib/app/agent/turn-record';
+import {
+  listMemoryEntriesForOrg,
+  listMemoryEntriesForSubject,
+} from '@/lib/app/memory/memory-index';
 import { findSafetyEventsForSubject } from '@/lib/app/safety/record';
 
 /**
@@ -120,6 +124,18 @@ export function initLeafSubjectSources(): void {
         disposition: 'export',
         description:
           'Each time something you wrote suggested you might be in danger and the app showed you where to find help: when, what kind of words it noticed, whether it stopped the conversation or let it carry on, and which country\u2019s helplines it showed you. It also records each time the app\u2019s automatic checks flagged a message of yours as a possible attempt to misuse the assistant: when, and which check flagged it. What you wrote is not stored here.',
+      },
+      {
+        // f-memory t-129. Never the vector: a list of numbers means nothing to
+        // the person it describes, and the words it was made from are their
+        // conversation, which the platform's sections already return. What
+        // this section says is which of their messages the AI can find again
+        // by meaning, and since when.
+        model: 'AppMemoryEmbedding',
+        section: 'memory',
+        disposition: 'export',
+        description:
+          'Which of your messages are indexed so the assistant can find them again by what they mean, when each was indexed, and by which AI model. The index holds no words: what you said is in your conversations. Deleting a message, a conversation or your account removes it from the index.',
       },
     ],
     excluded: [
@@ -344,7 +360,7 @@ export function initLeafSubjectSources(): void {
 /**
  * Collect Lelañea's own data about one subject.
  *
- * Five sections: `waitlist`, `acknowledgements`, `budget`, `turns` and `safety`. Each is returned whether or
+ * Six sections: `waitlist`, `acknowledgements`, `budget`, `turns`, `safety` and `memory`. Each is returned whether or
  * not the subject has a row — an empty array, never an omitted key. A declared
  * section missing from this object makes `exportUserData()` throw, and a key
  * set to `undefined` counts as missing because `JSON.stringify` drops it.
@@ -358,14 +374,15 @@ export function initLeafSubjectSources(): void {
  * against superseded document versions, because we still hold them.
  */
 export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
-  const [waitlist, acknowledgements, budget, turns, safety] = await Promise.all([
+  const [waitlist, acknowledgements, budget, turns, safety, memory] = await Promise.all([
     findWaitlistEntriesForSubject(subject),
     findAcknowledgementsForSubject(subject),
     findUserBudgetsForSubject(subject),
     findTurnsForSubject(subject),
     findSafetyEventsForSubject(subject),
+    listMemoryEntriesForSubject(subject),
   ]);
-  return { waitlist, acknowledgements, budget, turns, safety };
+  return { waitlist, acknowledgements, budget, turns, safety, memory };
 }
 
 /**
@@ -424,6 +441,16 @@ const ORG_SOURCES: OrgDataSource[] = [
         where: ownedBy(orgId),
         orderBy: { writtenAt: 'asc' },
       }),
+  },
+  {
+    // f-memory t-129. Read through the index module, the only code that touches
+    // the table, and never the vectors.
+    model: 'AppMemoryEmbedding',
+    section: 'appMemoryEmbeddings',
+    disposition: 'export',
+    description:
+      'Which of each member’s messages are in the memory index, when and by which model. Not the vectors, and no words.',
+    fetch: ({ orgId }) => listMemoryEntriesForOrg(orgId),
   },
   {
     model: 'AppSafetyEvent',

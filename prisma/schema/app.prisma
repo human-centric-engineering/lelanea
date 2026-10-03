@@ -627,6 +627,60 @@ model AppTurnSlotWrite {
   @@map("app_turn_slot_write")
 }
 
+/// What a memory embedding was made from (f-memory t-129). One value per
+/// source kind, each with its own cascading foreign key column on the row:
+/// `message` (a person's own message, `messageId`) today; notes join in t-107.
+enum AppMemorySourceKind {
+  message
+
+  @@map("app_memory_source_kind")
+}
+
+/// One thing a person said, embedded so it can be found again by meaning, for
+/// that person only (f-memory t-129; product description §5, §3.19).
+///
+/// **A leaf stand-in for daybreak#287** (owner ruling 1, 3 Oct 2026). Only
+/// `lib/app/memory/memory-index.ts` reads or writes this table
+/// (`tests/unit/lib/app/memory/index-boundary.test.ts`), so swapping it for
+/// Daybreak's index is a change to one module.
+///
+/// **Holds no words.** The text stays in its source (`ai_message.content`) and
+/// a search reads it from there. A copy here would be a second copy of the
+/// conversation with its own deletion story.
+///
+/// **An embedding goes with its source** (owner ruling 2, at claim). Three
+/// hand-written FKs, all `ON DELETE CASCADE`, none modelled by Prisma: a fork
+/// table must not add a reverse field to a Sunrise model (CUSTOMIZATION.md §5).
+/// They are `userId` → `user` (erasure), `messageId` → `ai_message` (deleting a
+/// message, an exchange or a conversation), and the org relation below. The
+/// migration's CHECK ties `sourceKind` to its column. Each is pinned by a drift
+/// probe in `lib/app/leaf-db-drift.ts`, as is the hand-written HNSW index.
+model AppMemoryEmbedding {
+  id                 String                      @id @default(cuid())
+  /// Hand-written FK → `user`, `ON DELETE CASCADE`. The person the words are
+  /// theirs; every search filters on it.
+  userId             String
+  sourceKind         AppMemorySourceKind
+  /// Hand-written FK → `ai_message`, `ON DELETE CASCADE`. Set when
+  /// `sourceKind` is `message`; one embedding per message.
+  messageId          String?                     @unique
+  embedding          Unsupported("vector(1536)")
+  /// The model that made the vector. A search compares only vectors made by
+  /// the model that embedded the query: two models' vectors are not comparable.
+  embeddingModel     String
+  embeddingProvider  String
+  embeddingDimension Int
+  createdAt          DateTime                    @default(now())
+
+  /// The org this row belongs to (Sunrise §107, t-112), taken from the source row.
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([userId, embeddingModel])
+  @@index([orgId])
+  @@map("app_memory_embedding")
+}
+
 /// What kind of safety event a row records. `crisis` today; the misuse task
 /// (f-safety t-60) adds its own kind to the same table.
 enum AppSafetyEventKind {

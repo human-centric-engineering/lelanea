@@ -210,6 +210,16 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       '(run prisma generate after a schema edit), which no module graph ' +
       'from the branch that adds a model reaches.',
   },
+  {
+    path: 'tests/unit/lib/app/memory/index-boundary.test.ts',
+    reason:
+      'fails when any file outside `lib/app/memory/memory-index.ts` reads or ' +
+      'writes the memory index table (f-memory t-129). It reads the tree off ' +
+      'disk and imports none of it, so the branch that adds a second reader, ' +
+      'a new route, a new job or a script, reaches it through no module graph. ' +
+      'One reader is what keeps the index swappable for daybreak#287, and what ' +
+      'keeps every read of it per person.',
+  },
 ];
 
 /**
@@ -268,5 +278,18 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'carry `userId` — so they can only ever match the member’s own rows, never an ' +
       'ownerless or shared thread. `conversationVisibilityWhere` answers who may ' +
       'SEE a thread; a deletion must be narrower than that, the owner alone.',
+  },
+  {
+    path: 'lib/app/memory/memory-index.ts',
+    disposition: 'by-design',
+    reason:
+      'the memory index reads the caller’s OWN messages to embed them and, on a ' +
+      'search, to return their words (f-memory t-129). Every read joins the ' +
+      'message to its conversation and requires `c."userId"` to be the person ' +
+      'the caller names from its own context (the turn, the session), and the ' +
+      'index rows carry the same `userId`, so a read can only ever match that ' +
+      'member’s own messages, never an ownerless or shared thread. The backfill ' +
+      'reads across one org’s seat conversations and indexes each message ' +
+      'under the conversation’s own owner, which is the same rule.',
   },
 ];
