@@ -259,6 +259,11 @@ describe('reserved fork tiers', () => {
       // writes themselves; and a child of `AppTurn`, so its Art. 17 disposition
       // is that turn's cascade rather than a second FK to `user`).
       'model AppTurnSlotWrite {',
+      // f-memory t-129 — the per-person memory index: a vector and its source's
+      // id, never the words (a SOURCE: which of a person's messages are indexed
+      // is about them; every row cascades with its message and its person).
+      'enum AppMemorySourceKind {',
+      'model AppMemoryEmbedding {',
       // f-safety t-58 — that the crisis path answered someone, never the words
       // (a SOURCE: it is about the person it happened to).
       'enum AppSafetyEventKind {',

@@ -103,6 +103,12 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 3,
     why: 'read-only SUM/COUNT over ai_cost_log grouped by a CASE-picked dimension (JSON seat with an ai_conversation fallback, UTC day) that Prisma groupBy cannot express; every value bound — the person, when scoped, filters ai_cost_log.userId',
   },
+  // LELAÑEA — the memory index (f-memory t-129), same ledger row.
+  {
+    file: 'lib/app/memory/memory-index.ts',
+    calls: 4,
+    why: 'pgvector writes and cosine search over app_memory_embedding joined to ai_message and ai_conversation, which Prisma cannot express (Unsupported vector column, <=> ordering); every table carries org_isolation, the search and the backfill bind the org, and every statement binds the person on the conversation',
+  },
   {
     file: 'lib/db/drift-probes.ts',
     calls: 6,

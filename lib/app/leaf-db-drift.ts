@@ -257,7 +257,7 @@ export function registerLeafDriftProbes(): void {
     probe: constraintExists('app_memory_embedding_userId_fkey', 'ON DELETE CASCADE'),
   });
   registerAppDriftProbe({
-    name: 'app_memory_embedding_messageId_fkey (hand-written FK → ai_message)',
+    name: 'app_memory_embedding_messageId_fkey (hand-written FK → the message table)',
     kind: 'FK constraint',
     table: 'app_memory_embedding',
     probe: constraintExists('app_memory_embedding_messageId_fkey', 'ON DELETE CASCADE'),
