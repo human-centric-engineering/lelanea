@@ -257,4 +257,16 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'member’s own rows only, so an ownerless or shared thread matching nothing ' +
       'is the right answer, not a gap. f-onboarding t-122.',
   },
+  {
+    path: 'lib/app/memory/delete-exchange.ts',
+    disposition: 'by-design',
+    reason:
+      'deleting an exchange reads the messages of the caller’s OWN turns, and ' +
+      'their own conversation row, to delete them (f-memory t-127). The turns are ' +
+      'first read by `userId` from the session, every message read and delete ' +
+      'carries `conversation: { userId }`, and the conversation read and update ' +
+      'carry `userId` — so they can only ever match the member’s own rows, never an ' +
+      'ownerless or shared thread. `conversationVisibilityWhere` answers who may ' +
+      'SEE a thread; a deletion must be narrower than that, the owner alone.',
+  },
 ];

@@ -1251,16 +1251,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
-        // LELAÑEA's three, spread after them from `leaf-ci.ts` — pinned here too,
+        // LELAÑEA's four, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122).
+        // f-onboarding t-122; f-memory t-127).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
+        'lib/app/memory/delete-exchange.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(8).fill('by-design')
+        Array<'by-design'>(9).fill('by-design')
       );
     },
   },
@@ -1298,12 +1299,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
       // §08 t-56 — the meter's seat-only conversation join, by design.
       // t-122 — whether the member has spoken on the facilitator seat, by design.
+      // t-127 — deleting the member's own exchanges, owner-scoped, by design.
       expect(
         leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
       ).toEqual([
         ['lib/app/agent/turn-record.ts', 'by-design'],
         ['lib/app/agent/metering.ts', 'by-design'],
         ['lib/app/conversation/opening.ts', 'by-design'],
+        ['lib/app/memory/delete-exchange.ts', 'by-design'],
       ]);
     },
   },
