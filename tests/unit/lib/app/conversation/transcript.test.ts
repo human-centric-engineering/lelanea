@@ -131,6 +131,8 @@ function turn(
     errorCode: string | null;
     modelId: string | null;
     fingerprintVersion: string | null;
+    register: string | null;
+    registerSource: string | null;
     startedAt: Date;
   }> = {}
 ) {
@@ -142,6 +144,8 @@ function turn(
     modelId: 'gpt-4o-mini-2024-07-18',
     providerSlug: 'openai',
     fingerprintVersion: 'v1',
+    register: null as string | null,
+    registerSource: null as string | null,
     inputTokens: 100,
     outputTokens: 40,
     costUsd: 0.00063,
@@ -156,6 +160,36 @@ function turn(
 }
 
 describe('assembleTranscript', () => {
+  it('carries the register a turn was steered to, and reads an unknown one as none (t-125)', () => {
+    const entries = assemble(
+      [
+        user('u1', 'Hello', 1, 't1'),
+        assistant('a1', 'Welcome.', 3),
+        user('u2', 'And?', 6, 't2'),
+        assistant('a2', 'Then this.', 8),
+      ],
+      [
+        turn('t1', {
+          userMessageId: 'u1',
+          assistantMessageId: 'a1',
+          register: 'teaching',
+          registerSource: 'module',
+        }),
+        turn('t2', {
+          userMessageId: 'u2',
+          assistantMessageId: 'a2',
+          register: 'stern',
+          registerSource: 'whim',
+        }),
+      ]
+    );
+
+    const turns = entries.flatMap((entry) => (entry.kind === 'reply' ? [entry.turn] : []));
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).toMatchObject({ register: 'teaching', registerSource: 'module' });
+    expect(turns[1]).toMatchObject({ register: null, registerSource: null });
+  });
+
   it('pairs a reply with the turn row that names it, carrying the account', () => {
     const entries = assemble(
       [user('u1', 'Hello', 1, 't1'), assistant('a1', 'Welcome.', 3)],

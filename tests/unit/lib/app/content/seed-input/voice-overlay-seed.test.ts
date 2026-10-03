@@ -15,6 +15,7 @@
  * this file fails at import. That is the seam being unfilled, not a defect.
  */
 
+import { REGISTERS } from '@/lib/app/voice/register';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -25,6 +26,10 @@ import {
 import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';
+const REGISTER_MIGRATION =
+  'prisma/migrations/20261007100100_app_voice_register_overlays/migration.sql';
+/** The overlays the t-125 migration adds, named for the registers that select them. */
+const REGISTER_SITUATIONS: readonly string[] = ['guiding', 'teaching'];
 
 /** t-114: moved the set's authored name from `id` into `slug`. */
 const PER_ORG_KEYS_MIGRATION =
@@ -154,9 +159,13 @@ describe('the data migration', () => {
       overlays: unknown[];
     };
     const { id: authoredName, ...setText } = embedded.set;
-    expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual(
-      buildVoiceOverlaySeed()
-    );
+    // The registers' two overlays came later, in their own migration (t-125,
+    // below); t-88's literal is the seed without them.
+    const seed = buildVoiceOverlaySeed();
+    expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual({
+      ...seed,
+      overlays: seed.overlays.filter((o) => !REGISTER_SITUATIONS.includes(o.situation)),
+    });
     expect(migrationSql(PER_ORG_KEYS_MIGRATION)).toContain(
       'UPDATE "app_voice_overlay_set" SET "slug" = "id";'
     );
@@ -186,5 +195,44 @@ describe('the data migration', () => {
 
     expect(sql).not.toContain("'signed_off'");
     expect(sql.match(/'draft'/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('the registers’ data migration (f-registers t-125)', () => {
+  const sql = () => migrationSql(REGISTER_MIGRATION);
+
+  it('writes exactly the guiding and teaching overlays the seed builds today', () => {
+    const match = /\$t125overlays\$([\s\S]*?)\$t125overlays\$/.exec(sql());
+
+    expect(match, 'the migration no longer embeds the register overlays').not.toBeNull();
+    const embedded = JSON.parse(match![1]) as { overlays: unknown[] };
+    const seeded = buildVoiceOverlaySeed().overlays.filter((o) =>
+      REGISTER_SITUATIONS.includes(o.situation)
+    );
+    expect(seeded.map((o) => o.situation)).toEqual([...REGISTER_SITUATIONS]);
+    expect(embedded.overlays).toEqual(seeded);
+  });
+
+  it('names one situation per register, so every register selects an overlay', () => {
+    expect([...REGISTER_SITUATIONS]).toEqual([...REGISTERS]);
+  });
+
+  it('inserts only a situation the org does not have yet, so an operator’s own survives', () => {
+    expect(sql()).toContain('WHERE NOT EXISTS (');
+    expect(sql()).toContain('"e"."situation" = "o"."value"->>\'situation\'');
+  });
+
+  it('places them after the set’s last overlay, since positions are unique per set', () => {
+    expect(sql()).toContain('COALESCE(MAX("x"."position"), 0)');
+  });
+
+  it('records the same changed fields the service records, as drafts, under the org', async () => {
+    const { VOICE_OVERLAY_SNAPSHOT_FIELDS } = await import('@/lib/app/content/voice-overlay-store');
+    expect(sql()).toContain(
+      `ARRAY[${VOICE_OVERLAY_SNAPSHOT_FIELDS.map((f) => `'${f}'`).join(', ')}]`
+    );
+    expect(sql()).not.toContain("'signed_off'");
+    expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
+    expect(sql()).toContain('"set"."orgId"');
   });
 });

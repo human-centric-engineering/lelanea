@@ -71,7 +71,11 @@ function newestEstablishingMigration(): { name: string; sql: string } {
     .filter((entry) => existsSync(entry.path))
     .map((entry) => ({ name: entry.name, sql: readFileSync(entry.path, 'utf8') }))
     .filter(
-      (entry) => entry.sql.includes('INSERT INTO "ai_capability"') && entry.sql.includes('$json$')
+      (entry) =>
+        entry.sql.includes('INSERT INTO "ai_capability"') &&
+        entry.sql.includes('$json$') &&
+        // Its own slug: other capabilities ship the same shape (t-126's `set_register`).
+        entry.sql.includes(`'${SUGGEST_RESOURCE_SLUG}'`)
     );
   const newest = found.at(-1);
   if (!newest) {

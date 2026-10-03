@@ -43,6 +43,7 @@ import { isRecord } from '@/lib/utils';
 import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
 import { isOpeningTurnId } from '@/lib/app/conversation/opening-id';
+import type { RegisterChoice } from '@/lib/app/voice/register';
 
 /**
  * How long past the whole-turn deadline a `running` claim is still honoured.
@@ -125,19 +126,32 @@ function isUniqueViolation(err: unknown): boolean {
   return isRecord(err) && err.code === 'P2002';
 }
 
+/** What a claim stamps on the row, fresh on every attempt. */
+export interface TurnStamp {
+  fingerprintVersion: string | null;
+  /** The register the turn is steered to and why (f-registers t-125), or null for none. */
+  register: RegisterChoice | null;
+}
+
 /**
  * Claim a turn id for this request.
  *
- * `fingerprintVersion` is written on every claim, re-runs included, because a
- * re-run may be told a different version than the attempt that failed.
- * `staleAfterMs` is {@link staleClaimMs} of the deadline in force.
+ * The stamp is written on every claim, re-runs included, because a re-run may
+ * be told a different version, or steered to a different register, than the
+ * attempt that failed. `staleAfterMs` is {@link staleClaimMs} of the deadline
+ * in force.
  */
 export async function claimTurn(
   request: TurnRequest,
-  fingerprintVersion: string | null,
+  stamp: TurnStamp,
   staleAfterMs: number,
   now: Date = new Date()
 ): Promise<TurnClaim> {
+  const stamped = {
+    fingerprintVersion: stamp.fingerprintVersion,
+    register: stamp.register?.register ?? null,
+    registerSource: stamp.register?.source ?? null,
+  };
   const { requestHash } = request;
 
   try {
@@ -149,7 +163,7 @@ export async function claimTurn(
         requestHash,
         seat: request.seat,
         agentSlug: request.agentSlug,
-        fingerprintVersion,
+        ...stamped,
         startedAt: now,
       },
     });
@@ -183,7 +197,7 @@ export async function claimTurn(
       attempts: existing.attempts + 1,
       startedAt: now,
       completedAt: null,
-      fingerprintVersion,
+      ...stamped,
       errorCode: null,
       conversationId: null,
       userMessageId: null,

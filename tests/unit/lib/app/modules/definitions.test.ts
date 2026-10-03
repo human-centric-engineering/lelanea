@@ -179,3 +179,30 @@ describe('getModuleDefinitions() from the roster alone — no database', () => {
     }
   });
 });
+
+describe('every module carries its register (f-registers t-125)', () => {
+  const definitions = getModuleDefinitions();
+
+  it('starts Values at teaching and every other module at guiding, editable in its config', () => {
+    const starts = new Map(
+      definitions.map((definition) => [
+        definition.slug,
+        (definition.configSchema.parse({}) as { register: string }).register,
+      ])
+    );
+
+    expect(starts.size).toBe(LELANEA_MODULE_COUNT);
+    expect(starts.get('values')).toBe('teaching');
+    for (const [slug, register] of starts) {
+      if (slug !== 'values') expect(register, slug).toBe('guiding');
+    }
+  });
+
+  it('refuses a register that is not one, and an unknown key beside it', () => {
+    const values = definitions.find((definition) => definition.slug === 'values')!;
+
+    expect(values.configSchema.parse({ register: 'guiding' })).toEqual({ register: 'guiding' });
+    expect(() => values.configSchema.parse({ register: 'stern' })).toThrow();
+    expect(() => values.configSchema.parse({ register: 'guiding', stray: 1 })).toThrow();
+  });
+});

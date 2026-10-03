@@ -276,10 +276,83 @@ next sync.
 `voice` straight through. A member's turn comes through Daybreak's facilitation
 route, which pins `facilitation` / `<seat>` — and since §08 t-54 the same block is
 registered for that type too, with the seat mapped to a situation
-(`onboarding` → `first-meeting`; `facilitator` → core-only until a turn can say
-which moment it is). See [`agent.md`](./agent.md#her-voice-on-a-seat). The core
+(`onboarding` → `first-meeting`). The `facilitator` seat is every moment after
+the first, so it is not one situation: its overlay is the person's **register**,
+guiding or teaching (below, f-registers t-125), and core-only only when no
+register can be read. See [`agent.md`](./agent.md#her-voice-on-a-seat). The core
 consumer route refuses a context type outright, so a turn through it gets the
 always-on core and no block.
+
+## Guiding and teaching: the facilitator seat's register (f-registers t-125)
+
+Product description §3.14: **guiding** holds space; **teaching** pushes past
+the comfortable answer. The moment sets the register and the person sets the
+leanings. Owner rulings, 2 Oct 2026, are journalled on f-registers.
+
+- **The module sets where a turn starts.** Every module's config has a
+  `register` field (`lib/app/modules/definitions.ts`), edited in Framework →
+  Modules → the module. Values starts at `teaching`, every other module at
+  `guiding` (`moduleDefaultRegister`); the stored config wins. Not a
+  facilitation policy kind: Daybreak's kinds are a fixed vocabulary behind a
+  migration CHECK.
+- **The person's current module** is their most recently active node on the
+  journey (`readCurrentModuleSlug`; node keys are module slugs on our map).
+- **A crisis holds it at guiding** for `SAFETY_HOLD_HOURS` (24), whatever the
+  module says, including the soft-crisis turn it happens in. A crisis check
+  that cannot be read also steers to guiding, but as source `fallback`, not
+  `safety`: the account under the reply then gives no reason, rather than
+  telling the person something hard happened when nothing was read.
+- **The AI moves off it within a reply** when the moment calls for it. That is
+  the overlays' own authored instruction, not code, and nothing records that it
+  did: the record says where the turn **began**.
+
+**Decided once, at the claim.** `runGeneratedTurn` calls `resolveRegister`
+before claiming the turn and stamps `register` / `registerSource` on the
+`app_turn` row. The contributor reads it back from the running row
+(`registerForPrompt`) rather than deciding again, so the prompt and the account
+are one value. The seat drops the person's cached block when a turn's register
+differs from their last turn's, so a change reaches the very next prompt.
+
+**A register is a situation.** The two overlays are rows in `app_voice_overlay`
+named `guiding` and `teaching`, each with its own exemplar query, added to
+existing databases by `20261007100100_app_voice_register_overlays` (pinned to
+the seed by `voice-overlay-seed.test.ts`). Deleting one leaves the seat
+core-only in that register; the Voice page names the seat as what selects it.
+
+**Shown to the person.** The `done` frame carries `register` and
+`registerSource` (the leaf's own fields; nothing strips them), so the account
+under a live reply, a replay and a reload all say the same sentence
+(`registerSentence`, in the detail, not the one-liner).
+
+**The person can lean (t-126).** "Be gentle with me today" makes the AI call
+`set_register` (`lib/app/voice/register-capability.ts`), which writes the
+caller's own lean onto their current module node's `progress` ledger, under
+`registerLean`, through Daybreak's `recordNodeProgress`
+(`lib/app/voice/register-lean.ts`). It holds for a sitting (`LEAN_HOLD_HOURS`,
+12): the facilitator conversation is resumed rather than ended, so a sitting
+is what "for now" can mean. "Go back to normal" writes a `null` tombstone.
+Moving to another module leaves it behind. Precedence (`selectRegister`):
+**crisis, then the lean, then the module.** The tool is the facilitator
+seat's only (it reads the seat the turn seam stamps on the dispatch), is a
+sanctioned self-write in `pins.ts` with its argument written out, and the
+account says "Noted how you asked to be spoken to". Its row and grant reach
+existing databases by `20261007100200_app_set_register_capability`; seed
+`023-set-register` re-applies the code-owned fields.
+
+Not a data slot, which the plan named first: a global slot is a row of the
+admin-edited taxonomy (renamable, deletable, listed in the vocabulary the AI
+captures into), kept as a permanent fact. A lean is a request about how to be
+met for a while; the module's own node ledger is the element that says so, and
+it is exported and erased with the journey.
+
+**What it does to the pinned model.** `npm run smoke:app-register` asks the
+same question in Values at teaching and at guiding, each in a fresh
+conversation (asked twice in one, the model repeats its first answer, which
+compares the history rather than the register). The teaching reply names the
+conflict plainly and asks the question underneath; the guiding reply receives
+first and does not press. Both still tend to ask more than one question. The
+wording is a draft awaiting her review (idea #46), and it is rows: tuning it
+is an edit on the Voice page, not code.
 
 ## Where the overlays live: the database (t-88)
 
@@ -598,11 +671,13 @@ designation made through instance A leaves instance B serving its cached block �
 that document's passage still in it — for the rest of the TTL. Also Sunrise's,
 and also an `upstream-gap`.
 
-## It is the same for every user, on purpose
+## It is the same for every user, except where they are
 
 `buildContext` hands a contributor the request's `userId` and partitions its
-60-second cache by it, so a per-user block is available. This one does not use
-it. A user's voice leanings are a later filter over these two layers, and until
+60-second cache by it, so a per-user block is available. Two things in it are
+per person: their discovery answers, and on the facilitator seat which
+register's overlay is chosen. That is where the person is, not what they
+prefer, and it is shown under every reply. A user's voice leanings are a later filter over these two layers, and until
 that is designed, one person's preference silently reshaping how her voice is
 reproduced is a change nobody asked for and nobody can see.
 

@@ -32,8 +32,12 @@
  * **The module that asks the discovery questions owns them** (f-onboarding
  * t-101; `.context/app/building-with-daybreak.md`). Its definition declares one
  * data slot per question (`slotDefinitions`, scoped `module:<slug>` by
- * Daybreak) and the Core Set switch as its config (`configSchema`). The other
- * modules keep an empty interior until they are written.
+ * Daybreak) and the Core Set switch as its config (`configSchema`).
+ *
+ * **Every module carries its register** (f-registers t-125): guiding or
+ * teaching, as one field of its config, so an admin sets it in the module's
+ * own area (`lib/app/voice/register.ts`). Otherwise the modules keep an empty
+ * interior until they are written.
  *
  * @see lib/app/journey/roster.ts — which modules exist
  * @see lib/app/content/journey-store.ts — `getJourneyStructure()`, their words
@@ -46,8 +50,9 @@ import type { JourneyStructure } from '@/lib/app/content/journey-view';
 import { JOURNEY_MODULES, type RosterModule } from '@/lib/app/journey/roster';
 import {
   DISCOVERY_DEFAULT_MODULE_ID,
-  discoveryConfigSchema,
+  discoveryConfigShape,
 } from '@/lib/app/onboarding/discovery-config';
+import { registerConfigField } from '@/lib/app/voice/register';
 import type { SlotDefinitionInput } from '@/lib/framework/data-slots';
 
 /**
@@ -109,12 +114,12 @@ function toDefinition(slug: string, name: string, description: string): ModuleDe
     slug,
     name,
     description,
-    // An empty interior, deliberately: the admin config form renders no fields
-    // and the API accepts `{}` and nothing else. Strict, like every authored
-    // schema in `lib/app/content/schemas.ts`: a plain `z.object({})` would
-    // strip unknown keys and store `{}` for a body that said something, which
-    // reads as saved. Each module grows its own schema when it is written.
-    configSchema: z.strictObject({}),
+    // The register and nothing else, deliberately: the admin config form
+    // renders one field. Strict, like every authored schema in
+    // `lib/app/content/schemas.ts`: a plain `z.object({})` would strip unknown
+    // keys and store `{}` for a body that said something, which reads as
+    // saved. Each module grows its own fields when it is written.
+    configSchema: z.strictObject({ register: registerConfigField(slug) }),
   };
 }
 
@@ -131,7 +136,10 @@ function withDiscovery(
   if (moduleId !== owner) return definition;
   return {
     ...definition,
-    configSchema: discoveryConfigSchema,
+    configSchema: z.strictObject({
+      ...discoveryConfigShape,
+      register: registerConfigField(definition.slug),
+    }),
     ...(discovery ? { slotDefinitions: discovery.slotDefinitions } : {}),
   };
 }

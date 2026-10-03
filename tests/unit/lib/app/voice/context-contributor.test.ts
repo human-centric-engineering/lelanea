@@ -134,6 +134,17 @@ vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
   }),
 }));
 
+/**
+ * The register the facilitator seat's turn was claimed with (t-125). Its reads
+ * are `register-store.test.ts`'s; here it is what the block does with one.
+ */
+const registers = vi.hoisted(() => ({ value: null as 'guiding' | 'teaching' | null }));
+vi.mock('@/lib/app/voice/register-store', () => ({
+  registerForPrompt: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator' ? registers.value : null
+  ),
+}));
+
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -225,6 +236,8 @@ const CORPUS_AGENT = 'agent-corpus';
 const CONTENT = readVoiceOverlaysFile();
 const KNOWN_SITUATION = CONTENT.overlays[0];
 const UNKNOWN_SITUATION = 'a-situation-nobody-authored';
+/** The register overlays, by situation. */
+const REG = { guiding: true, teaching: true };
 
 /** Her passage, and a knowledge passage that must never arrive by this path. */
 function seedWorld(): void {
@@ -810,7 +823,28 @@ describe('a facilitation seat turn', () => {
     expect(prompt).toContain('Voice fingerprint: lelanea_voice_fingerprint_core v1.0');
   });
 
-  it('the facilitator seat gets the core-only block — a register is never invented', async () => {
+  it.each(['guiding', 'teaching'] as const)(
+    'the facilitator seat carries the %s overlay when its turn was claimed with it, and her passages',
+    async (register) => {
+      registers.value = register;
+      const overlay = CONTENT.overlays.find((o) => o.situation === register);
+      if (!overlay) throw new Error(`no authored overlay for the ${register} register`);
+      const other = CONTENT.overlays.find((o) => o.situation !== register && o.situation in REG);
+
+      const prompt = await systemPromptFor('facilitator');
+
+      expect(prompt).toContain(overlay.heading);
+      for (const line of overlay.lines) expect(prompt).toContain(line);
+      // Not both: the turn is steered to one register.
+      expect(prompt).not.toContain(other!.heading);
+      for (const line of CONTENT.coreOnly.lines) expect(prompt).not.toContain(line);
+      expect(labelCount(prompt)).toBeGreaterThan(0);
+      expect(searchKnowledgeMock.mock.calls[0]?.[0]).toBe(overlay.exemplarQuery);
+    }
+  );
+
+  it('the facilitator seat gets the core-only block when there is no register to read', async () => {
+    registers.value = null;
     const prompt = await systemPromptFor('facilitator');
 
     // Population first: the block is there, and it is the authored fallback.

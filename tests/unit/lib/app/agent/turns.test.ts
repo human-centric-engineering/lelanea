@@ -36,6 +36,8 @@ interface TurnRow {
   status: 'running' | 'completed' | 'failed';
   attempts: number;
   fingerprintVersion: string | null;
+  register?: string | null;
+  registerSource?: string | null;
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -106,6 +108,26 @@ vi.mock('@/lib/logging', () => ({
   logger: { warn, error, info: vi.fn(), debug: vi.fn() },
 }));
 
+/**
+ * The register a facilitator turn is claimed with (f-registers t-125). Its
+ * reads are `register-store.test.ts`'s; here it is set per case, and the seam
+ * is asked what it does with it.
+ */
+const registers = vi.hoisted(() => ({
+  next: null as { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null,
+}));
+vi.mock('@/lib/app/voice/register-store', () => ({
+  hasRegister: (seat: string) => seat === 'facilitator',
+  resolveRegister: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator' && registers.next ? { ...registers.next, moduleSlug: 'values' } : null
+  ),
+}));
+const { invalidate } = vi.hoisted(() => ({ invalidate: vi.fn() }));
+vi.mock('@/lib/orchestration/chat/context-builder', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/orchestration/chat/context-builder')>()),
+  invalidateContext: invalidate,
+}));
+
 /** The voice agent as the seed leaves it: instructions on it, her voice core on the profile. */
 const HER_PERSONA = 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint_core v1.0';
 
@@ -153,6 +175,13 @@ vi.mock('@/lib/db/client', () => {
             return row ? { ...row } : null;
           }
         ),
+        // The seam's read of the person's last register on a seat (t-125).
+        findFirst: vi.fn(async ({ where }: { where: { userId: string; seat: string } }) => {
+          const rows = db.turns
+            .filter((t) => t.userId === where.userId && t.seat === where.seat)
+            .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+          return rows[0] ? { register: rows[0].register ?? null } : null;
+        }),
         findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => {
           const row = db.turns.find((t) => t.id === where.id);
           if (!row) throw new Error('not found');
@@ -1150,7 +1179,11 @@ describe('the edges of a claim', () => {
     // The other re-run takes it back between this one's read and its write.
     vi.mocked(prisma.appTurn.updateMany).mockResolvedValueOnce({ count: 0 });
 
-    const claim = await claimTurn(request, '1.0', staleClaimMs(60_000));
+    const claim = await claimTurn(
+      request,
+      { fingerprintVersion: '1.0', register: null },
+      staleClaimMs(60_000)
+    );
 
     expect(claim.kind).toBe('in_flight');
   });
@@ -1169,7 +1202,7 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        null,
+        { fingerprintVersion: null, register: null },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);
@@ -1560,5 +1593,54 @@ describe('the monthly ceiling (f-safety t-59)', () => {
       'Monthly ceiling could not be read; the turn is allowed',
       expect.objectContaining({ error: 'pool exhausted' })
     );
+  });
+});
+
+describe('the register a turn is steered to (f-registers t-125)', () => {
+  const facilitator = (overrides: Partial<FacilitationTurn> = {}) =>
+    turnFor({ role: 'facilitator', ...overrides });
+  const doneOf = (events: ChatEvent[]) => events.find((event) => event.type === 'done');
+
+  beforeEach(() => {
+    registers.next = { register: 'teaching', source: 'module' };
+  });
+
+  it('stamps the claim with it, and carries it on the done frame', async () => {
+    const events = await take(facilitator());
+
+    expect(db.turns[0]).toMatchObject({ register: 'teaching', registerSource: 'module' });
+    expect(doneOf(events)).toMatchObject({ register: 'teaching', registerSource: 'module' });
+  });
+
+  it('replays it from the row, so a retry’s account says what the first did', async () => {
+    await take(facilitator());
+    registers.next = { register: 'guiding', source: 'safety' };
+
+    const replayed = await take(facilitator());
+
+    expect(modelCalls).toBe(1);
+    expect(doneOf(replayed)).toMatchObject({ register: 'teaching', registerSource: 'module' });
+  });
+
+  it('drops the cached context when the register changes, and only then', async () => {
+    await take(facilitator({ clientTurnId: 'turn-a' }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith('facilitation', 'facilitator', { userId: 'user-1' });
+
+    await take(facilitator({ clientTurnId: 'turn-b', message: 'And then?' }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    registers.next = { register: 'guiding', source: 'safety' };
+    await take(facilitator({ clientTurnId: 'turn-c', message: 'It got hard.' }));
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(db.turns.at(-1)).toMatchObject({ register: 'guiding', registerSource: 'safety' });
+  });
+
+  it('leaves a seat with no register as it was: no stamp, no field on done', async () => {
+    const events = await take(turnFor());
+
+    expect(db.turns[0].register ?? null).toBeNull();
+    expect(doneOf(events)).not.toHaveProperty('register');
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

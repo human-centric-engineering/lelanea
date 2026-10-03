@@ -44,8 +44,15 @@ describe('readDiscoveryConfig', () => {
     expect(loggerMock.error).not.toHaveBeenCalled();
   });
 
+  it('reads the switch beside the register every module carries (t-125)', async () => {
+    getConfigForm.mockResolvedValue(form({ coreSetOnly: true, register: 'teaching' }));
+
+    await expect(readDiscoveryConfig('onboarding')).resolves.toEqual({ coreSetOnly: true });
+    expect(loggerMock.error).not.toHaveBeenCalled();
+  });
+
   it('asks every question when the stored config is refused by the schema, and logs it', async () => {
-    getConfigForm.mockResolvedValue(form({ coreSetOnly: true, stray: 1 }));
+    getConfigForm.mockResolvedValue(form({ coreSetOnly: 'yes' }));
 
     await expect(readDiscoveryConfig('onboarding')).resolves.toEqual({ coreSetOnly: false });
     expect(loggerMock.error).toHaveBeenCalledWith(

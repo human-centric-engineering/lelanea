@@ -580,6 +580,9 @@ export function useConversation(options: Options = {}): ConversationState {
                     providerSlug: event.provider ?? null,
                     // Not on the wire; the read route has it on reload.
                     fingerprintVersion: null,
+                    // The leaf's own fields on `done` (t-125), as a reload reads them.
+                    register: event.register ?? null,
+                    registerSource: event.registerSource ?? null,
                     inputTokens: event.tokenUsage?.inputTokens ?? null,
                     outputTokens: event.tokenUsage?.outputTokens ?? null,
                     // A replay's `done` says `0` for an unpriced turn (turns.ts),

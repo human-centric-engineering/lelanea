@@ -149,3 +149,26 @@ describe('the crisis frame keeps its resource', () => {
     expect(ours && 'resource' in ours ? ours.resource : 'absent').toBeUndefined();
   });
 });
+
+describe('the done frame carries the register (f-registers t-125)', () => {
+  const done = {
+    tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    costUsd: 0.001,
+  };
+
+  it('keeps a register and its source', () => {
+    expect(
+      parseConversationEvent(
+        block('done', { ...done, register: 'teaching', registerSource: 'module' })
+      )
+    ).toMatchObject({ type: 'done', register: 'teaching', registerSource: 'module' });
+  });
+
+  it('drops a value it cannot read without dropping the frame', () => {
+    const parsed = parseConversationEvent(
+      block('done', { ...done, register: 'stern', registerSource: 42 })
+    );
+    expect(parsed).toMatchObject({ type: 'done', costUsd: 0.001 });
+    expect(parsed).toMatchObject({ register: undefined, registerSource: undefined });
+  });
+});

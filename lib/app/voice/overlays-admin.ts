@@ -76,6 +76,8 @@ import {
 } from '@/lib/app/content/admin/shared';
 import { idsBySlug } from '@/lib/app/content/row-ids';
 import { SEAT_SITUATIONS } from '@/lib/app/voice/context-contributor';
+import { parseRegister } from '@/lib/app/voice/register';
+import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import type {
   OverlayCreate,
   OverlayEdit,
@@ -236,7 +238,14 @@ export function overlaySelectors(situation: string): string[] {
   const seats = [...SEAT_SITUATIONS]
     .filter(([, selected]) => selected === situation)
     .map(([seat]) => `the ${seat} seat, on every turn a person takes there`);
-  return [...seats, 'the admin chat, when it is asked for this situation'];
+  // A register is selected by the facilitator seat, from the person's module
+  // or a recent crisis (f-registers t-125), rather than pinned to a seat.
+  const register = parseRegister(situation);
+  const registers =
+    register === null
+      ? []
+      : [`the ${CONVERSATION_SEAT} seat, whenever a turn is steered to the ${register} register`];
+  return [...seats, ...registers, 'the admin chat, when it is asked for this situation'];
 }
 
 function describeUnservable(err: unknown): string {

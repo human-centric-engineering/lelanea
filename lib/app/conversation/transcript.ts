@@ -51,6 +51,12 @@
  * @see .context/app/conversation.md
  */
 
+import {
+  parseRegister,
+  parseRegisterSource,
+  type Register,
+  type RegisterSource,
+} from '@/lib/app/voice/register';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db/client';
@@ -77,6 +83,9 @@ export interface TurnAccount {
   modelId: string | null;
   providerSlug: string | null;
   fingerprintVersion: string | null;
+  /** The register the turn was steered to, and why (f-registers t-125); null when it had none. */
+  register: Register | null;
+  registerSource: RegisterSource | null;
   inputTokens: number | null;
   outputTokens: number | null;
   /** Null when unpriced — never zero, which would read as free. */
@@ -163,6 +172,8 @@ interface TurnRow {
   modelId: string | null;
   providerSlug: string | null;
   fingerprintVersion: string | null;
+  register: string | null;
+  registerSource: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
@@ -197,6 +208,8 @@ function accountOf(turn: TurnRow): TurnAccount {
     modelId: turn.modelId,
     providerSlug: turn.providerSlug,
     fingerprintVersion: turn.fingerprintVersion,
+    register: parseRegister(turn.register),
+    registerSource: parseRegisterSource(turn.registerSource),
     inputTokens: turn.inputTokens,
     outputTokens: turn.outputTokens,
     costUsd: turn.costUsd,
@@ -396,6 +409,8 @@ export async function readTranscript(
         modelId: true,
         providerSlug: true,
         fingerprintVersion: true,
+        register: true,
+        registerSource: true,
         inputTokens: true,
         outputTokens: true,
         costUsd: true,
