@@ -61,7 +61,8 @@ import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { listSlotDefinitions } from '@/lib/framework/data-slots';
-import { turnWindowStart } from '@/lib/app/agent/turn-record';
+import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
+import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import {
   NOT_YET_REMOVED,
   forgetCachedContext,
@@ -205,7 +206,8 @@ async function clearingsFor(
  *   them thinking it was all gone.
  * - **A turn still being answered** gets a 409. Its window is still filling, so
  *   deleting it now would leave the reply's last passes behind. The refusal
- *   names its remedy (`HB10`): wait, and ask again.
+ *   names its remedy (`HB10`): wait, and ask again. A claim left `running` past
+ *   `staleClaimMs()` is abandoned, not being answered, and is deleted.
  */
 export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedExchanges> {
   const ids = [...new Set(input.exchangeIds)];
@@ -213,7 +215,14 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   if (turns.length !== ids.length) {
     throw new NotFoundError('That part of the conversation could not be found.');
   }
-  if (turns.some((turn) => turn.status === 'running')) {
+  // A claim still `running` past `staleClaimMs()` was abandoned — its process
+  // died — and its window will not fill any further; the turn path reclaims it
+  // by the same test. Refusing it would make that exchange undeletable.
+  const staleAfterMs = staleClaimMs((await getAgentDeadlines()).turnDeadlineMs);
+  const now = Date.now();
+  const answering = (turn: OwnedTurn): boolean =>
+    turn.status === 'running' && now - turn.startedAt.getTime() <= staleAfterMs;
+  if (turns.some(answering)) {
     throw new ConflictError(
       'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
       { reason: 'still_answering' }

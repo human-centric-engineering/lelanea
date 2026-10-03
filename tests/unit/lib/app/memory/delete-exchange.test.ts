@@ -43,6 +43,9 @@ vi.mock('@/lib/db/utils', async () => {
   };
 });
 vi.mock('@/lib/orchestration/chat/context-builder', () => ({ invalidateContext }));
+vi.mock('@/lib/app/agent/settings', () => ({
+  getAgentDeadlines: async () => ({ firstWordsDeadlineMs: 30_000, turnDeadlineMs: 120_000 }),
+}));
 vi.mock('@/lib/framework/modules/registry', () => ({
   getRegisteredModules: () => [{ slug: 'values' }],
 }));
@@ -215,7 +218,9 @@ describe('deleting an exchange', () => {
 
   it('refuses an exchange still being answered, naming the remedy, and changes nothing', async () => {
     twoExchanges();
-    world.turns.find((row) => row.id === 'turn-b')!.status = 'running';
+    const turn = world.turns.find((row) => row.id === 'turn-b')!;
+    turn.status = 'running';
+    turn.startedAt = new Date();
     const before = JSON.stringify(world);
 
     const refused = deleteExchanges({ userId: ME, exchangeIds: ['turn-b'] });
@@ -223,6 +228,19 @@ describe('deleting an exchange', () => {
     await expect(refused).rejects.toBeInstanceOf(ConflictError);
     await expect(refused).rejects.toThrow(/Try again/);
     expect(JSON.stringify(world)).toBe(before);
+  });
+
+  it('deletes an exchange whose claim was abandoned mid-answer, past the stale window', async () => {
+    twoExchanges();
+    const turn = world.turns.find((row) => row.id === 'turn-b')!;
+    turn.status = 'running';
+    // Deadline 120s + 60s grace: 181s ago is abandoned.
+    turn.startedAt = new Date(Date.now() - 181_000);
+
+    const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-b'] });
+
+    expect(result.exchanges).toBe(1);
+    expect(world.turns.some((row) => row.id === 'turn-b')).toBe(false);
   });
 
   it('deletes a turn whose conversation is already gone, with the versions it wrote', async () => {
@@ -315,6 +333,23 @@ describe('the notes page', () => {
     const after = (await getNotes(ME)).notes.find((note) => note.slotSlug === 'life_rhythm');
     expect(after).toMatchObject({ removed: true, exchanges: [] });
     expect(world.messages.some((row) => row.id === 'm5')).toBe(false);
+  });
+
+  it('keeps a note removable while an exchange deletion left a reading under its placeholder', async () => {
+    twoExchanges();
+    // turn-b wrote both: removing one note and deleting the exchange wipes
+    // life_work's head (v3), but v1 and v2 came from elsewhere and are kept.
+    await deleteNote({ userId: ME, slotSlug: 'life_rhythm' });
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-b'] });
+
+    const work = (await getNotes(ME)).notes.find((note) => note.slotSlug === 'life_work');
+    expect(work).toMatchObject({ removed: true, removable: true });
+    expect(work?.previous).toMatchObject({ removed: false, value: 'stopped teaching' });
+
+    await deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    const gone = (await getNotes(ME)).notes.find((note) => note.slotSlug === 'life_work');
+    expect(gone).toMatchObject({ removed: true, removable: false });
   });
 
   it('offers nothing for a note no conversation wrote', async () => {

@@ -1146,7 +1146,8 @@ it** (owner ruling 4, 3 Oct 2026). `DELETE /api/v1/app/exchanges` with
 `{ exchangeIds }`: the `app_turn` ids the notes read hands out per note as
 `exchanges`. All or nothing. An id that isn't the caller's gets the same 404 as
 one that doesn't exist, and a turn still being answered gets a 409 that says to
-wait. The store is `lib/app/memory/delete-exchange.ts`.
+wait. A claim left `running` past `staleClaimMs()` was abandoned, not being
+answered, so it is deleted rather than refused forever. The store is `lib/app/memory/delete-exchange.ts`.
 
 **An exchange is one turn's window**, not two messages. A turn that calls a
 tool is stored as several assistant passes and tool results, and a `fill_slot`
@@ -1163,7 +1164,9 @@ included. The latest turn's window runs to the end of the conversation.
 - **only the note versions that turn wrote**, each as a placeholder (owner
   ruling, at planning). Earlier and later readings came from other exchanges and
   stay. So a head can be a placeholder with a live reading behind it, and the
-  card still shows that reading under _Before this_.
+  card still shows that reading under _Before this_. That note stays
+  `removable` while any version under it is unwiped, and the placeholder offers
+  **Remove what is still kept**.
 - a heading the AI coined, but only once **no** version under it is left
   unwiped. While another exchange's reading is still filed there, renaming part
   of the chain would leave the old slug headless, and its next capture would

@@ -300,6 +300,43 @@ describe('what the removal says about the conversation (t-127)', () => {
   });
 });
 
+describe('a removed note with a reading still kept under it (t-127)', () => {
+  const placeholderOver = (removable: boolean) =>
+    note({
+      removed: true,
+      removable,
+      correctable: false,
+      value: '',
+      reasoningNote: '',
+      conversationId: null,
+      exchanges: [],
+    });
+
+  it('offers to remove what is still kept, and asks before doing anything', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 2 } });
+    render(
+      <NoteCard
+        note={placeholderOver(true)}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove what is still kept' }));
+
+    expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing to remove once every version is a placeholder', () => {
+    render(<NoteCard note={placeholderOver(false)} onAsk={() => {}} onCorrected={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: 'Remove what is still kept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove this note' })).toBeNull();
+  });
+});
+
 describe('deleting the exchange a removed note came from (t-127)', () => {
   const removedNote = (overrides: Partial<Note> = {}) =>
     note({

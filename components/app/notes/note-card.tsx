@@ -754,8 +754,9 @@ export function NoteCard({
           A placeholder, and only that (t-78). No aside: a removed note has no
           certainty or source left to report, and showing "Only a guess · 1 of 10"
           for something the person took back would read as a judgement on it.
-          Nothing left to correct, ask about or remove. The one control is
-          the offer to delete the exchange the note came from (t-127).
+          Nothing left to correct or ask about. The controls are the offer to
+          delete the exchange the note came from, and removing an earlier
+          reading an exchange deletion left behind (t-127).
         */
         <div className="flex max-w-[34rem] flex-col gap-1.5">
           <p className="text-muted-foreground text-[15px] leading-[1.6]">
@@ -770,6 +771,22 @@ export function NoteCard({
           {note.previous && !note.previous.removed ? (
             <div className="mt-2">
               <PreviousReading previous={note.previous} older={older} />
+            </div>
+          ) : null}
+          {/* And what is still held is still the person's to remove. */}
+          {note.removable && !confirmingRemoval ? (
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className={PILL}
+                onClick={() => {
+                  setRemovalRefusal(null);
+                  setConfirmingRemoval(true);
+                }}
+              >
+                Remove what is still kept
+              </Button>
             </div>
           ) : null}
           {note.exchanges.length > 0 && !confirmingExchange ? (
@@ -1010,7 +1027,7 @@ export function NoteCard({
         </div>
       )}
 
-      {confirmingRemoval && !note.removed && !editing ? (
+      {confirmingRemoval && note.removable && !editing ? (
         /*
           In place rather than a dialog: the reader is looking at the note, and
           the question is about the note. The destructive fill is on the act

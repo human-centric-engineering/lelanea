@@ -104,6 +104,7 @@ import { redactedString } from '@/lib/security/redact';
 import type { Note, NoteHistory, NotesView } from '@/lib/app/slots/notes-view';
 import { queryNotes, type NotesQuery } from '@/lib/app/slots/notes-query';
 import { isRemoved } from '@/lib/app/slots/removed';
+import { NOT_YET_REMOVED } from '@/lib/app/slots/wipe';
 
 /** What masking leaves behind for an Art. 9 slot. Compared, never constructed twice. */
 const WITHHELD = redactedString('special_category');
@@ -227,6 +228,25 @@ async function readPreviousVersions(
 }
 
 /**
+ * Which removed heads still have a version holding words, in one query (t-127).
+ * Deleting an exchange wipes only the versions that turn wrote, so a head can
+ * be a placeholder over an earlier reading that is still kept — and the person
+ * must still be able to remove that reading on its own.
+ */
+async function readStillHeld(
+  userId: string,
+  heads: { slotSlug: string; sourceType: string }[]
+): Promise<Set<string>> {
+  const slugs = heads.filter((head) => isRemoved(head)).map((head) => head.slotSlug);
+  if (slugs.length === 0) return new Set();
+  const rows = await prisma.slotValue.findMany({
+    where: { userId, slotSlug: { in: slugs }, ...NOT_YET_REMOVED },
+    select: { slotSlug: true },
+  });
+  return new Set(rows.map((row) => row.slotSlug));
+}
+
+/**
  * The exchanges each note came from, in one query (t-127): the person's turns
  * whose captures wrote a version under the note's slug. The ledger follows a
  * coined heading when a removal renames it, so a removed note still finds its
@@ -286,6 +306,7 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
 
   const previous = await readPreviousVersions(userId, shown);
   const exchanges = await readExchanges(userId, shown);
+  const stillHeld = await readStillHeld(userId, shown);
   const byslug = new Map(definitions.map((definition) => [definition.slug, definition]));
 
   const notes: Note[] = shown.map((head) => {
@@ -327,8 +348,10 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
       correctable: !removed && !retired && sensitivity !== SLOT_SENSITIVITY.special_category,
       // Any note the person can see is theirs to remove — retired and Art. 9
       // ones included, since removing is how the kept summary of an Art. 9
-      // note goes too. Only a note already removed has nothing left to take.
-      removable: !removed,
+      // note goes too. Only a note with every version already a placeholder has
+      // nothing left to take: a removed head can sit over a reading an exchange
+      // deletion left behind (t-127).
+      removable: !removed || stillHeld.has(head.slotSlug),
       exchanges: exchanges.get(head.slotSlug) ?? [],
       previous: previous.get(head.slotSlug) ?? null,
       // An open-mode mint has no definition, and so no group.
