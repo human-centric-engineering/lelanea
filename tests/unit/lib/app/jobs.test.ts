@@ -2,6 +2,12 @@
  * The leaf's recurring jobs (`lib/app/jobs.ts`). Which jobs are registered is
  * pinned in `defaults.test.ts`; this proves what the one job does when the
  * maintenance tick runs it (f-memory t-129).
+ *
+ * FORK NOTE — this reads the real `lib/app/jobs.ts`, not a mock. It has to: the
+ * job's `run` is the thing under test, so a mock would assert the mock. It is
+ * Lelañea's seam and Lelañea's test. A fork of Lelañea that changes
+ * `initAppJobs()` updates the job this finds first (`registerAppJob`'s first
+ * call) and what its `run` is expected to call.
  */
 
 import { describe, it, expect, vi } from 'vitest';
