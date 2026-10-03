@@ -77,12 +77,37 @@ export interface LotusAssets {
   'public/lotus-bloom.svg': string;
   /** The half-open glyph: `LotusMark water={false}` under 48px. */
   'public/lotus-glyph.svg': string;
+  /** The animated `Lotus` at rest — bud and open, with and without water —
+   *  in the animation's frames (room for the bud), so the canvas that plays
+   *  between them lines up exactly. */
+  'public/lotus-anim-bud.svg': string;
+  'public/lotus-anim-bud-water.svg': string;
+  'public/lotus-anim-open.svg': string;
+  'public/lotus-anim-open-water.svg': string;
   /** Rasterised to `public/lotus-mark.png` for email. */
   'email-lotus.svg': string;
   /** The favicon: the half-open glyph, square, transparent. */
   'app/icon.svg': string;
   /** Rasterised to `app/apple-icon.png`: the glyph on the oyster ground. */
   'apple-icon.svg': string;
+}
+
+function animStills(measured: ReturnType<typeof measureLotusFrames>, paint: (c: Colour) => string) {
+  const at = (state: 'bud' | 'open', water: boolean) =>
+    svg(
+      {
+        viewBox: (water ? measured.animated.water : measured.animated.tight).box.join(' '),
+        role: 'img',
+        'aria-label': 'Lelañea lotus',
+      },
+      lotusSvgElements(stillLotus(state, water), 'l', paint)
+    );
+  return {
+    'public/lotus-anim-bud.svg': at('bud', false),
+    'public/lotus-anim-bud-water.svg': at('bud', true),
+    'public/lotus-anim-open.svg': at('open', false),
+    'public/lotus-anim-open-water.svg': at('open', true),
+  };
 }
 
 export function lotusAssets(stylesheet: string): LotusAssets {
@@ -114,6 +139,7 @@ export function lotusAssets(stylesheet: string): LotusAssets {
       { viewBox: frames.glyph.box.join(' '), role: 'img', 'aria-label': 'Lelañea lotus' },
       lotusSvgElements(stillLotus('glyph', false), 'l', paint)
     ),
+    ...animStills(measured, paint),
     'email-lotus.svg': svg(
       { viewBox: frames.tight.box.join(' '), width: email.width * 2, height: email.height * 2 },
       lotusSvgElements(stillLotus('open', false), 'l', paint)

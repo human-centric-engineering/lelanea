@@ -32,6 +32,10 @@ describe('the baked lotus', () => {
     'public/lotus-mark.svg',
     'public/lotus-bloom.svg',
     'public/lotus-glyph.svg',
+    'public/lotus-anim-bud.svg',
+    'public/lotus-anim-bud-water.svg',
+    'public/lotus-anim-open.svg',
+    'public/lotus-anim-open-water.svg',
     'app/icon.svg',
   ] as const)('%s is up to date — run `npm run lotus:assets`', (file) => {
     expect(read(file)).toBe(assets[file]);

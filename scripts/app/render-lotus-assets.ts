@@ -48,6 +48,10 @@ async function main() {
     'public/lotus-mark.svg',
     'public/lotus-bloom.svg',
     'public/lotus-glyph.svg',
+    'public/lotus-anim-bud.svg',
+    'public/lotus-anim-bud-water.svg',
+    'public/lotus-anim-open.svg',
+    'public/lotus-anim-open-water.svg',
   ] as const) {
     writeFileSync(path.join(root, file), assets[file]);
   }
@@ -75,7 +79,7 @@ async function main() {
     .toFile(path.join(root, 'app', 'apple-icon.png'));
 
   console.log(
-    'lotus assets written: public/lotus-{mark,bloom,glyph}.svg, public/lotus-mark.png, public/favicon.{svg,ico}, app/icon.svg, app/apple-icon.png'
+    'lotus assets written: public/lotus-{mark,bloom,glyph,anim-*}.svg, public/lotus-mark.png, public/favicon.{svg,ico}, app/icon.svg, app/apple-icon.png'
   );
 }
 

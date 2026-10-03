@@ -20,10 +20,22 @@ import { StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EntryBloom } from '@/components/app/shell/entry-bloom';
 import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus';
 
-beforeEach(() => {
+/**
+ * A fresh module per test: whether this document has bloomed is module state,
+ * and a fresh module is exactly what a refresh or a new visit is.
+ */
+let EntryBloom: (typeof import('@/components/app/shell/entry-bloom'))['EntryBloom'];
+async function newDocument() {
+  vi.resetModules();
+  ({ EntryBloom } = await import('@/components/app/shell/entry-bloom'));
+}
+
+const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+
+beforeEach(async () => {
+  await newDocument();
   // The bloom is decorative and would otherwise animate for real in every case.
   vi.stubGlobal(
     'matchMedia',
@@ -59,16 +71,29 @@ describe('EntryBloom — on every full page load', () => {
     expect(html).toContain('data-testid="entry-bloom"');
   });
 
-  it('plays again on the next load — a refresh is a new mount', async () => {
+  it('plays again on the next load — a refresh is a new document', async () => {
     vi.useFakeTimers();
     const first = render(<EntryBloom />);
     await settle();
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
     first.unmount();
 
-    // The browser refreshed: the layout, and the bloom in it, mount afresh.
+    // The browser refreshed: a new document, a fresh module, a new mount.
+    await newDocument();
     render(<EntryBloom />);
     expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+  });
+
+  it('does not replay on a link back into the app — the same document', async () => {
+    // From Profile or Settings back to /app remounts the layout, but in a
+    // document that has already bloomed: moving around, not a visit.
+    vi.useFakeTimers();
+    const first = render(<EntryBloom />);
+    await settle();
+    first.unmount();
+
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
   it('remembers nothing between loads', () => {
@@ -103,13 +128,18 @@ describe('EntryBloom — on every full page load', () => {
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
-  it('still blooms under StrictMode, which is how development runs it', () => {
+  it('blooms under StrictMode, which is how development runs it — and still lifts', async () => {
+    // StrictMode remounts the same instance; the once-per-document flag must
+    // not read its own write and skip the bloom, nor strand the cover.
+    vi.useFakeTimers();
     render(
       <StrictMode>
         <EntryBloom />
       </StrictMode>
     );
     expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    await settle();
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 });
 
@@ -140,6 +170,12 @@ describe('EntryBloom — always gets out of the way', () => {
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
+  it('lets Tab skip it, rather than move through controls nobody can see', () => {
+    render(<EntryBloom />);
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+  });
+
   it('ignores other keys', () => {
     render(<EntryBloom />);
     fireEvent.keyDown(document, { key: 'Enter' });
@@ -159,6 +195,32 @@ describe('EntryBloom — always gets out of the way', () => {
     const cover = screen.getByTestId('entry-bloom');
     expect(cover).toHaveAttribute('data-hydrated', 'true');
     expect(cover.className).not.toMatch(/failsafe/);
+  });
+
+  it('does not bring the cover back if the fail-safe already lifted it', () => {
+    // A phone that hydrates after the fail-safe has run: the reader is already
+    // using the app. Dropping the fail-safe class would snap the cover back
+    // over it for another whole opening.
+    const getAnimations = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockReturnValue([
+      {
+        animationName: 'entry-bloom-module__lift',
+        currentTime: FAILSAFE_MS + 1,
+      } as unknown as Animation,
+    ]);
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+    getAnimations.mockRestore();
+  });
+
+  it('keeps the cover when the fail-safe has not started — hydration in time', () => {
+    const getAnimations = vi
+      .spyOn(HTMLElement.prototype, 'getAnimations')
+      .mockReturnValue([
+        { animationName: 'entry-bloom-module__lift', currentTime: 200 } as unknown as Animation,
+      ]);
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    getAnimations.mockRestore();
   });
 
   it('blocks clicks while it is opaque, and releases them for the fade', async () => {

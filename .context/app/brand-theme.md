@@ -329,11 +329,15 @@ stamens, on lily pads and sage ripples — in the mark's teals. It supersedes
 | Frames    | `components/app/ui/lotus-frames.ts` | GENERATED: the measured frames, so nothing measures at runtime.                            |
 | Assets    | `scripts/app/lotus-assets.tsx`      | Bakes every still copy with tokens resolved to literals.                                   |
 
-**Animated `Lotus`: SVG at rest, canvas while moving.** Rebuilding ~240 shaded
-gradient bands through React every frame measured ~28fps in t-131; a canvas
-repaint is a few milliseconds. The SVG under the canvas is the bud or the open
-bloom, so every path that skips the animation (reduced motion, no 2D context)
-still shows a correct lotus.
+**Animated `Lotus`: a baked image at rest, a canvas while moving.** Rebuilding
+~240 shaded gradient bands through React every frame measured ~28fps in t-131;
+a canvas repaint is a few milliseconds. At rest — the bud, and the open bloom —
+it shows `public/lotus-anim-*.svg`, baked in the animation's own frames so the
+canvas lines up with them exactly, and the open image loads under the canvas
+while it plays. Every path that skips the animation (reduced motion, no 2D
+context, no JavaScript) still shows a correct lotus. It plays on the landing
+hero (`fluid`, filling its column) and as the app's entry bloom, which is
+server-rendered on every page load (t-132).
 
 **`LotusMark` is a baked image, not inline SVG.** Inline, the open bloom is
 ~270KB of markup in every page's HTML, and the glyph again in every chat
@@ -346,8 +350,9 @@ avatar it would be a sliver. The glyph is also the favicon, the apple icon, and
 `public/favicon.{svg,ico}` (divergence row 13).
 
 **After changing the model or any `--color-lotus-*` token, run
-`npm run lotus:assets`.** It rewrites `lotus-frames.ts`, the three marks in
-`public/`, the email PNG, the favicons and the apple icon.
+`npm run lotus:assets`.** It rewrites `lotus-frames.ts`, the three marks and
+the four animation stills in `public/`, the email PNG, the favicons and the
+apple icon.
 `tests/unit/scripts/app/lotus-assets.test.ts` and `lotus-draw.test.ts` fail
 until you do.
 

@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
 import { lotusPainter, tokenReader } from '@/components/app/ui/lotus-canvas';
-import { drawLotus, lotusFrameSize, lotusFrames, stillLotus } from '@/components/app/ui/lotus-draw';
+import { drawLotus, lotusFrameSize, lotusFrames } from '@/components/app/ui/lotus-draw';
 import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus-model';
-import { lotusSvgElements } from '@/components/app/ui/lotus-svg';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import styles from '@/components/app/ui/lotus.module.css';
 
@@ -26,6 +25,11 @@ export interface LotusProps {
   delay?: number;
   /** Fired once the last petal has come to rest. */
   onOpened?: () => void;
+  /**
+   * Fill the container's width, keeping the frame's aspect, never wider than
+   * `size` would make it. For a column that sets the width — the landing hero.
+   */
+  fluid?: boolean;
   className?: string;
 }
 
@@ -37,18 +41,21 @@ export interface LotusProps {
  * opening gesture rather than a loading state" (§6.9): nothing waits on it,
  * and a caller that needs to sequence something after it takes `onOpened`.
  *
- * ## Two painters, one flower
+ * ## A canvas while it moves, a baked image at rest
  *
- * At rest — closed or open — the bloom is SVG, painted from `stillLotus`, so it
- * renders on the server, hydrates, and is in the DOM to be asserted on. While
- * the petals are MOVING it is a canvas laid over the SVG, repainted every frame
- * from the same draw list: rebuilding ~240 shaded SVG gradients through React
- * per frame measured ~28fps. When the opening ends the canvas goes and the open
- * SVG — the identical picture — is what remains.
+ * At rest — the bud, or the open bloom — it is an image baked from the same
+ * draw list by `npm run lotus:assets` (`public/lotus-anim-*.svg`). Inline, each
+ * still is ~250KB of shaded SVG, and the entry bloom is now server-rendered on
+ * every app load (t-132) and the landing hero animates too; as an image it is
+ * one cached request. While the petals are MOVING a canvas is laid over it and
+ * repainted every frame from the draw list — React-managed SVG measured ~28fps.
+ * When the opening ends the canvas goes and the open image — the identical
+ * picture, in the same frame — is what remains. It has been loading, hidden,
+ * under the canvas the whole time.
  *
  * **The resting state is the default.** If the canvas never paints (no 2D
- * context, a hydration gap, reduced motion) the SVG underneath is the open
- * bloom as soon as the bloom is open: correct, simply not moving.
+ * context, no JavaScript, reduced motion) the image is the bud or the open
+ * bloom as the state says: correct, simply not moving.
  *
  * ## Reduced motion
  *
@@ -67,6 +74,7 @@ export function Lotus({
   water = true,
   delay = 0,
   onOpened,
+  fluid = false,
   className,
 }: LotusProps) {
   const reducedMotion = useReducedMotion();
@@ -182,8 +190,8 @@ export function Lotus({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) {
-      // No 2D context (lost, or none to give): stop playing, so the open SVG
-      // shows instead of a hidden SVG over an empty canvas for the whole opening.
+      // No 2D context (lost, or none to give): stop playing, so the open image
+      // shows instead of a hidden image under an empty canvas for the opening.
       setPlaying(false);
       return;
     }
@@ -205,8 +213,7 @@ export function Lotus({
     return () => cancelAnimationFrame(raf);
   }, [playing, water, frame, width, height]);
 
-  const idPrefix = `lotus-${useId().replace(/:/g, '')}`;
-  const shapes = stillLotus(settled ? 'open' : 'bud', water);
+  const still = `/lotus-anim-${settled ? 'open' : 'bud'}${water ? '-water' : ''}.svg`;
 
   return (
     <div
@@ -214,29 +221,35 @@ export function Lotus({
         'relative inline-block',
         settled && idle && !reducedMotion && !playing && styles.breath
       )}
-      style={{ width, height }}
+      style={
+        fluid
+          ? { width: '100%', maxWidth: width, aspectRatio: `${width} / ${height}` }
+          : { width, height }
+      }
       data-open={settled ? 'true' : 'false'}
       data-reduced-motion={reducedMotion ? 'true' : undefined}
       data-playing={playing ? 'true' : undefined}
     >
-      <svg
+      {/* A plain <img>: a static SVG gains nothing from next/image, which
+          refuses SVG without `dangerouslyAllowSVG`. Hidden, not removed, while
+          the canvas plays — it is what remains, and it loads meanwhile. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={still}
         width={width}
         height={height}
-        viewBox={frame.box.join(' ')}
-        className={cn('relative overflow-visible', className)}
-        // Hidden, not removed, while the canvas plays: it is what remains.
-        style={{ visibility: playing ? 'hidden' : 'visible' }}
+        alt=""
         aria-hidden="true"
-        focusable="false"
-      >
-        {lotusSvgElements(shapes, idPrefix)}
-      </svg>
+        draggable={false}
+        className={cn('relative block h-full w-full select-none', className)}
+        style={{ visibility: playing ? 'hidden' : 'visible' }}
+      />
       {playing && (
         <canvas
           ref={canvasRef}
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
-          style={{ width, height }}
+          style={{ width: '100%', height: '100%' }}
         />
       )}
     </div>

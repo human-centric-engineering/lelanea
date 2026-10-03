@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Lotus } from '@/components/app/ui/lotus';
 import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus-model';
@@ -19,6 +19,29 @@ const FADE_MS = 420;
 const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
 
 /**
+ * Whether this document has already shown the bloom. Module scope is exactly
+ * "this page load": a refresh or a new visit starts a fresh module, while a
+ * link from Profile back into `/app` remounts the layout in the SAME document
+ * — and that is moving around, not a visit, so it does not replay.
+ */
+let shownThisDocument = false;
+
+/** Has the CSS fail-safe already started lifting the cover by itself? */
+function failsafeHasRun(element: HTMLElement | null): boolean {
+  const animations = element?.getAnimations?.();
+  if (animations) {
+    return animations.some(
+      (a) =>
+        (a as CSSAnimation).animationName?.includes('lift') &&
+        Number(a.currentTime ?? 0) >= FAILSAFE_MS
+    );
+  }
+  // No Web Animations API: navigation start is no later than the animation's
+  // start, so this errs toward skipping a cover rather than restoring one.
+  return performance.now() >= FAILSAFE_MS;
+}
+
+/**
  * The entry bloom: the lotus unfolds over the shell on every full page load —
  * a first visit, a return, a browser refresh, a deep link — and then fades to
  * the page the reader loaded.
@@ -27,9 +50,10 @@ const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
  *
  * It used to play once per tab session (`sessionStorage`), on §6.9's "it opens
  * once per session". The owner asked for it on every return and every refresh.
- * It is mounted in the `/app` layout, which survives client-side navigation, so
- * "every load" falls out of mounting: a refresh or a new visit mounts it, a
- * link inside the app does not, and the bloom never interrupts moving around.
+ * It plays on the first mount in each document: a refresh or a new visit is a
+ * new document; a link inside the app keeps the `/app` layout mounted; and a
+ * link back in from Profile or Settings remounts it in a document that has
+ * already bloomed (`shownThisDocument`). Moving around never replays it.
  *
  * It overlays the route rather than redirecting, so what is under it when it
  * fades is exactly the URL that was loaded.
@@ -43,19 +67,40 @@ const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
  * A server-rendered cover has a failure mode a client-only one did not: if the
  * scripts never run, nothing would ever take it away. So until this component
  * has mounted, a CSS animation fades it out by itself after `FAILSAFE_MS`; once
- * JavaScript is alive the class comes off and the bloom's own clock rules, so
- * a slow-hydrating phone still gets the whole opening.
+ * JavaScript is alive the class comes off and the bloom's own clock rules — so
+ * a phone that hydrates late still gets the whole opening, and one that hydrates
+ * after the fail-safe has run does not get the cover back (`failsafeHasRun`).
  *
  * ## Skippable
  *
  * Seeing it on every refresh is the point, but someone reloading in a hurry
- * should not have to wait: a click, a tap or Escape lets it go at once.
+ * should not have to wait: a click, a tap, Escape or Tab lets it go at once.
  */
 export function EntryBloom() {
   const [phase, setPhase] = useState<'showing' | 'leaving' | 'done'>('showing');
   const [hydrated, setHydrated] = useState(false);
+  const cover = useRef<HTMLDivElement>(null);
+  const decided = useRef(false);
 
-  useEffect(() => setHydrated(true), []);
+  /**
+   * Decided once per instance, before the browser paints.
+   *
+   * - Already shown in this document (a link back into `/app`): gone, with no
+   *   frame of cover.
+   * - The fail-safe already ran (a phone slow enough to hydrate after it):
+   *   gone. Dropping the fail-safe class here would otherwise snap the cover
+   *   back over an app the reader is already using (code review, t-132).
+   *
+   * A ref, not the module flag alone, so StrictMode's simulated remount of the
+   * same instance does not read its own write and skip the bloom.
+   */
+  useLayoutEffect(() => {
+    if (decided.current) return;
+    decided.current = true;
+    if (shownThisDocument || failsafeHasRun(cover.current)) setPhase('done');
+    shownThisDocument = true;
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (phase !== 'leaving') return;
@@ -65,8 +110,11 @@ export function EntryBloom() {
 
   useEffect(() => {
     if (phase !== 'showing') return;
+    // Escape skips it. So does Tab: the shell under the cover is focusable,
+    // and a keyboard reader should not be moving through controls they cannot
+    // see.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPhase('leaving');
+      if (event.key === 'Escape' || event.key === 'Tab') setPhase('leaving');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -77,8 +125,8 @@ export function EntryBloom() {
   return (
     <div
       // Purely decorative and briefly on top of everything: a screen reader
-      // should hear the shell, not an unnamed overlay. Escape (above) is the
-      // keyboard's way past it; the click below is the pointer's.
+      // should hear the shell, not an unnamed overlay. Escape or Tab (above) is
+      // the keyboard's way past it; the click below is the pointer's.
       aria-hidden="true"
       /*
         The same claim as `pointer-events-auto` below, made to the things that
@@ -108,6 +156,7 @@ export function EntryBloom() {
         !hydrated && styles.failsafe
       )}
       style={{ transitionDuration: `${FADE_MS}ms`, animationDelay: `${FAILSAFE_MS}ms` }}
+      ref={cover}
       data-testid="entry-bloom"
       data-hydrated={hydrated ? 'true' : undefined}
     >

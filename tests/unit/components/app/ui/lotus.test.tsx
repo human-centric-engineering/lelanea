@@ -39,11 +39,12 @@ import path from 'node:path';
 
 import { LOTUS_OPENED_MS, Lotus } from '@/components/app/ui/lotus';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
-import { LOTUS_GLYPH_BELOW, drawLotus, lotusFrames } from '@/components/app/ui/lotus-draw';
-import { LOTUS_WHORLS, STAMEN_COUNT } from '@/components/app/ui/lotus-model';
-
-/** Every petal in every whorl. */
-const PETAL_COUNT = LOTUS_WHORLS.reduce((total, whorl) => total + whorl.count, 0);
+import {
+  LOTUS_GLYPH_BELOW,
+  drawLotus,
+  lotusFrameSize,
+  lotusFrames,
+} from '@/components/app/ui/lotus-draw';
 
 type Listener = (event: MediaQueryListEvent) => void;
 
@@ -77,6 +78,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 /** The wrapper carrying the open state and the breath, not the `<svg>`. */
@@ -86,21 +88,15 @@ function bloom(): HTMLElement {
   return element;
 }
 
-function svg(): SVGSVGElement {
-  const element = document.querySelector('svg');
-  if (!element) throw new Error('no lotus svg rendered');
+/** The baked image the bloom rests on — the bud, or the open bloom. */
+function still(): HTMLImageElement {
+  const element = document.querySelector('[data-open] img');
+  if (!(element instanceof HTMLImageElement)) throw new Error('no lotus image rendered');
   return element;
 }
 
-/** Petal bands: every petal is drawn as lengthwise bands, each its own gradient. */
-function bands(): Element[] {
-  return [...document.querySelectorAll('svg path[fill^="url(#"]')];
-}
-
-/** Stamen strokes: a filament and its lit tip each. */
-function stamenStrokes(): Element[] {
-  return [...document.querySelectorAll('svg path[fill="none"]')];
-}
+const isBud = () => /\/lotus-anim-bud/.test(still().getAttribute('src') ?? '');
+const isOpen = () => /\/lotus-anim-open/.test(still().getAttribute('src') ?? '');
 
 /**
  * happy-dom has no 2D context. Stand one in that records repaints — every
@@ -108,8 +104,11 @@ function stamenStrokes(): Element[] {
  */
 let clearRect = vi.fn();
 const noop = () => undefined;
-function stubCanvas() {
+function stubCanvas({ frames = true }: { frames?: boolean } = {}) {
   clearRect = vi.fn();
+  // A whole opening is ~190 real frames of drawing; cases about the playing
+  // LIFECYCLE paint the first frame only and leave the clock to its timer.
+  if (!frames) vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
   const gradient = { addColorStop: vi.fn() };
   const ctx = new Proxy(
     { clearRect, createLinearGradient: () => gradient, createRadialGradient: () => gradient },
@@ -125,56 +124,34 @@ const clearRectCalls = () => clearRect.mock.calls.length;
 
 describe('Lotus', () => {
   describe('the flower', () => {
-    it('is the bud while closed: every petal folded, no stamens yet', () => {
+    it('rests on the bud while closed', () => {
       render(<Lotus autoOpen={false} />);
-
-      // Every petal is drawn — folded, not absent — and the bands divide evenly
-      // among them. The crown has not risen.
-      expect(bands().length).toBeGreaterThan(0);
-      expect(bands().length % PETAL_COUNT).toBe(0);
-      expect(stamenStrokes()).toHaveLength(0);
+      expect(still()).toHaveAttribute('src', '/lotus-anim-bud-water.svg');
     });
 
-    it('is the full bloom once open: petals, and the stamen crown', () => {
+    it('rests on the open bloom once open', () => {
       render(<Lotus open />);
-
-      expect(bands().length % PETAL_COUNT).toBe(0);
-      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+      expect(still()).toHaveAttribute('src', '/lotus-anim-open-water.svg');
     });
 
-    it('sits on water — pads, ripples, halation — and drops it on request', () => {
-      const { unmount } = render(<Lotus open />);
-      const pads = document.querySelectorAll(
-        'svg path[stroke]:not([fill="none"]):not([fill^="url"])'
-      );
-      expect(pads).toHaveLength(3);
-      // Three ripple rings and the halation glow.
-      expect(document.querySelectorAll('svg ellipse[fill="none"]')).toHaveLength(3);
-      unmount();
-
+    it('drops the water on request', () => {
       render(<Lotus open water={false} />);
-      expect(document.querySelectorAll('svg ellipse[fill="none"]')).toHaveLength(0);
-      expect(svg()).toHaveAttribute('viewBox', lotusFrames().animated.tight.box.join(' '));
+      expect(still()).toHaveAttribute('src', '/lotus-anim-open.svg');
     });
 
-    it('gives each bloom its own gradient ids', () => {
-      // Two blooms sharing ids means the second paints with the first's
-      // gradients — an easy bug to introduce by hoisting `<defs>`.
-      render(
-        <>
-          <Lotus autoOpen={false} />
-          <Lotus autoOpen={false} />
-        </>
-      );
-      const ids = [...document.querySelectorAll('linearGradient')].map((node) => node.id);
-
-      expect(ids.length).toBeGreaterThan(0);
-      expect(new Set(ids).size).toBe(ids.length);
+    it('points only at baked files that exist', () => {
+      for (const state of ['bud', 'open']) {
+        for (const water of ['', '-water']) {
+          const file = `lotus-anim-${state}${water}.svg`;
+          expect(existsSync(path.join(process.cwd(), 'public', file)), file).toBe(true);
+        }
+      }
     });
 
     it('is decorative — it never announces itself', () => {
       render(<Lotus autoOpen={false} />);
-      expect(svg()).toHaveAttribute('aria-hidden', 'true');
+      expect(still()).toHaveAttribute('alt', '');
+      expect(still()).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('renders the bloom at `size`, whatever frame is around it', () => {
@@ -194,12 +171,22 @@ describe('Lotus', () => {
           <LotusMark size={64} />
         </>
       );
-      const animated = Number.parseFloat(svg().getAttribute('width') ?? '0');
-      const still = Number(document.querySelector('img')?.getAttribute('width'));
+      const [animated, mark] = [...document.querySelectorAll('img')];
 
       // The same bloom width in both; the frames differ only in height (the
       // animated one has room for the bud).
-      expect(Math.round(animated)).toBe(still);
+      expect(Math.round(Number(animated.getAttribute('width')))).toBe(
+        Number(mark.getAttribute('width'))
+      );
+    });
+
+    it('fills its column when fluid, never wider than `size` makes it', () => {
+      render(<Lotus autoOpen={false} size={300} fluid />);
+      const { width, height } = lotusFrameSize(300, lotusFrames().animated.water);
+
+      expect(bloom().style.width).toBe('100%');
+      expect(Number.parseFloat(bloom().style.maxWidth)).toBeCloseTo(width, 5);
+      expect(bloom().style.aspectRatio.replace(/\s/g, '')).toBe(`${width}/${height}`);
     });
   });
 
@@ -311,24 +298,24 @@ describe('Lotus', () => {
       expect(bloom()).toHaveAttribute('data-open', 'true');
     });
 
-    it('plays on a canvas while the petals move, then leaves the open SVG', () => {
+    it('plays on a canvas while the petals move, then leaves the open image', () => {
       // The canvas is up exactly while the bloom moves, and comes down on the
       // same clock as `onOpened`. The SVG stays in the DOM throughout — hidden,
       // not removed — so what remains is the identical open picture.
       vi.useFakeTimers();
-      const getContext = stubCanvas();
+      const getContext = stubCanvas({ frames: false });
       render(<Lotus />);
       act(() => void vi.advanceTimersByTime(0));
 
       expect(bloom()).toHaveAttribute('data-playing', 'true');
       expect(document.querySelector('canvas')).not.toBeNull();
-      expect(svg().style.visibility).toBe('hidden');
+      expect(still().style.visibility).toBe('hidden');
 
       act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
       expect(bloom()).not.toHaveAttribute('data-playing');
       expect(document.querySelector('canvas')).toBeNull();
-      expect(svg().style.visibility).toBe('visible');
-      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+      expect(still().style.visibility).toBe('visible');
+      expect(isOpen()).toBe(true);
       getContext.mockRestore();
     });
 
@@ -341,7 +328,7 @@ describe('Lotus', () => {
 
       expect(bloom()).toHaveAttribute('data-open', 'true');
       expect(bloom()).not.toHaveAttribute('data-playing');
-      expect(svg().style.visibility).toBe('visible');
+      expect(still().style.visibility).toBe('visible');
     });
 
     it('paints frames onto the canvas while it plays', () => {
@@ -369,7 +356,7 @@ describe('Lotus', () => {
 
     it('does not breathe while the opening is still playing', () => {
       vi.useFakeTimers();
-      const getContext = stubCanvas();
+      const getContext = stubCanvas({ frames: false });
       render(<Lotus idle />);
       act(() => void vi.advanceTimersByTime(0));
 
@@ -389,7 +376,7 @@ describe('Lotus', () => {
       expect(bloom()).toHaveAttribute('data-reduced-motion', 'true');
       expect(bloom()).not.toHaveAttribute('data-playing');
       expect(document.querySelector('canvas')).toBeNull();
-      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+      expect(isOpen()).toBe(true);
     });
 
     it('does not breathe, even with idle on', () => {
@@ -417,7 +404,7 @@ describe('Lotus', () => {
 
       expect(bloom()).toHaveAttribute('data-open', 'false');
       expect(bloom()).toHaveAttribute('data-reduced-motion', 'true');
-      expect(stamenStrokes()).toHaveLength(0);
+      expect(isBud()).toBe(true);
     });
 
     it('tells a controlled caller on the same tick, too', () => {
