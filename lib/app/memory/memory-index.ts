@@ -51,6 +51,8 @@
  * @see .context/app/memory.md
  */
 
+import type { AppMemoryEmbedding } from '@prisma/client';
+
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { embedText } from '@/lib/orchestration/knowledge/embedder';
@@ -362,15 +364,13 @@ export function listMemoryEntriesForSubject(subject: MemorySubject): Promise<Mem
   });
 }
 
-/** An org's index entries, for the org export (`leaf-data-export.ts`). Never the vectors. */
-export function listMemoryEntriesForOrg(
-  orgId: string
-): Promise<Array<MemoryEntry & { id: string; userId: string; orgId: string | null }>> {
-  return prisma.appMemoryEmbedding.findMany({
-    where: { orgId },
-    select: { ...ENTRY_SELECT, id: true, userId: true, orgId: true },
-    orderBy: { createdAt: 'asc' },
-  });
+/**
+ * An org's index rows, for the org export (`leaf-data-export.ts`). Full rows, as
+ * an `export` source must be: Prisma never reads an `Unsupported` column, so the
+ * vectors are not among them.
+ */
+export function listMemoryEntriesForOrg(orgId: string): Promise<AppMemoryEmbedding[]> {
+  return prisma.appMemoryEmbedding.findMany({ where: { orgId }, orderBy: { createdAt: 'asc' } });
 }
 
 function toVector(embedding: number[]): string {
