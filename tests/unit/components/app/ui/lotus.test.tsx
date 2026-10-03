@@ -309,6 +309,29 @@ describe('Lotus', () => {
       expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
     });
 
+    it('paints frames onto the canvas while it plays', () => {
+      // happy-dom has no 2D context, so stand one in and count the repaints:
+      // the loop must paint the bud at once and keep painting as time passes.
+      vi.useFakeTimers();
+      const clearRect = vi.fn();
+      const gradient = { addColorStop: vi.fn() };
+      const ctx = new Proxy(
+        { clearRect, createLinearGradient: () => gradient, createRadialGradient: () => gradient },
+        { get: (target, key) => (key in target ? target[key as keyof typeof target] : vi.fn()) }
+      );
+      const getContext = vi
+        .spyOn(HTMLCanvasElement.prototype, 'getContext')
+        .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+      render(<Lotus />);
+      act(() => void vi.advanceTimersByTime(0));
+      const first = clearRect.mock.calls.length;
+      expect(first).toBeGreaterThan(0);
+
+      act(() => void vi.advanceTimersByTime(500));
+      expect(clearRect.mock.calls.length).toBeGreaterThan(first);
+      getContext.mockRestore();
+    });
+
     it('breathes once open, and only when asked to', () => {
       const { rerender } = render(<Lotus open idle />);
       const breathing = bloom().className;

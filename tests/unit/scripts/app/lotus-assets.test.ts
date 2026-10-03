@@ -13,7 +13,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { emailLotusSize } from '@/components/app/ui/lotus-sizes';
-import { lightTokens, lotusAssets } from '@/scripts/app/lotus-assets';
+import { lightTokens, lotusAssets, lotusFramesSource } from '@/scripts/app/lotus-assets';
 
 const root = process.cwd();
 const stylesheet = readFileSync(path.join(root, 'app', 'brand-theme.css'), 'utf8');
@@ -37,6 +37,10 @@ describe('the baked lotus', () => {
     expect(read(file)).toBe(assets[file]);
   });
 
+  it('components/app/ui/lotus-frames.ts is the measured frames — run `npm run lotus:assets`', () => {
+    expect(read('components/app/ui/lotus-frames.ts')).toBe(lotusFramesSource());
+  });
+
   it('keeps the Sunrise-owned favicon.svg on the same glyph (divergence row 13)', () => {
     expect(read('public/favicon.svg')).toBe(assets['app/icon.svg']);
   });
@@ -57,6 +61,16 @@ describe('the baked lotus', () => {
     expect(lotusAssets(retinted)['public/lotus-mark.svg']).not.toBe(
       assets['public/lotus-mark.svg']
     );
+  });
+
+  it('refuses to bake when a lotus token is missing, rather than baking black', () => {
+    const without = stylesheet.replace(/--color-lotus-pad:[^;]+;/, '');
+    expect(() => lotusAssets(without)).toThrow(/--color-lotus-pad is not a colour/);
+  });
+
+  it('refuses to bake the apple icon without the ground it sits on', () => {
+    const without = stylesheet.replaceAll(/--color-background:[^;]+;/g, '');
+    expect(() => lotusAssets(without)).toThrow(/--color-background missing/);
   });
 
   it('reads the light value of each token, which comes first in the file', () => {

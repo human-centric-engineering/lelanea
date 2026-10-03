@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 /**
  * The canvas painter: the animation's half of "two painters, one flower".
  * A recording context stands in for the browser's — what matters is that it
@@ -7,7 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { lotusPainter } from '@/components/app/ui/lotus-canvas';
+import { lotusPainter, tokenReader } from '@/components/app/ui/lotus-canvas';
 import { drawLotus, lotusFrames } from '@/components/app/ui/lotus-draw';
 import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus-model';
 import type { Rgba } from '@/components/app/ui/lotus-colour';
@@ -92,5 +94,26 @@ describe('lotusPainter', () => {
 
     paint(recordingContext().ctx, shapes, lotusFrames().animated.water, 400);
     expect(reads.mock.calls.length).toBe(first);
+  });
+});
+
+describe('tokenReader', () => {
+  it('reads each token from computed style once, and parses it', () => {
+    const getPropertyValue = vi.fn((name: string) => (name === '--a' ? ' #17718a ' : ''));
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      getPropertyValue,
+    } as unknown as CSSStyleDeclaration);
+    const read = tokenReader(document.createElement('div'));
+
+    expect(read('--a')).toEqual([23, 113, 138, 1]);
+    expect(read('--a')).toEqual([23, 113, 138, 1]);
+    expect(getPropertyValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a missing token as transparent rather than throwing mid-animation', () => {
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      getPropertyValue: () => '',
+    } as unknown as CSSStyleDeclaration);
+    expect(tokenReader(document.createElement('div'))('--missing')).toEqual([0, 0, 0, 0]);
   });
 });
