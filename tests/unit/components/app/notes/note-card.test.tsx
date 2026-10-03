@@ -1,0 +1,232 @@
+// @vitest-environment happy-dom
+
+/**
+ * One note's card, driven directly — the removal flow the panel test does not
+ * reach (f-slots t-78).
+ *
+ * `notes-panel.test.tsx` exercises `NoteCard` through the real panel for the
+ * correction flow and the shapes a search response can take; these tests drive
+ * the card in isolation the way `note-row.test.tsx` drives the row, so the
+ * confirm-then-remove exchange and the placeholder a removed note leaves are
+ * each one short test rather than a detour through the panel's conversation
+ * pane and fake server.
+ *
+ * @see components/app/notes/note-card.tsx
+ * @see lib/app/slots/notes-client.ts
+ */
+
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  NoteCard,
+  REMOVE_CONFIRM,
+  REMOVED_POINTER,
+  removedWords,
+} from '@/components/app/notes/note-card';
+import type { Note } from '@/lib/app/slots/notes-view';
+
+function note(overrides: Partial<Note> = {}): Note {
+  return {
+    slotSlug: 'life_work',
+    asking: 'How work stands for this person right now.',
+    value: 'Work is going badly.',
+    withheld: false,
+    removed: false,
+    confidence: 8,
+    sourceType: 'direct',
+    reasoningNote: 'Said plainly.',
+    version: 1,
+    capturedAt: '2026-09-21T09:15:00.000Z',
+    conversationId: 'c1',
+    sensitivity: 'standard',
+    retired: false,
+    correctable: true,
+    removable: true,
+    previous: null,
+    group: 'life_areas',
+    ...overrides,
+  };
+}
+
+/** A `fetch` that answers exactly this, whatever it is asked. */
+function answering(body: unknown, init: ResponseInit = { status: 200 }): typeof fetch {
+  return vi.fn(async () => new Response(JSON.stringify(body), init));
+}
+
+describe('removing a note', () => {
+  it('offers "Remove this note" on a removable note, and asks before doing anything', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 1 } });
+    render(
+      <NoteCard note={note()} onAsk={() => {}} onCorrected={() => {}} fetchImpl={fetchImpl} />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
+
+    expect(screen.getByText(REMOVE_CONFIRM)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep it' })).toBeTruthy();
+    // Asking is not acting: nothing has been sent yet.
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('closes the confirmation on "Keep it" without calling fetch', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 1 } });
+    render(
+      <NoteCard note={note()} onAsk={() => {}} onCorrected={() => {}} fetchImpl={fetchImpl} />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+
+    expect(screen.queryByText(REMOVE_CONFIRM)).toBeNull();
+    // The control to ask again is back, in place of the confirmation.
+    expect(screen.getByRole('button', { name: 'Remove this note' })).toBeTruthy();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('sends a DELETE with the slug on "Remove it", and calls onRemoved', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 3 } });
+    const onRemoved = vi.fn();
+    const onCorrected = vi.fn();
+    render(
+      <NoteCard
+        note={note({ slotSlug: 'life_money' })}
+        onAsk={() => {}}
+        onCorrected={onCorrected}
+        onRemoved={onRemoved}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove it' }));
+
+    await waitFor(() => expect(onRemoved).toHaveBeenCalledTimes(1));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(fetchImpl).mock.calls[0];
+    expect(url).toBe('/api/v1/app/notes');
+    expect(init?.method).toBe('DELETE');
+    expect(JSON.parse(init?.body as string)).toEqual({ slotSlug: 'life_money' });
+    // The correction callback is NOT also called when a dedicated one is given.
+    expect(onCorrected).not.toHaveBeenCalled();
+  });
+
+  it('falls back to onCorrected when onRemoved is not given', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 1 } });
+    const onCorrected = vi.fn();
+    render(
+      <NoteCard note={note()} onAsk={() => {}} onCorrected={onCorrected} fetchImpl={fetchImpl} />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove it' }));
+
+    await waitFor(() => expect(onCorrected).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows the route’s own refusal message under "Not removed.", and does not call onRemoved', async () => {
+    const fetchImpl = answering(
+      { success: false, error: { code: 'NOT_FOUND', message: 'There is nothing left to remove.' } },
+      { status: 404 }
+    );
+    const onRemoved = vi.fn();
+    render(
+      <NoteCard
+        note={note()}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        onRemoved={onRemoved}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove it' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Not removed.');
+    expect(alert.textContent).toContain('There is nothing left to remove.');
+    expect(onRemoved).not.toHaveBeenCalled();
+    // The confirmation is still open, so a person can try again or back out.
+    expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy();
+  });
+
+  it('offers no remove control on a note that cannot be removed', () => {
+    render(<NoteCard note={note({ removable: false })} onAsk={() => {}} onCorrected={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: 'Remove this note' })).toBeNull();
+  });
+});
+
+describe('a note that was removed', () => {
+  it('shows the placeholder and the AI’s pointer, and no buttons, aside or reading, even if the fixture still carries them', () => {
+    render(
+      <NoteCard
+        note={note({
+          removed: true,
+          capturedAt: '2026-09-22T10:00:00.000Z',
+          // Deliberately still carrying the kind of content a removed row's
+          // other fields COULD hold, so the assertions below prove the card
+          // suppresses it rather than merely never having had it to show.
+          value: 'Work is going badly.',
+          reasoningNote: 'Said plainly.',
+          asking: 'How work stands for this person right now.',
+          confidence: 8,
+          sourceType: 'direct',
+        })}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+      />
+    );
+
+    expect(screen.getByText(removedWords('2026-09-22T10:00:00.000Z'))).toBeTruthy();
+    expect(screen.getByText(REMOVED_POINTER)).toBeTruthy();
+
+    // No controls at all: nothing left to correct, ask about or remove.
+    expect(screen.queryByRole('button', { name: /not right/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /ask lela.*about this/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove this note' })).toBeNull();
+
+    // No certainty aside: a removed note has nothing left to be certain about.
+    expect(screen.queryByText(/Confident|Fairly sure|Not certain|Only a guess/)).toBeNull();
+    expect(screen.queryByText(/of 10/)).toBeNull();
+
+    // None of the value or reasoning text the fixture still carries.
+    expect(screen.queryByText('Work is going badly.')).toBeNull();
+    expect(screen.queryByText('Said plainly.')).toBeNull();
+    expect(screen.queryByText(/What Lelañea was looking for/)).toBeNull();
+  });
+});
+
+describe('a note whose earlier version was removed', () => {
+  it('says the version before it was removed, and does not print its value', () => {
+    render(
+      <NoteCard
+        note={note({
+          version: 2,
+          value: 'Work is going fine now.',
+          previous: {
+            version: 1,
+            // Deliberately non-empty, even though the route always writes the
+            // removed placeholder's value empty: this proves the card is
+            // branching on `removed`, not merely rendering whatever `value`
+            // happens to hold.
+            value: 'Work was going badly.',
+            withheld: false,
+            removed: true,
+            sourceType: 'removed_by_person',
+            confidence: 1,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        })}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+      />
+    );
+
+    expect(screen.getByText('A note you removed. Nothing of it is kept.')).toBeTruthy();
+    expect(screen.queryByText('Work was going badly.')).toBeNull();
+  });
+});
