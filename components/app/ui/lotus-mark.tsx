@@ -1,20 +1,10 @@
-import { useId } from 'react';
-
 import { cn } from '@/lib/utils';
 
-import {
-  LOTUS_CORE,
-  LOTUS_FRAMES,
-  LOTUS_ORIGIN,
-  LOTUS_RIPPLES,
-  LOTUS_RIPPLE_CY,
-  LOTUS_TIERS,
-  lotusFrameSize,
-} from '@/components/app/ui/lotus-geometry';
+import { LOTUS_GLYPH_BELOW, lotusFrameSize, lotusFrames } from '@/components/app/ui/lotus-draw';
 
 export interface LotusMarkProps {
   /**
-   * The rendered width of the BLOOM in pixels — not of the SVG frame.
+   * The rendered width of the BLOOM in pixels — not of the frame around it.
    *
    * §6.6: "`size` is the rendered width of the bloom rather than of the SVG
    * frame, so the two are interchangeable at the same size." A 32px `LotusMark`
@@ -22,96 +12,52 @@ export interface LotusMarkProps {
    * wider. See `LotusFrame.bloomFraction`.
    */
   size?: number;
-  /** Include the sage ripples. §6.6 says drop them under about 40px. */
+  /** Include the lily pads and sage ripples. §6.6 says drop them under about 40px. */
   water?: boolean;
   className?: string;
 }
 
 /**
- * The lotus as a still glyph — avatars, favicons, the 16px mark above a pull
- * quote, the inline mark beside the name Lelañea (§6.7).
+ * The lotus as a still mark — the landing hero, the header and footer, the
+ * shell nav, the chat avatar (§6.7).
  *
- * This is `Lotus` with every petal already at rest and nothing that moves, and
- * it is a separate component rather than `<Lotus open idle={false} />` because
- * of what that would drag along: a client component, three `useState`s, a
- * `matchMedia` subscription and an effect, for a glyph. This one is a server
- * component and renders to markup.
+ * It is a baked image of the same flower the animated `Lotus` draws, made from
+ * the model by `npm run lotus:assets` (`scripts/app/lotus-assets.tsx`). Inline, the
+ * open bloom is ~270KB of shaded SVG repeated in every page's HTML — and the
+ * glyph again in every chat turn's avatar; as an image it is one cached
+ * request. The lotus tokens are the same in both modes by design, so a baked
+ * file loses nothing a live one would show, and a test fails if the tokens or
+ * the model change without re-baking.
  *
- * DECORATIVE BY DEFAULT. `aria-hidden` is unconditional here: every use §6.7
- * names sits beside the name it stands for, so announcing it would repeat that
- * name. Where the mark is the *only* content of a link — the prototype's nav
- * does exactly this — label the LINK, as `aria-label` on an `<a>` wrapping this,
- * rather than reaching for a `label` prop that would make one component do two
- * accessibility jobs.
+ * Three forms: the bloom on water, the bloom alone, and — without water, below
+ * 48px — the half-open GLYPH, because the open flower is ~2.3× wider than tall
+ * and at avatar size would be a sliver.
  *
- * @see .context/app/planning/lelanea-product-description.md §6.6, §6.9
+ * DECORATIVE BY DEFAULT. Empty `alt` and `aria-hidden`: every use §6.7 names
+ * sits beside the name it stands for. Where the mark is the *only* content of
+ * a link, label the LINK, as the header and the shell nav do.
+ *
+ * @see .context/app/brand-theme.md — the lotus
  */
 export function LotusMark({ size = 32, water = true, className }: LotusMarkProps) {
-  // Two marks on one page would otherwise share a gradient id, and the second
-  // would paint with the first's. `useId` is stable across server and client.
-  const gradientId = `lotus-mark-core-${useId().replace(/:/g, '')}`;
-  const frame = water ? LOTUS_FRAMES.water : LOTUS_FRAMES.tight;
+  const glyph = !water && size < LOTUS_GLYPH_BELOW;
+  const frames = lotusFrames().still;
+  const frame = water ? frames.water : glyph ? frames.glyph : frames.tight;
+  const src = water ? '/lotus-mark.svg' : glyph ? '/lotus-glyph.svg' : '/lotus-bloom.svg';
   const { width, height } = lotusFrameSize(size, frame);
 
   return (
-    <svg
+    // A plain <img>, not next/image: a static SVG gains nothing from the
+    // optimiser, which refuses SVG unless `dangerouslyAllowSVG` is set.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
       width={Math.round(width)}
       height={Math.round(height)}
-      viewBox={frame.box}
-      className={cn(className)}
+      alt=""
       aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <radialGradient id={gradientId} cx="50%" cy="42%" r="60%">
-          <stop offset="0%" stopColor="var(--color-lotus-core-light)" />
-          <stop offset="55%" stopColor="var(--color-lotus-core)" />
-          <stop offset="100%" stopColor="var(--color-lotus-core-deep)" />
-        </radialGradient>
-      </defs>
-
-      {water && (
-        <g fill="none" strokeLinecap="round">
-          {LOTUS_RIPPLES.map((ripple) => (
-            <ellipse
-              key={ripple.rx}
-              cx={LOTUS_ORIGIN.x}
-              cy={LOTUS_RIPPLE_CY}
-              rx={ripple.rx}
-              ry={ripple.ry}
-              stroke={ripple.stroke}
-              strokeOpacity={ripple.opacity}
-              strokeWidth={ripple.width}
-            />
-          ))}
-        </g>
-      )}
-
-      {LOTUS_TIERS.map((tier) => (
-        <g
-          key={tier.fill}
-          fill={tier.fill}
-          stroke={tier.stroke}
-          strokeWidth={frame.stroke}
-          strokeLinejoin="round"
-        >
-          {tier.angles.map((angle) => (
-            <path
-              key={angle}
-              d={tier.d}
-              transform={`rotate(${angle} ${LOTUS_ORIGIN.x} ${LOTUS_ORIGIN.y})`}
-            />
-          ))}
-        </g>
-      ))}
-
-      <ellipse
-        cx={LOTUS_CORE.cx}
-        cy={LOTUS_CORE.cy}
-        rx={LOTUS_CORE.rx}
-        ry={LOTUS_CORE.ry}
-        fill={`url(#${gradientId})`}
-      />
-    </svg>
+      draggable={false}
+      className={cn('inline-block select-none', className)}
+    />
   );
 }

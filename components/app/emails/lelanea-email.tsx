@@ -12,6 +12,7 @@ import {
   Text,
 } from '@react-email/components';
 
+import { emailLotusSize } from '@/components/app/ui/lotus-sizes';
 import { BRAND } from '@/lib/brand';
 
 /**
@@ -116,7 +117,13 @@ export function LelaneaEmail({ preview, baseUrl, reason, children }: LelaneaEmai
         <Section style={ground} className="lelanea-ground">
           <Container style={container}>
             <Section style={header}>
-              <Img src={`${baseUrl}/lotus-mark.png`} width="72" height="46" alt="" style={lotus} />
+              <Img
+                src={`${baseUrl}/lotus-mark.png`}
+                width={String(EMAIL_LOTUS.width)}
+                height={String(EMAIL_LOTUS.height)}
+                alt=""
+                style={lotus}
+              />
               <Text style={wordmark} className="lelanea-heading">
                 {BRAND.name}
               </Text>
@@ -238,6 +245,9 @@ const header: React.CSSProperties = {
   textAlign: 'center',
   padding: '12px 0 20px',
 };
+
+/** The PNG's display size, from the frame `npm run lotus:assets` baked it in. */
+const EMAIL_LOTUS = emailLotusSize();
 
 const lotus: React.CSSProperties = {
   display: 'block',

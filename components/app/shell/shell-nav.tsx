@@ -48,10 +48,12 @@ const INTERACTIVE = 'a, button, input, select, textarea, [role="button"], [role=
  *
  * 72px is the slim stack MEASURED, and the measurement is the point: this said
  * 70px on the strength of a "25px-tall mark", which is not what renders.
- * `LotusMark` sizes by BLOOM width, not by frame height — `lotusFrameSize(30,
- * water)` is 45.59 × 29.51, rounded to 46 × 30 — so the column is 30 + 10 + 32,
- * and every child is `flex-none`. Two pixels short of its contents is not a
- * tight fit; it is an overflow that clips into the first nav item.
+ * `LotusMark` sizes by BLOOM width, not by frame height. Under 48px without
+ * water it is the half-open glyph (t-134), 31 × 24 at size 30, so the column
+ * is 24 + 10 + 32 = 66 and every child is `flex-none`. The row keeps 72 — the
+ * old fan's 30px-tall mark — because a row shorter than its contents is not a
+ * tight fit; it is an overflow that clips into the first nav item, and 6px of
+ * slack costs nothing.
  */
 const NAV_TOP_H = 'h-[72px]';
 
@@ -403,7 +405,7 @@ export function ShellNav({ user }: ShellNavProps) {
             aria-label="Lelañea, back to the site"
             className="flex min-w-0 flex-none items-center gap-2.5 no-underline hover:no-underline"
           >
-            <LotusMark size={30} />
+            <LotusMark size={30} water={false} />
             {slim ? null : (
               <span className="brand-display text-[22px] whitespace-nowrap">Lelañea</span>
             )}

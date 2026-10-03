@@ -363,6 +363,9 @@
   --color-lotus-glint: #f5b896;
   --color-lotus-ripple: #457b6a;
   --color-lotus-ripple-far: #6fa88f;
+  /* The lily pads behind the bloom (t-134): the outer edge teal deepened. */
+  --color-lotus-pad: #042935;
+  --color-lotus-pad-edge: #0e5265;
   --color-lotus-halation: rgba(124, 192, 214, 0.2);
 
   /* ---- Radii (§6.4) -----------------------------------------------------

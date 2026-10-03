@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { ogLotusSize } from '@/components/app/ui/lotus-sizes';
 import { BRAND } from '@/lib/brand';
 
 export const alt = 'Lelañea — an invitation into conscious living';
@@ -57,6 +58,8 @@ export const OG_COLORS = {
 export default async function OpengraphImage() {
   const lotus = await readFile(join(process.cwd(), 'public', 'lotus-mark.svg'));
   const lotusSrc = `data:image/svg+xml;base64,${lotus.toString('base64')}`;
+  // The file's own aspect, computed from the same frame that baked it.
+  const lotusSize = ogLotusSize();
 
   return new ImageResponse(
     <div
@@ -74,7 +77,7 @@ export default async function OpengraphImage() {
     >
       {/* A bare <img> is what Satori renders; next/image does not exist
             inside ImageResponse. Decorative — the name is the next element. */}
-      <img src={lotusSrc} alt="" width={300} height={194} />
+      <img src={lotusSrc} alt="" width={lotusSize.width} height={lotusSize.height} />
       <div style={{ fontSize: 76, letterSpacing: -1 }}>{BRAND.name}</div>
       <div style={{ fontSize: 30, color: OG_COLORS.mutedForeground, letterSpacing: 4 }}>
         transcendental coaching, at your own pace

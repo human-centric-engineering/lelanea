@@ -293,14 +293,15 @@ darker — `#786573`, 4.73:1 — and the named amethyst survives as
 because the status hues **lighten in dark mode** for badge use, which is the
 exact trap that put oyster on the status red at 2.99:1 before t-18.
 
-### The lotus has its own fourteen values
+### The lotus has its own sixteen values
 
-`--color-lotus-*` names the petal tiers, their edges, the veins, the core's
-three gradient stops, its glint, two ripple steps and the halation. §6.2 names
-four of them; the rest are named nowhere but the kit's geometry.
+`--color-lotus-*` names the petal teals and their edges, the veins, the
+stamens' three oranges and their glint, two ripple steps, the halation, and
+(t-134) the lily pad and its edge. §6.2 names four of them; the rest are named
+nowhere but the lotus model.
 
 They exist so the no-colour-literal guard over `components/app/ui/` can be
-**absolute**. The alternative was exempting `lotus.tsx` — the one file in that
+**absolute**. The alternative was exempting the lotus — the one part of that
 directory that would most have needed the guard — and an exemption is a hole
 that widens.
 
@@ -310,6 +311,45 @@ byte-identical to them today. Those are UI roles that can be re-tuned for
 contrast: t-18 moved `--color-ring` onto the teal, and a later pass could move
 the teal itself. The bloom must not follow it. Same colour, different reason to
 exist — and they hold across both modes, because a mark is not a surface.
+
+## The lotus
+
+The owner's choice from t-131's prototypes (3 Oct 2026, "T5"; decision on
+f-identity): a water lily drawn from a 3D model — four sepals and four whorls
+of slender pointed petals, opening from a pointed bud around a crown of orange
+stamens, on lily pads and sage ripples — in the mark's teals. It supersedes
+§6.9's flat three-tier fan.
+
+| Piece     | File                                | Does                                                                                       |
+| --------- | ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| Model     | `components/app/ui/lotus-model.ts`  | Petal surfaces, whorls, timing, light. `LOTUS_OPENED_MS` is derived.                       |
+| Draw list | `components/app/ui/lotus-draw.ts`   | The flower at a moment as flat shapes in paint order, rounded so server and browser agree. |
+| Colour    | `components/app/ui/lotus-colour.ts` | Colours as token expressions; read as `color-mix()` CSS, or mixed in JS in the same OKLab. |
+| Painters  | `lotus-svg.tsx`, `lotus-canvas.ts`  | SVG for still states, canvas for the animation.                                            |
+| Frames    | `components/app/ui/lotus-frames.ts` | GENERATED: the measured frames, so nothing measures at runtime.                            |
+| Assets    | `scripts/app/lotus-assets.tsx`      | Bakes every still copy with tokens resolved to literals.                                   |
+
+**Animated `Lotus`: SVG at rest, canvas while moving.** Rebuilding ~240 shaded
+gradient bands through React every frame measured ~28fps in t-131; a canvas
+repaint is a few milliseconds. The SVG under the canvas is the bud or the open
+bloom, so every path that skips the animation (reduced motion, no 2D context)
+still shows a correct lotus.
+
+**`LotusMark` is a baked image, not inline SVG.** Inline, the open bloom is
+~270KB of markup in every page's HTML, and the glyph again in every chat
+avatar. Baked, it is one cached request per form. This is safe only because the
+lotus tokens are mode-invariant (above).
+
+**Below 48px without water, the mark is the GLYPH**: the bloom caught 850ms into
+its opening. Fully open the flower is ~2.3× wider than tall, so at the 18px
+avatar it would be a sliver. The glyph is also the favicon, the apple icon, and
+`public/favicon.{svg,ico}` (divergence row 13).
+
+**After changing the model or any `--color-lotus-*` token, run
+`npm run lotus:assets`.** It rewrites `lotus-frames.ts`, the three marks in
+`public/`, the email PNG, the favicons and the apple icon.
+`tests/unit/scripts/app/lotus-assets.test.ts` and `lotus-draw.test.ts` fail
+until you do.
 
 ## The destructive token has two roles, and only one rule separates them
 

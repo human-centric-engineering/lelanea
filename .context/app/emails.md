@@ -47,7 +47,8 @@ ground, the reason-for-receipt and the legal line. Templates put words in
   the `prefers-color-scheme` block in `<Head>`; Gmail ignores it and inverts on
   its own. The real guarantee is the palette — nothing pure white on pure black
   — and a transparent lotus PNG that sits on either ground.
-- **The lotus is `public/lotus-mark.png`**, rendered from the SVG at 2×,
+- **The lotus is `public/lotus-mark.png`**, baked at 2× from the lotus model
+  by `npm run lotus:assets` (its display size comes from `emailLotusSize()`),
   because Gmail strips `<svg>` and blocks SVG image sources. It is referenced by
   absolute URL from `baseUrl`; the invitation kind gets no `baseUrl` from the
   platform, so it reads the origin off `invitationUrl`.

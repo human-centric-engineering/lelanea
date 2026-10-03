@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
 /**
- * The lotus — §6.9's opening gesture, and what happens when someone has asked
- * their machine to stop things moving.
+ * The lotus — the app's opening gesture (§6.9, redrawn in t-134 as the owner's
+ * T5 water lily), and what happens when someone has asked their machine to stop
+ * things moving.
  *
- * Three properties are worth a test here and the rest is geometry:
+ * Three properties are worth a test here; the geometry itself is the draw
+ * list's, tested in `lotus-draw.test.ts`:
  *
  *   1. **The resting state is the default.** Every path that skips the animation
  *      — reduced motion, no JavaScript, a hydration gap — has to leave a correct
@@ -32,12 +34,16 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import { LOTUS_OPENED_MS, Lotus } from '@/components/app/ui/lotus';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
-import { LOTUS_FRAMES, LOTUS_TIERS, LOTUS_VEIN_ANGLES } from '@/components/app/ui/lotus-geometry';
+import { LOTUS_GLYPH_BELOW, drawLotus, lotusFrames } from '@/components/app/ui/lotus-draw';
+import { LOTUS_WHORLS, STAMEN_COUNT } from '@/components/app/ui/lotus-model';
 
-/** Petals across all three tiers: 6 + 6 + 5. */
-const PETAL_COUNT = LOTUS_TIERS.reduce((total, tier) => total + tier.angles.length, 0);
+/** Every petal in every whorl. */
+const PETAL_COUNT = LOTUS_WHORLS.reduce((total, whorl) => total + whorl.count, 0);
 
 type Listener = (event: MediaQueryListEvent) => void;
 
@@ -80,99 +86,84 @@ function bloom(): HTMLElement {
   return element;
 }
 
-/**
- * The tier petals only.
- *
- * The vein group is also a `g[fill]` with paths in it, and it is deliberately
- * excluded: veins do not move, so their transition lives on the group rather
- * than on each path. Counting them as petals would have made the transition
- * assertions below pass against an empty string.
- */
-function petals(): SVGPathElement[] {
-  return [...document.querySelectorAll<SVGPathElement>('svg g[fill]:not([fill="none"]) path')];
+function svg(): SVGSVGElement {
+  const element = document.querySelector('svg');
+  if (!element) throw new Error('no lotus svg rendered');
+  return element;
 }
 
-/** Petals and veins together — what the whole bloom draws as paths. */
-function allPaths(): SVGPathElement[] {
-  return [...document.querySelectorAll<SVGPathElement>('svg g[fill] path')];
+/** Petal bands: every petal is drawn as lengthwise bands, each its own gradient. */
+function bands(): Element[] {
+  return [...document.querySelectorAll('svg path[fill^="url(#"]')];
 }
 
-/**
- * When every inline transition on the rendered bloom has finished, in ms.
- *
- * Read off the DOM rather than recomputed from the constants, because a test
- * that redoes the component's arithmetic agrees with it by construction and
- * would have shipped the same 490ms gap. Each declaration is
- * `<property> <duration>ms <easing> <delay>ms`, and the easing is a
- * `cubic-bezier(…)` with commas inside it — hence the split that ignores a
- * comma with an unclosed paren behind it.
- */
-function lastMovementMs(): number {
-  const ends: number[] = [];
-  for (const node of document.querySelectorAll<HTMLElement>('[style*="transition"]')) {
-    for (const declaration of node.style.transition.split(/,(?![^(]*\))/)) {
-      const times = [...declaration.matchAll(/([\d.]+)ms/g)].map((match) => Number(match[1]));
-      if (times.length > 0) ends.push(times[0] + (times[1] ?? 0));
-    }
-  }
-  return Math.max(0, ...ends);
+/** Stamen strokes: a filament and its lit tip each. */
+function stamenStrokes(): Element[] {
+  return [...document.querySelectorAll('svg path[fill="none"]')];
 }
 
 describe('Lotus', () => {
-  describe('the geometry §6.9 specifies', () => {
-    it('draws three tiers of petals, veins and ripples', () => {
+  describe('the flower', () => {
+    it('is the bud while closed: every petal folded, no stamens yet', () => {
       render(<Lotus autoOpen={false} />);
 
-      expect(petals()).toHaveLength(PETAL_COUNT);
-      expect(allPaths()).toHaveLength(PETAL_COUNT + LOTUS_VEIN_ANGLES.length);
-      expect(document.querySelectorAll('ellipse')).toHaveLength(
-        // three ripples, the core, and the glint
-        5
+      // Every petal is drawn — folded, not absent — and the bands divide evenly
+      // among them. The crown has not risen.
+      expect(bands().length).toBeGreaterThan(0);
+      expect(bands().length % PETAL_COUNT).toBe(0);
+      expect(stamenStrokes()).toHaveLength(0);
+    });
+
+    it('is the full bloom once open: petals, and the stamen crown', () => {
+      render(<Lotus open />);
+
+      expect(bands().length % PETAL_COUNT).toBe(0);
+      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+    });
+
+    it('sits on water — pads, ripples, halation — and drops it on request', () => {
+      const { unmount } = render(<Lotus open />);
+      const pads = document.querySelectorAll(
+        'svg path[stroke]:not([fill="none"]):not([fill^="url"])'
       );
+      expect(pads).toHaveLength(3);
+      // Three ripple rings and the halation glow.
+      expect(document.querySelectorAll('svg ellipse[fill="none"]')).toHaveLength(3);
+      unmount();
+
+      render(<Lotus open water={false} />);
+      expect(document.querySelectorAll('svg ellipse[fill="none"]')).toHaveLength(0);
+      expect(svg()).toHaveAttribute('viewBox', lotusFrames().animated.tight.box.join(' '));
     });
 
-    it('drops the water frame and its ripples on request', () => {
-      render(<Lotus autoOpen={false} water={false} />);
-
-      // Only the core and the glint remain.
-      expect(document.querySelectorAll('ellipse')).toHaveLength(2);
-      expect(document.querySelector('svg')).toHaveAttribute('viewBox', LOTUS_FRAMES.tight.box);
-    });
-
-    it('gives each bloom its own gradient id', () => {
-      // Two marks sharing an id means the second paints with the first's
-      // gradient, which is a real bug and an easy one to introduce by hoisting
-      // the `<defs>` to module scope.
+    it('gives each bloom its own gradient ids', () => {
+      // Two blooms sharing ids means the second paints with the first's
+      // gradients — an easy bug to introduce by hoisting `<defs>`.
       render(
         <>
           <Lotus autoOpen={false} />
           <Lotus autoOpen={false} />
         </>
       );
-      const ids = [...document.querySelectorAll('radialGradient')].map((node) => node.id);
+      const ids = [...document.querySelectorAll('linearGradient')].map((node) => node.id);
 
-      expect(ids).toHaveLength(2);
-      expect(new Set(ids).size).toBe(2);
+      expect(ids.length).toBeGreaterThan(0);
+      expect(new Set(ids).size).toBe(ids.length);
     });
 
     it('is decorative — it never announces itself', () => {
-      // §6.9 calls it an opening gesture. It carries no information a reader
-      // would otherwise miss, and every place §6.7 puts it sits beside the name
-      // it stands for.
       render(<Lotus autoOpen={false} />);
-      expect(document.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+      expect(svg()).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('renders the bloom at `size`, whatever frame is around it', () => {
       // §6.6's interchangeability promise. The water frame is wider than the
-      // tight one by half again, so comparing the two FRAMES would be the wrong
-      // assertion — what has to match is the bloom inside them.
+      // bloom, so what has to equal `size` is the bloom inside it.
       const size = 120;
       render(<Lotus autoOpen={false} size={size} />);
-      const watery = bloom();
-      const frameWidth = Number.parseFloat(watery.style.width);
+      const frameWidth = Number.parseFloat(bloom().style.width);
 
-      expect(frameWidth * LOTUS_FRAMES.water.bloomFraction).toBeCloseTo(size, 5);
+      expect(frameWidth * lotusFrames().animated.water.bloomFraction).toBeCloseTo(size, 5);
     });
 
     it('matches LotusMark at the same size', () => {
@@ -182,13 +173,12 @@ describe('Lotus', () => {
           <LotusMark size={64} />
         </>
       );
-      const [animated, still] = [...document.querySelectorAll('svg')];
+      const animated = Number.parseFloat(svg().getAttribute('width') ?? '0');
+      const still = Number(document.querySelector('img')?.getAttribute('width'));
 
-      // Both use the water frame by default, so the rendered widths agree —
-      // which is what "interchangeable" has to mean at a call site.
-      expect(Math.round(Number.parseFloat(animated.getAttribute('width') ?? '0'))).toBe(
-        Number(still.getAttribute('width'))
-      );
+      // The same bloom width in both; the frames differ only in height (the
+      // animated one has room for the bud).
+      expect(Math.round(animated)).toBe(still);
     });
   });
 
@@ -218,35 +208,22 @@ describe('Lotus', () => {
       expect(onOpened).toHaveBeenCalledTimes(1);
     });
 
-    it('waits for the bloom to STOP, not for the design kit figure', () => {
-      // The bug this replaces: `LOTUS_OPENED_MS` was the kit's 2400ms, taken at
-      // its word. The last outer petal does not start until 340 + 5×70 = 690ms
-      // and then runs 2200ms, so it settles at 2890ms, and the ripples at 2900 —
-      // ~490ms after the caller had been told the gesture was over. A screen
-      // transition sequenced behind it cut the bloom off mid-flight, which is
-      // visible to a person and to nothing else.
-      //
-      // Asserted against every transition actually rendered, so an element added
-      // later with a longer tail fails here rather than shortening the gesture.
-      render(<Lotus open />);
+    it('waits for the bloom to STOP: nothing moves after LOTUS_OPENED_MS', () => {
+      // The bug this guards: `onOpened` once fired ~490ms before the last petal
+      // settled, and a screen transition sequenced behind it cut the gesture
+      // off mid-flight. Asserted on the DRAWING, not on the constants, so a
+      // part added later with a longer tail fails here.
+      const at = (ms: number) => JSON.stringify(drawLotus(ms, { water: true }));
 
-      const lastMovement = lastMovementMs();
-      expect(lastMovement).toBeGreaterThan(2400);
-      expect(LOTUS_OPENED_MS).toBeGreaterThanOrEqual(lastMovement);
+      expect(at(LOTUS_OPENED_MS)).toBe(at(LOTUS_OPENED_MS + 5_000));
+      expect(at(LOTUS_OPENED_MS - 50)).not.toBe(at(LOTUS_OPENED_MS));
     });
 
     it('fires an inline callback however often the parent re-renders', () => {
-      // `onOpened={() => …}` is a new function on every render and is the
-      // ordinary call shape. It used to be an effect dependency, so each render
-      // cleared the pending timer and rescheduled from zero: one extra render
-      // doubled the wait, and a parent that re-renders faster than the gesture —
-      // a ticking clock, a form, a resize handler — starved the callback for the
-      // whole session. Nothing threw, and the bloom looked perfect throughout.
-      //
-      // The renders are committed BETWEEN advances rather than inside one, which
-      // is the whole point: a single `act()` around the full advance flushes
-      // effects once at the end, so the interleaving that causes this never
-      // happens and the case passes against the defect it is meant to catch.
+      // `onOpened={() => …}` is a new function every render. As an effect
+      // dependency it cleared the pending timer on each render, and a parent
+      // re-rendering faster than the gesture starved the callback for good.
+      // Renders are committed BETWEEN advances, which is what exposes it.
       vi.useFakeTimers();
       const opened = vi.fn();
       const { rerender } = render(<Lotus onOpened={() => opened()} />);
@@ -260,11 +237,6 @@ describe('Lotus', () => {
     });
 
     it('tells a caller who drives it, which is the shape the prop doc recommends', () => {
-      // `<Lotus open={ready} onOpened={next} />` never called back at all: the
-      // auto-open effect returned on its first line for a controlled bloom, and
-      // it was the only place `onOpened` was reached from. A caller gating a
-      // screen on it waited for the session, and the prop's own doc promised
-      // otherwise.
       vi.useFakeTimers();
       const onOpened = vi.fn();
       const { rerender } = render(<Lotus open={false} onOpened={onOpened} />);
@@ -318,6 +290,25 @@ describe('Lotus', () => {
       expect(bloom()).toHaveAttribute('data-open', 'true');
     });
 
+    it('plays on a canvas while the petals move, then leaves the open SVG', () => {
+      // The canvas is up exactly while the bloom moves, and comes down on the
+      // same clock as `onOpened`. The SVG stays in the DOM throughout — hidden,
+      // not removed — so what remains is the identical open picture.
+      vi.useFakeTimers();
+      render(<Lotus />);
+      act(() => void vi.advanceTimersByTime(0));
+
+      expect(bloom()).toHaveAttribute('data-playing', 'true');
+      expect(document.querySelector('canvas')).not.toBeNull();
+      expect(svg().style.visibility).toBe('hidden');
+
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
+      expect(bloom()).not.toHaveAttribute('data-playing');
+      expect(document.querySelector('canvas')).toBeNull();
+      expect(svg().style.visibility).toBe('visible');
+      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
+    });
+
     it('breathes once open, and only when asked to', () => {
       const { rerender } = render(<Lotus open idle />);
       const breathing = bloom().className;
@@ -327,35 +318,30 @@ describe('Lotus', () => {
       expect(bloom().className.split(/\s+/)).toEqual(['relative', 'inline-block']);
     });
 
-    it('leaves an unopened petal folded rather than absent', () => {
-      // The closed state is the SAME rotation, mostly undone, at a third of the
-      // size — so if a transition never runs the mark is a lotus and not a
-      // stack. Asserted on the transform because that is what carries it.
-      render(<Lotus autoOpen={false} />);
-      const [first] = petals();
+    it('does not breathe while the opening is still playing', () => {
+      vi.useFakeTimers();
+      render(<Lotus idle />);
+      act(() => void vi.advanceTimersByTime(0));
 
-      expect(first.style.transform).toMatch(/rotate\([-\d.]+deg\) scale\(0\.34\)/);
-      expect(first.style.opacity).toBe('0');
+      expect(bloom().className.split(/\s+/)).toEqual(['relative', 'inline-block']);
+      act(() => void vi.advanceTimersByTime(LOTUS_OPENED_MS));
+      expect(bloom().className.split(/\s+/)).not.toEqual(['relative', 'inline-block']);
     });
   });
 
   describe('reduced motion', () => {
-    it('shows the bloom at rest immediately, with nothing transitioning', () => {
+    it('shows the bloom at rest immediately, with no canvas', () => {
       prefersReduced = true;
       render(<Lotus />);
 
       expect(bloom()).toHaveAttribute('data-open', 'true');
       expect(bloom()).toHaveAttribute('data-reduced-motion', 'true');
-      for (const petal of petals()) {
-        expect(petal.style.transition).toBe('none');
-        expect(petal.style.transform).toMatch(/scale\(1\)/);
-      }
+      expect(bloom()).not.toHaveAttribute('data-playing');
+      expect(document.querySelector('canvas')).toBeNull();
+      expect(stamenStrokes()).toHaveLength(STAMEN_COUNT * 2);
     });
 
     it('does not breathe, even with idle on', () => {
-      // The breath is the animation that never ends, so it is the one that
-      // matters most here. The CSS module's own media query is the belt; this
-      // asserts the braces, which is the half a test can see.
       prefersReduced = true;
       render(<Lotus idle />);
 
@@ -363,8 +349,8 @@ describe('Lotus', () => {
     });
 
     it('still tells the caller, on the same tick', () => {
-      // Without this a caller gating a screen behind `onOpened` would wait
-      // forever for an animation that was never going to run.
+      // Otherwise a caller gating a screen behind `onOpened` would wait forever
+      // for an animation that was never going to run.
       prefersReduced = true;
       const onOpened = vi.fn();
       render(<Lotus onOpened={onOpened} delay={5_000} />);
@@ -373,19 +359,14 @@ describe('Lotus', () => {
     });
 
     it('does not open a bloom the caller is holding closed', () => {
-      // `settled` was `open || reducedMotion` for every path, so a reader with
-      // the OS preference set saw a fully open lotus — and `data-open="true"` —
-      // from a `<Lotus open={false} />`. Skipping an animation is the promise a
-      // motion preference makes; choosing the state it was going to arrive at is
-      // not, and the caller had a reason.
+      // Skipping an animation is the promise a motion preference makes;
+      // choosing the state it was going to arrive at is not.
       prefersReduced = true;
       render(<Lotus open={false} />);
 
       expect(bloom()).toHaveAttribute('data-open', 'false');
       expect(bloom()).toHaveAttribute('data-reduced-motion', 'true');
-      for (const petal of petals()) {
-        expect(petal.style.transition).toBe('none');
-      }
+      expect(stamenStrokes()).toHaveLength(0);
     });
 
     it('tells a controlled caller on the same tick, too', () => {
@@ -404,19 +385,21 @@ describe('Lotus', () => {
       act(() => setPreference(true));
 
       expect(bloom()).toHaveAttribute('data-open', 'true');
-      // And the pending timer was cleared rather than left to fire into a
-      // component that has already settled.
+      expect(document.querySelector('canvas')).toBeNull();
+      // And the pending timer was cleared rather than left to fire.
       act(() => void vi.advanceTimersByTime(10_000));
       expect(bloom()).toHaveAttribute('data-open', 'true');
     });
 
     it('animates for everyone else', () => {
-      // The negative control. Every case above would pass for free if the hook
+      // The negative control: every case above would pass for free if the hook
       // returned `true` unconditionally.
-      render(<Lotus open />);
+      vi.useFakeTimers();
+      render(<Lotus />);
+      act(() => void vi.advanceTimersByTime(0));
 
       expect(bloom()).not.toHaveAttribute('data-reduced-motion');
-      expect(petals()[0].style.transition).toContain('cubic-bezier');
+      expect(document.querySelector('canvas')).not.toBeNull();
     });
 
     it('survives an environment with no matchMedia at all', () => {
@@ -429,43 +412,55 @@ describe('Lotus', () => {
 });
 
 describe('LotusMark', () => {
-  it('is the bloom at rest, with nothing that moves', () => {
-    render(<LotusMark />);
+  function img(): HTMLImageElement {
+    const element = document.querySelector('img');
+    if (!element) throw new Error('no mark rendered');
+    return element;
+  }
 
-    expect(document.querySelectorAll('svg g[fill] path')).toHaveLength(PETAL_COUNT);
-    // No veins, no glint, no halation — the still glyph is the mark, not the
-    // gesture. And no inline transition anywhere.
+  it('is the baked bloom on water by default', () => {
+    render(<LotusMark />);
+    expect(img()).toHaveAttribute('src', '/lotus-mark.svg');
+    // A still image: nothing here can move.
     expect(document.querySelector('[data-open]')).toBeNull();
-    for (const node of document.querySelectorAll<SVGElement>('svg *')) {
-      expect(node.getAttribute('style') ?? '').not.toContain('transition');
+  });
+
+  it('is the half-open glyph without water below the glyph threshold', () => {
+    // The open flower is ~2.3× wider than tall; at avatar size it would be a
+    // sliver, so small marks show the bloom part-way open.
+    render(<LotusMark size={LOTUS_GLYPH_BELOW - 1} water={false} />);
+    expect(img()).toHaveAttribute('src', '/lotus-glyph.svg');
+  });
+
+  it('is the open bloom without water at and above the threshold', () => {
+    render(<LotusMark size={LOTUS_GLYPH_BELOW} water={false} />);
+    expect(img()).toHaveAttribute('src', '/lotus-bloom.svg');
+  });
+
+  it('sizes the BLOOM, whichever frame is around it', () => {
+    const frames = lotusFrames().still;
+    for (const [props, frame] of [
+      [{ size: 120 }, frames.water],
+      [{ size: 120, water: false }, frames.tight],
+      [{ size: 24, water: false }, frames.glyph],
+    ] as const) {
+      const { unmount } = render(<LotusMark {...props} />);
+      expect(Number(img().getAttribute('width'))).toBe(
+        Math.round(props.size / frame.bloomFraction)
+      );
+      unmount();
     }
   });
 
-  it('crops tight to the bloom on request, as §6.6 asks under 40px', () => {
-    render(<LotusMark size={24} water={false} />);
-    const svg = document.querySelector('svg');
-
-    expect(svg).toHaveAttribute('viewBox', LOTUS_FRAMES.tight.box);
-    expect(document.querySelectorAll('ellipse')).toHaveLength(1);
-    // The tight frame is barely wider than the bloom, so a 24px mark is 25px.
-    expect(Number(svg?.getAttribute('width'))).toBe(
-      Math.round(24 / LOTUS_FRAMES.tight.bloomFraction)
-    );
+  it('points only at files that exist', () => {
+    for (const file of ['lotus-mark.svg', 'lotus-bloom.svg', 'lotus-glyph.svg']) {
+      expect(existsSync(path.join(process.cwd(), 'public', file)), file).toBe(true);
+    }
   });
 
   it('is hidden from assistive technology', () => {
     render(<LotusMark />);
-    expect(document.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
-  });
-
-  it('gives each mark its own gradient id', () => {
-    render(
-      <>
-        <LotusMark />
-        <LotusMark />
-      </>
-    );
-    const ids = [...document.querySelectorAll('radialGradient')].map((node) => node.id);
-    expect(new Set(ids).size).toBe(2);
+    expect(img()).toHaveAttribute('alt', '');
+    expect(img()).toHaveAttribute('aria-hidden', 'true');
   });
 });
