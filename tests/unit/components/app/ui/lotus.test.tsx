@@ -35,6 +35,7 @@ import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { existsSync } from 'node:fs';
+import { renderToString } from 'react-dom/server';
 import path from 'node:path';
 
 import { LOTUS_OPENED_MS, Lotus } from '@/components/app/ui/lotus';
@@ -137,6 +138,21 @@ describe('Lotus', () => {
     it('drops the water on request', () => {
       render(<Lotus open water={false} />);
       expect(still()).toHaveAttribute('src', '/lotus-anim-open.svg');
+    });
+
+    it('asks for the open image from the first render, while still a bud', () => {
+      // Requested only once opening began, it had 2.2s to arrive; on a slow
+      // connection the canvas came down onto the bud. The preload goes out
+      // with the server HTML …
+      const html = renderToString(<Lotus autoOpen={false} />);
+      expect(html).toMatch(/<link[^>]*rel="preload"[^>]*href="\/lotus-anim-open-water\.svg"/);
+
+      // … and from a client render, into the head.
+      render(<Lotus autoOpen={false} water={false} />);
+      expect(still()).toHaveAttribute('src', '/lotus-anim-bud.svg');
+      expect(
+        document.head.querySelector('link[rel="preload"][href="/lotus-anim-open.svg"]')
+      ).not.toBeNull();
     });
 
     it('points only at baked files that exist', () => {

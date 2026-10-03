@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { preload } from 'react-dom';
 
 import { cn } from '@/lib/utils';
 
@@ -213,7 +214,13 @@ export function Lotus({
     return () => cancelAnimationFrame(raf);
   }, [playing, water, frame, width, height]);
 
-  const still = `/lotus-anim-${settled ? 'open' : 'bud'}${water ? '-water' : ''}.svg`;
+  const openSrc = `/lotus-anim-open${water ? '-water' : ''}.svg`;
+  const still = settled ? openSrc : `/lotus-anim-bud${water ? '-water' : ''}.svg`;
+  // Request the open image from the first render — with the HTML, on the
+  // server. Asked for only when the opening began, it had the opening's 2.2s
+  // to arrive, and on a slow connection the canvas came down onto the BUD,
+  // still showing until the swap finished loading (code review, t-134).
+  preload(openSrc, { as: 'image' });
 
   return (
     <div
