@@ -1,88 +1,114 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Lotus } from '@/components/app/ui/lotus';
+import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus-model';
 import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
+import styles from '@/components/app/shell/entry-bloom.module.css';
+
+/** The fade once the last petal has settled — long enough to read as a fade-out, not a cut. */
+const FADE_MS = 900;
+
+/** The lotus fades in over this long as it starts to rise. */
+const FADE_IN_MS = 1000;
+
 /**
- * Once per browser session, keyed per tab.
- *
- * `sessionStorage`, not `localStorage`: §6.9 calls the bloom "the app's opening
- * gesture", and an opening gesture belongs to a visit. `localStorage` would show
- * it once and never again on that device; a plain module flag would re-show it
- * on every full page load. `sessionStorage` is the one that means "this visit".
+ * It drifts up through the whole opening and on through the fade-out, so it
+ * is still rising as it disappears rather than stopping and then vanishing.
  */
-const SEEN_KEY = 'lelanea.bloom.seen';
-
-/** Long enough for the last petal to settle, plus the fade this adds on top. */
-const FADE_MS = 420;
+const DRIFT_MS = LOTUS_OPENED_MS + FADE_MS;
 
 /**
- * The entry bloom: the lotus over the shell on the first view of a session.
+ * If JavaScript never arrives, CSS lifts the cover on its own this long after
+ * the page loads: the opening, plus a beat. See `failsafe` below.
+ */
+const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+
+/**
+ * Whether this document has already shown the bloom. Module scope is exactly
+ * "this page load": a refresh or a new visit starts a fresh module, while a
+ * link from Profile back into `/app` remounts the layout in the SAME document
+ * — and that is moving around, not a visit, so it does not replay.
+ */
+let shownThisDocument = false;
+
+/** Has the CSS fail-safe already started lifting the cover by itself? */
+function failsafeHasRun(element: HTMLElement | null): boolean {
+  const animations = element?.getAnimations?.();
+  if (animations) {
+    return animations.some(
+      (a) =>
+        (a as CSSAnimation).animationName?.includes('lift') &&
+        Number(a.currentTime ?? 0) >= FAILSAFE_MS
+    );
+  }
+  // No Web Animations API: navigation start is no later than the animation's
+  // start, so this errs toward skipping a cover rather than restoring one.
+  return performance.now() >= FAILSAFE_MS;
+}
+
+/**
+ * The entry bloom: the lotus unfolds over the shell on every full page load —
+ * a first visit, a return, a browser refresh, a deep link — and then fades to
+ * the page the reader loaded.
  *
- * ## What this owns, and what it does not
+ * ## Every load, and only loads (owner ruling, 3 Oct 2026 — t-132)
  *
- * `Lotus` already does the whole animation — the petal fan, the breathing idle,
- * `onOpened` when the last petal settles, and the reduced-motion resting state.
- * None of that is re-implemented here and none of it should be.
+ * It used to play once per tab session (`sessionStorage`), on §6.9's "it opens
+ * once per session". The owner asked for it on every return and every refresh.
+ * It plays on the first mount in each document: a refresh or a new visit is a
+ * new document; a link inside the app keeps the `/app` layout mounted; and a
+ * link back in from Profile or Settings remounts it in a document that has
+ * already bloomed (`shownThisDocument`). Moving around never replays it.
  *
- * What this component owns is the once-per-session gate, which is genuinely new:
- * the prototype has no `sessionStorage` at all and blooms on every render of its
- * `#app` view. So this is an addition to the prototype rather than a port from
- * it, which is why it carries a test rather than a screenshot comparison.
+ * It overlays the route rather than redirecting, so what is under it when it
+ * fades is exactly the URL that was loaded.
  *
- * ## Why it starts hidden and reveals in an effect
+ * ## It covers the page from the first paint
  *
- * The server cannot read `sessionStorage`, so a server-rendered bloom would
- * flash for every returning visitor before the client could take it away. The
- * first client render therefore matches the server — nothing — and the effect
- * decides. A visitor who has already seen it this session renders nothing at
- * all, not a hidden element.
+ * The overlay is in the server HTML, so there is no flash of the shell before
+ * it. (While the bloom was once per session it could not be: the server cannot
+ * read `sessionStorage`, so it started hidden and an effect decided.)
+ *
+ * A server-rendered cover has a failure mode a client-only one did not: if the
+ * scripts never run, nothing would ever take it away. So until this component
+ * has mounted, a CSS animation fades it out by itself after `FAILSAFE_MS`; once
+ * JavaScript is alive the class comes off and the bloom's own clock rules — so
+ * a phone that hydrates late still gets the whole opening, and one that hydrates
+ * after the fail-safe has run does not get the cover back (`failsafeHasRun`).
+ *
+ * ## Skippable
+ *
+ * Seeing it on every refresh is the point, but someone reloading in a hurry
+ * should not have to wait: a click, a tap, Escape or Tab lets it go at once.
  */
 export function EntryBloom() {
-  const [phase, setPhase] = useState<'idle' | 'showing' | 'leaving' | 'done'>('idle');
-
-  /**
-   * One decision per mounted component, not per effect run.
-   *
-   * `reactStrictMode` is on, so in development React runs this effect, tears it
-   * down, and runs it again on the same instance. Without this guard the first
-   * run writes the flag and the second run reads it back and concludes the
-   * bloom has already been seen — so the opening gesture never appeared in
-   * development at all, which is the only place anyone would be checking it.
-   * Fast Refresh remounts did the same thing in the same way.
-   *
-   * A ref rather than state: refs survive Strict Mode's simulated remount,
-   * which is exactly the property needed, and writing one does not re-render.
-   */
+  const [phase, setPhase] = useState<'showing' | 'leaving' | 'done'>('showing');
+  const [hydrated, setHydrated] = useState(false);
+  const cover = useRef<HTMLDivElement>(null);
   const decided = useRef(false);
 
-  useEffect(() => {
+  /**
+   * Decided once per instance, before the browser paints.
+   *
+   * - Already shown in this document (a link back into `/app`): gone, with no
+   *   frame of cover.
+   * - The fail-safe already ran (a phone slow enough to hydrate after it):
+   *   gone. Dropping the fail-safe class here would otherwise snap the cover
+   *   back over an app the reader is already using (code review, t-132).
+   *
+   * A ref, not the module flag alone, so StrictMode's simulated remount of the
+   * same instance does not read its own write and skip the bloom.
+   */
+  useLayoutEffect(() => {
     if (decided.current) return;
     decided.current = true;
-
-    let seen = false;
-    try {
-      seen = window.sessionStorage.getItem(SEEN_KEY) === '1';
-    } catch {
-      // Private mode, or storage disabled. Treat it as unseen: showing the
-      // opening gesture twice is a far smaller cost than throwing on mount.
-      seen = false;
-    }
-
-    if (seen) {
-      setPhase('done');
-      return;
-    }
-
-    try {
-      window.sessionStorage.setItem(SEEN_KEY, '1');
-    } catch {
-      // Same reasoning: the write failing must not stop the bloom rendering.
-    }
-    setPhase('showing');
+    if (shownThisDocument || failsafeHasRun(cover.current)) setPhase('done');
+    shownThisDocument = true;
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -91,44 +117,80 @@ export function EntryBloom() {
     return () => clearTimeout(timer);
   }, [phase]);
 
-  if (phase === 'idle' || phase === 'done') return null;
+  useEffect(() => {
+    if (phase !== 'showing') return;
+    // Escape skips it. So does Tab: the shell under the cover is focusable,
+    // and a keyboard reader should not be moving through controls they cannot
+    // see.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === 'Tab') setPhase('leaving');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [phase]);
+
+  if (phase === 'done') return null;
 
   return (
     <div
       // Purely decorative and briefly on top of everything: a screen reader
-      // should hear the shell, not an unnamed overlay it cannot dismiss.
+      // should hear the shell, not an unnamed overlay. Escape or Tab (above) is
+      // the keyboard's way past it; the click below is the pointer's.
       aria-hidden="true"
       /*
         The same claim as `pointer-events-auto` below, made to the things that
         listen on `document` rather than to the ones that hit-test.
         `shell-nav.tsx`'s click-away fires wherever the press lands, and this
-        overlay is neither a control nor inside the nav — so clicking anywhere
-        during the ~2.9s bloom collapsed the reader's menu as their very first
-        interaction with the app. `pointer-events-auto` cannot help with that:
-        it stops the press reaching what is UNDER the overlay, and a document
-        listener is not under anything.
+        overlay is neither a control nor inside the nav — so a click during the
+        bloom collapsed the reader's menu as their very first interaction with
+        the app. `pointer-events-auto` cannot help with that: it stops the
+        press reaching what is UNDER the overlay, and a document listener is
+        not under anything.
       */
       {...{ [SHELL_OVERLAY_ATTR]: '' }}
+      // A press anywhere skips it. It is the press itself the reader meant, not
+      // whatever lies under the cover, so it is consumed here (see above).
+      onClick={() => setPhase('leaving')}
       className={cn(
         'bg-background fixed inset-0 z-[100] flex items-center justify-center',
-        // While it is OPAQUE it must also be solid to the pointer. It was
-        // `pointer-events-none` throughout, which meant that for the ~2.9s the
-        // bloom takes to settle a click went through to a nav item or the theme
-        // toggle the reader could not see — worst on a deep link into a nested
-        // view, where the thing under the cursor is not what the last page had
-        // there. Released for the fade, so the shell is live as it appears
-        // rather than 420ms later.
+        // Solid to the pointer while opaque, so a click cannot land on a nav
+        // item the reader cannot see; released for the fade, so the shell is
+        // live as it appears.
         phase === 'leaving' ? 'pointer-events-none' : 'pointer-events-auto',
         // The duration is an inline style, not a class: Tailwind extracts class
         // names statically, so `duration-[${FADE_MS}ms]` would compile to
-        // nothing and the fade would snap. One source for the number either way.
+        // nothing and the fade would snap.
         'transition-opacity ease-[var(--ease-brand)] motion-reduce:transition-none',
-        phase === 'leaving' ? 'opacity-0' : 'opacity-100'
+        phase === 'leaving' ? 'opacity-0' : 'opacity-100',
+        !hydrated && styles.failsafe
       )}
-      style={{ transitionDuration: `${FADE_MS}ms` }}
+      style={{ transitionDuration: `${FADE_MS}ms`, animationDelay: `${FAILSAFE_MS}ms` }}
+      ref={cover}
       data-testid="entry-bloom"
+      data-hydrated={hydrated ? 'true' : undefined}
     >
-      <Lotus size={168} autoOpen idle water onOpened={() => setPhase('leaving')} />
+      {/*
+        Large, fading in and drifting slowly up the screen while it opens, then
+        fading out with the cover (owner, 3 Oct 2026). The drift is a deliberate
+        exception to §6.5's 4–8px translation limit, asked for by name; reduced
+        motion gets neither the drift nor the fade-in (the module's media query).
+        No breath: it is leaving, not resting. Capped by height as well as
+        width (120dvh), so a landscape phone does not crop it as it rises.
+      */}
+      <div
+        className={cn('w-[min(86vw,680px,120dvh)]', styles.rise)}
+        style={{
+          animationDuration: `${FADE_IN_MS}ms, ${DRIFT_MS}ms`,
+          // Held until JavaScript is alive, which is when the petals start to
+          // move: run from the first paint, a slow page finished the rise
+          // before the bloom had opened. Until then the lotus is not yet shown
+          // (the fade-in's start state) over the plain cover.
+          animationPlayState: hydrated ? 'running' : 'paused',
+        }}
+        data-testid="entry-bloom-rise"
+      >
+        <Lotus size={520} autoOpen idle={false} water fluid onOpened={() => setPhase('leaving')} />
+      </div>
     </div>
   );
 }

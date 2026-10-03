@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
-import { LotusMark } from '@/components/app/ui/lotus-mark';
+import { Lotus } from '@/components/app/ui/lotus';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
@@ -138,9 +138,10 @@ export default async function HomePage() {
 
         <div className={styles.bloom}>
           {/* Decorative: the page's name is its `h1` a column away, so
-              announcing the flower would only repeat it. */}
+              announcing the flower would only repeat it. It unfolds on every
+              load, as the app's entry bloom does (owner, t-132). */}
           <div className={styles.bloomArt}>
-            <LotusMark size={300} water />
+            <Lotus size={300} water fluid />
           </div>
         </div>
       </section>

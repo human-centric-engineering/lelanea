@@ -586,6 +586,8 @@ Custom marks are the lotus glyph (favicon, app icon center, a 16px mark above pu
 
 ### 6.9 The lotus
 
+> **Superseded in t-134 (3 Oct 2026).** The owner chose a new lotus from t-131's prototypes: a water lily drawn from a 3D model — sepals and four whorls of slender pointed petals opening from a pointed bud around a crown of orange stamens, on lily pads and the sage ripples — in the teals below. Outer whorls open first (a cup cannot open inner-first), and small marks show the bloom half-open. The geometry below is the original fan, kept for the record; the current mark is described in `.context/app/brand-theme.md` § The lotus.
+
 The signature element. A bloom of three petal tiers over sage ripples, with a burnt orange core.
 
 - **Outer tier:** 6 petals in deep teal `#17718A`, 60 long by 48 wide, at ±66°, ±46°, ±25°.
@@ -596,7 +598,7 @@ The signature element. A bloom of three petal tiers over sage ripples, with a bu
 - **Opening:** 2200ms, staggered inner to outer, from a near-upright cluster out to rest.
 - **Idle:** a 4s breath, scaling between 1.0 and 1.015.
 
-It opens **once per session** and is ambient thereafter. It is the first thing a new user sees, and the animation is the app's opening gesture rather than a loading state.
+It opens **once per session** and is ambient thereafter. *(Superseded in t-132: it now opens on every full page load, refresh and return included, and a click or Escape skips it.)* It is the first thing a new user sees, and the animation is the app's opening gesture rather than a loading state.
 
 ### 6.10 Copy and casing
 

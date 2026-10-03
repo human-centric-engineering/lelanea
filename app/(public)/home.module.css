@@ -76,11 +76,6 @@
   width: min(360px, 100%);
 }
 
-.bloomArt > svg {
-  width: 100%;
-  height: auto;
-}
-
 .band {
   padding: 44px 0;
   border-top: 1px solid var(--color-divider);

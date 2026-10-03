@@ -1,31 +1,43 @@
 // @vitest-environment happy-dom
 
 /**
- * The entry bloom's session gate — the part of it that is ours.
+ * The entry bloom — when it plays, and that it always gets out of the way.
  *
- * `Lotus` already owns the animation and is covered by its own suite. What is
- * new here is the once-per-session rule, and it needs its own test for a
- * specific reason: **the prototype has no `sessionStorage` at all.** It blooms
- * on every render of its `#app` view, so the screenshot comparison in this
- * task's done-when cannot sign this behaviour off — there is nothing on the
- * other side to compare against.
+ * `Lotus` owns the animation and has its own suite. What is ours here is the
+ * owner's rule from t-132 — **the lotus unfolds on every full page load**, a
+ * refresh and a return included, and NOT on moving around inside the app — and
+ * the three ways the cover must come off: the bloom settling, the reader
+ * skipping it, and (if scripts never run) a CSS fail-safe.
  *
- * The failure it guards is also silent in the direction that matters. A gate
- * that never writes its flag looks perfect on a first visit and wrong only on
- * the second, which is the visit nobody screenshots.
+ * The cover is server-rendered now, so a cover that never lifts would sit over
+ * the whole app. Every exit has a case.
  *
  * @see components/app/shell/entry-bloom.tsx
  */
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EntryBloom } from '@/components/app/shell/entry-bloom';
 import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus';
 
-beforeEach(() => {
-  window.sessionStorage.clear();
+/**
+ * A fresh module per test: whether this document has bloomed is module state,
+ * and a fresh module is exactly what a refresh or a new visit is.
+ */
+let EntryBloom: (typeof import('@/components/app/shell/entry-bloom'))['EntryBloom'];
+async function newDocument() {
+  vi.resetModules();
+  ({ EntryBloom } = await import('@/components/app/shell/entry-bloom'));
+}
+
+const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+/** The cover's fade-out. */
+const FADE_MS = 900;
+
+beforeEach(async () => {
+  await newDocument();
   // The bloom is decorative and would otherwise animate for real in every case.
   vi.stubGlobal(
     'matchMedia',
@@ -41,148 +53,223 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('EntryBloom — once per session', () => {
-  it('blooms on the first view of a session', () => {
+/** Run the bloom to the end of its opening and its fade. */
+async function settle() {
+  await act(async () => {
+    vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(FADE_MS + 50);
+  });
+}
+
+describe('EntryBloom — on every full page load', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is in the server HTML, so the shell never shows before it', () => {
+    const html = renderToString(<EntryBloom />);
+    expect(html).toContain('data-testid="entry-bloom"');
+  });
+
+  it('plays again on the next load — a refresh is a new document', async () => {
+    vi.useFakeTimers();
+    const first = render(<EntryBloom />);
+    await settle();
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+    first.unmount();
+
+    // The browser refreshed: a new document, a fresh module, a new mount.
+    await newDocument();
     render(<EntryBloom />);
     expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
   });
 
-  it('does not bloom on the second view of the same session', () => {
+  it('does not replay on a link back into the app — the same document', async () => {
+    // From Profile or Settings back to /app remounts the layout, but in a
+    // document that has already bloomed: moving around, not a visit.
+    vi.useFakeTimers();
     const first = render(<EntryBloom />);
-    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    await settle();
     first.unmount();
 
     render(<EntryBloom />);
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
-  it('records the flag rather than relying on a module-level variable', () => {
-    // A module flag would pass the case above and fail on a full page load,
-    // which is the real second visit. Assert the durable record directly.
+  it('remembers nothing between loads', () => {
+    // The once-per-session flag is gone, not merely unread.
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
     render(<EntryBloom />);
-    expect(window.sessionStorage.getItem('lelanea.bloom.seen')).toBe('1');
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
   });
 
-  it('blooms again once the session ends', () => {
-    const first = render(<EntryBloom />);
-    first.unmount();
-    window.sessionStorage.clear(); // a new tab, or a new visit
-
-    render(<EntryBloom />);
-    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
-  });
-
-  it('renders nothing rather than an empty overlay once seen', () => {
-    // A returning visitor must not get a fixed, full-screen element over the
-    // shell — even a transparent one, which would eat every click.
-    const first = render(<EntryBloom />);
-    first.unmount();
-
-    const { container } = render(<EntryBloom />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('still blooms when sessionStorage throws', () => {
-    // Private mode, or storage disabled by policy. Showing the opening gesture
-    // twice is a far smaller cost than throwing on mount and taking the shell
-    // down with it.
-    const denied = () => {
-      throw new Error('storage disabled');
-    };
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(denied);
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(denied);
-
-    expect(() => render(<EntryBloom />)).not.toThrow();
-    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
-    vi.restoreAllMocks();
+  it('does not replay while the layout stays mounted — moving around the app', async () => {
+    // Client-side navigation re-renders the layout's children, not the layout:
+    // the same EntryBloom instance stays mounted, done.
+    vi.useFakeTimers();
+    const { rerender } = render(<EntryBloom />);
+    await settle();
+    rerender(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
   it('fades out and unmounts once the last petal settles', async () => {
-    // The overlay is `fixed inset-0` over the whole shell. If the leave path
-    // never completes it is not a cosmetic bug: the shell is covered and,
-    // without `pointer-events-none`, would be unusable for the session.
     vi.useFakeTimers();
-    try {
-      render(<EntryBloom />);
-      expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
 
-      // `Lotus` calls `onOpened` when it settles; drive its timer, then ours.
-      await act(async () => {
-        vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
-      });
-      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
-
-      await act(async () => {
-        vi.advanceTimersByTime(500);
-      });
-      expect(screen.queryByTestId('entry-bloom')).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('still blooms under StrictMode, which is how development runs it', () => {
-    // `next.config.js` sets `reactStrictMode: true`, so React mounts, tears
-    // down and remounts the same instance in development. With the flag written
-    // and read in the same effect, the first run wrote `'1'` and the second read
-    // it back and concluded the bloom had already been seen — so the opening
-    // gesture never appeared in development at ALL, the only environment anyone
-    // would be checking it in. Fast Refresh remounts did the same.
-    //
-    // This case has to render under `StrictMode` explicitly: Testing Library
-    // does not, so every other case in this file passes with or without the
-    // guard and none of them can see this.
-    render(
-      <StrictMode>
-        <EntryBloom />
-      </StrictMode>
-    );
-    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
-  });
-
-  it('still blooms only once per session under StrictMode', () => {
-    // The guard must not have bought the first bloom by breaking the rule.
-    const first = render(
-      <StrictMode>
-        <EntryBloom />
-      </StrictMode>
-    );
-    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
-    first.unmount();
-
-    render(
-      <StrictMode>
-        <EntryBloom />
-      </StrictMode>
-    );
+    await act(async () => {
+      vi.advanceTimersByTime(FADE_MS + 50);
+    });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
   });
 
-  it('blocks clicks while it is opaque, and releases them for the fade', async () => {
-    // This case previously asserted `pointer-events-none` THROUGHOUT, which was
-    // the defect rather than the requirement: the cover is `bg-background`, so
-    // for the ~2.9s the bloom takes to settle a click went through to a nav item
-    // or the theme toggle nobody could see. Worst on a deep link, where what is
-    // under the cursor is not what the last page had there.
-    //
-    // Solid while opaque; released as it fades, so the shell is live when it
-    // appears rather than 420ms later.
+  it('blooms under StrictMode, which is how development runs it — and still lifts', async () => {
+    // StrictMode remounts the same instance; the once-per-document flag must
+    // not read its own write and skip the bloom, nor strand the cover.
     vi.useFakeTimers();
-    try {
-      render(<EntryBloom />);
-      expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-auto');
+    render(
+      <StrictMode>
+        <EntryBloom />
+      </StrictMode>
+    );
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    await settle();
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+  });
+});
 
-      await act(async () => {
-        vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
-      });
-      expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
-    } finally {
-      vi.useRealTimers();
-    }
+describe('EntryBloom — the lotus rises as it opens', () => {
+  it('is large, and fades in and drifts up for the whole opening and fade', () => {
+    render(<EntryBloom />);
+    const rise = screen.getByTestId('entry-bloom-rise');
+    expect(rise.className).toMatch(/rise/);
+    expect(rise.style.animationDuration).toBe(`1000ms, ${LOTUS_OPENED_MS + FADE_MS}ms`);
+    // Far bigger than the old 168px bloom: a fluid lotus up to 680px wide,
+    // capped by height too so a short screen does not crop it as it rises.
+    expect(rise.className).toContain('w-[min(86vw,680px,120dvh)]');
+    expect(rise.querySelector('[data-open]')).toHaveStyle({ width: '100%' });
+  });
+
+  it('holds the rise until the bloom starts, so they move together', () => {
+    // On the server — before JavaScript — the rise is paused at its start.
+    expect(renderToString(<EntryBloom />)).toMatch(/animation-play-state:paused/);
+    render(<EntryBloom />);
+    expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('running');
+  });
+
+  it('does not breathe — it is leaving, not resting', async () => {
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+    });
+    const bloom = screen.getByTestId('entry-bloom-rise').querySelector('[data-open]');
+    expect(bloom?.className.split(/\s+/)).toEqual(['relative', 'inline-block']);
+    vi.useRealTimers();
+  });
+});
+
+describe('EntryBloom — always gets out of the way', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('lets a click or tap skip it', async () => {
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    fireEvent.click(screen.getByTestId('entry-bloom'));
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    await act(async () => {
+      vi.advanceTimersByTime(FADE_MS + 50);
+    });
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+  });
+
+  it('lets Escape skip it', async () => {
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    await act(async () => {
+      vi.advanceTimersByTime(FADE_MS + 50);
+    });
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+  });
+
+  it('lets Tab skip it, rather than move through controls nobody can see', () => {
+    render(<EntryBloom />);
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+  });
+
+  it('ignores other keys', () => {
+    render(<EntryBloom />);
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+  });
+
+  it('carries a CSS fail-safe until JavaScript is alive, then drops it', () => {
+    // If the scripts never run, the server-rendered cover must lift by itself.
+    // The server HTML carries the fail-safe class and its delay …
+    const html = renderToString(<EntryBloom />);
+    expect(html).toMatch(/class="[^"]*failsafe/);
+    expect(html).toContain(`animation-delay:${LOTUS_OPENED_MS + 600}ms`);
+
+    // … and once mounted the component's own clock takes over, so a slow-
+    // hydrating device still gets the whole opening.
+    render(<EntryBloom />);
+    const cover = screen.getByTestId('entry-bloom');
+    expect(cover).toHaveAttribute('data-hydrated', 'true');
+    expect(cover.className).not.toMatch(/failsafe/);
+  });
+
+  it('does not bring the cover back if the fail-safe already lifted it', () => {
+    // A phone that hydrates after the fail-safe has run: the reader is already
+    // using the app. Dropping the fail-safe class would snap the cover back
+    // over it for another whole opening.
+    const getAnimations = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockReturnValue([
+      {
+        animationName: 'entry-bloom-module__lift',
+        currentTime: FAILSAFE_MS + 1,
+      } as unknown as Animation,
+    ]);
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+    getAnimations.mockRestore();
+  });
+
+  it('keeps the cover when the fail-safe has not started — hydration in time', () => {
+    const getAnimations = vi
+      .spyOn(HTMLElement.prototype, 'getAnimations')
+      .mockReturnValue([
+        { animationName: 'entry-bloom-module__lift', currentTime: 200 } as unknown as Animation,
+      ]);
+    render(<EntryBloom />);
+    expect(screen.queryByTestId('entry-bloom')).not.toBeNull();
+    getAnimations.mockRestore();
+  });
+
+  it('blocks clicks while it is opaque, and releases them for the fade', async () => {
+    // Solid while opaque, so a click cannot land on a nav item nobody can see;
+    // released as it fades, so the shell is live when it appears.
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-auto');
+
+    await act(async () => {
+      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
   });
 
   it('is hidden from assistive technology', () => {
-    // It is decorative, briefly covers everything, and cannot be dismissed.
     render(<EntryBloom />);
     expect(screen.getByTestId('entry-bloom').getAttribute('aria-hidden')).toBe('true');
   });
