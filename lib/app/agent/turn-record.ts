@@ -324,7 +324,7 @@ export function openingWindowStart(startedAt: Date): Date {
  * the same writer as the reply. With no user message id, the claim's start —
  * reached back by {@link NO_USER_ROW_GRACE_MS} for the AI's opening only.
  */
-async function turnWindowStart(
+export async function turnWindowStart(
   turn: Pick<AppTurn, 'userId' | 'turnId' | 'startedAt' | 'conversationId' | 'userMessageId'>
 ): Promise<Date> {
   if (!turn.userMessageId || !turn.conversationId) {

@@ -22,8 +22,13 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   NoteCard,
   noteTag,
+  EXCHANGE_CONFIRM,
+  EXCHANGE_OFFER,
   REMOVE_CONFIRM,
+  REMOVE_CONFIRM_CONVERSATION,
+  REMOVE_CONFIRM_EXCHANGE,
   REMOVED_POINTER,
+  removeConfirm,
   removedWords,
 } from '@/components/app/notes/note-card';
 import type { Note } from '@/lib/app/slots/notes-view';
@@ -45,6 +50,7 @@ function note(overrides: Partial<Note> = {}): Note {
     retired: false,
     correctable: true,
     removable: true,
+    exchanges: [],
     previous: null,
     group: 'life_areas',
     ...overrides,
@@ -65,7 +71,7 @@ describe('removing a note', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
 
-    expect(screen.getByText(REMOVE_CONFIRM)).toBeTruthy();
+    expect(screen.getByText(removeConfirm(note()))).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep it' })).toBeTruthy();
     // Asking is not acting: nothing has been sent yet.
@@ -81,7 +87,7 @@ describe('removing a note', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove this note' }));
     await userEvent.click(screen.getByRole('button', { name: 'Keep it' }));
 
-    expect(screen.queryByText(REMOVE_CONFIRM)).toBeNull();
+    expect(screen.queryByText(removeConfirm(note()))).toBeNull();
     // The control to ask again is back, in place of the confirmation.
     expect(screen.getByRole('button', { name: 'Remove this note' })).toBeTruthy();
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -273,5 +279,215 @@ describe('the tag on a removed note', () => {
 
   it('keeps a taxonomy heading, which is an admin’s wording', () => {
     expect(noteTag(note({ removed: true, slotSlug: 'life_work' }))).toBe('life work');
+  });
+});
+
+describe('what the removal says about the conversation (t-127)', () => {
+  it('says the exchange can go next where one is on record', () => {
+    expect(removeConfirm(note({ exchanges: ['t1'] }))).toBe(
+      `${REMOVE_CONFIRM} ${REMOVE_CONFIRM_EXCHANGE}`
+    );
+  });
+
+  it('says the conversation is untouched where the note came from talking but no exchange is on record', () => {
+    expect(removeConfirm(note({ exchanges: [], conversationId: 'c1' }))).toBe(
+      `${REMOVE_CONFIRM} ${REMOVE_CONFIRM_CONVERSATION}`
+    );
+  });
+
+  it('says nothing about a conversation for a note none wrote', () => {
+    expect(removeConfirm(note({ exchanges: [], conversationId: null }))).toBe(REMOVE_CONFIRM);
+  });
+});
+
+describe('a removed note with a reading still kept under it (t-127)', () => {
+  const placeholderOver = (removable: boolean) =>
+    note({
+      removed: true,
+      removable,
+      correctable: false,
+      value: '',
+      reasoningNote: '',
+      conversationId: null,
+      exchanges: [],
+    });
+
+  it('offers to remove what is still kept, and asks before doing anything', async () => {
+    const fetchImpl = answering({ success: true, data: { versions: 2 } });
+    render(
+      <NoteCard
+        note={placeholderOver(true)}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove what is still kept' }));
+
+    expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing to remove once every version is a placeholder', () => {
+    render(<NoteCard note={placeholderOver(false)} onAsk={() => {}} onCorrected={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: 'Remove what is still kept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove this note' })).toBeNull();
+  });
+});
+
+describe('deleting the exchange a removed note came from (t-127)', () => {
+  const removedNote = (overrides: Partial<Note> = {}) =>
+    note({
+      removed: true,
+      removable: false,
+      correctable: false,
+      value: '',
+      reasoningNote: '',
+      conversationId: null,
+      exchanges: ['cmturna000000000000000000', 'cmturnb000000000000000000'],
+      ...overrides,
+    });
+
+  it('offers it, and asks before doing anything', async () => {
+    const fetchImpl = answering({ success: true, data: { exchanges: 2, messages: 5 } });
+    render(
+      <NoteCard
+        note={removedNote()}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    expect(screen.getByText(EXCHANGE_OFFER)).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Delete that part of the conversation' })
+    );
+
+    expect(screen.getByText(EXCHANGE_CONFIRM)).toBeTruthy();
+    expect(fetchImpl).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(screen.queryByText(EXCHANGE_CONFIRM)).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('sends every exchange the note came from in one DELETE, and calls onRemoved', async () => {
+    const fetchImpl = answering({ success: true, data: { exchanges: 2, messages: 5 } });
+    const onRemoved = vi.fn();
+    render(
+      <NoteCard
+        note={removedNote()}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        onRemoved={onRemoved}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Delete that part of the conversation' })
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Delete it' }));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/api/v1/app/exchanges');
+    expect(init.method).toBe('DELETE');
+    expect(JSON.parse(init.body)).toEqual({
+      exchangeIds: ['cmturna000000000000000000', 'cmturnb000000000000000000'],
+    });
+    expect(onRemoved).toHaveBeenCalledTimes(1);
+  });
+
+  it('prints the route’s own refusal and keeps the confirmation open', async () => {
+    const fetchImpl = answering(
+      {
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message:
+            'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+          details: { reason: 'still_answering' },
+        },
+      },
+      { status: 409 }
+    );
+    const onRemoved = vi.fn();
+    render(
+      <NoteCard
+        note={removedNote()}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+        onRemoved={onRemoved}
+        fetchImpl={fetchImpl}
+      />
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Delete that part of the conversation' })
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Delete it' }));
+
+    expect(await screen.findByText(/still answering that/)).toBeTruthy();
+    expect(screen.getByText('Not deleted.')).toBeTruthy();
+    expect(screen.getByText(EXCHANGE_CONFIRM)).toBeTruthy();
+    expect(onRemoved).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing for a removed note no exchange wrote', () => {
+    render(
+      <NoteCard note={removedNote({ exchanges: [] })} onAsk={() => {}} onCorrected={() => {}} />
+    );
+
+    expect(screen.queryByText(EXCHANGE_OFFER)).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Delete that part of the conversation' })
+    ).toBeNull();
+  });
+
+  it('still shows a live reading kept behind a placeholder head, and never a removed one', () => {
+    const { rerender } = render(
+      <NoteCard
+        note={removedNote({
+          version: 2,
+          previous: {
+            version: 1,
+            value: 'Work is steady.',
+            withheld: false,
+            removed: false,
+            sourceType: 'direct',
+            confidence: 7,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        })}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+      />
+    );
+    expect(screen.getByText('Work is steady.')).toBeTruthy();
+    expect(screen.getByText('Before this')).toBeTruthy();
+
+    rerender(
+      <NoteCard
+        note={removedNote({
+          version: 2,
+          previous: {
+            version: 1,
+            value: '',
+            withheld: false,
+            removed: true,
+            sourceType: 'removed_by_person',
+            confidence: 1,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        })}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+      />
+    );
+    expect(screen.queryByText('Before this')).toBeNull();
   });
 });

@@ -20,7 +20,13 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-import { correctNote, fetchNotes, NotesRefused, removeNote } from '@/lib/app/slots/notes-client';
+import {
+  correctNote,
+  deleteExchanges,
+  fetchNotes,
+  NotesRefused,
+  removeNote,
+} from '@/lib/app/slots/notes-client';
 import { noteGroupTitle, noteSourceWords, NOTE_SOURCES } from '@/lib/app/slots/notes-view';
 import { REMOVED_SOURCE_TYPE } from '@/lib/app/slots/removed';
 import { SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots/vocabulary';
@@ -87,6 +93,7 @@ describe('a server that answers the wrong shape', () => {
       retired: false,
       correctable: true,
       removable: true,
+      exchanges: [],
       previous: null,
       group: 'life_areas',
     };
@@ -174,6 +181,53 @@ describe('removing a note (t-78)', () => {
     const body = JSON.stringify({ success: true, data: {} });
 
     await expect(removeNote('life_work', { fetchImpl: answering(body) })).rejects.toMatchObject({
+      name: 'NotesRefused',
+      code: 'malformed',
+    });
+  });
+});
+
+describe('deleting the exchanges a note came from (t-127)', () => {
+  it('sends one DELETE with every id, with credentials, and returns what went', async () => {
+    const fetchImpl = answering(
+      JSON.stringify({ success: true, data: { exchanges: 2, messages: 5 } })
+    );
+
+    const result = await deleteExchanges(['t1', 't2'], { fetchImpl });
+
+    expect(result).toEqual({ exchanges: 2, messages: 5 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(fetchImpl).mock.calls[0];
+    expect(url).toBe('/api/v1/app/exchanges');
+    expect(init?.method).toBe('DELETE');
+    expect(init?.credentials).toBe('include');
+    expect(JSON.parse(init?.body as string)).toEqual({ exchangeIds: ['t1', 't2'] });
+  });
+
+  it('throws a `NotesRefused` carrying the route’s message and reason on a refusal', async () => {
+    const body = JSON.stringify({
+      success: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'Lelañea is still answering that. Try again in a moment.',
+        details: { reason: 'still_answering' },
+      },
+    });
+
+    await expect(
+      deleteExchanges(['t1'], { fetchImpl: answering(body, { status: 409 }) })
+    ).rejects.toMatchObject({
+      name: 'NotesRefused',
+      status: 409,
+      code: 'still_answering',
+      message: 'Lelañea is still answering that. Try again in a moment.',
+    });
+  });
+
+  it('throws `malformed` on a 200 it cannot confirm the deletion from', async () => {
+    const body = JSON.stringify({ success: true, data: { exchanges: 1 } });
+
+    await expect(deleteExchanges(['t1'], { fetchImpl: answering(body) })).rejects.toMatchObject({
       name: 'NotesRefused',
       code: 'malformed',
     });

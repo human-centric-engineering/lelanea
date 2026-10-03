@@ -24,6 +24,9 @@ import type { NotesView } from '@/lib/app/slots/notes-view';
  */
 export const NOTES_ENDPOINT = '/api/v1/app/notes';
 
+/** Deleting the exchanges a note came from (t-127): `DELETE { exchangeIds }`. */
+export const EXCHANGES_ENDPOINT = '/api/v1/app/exchanges';
+
 /** Where a person reads them. The nav item and the page both name it here. */
 export const NOTES_PAGE = '/app/notes';
 
@@ -94,6 +97,7 @@ const noteSchema = z.object({
   retired: z.boolean(),
   correctable: z.boolean(),
   removable: z.boolean(),
+  exchanges: z.array(z.string()),
   previous: historySchema.nullable(),
   group: z.string().nullable(),
 });
@@ -197,6 +201,36 @@ export async function removeNote(
   const parsed = removedEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) {
     throw new NotesRefused(response.status, 'malformed', 'The removal could not be confirmed.');
+  }
+  return parsed.data.data;
+}
+
+const deletedExchangesEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ exchanges: z.number(), messages: z.number() }),
+});
+
+/**
+ * Delete the exchanges a note came from, and everything they left behind
+ * (t-127). Throws {@link NotesRefused} with a message meant to be printed when
+ * the route says no.
+ */
+export async function deleteExchanges(
+  exchangeIds: string[],
+  options: Options = {}
+): Promise<{ exchanges: number; messages: number }> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(EXCHANGES_ENDPOINT, {
+    method: 'DELETE',
+    credentials: 'include',
+    signal: options.signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ exchangeIds }),
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = deletedExchangesEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new NotesRefused(response.status, 'malformed', 'The deletion could not be confirmed.');
   }
   return parsed.data.data;
 }

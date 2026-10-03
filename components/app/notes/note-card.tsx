@@ -7,8 +7,13 @@ import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
-import { correctNote, NotesRefused, removeNote } from '@/lib/app/slots/notes-client';
-import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
+import {
+  correctNote,
+  deleteExchanges,
+  NotesRefused,
+  removeNote,
+} from '@/lib/app/slots/notes-client';
+import { noteSourceWords, type Note, type NoteHistory } from '@/lib/app/slots/notes-view';
 import { REMOVED_SLUG_PREFIX } from '@/lib/app/slots/removed';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
@@ -48,6 +53,13 @@ import { cn } from '@/lib/utils';
  * step says what it does and does not touch. A removed note stays on the page
  * as a placeholder that says when it was removed and never what it said: the
  * owner's ruling (3 Oct 2026), and the same promise the AI is held to.
+ *
+ * ## Deleting the exchange a note came from (t-127)
+ *
+ * Removing a note does not touch the conversation. Where the note's exchanges
+ * are on record, the placeholder offers to delete them too, and asks once
+ * before it acts (owner ruling 4). A note no exchange wrote, such as an
+ * onboarding answer or a correction, offers nothing.
  */
 
 /**
@@ -267,12 +279,39 @@ export const REMOVED_POINTER = 'Lelañea knows a note was removed here, but not 
 
 /**
  * What the confirmation says before anything happens. It names the one thing a
- * removal does not reach yet — the conversation — because a person who wanted
+ * removal does not reach — the conversation — because a person who wanted
  * something gone should not find it still quoted there and think the removal
- * failed.
+ * failed. Where an exchange wrote the note, it says that part can go next
+ * (t-127); see {@link removeConfirm}.
  */
 export const REMOVE_CONFIRM =
-  'This removes the note and every earlier version of it. Lelañea will know a note was removed here, but not what it said. The conversation it came from is not changed.';
+  'This removes the note and every earlier version of it. Lelañea will know a note was removed here, but not what it said.';
+
+/** Said after {@link REMOVE_CONFIRM} when the note came from talking, but no exchange is on record. */
+export const REMOVE_CONFIRM_CONVERSATION = 'The conversation it came from is not changed.';
+
+/** Said after {@link REMOVE_CONFIRM} when the note's exchanges are on record and can be deleted next. */
+export const REMOVE_CONFIRM_EXCHANGE =
+  'The conversation it came from is not changed, but you can delete that part of it next.';
+
+/** The whole confirmation for this note. */
+export function removeConfirm(note: Pick<Note, 'exchanges' | 'conversationId'>): string {
+  if (note.exchanges.length > 0) return `${REMOVE_CONFIRM} ${REMOVE_CONFIRM_EXCHANGE}`;
+  if (note.conversationId) return `${REMOVE_CONFIRM} ${REMOVE_CONFIRM_CONVERSATION}`;
+  return REMOVE_CONFIRM;
+}
+
+/**
+ * On a removed note whose exchanges are still on record: what is left, and the
+ * offer to delete it (owner ruling 4, 3 Oct 2026). The person decides; nothing
+ * is deleted until they confirm.
+ */
+export const EXCHANGE_OFFER =
+  'What you said that this note came from is still in your conversation with Lelañea.';
+
+/** What deleting the exchange does, said before it happens. */
+export const EXCHANGE_CONFIRM =
+  'This deletes what you said there and Lelañea’s replies, from the conversation and from everything Lelañea keeps. Anything else Lelañea noted from those words is removed too. This can’t be undone.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
@@ -481,6 +520,55 @@ function Disclosure({
   );
 }
 
+/**
+ * The reading before this one, folded (§3.12): its provenance in the head, so a
+ * reader can decide whether to open it without opening it, and the count of
+ * anything older beside it. Folded and quiet because the current reading is
+ * what the page is for, and this is the door beside it.
+ *
+ * Shared by a live note and by a placeholder head whose earlier readings are
+ * still kept: deleting an exchange wipes only the version that exchange wrote
+ * (t-127), so the head can be a placeholder with a live reading behind it.
+ */
+function PreviousReading({ previous, older }: { previous: NoteHistory; older: number }) {
+  return (
+    <Disclosure
+      tone="history"
+      summary={
+        <>
+          <span className="text-[var(--color-heading)]">Before this</span>
+          {' · '}
+          {noteSourceWords(previous.sourceType)}, {formatWhen(previous.capturedAt)}
+          {older > 0
+            ? ` · ${older === 1 ? '1 older reading' : `${older} older readings`} as well`
+            : ''}
+        </>
+      }
+    >
+      <p className="whitespace-pre-line text-[var(--color-heading)]">
+        {previous.removed
+          ? 'A note you removed. Nothing of it is kept.'
+          : previous.withheld
+            ? 'Something Lelañea noted without keeping your exact words.'
+            : previous.value}
+      </p>
+      {/*
+        "Kept, not replaced" is true of a reading and false of one the
+        person removed, which keeps nothing — so a removed version says
+        only what its own line says (`/code-review`, t-78).
+      */}
+      {previous.removed ? null : (
+        <p>
+          Kept, not replaced.
+          {older > 0
+            ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
+            : ''}
+        </p>
+      )}
+    </Disclosure>
+  );
+}
+
 export function NoteCard({
   note,
   onAsk,
@@ -508,6 +596,9 @@ export function NoteCard({
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removalRefusal, setRemovalRefusal] = useState<string | null>(null);
+  const [confirmingExchange, setConfirmingExchange] = useState(false);
+  const [deletingExchange, setDeletingExchange] = useState(false);
+  const [exchangeRefusal, setExchangeRefusal] = useState<string | null>(null);
 
   const save = async () => {
     const value = draft.trim();
@@ -553,6 +644,28 @@ export function NoteCard({
       });
     } finally {
       setRemoving(false);
+    }
+  };
+
+  const deleteExchange = async () => {
+    if (deletingExchange) return;
+    setDeletingExchange(true);
+    setExchangeRefusal(null);
+    try {
+      await deleteExchanges(note.exchanges, { fetchImpl });
+      setConfirmingExchange(false);
+      (onRemoved ?? onCorrected)();
+    } catch (error: unknown) {
+      setExchangeRefusal(
+        error instanceof NotesRefused
+          ? error.message
+          : 'That could not be deleted just now. Try again in a moment.'
+      );
+      logger.warn('An exchange deletion was refused', {
+        code: error instanceof NotesRefused ? error.code : 'unknown',
+      });
+    } finally {
+      setDeletingExchange(false);
     }
   };
 
@@ -641,14 +754,97 @@ export function NoteCard({
           A placeholder, and only that (t-78). No aside: a removed note has no
           certainty or source left to report, and showing "Only a guess · 1 of 10"
           for something the person took back would read as a judgement on it.
-          No controls either — there is nothing left to correct, ask about or
-          remove.
+          Nothing left to correct or ask about. The controls are the offer to
+          delete the exchange the note came from, and removing an earlier
+          reading an exchange deletion left behind (t-127).
         */
         <div className="flex max-w-[34rem] flex-col gap-1.5">
           <p className="text-muted-foreground text-[15px] leading-[1.6]">
             {removedWords(note.capturedAt)}
           </p>
           <p className="text-muted-foreground text-[13px] leading-[1.6]">{REMOVED_POINTER}</p>
+          {/*
+            Deleting an exchange wipes only the version it wrote (t-127), so a
+            placeholder head can have a live reading behind it. That reading is
+            still held, so it is still shown: §3.19 is the whole picture.
+          */}
+          {note.previous && !note.previous.removed ? (
+            <div className="mt-2">
+              <PreviousReading previous={note.previous} older={older} />
+            </div>
+          ) : null}
+          {/* And what is still held is still the person's to remove. */}
+          {note.removable && !confirmingRemoval ? (
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className={PILL}
+                onClick={() => {
+                  setRemovalRefusal(null);
+                  setConfirmingRemoval(true);
+                }}
+              >
+                Remove what is still kept
+              </Button>
+            </div>
+          ) : null}
+          {note.exchanges.length > 0 && !confirmingExchange ? (
+            <div className="mt-2 flex flex-col items-start gap-2">
+              <p className="text-[13.5px] leading-[1.6] text-[var(--color-heading)]">
+                {EXCHANGE_OFFER}
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={PILL}
+                onClick={() => {
+                  setExchangeRefusal(null);
+                  setConfirmingExchange(true);
+                }}
+              >
+                Delete that part of the conversation
+              </Button>
+            </div>
+          ) : null}
+          {confirmingExchange && note.exchanges.length > 0 ? (
+            /*
+              In place, like the removal's own confirmation, and for the same
+              reason: the question is about what the reader is looking at.
+            */
+            <div className="mt-2" role="group" aria-label="Delete that part of the conversation?">
+              <p className="text-[13.5px] leading-[1.6] text-[var(--color-heading)]">
+                {EXCHANGE_CONFIRM}
+              </p>
+              {exchangeRefusal ? (
+                <Banner tone="error" className="mt-2.5" lead="Not deleted.">
+                  {exchangeRefusal}
+                </Banner>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={deletingExchange}
+                  onClick={() => void deleteExchange()}
+                >
+                  {deletingExchange ? 'Deleting…' : 'Delete it'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={PILL}
+                  disabled={deletingExchange}
+                  onClick={() => {
+                    setConfirmingExchange(false);
+                    setExchangeRefusal(null);
+                  }}
+                >
+                  Keep it
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="grid gap-x-8 gap-y-4 @min-[32rem]:grid-cols-[minmax(0,1fr)_11rem]">
@@ -701,53 +897,7 @@ export function NoteCard({
               </p>
             )}
 
-            {note.previous ? (
-              /*
-              Folded, and quieter than it was. It was an always-open washed
-              inset that competed with the reading above it for attention —
-              which gets the emphasis backwards, because the current reading is
-              what the page is for and this is the door beside it (§3.12).
-
-              The head carries the previous reading's provenance so a reader can
-              decide whether to open it without opening it, and the count of
-              anything older rides there too rather than inside.
-            */
-              <Disclosure
-                tone="history"
-                summary={
-                  <>
-                    <span className="text-[var(--color-heading)]">Before this</span>
-                    {' · '}
-                    {noteSourceWords(note.previous.sourceType)},{' '}
-                    {formatWhen(note.previous.capturedAt)}
-                    {older > 0
-                      ? ` · ${older === 1 ? '1 older reading' : `${older} older readings`} as well`
-                      : ''}
-                  </>
-                }
-              >
-                <p className="whitespace-pre-line text-[var(--color-heading)]">
-                  {note.previous.removed
-                    ? 'A note you removed. Nothing of it is kept.'
-                    : note.previous.withheld
-                      ? 'Something Lelañea noted without keeping your exact words.'
-                      : note.previous.value}
-                </p>
-                {/*
-                  "Kept, not replaced" is true of a reading and false of one the
-                  person removed, which keeps nothing — so a removed version says
-                  only what its own line says (`/code-review`, t-78).
-                */}
-                {note.previous.removed ? null : (
-                  <p>
-                    Kept, not replaced.
-                    {older > 0
-                      ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
-                      : ''}
-                  </p>
-                )}
-              </Disclosure>
-            ) : null}
+            {note.previous ? <PreviousReading previous={note.previous} older={older} /> : null}
 
             <Disclosure plain summary="How Lelañea came to this">
               <p>{note.reasoningNote}</p>
@@ -877,7 +1027,7 @@ export function NoteCard({
         </div>
       )}
 
-      {confirmingRemoval && !note.removed && !editing ? (
+      {confirmingRemoval && note.removable && !editing ? (
         /*
           In place rather than a dialog: the reader is looking at the note, and
           the question is about the note. The destructive fill is on the act
@@ -885,7 +1035,7 @@ export function NoteCard({
         */
         <div className="mt-3.5 max-w-[34rem]" role="group" aria-label="Remove this note?">
           <p className="text-[13.5px] leading-[1.6] text-[var(--color-heading)]">
-            {REMOVE_CONFIRM}
+            {removeConfirm(note)}
           </p>
           {removalRefusal ? (
             <Banner tone="error" className="mt-2.5" lead="Not removed.">
