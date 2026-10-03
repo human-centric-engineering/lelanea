@@ -33,6 +33,17 @@
  *   is what that reading is filed under, and renaming part of a chain would
  *   leave the old slug with no head, so its next capture would collide at
  *   version 1.
+ * - **What the conversation row kept of them.** Sunrise folds a long
+ *   conversation's oldest messages into a stored `summary`, pinned at
+ *   `summaryUpToMessageId`, and puts that summary in the prompt in their place.
+ *   If a deleted message sits inside the summarised prefix, or *is* the pin,
+ *   the summary still carries its words. Sunrise carries a summary forward even
+ *   when its pin is gone (`streaming-handler.ts`). So the summary and its pin
+ *   are cleared, and the next turn that needs one summarises what is left. The
+ *   cost: a summary of messages older than the 200 the platform loads is lost
+ *   with it. The words of a deleted exchange outrank that. The conversation's
+ *   `title` is the first 80 characters of its first message, so it is cleared
+ *   when that message goes.
  * - **The person's cached context blocks**, as a removal does.
  *
  * ## The stopgap write
@@ -91,12 +102,18 @@ function readOwnedTurns(userId: string, ids: string[]) {
   });
 }
 
+interface WindowMessage {
+  id: string;
+  conversationId: string;
+  createdAt: Date;
+}
+
 /**
- * The ids of every message in one turn's window: from where the turn began up
- * to, and not including, the next message the person sent in that
- * conversation. The latest turn has no next message, so its window is open.
+ * Every message in one turn's window: from where the turn began up to, and not
+ * including, the next message the person sent in that conversation. The latest
+ * turn has no next message, so its window is open.
  */
-async function messagesOf(turn: OwnedTurn): Promise<string[]> {
+async function messagesOf(turn: OwnedTurn): Promise<WindowMessage[]> {
   if (!turn.conversationId) return [];
   const owned = { conversationId: turn.conversationId, conversation: { userId: turn.userId } };
   const since = await turnWindowStart(turn);
@@ -115,9 +132,65 @@ async function messagesOf(turn: OwnedTurn): Promise<string[]> {
       ...owned,
       createdAt: { gte: since, ...(next ? { lt: next.createdAt } : {}) },
     },
-    select: { id: true },
+    select: { id: true, conversationId: true, createdAt: true },
   });
-  return rows.map((row) => row.id);
+  return rows;
+}
+
+/** What to clear on one conversation row, once these of its messages are gone. */
+interface ConversationClearing {
+  conversationId: string;
+  summary: boolean;
+  title: boolean;
+}
+
+/**
+ * Whether a conversation's stored summary or title holds words from the
+ * messages being deleted. See the header for why each is cleared.
+ */
+async function clearingsFor(
+  userId: string,
+  deleted: WindowMessage[]
+): Promise<ConversationClearing[]> {
+  const byConversation = new Map<string, WindowMessage[]>();
+  for (const row of deleted) {
+    byConversation.set(row.conversationId, [
+      ...(byConversation.get(row.conversationId) ?? []),
+      row,
+    ]);
+  }
+  const clearings: ConversationClearing[] = [];
+  for (const [conversationId, rows] of byConversation) {
+    const conversation = await prisma.aiConversation.findFirst({
+      where: { id: conversationId, userId },
+      select: { summary: true, summaryUpToMessageId: true },
+    });
+    if (!conversation) continue;
+    const ids = new Set(rows.map((row) => row.id));
+    const oldestDeleted = Math.min(...rows.map((row) => row.createdAt.getTime()));
+
+    let summary = false;
+    if (conversation.summary !== null || conversation.summaryUpToMessageId !== null) {
+      const pin = conversation.summaryUpToMessageId
+        ? await prisma.aiMessage.findFirst({
+            where: { id: conversation.summaryUpToMessageId, conversationId },
+            select: { id: true, createdAt: true },
+          })
+        : null;
+      // No pin, a pin already gone, the pin itself, or anything at or before it.
+      summary = !pin || ids.has(pin.id) || oldestDeleted <= pin.createdAt.getTime();
+    }
+
+    const first = await prisma.aiMessage.findFirst({
+      where: { conversationId, conversation: { userId } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    const title = first !== null && ids.has(first.id);
+
+    if (summary || title) clearings.push({ conversationId, summary, title });
+  }
+  return clearings;
 }
 
 /**
@@ -147,7 +220,9 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
     );
   }
 
-  const messageIds = (await Promise.all(turns.map(messagesOf))).flat();
+  const deletedMessages = (await Promise.all(turns.map(messagesOf))).flat();
+  const messageIds = deletedMessages.map((row) => row.id);
+  const clearings = await clearingsFor(input.userId, deletedMessages);
 
   // Which versions, slug by slug.
   const bySlug = new Map<string, number[]>();
@@ -200,6 +275,15 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
           where: { id: { in: messageIds }, conversation: { userId: input.userId } },
         })
       : { count: 0 };
+    for (const clearing of clearings) {
+      await tx.aiConversation.updateMany({
+        where: { id: clearing.conversationId, userId: input.userId },
+        data: {
+          ...(clearing.summary ? { summary: null, summaryUpToMessageId: null } : {}),
+          ...(clearing.title ? { title: null } : {}),
+        },
+      });
+    }
     const exchanges = await tx.appTurn.deleteMany({
       where: { id: { in: ids }, userId: input.userId },
     });

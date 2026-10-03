@@ -66,6 +66,8 @@ export const world = {
   turns: [] as TurnRow[],
   /** `ai_message`, with the conversation's owner flattened onto each row (t-127). */
   messages: [] as MessageRow[],
+  /** `ai_conversation`: only what an exchange deletion clears (t-127). */
+  conversations: [] as ConversationRow[],
   nextId: 0,
 };
 
@@ -77,6 +79,14 @@ export interface TurnRow {
   startedAt: Date;
   conversationId: string | null;
   userMessageId: string | null;
+}
+
+export interface ConversationRow {
+  id: string;
+  userId: string;
+  title: string | null;
+  summary: string | null;
+  summaryUpToMessageId: string | null;
 }
 
 export interface MessageRow {
@@ -294,6 +304,36 @@ export const prismaFake = {
       return { count: gone.length };
     }),
   },
+  aiConversation: {
+    findFirst: vi.fn(async ({ where }: { where: { id: string; userId: string } }) => {
+      if (Object.keys(where).sort().join() !== 'id,userId') {
+        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      }
+      const row = world.conversations.find(
+        (candidate) => candidate.id === where.id && candidate.userId === where.userId
+      );
+      return row ? { ...row } : null;
+    }),
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; userId: string };
+        data: Partial<Omit<ConversationRow, 'id' | 'userId'>>;
+      }) => {
+        const allowed = new Set(['title', 'summary', 'summaryUpToMessageId']);
+        for (const key of Object.keys(data)) {
+          if (!allowed.has(key)) throw new Error(`the fake does not model writing ${key}`);
+        }
+        const rows = world.conversations.filter(
+          (row) => row.id === where.id && row.userId === where.userId
+        );
+        for (const row of rows) Object.assign(row, data);
+        return { count: rows.length };
+      }
+    ),
+  },
   aiMessage: {
     findFirst: vi.fn(
       async ({
@@ -407,6 +447,7 @@ export function resetWorld(): void {
   world.ledger = [];
   world.turns = [];
   world.messages = [];
+  world.conversations = [];
   world.nextId = 0;
   clock = 0;
 }

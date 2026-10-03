@@ -326,3 +326,63 @@ describe('the notes page', () => {
     expect(view.notes.find((note) => note.slotSlug === 'life_place')?.exchanges).toEqual([]);
   });
 });
+
+describe('what the conversation row kept of an exchange', () => {
+  function withConversations(pin: string | null, title = 'words of m1'): void {
+    twoExchanges();
+    world.conversations.push(
+      {
+        id: MINE,
+        userId: ME,
+        title,
+        summary: pin ? 'They talked about work.' : null,
+        summaryUpToMessageId: pin,
+      },
+      {
+        id: THEIRS,
+        userId: THEM,
+        title: 'words of t1',
+        summary: 'Their own summary.',
+        summaryUpToMessageId: 't2',
+      }
+    );
+  }
+  const mine = () => world.conversations.find((row) => row.id === MINE)!;
+  const theirs = () => world.conversations.find((row) => row.id === THEIRS)!;
+
+  it('clears a summary that covers the deleted exchange, and the title its first message gave', async () => {
+    withConversations('m4');
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(mine()).toMatchObject({ summary: null, summaryUpToMessageId: null, title: null });
+    expect(theirs()).toMatchObject({
+      summary: 'Their own summary.',
+      summaryUpToMessageId: 't2',
+      title: 'words of t1',
+    });
+  });
+
+  it('clears a summary pinned before a deleted exchange only if the exchange is inside it', async () => {
+    // Pinned at m4: turn-b (m5, m6) comes after it, so the summary holds none of it.
+    withConversations('m4');
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-b'] });
+
+    expect(mine()).toMatchObject({
+      summary: 'They talked about work.',
+      summaryUpToMessageId: 'm4',
+      title: 'words of m1',
+    });
+  });
+
+  it('clears a summary whose pin is already gone, since Sunrise would carry it forward', async () => {
+    withConversations('m-gone');
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-b'] });
+
+    expect(mine()).toMatchObject({ summary: null, summaryUpToMessageId: null });
+    // turn-b's messages are not the first, so the title stays.
+    expect(mine().title).toBe('words of m1');
+  });
+});
