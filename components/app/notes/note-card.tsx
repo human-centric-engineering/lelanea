@@ -278,7 +278,9 @@ export const REMOVE_CONFIRM =
 export function noteTag(note: Note): string {
   // A removed note whose heading Lelañea made up was moved to an opaque slug
   // (`delete-note.ts`), and the random part of it means nothing to anyone.
-  if (note.slotSlug.startsWith(REMOVED_SLUG_PREFIX)) return 'removed note';
+  // Both, not the prefix alone: `removed_` is not reserved, so a live heading
+  // like `removed_from_my_job` keeps its own words (`/code-review` round 2).
+  if (note.removed && note.slotSlug.startsWith(REMOVED_SLUG_PREFIX)) return 'removed note';
   return note.slotSlug.replace(/_/g, ' ');
 }
 

@@ -265,6 +265,12 @@ describe('the tag on a removed note', () => {
     ).toBe('removed note');
   });
 
+  it('leaves a live heading that merely starts the same way alone', () => {
+    expect(noteTag(note({ removed: false, slotSlug: 'removed_from_my_job' }))).toBe(
+      'removed from my job'
+    );
+  });
+
   it('keeps a taxonomy heading, which is an admin’s wording', () => {
     expect(noteTag(note({ removed: true, slotSlug: 'life_work' }))).toBe('life work');
   });
