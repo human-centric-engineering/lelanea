@@ -1117,24 +1117,74 @@ a slug with nothing left to remove get the same 404, so the route can't be
 used to learn that a hidden slot is filled. Retired and Art. 9 notes are
 removable. Removing is how an Art. 9 note's kept summary goes too.
 
-**What a removal does not reach yet.**
+**What a removal does not reach.**
 
 - **The conversation it came from.** What the person said is still in the
-  transcript, and the AI can still read it. Offering to remove that exchange is
-  the exchange-deletion task on `f-memory` (ruling 4). The card's second step
-  says so plainly, so nobody finds their words still quoted and thinks the
-  removal failed.
+  transcript, and the AI can still read it. Where the note's exchanges are on
+  record, the placeholder then offers to delete them ("Deleting an exchange",
+  below). The card's confirmation says so, so nobody finds their words still
+  quoted and thinks the removal failed.
 - **`app_turn_slot_write`** rows are kept on purpose. They hold a turn id, a
   slug and a version, no words, and they are the only link the exchange
   offer can start from.
 - **Embeddings.** None exist for a slot value yet. The task that first embeds
   anything owns the rule that a vector goes with its source.
 
-**This writes Daybreak's table directly**, a stopgap the owner ruled for:
-`lib/app/slots/delete-note.ts` is the one function, `divergences.md` Row 26 is
-the ledger entry, and
+**This writes Daybreak's table directly**, a stopgap the owner ruled for. The
+placeholder write is `lib/app/slots/wipe.ts`, called from
+`lib/app/slots/delete-note.ts` and from exchange deletion. `divergences.md`
+Row 26 is the ledger entry, and
 [`daybreak#286`](https://github.com/human-centric-engineering/daybreak/issues/286)
 asks for the real removal. Delete the function when one lands.
+
+## Deleting an exchange (f-memory t-127)
+
+Removing a note takes the note, not what the person said. So where a removed
+note's exchanges are on record, its placeholder offers **Delete that part of
+the conversation**, then a second step that says what it does, then **Delete
+it** (owner ruling 4, 3 Oct 2026). `DELETE /api/v1/app/exchanges` with
+`{ exchangeIds }`: the `app_turn` ids the notes read hands out per note as
+`exchanges`. All or nothing. An id that isn't the caller's gets the same 404 as
+one that doesn't exist, and a turn still being answered gets a 409 that says to
+wait. The store is `lib/app/memory/delete-exchange.ts`.
+
+**An exchange is one turn's window**, not two messages. A turn that calls a
+tool is stored as several assistant passes and tool results, and a `fill_slot`
+result can echo the person's words. So it is every message in the turn's
+conversation from the person's message up to their next one, every role
+included. The latest turn's window runs to the end of the conversation.
+
+**What goes with it:**
+
+- every message in the window. Sunrise's reply embeddings cascade with them.
+- the turn record and its ledger rows. No dollar lives on a turn: the meter
+  sums Sunrise's `ai_cost_log`, which keeps the turn's cost, so this can't lower
+  anyone's spend against a ceiling.
+- **only the note versions that turn wrote**, each as a placeholder (owner
+  ruling, at planning). Earlier and later readings came from other exchanges and
+  stay. So a head can be a placeholder with a live reading behind it, and the
+  card still shows that reading under _Before this_.
+- a heading the AI coined, but only once **no** version under it is left
+  unwiped. While another exchange's reading is still filed there, renaming part
+  of the chain would leave the old slug headless, and its next capture would
+  collide at version 1.
+- **the conversation's summary and title, where they hold its words.** Sunrise
+  folds a long conversation's oldest messages into a stored `summary`, pinned at
+  `summaryUpToMessageId`, and puts it in the prompt in their place. It carries
+  the summary forward even when the pin is gone. So a deletion at or before the
+  pin, or of the pin, clears both, and the next turn that needs a summary makes
+  one from what is left. The cost is that a summary of messages older than the
+  200 the platform loads goes with it. The `title` is the first message's
+  opening 80 characters, so it is cleared when that message goes.
+- the person's cached context blocks.
+
+**The response counts exchanges and messages, never note versions.** A turn
+can write a hidden slot, and a count including it would tell the person one
+exists and was filled (§12). The route logs it for the operator.
+
+`npm run smoke:app-delete-exchange` proves the wiring on the dev database: the
+embedding cascade, the ledger cascade, the summary and title, and that what the
+AI reads next holds nothing of the deleted exchange and all of the kept one.
 
 ### What it changes about erasure (Art. 17)
 
