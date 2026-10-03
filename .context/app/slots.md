@@ -1093,6 +1093,15 @@ reasons, both in `lib/app/slots/removed.ts`:
   next reading of that slug a second version 1. `npm run smoke:app-delete-note`
   proves the next capture lands as N+1 against the real unique index.
 
+**A heading Lelañea made up goes too.** A slug with no definition in either
+tier was coined by the AI from what the person said (`leaving_my_husband`), so
+keeping it would leave the note's gist on the head, beside the marker. Its
+versions move together to an opaque `removed_<random>` slug, and the person's
+`app_turn_slot_write` rows follow, in one transaction. The card tags it
+_removed note_. A later reading under the old heading starts its own chain at 1.
+A taxonomy slug is an admin's wording, not the person's, and it stays. Found by
+`/code-review`.
+
 **What the AI is told** (ruling 5): that a note was removed, never what. The
 placeholder's text is a marker written for the AI, and that is what `get_state`
 and a module's context print where the reading was. The discovery-answers block

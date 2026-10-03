@@ -9,6 +9,7 @@ import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { correctNote, NotesRefused, removeNote } from '@/lib/app/slots/notes-client';
 import { noteSourceWords, type Note } from '@/lib/app/slots/notes-view';
+import { REMOVED_SLUG_PREFIX } from '@/lib/app/slots/removed';
 import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
@@ -275,6 +276,9 @@ export const REMOVE_CONFIRM =
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
+  // A removed note whose heading Lelañea made up was moved to an opaque slug
+  // (`delete-note.ts`), and the random part of it means nothing to anyone.
+  if (note.slotSlug.startsWith(REMOVED_SLUG_PREFIX)) return 'removed note';
   return note.slotSlug.replace(/_/g, ' ');
 }
 
@@ -727,12 +731,19 @@ export function NoteCard({
                       ? 'Something Lelañea noted without keeping your exact words.'
                       : note.previous.value}
                 </p>
-                <p>
-                  Kept, not replaced.
-                  {older > 0
-                    ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
-                    : ''}
-                </p>
+                {/*
+                  "Kept, not replaced" is true of a reading and false of one the
+                  person removed, which keeps nothing — so a removed version says
+                  only what its own line says (`/code-review`, t-78).
+                */}
+                {note.previous.removed ? null : (
+                  <p>
+                    Kept, not replaced.
+                    {older > 0
+                      ? ` The ${older === 1 ? 'reading' : 'readings'} before that ${older === 1 ? 'is' : 'are'} kept too, and not shown here.`
+                      : ''}
+                  </p>
+                )}
               </Disclosure>
             ) : null}
 

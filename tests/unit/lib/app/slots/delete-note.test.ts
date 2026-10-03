@@ -60,8 +60,13 @@ const { appendSlotValue } = await import('@/lib/framework/data-slots');
 const { evaluateCondition } = await import('@/lib/framework/facilitation/engine/conditions');
 const { READABLE_SEATS } = await import('@/lib/app/conversation/seats');
 const { FACILITATION_CONTEXT_TYPE } = await import('@/lib/app/voice/context-contributor');
-const { REMOVED_REASONING, REMOVED_SOURCE_TYPE, REMOVED_VALUE, REMOVED_VALUE_JSON } =
-  await import('@/lib/app/slots/removed');
+const {
+  REMOVED_REASONING,
+  REMOVED_SLUG_PREFIX,
+  REMOVED_SOURCE_TYPE,
+  REMOVED_VALUE,
+  REMOVED_VALUE_JSON,
+} = await import('@/lib/app/slots/removed');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -226,6 +231,75 @@ describe('removing a note', () => {
     await deleteNote({ userId: ME, slotSlug: 'life_work' }).catch(() => undefined);
 
     expect(invalidateContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('a heading Lelañea made up (`/code-review`, t-78)', () => {
+  // No definition in either tier: the AI coined it from what was said.
+  const MINTED = 'leaving_my_husband';
+
+  beforeEach(() => {
+    world.values.push(
+      value(ME, MINTED, { version: 1, supersededAt: new Date(5_000) }),
+      value(ME, MINTED, { version: 2 }),
+      value(THEM, MINTED, { value: 'their own words' }),
+      value(ME, 'life_work', { value: 'a taxonomy note' })
+    );
+    world.ledger = [
+      { turnId: 'turn-mine', userId: ME, slotSlug: MINTED, version: 2 },
+      { turnId: 'turn-theirs', userId: THEM, slotSlug: MINTED, version: 1 },
+    ];
+  });
+
+  it('moves every version to an opaque heading, so the words in it go too', async () => {
+    await deleteNote({ userId: ME, slotSlug: MINTED });
+
+    const mine = world.values.filter((row) => row.userId === ME && row.slotSlug !== 'life_work');
+    expect(mine).toHaveLength(2);
+    const [renamed] = new Set(mine.map((row) => row.slotSlug));
+    expect(new Set(mine.map((row) => row.slotSlug)).size).toBe(1);
+    expect(renamed.startsWith(REMOVED_SLUG_PREFIX)).toBe(true);
+    expect(renamed).not.toContain('husband');
+    expect(mine.map((row) => row.version).sort()).toEqual([1, 2]);
+    // The other person's note under the same coined heading is theirs, untouched.
+    expect(rowsOf(THEM, MINTED)[0]).toMatchObject({ value: 'their own words' });
+    // And a taxonomy heading is an admin's wording, which stays.
+    expect(rowsOf(ME, 'life_work')[0].slotSlug).toBe('life_work');
+  });
+
+  it('moves the person’s ledger rows with it, and nobody else’s', async () => {
+    await deleteNote({ userId: ME, slotSlug: MINTED });
+
+    const [renamed] = world.values
+      .filter((row) => row.userId === ME && row.slotSlug.startsWith(REMOVED_SLUG_PREFIX))
+      .map((row) => row.slotSlug);
+    expect(world.ledger.find((row) => row.turnId === 'turn-mine')?.slotSlug).toBe(renamed);
+    expect(world.ledger.find((row) => row.turnId === 'turn-theirs')?.slotSlug).toBe(MINTED);
+  });
+
+  it('lets a later reading under the old heading start afresh, without colliding', async () => {
+    await deleteNote({ userId: ME, slotSlug: MINTED });
+
+    const next = await appendSlotValue({
+      userId: ME,
+      slotSlug: MINTED,
+      value: 'said again',
+      confidence: 6,
+      sourceType: 'inferred',
+      reasoningNote: 'Came up again.',
+      provenance: {},
+    });
+
+    expect(next.version).toBe(1);
+    expect(rowsOf(ME, MINTED)).toHaveLength(1);
+  });
+
+  it('keeps a taxonomy note’s ledger rows where they are', async () => {
+    world.ledger.push({ turnId: 'turn-work', userId: ME, slotSlug: 'life_work', version: 1 });
+
+    await deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    expect(world.ledger.find((row) => row.turnId === 'turn-work')?.slotSlug).toBe('life_work');
   });
 });
 

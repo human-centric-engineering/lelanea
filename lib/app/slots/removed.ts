@@ -72,6 +72,18 @@ export const REMOVED_REASONING = 'The person removed this note in Lelañea’s n
  */
 export const REMOVED_CONFIDENCE = 1;
 
+/**
+ * The prefix a removed note's slug takes when the AI made the heading up.
+ *
+ * A taxonomy slug is an admin's wording for a question, and it stays. But a
+ * slug the AI coined in open mode is free text drawn from what the person said
+ * (`validation.ts`) — `leaving_my_husband` — so keeping it would leave the
+ * gist of the note on the head, where `get_state` and a module's context
+ * print it beside the marker. Such a note's versions move together to
+ * `removed_<random>`, which says nothing (`/code-review`, t-78).
+ */
+export const REMOVED_SLUG_PREFIX = 'removed_';
+
 /** Whether a stored version is a placeholder the person left by removing a note. */
 export function isRemoved(row: { sourceType: string }): boolean {
   return row.sourceType === REMOVED_SOURCE_TYPE;

@@ -16,6 +16,9 @@
  *      numbers, the sibling is untouched, and the panel shows a placeholder.
  *   3. Assert the placeholder head fails a journey gate a live reading passes.
  *   4. Capture the same slug again. Assert it lands as version 3, the only head.
+ *   5. Remove a note under a heading the AI made up. Assert its versions moved
+ *      to an opaque `removed_*` slug, and a later reading under the old heading
+ *      starts its own chain at 1 against the real index.
  *
  * No server and no model: everything runs in this process. Skips (exit 0, says
  * so) with no database.
@@ -32,13 +35,18 @@ import { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots';
 import { evaluateCondition } from '@/lib/framework/facilitation/engine/conditions';
 import { deleteNote } from '@/lib/app/slots/delete-note';
 import { getNotes } from '@/lib/app/slots/notes';
-import { isRemoved, REMOVED_VALUE } from '@/lib/app/slots/removed';
+import { isRemoved, REMOVED_SLUG_PREFIX, REMOVED_VALUE } from '@/lib/app/slots/removed';
 
 const PREFIX = 'smoke-app-delete-note';
 const stamp = Date.now();
-/** Not in the taxonomy, so no definition can hide it or retire it mid-run. */
-const SLUG = 'smoke_delete_note_life';
+/**
+ * A taxonomy slug, open and standard, so the removal keeps the heading and the
+ * next capture has to number after the placeholder. Steps 1–4 need exactly that.
+ */
+const SLUG = 'current_circumstances';
+/** Not in the taxonomy: a sibling nothing touches, and the made-up heading of step 5. */
 const SIBLING = 'smoke_delete_note_sibling';
+const MINTED = 'smoke_delete_note_minted_heading';
 
 async function dbReachable(): Promise<boolean> {
   try {
@@ -137,6 +145,25 @@ async function main(): Promise<void> {
     check(next.version === 3, 'it is version 3, not a second version 1');
     const heads = (await rows(user.id, SLUG)).filter((row) => row.supersededAt === null);
     check(heads.length === 1 && heads[0].version === 3, 'it is the only head');
+
+    console.log('\n5. A heading the AI made up goes with the note');
+    await capture(user.id, MINTED, 'first said');
+    await capture(user.id, MINTED, 'said again');
+    await deleteNote({ userId: user.id, slotSlug: MINTED });
+    check((await rows(user.id, MINTED)).length === 0, 'nothing is left under the old heading');
+    const moved = await prisma.slotValue.findMany({
+      where: { userId: user.id, slotSlug: { startsWith: REMOVED_SLUG_PREFIX } },
+      orderBy: { version: 'asc' },
+    });
+    check(
+      moved.length === 2 &&
+        new Set(moved.map((row) => row.slotSlug)).size === 1 &&
+        moved.every(isRemoved) &&
+        !moved[0].slotSlug.includes('minted'),
+      'both versions moved together to one opaque heading, as placeholders'
+    );
+    const fresh = await capture(user.id, MINTED, 'a new reading under the old heading');
+    check(fresh.version === 1, 'a later reading under the old heading starts at 1, no collision');
 
     console.log('\n✓ smoke:app-delete-note passed');
   } finally {

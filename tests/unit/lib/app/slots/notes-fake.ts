@@ -60,6 +60,8 @@ export const world = {
   projections: [] as DefinitionRow[],
   /** Ours — the taxonomy an admin edits. Only `visibility` is read from it. */
   ours: [] as { slug: string; visibility: string; sensitivity?: string }[],
+  /** `app_turn_slot_write`, with the turn's owner flattened onto each row. */
+  ledger: [] as { turnId: string; userId: string; slotSlug: string; version: number }[],
   nextId: 0,
 };
 
@@ -147,6 +149,7 @@ export const prismaFake = {
           'reasoningNote',
           'provenance',
           'capturedAt',
+          'slotSlug',
         ]);
         for (const key of Object.keys(data)) {
           if (!allowed.has(key)) throw new Error(`the fake does not model writing ${key}`);
@@ -161,6 +164,28 @@ export const prismaFake = {
       world.values.push(row);
       return { ...row };
     }),
+  },
+  appTurnSlotWrite: {
+    // The removal's ledger move (t-78): `{ slotSlug, turn: { userId } }` and
+    // nothing else, so a later query of another shape fails loudly.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { slotSlug: string; turn: { userId: string } };
+        data: { slotSlug: string };
+      }) => {
+        if (Object.keys(where).sort().join() !== 'slotSlug,turn' || !where.turn.userId) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        const rows = world.ledger.filter(
+          (row) => row.slotSlug === where.slotSlug && row.userId === where.turn.userId
+        );
+        for (const row of rows) row.slotSlug = data.slotSlug;
+        return { count: rows.length };
+      }
+    ),
   },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
@@ -237,6 +262,7 @@ export function resetWorld(): void {
   world.values = [];
   world.projections = [];
   world.ours = [];
+  world.ledger = [];
   world.nextId = 0;
   clock = 0;
 }

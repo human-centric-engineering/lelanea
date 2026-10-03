@@ -29,6 +29,14 @@
  * timeline is a fact about the note, and it goes with it; what the person sees
  * is when they removed it.
  *
+ * **A heading the AI made up goes too.** A slug with no definition in either
+ * tier was coined by the AI from what the person said, so it can carry the
+ * note's gist on its own. Its versions move together to an opaque
+ * `removed_<random>` slug, and the turn ledger's rows follow them, in the same
+ * transaction. The chain keeps its numbers under the new slug, and a later
+ * reading under the old heading starts its own chain at 1 without colliding.
+ * A taxonomy slug is an admin's wording, not the person's, and it stays.
+ *
  * ## What it leaves, on purpose
  *
  * - **`app_turn_slot_write` rows.** They hold a turn id, a slug and a version —
@@ -51,7 +59,9 @@
  * @see .context/app/slots.md — "Removing a note"
  */
 
-import { prisma } from '@/lib/db/client';
+import { randomUUID } from 'crypto';
+
+import { executeTransaction } from '@/lib/db/utils';
 import { NotFoundError } from '@/lib/api/errors';
 import { getRegisteredModules } from '@/lib/framework/modules/registry';
 import { MODULE_CONTEXT_TYPE } from '@/lib/framework/modules/context';
@@ -62,6 +72,7 @@ import { readSlotVerdict } from '@/lib/app/slots/notes';
 import {
   REMOVED_CONFIDENCE,
   REMOVED_REASONING,
+  REMOVED_SLUG_PREFIX,
   REMOVED_SOURCE_TYPE,
   REMOVED_VALUE,
   REMOVED_VALUE_JSON,
@@ -93,30 +104,47 @@ export interface RemovedNote {
  * so a second removal racing the first changes nothing and reports nothing.
  */
 export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
-  const { isHidden } = await readSlotVerdict(input.slotSlug);
+  const { definition, ours, isHidden } = await readSlotVerdict(input.slotSlug);
   if (isHidden) throw nothingToRemove();
+  // No definition in either tier: the AI coined this heading, so it goes too.
+  const renamedTo =
+    definition === null && ours === null
+      ? `${REMOVED_SLUG_PREFIX}${randomUUID().replace(/-/g, '')}`
+      : null;
 
   const removedAt = new Date();
-  // STOPGAP — direct write to Daybreak's `framework_slot_value`. Owner ruling,
-  // 3 Oct 2026; divergence row in `.context/app/divergences.md`. Replace with
-  // Daybreak's per-value removal when it ships.
-  const { count } = await prisma.slotValue.updateMany({
-    where: {
-      userId: input.userId,
-      slotSlug: input.slotSlug,
-      sourceType: { not: REMOVED_SOURCE_TYPE },
-    },
-    data: {
-      value: REMOVED_VALUE,
-      valueJson: REMOVED_VALUE_JSON,
-      confidence: REMOVED_CONFIDENCE,
-      sourceType: REMOVED_SOURCE_TYPE,
-      reasoningNote: REMOVED_REASONING,
-      provenance: {},
-      capturedAt: removedAt,
-    },
+  const count = await executeTransaction(async (tx) => {
+    // STOPGAP — direct write to Daybreak's `framework_slot_value`. Owner ruling,
+    // 3 Oct 2026; divergence row in `.context/app/divergences.md`. Replace with
+    // Daybreak's per-value removal when it ships.
+    const written = await tx.slotValue.updateMany({
+      where: {
+        userId: input.userId,
+        slotSlug: input.slotSlug,
+        sourceType: { not: REMOVED_SOURCE_TYPE },
+      },
+      data: {
+        value: REMOVED_VALUE,
+        valueJson: REMOVED_VALUE_JSON,
+        confidence: REMOVED_CONFIDENCE,
+        sourceType: REMOVED_SOURCE_TYPE,
+        reasoningNote: REMOVED_REASONING,
+        provenance: {},
+        capturedAt: removedAt,
+        ...(renamedTo !== null ? { slotSlug: renamedTo } : {}),
+      },
+    });
+    if (written.count === 0) throw nothingToRemove();
+    if (renamedTo !== null) {
+      // The ledger keeps its link to the note (the exchange offer reads it),
+      // under the heading the note now has.
+      await tx.appTurnSlotWrite.updateMany({
+        where: { slotSlug: input.slotSlug, turn: { userId: input.userId } },
+        data: { slotSlug: renamedTo },
+      });
+    }
+    return written.count;
   });
-  if (count === 0) throw nothingToRemove();
 
   forgetCachedContext(input.userId);
   return { versions: count };

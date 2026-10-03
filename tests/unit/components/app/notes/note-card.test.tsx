@@ -21,6 +21,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   NoteCard,
+  noteTag,
   REMOVE_CONFIRM,
   REMOVED_POINTER,
   removedWords,
@@ -228,5 +229,43 @@ describe('a note whose earlier version was removed', () => {
 
     expect(screen.getByText('A note you removed. Nothing of it is kept.')).toBeTruthy();
     expect(screen.queryByText('Work was going badly.')).toBeNull();
+    // "Kept, not replaced" is false of a removed version, and the line above
+    // would contradict it (`/code-review`, t-78).
+    expect(screen.queryByText(/Kept, not replaced/)).toBeNull();
+  });
+
+  it('still says a superseded reading was kept, when it was', () => {
+    render(
+      <NoteCard
+        note={note({
+          version: 2,
+          previous: {
+            version: 1,
+            value: 'Work was going badly.',
+            withheld: false,
+            removed: false,
+            sourceType: 'inferred',
+            confidence: 5,
+            capturedAt: '2026-09-20T09:15:00.000Z',
+          },
+        })}
+        onAsk={() => {}}
+        onCorrected={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/Kept, not replaced/)).toBeTruthy();
+  });
+});
+
+describe('the tag on a removed note', () => {
+  it('names a heading Lelañea made up as a removed note, not by its random slug', () => {
+    expect(
+      noteTag(note({ removed: true, slotSlug: 'removed_3f2a9c0d1e4b4f6a8b7c6d5e4f3a2b1c' }))
+    ).toBe('removed note');
+  });
+
+  it('keeps a taxonomy heading, which is an admin’s wording', () => {
+    expect(noteTag(note({ removed: true, slotSlug: 'life_work' }))).toBe('life work');
   });
 });
