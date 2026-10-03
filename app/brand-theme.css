@@ -327,17 +327,21 @@
   --color-bar: #0b80a0;
   --color-bar-idle: rgba(11, 128, 160, 0.16);
 
-  /* ---- The lotus (§6.9) -------------------------------------------------
-   * The signature mark's own palette: three petal tiers over sage ripples with
-   * a burnt orange core. Eleven values, and only four of them existed as tokens
-   * before — §6.2 names the deep teal, the mid teal, the light aqua and the
-   * sage, and the petal EDGES, the veins, the core's gradient stops and its
-   * glint are named nowhere but the kit's geometry.
+  /* ---- The lotus (§6.9; redrawn in t-134) ---------------------------------
+   * The signature mark's own palette: teal petals over lily pads and sage
+   * ripples, around a crown of orange stamens. §6.2 names the deep teal, the
+   * mid teal, the light aqua and the sage; the outer edge teal, the vein, the
+   * stamens' oranges and glint, the halation and the pads are named nowhere
+   * but the lotus model (`components/app/ui/lotus-model.ts`). The fan's mid
+   * and inner edge colours and its core's deep stop went with the fan.
    *
-   * WHY TOKENS AND NOT LITERALS IN THE SVG. `components/app/ui/lotus.tsx` and
-   * `lotus-mark.tsx` are the only consumers, so a literal would have worked and
-   * a grep guard in the component tests would have had to make an exception for
-   * exactly the file the guard exists for. Naming them here is what lets that
+   * Change any of these and run `npm run lotus:assets`: the still marks are
+   * baked from them, and a test fails until they are re-baked.
+   *
+   * WHY TOKENS AND NOT LITERALS IN THE MODEL. The lotus files are the only
+   * consumers, so a literal would have worked and a grep guard in the
+   * component tests would have had to make an exception for exactly the file
+   * the guard exists for. Naming them here is what lets that
    * guard be absolute, and it is where the rest of the design's literals live.
    *
    * THEY HOLD ACROSS BOTH MODES, and deliberately so: the lotus is a mark, not
@@ -353,13 +357,10 @@
   --color-lotus-petal-outer: #17718a;
   --color-lotus-petal-outer-edge: #0e5064;
   --color-lotus-petal-mid: #3e96ae;
-  --color-lotus-petal-mid-edge: #17718a;
   --color-lotus-petal-inner: #7cc0d6;
-  --color-lotus-petal-inner-edge: #2e8ba5;
   --color-lotus-vein: #a8d6e5;
   --color-lotus-core-light: #f0a078;
   --color-lotus-core: #c96f43;
-  --color-lotus-core-deep: #9c5530;
   --color-lotus-glint: #f5b896;
   --color-lotus-ripple: #457b6a;
   --color-lotus-ripple-far: #6fa88f;

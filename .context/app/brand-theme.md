@@ -293,11 +293,11 @@ darker — `#786573`, 4.73:1 — and the named amethyst survives as
 because the status hues **lighten in dark mode** for badge use, which is the
 exact trap that put oyster on the status red at 2.99:1 before t-18.
 
-### The lotus has its own sixteen values
+### The lotus has its own thirteen values
 
-`--color-lotus-*` names the petal teals and their edges, the veins, the
-stamens' three oranges and their glint, two ripple steps, the halation, and
-(t-134) the lily pad and its edge. §6.2 names four of them; the rest are named
+`--color-lotus-*` names the three petal teals and the outer edge teal, the
+vein, the stamens' two oranges and their glint, two ripple steps, the
+halation, and (t-134) the lily pad and its edge. §6.2 names four of them; the rest are named
 nowhere but the lotus model.
 
 They exist so the no-colour-literal guard over `components/app/ui/` can be
