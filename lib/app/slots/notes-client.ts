@@ -94,6 +94,7 @@ const noteSchema = z.object({
   retired: z.boolean(),
   correctable: z.boolean(),
   removable: z.boolean(),
+  exchanges: z.array(z.string()),
   previous: historySchema.nullable(),
   group: z.string().nullable(),
 });

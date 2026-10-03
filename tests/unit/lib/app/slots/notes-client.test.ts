@@ -87,6 +87,7 @@ describe('a server that answers the wrong shape', () => {
       retired: false,
       correctable: true,
       removable: true,
+      exchanges: [],
       previous: null,
       group: 'life_areas',
     };

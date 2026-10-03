@@ -56,27 +56,19 @@
  * like the cache itself.
  *
  * @see lib/app/slots/removed.ts — the placeholder
+ * @see lib/app/slots/wipe.ts — the write, shared with deleting an exchange
  * @see .context/app/slots.md — "Removing a note"
  */
 
-import { randomUUID } from 'crypto';
-
 import { executeTransaction } from '@/lib/db/utils';
 import { NotFoundError } from '@/lib/api/errors';
-import { getRegisteredModules } from '@/lib/framework/modules/registry';
-import { MODULE_CONTEXT_TYPE } from '@/lib/framework/modules/context';
-import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
-import { READABLE_SEATS } from '@/lib/app/conversation/seats';
-import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { readSlotVerdict } from '@/lib/app/slots/notes';
 import {
-  REMOVED_CONFIDENCE,
-  REMOVED_REASONING,
-  REMOVED_SLUG_PREFIX,
-  REMOVED_SOURCE_TYPE,
-  REMOVED_VALUE,
-  REMOVED_VALUE_JSON,
-} from '@/lib/app/slots/removed';
+  NOT_YET_REMOVED,
+  forgetCachedContext,
+  opaqueRemovedSlug,
+  placeholderFields,
+} from '@/lib/app/slots/wipe';
 
 export interface NoteRemoval {
   userId: string;
@@ -107,10 +99,7 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
   const { definition, ours, isHidden } = await readSlotVerdict(input.slotSlug);
   if (isHidden) throw nothingToRemove();
   // No definition in either tier: the AI coined this heading, so it goes too.
-  const renamedTo =
-    definition === null && ours === null
-      ? `${REMOVED_SLUG_PREFIX}${randomUUID().replace(/-/g, '')}`
-      : null;
+  const renamedTo = definition === null && ours === null ? opaqueRemovedSlug() : null;
 
   const removedAt = new Date();
   const count = await executeTransaction(async (tx) => {
@@ -121,16 +110,10 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
       where: {
         userId: input.userId,
         slotSlug: input.slotSlug,
-        sourceType: { not: REMOVED_SOURCE_TYPE },
+        ...NOT_YET_REMOVED,
       },
       data: {
-        value: REMOVED_VALUE,
-        valueJson: REMOVED_VALUE_JSON,
-        confidence: REMOVED_CONFIDENCE,
-        sourceType: REMOVED_SOURCE_TYPE,
-        reasoningNote: REMOVED_REASONING,
-        provenance: {},
-        capturedAt: removedAt,
+        ...placeholderFields(removedAt),
         ...(renamedTo !== null ? { slotSlug: renamedTo } : {}),
       },
     });
@@ -152,14 +135,4 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
 
 function nothingToRemove(): NotFoundError {
   return new NotFoundError('There is no note under that heading to remove.');
-}
-
-/** Every cached block that may quote the note: each seat's, and each module's. */
-function forgetCachedContext(userId: string): void {
-  for (const seat of READABLE_SEATS) {
-    invalidateContext(FACILITATION_CONTEXT_TYPE, seat, { userId });
-  }
-  for (const definition of getRegisteredModules()) {
-    invalidateContext(MODULE_CONTEXT_TYPE, definition.slug, { userId });
-  }
 }

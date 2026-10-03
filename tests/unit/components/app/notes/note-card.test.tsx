@@ -45,6 +45,7 @@ function note(overrides: Partial<Note> = {}): Note {
     retired: false,
     correctable: true,
     removable: true,
+    exchanges: [],
     previous: null,
     group: 'life_areas',
     ...overrides,

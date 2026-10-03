@@ -62,8 +62,67 @@ export const world = {
   ours: [] as { slug: string; visibility: string; sensitivity?: string }[],
   /** `app_turn_slot_write`, with the turn's owner flattened onto each row. */
   ledger: [] as { turnId: string; userId: string; slotSlug: string; version: number }[],
+  /** `app_turn`: what locates a turn's messages (t-127). `id` is what the ledger's `turnId` names. */
+  turns: [] as TurnRow[],
+  /** `ai_message`, with the conversation's owner flattened onto each row (t-127). */
+  messages: [] as MessageRow[],
   nextId: 0,
 };
+
+export interface TurnRow {
+  id: string;
+  userId: string;
+  turnId: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt: Date;
+  conversationId: string | null;
+  userMessageId: string | null;
+}
+
+export interface MessageRow {
+  id: string;
+  conversationId: string;
+  /** The conversation's owner, which `conversation: { userId }` filters on. */
+  ownerId: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  createdAt: Date;
+}
+
+/**
+ * A message `where`, applied honestly: the shapes `turn-record.ts` and
+ * `delete-exchange.ts` send, and nothing else.
+ */
+function messageMatches(row: MessageRow, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([key, condition]) => {
+    if (key === 'conversation') {
+      return row.ownerId === (condition as { userId: string }).userId;
+    }
+    if (key === 'id' && typeof condition === 'object' && condition !== null) {
+      const op = condition as { in?: string[]; not?: string };
+      if (op.in) return op.in.includes(row.id);
+      if (op.not !== undefined) return row.id !== op.not;
+    }
+    if (key === 'createdAt' && typeof condition === 'object' && condition !== null) {
+      const op = condition as { gt?: Date; gte?: Date; lt?: Date; lte?: Date };
+      const known = ['gt', 'gte', 'lt', 'lte'];
+      if (Object.keys(op).some((k) => !known.includes(k))) {
+        throw new Error(`the fake does not model ${JSON.stringify(condition)} on createdAt`);
+      }
+      const t = row.createdAt.getTime();
+      return (
+        (op.gt === undefined || t > op.gt.getTime()) &&
+        (op.gte === undefined || t >= op.gte.getTime()) &&
+        (op.lt === undefined || t < op.lt.getTime()) &&
+        (op.lte === undefined || t <= op.lte.getTime())
+      );
+    }
+    if (typeof condition === 'object' && condition !== null) {
+      throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
+    }
+    return (row as unknown as Record<string, unknown>)[key] === condition;
+  });
+}
 
 /**
  * A `where` this fake understands, applied honestly.
@@ -159,6 +218,10 @@ export const prismaFake = {
         return { count: rows.length };
       }
     ),
+    count: vi.fn(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        world.values.filter((row) => matches(row, where)).length
+    ),
     create: vi.fn(async ({ data }: { data: Omit<ValueRow, 'id' | 'supersededAt'> }) => {
       const row: ValueRow = { id: `v${++world.nextId}`, supersededAt: null, ...data };
       world.values.push(row);
@@ -166,6 +229,20 @@ export const prismaFake = {
     }),
   },
   appTurnSlotWrite: {
+    // The panel's exchange read (t-127): `{ slotSlug: { in }, turn: { userId } }`,
+    // oldest first. The ledger is kept in write order, so insertion order is it.
+    findMany: vi.fn(
+      async ({ where }: { where: { slotSlug: { in: string[] }; turn: { userId: string } } }) => {
+        if (Object.keys(where).sort().join() !== 'slotSlug,turn' || !where.slotSlug.in) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        return world.ledger
+          .filter(
+            (row) => where.slotSlug.in.includes(row.slotSlug) && row.userId === where.turn.userId
+          )
+          .map((row) => ({ slotSlug: row.slotSlug, turnId: row.turnId }));
+      }
+    ),
     // The removal's ledger move (t-78): `{ slotSlug, turn: { userId } }` and
     // nothing else, so a later query of another shape fails loudly.
     updateMany: vi.fn(
@@ -187,6 +264,64 @@ export const prismaFake = {
       }
     ),
   },
+  appTurn: {
+    // The exchange deletion's read (t-127): `{ id: { in }, userId }`, with its
+    // ledger rows as `slotWrites`.
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) => {
+      if (Object.keys(where).sort().join() !== 'id,userId' || !where.id.in) {
+        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      }
+      return world.turns
+        .filter((row) => where.id.in.includes(row.id) && row.userId === where.userId)
+        .map((row) => ({
+          ...row,
+          slotWrites: world.ledger
+            .filter((write) => write.turnId === row.id)
+            .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
+        }));
+    }),
+    // And its delete, which cascades to the ledger as the FK does.
+    deleteMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) => {
+      if (Object.keys(where).sort().join() !== 'id,userId' || !where.id.in) {
+        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      }
+      const gone = world.turns.filter(
+        (row) => where.id.in.includes(row.id) && row.userId === where.userId
+      );
+      const ids = new Set(gone.map((row) => row.id));
+      world.turns = world.turns.filter((row) => !ids.has(row.id));
+      world.ledger = world.ledger.filter((row) => !ids.has(row.turnId));
+      return { count: gone.length };
+    }),
+  },
+  aiMessage: {
+    findFirst: vi.fn(
+      async ({
+        where,
+        orderBy,
+      }: {
+        where: Record<string, unknown>;
+        orderBy?: { createdAt: 'asc' | 'desc' };
+      }) => {
+        const rows = world.messages.filter((row) => messageMatches(row, where));
+        rows.sort((a, b) =>
+          orderBy?.createdAt === 'desc'
+            ? b.createdAt.getTime() - a.createdAt.getTime()
+            : a.createdAt.getTime() - b.createdAt.getTime()
+        );
+        return rows[0] ? { ...rows[0] } : null;
+      }
+    ),
+    findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+      world.messages.filter((row) => messageMatches(row, where)).map((row) => ({ ...row }))
+    ),
+    deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      const gone = world.messages.filter((row) => messageMatches(row, where));
+      const ids = new Set(gone.map((row) => row.id));
+      world.messages = world.messages.filter((row) => !ids.has(row.id));
+      return { count: gone.length };
+    }),
+  },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
     findFirst: vi.fn(async ({ where }: { where: { slug: string } }) => {
@@ -198,19 +333,26 @@ export const prismaFake = {
     // Honours the ONE shape `ourVerdicts()` sends — an OR of equality clauses —
     // and throws on anything else, for the reason `matches()` above does: a
     // query added later must fail loudly rather than match every row.
-    findMany: vi.fn(async ({ where }: { where: { OR?: Record<string, string>[] } }) => {
-      if (!where.OR) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
-      const clauses = where.OR;
-      return world.ours
-        .filter((row) =>
-          clauses.some((clause) =>
-            Object.entries(clause).every(
-              ([key, want]) => (row as Record<string, string | undefined>)[key] === want
+    findMany: vi.fn(
+      async ({ where }: { where: { OR?: Record<string, string>[]; slug?: { in: string[] } } }) => {
+        // The exchange deletion's "which of these slugs are ours" (t-127).
+        if (where.slug?.in && Object.keys(where).length === 1) {
+          const wanted = where.slug.in;
+          return world.ours.filter((row) => wanted.includes(row.slug)).map((row) => ({ ...row }));
+        }
+        if (!where.OR) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        const clauses = where.OR;
+        return world.ours
+          .filter((row) =>
+            clauses.some((clause) =>
+              Object.entries(clause).every(
+                ([key, want]) => (row as Record<string, string | undefined>)[key] === want
+              )
             )
           )
-        )
-        .map((row) => ({ sensitivity: 'standard', ...row }));
-    }),
+          .map((row) => ({ sensitivity: 'standard', ...row }));
+      }
+    ),
     findFirst: vi.fn(async ({ where }: { where: { slug: string } }) => {
       const row = world.ours.find((candidate) => candidate.slug === where.slug);
       return row ? { ...row } : null;
@@ -263,6 +405,8 @@ export function resetWorld(): void {
   world.projections = [];
   world.ours = [];
   world.ledger = [];
+  world.turns = [];
+  world.messages = [];
   world.nextId = 0;
   clock = 0;
 }

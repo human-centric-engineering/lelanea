@@ -164,6 +164,14 @@ export interface Note {
    * already removed — retired and Art. 9 notes included (`notes.ts`).
    */
   removable: boolean;
+  /**
+   * The exchanges this note came from, as `app_turn` ids: the turns whose
+   * captures wrote a version of it (t-127). Empty for a note no conversation
+   * wrote: an onboarding answer, a correction. The card offers to delete them,
+   * and after that they are gone from here too, because the ledger rows go with
+   * the turn.
+   */
+  exchanges: string[];
   /** The version before this one, where there is one. */
   previous: NoteHistory | null;
   /**
