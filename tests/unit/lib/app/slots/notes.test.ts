@@ -41,6 +41,18 @@ import {
   world,
 } from '@/tests/unit/lib/app/slots/notes-fake';
 
+const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
+  forgetWipedNotes: vi.fn(async () => 0),
+  queueNoteIndex: vi.fn(),
+}));
+// The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
+// its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));
@@ -286,6 +298,8 @@ describe('a correction is a new version, never an overwrite', () => {
       confidence: CORRECTION_CONFIDENCE,
       supersededAt: null,
     });
+    // The correction is the new head; the index replaces the old version's vector (t-107).
+    expect(queueNoteIndex).toHaveBeenCalledWith({ userId: ME }, 'life_work');
   });
 
   it('shows both sides of the contradiction afterwards (§3.12)', async () => {

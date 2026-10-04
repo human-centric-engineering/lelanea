@@ -338,11 +338,12 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). THREE registrations: two mounted OVER an
-    // upstream slug rather than beside it — f-safety t-60's search, so each
-    // result says whose material it is, and f-slots t-72's `fill_slot`, so one
-    // turn writes a slot once — and one of the app's own, f-resources t-77's
-    // `suggest_resource`. What is pinned is the handler the dispatcher ends up
+    // PINNED, not deleted (`HB2`). Two registrations mounted OVER an upstream
+    // slug rather than beside it — f-safety t-60's search, so each result says
+    // whose material it is, and f-slots t-72's `fill_slot`, so one turn writes
+    // a slot once — and the app's own: f-resources t-77's `suggest_resource`,
+    // f-registers t-126's `set_register` and f-memory t-130's
+    // `search_person_memory`. What is pinned is the handler the dispatcher ends up
     // holding for each slug after the real lazy registration pass. A
     // registration under any other slug, or a built-in flush that ran after
     // ours, fails here. A stray registration of one of THESE classes is caught
@@ -361,6 +362,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const { GuardedFillSlotCapability } = await import('@/lib/app/slots/capture');
       const { SuggestResourceCapability } = await import('@/lib/app/resources/suggest');
       const { SetRegisterCapability } = await import('@/lib/app/voice/register-capability');
+      const { SearchPersonMemoryCapability } = await import('@/lib/app/memory/search-capability');
       const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
       __resetRegistrationForTests();
       registerBuiltInCapabilities();
@@ -368,12 +370,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const capture = capabilityDispatcher.getHandler('fill_slot');
       const suggest = capabilityDispatcher.getHandler('suggest_resource');
       const register = capabilityDispatcher.getHandler('set_register');
+      const memory = capabilityDispatcher.getHandler('search_person_memory');
       const ours = registerSpy.mock.calls.filter(([capability]) =>
         [
           LabelledSearchKnowledgeCapability,
           GuardedFillSlotCapability,
           SuggestResourceCapability,
           SetRegisterCapability,
+          SearchPersonMemoryCapability,
         ].some((cls) => capability instanceof cls)
       );
       const appHandlers = [
@@ -381,6 +385,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'fill_slot',
         'suggest_resource',
         'set_register',
+        'search_person_memory',
       ];
       registerSpy.mockRestore();
       expect(search).toBeInstanceOf(LabelledSearchKnowledgeCapability);
@@ -388,7 +393,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(suggest).toBeInstanceOf(SuggestResourceCapability);
       // f-registers t-126.
       expect(register).toBeInstanceOf(SetRegisterCapability);
-      expect(ours).toHaveLength(4);
+      // f-memory t-130.
+      expect(memory).toBeInstanceOf(SearchPersonMemoryCapability);
+      expect(ours).toHaveLength(5);
       expect(appHandlers.every((slug) => capabilityDispatcher.has(slug))).toBe(true);
       expect(initAppCapabilities()).toBeUndefined();
     },
@@ -1269,17 +1276,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/privacy/export-sources.ts',
         // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122; f-memory t-127, t-128, t-129).
+        // f-onboarding t-122; f-memory t-127, t-128, t-129, t-130).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
         'lib/app/memory/delete-exchange.ts',
         'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
+        'lib/app/memory/stored-results.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(11).fill('by-design')
+        Array<'by-design'>(12).fill('by-design')
       );
     },
   },
@@ -1320,6 +1328,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // t-122 — whether the member has spoken on the facilitator seat, by design.
       // t-127 — deleting the member's own exchanges, owner-scoped, by design.
       // t-129 — indexing and searching the member's own words, owner-scoped, by design.
+      // t-130 — clearing the member's own stored search results, owner-scoped, by design.
       expect(
         leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
       ).toEqual([
@@ -1329,6 +1338,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
         ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
+        ['lib/app/memory/stored-results.ts', 'by-design'],
       ]);
     },
   },

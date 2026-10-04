@@ -33,6 +33,18 @@ import {
 
 const { invalidateContext } = vi.hoisted(() => ({ invalidateContext: vi.fn() }));
 
+const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
+  forgetWipedNotes: vi.fn(async () => 0),
+  queueNoteIndex: vi.fn(),
+}));
+// The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
+// its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));
@@ -51,6 +63,7 @@ vi.mock('@/lib/framework/modules/registry', () => ({
 }));
 
 const { deleteExchanges } = await import('@/lib/app/memory/delete-exchange');
+const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
 const { deleteNote } = await import('@/lib/app/slots/delete-note');
 const { getNotes } = await import('@/lib/app/slots/notes');
 const { appendSlotValue } = await import('@/lib/framework/data-slots');
@@ -167,6 +180,25 @@ describe('deleting an exchange', () => {
     expect(mine[2].value).toBe('retraining as a nurse');
     expect(rowsOf(ME, 'life_rhythm')[0].value).toBe('early riser');
     expect(rowsOf(THEM, 'life_work')[0].value).toBe('their own words');
+  });
+
+  it('drops the vectors of the versions it wiped, in the same transaction (t-107)', async () => {
+    twoExchanges();
+    let wipedWhenForgotten: boolean[] = [];
+    forgetWipedNotes.mockImplementationOnce(async () => {
+      wipedWhenForgotten = rowsOf(ME, 'life_work').map(
+        (row) => row.sourceType === REMOVED_SOURCE_TYPE
+      );
+      return 1;
+    });
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(forgetWipedNotes).toHaveBeenCalledWith(prismaFake, { userId: ME });
+    // And every stored memory-search result that may quote the deleted words (t-130).
+    expect(clearStoredSearchResults).toHaveBeenCalledWith(prismaFake, { userId: ME });
+    // Called after the wipe, inside it: the version turn-a wrote is already a placeholder.
+    expect(wipedWhenForgotten).toEqual([false, true, false]);
   });
 
   it('takes the latest exchange to the end of its conversation', async () => {

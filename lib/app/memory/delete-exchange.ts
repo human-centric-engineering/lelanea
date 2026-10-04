@@ -64,6 +64,7 @@ import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
 import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
+import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 
 export interface ExchangeDeletion {
   userId: string;
@@ -265,6 +266,8 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
     const exchanges = await tx.appTurn.deleteMany({
       where: { id: { in: ids }, userId: input.userId },
     });
+    // A memory search elsewhere may hold a copy of these words (t-130).
+    await clearStoredSearchResults(tx, { userId: input.userId });
 
     return { exchanges: exchanges.count, messages: messages.count, versions };
   });

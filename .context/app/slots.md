@@ -1112,6 +1112,12 @@ matches no gate. Every reader keys on `isRemoved()` (the `sourceType`), never
 on the text, so nobody makes a note read as removed by typing the marker's
 words.
 
+**What it takes from the memory index** (f-memory t-107): the note's vectors,
+in the same transaction as the wipe (`forgetWipedNotes`). A placeholder is an
+update, so no foreign key cascade would take them, and a search must never find
+a removed note by meaning. Deleting an exchange does the same for the versions
+it wipes. See [`memory.md`](./memory.md).
+
 **Who may remove what.** The same refusal as the correction: a hidden slug and
 a slug with nothing left to remove get the same 404, so the route can't be
 used to learn that a hidden slot is filled. Retired and Art. 9 notes are
@@ -1127,8 +1133,6 @@ removable. Removing is how an Art. 9 note's kept summary goes too.
 - **`app_turn_slot_write`** rows are kept on purpose. They hold a turn id, a
   slug and a version, no words, and they are the only link the exchange
   offer can start from.
-- **Embeddings.** None exist for a slot value yet. The task that first embeds
-  anything owns the rule that a vector goes with its source.
 
 **This writes Daybreak's table directly**, a stopgap the owner ruled for. The
 placeholder write is `lib/app/slots/wipe.ts`, called from

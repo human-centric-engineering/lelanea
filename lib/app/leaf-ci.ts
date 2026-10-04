@@ -306,4 +306,17 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'reads across one org’s seat conversations and indexes each message ' +
       'under the conversation’s own owner, which is the same rule.',
   },
+  {
+    path: 'lib/app/memory/stored-results.ts',
+    disposition: 'by-design',
+    reason:
+      'clearing what a memory search left in the conversation overwrites the ' +
+      'person’s OWN stored `search_person_memory` results when they delete ' +
+      'something (f-memory t-130). The one write carries `conversation: { userId }` ' +
+      'of the person whose deletion it runs inside (a note, an exchange, a ' +
+      'conversation), and reads nothing back — so it can only ever match that ' +
+      'member’s own messages, never an ownerless or shared thread. ' +
+      '`conversationVisibilityWhere` answers who may SEE a thread; clearing must ' +
+      'be narrower than that, the owner alone.',
+  },
 ];

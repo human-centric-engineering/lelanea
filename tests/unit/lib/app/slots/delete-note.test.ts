@@ -40,6 +40,18 @@ import {
 
 const { invalidateContext } = vi.hoisted(() => ({ invalidateContext: vi.fn() }));
 
+const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
+  forgetWipedNotes: vi.fn(async () => 0),
+  queueNoteIndex: vi.fn(),
+}));
+// The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
+// its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));
@@ -55,6 +67,7 @@ vi.mock('@/lib/framework/modules/registry', () => ({
 }));
 
 const { deleteNote } = await import('@/lib/app/slots/delete-note');
+const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
 const { getNotes, correctNote } = await import('@/lib/app/slots/notes');
 const { appendSlotValue } = await import('@/lib/framework/data-slots');
 const { evaluateCondition } = await import('@/lib/framework/facilitation/engine/conditions');
@@ -146,6 +159,25 @@ describe('removing a note', () => {
     });
   });
 
+  it('drops the note’s vectors in the same transaction, once its versions are placeholders (t-107)', async () => {
+    threeVersions();
+    let wipedWhenForgotten: boolean[] = [];
+    forgetWipedNotes.mockImplementationOnce(async () => {
+      wipedWhenForgotten = rowsOf(ME, 'life_work').map(
+        (row) => row.sourceType === REMOVED_SOURCE_TYPE
+      );
+      return 3;
+    });
+
+    await deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    // The transaction's client (the fake forwards it), and the person from the session.
+    expect(forgetWipedNotes).toHaveBeenCalledWith(prismaFake, { userId: ME });
+    expect(wipedWhenForgotten).toEqual([true, true, true]);
+    // And every stored memory-search result that may quote the note (t-130).
+    expect(clearStoredSearchResults).toHaveBeenCalledWith(prismaFake, { userId: ME });
+  });
+
   it('cannot reach another person’s note under the same heading', async () => {
     world.values.push(value(THEM, 'life_work', { value: 'their own words' }));
 
@@ -186,9 +218,12 @@ describe('removing a note', () => {
     threeVersions();
     await deleteNote({ userId: ME, slotSlug: 'life_work' });
 
+    forgetWipedNotes.mockClear();
+
     await expect(deleteNote({ userId: ME, slotSlug: 'life_work' })).rejects.toMatchObject({
       status: 404,
     });
+    expect(forgetWipedNotes).not.toHaveBeenCalled();
   });
 
   it('removes a retired note and an Art. 9 one — taking something back does not depend on either', async () => {

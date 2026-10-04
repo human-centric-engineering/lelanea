@@ -56,6 +56,7 @@ import { logger } from '@/lib/logging';
 import { requireOrgId, runAsSystem } from '@/lib/tenancy/context';
 import { stillAnswering } from '@/lib/app/memory/delete-exchange';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
+import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 
 /** What forgetting did. */
 export interface ForgottenConversations {
@@ -119,6 +120,16 @@ export async function forgetDeletedConversations(
   const gone = ids.filter((id) => !liveIds.has(id));
   if (gone.length === 0) return none;
 
+  // The person's own delete knows whose words went, so a memory search that
+  // quoted them elsewhere is cleared now, whether or not the conversation had
+  // turns of ours (t-130; an old one may have none, and still have been
+  // searched). The sweep cannot tell whose a turnless conversation was; it
+  // clears per person below, for conversations with turns.
+  if (options.userId) {
+    const userId = options.userId;
+    await executeTransaction((tx) => clearStoredSearchResults(tx, { userId }));
+  }
+
   const turns = await prisma.appTurn.findMany({
     where: {
       conversationId: { in: gone },
@@ -174,6 +185,8 @@ export async function forgetDeletedConversations(
             conversationId: { in: [conversationId ?? ''] },
           },
         });
+        // A memory search in another conversation may hold a copy of its words (t-130).
+        await clearStoredSearchResults(tx, { userId });
         return { turns: deleted.count, versions };
       });
       result.turns += done.turns;

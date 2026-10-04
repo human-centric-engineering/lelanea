@@ -68,6 +68,7 @@ const READ_THE_PROFILE = 'get_state';
 const WRITE_THE_PROFILE = 'fill_slot';
 const OFFERED_A_RESOURCE = 'suggest_resource';
 const NOTED_HOW_TO_SPEAK = 'set_register';
+const LOOKED_BACK = 'search_person_memory';
 
 /** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
 const NAMED_CAPABILITIES = new Set([
@@ -76,6 +77,7 @@ const NAMED_CAPABILITIES = new Set([
   WRITE_THE_PROFILE,
   OFFERED_A_RESOURCE,
   NOTED_HOW_TO_SPEAK,
+  LOOKED_BACK,
 ]);
 
 /** Looked something up in her material — and how many passages it drew on. */
@@ -212,6 +214,23 @@ const notedHowToSpeak: AccountSource = (input) => {
   };
 };
 
+/**
+ * Looked back through what the person said before (f-memory t-130).
+ *
+ * Said whether or not anything came back: the frame carries the call, not its
+ * result, and what was found is the reply's to use. Never the words, so the
+ * account below a reply cannot become a second copy of an old exchange that
+ * the person may later delete.
+ */
+const lookedBack: AccountSource = (input) => {
+  if (!input.capabilities.includes(LOOKED_BACK)) return null;
+  return {
+    key: 'looked_back',
+    line: 'Looked back at what you’ve said before',
+    detail: 'Looked back at what you’ve said before, to remember it with you.',
+  };
+};
+
 /** "a video", "two videos", "three articles" — small counts as words; `''` for none. */
 function count(n: number, one: string, many: string): string {
   if (n === 0) return '';
@@ -244,6 +263,7 @@ const otherCapability: AccountSource = (input) => {
  */
 export const ACCOUNT_SOURCES: readonly AccountSource[] = [
   lookedUp,
+  lookedBack,
   readTheProfile,
   wroteToProfile,
   pointedTo,

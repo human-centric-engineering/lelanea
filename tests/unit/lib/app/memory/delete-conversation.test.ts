@@ -40,6 +40,18 @@ const { invalidateContext, logError, logWarn } = vi.hoisted(() => ({
   logWarn: vi.fn(),
 }));
 
+const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
+  forgetWipedNotes: vi.fn(async () => 0),
+  queueNoteIndex: vi.fn(),
+}));
+// The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
+// its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));
@@ -155,6 +167,8 @@ describe('forgetDeletedConversations', () => {
     expect(result).toEqual({ turns: 2, versions: 2, deferred: 0, failed: 0 });
     expect(world.turns.map((row) => row.id).sort()).toEqual(['turn-b', 'turn-x']);
     expect(world.ledger.map((row) => row.turnId).sort()).toEqual(['turn-b', 'turn-x']);
+    // A memory search in another conversation may hold a copy of its words (t-130).
+    expect(clearStoredSearchResults).toHaveBeenCalledWith(expect.anything(), { userId: ME });
   });
 
   it('makes placeholders of only the versions its turns wrote', async () => {
@@ -208,6 +222,24 @@ describe('forgetDeletedConversations', () => {
 
     expect(result).toEqual({ turns: 0, versions: 0, deferred: 0, failed: 0 });
     expect(JSON.stringify(world)).toBe(before);
+    expect(clearStoredSearchResults).not.toHaveBeenCalled();
+  });
+
+  it('clears the person’s stored search results for a deleted conversation with no turns (t-130)', async () => {
+    world.turns = world.turns.filter((row) => row.conversationId !== DELETED);
+
+    const result = await forgetDeletedConversations([DELETED], { userId: ME });
+
+    expect(result).toEqual({ turns: 0, versions: 0, deferred: 0, failed: 0 });
+    expect(clearStoredSearchResults).toHaveBeenCalledWith(expect.anything(), { userId: ME });
+  });
+
+  it('leaves the clear to the per-person transactions on the sweep, which knows no person', async () => {
+    world.turns = world.turns.filter((row) => row.conversationId !== DELETED);
+
+    await forgetDeletedConversations([DELETED]);
+
+    expect(clearStoredSearchResults).not.toHaveBeenCalled();
   });
 
   it('leaves a turn still being answered for the sweep, and takes an abandoned one', async () => {

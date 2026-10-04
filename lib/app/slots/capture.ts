@@ -87,6 +87,7 @@ import { logger } from '@/lib/logging';
 import { prisma } from '@/lib/db/client';
 import { FillSlotCapability } from '@/lib/framework/data-slots/capabilities/fill-slot';
 import { isDiscoverySlotSlug } from '@/lib/app/onboarding/discovery-slot-names';
+import { queueNoteIndex } from '@/lib/app/memory/memory-index';
 import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
 
 /** The framework's own argument and result types, which it does not export. */
@@ -218,6 +219,25 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
     return super.redactProvenance(args, result);
   }
 
+  /**
+   * The framework's write, answered so the agent still speaks, and queued for
+   * the memory index when it lands, so the note can be found by meaning
+   * (f-memory t-107). The index takes the head, so a write that only revised a
+   * note replaces the old version's vector. Never awaited: the turn does not
+   * wait on an embedding, and a miss is the backfill's.
+   */
+  private async write(
+    args: FillSlotArgs,
+    context: CapabilityContext,
+    turnId: string | null
+  ): Promise<FillSlotResult> {
+    const result = answering(await super.execute(args, context));
+    if (result.success && result.data && context.userId !== null) {
+      queueNoteIndex({ userId: context.userId }, result.data.slotSlug, turnId ? { turnId } : {});
+    }
+    return result;
+  }
+
   async execute(args: FillSlotArgs, context: CapabilityContext): Promise<FillSlotResult> {
     // A discovery answer is the person's own words, written by the onboarding
     // surface (f-onboarding t-101). A reading of the agent's appended to that
@@ -240,14 +260,14 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
       // guarded" — and note the framework refuses a null `userId` itself, with
       // its own message, which is why that case falls through rather than
       // answering here.
-      return answering(await super.execute(args, context));
+      return this.write(args, context, null);
     }
 
     const turn = await readTurnWrite(context.userId, turnId, args.slotSlug);
     if (turn === null) {
       // A turn id the record does not know: a client id on a path that never
       // claimed a turn. Unguarded, not refused.
-      return answering(await super.execute(args, context));
+      return this.write(args, context, null);
     }
 
     if (turn.written !== null) {
@@ -269,7 +289,7 @@ export class GuardedFillSlotCapability extends FillSlotCapability {
       });
     }
 
-    const result = answering(await super.execute(args, context));
+    const result = await this.write(args, context, turnId);
     if (!result.success || !result.data) return result;
 
     // Recorded AFTER the write, so a failed append leaves nothing claiming to

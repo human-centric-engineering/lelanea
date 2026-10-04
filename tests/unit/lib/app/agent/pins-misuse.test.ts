@@ -34,6 +34,7 @@ import {
   GUARD_MODES,
   HER_CAPABILITY_SLUGS,
   READ_ONLY_CAPABILITY_SLUGS,
+  MEMORY_CAPABILITY_SLUGS,
   REGISTER_CAPABILITY_SLUGS,
   RESOURCE_CAPABILITY_SLUGS,
   SELF_WRITE_CAPABILITY_SLUGS,
@@ -99,13 +100,14 @@ const SANCTIONED_SELF_WRITES = [
 ];
 
 describe('the agent’s tools', () => {
-  it('are exactly what the four seeds grant, and nothing else', () => {
+  it('are exactly what the five seeds grant, and nothing else', () => {
     expect(
       [
         ...GRANTED_CAPABILITY_SLUGS,
         ...SLOT_CAPABILITY_SLUGS,
         ...RESOURCE_CAPABILITY_SLUGS,
         ...REGISTER_CAPABILITY_SLUGS,
+        ...MEMORY_CAPABILITY_SLUGS,
       ].sort()
     ).toEqual([...HER_CAPABILITY_SLUGS].sort());
   });
@@ -120,6 +122,7 @@ describe('the agent’s tools', () => {
       ...SLOT_CAPABILITY_SLUGS,
       ...RESOURCE_CAPABILITY_SLUGS,
       ...REGISTER_CAPABILITY_SLUGS,
+      ...MEMORY_CAPABILITY_SLUGS,
     ];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
       if (SANCTIONED_SELF_WRITES.includes(slug)) continue;

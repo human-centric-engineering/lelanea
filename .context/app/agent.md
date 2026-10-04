@@ -286,14 +286,16 @@ body `{ message, turnId? }`.
 
 ### The tools the guide holds
 
-Four seeds, because they grant different things. 007 grants a slug and nothing
+Several seeds, because they grant different things. 007 grants a slug and nothing
 else; 013's two bindings each carry an exposure allowlist, and that config has
 to be written **with** the binding — a grant created first and configured second
 is permissive in between; 014 creates the capability's own row as well as the
 grant, because `suggest_resource` is the app's tool rather than Daybreak's or
 Sunrise's, and a row with no grant is a tool nobody holds. 023 does the same
 for `set_register` (f-registers t-126), with its own migration,
-`20261007100200_app_set_register_capability`.
+`20261007100200_app_set_register_capability`, and 024 for
+`search_person_memory` (f-memory t-130), with
+`20261009100000_app_search_person_memory_capability`.
 
 | Tool                    | Seed | Does                                                                                                                                                                                                |
 | ----------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -302,6 +304,7 @@ for `set_register` (f-registers t-126), with its own migration,
 | `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                                                                                                                                              |
 | `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77)                                                                                                                    |
 | `set_register`          | 023  | remembers, for a sitting, how the person asked to be spoken to (t-126); a sanctioned self-write, see [`voice.md`](./voice.md#guiding-and-teaching-the-facilitator-seats-register-f-registers-t-125) |
+| `search_person_memory`  | 024  | looks back, by meaning, through what this person has said before and the notes kept about them, each result labelled (t-130, t-107); see [`memory.md`](./memory.md)                                 |
 
 **014 reaches a fresh database; a migration reaches every existing one.** The
 seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)

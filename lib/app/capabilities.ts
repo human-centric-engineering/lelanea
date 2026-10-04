@@ -18,7 +18,7 @@
  * Two capabilities mounted OVER an upstream one rather than beside it — same
  * slug, same schema, same function definition, because a new slug would lose
  * what is keyed on the old one and would advertise a second tool for the same
- * job — and two of the app's own.
+ * job — and the app's own.
  *
  * - **`search_knowledge_base`** — the agent's search, with each result labelled
  *   by whose material it is (f-safety t-60). The subclass runs the platform's
@@ -38,6 +38,10 @@
  *   asked to be met more gently or more directly (f-registers t-126). The
  *   app's own tool; its row and grant are seed `023-set-register.ts` and the
  *   migration `20261007100200_app_set_register_capability`.
+ * - **`search_person_memory`** — the agent looks back, by meaning, through
+ *   what this person has said before (f-memory t-130). The app's own tool;
+ *   its row and grant are seed `024-search-person-memory.ts` and the
+ *   migration `20261009100000_app_search_person_memory_capability`.
  *
  * `get_state` is granted but NOT mounted here: it is read-only, and nothing
  * about it needs a leaf's turn.
@@ -48,6 +52,7 @@
  * the row).
  */
 import { registerAppCapability } from '@/lib/orchestration/capabilities/registry';
+import { SearchPersonMemoryCapability } from '@/lib/app/memory/search-capability';
 import { SuggestResourceCapability } from '@/lib/app/resources/suggest';
 import { LabelledSearchKnowledgeCapability } from '@/lib/app/safety/labelled-search';
 import { GuardedFillSlotCapability } from '@/lib/app/slots/capture';
@@ -58,4 +63,5 @@ export function initAppCapabilities(): void {
   registerAppCapability(new GuardedFillSlotCapability());
   registerAppCapability(new SuggestResourceCapability());
   registerAppCapability(new SetRegisterCapability());
+  registerAppCapability(new SearchPersonMemoryCapability());
 }
