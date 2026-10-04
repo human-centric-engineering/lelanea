@@ -1189,6 +1189,43 @@ exists and was filled (§12). The route logs it for the operator.
 embedding cascade, the ledger cascade, the summary and title, and that what the
 AI reads next holds nothing of the deleted exchange and all of the kept one.
 
+## Deleting a conversation (f-memory t-128)
+
+Sunrise deletes whole conversations on four paths: the person's own
+`DELETE /api/v1/chat/conversations/:id` (her agent is `public`, so it reaches a
+seat conversation; no page calls it yet), the admin per-thread delete, the
+admin bulk clear, and retention. Each deletes the conversation row, and its
+messages, Sunrise's reply embeddings and the memory index's vectors cascade.
+None tells the app. `lib/app/memory/delete-conversation.ts` takes, per turn,
+what an exchange deletion takes once its messages are already gone: **the turn
+record and its ledger rows, and only the note versions it wrote**, as
+placeholders, a coined heading moving off once nothing under it is left.
+
+**Two callers.** The person's own route calls `onConversationsDeleted` once the
+row is gone, so it is immediate (`divergences.md` Row 27,
+[`sunrise#919`](https://github.com/human-centric-engineering/sunrise/issues/919)).
+Every other path is caught by `app:deleted-conversation-sweep`, an app job that
+runs every minute and finds our turns whose conversation is gone. So after an
+admin delete or a retention purge, a note from that conversation can still be
+read for up to a minute.
+
+**`app_turn.conversationId` has no foreign key, on purpose.** A cascading one
+would take the turn and its ledger rows on every path, and the ledger is the
+only link from a note version to the exchange that wrote it. The versions would
+survive unwiped and unfindable. Without it, a turn pointing at nothing is
+itself the record of what still needs forgetting. A turn still being answered
+is left for the next sweep.
+
+**What it leaves:** journey events and node progress, which record that a step
+happened and hold no words; notes with no turn behind them (onboarding answers,
+corrections); and spend, which is Sunrise's `ai_cost_log` and survives a
+conversation's deletion. `AiUserMemory` is out of reach: no seat is advertised
+`write_user_memory`.
+
+`npm run smoke:app-delete-conversation` proves it on the dev database: one
+conversation deleted the route's way, one the retention way and then swept, and
+the kept conversation's turn and reading untouched.
+
 ### What it changes about erasure (Art. 17)
 
 Before this, erasure was all or nothing: `eraseUser()` and the FK cascade.
