@@ -39,9 +39,9 @@ describe('the memory index backfill job', () => {
 });
 
 describe('the deleted-conversation sweep job', () => {
-  it('runs the sweep every minute and hands its outcome to the tick’s log line', async () => {
+  it('runs the sweep every five minutes and hands its outcome to the tick’s log line', async () => {
     const sweep = job('app:deleted-conversation-sweep');
-    expect(sweep?.intervalMs).toBe(60_000);
+    expect(sweep?.intervalMs).toBe(300_000);
     expect(sweepDeletedConversations).not.toHaveBeenCalled();
     await expect(sweep?.run()).resolves.toEqual({ turns: 2, versions: 1, deferred: 0 });
     expect(sweepDeletedConversations).toHaveBeenCalledTimes(1);

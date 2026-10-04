@@ -1205,9 +1205,9 @@ placeholders, a coined heading moving off once nothing under it is left.
 row is gone, so it is immediate (`divergences.md` Row 27,
 [`sunrise#919`](https://github.com/human-centric-engineering/sunrise/issues/919)).
 Every other path is caught by `app:deleted-conversation-sweep`, an app job that
-runs every minute and finds our turns whose conversation is gone. So after an
-admin delete or a retention purge, a note from that conversation can still be
-read for up to a minute.
+runs every five minutes and finds our turns whose conversation is gone. So after
+an admin delete or a retention purge, a note from that conversation can still be
+read for up to five minutes.
 
 **`app_turn.conversationId` has no foreign key, on purpose.** A cascading one
 would take the turn and its ledger rows on every path, and the ledger is the

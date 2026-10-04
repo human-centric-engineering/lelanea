@@ -34,9 +34,10 @@ import {
   world,
 } from '@/tests/unit/lib/app/slots/notes-fake';
 
-const { invalidateContext, logError } = vi.hoisted(() => ({
+const { invalidateContext, logError, logWarn } = vi.hoisted(() => ({
   invalidateContext: vi.fn(),
   logError: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 vi.mock('@/lib/db/client', async () => ({
@@ -60,7 +61,7 @@ const { runAsSystem } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/tenancy/context', () => ({ requireOrgId: () => 'org-1', runAsSystem }));
 vi.mock('@/lib/logging', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: logError, debug: vi.fn() },
+  logger: { info: vi.fn(), warn: logWarn, error: logError, debug: vi.fn() },
 }));
 
 const {
@@ -260,8 +261,10 @@ describe('forgetDeletedConversations', () => {
 
       expect(result).toEqual({ turns: 1, versions: 1, deferred: 0, failed: 2 });
       expect(world.turns.some((row) => row.id === 'turn-x')).toBe(false);
-      expect(logError).toHaveBeenCalledWith(expect.stringContaining('one person'), {
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('Could not forget'), {
+        conversationId: DELETED,
         turns: 2,
+        attempts: 1,
         error: 'lock timeout',
       });
     } finally {
@@ -327,6 +330,31 @@ describe('sweepDeletedConversations', () => {
       }
       await sweepDeletedConversations();
       expect(await findDeletedConversations()).toEqual([]);
+      expect(logWarn).toHaveBeenCalledTimes(1);
+      expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('Gave up'), {
+        conversationId: DELETED,
+        attempts: MAX_SWEEP_ATTEMPTS,
+      });
+    } finally {
+      prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+    }
+  });
+
+  it('counts a failure against the conversation that failed, not its owner’s others', async () => {
+    const OTHER = 'conv-deleted-too';
+    turn('turn-d', OTHER);
+    ledger('turn-d', 'life_work', 1);
+    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+    prismaFake.appTurn.deleteMany.mockImplementation(async (args) => {
+      if (args.where.conversationId?.in.includes(DELETED)) throw new Error('lock timeout');
+      return deleteMany(args);
+    });
+    try {
+      const result = await forgetDeletedConversations([DELETED, OTHER], { userId: ME });
+
+      expect(result).toEqual({ turns: 1, versions: 1, deferred: 0, failed: 2 });
+      expect(world.turns.some((row) => row.id === 'turn-d')).toBe(false);
+      expect(world.turns.filter((row) => row.conversationId === DELETED)).toHaveLength(2);
     } finally {
       prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
     }

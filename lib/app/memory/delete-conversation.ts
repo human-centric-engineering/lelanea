@@ -142,24 +142,27 @@ export async function forgetDeletedConversations(
   const ready = turns.filter((turn) => !answering(turn));
   const result = { ...none, deferred: turns.length - ready.length };
 
-  const byUser = new Map<string, typeof ready>();
+  // One transaction per conversation, so a failure is counted against the
+  // conversation that caused it and holds up nothing else (#2's give-up keys on
+  // it). A conversation has one owner; the key carries the person anyway.
+  const groups = new Map<string, typeof ready>();
   for (const turn of ready) {
-    const owned = byUser.get(turn.userId) ?? [];
-    owned.push(turn);
-    byUser.set(turn.userId, owned);
+    const key = `${turn.userId}\u0000${turn.conversationId}`;
+    const group = groups.get(key) ?? [];
+    group.push(turn);
+    groups.set(key, group);
   }
   const coined = await coinedSlugs([
     ...new Set(ready.flatMap((turn) => turn.slotWrites.map((write) => write.slotSlug))),
   ]);
-  for (const [userId, owned] of byUser) {
-    // One person's failure must not hold up everyone else's: log it and carry
-    // on, and the next sweep tries them again.
+  for (const owned of groups.values()) {
+    const { userId, conversationId } = owned[0];
     try {
       const writes = owned.flatMap((turn) => turn.slotWrites);
       const removedAt = new Date();
       const done = await executeTransaction(async (tx) => {
         const versions = await wipeTurnWrites(tx, { userId, writes, coined, removedAt });
-        // Only turns still pointing at a deleted conversation. A failed turn
+        // Only turns still pointing at this deleted conversation. A failed turn
         // retried under the same id since it was read has been claimed again,
         // which resets its conversation (`claimTurn`); deleting its record now
         // would take the ledger row the new attempt writes, and leave that
@@ -168,24 +171,32 @@ export async function forgetDeletedConversations(
           where: {
             id: { in: owned.map((turn) => turn.id) },
             userId,
-            conversationId: { in: gone },
+            conversationId: { in: [conversationId ?? ''] },
           },
         });
         return { turns: deleted.count, versions };
       });
       result.turns += done.turns;
       result.versions += done.versions;
-      for (const turn of owned) if (turn.conversationId) sweepFailures.delete(turn.conversationId);
+      if (conversationId) sweepFailures.delete(conversationId);
       forgetCachedContext(userId);
     } catch (err) {
       result.failed += owned.length;
-      for (const id of new Set(owned.map((turn) => turn.conversationId))) {
-        if (id) sweepFailures.set(id, (sweepFailures.get(id) ?? 0) + 1);
-      }
-      logger.error('Could not forget what a deleted conversation left behind for one person', {
+      const attempts = conversationId ? (sweepFailures.get(conversationId) ?? 0) + 1 : 0;
+      if (conversationId) sweepFailures.set(conversationId, attempts);
+      logger.error('Could not forget what a deleted conversation left behind', {
+        conversationId,
         turns: owned.length,
+        attempts,
         error: err instanceof Error ? err.message : String(err),
       });
+      if (attempts === MAX_SWEEP_ATTEMPTS) {
+        // Its notes stay readable until someone looks: say which, once.
+        logger.warn('Gave up forgetting a deleted conversation until the next restart', {
+          conversationId,
+          attempts,
+        });
+      }
     }
   }
   return result;
