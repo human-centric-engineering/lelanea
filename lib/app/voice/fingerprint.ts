@@ -49,9 +49,11 @@
  * ## What is NOT here
  *
  * The other two layers of the fingerprint — context-selected overlays and
- * retrieved exemplars — are later work, and a user's voice leanings are a filter
- * over those. Neither may reach what is in this file: the core is the invariant
- * that no preference and no retrieval result can soften.
+ * retrieved exemplars — are composed per turn by `context-contributor.ts`, and a
+ * person's voice leanings shade them there by adding authored pole lines
+ * (`leanings-select.ts`, f-leanings t-136). None of them reaches what is in this
+ * file: the core rides on the profile, out of the block's reach, and is the
+ * invariant that no preference and no retrieval result can soften.
  *
  * @see .context/app/voice.md
  * @see lib/orchestration/agents/resolve-effective-prompt.ts — the composition order
