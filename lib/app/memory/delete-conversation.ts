@@ -120,6 +120,16 @@ export async function forgetDeletedConversations(
   const gone = ids.filter((id) => !liveIds.has(id));
   if (gone.length === 0) return none;
 
+  // The person's own delete knows whose words went, so a memory search that
+  // quoted them elsewhere is cleared now, whether or not the conversation had
+  // turns of ours (t-130; an old one may have none, and still have been
+  // searched). The sweep cannot tell whose a turnless conversation was; it
+  // clears per person below, for conversations with turns.
+  if (options.userId) {
+    const userId = options.userId;
+    await executeTransaction((tx) => clearStoredSearchResults(tx, { userId }));
+  }
+
   const turns = await prisma.appTurn.findMany({
     where: {
       conversationId: { in: gone },

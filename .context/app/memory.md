@@ -158,6 +158,18 @@ emptied. The row is kept, because a tool call with no result is refused by the
 providers on replay. All of them, not only those that quoted what went:
 matching on the deleted words could miss one. The AI can search again.
 
+Two limits, both accepted (`/code-review` round 2, 4 Oct 2026):
+
+- **A conversation deleted by retention or an admin, with no turns of ours.**
+  The sweep finds deleted conversations through `app_turn`, so it cannot tell
+  whose a turnless one was. The person's own delete always clears. Revisit if
+  retention starts deleting seat conversations.
+- **A search answering while the person deletes.** The chat handler stores the
+  tool result after dispatch, so a result in flight at the moment of a deletion
+  lands after the clear, and is cleared only at the person's next deletion.
+  Closing it needs a seam around the platform's tool-message write; raise one
+  with Daybreak if it is ever seen.
+
 **Crisis turns.** A hard-tier turn never reaches the chat handler
 (`turns.ts`), so the person's message is never stored and never indexed. A
 soft-tier turn runs normally: its message is stored, stays in the transcript,
