@@ -61,15 +61,9 @@
 import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
-import { listSlotDefinitions } from '@/lib/framework/data-slots';
 import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
 import { getAgentDeadlines } from '@/lib/app/agent/settings';
-import {
-  NOT_YET_REMOVED,
-  forgetCachedContext,
-  opaqueRemovedSlug,
-  placeholderFields,
-} from '@/lib/app/slots/wipe';
+import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
 
 export interface ExchangeDeletion {
   userId: string;
@@ -83,6 +77,20 @@ export interface DeletedExchanges {
   messages: number;
   /** Note versions made placeholders. Logged, never sent: see the route. */
   versions: number;
+}
+
+/**
+ * Whether a turn is still being answered, as of now. A claim still `running`
+ * past `staleClaimMs()` was abandoned (its process died) and its window will
+ * not fill any further; the turn path reclaims it by the same test. Counting it
+ * as answering would make that exchange undeletable.
+ */
+export async function stillAnswering(): Promise<
+  (turn: { status: string; startedAt: Date }) => boolean
+> {
+  const staleAfterMs = staleClaimMs((await getAgentDeadlines()).turnDeadlineMs);
+  const now = Date.now();
+  return (turn) => turn.status === 'running' && now - turn.startedAt.getTime() <= staleAfterMs;
 }
 
 /** The turns asked about, the person's own, with what locates their messages. */
@@ -216,13 +224,7 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   if (turns.length !== ids.length) {
     throw new NotFoundError('That part of the conversation could not be found.');
   }
-  // A claim still `running` past `staleClaimMs()` was abandoned — its process
-  // died — and its window will not fill any further; the turn path reclaims it
-  // by the same test. Refusing it would make that exchange undeletable.
-  const staleAfterMs = staleClaimMs((await getAgentDeadlines()).turnDeadlineMs);
-  const now = Date.now();
-  const answering = (turn: OwnedTurn): boolean =>
-    turn.status === 'running' && now - turn.startedAt.getTime() <= staleAfterMs;
+  const answering = await stillAnswering();
   if (turns.some(answering)) {
     throw new ConflictError(
       'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
@@ -234,51 +236,17 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   const messageIds = deletedMessages.map((row) => row.id);
   const clearings = await clearingsFor(input.userId, deletedMessages);
 
-  // Which versions, slug by slug.
-  const bySlug = new Map<string, number[]>();
-  for (const write of turns.flatMap((turn) => turn.slotWrites)) {
-    bySlug.set(write.slotSlug, [...(bySlug.get(write.slotSlug) ?? []), write.version]);
-  }
-  const slugs = [...bySlug.keys()];
-  const coined = await coinedSlugs(slugs);
+  const writes = turns.flatMap((turn) => turn.slotWrites);
+  const coined = await coinedSlugs([...new Set(writes.map((write) => write.slotSlug))]);
 
   const removedAt = new Date();
   const result = await executeTransaction(async (tx) => {
-    let versions = 0;
-    for (const [slotSlug, written] of bySlug) {
-      // STOPGAP — direct write to Daybreak's `framework_slot_value`. Owner
-      // ruling, 3 Oct 2026; divergence row in `.context/app/divergences.md`.
-      // Replace with Daybreak's per-value removal when it ships (daybreak#286).
-      const wiped = await tx.slotValue.updateMany({
-        where: {
-          userId: input.userId,
-          slotSlug,
-          version: { in: written },
-          ...NOT_YET_REMOVED,
-        },
-        data: placeholderFields(removedAt),
-      });
-      versions += wiped.count;
-
-      if (wiped.count > 0 && coined.has(slotSlug)) {
-        const left = await tx.slotValue.count({
-          where: { userId: input.userId, slotSlug, ...NOT_YET_REMOVED },
-        });
-        if (left === 0) {
-          // Nothing of the note is left under the heading the AI coined, so the
-          // heading goes too, as it does on a removal (t-78).
-          const renamedTo = opaqueRemovedSlug();
-          await tx.slotValue.updateMany({
-            where: { userId: input.userId, slotSlug },
-            data: { slotSlug: renamedTo },
-          });
-          await tx.appTurnSlotWrite.updateMany({
-            where: { slotSlug, turn: { userId: input.userId } },
-            data: { slotSlug: renamedTo },
-          });
-        }
-      }
-    }
+    const versions = await wipeTurnWrites(tx, {
+      userId: input.userId,
+      writes,
+      coined,
+      removedAt,
+    });
 
     const messages = messageIds.length
       ? await tx.aiMessage.deleteMany({
@@ -303,19 +271,4 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
 
   forgetCachedContext(input.userId);
   return result;
-}
-
-/**
- * The slugs here that the AI coined: no definition in either tier. A taxonomy
- * slug is an admin's wording and stays whatever happens to the readings under it.
- */
-async function coinedSlugs(slugs: string[]): Promise<Set<string>> {
-  if (slugs.length === 0) return new Set();
-  const framework = await listSlotDefinitions();
-  const ours = await prisma.appSlotDefinition.findMany({
-    where: { slug: { in: slugs } },
-    select: { slug: true },
-  });
-  const defined = new Set([...framework.map((d) => d.slug), ...ours.map((d) => d.slug)]);
-  return new Set(slugs.filter((slug) => !defined.has(slug)));
 }

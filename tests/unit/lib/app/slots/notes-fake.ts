@@ -163,6 +163,26 @@ function matches(row: ValueRow, where: Record<string, unknown>): boolean {
 }
 
 export const prismaFake = {
+  /**
+   * The conversation sweep's one raw query (t-128): our turns whose
+   * conversation is gone, distinct by conversation, up to the bound limit. The
+   * fake cannot run SQL, so it answers that one question from the world and
+   * records the bound values for the test to assert on. The smoke runs the SQL.
+   */
+  $queryRaw: vi.fn(async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+    // Bound in order: the org, the ids given up on, the limit.
+    const given = new Set(values[1] as string[]);
+    const limit = values[2] as number;
+    const live = new Set([...world.conversations.map((row) => row.id), ...given]);
+    const gone = [
+      ...new Set(
+        world.turns
+          .map((row) => row.conversationId)
+          .filter((id): id is string => id !== null && !live.has(id))
+      ),
+    ];
+    return gone.slice(0, limit).map((conversationId) => ({ conversationId }));
+  }),
   slotValue: {
     findMany: vi.fn(
       async ({
@@ -275,36 +295,88 @@ export const prismaFake = {
     ),
   },
   appTurn: {
-    // The exchange deletion's read (t-127): `{ id: { in }, userId }`, with its
-    // ledger rows as `slotWrites`.
-    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) => {
-      if (Object.keys(where).sort().join() !== 'id,userId' || !where.id.in) {
-        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+    // The exchange deletion's read (t-127): `{ id: { in }, userId }`; and the
+    // conversation deletion's (t-128): `{ conversationId: { in } }`, with or
+    // without `userId`. Each with its ledger rows as `slotWrites`.
+    findMany: vi.fn(
+      async ({
+        where,
+      }: {
+        where: {
+          id?: { in: string[] };
+          conversationId?: { in: string[] };
+          userId?: string;
+        };
+      }) => {
+        const keys = Object.keys(where).sort().join();
+        const byId = keys === 'id,userId' && where.id?.in;
+        const byConversation =
+          (keys === 'conversationId' || keys === 'conversationId,userId') &&
+          where.conversationId?.in;
+        if (!byId && !byConversation) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        return world.turns
+          .filter((row) =>
+            byId
+              ? where.id!.in.includes(row.id) && row.userId === where.userId
+              : row.conversationId !== null &&
+                where.conversationId!.in.includes(row.conversationId) &&
+                (where.userId === undefined || row.userId === where.userId)
+          )
+          .map((row) => ({
+            ...row,
+            slotWrites: world.ledger
+              .filter((write) => write.turnId === row.id)
+              .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
+          }));
       }
-      return world.turns
-        .filter((row) => where.id.in.includes(row.id) && row.userId === where.userId)
-        .map((row) => ({
-          ...row,
-          slotWrites: world.ledger
-            .filter((write) => write.turnId === row.id)
-            .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
-        }));
-    }),
-    // And its delete, which cascades to the ledger as the FK does.
-    deleteMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) => {
-      if (Object.keys(where).sort().join() !== 'id,userId' || !where.id.in) {
-        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+    ),
+    // And its delete, which cascades to the ledger as the FK does. The
+    // conversation deletion (t-128) also narrows to turns still pointing at a
+    // deleted conversation.
+    deleteMany: vi.fn(
+      async ({
+        where,
+      }: {
+        where: {
+          id: { in: string[] };
+          userId: string;
+          conversationId?: { in: string[] };
+        };
+      }) => {
+        const keys = Object.keys(where).sort().join();
+        if (
+          !where.id.in ||
+          (keys !== 'id,userId' &&
+            !(keys === 'conversationId,id,userId' && where.conversationId?.in))
+        ) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        const gone = world.turns.filter(
+          (row) =>
+            where.id.in.includes(row.id) &&
+            row.userId === where.userId &&
+            (!where.conversationId ||
+              (row.conversationId !== null && where.conversationId.in.includes(row.conversationId)))
+        );
+        const ids = new Set(gone.map((row) => row.id));
+        world.turns = world.turns.filter((row) => !ids.has(row.id));
+        world.ledger = world.ledger.filter((row) => !ids.has(row.turnId));
+        return { count: gone.length };
       }
-      const gone = world.turns.filter(
-        (row) => where.id.in.includes(row.id) && row.userId === where.userId
-      );
-      const ids = new Set(gone.map((row) => row.id));
-      world.turns = world.turns.filter((row) => !ids.has(row.id));
-      world.ledger = world.ledger.filter((row) => !ids.has(row.turnId));
-      return { count: gone.length };
-    }),
+    ),
   },
   aiConversation: {
+    // Which of these conversations still exist (t-128): `{ id: { in } }` only.
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => {
+      if (Object.keys(where).join() !== 'id' || !where.id.in) {
+        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      }
+      return world.conversations
+        .filter((row) => where.id.in.includes(row.id))
+        .map((row) => ({ id: row.id }));
+    }),
     findFirst: vi.fn(async ({ where }: { where: { id: string; userId: string } }) => {
       if (Object.keys(where).sort().join() !== 'id,userId') {
         throw new Error(`the fake does not model ${JSON.stringify(where)}`);

@@ -1024,15 +1024,19 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/jobs.ts',
     risk: 'a stray job would run on every install\u2019s maintenance tick',
-    // PINNED, not deleted (`HB2`). f-memory t-129 fills this with ONE job: the
-    // memory index's backfill, per org (no scope declared, so the safe default).
-    // A second job, or this one bypassing the org scope, still fails here.
+    // PINNED, not deleted (`HB2`). f-memory fills this with TWO jobs, both per
+    // org (no scope declared, so the safe default): the memory index's backfill
+    // (t-129) and the deleted-conversation sweep (t-128). A third job, or either
+    // bypassing the org scope, still fails here.
     assert: () => {
       __resetAppJobsForTests();
       // getAppJobs() triggers the lazy init, so this exercises the REAL seam.
       const jobs = getAppJobs();
-      expect(jobs.map((job) => job.name)).toEqual(['app:memory-index-backfill']);
-      expect(jobs[0]?.scope).toBeUndefined();
+      expect(jobs.map((job) => job.name)).toEqual([
+        'app:memory-index-backfill',
+        'app:deleted-conversation-sweep',
+      ]);
+      expect(jobs.map((job) => job.scope)).toEqual([undefined, undefined]);
     },
   },
   {
@@ -1265,16 +1269,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/privacy/export-sources.ts',
         // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122; f-memory t-127, t-129).
+        // f-onboarding t-122; f-memory t-127, t-128, t-129).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
         'lib/app/memory/delete-exchange.ts',
+        'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(10).fill('by-design')
+        Array<'by-design'>(11).fill('by-design')
       );
     },
   },
@@ -1322,6 +1327,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/agent/metering.ts', 'by-design'],
         ['lib/app/conversation/opening.ts', 'by-design'],
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
+        ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
       ]);
     },

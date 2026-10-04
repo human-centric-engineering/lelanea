@@ -280,6 +280,20 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'SEE a thread; a deletion must be narrower than that, the owner alone.',
   },
   {
+    path: 'lib/app/memory/delete-conversation.ts',
+    disposition: 'by-design',
+    reason:
+      'forgetting a deleted conversation reads the conversation table only to ask ' +
+      'whether ids still EXIST (f-memory t-128): it selects `id` and nothing else, ' +
+      'and acts only on the ids that are gone. No row is returned to anyone. The ' +
+      'callers are the person’s own delete route, after it has checked ownership ' +
+      'and deleted, and the org-scoped sweep job, which has no caller to scope ' +
+      'to. `conversationVisibilityWhere` answers who may SEE a thread; an ' +
+      'existence check must see every thread, or it would take a live one it ' +
+      'could not see for a deleted one and forget what its turns wrote. So it ' +
+      'runs in the system scope, past row-level security, and fails closed.',
+  },
+  {
     path: 'lib/app/memory/memory-index.ts',
     disposition: 'by-design',
     reason:
