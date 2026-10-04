@@ -35,7 +35,11 @@
 
 import { z } from 'zod';
 
-import type { SlotDefinitionInput } from '@/lib/framework/data-slots';
+// The definition module, not the data-slots barrel: the barrel reaches the
+// value engine and so `@prisma/client`, and this module sits in the closure of
+// the voice fingerprint, which must never reach the database
+// (`tests/unit/lib/app/voice/fingerprint.test.ts`).
+import type { SlotDefinitionInput } from '@/lib/framework/data-slots/definition';
 
 /** The keys, in the prototype's order. A key is immutable: it names a slot. */
 export const LEANING_KEYS = [
