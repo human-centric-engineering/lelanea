@@ -1024,15 +1024,19 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/jobs.ts',
     risk: 'a stray job would run on every install\u2019s maintenance tick',
-    // PINNED, not deleted (`HB2`). f-memory t-129 fills this with ONE job: the
-    // memory index's backfill, per org (no scope declared, so the safe default).
-    // A second job, or this one bypassing the org scope, still fails here.
+    // PINNED, not deleted (`HB2`). f-memory fills this with TWO jobs, both per
+    // org (no scope declared, so the safe default): the memory index's backfill
+    // (t-129) and the deleted-conversation sweep (t-128). A third job, or either
+    // bypassing the org scope, still fails here.
     assert: () => {
       __resetAppJobsForTests();
       // getAppJobs() triggers the lazy init, so this exercises the REAL seam.
       const jobs = getAppJobs();
-      expect(jobs.map((job) => job.name)).toEqual(['app:memory-index-backfill']);
-      expect(jobs[0]?.scope).toBeUndefined();
+      expect(jobs.map((job) => job.name)).toEqual([
+        'app:memory-index-backfill',
+        'app:deleted-conversation-sweep',
+      ]);
+      expect(jobs.map((job) => job.scope)).toEqual([undefined, undefined]);
     },
   },
   {
