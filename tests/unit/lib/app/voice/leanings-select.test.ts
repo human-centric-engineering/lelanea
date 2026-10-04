@@ -214,6 +214,21 @@ describe('selectLeanings', () => {
       }
     );
 
+    it('does not report a pole as set aside when its row has gone, since it could never apply', () => {
+      const rows = content();
+      const without = {
+        overlays: rows.overlays.filter((o) => o.situation !== 'leaning-warmth-right'),
+      };
+
+      expect(
+        selectLeanings({
+          dials: dials({ warmth: 1, pace: -1 }),
+          registerSource: 'safety',
+          content: without,
+        })
+      ).toEqual({ applied: [], held: ['pace'] });
+    });
+
     it.each(['module', 'asked', null] as const)('under %s, holds nothing', (registerSource) => {
       const stamp = selectLeanings({
         dials: dials({ directness: 2, warmth: 2, pace: -2 }),

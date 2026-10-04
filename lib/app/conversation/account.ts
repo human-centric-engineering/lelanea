@@ -388,10 +388,13 @@ export function leaningsSentences(turn: TurnAccount | null): string[] {
       .join('; ');
     sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
   }
-  if (leanings.held.length > 0) {
-    const poles = leanings.held.map(heldPole).join('; ');
+  // Only a hard pole is ever held. A stamp naming another key (an old row, or a
+  // hold list changed since) is not said as something set aside.
+  const held = leanings.held.filter((key) => HELD_WHEN_HARD.has(key));
+  if (held.length > 0) {
+    const poles = held.map(heldPole).join('; ');
     const why = turn.registerSource === 'safety' ? ', because something hard came up recently' : '';
-    const noun = leanings.held.length === 1 ? 'leaning' : 'leanings';
+    const noun = held.length === 1 ? 'leaning' : 'leanings';
     sentences.push(`Set aside your ${noun} toward ${poles} for now${why}.`);
   }
   return sentences;

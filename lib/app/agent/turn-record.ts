@@ -132,11 +132,8 @@ export interface TurnStamp {
   fingerprintVersion: string | null;
   /** The register the turn is steered to and why (f-registers t-125), or null for none. */
   register: RegisterChoice | null;
-  /**
-   * The person's leanings the turn applies, and any held (f-leanings t-136),
-   * or null on a seat with none. Optional only for the callers from before them.
-   */
-  leanings?: LeaningsStamp | null;
+  /** The person's leanings the turn applies, and any held (f-leanings t-136), or null on a seat with none. */
+  leanings: LeaningsStamp | null;
 }
 
 /**

@@ -133,8 +133,7 @@ import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 import { loadResourceOffering } from '@/lib/app/resources/offering';
 import { loadAnswersContext } from '@/lib/app/onboarding/answers-context';
 import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
-import { registerForPrompt } from '@/lib/app/voice/register-store';
-import { leaningsForPrompt } from '@/lib/app/voice/leanings-store';
+import { promptStampFor, type PromptStamp } from '@/lib/app/voice/leanings-store';
 import { leaningOverlays, type LeaningsStamp } from '@/lib/app/voice/leanings-select';
 
 /**
@@ -217,7 +216,7 @@ export function composeVoiceContext(
 ): string {
   const shading = leanings.map((row) => block(row.heading, row.lines)).filter(Boolean);
 
-  // Core-only means core-only: the authored fallback body and NOTHING else.
+  // Core-only means the authored fallback body, and no register or exemplars.
   //
   // Never empty — a blank body reads to the model as a section that exists and
   // has nothing to say, and to whoever is debugging the prompt as a loader that
@@ -227,7 +226,9 @@ export function composeVoiceContext(
   // this whole feature is about not committing.
   //
   // The person's leanings still follow it: the stamp named them at claim, and
-  // the prompt and the account must agree.
+  // the prompt and the account must agree. The framing's "the register above"
+  // then reads as the core-only body, which is authored as the register for
+  // this moment and says the core stands as it is.
   if (overlay === null) {
     return [block(content.coreOnly.heading, content.coreOnly.lines), ...shading].join('\n\n');
   }
@@ -362,14 +363,11 @@ export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
  * The overlay a seat's turn is given: the seat's own moment, or on the
  * facilitator seat the register the turn was claimed with. The register's
  * overlays are named by the register (`guiding`, `teaching`), so a register is
- * a situation like any other and brings its own exemplar query.
- * `registerForPrompt` never throws; a seat with no situation and no register
- * gets the core-only block.
+ * a situation like any other and brings its own exemplar query. A seat with no
+ * situation and no register gets the core-only block.
  */
-async function situationFor(seat: string, userId: string): Promise<string> {
-  const situation = SEAT_SITUATIONS.get(seat);
-  if (situation !== undefined) return situation;
-  return (await registerForPrompt(userId, seat)) ?? '';
+function situationFor(seat: string, stamp: PromptStamp): string {
+  return SEAT_SITUATIONS.get(seat) ?? stamp.register ?? '';
 }
 
 /**
@@ -400,13 +398,10 @@ export async function loadFacilitationVoiceContext(
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
 
   // `loadVoiceContext` carries the taxonomy as well, for every path — see there.
-  // The register and the leanings are both read back from the turn's claim.
-  const userId = request.userId ?? '';
-  const [situation, leanings] = await Promise.all([
-    situationFor(seat, userId),
-    leaningsForPrompt(userId, seat),
-  ]);
-  const voice = await loadShadedVoiceContext(situation, leanings);
+  // The register and the leanings are read back from the turn's claim
+  // together, one decision (`promptStampFor` never throws).
+  const stamp = await promptStampFor(request.userId ?? '', seat);
+  const voice = await loadShadedVoiceContext(situationFor(seat, stamp), stamp.leanings);
 
   // Guarded for the reason the overlay read is: a throw from a contributor
   // blanks the WHOLE block, taking the taxonomy with it. A turn without the

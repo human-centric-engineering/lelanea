@@ -135,21 +135,11 @@ vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
 }));
 
 /**
- * The register the facilitator seat's turn was claimed with (t-125). Its reads
- * are `register-store.test.ts`'s; here it is what the block does with one.
+ * The register (t-125) and leanings (t-136) the facilitator seat's turn was
+ * claimed with, read back as one. Their reads are `leanings-store.test.ts`'s
+ * and `register-store.test.ts`'s; here it is what the block does with them.
  */
 const registers = vi.hoisted(() => ({ value: null as 'guiding' | 'teaching' | null }));
-vi.mock('@/lib/app/voice/register-store', () => ({
-  registerForPrompt: vi.fn(async (_userId: string, seat: string) =>
-    seat === 'facilitator' ? registers.value : null
-  ),
-}));
-
-/**
- * The leanings the facilitator seat's turn was claimed with (f-leanings t-136).
- * Their reads and selection are `leanings-store.test.ts`'s and
- * `leanings-select.test.ts`'s; here it is what the block does with a stamp.
- */
 const leanings = vi.hoisted(() => ({
   value: null as {
     applied: { key: 'length' | 'devotion'; stop: -2 | -1 | 1 | 2 }[];
@@ -157,8 +147,10 @@ const leanings = vi.hoisted(() => ({
   } | null,
 }));
 vi.mock('@/lib/app/voice/leanings-store', () => ({
-  leaningsForPrompt: vi.fn(async (_userId: string, seat: string) =>
-    seat === 'facilitator' ? leanings.value : null
+  promptStampFor: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator'
+      ? { register: registers.value, leanings: leanings.value }
+      : { register: null, leanings: null }
   ),
 }));
 

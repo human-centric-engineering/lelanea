@@ -134,12 +134,17 @@ const leanings = vi.hoisted(() => ({
     held: 'warmth'[];
   } | null,
 }));
-const { resolveLeanings } = vi.hoisted(() => ({
-  resolveLeanings: vi.fn(async (_userId: string, seat: string, _source: string | null) =>
-    seat === 'facilitator' ? leanings.next : null
+const { readLeaningInputs, leaningsFrom } = vi.hoisted(() => ({
+  // The inputs carry the stamp the case wants selected; `leaningsFrom` is
+  // where the register's source is handed over, so the case can see it.
+  readLeaningInputs: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator' ? { selects: leanings.next } : null
+  ),
+  leaningsFrom: vi.fn((inputs: { selects: unknown } | null, _source: string | null) =>
+    inputs === null ? null : inputs.selects
   ),
 }));
-vi.mock('@/lib/app/voice/leanings-store', () => ({ resolveLeanings }));
+vi.mock('@/lib/app/voice/leanings-store', () => ({ readLeaningInputs, leaningsFrom }));
 const { invalidate } = vi.hoisted(() => ({ invalidate: vi.fn() }));
 vi.mock('@/lib/orchestration/chat/context-builder', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/orchestration/chat/context-builder')>()),
@@ -1243,7 +1248,7 @@ describe('the edges of a claim', () => {
 
     const claim = await claimTurn(
       request,
-      { fingerprintVersion: '1.0', register: null },
+      { fingerprintVersion: '1.0', register: null, leanings: null },
       staleClaimMs(60_000)
     );
 
@@ -1264,7 +1269,7 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        { fingerprintVersion: null, register: null },
+        { fingerprintVersion: null, register: null, leanings: null },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);
@@ -1721,7 +1726,8 @@ describe('the leanings a turn applies (f-leanings t-136)', () => {
   it('decides them against the register’s source, stamps the claim, and carries them on done', async () => {
     const events = await take(facilitator());
 
-    expect(resolveLeanings).toHaveBeenCalledWith('user-1', 'facilitator', 'safety');
+    expect(readLeaningInputs).toHaveBeenCalledWith('user-1', 'facilitator');
+    expect(leaningsFrom).toHaveBeenCalledWith(expect.anything(), 'safety');
     expect(db.turns[0]).toMatchObject({
       register: 'guiding',
       leanings: { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] },

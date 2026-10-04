@@ -440,6 +440,14 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     ).toEqual(['Set aside your leaning toward direct, and further, challenging for now.']);
   });
 
+  it('does not say a pole that is never held was set aside', () => {
+    expect(
+      leaningsSentences(
+        turn({ registerSource: 'safety', leanings: { applied: [], held: ['questions'] } })
+      )
+    ).toEqual([]);
+  });
+
   it('says nothing for a turn that applied and held nothing, had no stamp, or no turn', () => {
     expect(leaningsSentences(turn({ leanings: { applied: [], held: [] } }))).toEqual([]);
     expect(leaningsSentences(turn())).toEqual([]);

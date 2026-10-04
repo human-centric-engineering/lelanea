@@ -791,14 +791,18 @@ loosen it.
 whose register reads a recent crisis, so the hold always has its input. The
 onboarding seat and the admin chat carry none.
 
-**Decided once, at the claim.** `runGeneratedTurn` calls `resolveLeanings`
-after `resolveRegister` (it needs the register's source) and stamps
-`app_turn.leanings`: `{ applied: [{ key, stop }], held: [key] }`, or SQL NULL
-on a seat with none (migration `20261011100000_app_turn_leanings`). The
-contributor reads it back from the running row (`leaningsForPrompt`), as it
-does the register. A turn claimed with different leanings than the person's
-last drops their cached block, so a dial moved in settings reaches the very
-next reply. A stop whose row has been deleted is not stamped as applied.
+**Decided once, at the claim.** `runGeneratedTurn` reads the person's dials
+(`readLeaningInputs`) beside `resolveRegister`, then selects against the
+register's source (`leaningsFrom`), and stamps `app_turn.leanings`:
+`{ applied: [{ key, stop }], held: [key] }`, or SQL NULL on a seat with none
+(migration `20261011100000_app_turn_leanings`). With every dial at rest the
+overlays are not read. The contributor reads the register and the leanings
+back from the running row together (`promptStampFor`); with no running row it
+decides both from one reading of the register, so the leanings are always held
+against the register they are composed under. A turn claimed with different
+leanings than the person's last drops their cached block, so a dial moved in
+settings reaches the very next reply. A stop whose row has been deleted is
+neither applied nor reported as set aside.
 
 **Shown to the person.** The `done` frame carries `leanings`, and the replay,
 the transcript read and the client schema all read it, so the account says the

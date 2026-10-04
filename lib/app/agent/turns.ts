@@ -103,7 +103,7 @@ import {
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
 import { parseRegister, parseRegisterSource } from '@/lib/app/voice/register';
-import { resolveLeanings } from '@/lib/app/voice/leanings-store';
+import { leaningsFrom, readLeaningInputs } from '@/lib/app/voice/leanings-store';
 import {
   parseLeaningsStamp,
   sameLeanings,
@@ -480,14 +480,15 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, last] = await Promise.all([
+  const [deadlines, fingerprintVersion, register, last, leaningInputs] = await Promise.all([
     getAgentDeadlines(),
     readAgentFingerprintVersion(turn.agentSlug),
     resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
     readLastStamp(turn.userId, turn.role),
+    readLeaningInputs(turn.userId, turn.role),
   ]);
-  // After the register: under a crisis hold the harder poles are held at rest.
-  const leanings = await resolveLeanings(turn.userId, turn.role, register?.source ?? null);
+  // Against the register's source: under a crisis hold the harder poles are held at rest.
+  const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
   const claim = await claimTurn(
     {
       userId: turn.userId,

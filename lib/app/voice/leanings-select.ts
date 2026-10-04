@@ -39,7 +39,7 @@
  * Pure, and client-safe: the account under a reply reads the stamp's shape from
  * here.
  *
- * @see lib/app/voice/leanings-store.ts — `resolveLeanings`, `leaningsForPrompt`
+ * @see lib/app/voice/leanings-store.ts — `readLeaningInputs`, `promptStampFor`
  * @see lib/app/voice/context-contributor.ts — where the rows are composed
  * @see .context/app/voice.md — "The person's leanings"
  */
@@ -161,8 +161,8 @@ export interface SelectLeaningsInput {
  * - rest applies nothing;
  * - under a `safety` or `fallback` register a {@link HELD_WHEN_HARD} pole is
  *   held, and named in `held`;
- * - a stop with no row applies nothing, and nothing applies with no framing
- *   row.
+ * - a stop with no row applies nothing and is not reported as held, and
+ *   nothing applies with no framing row.
  *
  * Settings order, so the same dials always compose the same block.
  */
@@ -179,14 +179,15 @@ export function selectLeanings(input: SelectLeaningsInput): LeaningsStamp {
     const stop = clampToBounds(dial);
     const side = leaningSide(stop);
     if (side === null) continue;
+    // A stop with no row could never apply, so it is neither applied nor
+    // reported as set aside.
+    const situation = leaningSituation(dimension.key, stop);
+    if (situation === null || !situations.has(situation)) continue;
     if (holding && HELD_WHEN_HARD.get(dimension.key) === side) {
       held.push(dimension.key);
       continue;
     }
-    const situation = leaningSituation(dimension.key, stop);
-    if (situation !== null && situations.has(situation)) {
-      applied.push({ key: dimension.key, stop });
-    }
+    applied.push({ key: dimension.key, stop });
   }
   return { applied, held };
 }
