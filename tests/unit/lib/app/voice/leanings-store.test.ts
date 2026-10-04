@@ -446,6 +446,16 @@ describe('the leanings a turn applies (t-136)', () => {
       });
     });
 
+    it('holds the hard poles when a claimed register’s source cannot be read', async () => {
+      world.running = { register: 'guiding', registerSource: 'whim', leanings: null };
+      world.values = [ours(ME, 'leaning_directness', 1, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'guiding',
+        leanings: { applied: [], held: ['directness'] },
+      });
+    });
+
     it('is nothing on a seat with no register', async () => {
       await expect(promptStampFor(ME, 'onboarding')).resolves.toEqual({
         register: null,

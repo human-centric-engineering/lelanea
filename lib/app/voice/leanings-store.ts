@@ -423,9 +423,11 @@ export async function promptStampFor(userId: string, seat: string): Promise<Prom
     return { register: claimed.register, leanings: claimed.leanings };
   }
   if (claimed.register !== null) {
+    // A source this build cannot read is held against as `fallback`: the
+    // register may have been a crisis hold, so the harder poles stay at rest.
     return {
       register: claimed.register,
-      leanings: await resolveLeanings(userId, seat, claimed.source),
+      leanings: await resolveLeanings(userId, seat, claimed.source ?? 'fallback'),
     };
   }
 

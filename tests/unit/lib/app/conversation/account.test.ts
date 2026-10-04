@@ -422,7 +422,7 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     );
 
     expect(sentences).toEqual([
-      'Leaned the way you set it in your settings: toward secular and plain; strongly toward concise and spare; strongly toward gentle.',
+      'Leaned the way you set it in your settings: toward secular and plain, strongly toward concise and spare, and strongly toward gentle.',
     ]);
   });
 
@@ -430,7 +430,7 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     const leanings = { applied: [], held: ['warmth' as const, 'pace' as const] };
 
     expect(leaningsSentences(turn({ registerSource: 'safety', leanings }))).toEqual([
-      'Set aside your leanings toward cool and analytical; energetic for now, because something hard came up recently.',
+      'Set aside your leanings toward cool and analytical and toward energetic for now, because something hard came up recently.',
     ]);
     // An unread crisis check holds them too, and claims no reason.
     expect(

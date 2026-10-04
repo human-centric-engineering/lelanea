@@ -380,6 +380,12 @@ function towardWords(key: LeaningKey, stop: number): string {
     : `toward ${poleWords(mildPole(label))}`;
 }
 
+/**
+ * A list in a sentence: "a, b, and c". Each item starts with "toward", so an
+ * item's own "and" ("cool and analytical") does not read as the list's.
+ */
+const listOf = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
 /** The pole a held dial was leaning toward, either stop: only a hard pole is ever held. */
 function heldPole(key: LeaningKey): string {
   const dimension = leaningDimension(key);
@@ -399,17 +405,17 @@ export function leaningsSentences(turn: TurnAccount | null): string[] {
   if (!leanings) return [];
   const sentences: string[] = [];
   if (leanings.applied.length > 0) {
-    const toward = leanings.applied.map(({ key, stop }) => towardWords(key, stop)).join('; ');
+    const toward = listOf.format(leanings.applied.map(({ key, stop }) => towardWords(key, stop)));
     sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
   }
   // Only a hard pole is ever held. A stamp naming another key (an old row, or a
   // hold list changed since) is not said as something set aside.
   const held = leanings.held.filter((key) => HELD_WHEN_HARD.has(key));
   if (held.length > 0) {
-    const poles = held.map(heldPole).join('; ');
+    const poles = listOf.format(held.map((key) => `toward ${heldPole(key)}`));
     const why = turn.registerSource === 'safety' ? ', because something hard came up recently' : '';
     const noun = held.length === 1 ? 'leaning' : 'leanings';
-    sentences.push(`Set aside your ${noun} toward ${poles} for now${why}.`);
+    sentences.push(`Set aside your ${noun} ${poles} for now${why}.`);
   }
   return sentences;
 }
