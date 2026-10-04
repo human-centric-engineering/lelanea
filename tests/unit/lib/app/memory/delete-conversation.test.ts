@@ -46,6 +46,10 @@ const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
 }));
 // The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
 // its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
 vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
 
 vi.mock('@/lib/db/client', async () => ({
@@ -163,6 +167,8 @@ describe('forgetDeletedConversations', () => {
     expect(result).toEqual({ turns: 2, versions: 2, deferred: 0, failed: 0 });
     expect(world.turns.map((row) => row.id).sort()).toEqual(['turn-b', 'turn-x']);
     expect(world.ledger.map((row) => row.turnId).sort()).toEqual(['turn-b', 'turn-x']);
+    // A memory search in another conversation may hold a copy of its words (t-130).
+    expect(clearStoredSearchResults).toHaveBeenCalledWith(expect.anything(), { userId: ME });
   });
 
   it('makes placeholders of only the versions its turns wrote', async () => {

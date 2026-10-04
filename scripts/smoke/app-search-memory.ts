@@ -59,6 +59,7 @@ import {
 } from '@/lib/app/memory/memory-index';
 import { deleteNote } from '@/lib/app/slots/delete-note';
 import { SEARCH_PERSON_MEMORY_SLUG } from '@/lib/app/memory/search-capability';
+import { CLEARED_SEARCH_RESULT } from '@/lib/app/memory/stored-results';
 
 const PREFIX = 'smoke-app-search-memory';
 const stamp = Date.now();
@@ -233,9 +234,32 @@ async function main(): Promise<void> {
       'labelled as the person’s own words, with the date they said them'
     );
 
+    // Stored as the chat handler stores a tool result, in the turn answering now:
+    // a copy of the father sentence that the deletion below never touches.
+    const stored = await prisma.aiMessage.create({
+      data: {
+        conversationId: mine.id,
+        role: 'tool',
+        content: before.toolMessage,
+        capabilitySlug: SEARCH_PERSON_MEMORY_SLUG,
+        toolCallId: `${PREFIX}-${stamp}-call`,
+        metadata: { result: before.toolMessage },
+        createdAt: at(22),
+      },
+    });
+    check(
+      stored.content.includes(MY_FATHER),
+      'the stored search result quotes the father sentence'
+    );
+
     console.log('\n3. Delete the father exchange');
     const deleted = await deleteExchanges({ userId: me.id, exchangeIds: [fatherTurn.id] });
     check(deleted.exchanges === 1, 'one exchange deleted');
+    const cleared = await prisma.aiMessage.findUniqueOrThrow({ where: { id: stored.id } });
+    check(
+      cleared.content === CLEARED_SEARCH_RESULT && !JSON.stringify(cleared).includes(MY_FATHER),
+      'the stored search result that quoted it is cleared, and kept as a row'
+    );
     const after = await ask(QUERY, nowTurn.turnId);
     check(after.result.success, 'the search still runs');
     check(

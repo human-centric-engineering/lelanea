@@ -45,6 +45,10 @@ const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
 }));
 // The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
 // its notes' vectors inside its own transaction, and a write queues one (t-107).
+const { clearStoredSearchResults } = vi.hoisted(() => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
 vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
 
 vi.mock('@/lib/db/client', async () => ({

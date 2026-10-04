@@ -51,6 +51,8 @@
  * The note's vectors in the memory index (t-107), in the same transaction as
  * the wipe: a placeholder is rewritten in place, so no foreign key cascade
  * would take them, and a search must never find a removed note by meaning.
+ * And every memory search result stored in the person's conversations, which
+ * may quote the note (`stored-results.ts`).
  *
  * The person's cached context blocks — the facilitation block on every seat
  * they can talk to, and every module's block — so the next turn reads the
@@ -65,6 +67,7 @@
 import { executeTransaction } from '@/lib/db/utils';
 import { NotFoundError } from '@/lib/api/errors';
 import { forgetWipedNotes } from '@/lib/app/memory/memory-index';
+import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 import { readSlotVerdict } from '@/lib/app/slots/notes';
 import {
   NOT_YET_REMOVED,
@@ -130,6 +133,8 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
       });
     }
     await forgetWipedNotes(tx, { userId: input.userId });
+    // A memory search may hold a copy of the note in a conversation (t-130).
+    await clearStoredSearchResults(tx, { userId: input.userId });
     return written.count;
   });
 

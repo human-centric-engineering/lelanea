@@ -56,6 +56,7 @@ import { logger } from '@/lib/logging';
 import { requireOrgId, runAsSystem } from '@/lib/tenancy/context';
 import { stillAnswering } from '@/lib/app/memory/delete-exchange';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
+import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 
 /** What forgetting did. */
 export interface ForgottenConversations {
@@ -174,6 +175,8 @@ export async function forgetDeletedConversations(
             conversationId: { in: [conversationId ?? ''] },
           },
         });
+        // A memory search in another conversation may hold a copy of its words (t-130).
+        await clearStoredSearchResults(tx, { userId });
         return { turns: deleted.count, versions };
       });
       result.turns += done.turns;

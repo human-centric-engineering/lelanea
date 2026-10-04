@@ -94,7 +94,10 @@ or our `app_slot_definition`, the stricter of the two, as the panel reads them).
   masking sentinel, which holds nothing to find. Excluding the slug also covers
   a value stored before the slot was reclassified.
 - **A revision replaces the vector.** `indexNote(subject, slotSlug)` embeds the
-  current head and drops every earlier version's vector.
+  current head and drops the vector of every superseded version, decided at
+  delete time from `supersededAt`. Never from the head the call read before it
+  embedded: a revision landing mid-embed would make that stale, and the slower
+  call would delete the newer version's vector.
 - **On write:** `fill_slot` (`capture.ts`), a correction (`correctNote`) and a
   discovery answer (`discovery-store.ts`) each call `queueNoteIndex()`, off the
   write's path.
@@ -143,6 +146,17 @@ answered and its block is cached for 60 seconds.
 - **The audit row keeps a count**, never the query or the words.
 - **The account under the reply** says "Looked back at what you’ve said
   before" (`account.ts`).
+
+**What a search leaves behind is cleared on deletion.** Sunrise stores every
+tool result as a `role: 'tool'` message and replays it on later turns, so a
+search leaves a copy of what it found in the conversation it ran in.
+Removing a note, deleting an exchange and forgetting a deleted conversation
+each call `clearStoredSearchResults(tx, …)` (`stored-results.ts`) in their own
+transaction: every stored `search_person_memory` result in the person's
+conversations is overwritten with `CLEARED_SEARCH_RESULT`, its metadata
+emptied. The row is kept, because a tool call with no result is refused by the
+providers on replay. All of them, not only those that quoted what went:
+matching on the deleted words could miss one. The AI can search again.
 
 **Crisis turns.** A hard-tier turn never reaches the chat handler
 (`turns.ts`), so the person's message is never stored and never indexed. A
