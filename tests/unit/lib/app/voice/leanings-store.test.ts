@@ -57,15 +57,6 @@ vi.mock('@/lib/db/client', () => ({
             )
             .sort((a, b) => a.slotSlug.localeCompare(b.slotSlug) || b.version - a.version)
       ),
-      findFirst: vi.fn(
-        async ({ where }: { where: { userId: string; slotSlug: string } }) =>
-          world.values.find(
-            (row) =>
-              row.userId === where.userId &&
-              row.slotSlug === where.slotSlug &&
-              row.supersededAt === null
-          ) ?? null
-      ),
     },
   },
 }));
@@ -239,6 +230,18 @@ describe('writing', () => {
 
     expect(again).toMatchObject({ outcome: 'unchanged', version: 1 });
     expect(appendSlotValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the version it read, not a newer head somebody else wrote', async () => {
+    world.values = [
+      { ...ours(ME, 'leaning_length', 1, 1), supersededAt: new Date() },
+      { ...ours(ME, 'leaning_length', -2, 2), reasoningNote: 'They seem to like long answers.' },
+    ];
+
+    const again = await setLeaning({ userId: ME, key: 'length', stop: 1, via: 'settings' });
+
+    expect(again).toMatchObject({ outcome: 'unchanged', version: 1 });
+    expect(appendSlotValue).not.toHaveBeenCalled();
   });
 
   it('writes nothing for rest when nothing was ever set', async () => {

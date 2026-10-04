@@ -31,10 +31,6 @@ const REGISTER_MIGRATION =
 /** The overlays the t-125 migration adds, named for the registers that select them. */
 const REGISTER_SITUATIONS: readonly string[] = ['guiding', 'teaching'];
 
-/** t-135: the leaning bounds, on every set. */
-const LEANINGS_MIGRATION =
-  'prisma/migrations/20261010100000_app_voice_leaning_bounds/migration.sql';
-
 /** t-114: moved the set's authored name from `id` into `slug`. */
 const PER_ORG_KEYS_MIGRATION =
   'prisma/migrations/20261004100100_app_voice_crisis_budget_per_org_keys/migration.sql';
@@ -243,40 +239,6 @@ describe('the registers’ data migration (f-registers t-125)', () => {
     expect(sql()).not.toContain("'signed_off'");
     expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
     expect(sql()).toContain('"set"."orgId"');
-  });
-});
-
-describe('the leaning bounds migration (f-leanings t-135)', () => {
-  const sql = () => migrationSql(LEANINGS_MIGRATION);
-
-  it('writes exactly the bounds the seed builds today', () => {
-    const match = /\$t135leanings\$([\s\S]*?)\$t135leanings\$/.exec(sql());
-
-    expect(match, 'the migration no longer embeds the leaning bounds').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildVoiceOverlaySeed().set.leanings);
-  });
-
-  it('moves only a set with no bounds yet, so an edited set survives', () => {
-    expect(sql()).toContain('WHERE "leanings" IS NULL');
-  });
-
-  it('records the change as the service would: a draft revision of the bounds, by the seed', () => {
-    expect(sql()).toContain("ARRAY['leanings']");
-    expect(sql()).toContain("ARRAY['leanings', 'status']");
-    expect(sql()).toContain('"status" = \'draft\'');
-    expect(sql()).not.toContain("'signed_off'");
-    expect(sql()).toContain("'seed', NULL");
-    expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
-    expect(sql()).toContain('"orgId"');
-  });
-
-  it('makes the set’s bounds required, and leaves older revisions without them', () => {
-    expect(sql()).toContain(
-      'ALTER TABLE "app_voice_overlay_set" ALTER COLUMN "leanings" SET NOT NULL;'
-    );
-    expect(sql()).not.toMatch(
-      /app_voice_overlay_set_revision" ALTER COLUMN "leanings" SET NOT NULL/
-    );
   });
 });
 

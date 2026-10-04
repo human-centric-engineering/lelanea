@@ -138,7 +138,9 @@ function dialBounds(bounds: LeaningBounds | null, key: LeaningKey): LeaningDialB
  * `getSlotHeads`, because the head may be a version somebody else wrote (see
  * the file header) — the same direct read `lib/app/slots/notes.ts` makes.
  */
-async function readStoredStops(userId: string): Promise<Map<LeaningKey, LeaningStop>> {
+async function readStoredStops(
+  userId: string
+): Promise<Map<LeaningKey, { stop: LeaningStop; version: number }>> {
   const rows = await prisma.slotValue.findMany({
     where: {
       userId,
@@ -154,11 +156,11 @@ async function readStoredStops(userId: string): Promise<Map<LeaningKey, LeaningS
     orderBy: [{ slotSlug: 'asc' }, { version: 'desc' }],
   });
 
-  const stops = new Map<LeaningKey, LeaningStop>();
+  const stops = new Map<LeaningKey, { stop: LeaningStop; version: number }>();
   for (const row of rows) {
     const key = leaningKeyOfSlug(row.slotSlug);
     if (!key || stops.has(key)) continue;
-    if (isOurLeaningVersion(row)) stops.set(key, row.valueJson);
+    if (isOurLeaningVersion(row)) stops.set(key, { stop: row.valueJson, version: row.version });
   }
   return stops;
 }
@@ -170,7 +172,7 @@ export async function getLeanings(userId: string): Promise<LeaningsView> {
     configured: bounds !== null,
     dials: LEANING_DIMENSIONS.map((dimension) => {
       const limits = dialBounds(bounds, dimension.key);
-      const stop = stored.get(dimension.key) ?? LEANING_REST;
+      const stop = stored.get(dimension.key)?.stop ?? LEANING_REST;
       return {
         key: dimension.key,
         left: dimension.left,
@@ -238,9 +240,11 @@ export async function setLeaning(input: SetLeaningInput): Promise<SetLeaningResu
     suggest: limits.suggest,
   });
 
-  const before = await readStoredStops(input.userId);
-  if ((before.get(input.key) ?? LEANING_REST) === stop) {
-    return { outcome: 'unchanged', dial: view(stop), version: await currentVersion(input) };
+  // The version reported is the one this reading took, never the head: the
+  // head may be a version somebody else wrote, which the reader ignores.
+  const before = (await readStoredStops(input.userId)).get(input.key);
+  if ((before?.stop ?? LEANING_REST) === stop) {
+    return { outcome: 'unchanged', dial: view(stop), version: before?.version ?? null };
   }
 
   const written = await appendOnce({
@@ -254,14 +258,6 @@ export async function setLeaning(input: SetLeaningInput): Promise<SetLeaningResu
     provenance: input.provenance ?? {},
   });
   return { outcome: 'written', dial: view(stop), version: written.version };
-}
-
-async function currentVersion(input: SetLeaningInput): Promise<number | null> {
-  const head = await prisma.slotValue.findFirst({
-    where: { userId: input.userId, slotSlug: leaningSlotSlug(input.key), supersededAt: null },
-    select: { version: true },
-  });
-  return head?.version ?? null;
 }
 
 /**
