@@ -263,11 +263,22 @@ export function registerLeafDriftProbes(): void {
     probe: constraintExists('app_memory_embedding_messageId_fkey', 'ON DELETE CASCADE'),
   });
   registerAppDriftProbe({
-    // A `message` row without its id would have no cascade to follow it.
+    // f-memory t-107. Deleting a version outright (erasure's cascade to slot
+    // values) takes its vector. Wiping one in place does not fire it; that is
+    // `forgetWipedNotes`, in the wipe's own transaction.
+    name: 'app_memory_embedding_slotValueId_fkey (hand-written FK → the slot value table)',
+    kind: 'FK constraint',
+    table: 'app_memory_embedding',
+    probe: constraintExists('app_memory_embedding_slotValueId_fkey', 'ON DELETE CASCADE'),
+  });
+  registerAppDriftProbe({
+    // A row without its source's id would have no cascade to follow it. Probed
+    // on the note half, which only t-107's widened CHECK has, so the t-129
+    // CHECK it replaced does not pass for it.
     name: 'app_memory_embedding_source_check (every row names its source)',
     kind: 'CHECK constraint',
     table: 'app_memory_embedding',
-    probe: constraintExists('app_memory_embedding_source_check', '"messageId" IS NOT NULL'),
+    probe: constraintExists('app_memory_embedding_source_check', '"slotValueId" IS NOT NULL'),
   });
   registerAppDriftProbe({
     // Without it a search still answers, by a sequential scan over every vector.

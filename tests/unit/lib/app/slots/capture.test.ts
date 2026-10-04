@@ -90,6 +90,8 @@ const prismaFake = {
   },
 };
 
+const { queueNoteIndex } = vi.hoisted(() => ({ queueNoteIndex: vi.fn() }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ queueNoteIndex }));
 vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -277,6 +279,14 @@ describe('a turn that writes a slot', () => {
     ]);
   });
 
+  it('queues the note for the memory index, under the turn, so a revision replaces its vector (t-107)', async () => {
+    await new GuardedFillSlotCapability().execute(ARGS, context());
+
+    expect(queueNoteIndex).toHaveBeenCalledWith({ userId: USER }, 'primary_goal', {
+      turnId: TURN,
+    });
+  });
+
   it('records a mint as a mint, so a suppressed retry answers with the same shape', async () => {
     framework.mockResolvedValue(wroteSilently(1, true));
     const capability = new GuardedFillSlotCapability();
@@ -404,6 +414,8 @@ describe('a dispatch the guard cannot place', () => {
     // and refusing would break every path the turn seam never reaches.
     expect(framework).toHaveBeenCalledTimes(2);
     expect(world.slotWrites).toHaveLength(0);
+    // Still indexed: the note was written, whether or not a turn guarded it (t-107).
+    expect(queueNoteIndex).toHaveBeenCalledWith({ userId: USER }, 'primary_goal', {});
   });
 
   it('runs unguarded when the turn id matches no turn record', async () => {
@@ -428,6 +440,7 @@ describe('when the framework refuses or fails', () => {
 
     expect(result).toMatchObject({ success: false });
     expect(world.slotWrites).toHaveLength(0);
+    expect(queueNoteIndex).not.toHaveBeenCalled();
   });
 
   it('lets a refusal through unchanged rather than dressing it as a success', async () => {

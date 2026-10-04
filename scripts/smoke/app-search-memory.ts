@@ -20,6 +20,11 @@
  *      as theirs with a date, and never the other person's.
  *   3. Delete the father exchange (t-127's `deleteExchanges`). The same search
  *      no longer returns it, and the garden sentence is still found by meaning.
+ *   4. Notes (t-107). Each person has a note about their father, and the other's
+ *      is again the closer match; the search returns the caller's, labelled as
+ *      a note. Revising it replaces its vector. A hidden slot is never embedded.
+ *      Then three ways a note goes, each leaving a sibling's vector: removing
+ *      it, deleting the exchange that wrote it, and erasing the person.
  *
  * "Into the prompt" is read as the chat handler builds it: the tool message's
  * content is `JSON.stringify` of the dispatch result (`streaming-handler.ts`).
@@ -43,8 +48,16 @@ import { registerBuiltInCapabilities } from '@/lib/orchestration/capabilities/re
 import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/agents/surface';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
+import { appendSlotValue } from '@/lib/framework/data-slots';
+import { eraseUser } from '@/lib/privacy/erase-user';
 import { deleteExchanges } from '@/lib/app/memory/delete-exchange';
-import { indexMessage, searchMemory } from '@/lib/app/memory/memory-index';
+import {
+  indexMessage,
+  indexNote,
+  listMemoryEntriesForSubject,
+  searchMemory,
+} from '@/lib/app/memory/memory-index';
+import { deleteNote } from '@/lib/app/slots/delete-note';
 import { SEARCH_PERSON_MEMORY_SLUG } from '@/lib/app/memory/search-capability';
 
 const PREFIX = 'smoke-app-search-memory';
@@ -235,6 +248,132 @@ async function main(): Promise<void> {
     );
     const kept = await ask('vegetables I grow', nowTurn.turnId);
     check(kept.toolMessage.includes(MY_GARDEN), 'a kept phrase is still found by meaning');
+
+    console.log('\n4. Notes');
+    const FAMILY = 'life_family';
+    const WORK = 'life_work';
+    const HIDDEN = 'development_stage';
+    const note = (userId: string, slotSlug: string, value: string) =>
+      appendSlotValue({
+        userId,
+        slotSlug,
+        value,
+        valueJson: value,
+        confidence: 8,
+        sourceType: 'direct',
+        reasoningNote: `SMOKE REASONING, never embedded: ${value}`,
+        provenance: { conversationId: mine.id },
+      });
+    const vectors = async (userId: string) =>
+      (await listMemoryEntriesForSubject({ userId }))
+        .map((entry) => entry.slotValueId)
+        .filter((id): id is string => id !== null);
+    const idOf = async (userId: string, slotSlug: string) =>
+      (
+        await prisma.slotValue.findFirstOrThrow({
+          where: { userId, slotSlug, supersededAt: null },
+          select: { id: true },
+        })
+      ).id;
+
+    await note(me.id, FAMILY, 'Their father taught them to sail; he has been unwell since spring.');
+    await note(me.id, WORK, 'Started a demanding new job at the hospital this year.');
+    await note(me.id, HIDDEN, 'Reads as early in the work; a tuning signal, never shown.');
+    await note(them.id, FAMILY, 'Misses their dad terribly; they used to sail together.');
+    for (const [userId, slug] of [
+      [me.id, FAMILY],
+      [me.id, WORK],
+      [me.id, HIDDEN],
+      [them.id, FAMILY],
+    ] as const) {
+      await indexNote({ userId }, slug);
+    }
+    const familyV1 = await idOf(me.id, FAMILY);
+    const work = await idOf(me.id, WORK);
+    check(
+      (await vectors(me.id)).sort().join() === [familyV1, work].sort().join(),
+      'their two open notes are embedded, and the hidden one is not'
+    );
+
+    const notes = await ask('my dad', nowTurn.turnId);
+    check(
+      notes.toolMessage.includes('he has been unwell since spring'),
+      'their own note reaches the prompt'
+    );
+    check(
+      !notes.toolMessage.includes('Misses their dad terribly'),
+      'the other person’s nearer note never does'
+    );
+    check(!notes.toolMessage.includes('SMOKE REASONING'), 'no reasoning note reaches it');
+    check(!notes.toolMessage.includes('tuning signal'), 'nor the hidden note');
+    check(
+      notes.toolMessage.includes('A note kept about the person') &&
+        notes.toolMessage.includes('"kind":"note"'),
+      'labelled as a note, not as their words'
+    );
+
+    await note(me.id, FAMILY, 'Their father is home again and recovering well.');
+    await indexNote({ userId: me.id }, FAMILY);
+    const familyV2 = await idOf(me.id, FAMILY);
+    check(
+      (await vectors(me.id)).sort().join() === [familyV2, work].sort().join(),
+      'a revision replaces the old version’s vector, and leaves the sibling’s'
+    );
+
+    await deleteNote({ userId: me.id, slotSlug: FAMILY });
+    check(
+      (await vectors(me.id)).join() === work,
+      'removing the note takes its vector, and the sibling’s stays'
+    );
+    const afterRemoval = await ask('my father recovering at home', nowTurn.turnId);
+    check(
+      !afterRemoval.toolMessage.includes('recovering well'),
+      'a removed note is not found by meaning'
+    );
+
+    // A note a turn wrote, deleted with its exchange.
+    const said = await say(
+      mine.id,
+      'user',
+      'I have started running in the mornings before work.',
+      30
+    );
+    const saidReply = await say(mine.id, 'assistant', 'That sounds like a good start.', 31);
+    const runTurn = await turn(me.id, mine.id, 'run', said.id, saidReply.id);
+    const written = await note(
+      me.id,
+      'aspirations',
+      'Wants to keep running every morning before work.'
+    );
+    await prisma.appTurnSlotWrite.create({
+      data: {
+        turnId: runTurn.id,
+        slotSlug: 'aspirations',
+        version: written.version,
+        minted: false,
+      },
+    });
+    await indexNote({ userId: me.id }, 'aspirations');
+    check((await vectors(me.id)).length === 2, 'the turn’s note is embedded beside the sibling');
+    await deleteExchanges({ userId: me.id, exchangeIds: [runTurn.id] });
+    check(
+      (await vectors(me.id)).join() === work,
+      'deleting the exchange that wrote it takes its vector, and the sibling’s stays'
+    );
+
+    const theirFamily = await idOf(them.id, FAMILY);
+    check(
+      (await vectors(them.id)).join() === theirFamily,
+      'the other person’s note is still embedded'
+    );
+    await eraseUser({
+      userId: them.id,
+      userEmail: them.email,
+      actorUserId: them.id,
+      reason: 'self_service',
+    });
+    check((await vectors(them.id)).length === 0, 'erasing them takes their note’s vector');
+    check((await vectors(me.id)).join() === work, 'and leaves everyone else’s');
 
     console.log('\n✓ smoke:app-search-memory passed');
   } finally {

@@ -40,6 +40,14 @@ const { invalidateContext, logError, logWarn } = vi.hoisted(() => ({
   logWarn: vi.fn(),
 }));
 
+const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
+  forgetWipedNotes: vi.fn(async () => 0),
+  queueNoteIndex: vi.fn(),
+}));
+// The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
+// its notes' vectors inside its own transaction, and a write queues one (t-107).
+vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
 }));

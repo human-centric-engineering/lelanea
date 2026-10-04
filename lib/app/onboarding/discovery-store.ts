@@ -13,7 +13,8 @@
  *   layout's `ensureJourneyStarted` starts the journey on the next entry.
  *   Answers need no journey.
  * - **A written answer** also drops the cached block that carries the person's
- *   answers into a turn (`answers-context.ts`, t-105).
+ *   answers into a turn (`answers-context.ts`, t-105), and is queued for the
+ *   memory index, so the AI can find it by meaning (f-memory t-107).
  */
 
 import {
@@ -34,6 +35,7 @@ import {
   type DiscoveryAnswer,
   type DiscoveryPosition,
 } from '@/lib/app/onboarding/discovery';
+import { queueNoteIndex } from '@/lib/app/memory/memory-index';
 import {
   getDiscoverySet,
   type DiscoveryQuestionToAsk,
@@ -173,6 +175,7 @@ export async function answerDiscoveryQuestion(
     return answerDiscoveryQuestion(userId, set, question, answer, true);
   }
   forgetCachedAnswers(userId);
+  queueNoteIndex({ userId }, question.slotSlug);
   await markDiscoveryStarted(userId, { action: 'answer', questionId: question.id });
   return { outcome: 'written', version: written.version };
 }

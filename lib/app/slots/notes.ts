@@ -103,6 +103,7 @@ import { getSlotDefinition } from '@/lib/framework/data-slots/queries';
 import { redactedString } from '@/lib/security/redact';
 import type { Note, NoteHistory, NotesView } from '@/lib/app/slots/notes-view';
 import { queryNotes, type NotesQuery } from '@/lib/app/slots/notes-query';
+import { queueNoteIndex } from '@/lib/app/memory/memory-index';
 import { isRemoved } from '@/lib/app/slots/removed';
 import { NOT_YET_REMOVED } from '@/lib/app/slots/wipe';
 
@@ -472,6 +473,8 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     // framework's own type does not declare.
     provenance: {},
   });
+  // The correction is the note's new head; its vector replaces the old one's.
+  queueNoteIndex({ userId: input.userId }, written.slotSlug);
 
   return { slotSlug: written.slotSlug, version: written.version };
 }

@@ -629,32 +629,41 @@ model AppTurnSlotWrite {
 
 /// What a memory embedding was made from (f-memory t-129). One value per
 /// source kind, each with its own cascading foreign key column on the row:
-/// `message` (a person's own message, `messageId`) today; notes join in t-107.
+/// `message` (a person's own message, `messageId`, t-129) and `note` (the head
+/// version of one of their notes, `slotValueId`, t-107).
 enum AppMemorySourceKind {
   message
+  note
 
   @@map("app_memory_source_kind")
 }
 
-/// One thing a person said, embedded so it can be found again by meaning, for
-/// that person only (f-memory t-129; product description §5, §3.19).
+/// One thing a person said, or one note the app keeps about them, embedded so
+/// it can be found again by meaning, for that person only (f-memory t-129,
+/// t-107; product description §5, §3.19).
 ///
 /// **A leaf stand-in for daybreak#287** (owner ruling 1, 3 Oct 2026). Only
 /// `lib/app/memory/memory-index.ts` reads or writes this table
 /// (`tests/unit/lib/app/memory/index-boundary.test.ts`), so swapping it for
 /// Daybreak's index is a change to one module.
 ///
-/// **Holds no words.** The text stays in its source (`ai_message.content`) and
-/// a search reads it from there. A copy here would be a second copy of the
+/// **Holds no words.** The text stays in its source (`ai_message.content`,
+/// `framework_slot_value.value`) and a search reads it from there. A copy here would be a second copy of the
 /// conversation with its own deletion story.
 ///
-/// **An embedding goes with its source** (owner ruling 2, at claim). Three
-/// hand-written FKs, all `ON DELETE CASCADE`, none modelled by Prisma: a fork
+/// **An embedding goes with its source** (owner ruling 2, at claim).
+/// Hand-written FKs, all `ON DELETE CASCADE`, none modelled by Prisma: a fork
 /// table must not add a reverse field to a Sunrise model (CUSTOMIZATION.md §5).
 /// They are `userId` → `user` (erasure), `messageId` → `ai_message` (deleting a
-/// message, an exchange or a conversation), and the org relation below. The
+/// message, an exchange or a conversation), `slotValueId` →
+/// `framework_slot_value` (t-107), and the org relation below. The
 /// migration's CHECK ties `sourceKind` to its column. Each is pinned by a drift
 /// probe in `lib/app/leaf-db-drift.ts`, as is the hand-written HNSW index.
+///
+/// **A note's vector is not always taken by a cascade.** Removing a note and
+/// deleting the exchange that wrote it rewrite versions in place rather than
+/// deleting them (`lib/app/slots/wipe.ts`), so each drops the vectors of the
+/// versions it wipes, in the same transaction (`forgetWipedNotes`).
 model AppMemoryEmbedding {
   id                 String                      @id @default(cuid())
   /// Hand-written FK → `user`, `ON DELETE CASCADE`. The person the words are
@@ -664,6 +673,10 @@ model AppMemoryEmbedding {
   /// Hand-written FK → `ai_message`, `ON DELETE CASCADE`. Set when
   /// `sourceKind` is `message`; one embedding per message.
   messageId          String?                     @unique
+  /// Hand-written FK → `framework_slot_value`, `ON DELETE CASCADE`. Set when
+  /// `sourceKind` is `note`; one embedding per version, and only the head
+  /// version keeps one (t-107).
+  slotValueId        String?                     @unique
   embedding          Unsupported("vector(1536)")
   /// The model that made the vector. A search compares only vectors made by
   /// the model that embedded the query: two models' vectors are not comparable.

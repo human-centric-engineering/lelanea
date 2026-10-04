@@ -43,7 +43,7 @@ export const SEARCH_PERSON_MEMORY_IMPL = {
   functionDefinition: {
     name: 'search_person_memory',
     description:
-      'Search what this person has said to you before, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering what they said would help you meet them now. Each result is their own words, with when they said them. Quote them back only as theirs, never as yours or as Lelañea’s material. If nothing comes back, do not claim to remember.',
+      'Search what this person has said to you before, and the notes kept about them, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering it would help you meet them now. Each result says whether it is their own words or a note, and when. Quote their words back only as theirs, never as yours or as Lelañea’s material. A note is your understanding of them, not something they said. If nothing comes back, do not claim to remember.',
     parameters: {
       type: 'object',
       properties: {
@@ -72,7 +72,7 @@ const unit: SeedUnit = {
         slug: SLUG,
         name: 'Search what the person said before',
         description:
-          'Finds, by meaning, what this person has said in earlier exchanges, so the guide can remember it with them. Reads only their own words; writes nothing.',
+          'Finds, by meaning, what this person has said before and the notes kept about them, so the guide can remember it with them. Reads only their own; writes nothing.',
         category: 'app',
         rateLimit: 20,
         isActive: true,

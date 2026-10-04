@@ -25,6 +25,7 @@ import { MODULE_CONTEXT_TYPE } from '@/lib/framework/modules/context';
 import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
 import { READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
+import { forgetWipedNotes } from '@/lib/app/memory/memory-index';
 import {
   REMOVED_CONFIDENCE,
   REMOVED_REASONING,
@@ -118,6 +119,10 @@ export interface TurnWrite {
  * those: earlier and later readings came from other exchanges and stay (owner
  * ruling, 3 Oct 2026). Returns how many versions were wiped.
  *
+ * The vectors of the versions it wipes go in the same transaction
+ * ({@link forgetWipedNotes}, t-107): a placeholder is rewritten in place, so no
+ * foreign key cascade would take them.
+ *
  * A heading the AI coined moves to an opaque slug only once **no** version
  * under it is left unwiped. While another exchange's reading is still filed
  * there, the heading is what that reading is filed under, and renaming part of
@@ -165,5 +170,6 @@ export async function wipeTurnWrites(
       }
     }
   }
+  if (versions > 0) await forgetWipedNotes(tx, { userId: input.userId });
   return versions;
 }

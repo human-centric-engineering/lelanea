@@ -1,13 +1,17 @@
 # The memory index
 
-What a person says, embedded so a conversation now can find what they said
-months ago by meaning, for that person only (f-memory t-129; product
-description §5, §3.19, §12 "Deletion is real").
+What a person says, and the notes the app keeps about them, embedded so a
+conversation now can find what they said months ago by meaning, for that person
+only (f-memory t-129, t-107; product description §5, §3.19, §12 "Deletion is
+real"). The AI reaches it through one tool, `search_person_memory` (t-130).
 
-**The code:** `lib/app/memory/memory-index.ts`. **The table:**
-`app_memory_embedding` (`prisma/schema/app.prisma`, migration
-`20261008100000_app_memory_embedding`). **The proof on a real database:**
-`npm run smoke:app-memory-index`.
+**The code:** `lib/app/memory/memory-index.ts` (the index) and
+`lib/app/memory/search-capability.ts` (the tool). **The table:**
+`app_memory_embedding` (`prisma/schema/app.prisma`, migrations
+`20261008100000_app_memory_embedding` and
+`20261009100100_app_memory_note_source`). **The proof on a real database:**
+`npm run smoke:app-memory-index` (the index) and `npm run
+smoke:app-search-memory` (the tool, notes, and each way a note goes).
 
 ## Anti-patterns first
 
@@ -20,20 +24,26 @@ description §5, §3.19, §12 "Deletion is real").
   function takes a `MemorySubject` (`{ userId }`), and the caller fills it from
   its own context: the turn, the session, a capability's execution context.
 - **Never copy words into the table.** A row holds a vector and the id of its
-  source. A search reads the words from `ai_message`, so deleting the message
-  deletes the words everywhere at once.
+  source. A search reads the words from `ai_message` or `framework_slot_value`,
+  so deleting the source deletes the words everywhere at once.
 - **Never add a source kind without its own cascading foreign key.** "An
   embedding goes with its source" (owner ruling 2, journal on `f-memory`) is
-  carried entirely by `ON DELETE CASCADE`: there is no deletion code on any
-  path. A kind whose source is wiped rather than deleted (a note's placeholder,
-  t-107) must call `forgetMemory()` from that wipe as well.
-- **Never apply its migrations with `migrate dev`.** Two FKs, two CHECKs and the
-  HNSW index are hand-written, so the generated SQL drops them (`B13`). Author
+  carried by `ON DELETE CASCADE` wherever a source is deleted.
+- **Never wipe a note version in place without `forgetWipedNotes(tx, …)` in the
+  same transaction.** A placeholder is an update, so no cascade fires.
+  `wipeTurnWrites()` and `deleteNote()` both call it; a third way of wiping a
+  note must too.
+- **Never embed a note's `reasoningNote`.** It is not masked (daybreak#269).
+  Only `value` is read.
+- **Never apply its migrations with `migrate dev`.** Three FKs, two CHECKs and
+  the HNSW index are hand-written, so the generated SQL drops them (`B13`). Author
   with `--create-only`, strip the drops, apply with `npm run db:migrate:deploy`,
   and run `npm run db:drift-check`, which probes each one in
   `lib/app/leaf-db-drift.ts`.
 
 ## What goes in
+
+### What the person said
 
 The person's own messages in a seat conversation (`contextType` =
 `facilitation`), at least `MIN_INDEXED_CHARS` long once trimmed. Replies,
@@ -71,36 +81,92 @@ meter counts it as that turn's `memory` part (`classifyCostRow`,
 `metering.ts`); a backfilled one belongs to no turn and counts only in the
 month.
 
+### The notes kept about them (t-107)
+
+The **head** version of every note the person can see in their own panel (owner
+ruling, 4 Oct 2026, journal on `f-memory`), headings the AI coined included.
+Every note statement carries the same five `QUALIFIES` lines, held equal by a
+unit test: a live head, not a placeholder, at least `MIN_INDEXED_CHARS` long, and not hidden
+or special-category in **either** tier (Daybreak's `framework_slot_definition`
+or our `app_slot_definition`, the stricter of the two, as the panel reads them).
+
+- **A special-category note is never embedded.** Its stored value is the
+  masking sentinel, which holds nothing to find. Excluding the slug also covers
+  a value stored before the slot was reclassified.
+- **A revision replaces the vector.** `indexNote(subject, slotSlug)` embeds the
+  current head and drops every earlier version's vector.
+- **On write:** `fill_slot` (`capture.ts`), a correction (`correctNote`) and a
+  discovery answer (`discovery-store.ts`) each call `queueNoteIndex()`, off the
+  write's path.
+- **By the backfill**, alongside messages: heads with no vector. The same run
+  first drops the vector of any note that stopped qualifying (superseded,
+  hidden since, or wiped in a race with its own embedding).
+
 ## Who can find it
 
-`searchMemory(subject, query, { limit, maxDistance? })` returns the person's own
-messages nearest in meaning, with their words. The SQL requires the person on
-the index row **and** on the message's conversation, and the org. It compares
-only vectors made by the model that embedded the query, so after the embedding
-model changes, older messages are unsearchable until re-embedded.
+`searchMemory(subject, query, { limit, maxDistance?, excludeMessageIds?,
+attribution? })` returns the person's own messages and notes nearest in meaning,
+with their words, merged by distance. Each kind's SQL requires the person on
+the index row **and** on its source (the message's conversation, the note
+version), and the org; the note query also carries the `QUALIFIES` lines, so a
+placeholder or a hidden note is never returned even before its vector is
+dropped. It compares only vectors made by the model that embedded the query, so
+after the embedding model changes, older entries are unsearchable until
+re-embedded.
 
 **Known limit:** the HNSW index ranks across everyone, and the person filter
 applies after it, so on a large table a person with few messages can get fewer
 than `limit` hits (pgvector's `ef_search`). Revisit with iterative scans or a
 partial index if a person's search comes back short.
 
-The capability that lets the AI call this is t-130. It decides what reaches a
-prompt, including whether a turn the crisis path answered is ever surfaced.
+### The AI's tool: `search_person_memory` (t-130)
+
+`lib/app/memory/search-capability.ts`, granted to the guide by seed 024 and the
+migration `20261009100000_app_search_person_memory_capability` (the
+[agent page](./agent.md#the-tools-the-guide-holds) has the pattern). A tool and
+not a context contributor, because a contributor never sees the message being
+answered and its block is cached for 60 seconds.
+
+- **Its only argument is the query.** The person is `context.userId`.
+- **Facilitator seat only.** A call from the onboarding seat or from no turn is
+  refused with a message the AI can speak past.
+- **Labelled.** Each result carries `kind` (`their_words` or `note`), `when`
+  (a date in words, UTC) and `whose`, a sentence telling the model how to use
+  it: their words are quoted only as theirs; a note is its understanding of
+  them, never quoted as something they said.
+- **Leaves out the message the turn is answering** (`app_turn.userMessageId`),
+  which is already in front of the AI and would otherwise be the nearest hit.
+- **At most `MEMORY_RESULTS_PER_CALL`, within `MEMORY_MAX_DISTANCE`.** The
+  distance was set on the dev database, where a short query ("my dad") sits
+  well inside it from a sentence on the same subject and an unrelated one
+  sits outside. `npm run smoke:app-search-memory` prints the distances.
+- **The audit row keeps a count**, never the query or the words.
+- **The account under the reply** says "Looked back at what you’ve said
+  before" (`account.ts`).
+
+**Crisis turns.** A hard-tier turn never reaches the chat handler
+(`turns.ts`), so the person's message is never stored and never indexed. A
+soft-tier turn runs normally: its message is stored, stays in the transcript,
+and is indexed like any other.
 
 ## What takes it out
 
-| When                                                                                         | How                                                   |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`       |
-| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them     |
-| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                |
-| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                  |
-| A source stays but its words go (t-107's notes)                                              | `forgetMemory()`, called by whatever wipes the source |
+| When                                                                                         | How                                                         |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`             |
+| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them           |
+| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                      |
+| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                        |
+| A note version is deleted outright (erasure's cascade to slot values)                        | `slotValueId` → `framework_slot_value`, `ON DELETE CASCADE` |
+| A note is removed, or the exchange that wrote it is deleted (`slots.md`)                     | `forgetWipedNotes(tx, …)` in the wipe's own transaction     |
+| A note is revised                                                                            | `indexNote()` drops the earlier version's vector            |
+| A note stops qualifying any other way (hidden since, a race)                                 | the backfill's prune; a search never returns it meanwhile   |
 
 ## Data rights
 
 - **Art. 15:** the `memory` section of the subject-access export lists which of
-  the person's messages are indexed, when, and by which model. Never the vector,
+  the person's messages and note versions are indexed, when, and by which
+  model. Never the vector,
   which means nothing to the person it describes; the words are in their
   conversations section (`lib/app/leaf-data-export.ts`).
 - **Art. 17:** the `userId` cascade. No erasure hook.
@@ -112,7 +178,9 @@ prompt, including whether a turn the crisis path answered is ever surfaced.
 The table is a leaf stand-in for
 [daybreak#287](https://github.com/human-centric-engineering/daybreak/issues/287)
 (owner ruling 1). The module's surface mirrors that ask: `indexMessage` /
-`queueMessageIndex` to add, `searchMemory` to find, `forgetMemory` to remove.
+`indexNote` and their `queue…` forms to add, `searchMemory` to find,
+`forgetMemory` / `forgetWipedNotes` to remove. Notes are data-slot values, a
+Daybreak element, so this is the half Daybreak will most want back.
 When Daybreak's index ships in a release we sync: point those functions at it,
 re-embed (or migrate) what this table holds, drop the table and its migration's
 objects in a new migration, and delete the drift probes, the always-run

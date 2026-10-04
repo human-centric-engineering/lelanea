@@ -1,7 +1,8 @@
 /**
- * The per-person memory index: what a person says, embedded so it can be found
- * again by meaning, for that person only (f-memory t-129; product description
- * §5 "Data storage", §3.19, §12 "Deletion is real").
+ * The per-person memory index: what a person says, and the notes the app keeps
+ * about them, embedded so they can be found again by meaning, for that person
+ * only (f-memory t-129, t-107; product description §5 "Data storage", §3.19,
+ * §12 "Deletion is real").
  *
  * A conversation happening now should be able to surface what the person said
  * eighteen months ago about their father. Nothing they say is embedded by the
@@ -29,18 +30,39 @@
  * ## An embedding goes with its source
  *
  * Owner ruling 2, at claim. The row holds no words, only the vector and the id
- * of the message it came from, with `ON DELETE CASCADE` foreign keys to the
- * message and to the person (`20261008100000_app_memory_embedding`). Deleting
- * a message, an exchange (t-127), a conversation, or the account takes the
- * vector with it, with no code on any of those paths.
+ * of the source it came from, with `ON DELETE CASCADE` foreign keys to the
+ * source and to the person (`20261008100000_app_memory_embedding`,
+ * `20261009100100_app_memory_note_source`). Deleting a message, an exchange
+ * (t-127), a conversation, or the account takes the vector with it, with no
+ * code on any of those paths.
+ *
+ * **A note is the exception, because a note is not deleted.** Removing one
+ * (t-78) and deleting the exchange that wrote it (t-127) overwrite its versions
+ * in place with a placeholder, so no cascade fires. Each calls
+ * {@link forgetWipedNotes} in its own transaction, and every read here takes
+ * live heads only, so a placeholder is never returned even in the instant
+ * between.
  *
  * ## What is embedded
  *
- * The person's own messages in a seat conversation, on write from the turn path
- * (`turns.ts`), off the reply's path as Sunrise embeds replies, and a backfill
- * job for messages stored before (`lib/app/jobs.ts`). A message shorter than
- * {@link MIN_INDEXED_CHARS} is not embedded: "ok", "yes thanks" carry nothing
- * to find again, and a vector of them would come back near any short query.
+ * **What the person said**: their own messages in a seat conversation, on write
+ * from the turn path (`turns.ts`), off the reply's path as Sunrise embeds
+ * replies. A message shorter than {@link MIN_INDEXED_CHARS} is not embedded:
+ * "ok", "yes thanks" carry nothing to find again, and a vector of them would
+ * come back near any short query.
+ *
+ * **The notes kept about them** (t-107): the head version of each note the
+ * person can see in their own panel (owner ruling, 4 Oct 2026, journal on
+ * `f-memory`). Coined headings are included. A slot hidden in either tier
+ * (§12) is not, and neither is a special-category one: its stored value is
+ * the masking sentinel, which holds nothing to find, and leaving the whole
+ * slug out also covers a value stored before the slot was reclassified. Only
+ * the value is embedded, never the reasoning note, which is not masked
+ * (daybreak#269). A revision replaces the previous version's vector.
+ *
+ * Both are embedded on write where the write is ours (the turn, a capture, a
+ * correction, a discovery answer), and a backfill job takes anything missed
+ * and drops vectors whose source stopped qualifying (`lib/app/jobs.ts`).
  *
  * ## What it costs
  *
@@ -51,13 +73,16 @@
  * @see .context/app/memory.md
  */
 
-import type { AppMemoryEmbedding } from '@prisma/client';
+import type { AppMemoryEmbedding, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { embedText, getActiveEmbeddingModelSummary } from '@/lib/orchestration/knowledge/embedder';
 import { requireOrgId } from '@/lib/tenancy/context';
 import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/agents/surface';
+import { SLOT_SENSITIVITY, SLOT_VISIBILITY } from '@/lib/framework/data-slots/vocabulary';
+import { redactedString } from '@/lib/security/redact';
+import { REMOVED_SOURCE_TYPE } from '@/lib/app/slots/removed';
 
 /** Shorter than this, a message is not embedded. See the module header. */
 export const MIN_INDEXED_CHARS = 12;
@@ -86,7 +111,7 @@ export interface MemorySubject {
 export type IndexOutcome = 'indexed' | 'already_indexed' | 'skipped';
 
 /** One thing the person said, found by meaning. */
-export interface MemoryHit {
+export interface MessageHit {
   sourceKind: 'message';
   /** The `ai_message` id. */
   sourceId: string;
@@ -96,6 +121,47 @@ export interface MemoryHit {
   saidAt: Date;
   /** Cosine distance to the query: 0 is identical, 2 is opposite. */
   distance: number;
+}
+
+/** One note the app keeps about the person, found by meaning (t-107). */
+export interface NoteHit {
+  sourceKind: 'note';
+  /** The `framework_slot_value` id of the head version. */
+  sourceId: string;
+  slotSlug: string;
+  /** The note's value, read from the version itself. */
+  text: string;
+  /** When this version was written. */
+  notedAt: Date;
+  distance: number;
+}
+
+export type MemoryHit = MessageHit | NoteHit;
+
+/** What `fill_slot` stores for a special-category capture: the words never land. */
+const MASKED_VALUE = redactedString(SLOT_SENSITIVITY.special_category);
+
+/**
+ * The slugs whose notes the index never takes: hidden or special-category in
+ * EITHER tier (Daybreak's definition, or ours), the stricter answer of the
+ * two, as the notes panel reads them (`ourVerdicts` in `notes.ts`). A slug
+ * with no definition in either tier, a heading the AI coined, is not here.
+ *
+ * Read fresh by every note statement's caller, and bound into the statement as
+ * `v."slotSlug" <> ALL(…)`.
+ */
+async function unsearchableSlugs(): Promise<string[]> {
+  const flagged = {
+    OR: [
+      { visibility: SLOT_VISIBILITY.hidden },
+      { sensitivity: SLOT_SENSITIVITY.special_category },
+    ],
+  };
+  const [framework, ours] = await Promise.all([
+    prisma.slotDefinition.findMany({ where: flagged, select: { slug: true } }),
+    prisma.appSlotDefinition.findMany({ where: flagged, select: { slug: true } }),
+  ]);
+  return [...new Set([...framework, ...ours].map((definition) => definition.slug))];
 }
 
 interface IndexableMessage {
@@ -245,10 +311,167 @@ export function queueMessageIndex(
   });
 }
 
+/**
+ * Embed the head version of one of the person's notes, and drop the vector of
+ * any earlier version of it, so a revision replaces what was there (t-107).
+ *
+ * Takes the slug rather than a version id: every caller has just written the
+ * note, and what should be indexed is whatever the head is by the time this
+ * runs. Two revisions in quick succession therefore index the later one twice
+ * at most, never the earlier one last. The INSERT re-checks the version is
+ * still a qualifying head, so one superseded, hidden or wiped while it was
+ * being embedded stores nothing.
+ *
+ * Only `value` is embedded. The reasoning note is never read here.
+ *
+ * Throws when the embedder does; {@link queueNoteIndex} is the caller that
+ * must not.
+ */
+export async function indexNote(
+  subject: MemorySubject,
+  slotSlug: string,
+  options: IndexOptions = {}
+): Promise<IndexOutcome> {
+  const unsearchable = await unsearchableSlugs();
+  const [head] = await prisma.$queryRaw<Array<{ id: string; value: string }>>`
+    SELECT v.id, v.value
+      FROM framework_slot_value v
+     WHERE v."userId" = ${subject.userId}
+       AND v."slotSlug" = ${slotSlug}
+       -- QUALIFIES: the live head of a note the person can see, with something
+       -- in it to find. The same five lines in every note statement, held equal
+       -- by a unit test, so no two can disagree about which notes count.
+       AND v."supersededAt" IS NULL
+       AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}
+       AND v.value <> ${MASKED_VALUE}
+       AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
+       AND v."slotSlug" <> ALL(${unsearchable}::text[])
+  `;
+  const outcome = head ? await embedNote(subject, head, unsearchable, options) : 'skipped';
+  await forgetEarlierVersions(subject, slotSlug, head?.id ?? null);
+  return outcome;
+}
+
+async function embedNote(
+  subject: MemorySubject,
+  head: { id: string; value: string },
+  unsearchable: string[],
+  options: IndexOptions
+): Promise<IndexOutcome> {
+  const existing = await prisma.appMemoryEmbedding.findFirst({
+    where: { slotValueId: head.id, userId: subject.userId },
+    select: { id: true },
+  });
+  if (existing) return 'already_indexed';
+  const fit = await embeddingFit();
+  if (!fit.ok) return 'skipped';
+
+  const { embedding, model, provider, dimensions } = await embedText(
+    head.value.slice(0, MAX_INDEXED_CHARS),
+    'document',
+    {
+      userId: subject.userId,
+      metadata: {
+        kind: MEMORY_EMBEDDING_COST_KIND,
+        slotValueId: head.id,
+        ...(options.turnId ? { turnId: options.turnId } : {}),
+      },
+    }
+  );
+  if (embedding.length !== MEMORY_EMBEDDING_DIMENSION) {
+    unstorableModels.add(fit.key);
+    logger.warn('Memory index stopped using an embedding model it cannot store', {
+      model,
+      dimension: embedding.length,
+      stores: MEMORY_EMBEDDING_DIMENSION,
+    });
+    return 'skipped';
+  }
+
+  const inserted = await prisma.$executeRaw`
+    INSERT INTO app_memory_embedding (
+      id, "userId", "sourceKind", "slotValueId", embedding,
+      "embeddingModel", "embeddingProvider", "embeddingDimension", "orgId"
+    )
+    SELECT gen_random_uuid()::text, v."userId", 'note'::app_memory_source_kind, v.id, ${toVector(embedding)}::vector,
+           ${model}, ${provider}, ${dimensions}, v."orgId"
+      FROM framework_slot_value v
+     WHERE v.id = ${head.id}
+       AND v."userId" = ${subject.userId}
+       -- QUALIFIES: the live head of a note the person can see, with something
+       -- in it to find. The same five lines in every note statement, held equal
+       -- by a unit test, so no two can disagree about which notes count.
+       AND v."supersededAt" IS NULL
+       AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}
+       AND v.value <> ${MASKED_VALUE}
+       AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
+       AND v."slotSlug" <> ALL(${unsearchable}::text[])
+    ON CONFLICT ("slotValueId") DO NOTHING
+  `;
+  return inserted === 1 ? 'indexed' : 'skipped';
+}
+
+/** Drop the vectors of every version of one note except `keep`, the head. */
+async function forgetEarlierVersions(
+  subject: MemorySubject,
+  slotSlug: string,
+  keep: string | null
+): Promise<number> {
+  return prisma.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING framework_slot_value v
+     WHERE e."slotValueId" = v.id
+       AND e."userId" = ${subject.userId}
+       AND v."userId" = ${subject.userId}
+       AND v."slotSlug" = ${slotSlug}
+       AND (${keep}::text IS NULL OR v.id <> ${keep}::text)
+  `;
+}
+
+/**
+ * Index a note without holding anyone up: the write that changed it has
+ * already answered. A miss is picked up by the backfill.
+ */
+export function queueNoteIndex(
+  subject: MemorySubject,
+  slotSlug: string,
+  options: IndexOptions = {}
+): void {
+  void indexNote(subject, slotSlug, options).catch((err: unknown) => {
+    // No slug: a coined one is the AI's wording of what the person said.
+    logger.warn('Memory index could not embed a note; the backfill will retry it', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
+/** The client a transaction hands its callback, as far as this module needs it. */
+type MemoryTx = Pick<Prisma.TransactionClient, '$executeRaw'>;
+
+/**
+ * Drop the vector of every note version of this person's that is now a
+ * placeholder. Called inside the transaction that wiped them (removing a note,
+ * deleting an exchange or a conversation; `lib/app/slots/wipe.ts`), so the
+ * words and their vector go together or not at all. Idempotent, and scoped to
+ * the person: it cannot touch anyone else's vectors, or a sibling note's.
+ */
+export async function forgetWipedNotes(tx: MemoryTx, subject: MemorySubject): Promise<number> {
+  return tx.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING framework_slot_value v
+     WHERE e."slotValueId" = v.id
+       AND e."userId" = ${subject.userId}
+       AND v."userId" = ${subject.userId}
+       AND v."sourceType" = ${REMOVED_SOURCE_TYPE}
+  `;
+}
+
 /** What one backfill run did. */
 export interface MemoryBackfillResult {
   indexed: number;
   failed: number;
+  /** Note vectors dropped because their source stopped qualifying. */
+  forgotten: number;
 }
 
 /** How many messages one backfill run takes on. */
@@ -271,27 +494,33 @@ export function __resetMemoryIndexForTests(): void {
 }
 
 /**
- * Embed the person's messages that were stored before the index existed, or
- * that the turn path missed. One org per call (the job runs per org), newest
- * first, a batch at a time.
+ * Embed what the turn path and the note writes missed: the person's messages
+ * stored before the index existed, notes written before t-107 or by a path
+ * that does not queue one, and anything whose embedding failed. One org per
+ * call (the job runs per org), newest first, a batch of each at a time. Then
+ * drop the vectors of notes that stopped qualifying: superseded by a revision
+ * the queued index missed, hidden since, or wiped in a race with their own
+ * embedding.
  *
- * **A failure is blamed on a message only when the next message embeds.** One
- * failure might be the embedder (no provider, a provider down) or the message
+ * **A failure is blamed on a source only when the next one embeds.** One
+ * failure might be the embedder (no provider, a provider down) or the source
  * (too long in tokens for the model, say), and the two need opposite answers.
- * So after a failure the run tries the next message. If that one fails too,
- * the embedder is down: the run stops, and nobody is blamed, so an outage of
- * any length leaves nothing behind it. If it embeds, the first failure was the
- * message's: it counts, the run carries on, and after
- * {@link MAX_BACKFILL_ATTEMPTS} such failures the message is left out, so it
+ * So after a failure the run tries the next one. If that fails too, the
+ * embedder is down: the run stops, and nobody is blamed, so an outage of any
+ * length leaves nothing behind it. If it embeds, the first failure was the
+ * source's: it counts, the run carries on, and after
+ * {@link MAX_BACKFILL_ATTEMPTS} such failures the source is left out, so it
  * cannot hold back the rest.
  *
- * Does nothing while the active embedding model answers in a size the column
- * cannot hold: every call would be charged and nothing stored.
+ * Embeds nothing while the active embedding model answers in a size the column
+ * cannot hold: every call would be charged and nothing stored. The prune still
+ * runs; it costs nothing.
  */
 export async function backfillMemoryIndex(
   batchSize: number = MEMORY_BACKFILL_BATCH
 ): Promise<MemoryBackfillResult> {
   const orgId = requireOrgId();
+  const forgotten = await forgetUnqualifiedNotes(orgId);
   if (!(await embeddingFit()).ok) {
     logger.warn(
       'Memory backfill skipped: the active embedding model is not the size the index stores',
@@ -299,12 +528,12 @@ export async function backfillMemoryIndex(
         dimension: MEMORY_EMBEDDING_DIMENSION,
       }
     );
-    return { indexed: 0, failed: 0 };
+    return { indexed: 0, failed: 0, forgotten };
   }
   const given = [...backfillFailures]
     .filter(([, attempts]) => attempts >= MAX_BACKFILL_ATTEMPTS)
     .map(([id]) => id);
-  const missing = await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
+  const messages = await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
     SELECT m.id, c."userId"
       FROM ai_message m
       JOIN ai_conversation c ON c.id = m."conversationId"
@@ -324,33 +553,87 @@ export async function backfillMemoryIndex(
      ORDER BY m."createdAt" DESC
      LIMIT ${batchSize}
   `;
+  const unsearchable = await unsearchableSlugs();
+  const notes = await prisma.$queryRaw<Array<{ id: string; userId: string; slotSlug: string }>>`
+    SELECT v.id, v."userId", v."slotSlug"
+      FROM framework_slot_value v
+      LEFT JOIN app_memory_embedding e ON e."slotValueId" = v.id
+     WHERE v."orgId" = ${orgId}
+       -- QUALIFIES: the live head of a note the person can see, with something
+       -- in it to find. The same five lines in every note statement, held equal
+       -- by a unit test, so no two can disagree about which notes count.
+       AND v."supersededAt" IS NULL
+       AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}
+       AND v.value <> ${MASKED_VALUE}
+       AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
+       AND v."slotSlug" <> ALL(${unsearchable}::text[])
+       AND e.id IS NULL
+       AND v.id <> ALL(${given}::text[])
+     ORDER BY v."capturedAt" DESC
+     LIMIT ${batchSize}
+  `;
+  const sources: Array<{ id: string; index: () => Promise<IndexOutcome> }> = [
+    ...messages.map((m) => ({
+      id: m.id,
+      index: () => indexMessage({ userId: m.userId }, m.id),
+    })),
+    ...notes.map((n) => ({
+      id: n.id,
+      index: () => indexNote({ userId: n.userId }, n.slotSlug),
+    })),
+  ];
 
   let indexed = 0;
   let failed = 0;
-  // The last message that failed, not yet known to be its own fault.
+  // The last source that failed, not yet known to be its own fault.
   let suspect: string | null = null;
-  for (const message of missing) {
+  for (const source of sources) {
     try {
-      if ((await indexMessage({ userId: message.userId }, message.id)) === 'indexed') indexed++;
-      backfillFailures.delete(message.id);
+      if ((await source.index()) === 'indexed') indexed++;
+      backfillFailures.delete(source.id);
       if (suspect) {
         backfillFailures.set(suspect, (backfillFailures.get(suspect) ?? 0) + 1);
         suspect = null;
       }
     } catch (err) {
       failed++;
-      logger.warn('Memory backfill could not embed a message', {
-        messageId: message.id,
+      logger.warn('Memory backfill could not embed a source', {
+        sourceId: source.id,
         error: err instanceof Error ? err.message : String(err),
       });
       if (suspect) {
         logger.warn('Memory backfill stopped: the embedder is failing');
         break;
       }
-      suspect = message.id;
+      suspect = source.id;
     }
   }
-  return { indexed, failed };
+  return { indexed, failed, forgotten };
+}
+
+/**
+ * Drop the vectors of an org's note versions that no longer qualify (see
+ * the QUALIFIES lines). The wipes drop theirs in their own transaction and a
+ * revision drops the previous one when it is indexed; this is the floor under
+ * both, for whatever a race or a missed queue left behind. A search never
+ * returns such a vector meanwhile, because it applies the same predicate.
+ */
+async function forgetUnqualifiedNotes(orgId: string): Promise<number> {
+  const unsearchable = await unsearchableSlugs();
+  return prisma.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING framework_slot_value v
+     WHERE e."slotValueId" = v.id
+       AND e."orgId" = ${orgId}
+       AND NOT (
+         -- QUALIFIES, negated: the same five lines as every other note statement.
+         v."supersededAt" IS NULL
+         AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}
+         AND v.value <> ${MASKED_VALUE}
+         AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
+         AND v."slotSlug" <> ALL(${unsearchable}::text[])
+       )
+  `;
 }
 
 /** How a search is bounded, and whom its query embedding is charged to. */
@@ -377,7 +660,14 @@ export interface MemorySearchOptions {
 }
 
 /**
- * The person's own words nearest in meaning to `query`, nearest first.
+ * The person's own words, and the notes kept about them, nearest in meaning to
+ * `query`, nearest first.
+ *
+ * Two statements, one per source kind, each limited and then merged: a note's
+ * text lives in a different table from a message's, and each is joined back to
+ * its source to be filtered by the person there too. A note is returned only
+ * while it is a live, visible head (the QUALIFIES lines), so a vector the
+ * prune has not reached yet still never reaches a prompt.
  *
  * Only vectors made by the model that embedded the query are compared: two
  * models' vectors share no space, and a distance between them means nothing.
@@ -410,7 +700,9 @@ export async function searchMemory(
   const maxDistance = options.maxDistance ?? null;
   const excluded = options.excludeMessageIds ?? [];
 
-  const rows = await prisma.$queryRaw<
+  const orgId = requireOrgId();
+  const unsearchable = await unsearchableSlugs();
+  const messageRows = prisma.$queryRaw<
     Array<{
       messageId: string;
       conversationId: string;
@@ -426,47 +718,97 @@ export async function searchMemory(
       JOIN ai_conversation c ON c.id = m."conversationId"
      WHERE e."userId" = ${subject.userId}
        AND c."userId" = ${subject.userId}
-       AND e."orgId" = ${requireOrgId()}
+       AND e."orgId" = ${orgId}
        AND e."embeddingModel" = ${model}
        AND (${maxDistance}::float8 IS NULL OR (e.embedding <=> ${vector}::vector) < ${maxDistance}::float8)
        AND e."messageId" <> ALL(${excluded}::text[])
      ORDER BY e.embedding <=> ${vector}::vector ASC
      LIMIT ${limit}
   `;
+  const noteRows = prisma.$queryRaw<
+    Array<{
+      slotValueId: string;
+      slotSlug: string;
+      value: string;
+      capturedAt: Date;
+      distance: number;
+    }>
+  >`
+    SELECT e."slotValueId", v."slotSlug", v.value, v."capturedAt",
+           (e.embedding <=> ${vector}::vector) AS distance
+      FROM app_memory_embedding e
+      JOIN framework_slot_value v ON v.id = e."slotValueId"
+     WHERE e."userId" = ${subject.userId}
+       AND v."userId" = ${subject.userId}
+       AND e."orgId" = ${orgId}
+       AND e."embeddingModel" = ${model}
+       -- QUALIFIES: the live head of a note the person can see, with something
+       -- in it to find. The same five lines in every note statement, held equal
+       -- by a unit test, so no two can disagree about which notes count.
+       AND v."supersededAt" IS NULL
+       AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}
+       AND v.value <> ${MASKED_VALUE}
+       AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}
+       AND v."slotSlug" <> ALL(${unsearchable}::text[])
+       AND (${maxDistance}::float8 IS NULL OR (e.embedding <=> ${vector}::vector) < ${maxDistance}::float8)
+     ORDER BY e.embedding <=> ${vector}::vector ASC
+     LIMIT ${limit}
+  `;
+  const [messages, notes] = await Promise.all([messageRows, noteRows]);
 
-  return rows.map((row) => ({
-    sourceKind: 'message',
-    sourceId: row.messageId,
-    conversationId: row.conversationId,
-    text: row.content,
-    saidAt: row.createdAt,
-    distance: Number(row.distance),
-  }));
+  const hits: MemoryHit[] = [
+    ...messages.map((row): MessageHit => ({
+      sourceKind: 'message',
+      sourceId: row.messageId,
+      conversationId: row.conversationId,
+      text: row.content,
+      saidAt: row.createdAt,
+      distance: Number(row.distance),
+    })),
+    ...notes.map((row): NoteHit => ({
+      sourceKind: 'note',
+      sourceId: row.slotValueId,
+      slotSlug: row.slotSlug,
+      text: row.value,
+      notedAt: row.capturedAt,
+      distance: Number(row.distance),
+    })),
+  ];
+  return hits.sort((a, b) => a.distance - b.distance).slice(0, limit);
 }
 
 /**
- * Remove the person's vectors for these messages, now.
+ * Remove the person's vectors for these sources, now.
  *
- * Deleting a message already does this through the foreign key; this is for a
- * source that stays while its words go (a note wiped to a placeholder, t-107),
- * and for Daybreak's ask, which names it. Scoped to the person: another
- * person's message id removes nothing.
+ * Deleting a message or a note version already does this through the foreign
+ * key, and a wipe has {@link forgetWipedNotes}; this is Daybreak's ask, which
+ * names it, for a caller that holds ids. Scoped to the person: another
+ * person's id removes nothing.
  */
 export async function forgetMemory(
   subject: MemorySubject,
-  sources: { messageIds: string[] }
+  sources: { messageIds?: string[]; slotValueIds?: string[] }
 ): Promise<number> {
-  if (sources.messageIds.length === 0) return 0;
+  const messageIds = sources.messageIds ?? [];
+  const slotValueIds = sources.slotValueIds ?? [];
+  if (messageIds.length === 0 && slotValueIds.length === 0) return 0;
   const { count } = await prisma.appMemoryEmbedding.deleteMany({
-    where: { userId: subject.userId, messageId: { in: sources.messageIds } },
+    where: {
+      userId: subject.userId,
+      OR: [{ messageId: { in: messageIds } }, { slotValueId: { in: slotValueIds } }],
+    },
   });
   return count;
 }
 
-/** What a subject-access export returns: which of their messages are indexed, never the vector. */
+/**
+ * What a subject-access export returns: which of their messages and note
+ * versions are indexed, never the vector.
+ */
 export interface MemoryEntry {
   sourceKind: string;
   messageId: string | null;
+  slotValueId: string | null;
   embeddingModel: string;
   createdAt: Date;
 }
@@ -474,6 +816,7 @@ export interface MemoryEntry {
 const ENTRY_SELECT = {
   sourceKind: true,
   messageId: true,
+  slotValueId: true,
   embeddingModel: true,
   createdAt: true,
 } as const;

@@ -24,9 +24,13 @@
  */
 
 import { Prisma } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
+import { redactedString } from '@/lib/security/redact';
 
 const ME = 'user-me';
 const THEM = 'user-them';
@@ -48,10 +52,28 @@ interface Message {
   orgId: string;
   createdAt: Date;
 }
+interface SlotValueRow {
+  id: string;
+  userId: string;
+  slotSlug: string;
+  version: number;
+  value: string;
+  reasoningNote: string;
+  sourceType: string;
+  supersededAt: Date | null;
+  capturedAt: Date;
+  orgId: string;
+}
+interface Definition {
+  slug: string;
+  visibility: string;
+  sensitivity: string;
+}
 interface Embedding {
   id: string;
   userId: string;
-  messageId: string;
+  messageId: string | null;
+  slotValueId: string | null;
   embedding: number[];
   embeddingModel: string;
   orgId: string;
@@ -67,6 +89,10 @@ const world = vi.hoisted(() => ({
   embedFails: false,
   sql: [] as Array<{ text: string; values: unknown[] }>,
   turns: [] as Array<{ userId: string; turnId: string; userMessageId: string | null }>,
+  slotValues: [] as SlotValueRow[],
+  /** Daybreak's definitions and ours: the fake reads their union, as the SQL does. */
+  frameworkDefinitions: [] as Definition[],
+  appDefinitions: [] as Definition[],
 }));
 
 /** One slot per word: two texts are near when they share words. */
@@ -124,9 +150,87 @@ function isIndexable(message: Message, min: unknown): boolean {
   );
 }
 
+const REMOVED = 'removed_by_person';
+/** What `fill_slot` stores for a special-category capture: the words never land. */
+const MASKED = redactedString('special_category');
+
+/** `noteQualifies()`, in JS: the live, visible head of a note with something in it. */
+function noteQualifies(v: SlotValueRow): boolean {
+  const flagged = (d: Definition) =>
+    d.slug === v.slotSlug && (d.visibility === 'hidden' || d.sensitivity === 'special_category');
+  return (
+    v.supersededAt === null &&
+    v.sourceType !== REMOVED &&
+    v.value !== MASKED &&
+    v.value.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '').length >= 12 &&
+    !world.frameworkDefinitions.some(flagged) &&
+    !world.appDefinitions.some(flagged)
+  );
+}
+
+/** What `unsearchableSlugs()` asks either tier for: hidden, or special-category. */
+function flaggedDefinition(d: Definition): boolean {
+  return d.visibility === 'hidden' || d.sensitivity === 'special_category';
+}
+
+function slotValue(id: string): SlotValueRow | undefined {
+  return world.slotValues.find((v) => v.id === id);
+}
+
+/** Drop note vectors matching `drop`, returning how many went. */
+function dropNoteVectors(drop: (e: Embedding, v: SlotValueRow) => boolean): number {
+  const before = world.embeddings.length;
+  world.embeddings = world.embeddings.filter((e) => {
+    const v = e.slotValueId ? slotValue(e.slotValueId) : undefined;
+    return !(v && drop(e, v));
+  });
+  return before - world.embeddings.length;
+}
+
 const prismaFake = {
   $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const { text, values: v } = sqlOf(strings, values);
+    if (text.includes('e."slotValueId" = v.id') && text.includes('LEFT JOIN')) {
+      // note backfill: [orgId, ...qualifies(4), given-up ids, limit]
+      const [orgId] = v;
+      const given = v.at(-2) as string[];
+      const limit = Number(v.at(-1));
+      return world.slotValues
+        .filter((row) => row.orgId === orgId && noteQualifies(row))
+        .filter((row) => !given.includes(row.id))
+        .filter((row) => !world.embeddings.some((e) => e.slotValueId === row.id))
+        .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())
+        .slice(0, limit)
+        .map((row) => ({ id: row.id, userId: row.userId, slotSlug: row.slotSlug }));
+    }
+    if (text.includes('JOIN framework_slot_value v ON v.id = e."slotValueId"')) {
+      // note search: [vec, userId, userId, orgId, model, ...qualifies(4), max, vec, max, vec, limit]
+      const query = parseVector(v[0]);
+      const [, userE, userV, orgId, model] = v;
+      const max = v[9];
+      const limit = Number(v.at(-1));
+      return world.embeddings
+        .filter((e) => e.userId === userE && e.orgId === orgId && e.embeddingModel === model)
+        .map((e) => ({ e, row: e.slotValueId ? slotValue(e.slotValueId) : undefined }))
+        .filter(({ row }) => row && row.userId === userV && noteQualifies(row))
+        .map(({ e, row }) => ({
+          slotValueId: row!.id,
+          slotSlug: row!.slotSlug,
+          value: row!.value,
+          capturedAt: row!.capturedAt,
+          distance: cosineDistance(e.embedding, query),
+        }))
+        .filter((r) => max === null || r.distance < Number(max))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, limit);
+    }
+    if (text.includes('SELECT v.id, v.value')) {
+      // note head: [userId, slotSlug, ...qualifies(4)]
+      const [userId, slotSlug] = v;
+      return world.slotValues
+        .filter((row) => row.userId === userId && row.slotSlug === slotSlug && noteQualifies(row))
+        .map((row) => ({ id: row.id, value: row.value }));
+    }
     if (text.includes('LEFT JOIN app_memory_embedding')) {
       // backfill: [orgId, seat, min, given-up ids, limit]
       const [orgId, seat, min, given, limit] = v;
@@ -149,7 +253,7 @@ const prismaFake = {
         .filter((e) => e.userId === userE && e.orgId === orgId && e.embeddingModel === model)
         .map((e) => ({ e, m: world.messages.find((m) => m.id === e.messageId) }))
         .filter(({ m }) => m && conversationOf(m)?.userId === userC)
-        .filter(({ e }) => !excluded.includes(e.messageId))
+        .filter(({ e }) => e.messageId !== null && !excluded.includes(e.messageId))
         .map(({ e, m }) => ({
           messageId: e.messageId,
           conversationId: m!.conversationId,
@@ -169,8 +273,48 @@ const prismaFake = {
       .map((m) => ({ content: m.content, conversationId: m.conversationId }));
   }),
   $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-    // insert: [vec, model, provider, dimension, messageId, userId]
-    const { values: v } = sqlOf(strings, values);
+    const { text, values: v } = sqlOf(strings, values);
+    if (text.includes('INSERT') && text.includes('"slotValueId"')) {
+      // note insert: [vec, model, provider, dimension, slotValueId, userId, ...qualifies(4)]
+      const [vec, model, , , slotValueId, userId] = v;
+      const row = slotValue(String(slotValueId));
+      if (!row || row.userId !== userId || !noteQualifies(row)) return 0;
+      if (world.embeddings.some((e) => e.slotValueId === row.id)) return 0;
+      world.embeddings.push({
+        id: `emb-${world.embeddings.length + 1}`,
+        userId: row.userId,
+        messageId: null,
+        slotValueId: row.id,
+        embedding: parseVector(vec),
+        embeddingModel: String(model),
+        orgId: row.orgId,
+        createdAt: new Date(),
+      });
+      return 1;
+    }
+    if (text.includes('NOT (')) {
+      // prune: [orgId, ...qualifies(4)]
+      return dropNoteVectors((e, row) => e.orgId === v[0] && !noteQualifies(row));
+    }
+    if (text.includes('v."sourceType" =')) {
+      // forgetWipedNotes: [userId, userId, removed]
+      const [userE, userV, removed] = v;
+      return dropNoteVectors(
+        (e, row) => e.userId === userE && row.userId === userV && row.sourceType === removed
+      );
+    }
+    if (text.includes('DELETE FROM app_memory_embedding')) {
+      // earlier versions: [userId, userId, slotSlug, keep, keep]
+      const [userE, userV, slug, keep] = v;
+      return dropNoteVectors(
+        (e, row) =>
+          e.userId === userE &&
+          row.userId === userV &&
+          row.slotSlug === slug &&
+          (keep === null || row.id !== keep)
+      );
+    }
+    // message insert: [vec, model, provider, dimension, messageId, userId]
     const [vec, model, , , messageId, userId] = v;
     const message = world.messages.find((m) => m.id === messageId);
     if (!message || conversationOf(message)?.userId !== userId) return 0;
@@ -179,6 +323,7 @@ const prismaFake = {
       id: `emb-${world.embeddings.length + 1}`,
       userId: String(userId),
       messageId: String(messageId),
+      slotValueId: null,
       embedding: parseVector(vec),
       embeddingModel: String(model),
       orgId: message.orgId,
@@ -186,6 +331,12 @@ const prismaFake = {
     });
     return 1;
   }),
+  slotDefinition: {
+    findMany: vi.fn(async () => world.frameworkDefinitions.filter(flaggedDefinition)),
+  },
+  appSlotDefinition: {
+    findMany: vi.fn(async () => world.appDefinitions.filter(flaggedDefinition)),
+  },
   appTurn: {
     findUnique: vi.fn(
       async ({ where }: { where: { userId_turnId: { userId: string; turnId: string } } }) =>
@@ -195,17 +346,40 @@ const prismaFake = {
     ),
   },
   appMemoryEmbedding: {
-    findFirst: vi.fn(async ({ where }: { where: { messageId: string; userId: string } }) => {
-      const row = world.embeddings.find(
-        (e) => e.messageId === where.messageId && e.userId === where.userId
-      );
-      return row ? { id: row.id } : null;
-    }),
+    findFirst: vi.fn(
+      async ({
+        where,
+      }: {
+        where: { messageId?: string; slotValueId?: string; userId: string };
+      }) => {
+        const row = world.embeddings.find(
+          (e) =>
+            e.userId === where.userId &&
+            (where.messageId !== undefined
+              ? e.messageId === where.messageId
+              : e.slotValueId === where.slotValueId)
+        );
+        return row ? { id: row.id } : null;
+      }
+    ),
     deleteMany: vi.fn(
-      async ({ where }: { where: { userId: string; messageId: { in: string[] } } }) => {
+      async ({
+        where,
+      }: {
+        where: {
+          userId: string;
+          OR: [{ messageId: { in: string[] } }, { slotValueId: { in: string[] } }];
+        };
+      }) => {
+        const [messages, notes] = where.OR;
         const before = world.embeddings.length;
         world.embeddings = world.embeddings.filter(
-          (e) => !(e.userId === where.userId && where.messageId.in.includes(e.messageId))
+          (e) =>
+            !(
+              e.userId === where.userId &&
+              ((e.messageId !== null && messages.messageId.in.includes(e.messageId)) ||
+                (e.slotValueId !== null && notes.slotValueId.in.includes(e.slotValueId)))
+            )
         );
         return { count: before - world.embeddings.length };
       }
@@ -214,8 +388,9 @@ const prismaFake = {
       world.embeddings
         .filter((e) => (where.userId ? e.userId === where.userId : e.orgId === where.orgId))
         .map((e) => ({
-          sourceKind: 'message',
+          sourceKind: e.messageId !== null ? 'message' : 'note',
           messageId: e.messageId,
+          slotValueId: e.slotValueId,
           embeddingModel: e.embeddingModel,
           createdAt: e.createdAt,
         }))
@@ -234,6 +409,9 @@ vi.mock('@/lib/logging', () => ({
 
 const {
   indexMessage,
+  indexNote,
+  queueNoteIndex,
+  forgetWipedNotes,
   queueMessageIndex,
   backfillMemoryIndex,
   searchMemory,
@@ -272,6 +450,51 @@ function said(
   return message;
 }
 
+/**
+ * Append a version of a note, as Daybreak's `appendSlotValue` does: the
+ * previous head is stamped superseded and stays.
+ */
+function noted(
+  slotSlug: string,
+  value: string,
+  {
+    owner = ME,
+    reasoningNote = 'They said so plainly.',
+  }: { owner?: string; reasoningNote?: string } = {}
+): SlotValueRow {
+  const chain = world.slotValues.filter((v) => v.userId === owner && v.slotSlug === slotSlug);
+  const at = new Date(++clock * 1000);
+  for (const previous of chain) previous.supersededAt ??= at;
+  const row: SlotValueRow = {
+    id: `sv-${owner}-${slotSlug}-${chain.length + 1}`,
+    userId: owner,
+    slotSlug,
+    version: chain.length + 1,
+    value,
+    reasoningNote,
+    sourceType: 'direct',
+    supersededAt: null,
+    capturedAt: at,
+    orgId: ORG,
+  };
+  world.slotValues.push(row);
+  return row;
+}
+
+/** Wipe a version in place, as `wipe.ts` does: the row stays, its words go. */
+function wipe(row: SlotValueRow): void {
+  row.value = 'This note was removed.';
+  row.reasoningNote = 'The person removed this note in Lelañea’s notes.';
+  row.sourceType = REMOVED;
+}
+
+function vectorsOf(owner: string): string[] {
+  return world.embeddings
+    .filter((e) => e.userId === owner)
+    .map((e) => e.slotValueId ?? e.messageId ?? '')
+    .sort();
+}
+
 const MY_FATHER = 'my father taught me to sail on the lake';
 const THEIR_FATHER = 'my father and I never spoke about the lake or about sail boats';
 
@@ -284,6 +507,9 @@ beforeEach(() => {
   world.embedFails = false;
   world.sql = [];
   world.turns = [];
+  world.slotValues = [];
+  world.frameworkDefinitions = [];
+  world.appDefinitions = [];
   clock = 0;
   vi.clearAllMocks();
   __resetMemoryIndexForTests();
@@ -380,7 +606,7 @@ describe('indexing a message', () => {
     expect(warn).toHaveBeenCalledTimes(1);
 
     expect(await indexMessage({ userId: ME }, 'm2')).toBe('skipped');
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0, forgotten: 0 });
     expect(embedText).toHaveBeenCalledTimes(1);
 
     // A different active model is asked afresh.
@@ -405,13 +631,13 @@ describe('the backfill', () => {
     said('theirs', THEIR_FATHER, { owner: THEM });
     said('reply', 'a reply that is long enough to count', { role: 'assistant' });
 
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 2, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 2, failed: 0, forgotten: 0 });
     expect(world.embeddings.map((e) => [e.messageId, e.userId]).sort()).toEqual([
       ['mine', ME],
       ['theirs', THEM],
     ]);
     // Run again: nothing left to take.
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0, forgotten: 0 });
   });
 
   it('takes exactly the messages an index call takes: one predicate, written the same in both', async () => {
@@ -452,12 +678,12 @@ describe('the backfill', () => {
     });
 
     // It never holds the others back: the run tries past it.
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 2, failed: 1 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 2, failed: 1, forgotten: 0 });
     expect(world.embeddings.map((e) => e.messageId).sort()).toEqual(['older', 'oldest']);
 
     // Each later run fails on it alone, which proves nothing about it: no blame.
     embedText.mockClear();
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 1, forgotten: 0 });
     expect(embedText).toHaveBeenCalledTimes(1);
 
     // Blamed only when a message after it in the run embeds (an older one, the
@@ -466,10 +692,10 @@ describe('the backfill', () => {
       said(`older-${run}`, `a different thing said long ago, number ${run}`).createdAt = new Date(
         run
       );
-      expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 1 });
+      expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 1, forgotten: 0 });
     }
     embedText.mockClear();
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0, forgotten: 0 });
     expect(embedText).not.toHaveBeenCalled();
   });
 
@@ -479,16 +705,16 @@ describe('the backfill', () => {
     said('c', 'I started a new job in the city this spring');
     world.embedFails = true;
     for (let run = 0; run < MAX_BACKFILL_ATTEMPTS * 3; run++) {
-      expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2 });
+      expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2, forgotten: 0 });
     }
     world.embedFails = false;
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 3, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 3, failed: 0, forgotten: 0 });
   });
 
   it('does nothing, and spends nothing, while the model is the wrong size', async () => {
     said('m1', MY_FATHER);
     getActiveEmbeddingModelSummary.mockResolvedValue({ modelId: 'big', dimensions: 3072 });
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0, forgotten: 0 });
     expect(embedText).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
   });
@@ -498,7 +724,7 @@ describe('the backfill', () => {
     said('b', THEIR_FATHER);
     said('c', 'I started a new job in the city this spring');
     world.embedFails = true;
-    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2 });
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 2, forgotten: 0 });
     expect(embedText).toHaveBeenCalledTimes(2);
   });
 });
@@ -710,5 +936,284 @@ describe('the AI’s search tool (t-130)', () => {
     expect(redacted.args).toEqual({ query: '[redacted]' });
     expect(redacted.resultPreview).toBe('{"success":true,"found":1}');
     expect(JSON.stringify(redacted)).not.toContain('father');
+  });
+});
+
+describe('indexing a note (t-107)', () => {
+  const FATHER_NOTE = 'Their father taught them to sail; he has been unwell since spring';
+  const WORK_NOTE = 'Started a demanding new job at the hospital this year';
+
+  it('embeds the head’s value, costed to the person, and never its reasoning note', async () => {
+    const note = noted('family', FATHER_NOTE, { reasoningNote: 'SECRET REASONING about him' });
+
+    expect(await indexNote({ userId: ME }, 'family', { turnId: 'turn-3' })).toBe('indexed');
+    expect(world.embeddings).toEqual([
+      expect.objectContaining({ userId: ME, slotValueId: note.id, messageId: null }),
+    ]);
+    expect(embedText).toHaveBeenCalledWith(FATHER_NOTE, 'document', {
+      userId: ME,
+      metadata: { kind: 'memory_embedding', slotValueId: note.id, turnId: 'turn-3' },
+    });
+    expect(JSON.stringify(embedText.mock.calls)).not.toContain('SECRET REASONING');
+  });
+
+  it('replaces the old version’s vector when the note is revised, and leaves a sibling’s', async () => {
+    const first = noted('family', FATHER_NOTE);
+    const sibling = noted('work', WORK_NOTE);
+    await indexNote({ userId: ME }, 'family');
+    await indexNote({ userId: ME }, 'work');
+    expect(vectorsOf(ME)).toEqual([first.id, sibling.id].sort());
+
+    const revised = noted('family', 'Their father is home again and recovering well now');
+    expect(await indexNote({ userId: ME }, 'family')).toBe('indexed');
+
+    expect(vectorsOf(ME)).toEqual([revised.id, sibling.id].sort());
+  });
+
+  it('does not embed a note twice', async () => {
+    noted('family', FATHER_NOTE);
+    await indexNote({ userId: ME }, 'family');
+    embedText.mockClear();
+
+    expect(await indexNote({ userId: ME }, 'family')).toBe('already_indexed');
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'hidden in Daybreak’s definition',
+      () =>
+        world.frameworkDefinitions.push({
+          slug: 'family',
+          visibility: 'hidden',
+          sensitivity: 'standard',
+        }),
+    ],
+    [
+      'hidden in ours',
+      () =>
+        world.appDefinitions.push({
+          slug: 'family',
+          visibility: 'hidden',
+          sensitivity: 'standard',
+        }),
+    ],
+    [
+      'special-category in Daybreak’s definition',
+      () =>
+        world.frameworkDefinitions.push({
+          slug: 'family',
+          visibility: 'open',
+          sensitivity: 'special_category',
+        }),
+    ],
+    [
+      'special-category in ours',
+      () =>
+        world.appDefinitions.push({
+          slug: 'family',
+          visibility: 'open',
+          sensitivity: 'special_category',
+        }),
+    ],
+  ])('never embeds a note %s', async (_case, flag) => {
+    noted('family', FATHER_NOTE);
+    flag();
+
+    expect(await indexNote({ userId: ME }, 'family')).toBe('skipped');
+    expect(world.embeddings).toEqual([]);
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it('embeds a masked value only in its stored form, which is the sentinel, so not at all', async () => {
+    // What `fill_slot` stores for a special-category capture: the words never land.
+    noted('beliefs', MASKED);
+
+    expect(await indexNote({ userId: ME }, 'beliefs')).toBe('skipped');
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it('embeds a heading the AI coined, which no definition hides', async () => {
+    noted('sailing_with_dad', FATHER_NOTE);
+    expect(await indexNote({ userId: ME }, 'sailing_with_dad')).toBe('indexed');
+  });
+
+  it('skips a removed note and one too short to mean anything', async () => {
+    wipe(noted('family', FATHER_NOTE));
+    noted('mood', 'tired');
+
+    expect(await indexNote({ userId: ME }, 'family')).toBe('skipped');
+    expect(await indexNote({ userId: ME }, 'mood')).toBe('skipped');
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for someone else’s note, and leaves their vector alone', async () => {
+    const theirs = noted('family', FATHER_NOTE, { owner: THEM });
+    await indexNote({ userId: THEM }, 'family');
+
+    expect(await indexNote({ userId: ME }, 'family')).toBe('skipped');
+    expect(vectorsOf(THEM)).toEqual([theirs.id]);
+    expect(vectorsOf(ME)).toEqual([]);
+  });
+
+  it('never fails the write: a queued note index that throws is logged and dropped', async () => {
+    noted('family', FATHER_NOTE);
+    world.embedFails = true;
+    queueNoteIndex({ userId: ME }, 'family');
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('family');
+  });
+});
+
+describe('a wiped note (t-107)', () => {
+  const NOTES = [
+    ['family', 'Their father taught them to sail; he has been unwell since spring'],
+    ['work', 'Started a demanding new job at the hospital this year'],
+  ] as const;
+
+  beforeEach(async () => {
+    for (const owner of [ME, THEM]) {
+      for (const [slug, value] of NOTES) {
+        noted(slug, value, { owner });
+        await indexNote({ userId: owner }, slug);
+      }
+    }
+    // The population: four vectors, two each, before anything is wiped.
+    expect(world.embeddings).toHaveLength(4);
+  });
+
+  it('loses its vector to forgetWipedNotes, while a sibling’s and the other person’s stay', async () => {
+    const family = world.slotValues.find((v) => v.userId === ME && v.slotSlug === 'family')!;
+    wipe(family);
+
+    expect(await forgetWipedNotes(prismaFake as never, { userId: ME })).toBe(1);
+    expect(vectorsOf(ME)).toEqual(['sv-user-me-work-1']);
+    expect(vectorsOf(THEM)).toHaveLength(2);
+    // Idempotent: a second call finds nothing more to drop.
+    expect(await forgetWipedNotes(prismaFake as never, { userId: ME })).toBe(0);
+  });
+
+  it('is never found by a search, even before its vector is dropped', async () => {
+    const family = world.slotValues.find((v) => v.userId === ME && v.slotSlug === 'family')!;
+    wipe(family);
+
+    const hits = await searchMemory({ userId: ME }, 'father sail unwell spring', { limit: 5 });
+    expect(hits.map((hit) => hit.sourceId)).toEqual(['sv-user-me-work-1']);
+  });
+
+  it('is dropped by the backfill’s prune if a race left its vector behind', async () => {
+    wipe(world.slotValues.find((v) => v.userId === ME && v.slotSlug === 'family')!);
+    world.frameworkDefinitions.push({
+      slug: 'work',
+      visibility: 'hidden',
+      sensitivity: 'standard',
+    });
+
+    // The wiped note, and the work note on both sides now that its slot is hidden.
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 0, failed: 0, forgotten: 3 });
+    expect(vectorsOf(ME)).toEqual([]);
+    expect(vectorsOf(THEM)).toEqual(['sv-user-them-family-1']);
+  });
+});
+
+describe('notes in the backfill and the search (t-107)', () => {
+  it('backfills a note written by a path that queued nothing, and not a superseded version', async () => {
+    noted('family', 'Their father taught them to sail on the lake');
+    const head = noted('family', 'Their father is recovering at home after the hospital');
+
+    expect(await backfillMemoryIndex()).toEqual({ indexed: 1, failed: 0, forgotten: 0 });
+    expect(vectorsOf(ME)).toEqual([head.id]);
+  });
+
+  it('returns the caller’s notes and words together, nearest first, never another person’s', async () => {
+    said('mine', MY_FATHER);
+    const mine = noted('family', 'Their father taught them to sail on the lake as a child');
+    // Theirs is the query word for word: the nearest vector in the index.
+    const QUERY = 'my father and the lake and the boats';
+    noted('family', QUERY, { owner: THEM });
+    await backfillMemoryIndex();
+    expect(world.embeddings).toHaveLength(3);
+
+    const hits = await searchMemory({ userId: ME }, QUERY, { limit: 5 });
+    expect(hits.map((hit) => hit.sourceId).sort()).toEqual(['mine', mine.id].sort());
+    expect(hits.map((hit) => hit.distance)).toEqual([...hits.map((h) => h.distance)].sort());
+    expect(hits.find((hit) => hit.sourceKind === 'note')).toMatchObject({
+      slotSlug: 'family',
+      text: mine.value,
+      notedAt: mine.capturedAt,
+    });
+  });
+
+  it('binds the person to both the index row and the note version in the SQL itself', async () => {
+    world.sql = [];
+    await searchMemory({ userId: ME }, 'father', { limit: 5 });
+    const notes = world.sql.find((q) => q.text.includes('JOIN framework_slot_value v'));
+    expect(notes?.text).toMatch(/e\."userId" = \$2/);
+    expect(notes?.text).toMatch(/v\."userId" = \$3/);
+    expect(notes?.values.slice(1, 3)).toEqual([ME, ME]);
+    // The live-head, visible-note predicate is in the query, not only in the fake.
+    expect(notes?.text).toMatch(/v\."supersededAt" IS NULL/);
+    expect(notes?.text).toMatch(/v\."sourceType" <> \$\d+/);
+    expect(notes?.text).toMatch(/v\."slotSlug" <> ALL\(\$\d+::text\[\]\)/);
+    expect(notes?.values).toEqual(expect.arrayContaining([REMOVED, MASKED]));
+  });
+
+  it('binds the slugs hidden or special-category in either tier, and no others', async () => {
+    world.frameworkDefinitions.push(
+      { slug: 'development_stage', visibility: 'hidden', sensitivity: 'sensitive' },
+      { slug: 'life_work', visibility: 'open', sensitivity: 'standard' }
+    );
+    world.appDefinitions.push(
+      { slug: 'beliefs', visibility: 'open', sensitivity: 'special_category' },
+      { slug: 'development_stage', visibility: 'hidden', sensitivity: 'sensitive' }
+    );
+    world.sql = [];
+    await searchMemory({ userId: ME }, 'father', { limit: 5 });
+
+    const notes = world.sql.find((q) => q.text.includes('JOIN framework_slot_value v'));
+    const slugs = notes?.values.find(Array.isArray) as string[];
+    expect([...slugs].sort()).toEqual(['beliefs', 'development_stage']);
+  });
+
+  it('carries the same QUALIFIES lines in every note statement', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/app/memory/memory-index.ts'), 'utf8');
+    const LINES = [
+      'v."supersededAt" IS NULL',
+      'AND v."sourceType" <> ${REMOVED_SOURCE_TYPE}',
+      'AND v.value <> ${MASKED_VALUE}',
+      "AND LENGTH(BTRIM(v.value, ' ' || chr(9) || chr(10) || chr(13))) >= ${MIN_INDEXED_CHARS}",
+      'AND v."slotSlug" <> ALL(${unsearchable}::text[])',
+    ];
+    const markers = source.match(/-- QUALIFIES/g) ?? [];
+    // The head read, the insert, the backfill, the prune (negated) and the search.
+    expect(markers).toHaveLength(5);
+    for (const line of LINES) {
+      expect(source.split(line).length - 1, line).toBe(markers.length);
+    }
+  });
+
+  it('labels a note for the AI as a note, never as the person’s words', async () => {
+    const note = noted('family', 'Their father taught them to sail on the lake as a child');
+    await backfillMemoryIndex();
+    const tool = new SearchPersonMemoryCapability();
+
+    const result = await tool.execute(
+      { query: 'father sail lake child' },
+      {
+        userId: ME,
+        agentId: 'agent-guide',
+        costLogMetadata: { turnId: 'turn-1', seat: 'facilitator' },
+      }
+    );
+
+    expect(result.data?.results).toEqual([
+      {
+        kind: 'note',
+        words: note.value,
+        when: '1 January 1970',
+        whose:
+          'A note kept about the person, written from what they shared, last updated on 1 January 1970. It is your understanding of them, not their words: never quote it as something they said.',
+      },
+    ]);
   });
 });

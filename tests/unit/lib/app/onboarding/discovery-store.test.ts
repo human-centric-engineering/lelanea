@@ -31,7 +31,9 @@ const mocks = vi.hoisted(() => ({
   getNodeStates: vi.fn(),
   recordNodeProgress: vi.fn(),
   invalidateContext: vi.fn(),
+  queueNoteIndex: vi.fn(),
 }));
+vi.mock('@/lib/app/memory/memory-index', () => ({ queueNoteIndex: mocks.queueNoteIndex }));
 vi.mock('@/lib/app/onboarding/discovery-slots', () => ({
   getDiscoverySet: mocks.getDiscoverySet,
 }));
@@ -193,10 +195,18 @@ describe('answerDiscoveryQuestion', () => {
   it('leaves the cache alone when nothing was written', async () => {
     await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
     mocks.invalidateContext.mockClear();
+    mocks.queueNoteIndex.mockClear();
 
     await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'Same.' });
 
     expect(mocks.invalidateContext).not.toHaveBeenCalled();
+    expect(mocks.queueNoteIndex).not.toHaveBeenCalled();
+  });
+
+  it('queues a written answer for the memory index, so the AI can find it by meaning (t-107)', async () => {
+    await answerDiscoveryQuestion(USER, setOf(ALL), ALL[0], { words: 'New words.' });
+
+    expect(mocks.queueNoteIndex).toHaveBeenCalledWith({ userId: USER }, 'discovery_q01');
   });
 
   it('writes the branch into the value, and reads it back', async () => {

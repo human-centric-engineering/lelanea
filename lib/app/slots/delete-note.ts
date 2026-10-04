@@ -45,10 +45,12 @@
  *   (owner ruling 4).
  * - **The conversation.** What the person said is still in it, and the AI can
  *   still read it. That is the exchange-deletion task's to offer, not this one's.
- * - **Embeddings.** None exist for a slot value; the index task owns the rule
- *   that one goes with its source (ruling 2).
  *
  * ## What it drops
+ *
+ * The note's vectors in the memory index (t-107), in the same transaction as
+ * the wipe: a placeholder is rewritten in place, so no foreign key cascade
+ * would take them, and a search must never find a removed note by meaning.
  *
  * The person's cached context blocks — the facilitation block on every seat
  * they can talk to, and every module's block — so the next turn reads the
@@ -62,6 +64,7 @@
 
 import { executeTransaction } from '@/lib/db/utils';
 import { NotFoundError } from '@/lib/api/errors';
+import { forgetWipedNotes } from '@/lib/app/memory/memory-index';
 import { readSlotVerdict } from '@/lib/app/slots/notes';
 import {
   NOT_YET_REMOVED,
@@ -126,6 +129,7 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
         data: { slotSlug: renamedTo },
       });
     }
+    await forgetWipedNotes(tx, { userId: input.userId });
     return written.count;
   });
 
