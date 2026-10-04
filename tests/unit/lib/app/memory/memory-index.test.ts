@@ -929,6 +929,38 @@ describe('the AI’s search tool (t-130)', () => {
     expect(result.error?.message).toMatch(/do not claim to remember/);
   });
 
+  it('searches without excluding anything when the seat stamp carries no turn or conversation', async () => {
+    embedText.mockClear();
+    const result = await tool.execute(
+      { query: MY_FATHER },
+      { userId: ME, agentId: 'agent-guide', costLogMetadata: { seat: 'facilitator' } }
+    );
+
+    expect(result.data?.results.map((item) => item.words)).toContain(MY_FATHER);
+    expect(embedText).toHaveBeenCalledWith(MY_FATHER, 'query', {
+      userId: ME,
+      agentId: 'agent-guide',
+      metadata: { seat: 'facilitator', kind: 'memory_search' },
+    });
+  });
+
+  it('keeps only the error code of a failed search on the audit row', () => {
+    const failed = tool.redactProvenance(
+      { query: MY_FATHER },
+      { success: false, error: { code: 'search_failed', message: 'down' } }
+    );
+    expect(failed).toEqual({
+      args: { query: '[redacted]' },
+      resultPreview: '{"success":false,"error":"search_failed"}',
+    });
+    expect(tool.redactProvenance({ query: 'x' }, { success: true }).resultPreview).toBe(
+      '{"success":true,"found":0}'
+    );
+    expect(tool.redactProvenance({ query: 'x' }, { success: false }).resultPreview).toBe(
+      '{"success":false,"error":"unknown"}'
+    );
+  });
+
   it('keeps neither the query nor the words on the audit row', async () => {
     const result = await tool.execute({ query: MY_FATHER }, onSeat(ME));
     const redacted = tool.redactProvenance({ query: MY_FATHER }, result);
