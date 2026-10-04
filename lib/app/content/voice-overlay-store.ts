@@ -38,6 +38,7 @@ import {
 } from '@/lib/app/content/voice-overlay-view';
 import type { VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-view';
 import { idsBySlug } from '@/lib/app/content/row-ids';
+import { leaningBoundsSchema } from '@/lib/app/voice/leanings';
 
 /**
  * The one set there is, re-exported so this module stays its import path.
@@ -85,6 +86,7 @@ export const VOICE_OVERLAY_SET_SNAPSHOT_FIELDS = [
   'provenance',
   'exemplars',
   'coreOnly',
+  'leanings',
   'status',
 ] as const;
 
@@ -136,6 +138,7 @@ export async function seedVoiceOverlays(
     provenance: storedProvenanceSchema.parse(setText.provenance),
     exemplars: storedExemplarsSchema.parse(setText.exemplars),
     coreOnly: storedCoreOnlySchema.parse(setText.coreOnly),
+    leanings: leaningBoundsSchema.parse(setText.leanings),
   };
   const provenance = { origin: 'seed' as const, editorId: null, changedAt: now };
 

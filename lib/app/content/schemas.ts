@@ -41,6 +41,8 @@
 
 import { z } from 'zod';
 
+import { leaningBoundsSchema } from '@/lib/app/voice/leanings';
+
 // ============================================================================
 // Foundational documents — content/lelanea_foundational_documents.json
 // ============================================================================
@@ -734,6 +736,13 @@ export const voiceOverlaysFileSchema = z
       heading: z.string().min(1),
       lines: voiceLinesSchema,
     }),
+    /**
+     * The bounds on a person's leanings (f-leanings t-135, owner ruling 2): per
+     * dial, the furthest stop each way and whether the AI may suggest moving
+     * it. The seed requires them. An import may leave them out, and then keeps
+     * the bounds already stored rather than reading the absence as "none".
+     */
+    leanings: leaningBoundsSchema.optional(),
     reviewNotes: z
       .array(
         z.strictObject({

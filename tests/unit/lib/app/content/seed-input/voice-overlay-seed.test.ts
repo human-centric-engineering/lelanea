@@ -160,10 +160,13 @@ describe('the data migration', () => {
     };
     const { id: authoredName, ...setText } = embedded.set;
     // The registers' two overlays came later, in their own migration (t-125,
-    // below); t-88's literal is the seed without them.
+    // below), and so did the leaning bounds (t-135, below); t-88's literal is
+    // the seed without them.
     const seed = buildVoiceOverlaySeed();
+    const { leanings: _leanings, ...setBeforeLeanings } = seed.set;
     expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual({
       ...seed,
+      set: setBeforeLeanings,
       overlays: seed.overlays.filter((o) => !REGISTER_SITUATIONS.includes(o.situation)),
     });
     expect(migrationSql(PER_ORG_KEYS_MIGRATION)).toContain(
@@ -175,8 +178,10 @@ describe('the data migration', () => {
     const { VOICE_OVERLAY_SET_SNAPSHOT_FIELDS, VOICE_OVERLAY_SNAPSHOT_FIELDS } =
       await import('@/lib/app/content/voice-overlay-store');
     const sql = migrationSql();
+    // `leanings` joined the set's snapshot later (t-135), in its own migration.
+    const setFieldsThen = VOICE_OVERLAY_SET_SNAPSHOT_FIELDS.filter((f) => f !== 'leanings');
 
-    for (const fields of [VOICE_OVERLAY_SET_SNAPSHOT_FIELDS, VOICE_OVERLAY_SNAPSHOT_FIELDS]) {
+    for (const fields of [setFieldsThen, VOICE_OVERLAY_SNAPSHOT_FIELDS]) {
       expect(sql).toContain(`ARRAY[${fields.map((f) => `'${f}'`).join(', ')}]`);
     }
   });
@@ -234,5 +239,17 @@ describe('the registers’ data migration (f-registers t-125)', () => {
     expect(sql()).not.toContain("'signed_off'");
     expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
     expect(sql()).toContain('"set"."orgId"');
+  });
+});
+
+describe('the leaning bounds the seed writes (f-leanings t-135)', () => {
+  it('refuses a file without them, rather than seed a set that locks every dial', () => {
+    const { leanings: _none, ...file } = readVoiceOverlaysFile();
+
+    expect(() => buildVoiceOverlaySeed(file)).toThrow(/no `leanings` block/);
+  });
+
+  it('writes the file’s bounds onto the set', () => {
+    expect(buildVoiceOverlaySeed().set.leanings).toEqual(readVoiceOverlaysFile().leanings);
   });
 });

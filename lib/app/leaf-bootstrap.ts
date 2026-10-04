@@ -38,7 +38,7 @@ import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
 import { VOICE_AGENT_SLUG } from '@/lib/app/voice/fingerprint';
 import { registerGlobalSlotDefinitionProvider } from '@/lib/framework/data-slots';
-import { loadGlobalSlotDefinitions } from '@/lib/app/slots/taxonomy-store';
+import { loadAppGlobalSlotDefinitions } from '@/lib/app/slots/global-provider';
 
 export function initLeafApp(): Promise<void> {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -80,7 +80,11 @@ export function initLeafApp(): Promise<void> {
   // It is before the module loop for the same reason as the hooks above — with
   // no provider registered the global pass does nothing at all, silently, and
   // the whole taxonomy would be missing with nothing saying so.
-  registerGlobalSlotDefinitionProvider(loadGlobalSlotDefinitions);
+  //
+  // The provider is the taxonomy plus the eleven voice leanings (f-leanings
+  // t-135), which are code-owned slots: Daybreak takes one provider, so both
+  // meet in `loadAppGlobalSlotDefinitions`.
+  registerGlobalSlotDefinitionProvider(loadAppGlobalSlotDefinitions);
 
   // The seventeen modules of the journey, each a real place with an empty
   // interior. `registerModule()` is idempotent by slug, so a hot reload or a

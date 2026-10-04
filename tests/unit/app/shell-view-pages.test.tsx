@@ -51,10 +51,9 @@ import { describe, expect, it } from 'vitest';
 
 import { ACCOUNT_MENU_LINKS } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
-import { ThemeProvider } from '@/hooks/use-theme';
 
 import JourneyPage, { metadata as journeyMeta } from '@/app/(lelanea)/app/journey/page';
-import SettingsPage, { metadata as settingsMeta } from '@/app/(lelanea)/app/settings/page';
+import { metadata as settingsMeta } from '@/app/(lelanea)/app/settings/page';
 import SharePage, { metadata as shareMeta } from '@/app/(lelanea)/app/share/page';
 import SituationsPage, { metadata as situationsMeta } from '@/app/(lelanea)/app/situations/page';
 import { metadata as usageMeta } from '@/app/(lelanea)/app/usage/page';
@@ -90,7 +89,10 @@ const MODULES = {
   // `fetch` can be stood up (`tests/unit/components/app/usage/`). The metadata
   // row is still checked here with everything else's.
   '/app/usage': { Page: null, metadata: usageMeta, placeholder: false },
-  '/app/settings': { Page: SettingsPage, metadata: settingsMeta, placeholder: false },
+  // Async and reads the session since f-leanings t-135, for the account view's
+  // reason: it renders the reader's own leanings. `shell-settings-page.test.tsx`
+  // stands the session up; the metadata row is still checked here.
+  '/app/settings': { Page: null, metadata: settingsMeta, placeholder: false },
   // Account is async and reads the session, so it is rendered in
   // `shell-account-page.test.tsx` where the session can be stood up. Its
   // metadata is still checked here, with everything else's.
@@ -133,12 +135,12 @@ describe('every destination names itself in the tab', () => {
   });
 });
 
-/** Renders a page, wrapping the one that needs a provider. */
+/** Renders a page. */
 function renderPage(href: string) {
   const { Page } = MODULES[href as keyof typeof MODULES];
   if (!Page) throw new Error(`${href} is rendered elsewhere`);
   const element = <Page />;
-  return render(href === '/app/settings' ? <ThemeProvider>{element}</ThemeProvider> : element);
+  return render(element);
 }
 
 const RENDERED = OFFERED.filter((href) => MODULES[href as keyof typeof MODULES].Page !== null);

@@ -77,6 +77,7 @@ import {
 import { idsBySlug } from '@/lib/app/content/row-ids';
 import { SEAT_SITUATIONS } from '@/lib/app/voice/context-contributor';
 import { parseRegister } from '@/lib/app/voice/register';
+import { leaningBoundsSchema, type LeaningBounds } from '@/lib/app/voice/leanings';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import type {
   OverlayCreate,
@@ -115,6 +116,12 @@ export type OverlaySetWords = {
   provenance: z.infer<typeof storedProvenanceSchema>;
   exemplars: z.infer<typeof storedExemplarsSchema>;
   coreOnly: z.infer<typeof storedCoreOnlySchema>;
+  /**
+   * The leaning bounds (t-135). Always present on the set itself; `null` only
+   * on a revision written before the set had them, and a write never stores
+   * `null` — it keeps the bounds it finds (see `writeSet`).
+   */
+  leanings: LeaningBounds | null;
 };
 
 /** One overlay's stored words, and its place in the order. */
@@ -192,6 +199,7 @@ function setWordsOf(row: {
   provenance: unknown;
   exemplars: unknown;
   coreOnly: unknown;
+  leanings: unknown;
 }): OverlaySetWords {
   return {
     title: row.title,
@@ -200,7 +208,25 @@ function setWordsOf(row: {
     provenance: storedProvenanceSchema.parse(row.provenance),
     exemplars: storedExemplarsSchema.parse(row.exemplars),
     coreOnly: storedCoreOnlySchema.parse(row.coreOnly),
+    leanings: row.leanings === null ? null : leaningBoundsSchema.parse(row.leanings),
   };
+}
+
+/**
+ * The words a write stores: bounds left out (an import that carries none) or
+ * read from a revision older than them are the bounds already stored, never
+ * `null`. A `null` would lock every dial at rest, which nobody asked for.
+ */
+function withStoredLeanings(
+  next: OverlaySetWords,
+  before: OverlaySetWords
+): OverlaySetWords & { leanings: LeaningBounds } {
+  const leanings = next.leanings ?? before.leanings;
+  if (!leanings) {
+    // Unreachable once the bounds migration has run: the set's column is NOT NULL.
+    throw new Error('The overlay set has no leaning bounds to keep.');
+  }
+  return { ...next, leanings };
 }
 
 function overlayWordsOf(row: {
@@ -356,7 +382,7 @@ async function writeSet(
       throw revisionMoved('The overlay set', row.revision, revisionRead);
 
     const before = setWordsOf(row);
-    const next = setWordsOf(toNext(before));
+    const next = withStoredLeanings(setWordsOf(toNext(before)), before);
     const changed = changedFieldsOf(before, next, SET_WORD_FIELDS);
     if (changed.length === 0)
       return { changed, changes: {}, revision: row.revision, status: statusOf(row.status) };
@@ -421,7 +447,8 @@ export async function signOffOverlaySet(
     if (row.status === 'signed_off')
       return { changed: [], changes: NO_CHANGES, revision: row.revision, status: 'signed_off' };
 
-    const words = setWordsOf(row);
+    const stored = setWordsOf(row);
+    const words = withStoredLeanings(stored, stored);
     const revision = row.revision + 1;
     const { count } = await tx.appVoiceOverlaySet.updateMany({
       where: { id: row.id, revision: revisionRead },
@@ -764,6 +791,7 @@ export async function exportOverlaysFile(): Promise<VoiceOverlaysFile> {
     })),
     exemplars: words.exemplars,
     coreOnly: words.coreOnly,
+    ...(words.leanings ? { leanings: words.leanings } : {}),
   };
   const parsed = voiceOverlaysFileSchema.safeParse(file);
   if (!parsed.success) {
@@ -823,14 +851,24 @@ export function planOverlaysImport(
     provenance: { ...file.fingerprint.provenance },
     exemplars: { ...file.exemplars, lines: [...file.exemplars.lines] },
     coreOnly: { ...file.coreOnly, lines: [...file.coreOnly.lines] },
+    // A file without bounds keeps the stored ones (below), rather than
+    // reading the absence as "lock every dial".
+    leanings: file.leanings ?? null,
   };
   let setChanged: (keyof OverlaySetWords)[] = [];
   if (stored.set) {
     try {
-      setChanged = changedFieldsOf(setWordsOf(stored.set), setAfter, SET_WORD_FIELDS);
+      const before = setWordsOf(stored.set);
+      setAfter.leanings ??= before.leanings;
+      setChanged = changedFieldsOf(before, setAfter, SET_WORD_FIELDS);
     } catch {
       // A stored set that fails its schema is replaced whole.
       setChanged = [...SET_WORD_FIELDS];
+      if (!setAfter.leanings) {
+        refusals.push(
+          'This file carries no leaning bounds, and the stored ones can’t be read. Add a `leanings` block and import again.'
+        );
+      }
     }
   }
 
@@ -943,17 +981,21 @@ export async function applyOverlaysImport(
       if (planned.plan.writesNothing) return planned.plan;
 
       if (planned.setChanged.length > 0 && planned.setAfter && stored.set) {
+        const { leanings, ...framing } = planned.setAfter;
+        // The planner refuses a file that leaves the set with no bounds.
+        if (!leanings) throw new Error('The overlay set would be left with no leaning bounds.');
+        const setAfter = { ...framing, leanings };
         const revision = stored.set.revision + 1;
         await tx.appVoiceOverlaySet.update({
           where: { id: stored.set.id },
-          data: { ...planned.setAfter, status: 'draft', signedOffAt: null, revision },
+          data: { ...setAfter, status: 'draft', signedOffAt: null, revision },
         });
         await tx.appVoiceOverlaySetRevision.create({
           data: {
             setSlug: stored.set.slug,
             setId: stored.set.id,
             revision,
-            ...planned.setAfter,
+            ...setAfter,
             status: 'draft',
             changedFields:
               stored.set.status === 'draft'

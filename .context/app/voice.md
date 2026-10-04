@@ -677,9 +677,10 @@ and also an `upstream-gap`.
 60-second cache by it, so a per-user block is available. Two things in it are
 per person: their discovery answers, and on the facilitator seat which
 register's overlay is chosen. That is where the person is, not what they
-prefer, and it is shown under every reply. A user's voice leanings are a later filter over these two layers, and until
-that is designed, one person's preference silently reshaping how her voice is
-reproduced is a change nobody asked for and nobody can see.
+prefer, and it is shown under every reply. A person's voice leanings are stored
+and set since f-leanings t-135 (below), but nothing reads them into the block
+until t-136, which stamps them on the turn and names them in the turn's account,
+so a preference never reshapes her voice where nobody can see it.
 
 The cost is a cache partitioned more finely than the answer needs: one embedding
 per cache miss per user, and per **spelling** of a situation rather than per
@@ -696,6 +697,63 @@ one, and a route pinning the key server-side sends one spelling anyway.
 — without the second, a document re-marked `sensitivity-client` goes on reaching
 the system prompt of every conversation whose block was built in the preceding
 minute.
+
+## The person's leanings (f-leanings t-135)
+
+Eleven dials, §3.4's pairs, each a person's own setting for how her voice is
+reproduced for them: plainer, slower, less devotional. A filter over the
+overlays, never the core (§5, §12). t-135 stores and sets them; t-136 reads
+them into the prompt; t-137 changes them in conversation, or on the AI's
+suggestion once the person agrees; t-138 edits the bounds. Owner rulings of
+4 Oct 2026 are in the journal on f-leanings.
+
+**Five stops, rest is her voice.** Each dial is `-2 … 2`. `0` is her voice with
+nothing applied, for every person: not a midpoint anyone chose. The prototype's
+resting values were a picture, and do not carry over. The vocabulary is
+`lib/app/voice/leanings.ts`, pure, because the settings view renders from it.
+
+**The setting is a Daybreak data slot per dial** (`leaning_<key>`, group
+`leanings`), written through `appendSlotValue`, so every change is a new
+version and the history answers "that was too much". The slots are
+**code-owned**, not taxonomy rows: `lib/app/slots/global-provider.ts` hands them
+to Daybreak beside the taxonomy (the one provider Daybreak takes), and the
+taxonomy refuses the group and the `leaning_` prefix. They are `hidden`, which
+keeps them out of the AI's slot vocabulary, its `get_state` read-back, the notes
+panel and the memory index. The notes panel and the index also refuse the
+prefix, so neither depends on the projection having run. An empty taxonomy read
+still hands Daybreak nothing, so its "empty is a fluke" rule holds.
+
+**The reader accepts only our shape.** Nothing on a slot value proves who wrote
+it: `fill_slot` takes any source type, and restricting its writes would stop the
+AI inventing slots, which the owner needs it to keep doing. So
+`lib/app/voice/leanings-store.ts` walks each dial's history newest-first and
+takes the newest version in the exact shape it writes: a stop as `valueJson`,
+`sourceType: user_confirmed`, and one of two fixed reasoning notes (settings, or
+asked). Anything else is skipped, and the person's last real setting holds.
+Until Daybreak can mark a slot capture may not write, that rests on the AI never
+being shown the slots, not on anything the database enforces.
+
+**The bounds live on the overlay set** (`app_voice_overlay_set.leanings`,
+migration `20261010100000_app_voice_leaning_bounds`), revisioned with it, beside
+the lines they bound (§7.3). Per dial: the furthest stop each way (rest is always
+inside), and whether the AI may suggest moving it; plus a set-wide `suggest`.
+Locked is `min = max = 0`. Drafted for her review at project end (idea #46):
+everything moves its full range except question-led ↔ guidance-led and warm ↔
+cool, which stop at `1`, so nobody can ask her to stop asking questions or turn
+cold to someone struggling. Every write to the set carries them: the seed, an
+edit, a sign-off, a restore (a revision from before them keeps the bounds it
+finds, never `null`), and the file round-trip (a file without them keeps the
+stored ones).
+
+**Clamp on read, and on write.** A stored stop outside today's bounds is shown
+and applied at the nearest allowed stop and left as it is, so loosening the
+bound gives it back. A write is clamped before it is stored. A locked dial
+refuses (`leaning_locked`). Bounds that are missing or fail their schema lock
+every dial at rest, and the settings page says so.
+
+**The surface.** `GET`/`PATCH /api/v1/app/leanings`, self-scoped. Settings
+(`app/(lelanea)/app/settings`) guards its own session and renders each dial as
+five native radio stops, saved as chosen, with out-of-bounds stops disabled.
 
 ## The overlays are her words too, and are a DRAFT
 
@@ -1664,8 +1722,9 @@ files now await her, the core, the overlays and the golden set itself, and each
 says so in its own `provenance` block. That is a feature-level check before ship
 (`fp3b`), not something a pull request can satisfy.
 
-**A user's voice leanings** — a filter over the overlays and the exemplars — are
-later still, and may not reach the core.
+**A person's voice leanings in the prompt.** Stored and set since t-135 (above);
+t-136 reads them into the block as authored pole lines, and may not reach the
+core.
 
 **Six `upstream-gap` findings for Sunrise.** The three-way blob check in
 `CLAUDE.md` is what established the tier for each — the first five are on files

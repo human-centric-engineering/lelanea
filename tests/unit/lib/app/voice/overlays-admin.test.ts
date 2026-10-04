@@ -525,6 +525,7 @@ describe('a stored row the schemas no longer accept', () => {
       'provenance',
       'exemplars',
       'coreOnly',
+      'leanings',
     ]);
   });
 });
@@ -747,5 +748,83 @@ describe('overlaysExportFilename', () => {
     expect(overlays.overlaysExportFilename(new Date('2026-03-04T12:00:00Z'))).toBe(
       'lelanea-voice-overlays-2026-03-04.json'
     );
+  });
+});
+
+describe('the leaning bounds travel with the set (f-leanings t-135)', () => {
+  /** The stored bounds, read the way the leanings store reads them. */
+  const storedBounds = () => db.current!.rows('appVoiceOverlaySet')[0].leanings;
+
+  it('are exported with the set, so an export can be imported back whole', async () => {
+    const file = await overlays.exportOverlaysFile();
+
+    expect(file.leanings).toEqual(buildVoiceOverlaySeed().set.leanings);
+  });
+
+  it('are kept when an imported file carries none, rather than read as "lock every dial"', async () => {
+    const before = storedBounds();
+    const { leanings: _none, ...file } = await overlays.exportOverlaysFile();
+    const changed = { ...file, fingerprint: { ...file.fingerprint, title: 'A retitled set' } };
+
+    const preview = await overlays.previewOverlaysImport(changed, false);
+    await overlays.applyOverlaysImport(changed, false, EDITOR);
+
+    expect(preview.sections.find((s) => s.entity === 'set')).toMatchObject({
+      updates: [{ changedFields: ['title'] }],
+    });
+    expect(storedBounds()).toEqual(before);
+    const [latest] = await overlays.listOverlaySetHistory();
+    expect(latest.snapshot.leanings).toEqual(before);
+  });
+
+  it('change through an import that carries different ones, recorded as such', async () => {
+    const file = await overlays.exportOverlaysFile();
+    const tighter = {
+      ...file.leanings!,
+      dials: { ...file.leanings!.dials, pace: { min: 0, max: 0, suggest: false } },
+    };
+
+    await overlays.applyOverlaysImport({ ...file, leanings: tighter }, false, EDITOR);
+
+    expect(storedBounds()).toEqual(tighter);
+    const [latest] = await overlays.listOverlaySetHistory();
+    expect(latest.changedFields).toEqual(['leanings']);
+  });
+
+  it('are kept when a revision from before them is restored', async () => {
+    const before = storedBounds();
+    // Revision 1 as a database migrated by t-135 holds it: written before the
+    // set had bounds, so its column is null.
+    const first = db.current!.rows('appVoiceOverlaySetRevision').find((r) => r.revision === 1)!;
+    // Through the fake's own client, untyped: Prisma's input type has no plain
+    // `null` for a JSON column, and the stored value is exactly that.
+    const revisions = db.current!.client.appVoiceOverlaySetRevision as {
+      update: (args: { where: { id: string }; data: { leanings: null } }) => Promise<unknown>;
+    };
+    await revisions.update({ where: { id: String(first.id) }, data: { leanings: null } });
+    expect(
+      db.current!.rows('appVoiceOverlaySetRevision').find((r) => r.revision === 1)!.leanings
+    ).toBeNull();
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.updateOverlaySet(
+      { exemplars: set.exemplars, coreOnly: { heading: 'Changed heading', lines: ['Changed'] } },
+      set.revision,
+      EDITOR
+    );
+
+    await overlays.restoreOverlaySetRevision(1, set.revision + 1, EDITOR);
+
+    expect(storedBounds()).toEqual(before);
+    const [latest] = await overlays.listOverlaySetHistory();
+    expect(latest.changedFields).toEqual(['coreOnly']);
+  });
+
+  it('are snapshotted on every revision, a sign-off included', async () => {
+    const set = (await overlays.getOverlaysAdminView()).set!;
+    await overlays.signOffOverlaySet(set.revision, EDITOR);
+
+    for (const revision of db.current!.rows('appVoiceOverlaySetRevision')) {
+      expect(revision.leanings, `revision ${String(revision.revision)}`).toEqual(storedBounds());
+    }
   });
 });

@@ -78,6 +78,25 @@ describe('the names the discovery answers hold (f-onboarding t-101)', () => {
   });
 });
 
+describe('the names the voice leanings hold (f-leanings t-135)', () => {
+  it('refuses a new taxonomy slot whose slug a leaning holds', () => {
+    const result = slotDefinitionCreateSchema.safeParse({ slug: 'leaning_length', ...AUTHORED });
+
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('voice leanings');
+  });
+
+  it('refuses the leanings group for a taxonomy slot, on a create and on an edit', () => {
+    expect(
+      slotDefinitionCreateSchema.safeParse({ slug: 'life_work', ...AUTHORED, group: 'leanings' })
+        .success
+    ).toBe(false);
+    expect(slotDefinitionUpdateSchema.safeParse({ ...AUTHORED, group: 'leanings' }).success).toBe(
+      false
+    );
+  });
+});
+
 describe('the write schemas', () => {
   it('takes a whole definition on a create', () => {
     expect(slotDefinitionCreateSchema.safeParse({ slug: 'life_work', ...AUTHORED }).success).toBe(

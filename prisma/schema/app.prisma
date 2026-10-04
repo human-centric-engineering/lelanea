@@ -1715,6 +1715,10 @@ model AppVoiceOverlaySet {
   exemplars   Json
   /// `{ heading, lines }` — the body used when no overlay matched.
   coreOnly    Json
+  /// The leaning bounds (f-leanings t-135, owner ruling 2): per dial, the
+  /// furthest stop each way and whether the AI may suggest moving it.
+  /// `leaningBoundsSchema` in `lib/app/voice/leanings.ts`.
+  leanings    Json
   status      AppVoiceContentStatus @default(draft)
   signedOffAt DateTime?
   revision    Int                   @default(1)
@@ -1746,6 +1750,9 @@ model AppVoiceOverlaySetRevision {
   provenance    Json
   exemplars     Json
   coreOnly      Json
+  /// The leaning bounds as they stood (t-135). Null on a revision written
+  /// before the set had them: a restore of one keeps the bounds it finds.
+  leanings      Json?
   status        AppVoiceContentStatus
   changedFields String[]
   origin        AppContentRevisionOrigin

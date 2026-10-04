@@ -76,6 +76,7 @@
 import type { AppMemoryEmbedding, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
+import { LEANING_DIMENSIONS, leaningSlotSlug } from '@/lib/app/voice/leanings';
 import { logger } from '@/lib/logging';
 import { embedText, getActiveEmbeddingModelSummary } from '@/lib/orchestration/knowledge/embedder';
 import { requireOrgId } from '@/lib/tenancy/context';
@@ -161,7 +162,15 @@ async function unsearchableSlugs(): Promise<string[]> {
     prisma.slotDefinition.findMany({ where: flagged, select: { slug: true } }),
     prisma.appSlotDefinition.findMany({ where: flagged, select: { slug: true } }),
   ]);
-  return [...new Set([...framework, ...ours].map((definition) => definition.slug))];
+  // The voice leanings are settings, not notes, and never searchable
+  // (f-leanings t-135): named here so this holds before Daybreak's projection
+  // has their `hidden` definitions.
+  return [
+    ...new Set([
+      ...[...framework, ...ours].map((definition) => definition.slug),
+      ...LEANING_DIMENSIONS.map((dimension) => leaningSlotSlug(dimension.key)),
+    ]),
+  ];
 }
 
 interface IndexableMessage {

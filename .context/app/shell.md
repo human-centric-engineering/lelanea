@@ -670,9 +670,10 @@ is the specific failure D6 names.
   item resolves to the last module visited (`lelanea.workspace.lastModule` in
   `localStorage`, written by `RememberModule` on a module page) and falls back
   to this landing until one has been. See [`journey.md`](./journey.md).
-- **The eleven voice leanings** — rendered as disabled sliders with the reason
-  beside them. Nothing reads a leaning until a model is answering, which is
-  phase 2.
+- ~~**The eleven voice leanings**~~ — live from f-leanings t-135: each dial is
+  five stops, saved as chosen, within bounds Lelañea Fulton sets. Settings now
+  guards its own session, since it reads the person's settings. See
+  [`voice.md`](./voice.md#the-persons-leanings-f-leanings-t-135).
 - **The resources drawer's lists.** The drawer is real from §14 t-75 — it
   follows the open module and shows her words on it from the API — but until an
   admin enters her list, `to watch`, `to listen` and `to read` are empty, and each section
