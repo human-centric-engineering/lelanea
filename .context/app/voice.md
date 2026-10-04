@@ -309,7 +309,7 @@ leanings. Owner rulings, 2 Oct 2026, are journalled on f-registers.
 **Decided once, at the claim.** `runGeneratedTurn` calls `resolveRegister`
 before claiming the turn and stamps `register` / `registerSource` on the
 `app_turn` row. The contributor reads it back from the running row
-(`registerForPrompt`) rather than deciding again, so the prompt and the account
+(`promptStampFor`, with the leanings) rather than deciding again, so the prompt and the account
 are one value. The seat drops the person's cached block when a turn's register
 differs from their last turn's, so a change reaches the very next prompt.
 

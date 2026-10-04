@@ -367,7 +367,7 @@ describe('the leanings a turn applies (t-136)', () => {
       held: [],
     });
     expect(logger.error).toHaveBeenCalledWith(
-      expect.stringMatching(/resolveLeanings/),
+      expect.stringMatching(/readLeaningInputs/),
       expect.any(Object)
     );
   });
@@ -428,6 +428,22 @@ describe('the leanings a turn applies (t-136)', () => {
         leanings: { applied: [], held: ['pace'] },
       });
       expect(resolveRegister).not.toHaveBeenCalled();
+    });
+
+    it('does not trust leanings stamped beside a register it cannot read, and decides both', async () => {
+      // Stamped under the module, with a hard pole applied; the register is unreadable.
+      world.running = {
+        register: 'stern',
+        registerSource: 'module',
+        leanings: { applied: [{ key: 'pace', stop: -2 }], held: [] },
+      };
+      world.registerSource = 'safety';
+      world.values = [ours(ME, 'leaning_pace', -2, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'guiding',
+        leanings: { applied: [], held: ['pace'] },
+      });
     });
 
     it('is nothing on a seat with no register', async () => {

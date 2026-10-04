@@ -346,7 +346,7 @@ export async function readLeaningInputs(
     }
     return { dials, content: await getVoiceOverlays() };
   } catch (err) {
-    logger.error('resolveLeanings: could not be read; this turn applies none', {
+    logger.error('readLeaningInputs: could not be read; this turn applies none', {
       error: err instanceof Error ? err.message : String(err),
     });
     return { dials: [], content: NOTHING_TO_APPLY };
@@ -422,12 +422,23 @@ export async function promptStampFor(userId: string, seat: string): Promise<Prom
   if (claimed.register !== null && claimed.leanings !== null) {
     return { register: claimed.register, leanings: claimed.leanings };
   }
+  if (claimed.register !== null) {
+    return {
+      register: claimed.register,
+      leanings: await resolveLeanings(userId, seat, claimed.source),
+    };
+  }
 
-  const resolved = claimed.register === null ? await resolveRegister(userId, seat) : null;
-  const register = claimed.register ?? resolved?.register ?? null;
-  const source = claimed.register !== null ? claimed.source : (resolved?.source ?? null);
+  // Nothing usable claimed: both decided here. Leanings stamped beside a
+  // register this build cannot read are not trusted, because they were held
+  // against that register's source, not this one. The dials are read beside
+  // the register, as at the claim.
+  const [resolved, inputs] = await Promise.all([
+    resolveRegister(userId, seat),
+    readLeaningInputs(userId, seat),
+  ]);
   return {
-    register,
-    leanings: claimed.leanings ?? (await resolveLeanings(userId, seat, source)),
+    register: resolved?.register ?? null,
+    leanings: leaningsFrom(inputs, resolved?.source ?? null),
   };
 }

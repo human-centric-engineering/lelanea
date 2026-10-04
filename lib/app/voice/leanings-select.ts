@@ -129,6 +129,7 @@ export const leaningsStampSchema = z.strictObject({
 });
 export type LeaningsStamp = z.infer<typeof leaningsStampSchema>;
 
+/** No leaning applied and none held, for comparing against. Selection never returns it by reference. */
 export const NO_LEANINGS: LeaningsStamp = { applied: [], held: [] };
 
 /** A stored stamp, or `null` when it is not one. Lenient: a row is read, not trusted. */
@@ -168,7 +169,7 @@ export interface SelectLeaningsInput {
  */
 export function selectLeanings(input: SelectLeaningsInput): LeaningsStamp {
   const situations = new Set(input.content.overlays.map((overlay) => overlay.situation));
-  if (!situations.has(LEANING_FRAMING_SITUATION)) return NO_LEANINGS;
+  if (!situations.has(LEANING_FRAMING_SITUATION)) return { applied: [], held: [] };
   const holding = input.registerSource !== null && HOLDING_SOURCES.has(input.registerSource);
 
   const applied: AppliedLeaning[] = [];

@@ -23,11 +23,7 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { readJourneyNodeStates } from '@/lib/app/onboarding/first-run-store';
 import { getModuleConfigForm } from '@/lib/framework/modules/config';
-import {
-  readCurrentModuleSlug,
-  registerForPrompt,
-  resolveRegister,
-} from '@/lib/app/voice/register-store';
+import { readCurrentModuleSlug, resolveRegister } from '@/lib/app/voice/register-store';
 
 const nodes = vi.mocked(readJourneyNodeStates);
 const config = vi.mocked(getModuleConfigForm);
@@ -224,42 +220,6 @@ describe('resolveRegister', () => {
   });
 });
 
-describe('registerForPrompt', () => {
-  it('reads the register the running turn was claimed with, and decides nothing again', async () => {
-    running.mockResolvedValue({ register: 'guiding' } as never);
-
-    await expect(registerForPrompt('u1', 'facilitator')).resolves.toBe('guiding');
-    expect(running).toHaveBeenCalledWith({
-      where: { userId: 'u1', seat: 'facilitator', status: 'running' },
-      orderBy: { startedAt: 'desc' },
-      select: { register: true },
-    });
-    // Values would have said teaching: the claim's answer is the one used.
-    expect(nodes).not.toHaveBeenCalled();
-  });
-
-  it('decides it the same way when no running turn carries one', async () => {
-    running.mockResolvedValue({ register: null } as never);
-
-    await expect(registerForPrompt('u1', 'facilitator')).resolves.toBe('teaching');
-  });
-
-  it('decides it when the turn row cannot be read, and logs it', async () => {
-    running.mockRejectedValue(new Error('down'));
-
-    await expect(registerForPrompt('u1', 'facilitator')).resolves.toBe('teaching');
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('turn row could not be read'),
-      expect.anything()
-    );
-  });
-
-  it('has none on a seat with no register', async () => {
-    await expect(registerForPrompt('u1', 'onboarding')).resolves.toBeNull();
-    expect(running).not.toHaveBeenCalled();
-  });
-});
-
 describe('the fallbacks a failure takes', () => {
   it('orders by first entry when a node has never been active since', async () => {
     nodes.mockResolvedValue([
@@ -303,15 +263,5 @@ describe('the fallbacks a failure takes', () => {
       error: 'config reset',
     });
     expect(logger.error).toHaveBeenCalledWith(expect.any(String), { error: 'crisis reset' });
-
-    running.mockRejectedValueOnce('row reset');
-    await registerForPrompt('u1', 'facilitator');
-    expect(logger.error).toHaveBeenCalledWith(expect.any(String), { error: 'row reset' });
-  });
-
-  it('has no register to give when deciding again finds none', async () => {
-    running.mockResolvedValue(null);
-
-    await expect(registerForPrompt('', 'facilitator')).resolves.toBeNull();
   });
 });

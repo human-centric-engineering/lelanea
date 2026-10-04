@@ -437,7 +437,17 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
       leaningsSentences(
         turn({ registerSource: 'fallback', leanings: { applied: [], held: ['directness'] } })
       )
-    ).toEqual(['Set aside your leaning toward direct, and further, challenging for now.']);
+    ).toEqual(['Set aside your leaning toward direct for now.']);
+  });
+
+  it('says a mild stop by its own name, not the strong one, where a label names both', () => {
+    const said = (stop: 1 | 2) =>
+      leaningsSentences(turn({ leanings: { applied: [{ key: 'directness', stop }], held: [] } }));
+
+    expect(said(1)).toEqual(['Leaned the way you set it in your settings: toward direct.']);
+    expect(said(2)).toEqual([
+      'Leaned the way you set it in your settings: strongly toward direct and challenging.',
+    ]);
   });
 
   it('does not say a pole that is never held was set aside', () => {

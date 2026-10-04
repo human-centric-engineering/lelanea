@@ -360,10 +360,30 @@ function poleWords(label: string): string {
   return `${label[0].toLowerCase()}${label.slice(1)}`;
 }
 
-/** The pole a held dial was leaning toward: only a hard pole is ever held. */
+/**
+ * Where a label names a pole's two stops ("Direct, and further, challenging"),
+ * the first stop's part alone; otherwise the label. So a mild setting is not
+ * described as the strong one.
+ */
+const FURTHER = ', and further, ';
+function mildPole(label: string): string {
+  const at = label.indexOf(FURTHER);
+  return at === -1 ? label : label.slice(0, at);
+}
+
+/** What a stop leans toward, in a sentence: "toward direct", "strongly toward direct and challenging". */
+function towardWords(key: LeaningKey, stop: number): string {
+  const dimension = leaningDimension(key);
+  const label = stop < 0 ? dimension.left : dimension.right;
+  return Math.abs(stop) === 2
+    ? `strongly toward ${poleWords(label.replace(FURTHER, ' and '))}`
+    : `toward ${poleWords(mildPole(label))}`;
+}
+
+/** The pole a held dial was leaning toward, either stop: only a hard pole is ever held. */
 function heldPole(key: LeaningKey): string {
   const dimension = leaningDimension(key);
-  return poleWords(HELD_WHEN_HARD.get(key) === 'left' ? dimension.left : dimension.right);
+  return poleWords(mildPole(HELD_WHEN_HARD.get(key) === 'left' ? dimension.left : dimension.right));
 }
 
 /**
@@ -379,13 +399,7 @@ export function leaningsSentences(turn: TurnAccount | null): string[] {
   if (!leanings) return [];
   const sentences: string[] = [];
   if (leanings.applied.length > 0) {
-    const toward = leanings.applied
-      .map(({ key, stop }) => {
-        const dimension = leaningDimension(key);
-        const pole = poleWords(stop < 0 ? dimension.left : dimension.right);
-        return `${Math.abs(stop) === 2 ? 'strongly ' : ''}toward ${pole}`;
-      })
-      .join('; ');
+    const toward = leanings.applied.map(({ key, stop }) => towardWords(key, stop)).join('; ');
     sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
   }
   // Only a hard pole is ever held. A stamp naming another key (an old row, or a
