@@ -170,8 +170,10 @@ export const prismaFake = {
    * records the bound values for the test to assert on. The smoke runs the SQL.
    */
   $queryRaw: vi.fn(async (_strings: TemplateStringsArray, ...values: unknown[]) => {
-    const limit = values[values.length - 1] as number;
-    const live = new Set(world.conversations.map((row) => row.id));
+    // Bound in order: the org, the ids given up on, the limit.
+    const given = new Set(values[1] as string[]);
+    const limit = values[2] as number;
+    const live = new Set([...world.conversations.map((row) => row.id), ...given]);
     const gone = [
       ...new Set(
         world.turns

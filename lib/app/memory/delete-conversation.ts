@@ -53,7 +53,7 @@
 import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
-import { requireOrgId } from '@/lib/tenancy/context';
+import { requireOrgId, runAsSystem } from '@/lib/tenancy/context';
 import { stillAnswering } from '@/lib/app/memory/delete-exchange';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
 
@@ -75,6 +75,22 @@ export interface ForgottenConversations {
 /** How many deleted conversations one sweep takes. */
 export const SWEEP_BATCH = 100;
 
+/** After this many failures, a conversation is left out of the sweep. */
+export const MAX_SWEEP_ATTEMPTS = 3;
+
+/**
+ * Deleted conversations whose forgetting failed, and how often. In process
+ * memory, like the job clock: a restart gives each three more tries. Without
+ * it, a conversation that always fails would hold its batch slot every run,
+ * and the sweep would stop reaching anyone else's.
+ */
+const sweepFailures = new Map<string, number>();
+
+/** For tests: forget every recorded failure. */
+export function __resetSweepFailuresForTests(): void {
+  sweepFailures.clear();
+}
+
 /**
  * Forget what our turns in these conversations left behind, for the ones that
  * no longer exist. A conversation that still exists is never touched, so a
@@ -92,10 +108,13 @@ export async function forgetDeletedConversations(
   const none: ForgottenConversations = { turns: 0, versions: 0, deferred: 0, failed: 0 };
   if (ids.length === 0) return none;
 
-  const live = await prisma.aiConversation.findMany({
-    where: { id: { in: ids } },
-    select: { id: true },
-  });
+  // Read past row-level security, deliberately. Everything below rests on
+  // "this conversation is gone", and under an org's policy a live conversation
+  // that scope cannot see would look gone too. So this is the one check that
+  // must see every thread, and it fails closed.
+  const live = await runAsSystem('a deleted conversation is gone, not merely hidden (t-128)', () =>
+    prisma.aiConversation.findMany({ where: { id: { in: ids } }, select: { id: true } })
+  );
   const liveIds = new Set(live.map((row) => row.id));
   const gone = ids.filter((id) => !liveIds.has(id));
   if (gone.length === 0) return none;
@@ -108,6 +127,7 @@ export async function forgetDeletedConversations(
     select: {
       id: true,
       userId: true,
+      conversationId: true,
       status: true,
       startedAt: true,
       slotWrites: { select: { slotSlug: true, version: true } },
@@ -155,9 +175,13 @@ export async function forgetDeletedConversations(
       });
       result.turns += done.turns;
       result.versions += done.versions;
+      for (const turn of owned) if (turn.conversationId) sweepFailures.delete(turn.conversationId);
       forgetCachedContext(userId);
     } catch (err) {
       result.failed += owned.length;
+      for (const id of new Set(owned.map((turn) => turn.conversationId))) {
+        if (id) sweepFailures.set(id, (sweepFailures.get(id) ?? 0) + 1);
+      }
       logger.error('Could not forget what a deleted conversation left behind for one person', {
         turns: owned.length,
         error: err instanceof Error ? err.message : String(err),
@@ -177,25 +201,23 @@ export async function forgetDeletedConversations(
 export async function sweepDeletedConversations(
   batchSize: number = SWEEP_BATCH
 ): Promise<ForgottenConversations> {
-  const conversationIds = await findDeletedConversations(batchSize);
-  const result = await forgetDeletedConversations(conversationIds);
-  if (result.turns > 0 || result.deferred > 0 || result.failed > 0) {
-    logger.info('Forgot what deleted conversations left behind', {
-      orgId: requireOrgId(),
-      conversations: conversationIds.length,
-      ...result,
-    });
-  }
-  return result;
+  // Its outcome is folded into the tick's log line (`AppJob.run`), so it is
+  // returned rather than logged here.
+  return forgetDeletedConversations(await findDeletedConversations(batchSize));
 }
 
 /**
  * The ids of conversations in this org that are gone but still have our turns
- * pointing at them, up to `batchSize`. What the sweep acts on, exported so the
- * smoke can prove the SQL without forgetting anyone else's.
+ * pointing at them, up to `batchSize`, leaving out any that have failed
+ * {@link MAX_SWEEP_ATTEMPTS} times. Candidates only: the existence check in
+ * {@link forgetDeletedConversations} is what decides. Exported so the smoke can
+ * prove the SQL without forgetting anyone else's.
  */
 export async function findDeletedConversations(batchSize: number = SWEEP_BATCH): Promise<string[]> {
   const orgId = requireOrgId();
+  const given = [...sweepFailures]
+    .filter(([, attempts]) => attempts >= MAX_SWEEP_ATTEMPTS)
+    .map(([id]) => id);
   const rows = await prisma.$queryRaw<Array<{ conversationId: string }>>`
     SELECT DISTINCT t."conversationId"
       FROM app_turn t
@@ -203,6 +225,7 @@ export async function findDeletedConversations(batchSize: number = SWEEP_BATCH):
      WHERE t."orgId" = ${orgId}
        AND t."conversationId" IS NOT NULL
        AND c.id IS NULL
+       AND t."conversationId" <> ALL(${given}::text[])
      LIMIT ${batchSize}
   `;
   return rows.map((row) => row.conversationId);

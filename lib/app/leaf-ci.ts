@@ -290,7 +290,8 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'and deleted, and the org-scoped sweep job, which has no caller to scope ' +
       'to. `conversationVisibilityWhere` answers who may SEE a thread; an ' +
       'existence check must see every thread, or it would take a live one it ' +
-      'could not see for a deleted one and forget what its turns wrote.',
+      'could not see for a deleted one and forget what its turns wrote. So it ' +
+      'runs in the system scope, past row-level security, and fails closed.',
   },
   {
     path: 'lib/app/memory/memory-index.ts',

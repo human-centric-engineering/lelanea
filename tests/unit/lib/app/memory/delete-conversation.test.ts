@@ -55,12 +55,17 @@ vi.mock('@/lib/app/agent/settings', () => ({
 vi.mock('@/lib/framework/modules/registry', () => ({
   getRegisteredModules: () => [{ slug: 'values' }],
 }));
-vi.mock('@/lib/tenancy/context', () => ({ requireOrgId: () => 'org-1' }));
+const { runAsSystem } = vi.hoisted(() => ({
+  runAsSystem: vi.fn((_reason: string, fn: () => Promise<unknown>) => fn()),
+}));
+vi.mock('@/lib/tenancy/context', () => ({ requireOrgId: () => 'org-1', runAsSystem }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: logError, debug: vi.fn() },
 }));
 
 const {
+  __resetSweepFailuresForTests,
+  MAX_SWEEP_ATTEMPTS,
   findDeletedConversations,
   forgetDeletedConversations,
   sweepDeletedConversations,
@@ -136,6 +141,7 @@ function population(): void {
 beforeEach(() => {
   resetWorld();
   vi.clearAllMocks();
+  __resetSweepFailuresForTests();
   population();
 });
 
@@ -181,6 +187,17 @@ describe('forgetDeletedConversations', () => {
     expect(world.turns.some((row) => row.id === 'turn-x')).toBe(true);
     expect(world.ledger.some((row) => row.turnId === 'turn-x')).toBe(true);
     expect(rowsOf(THEM, 'life_work')[0].value).toBe('their own words');
+  });
+
+  it('asks whether a conversation is gone past row-level security, so a hidden one is not taken', async () => {
+    await forgetDeletedConversations([DELETED], { userId: ME });
+
+    expect(runAsSystem).toHaveBeenCalledTimes(1);
+    expect(prismaFake.aiConversation.findMany).toHaveBeenCalledTimes(1);
+    // The read ran inside the system scope, not beside it.
+    expect(runAsSystem.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaFake.aiConversation.findMany.mock.invocationCallOrder[0]
+    );
   });
 
   it('touches nothing for a conversation that still exists', async () => {
@@ -288,7 +305,46 @@ describe('sweepDeletedConversations', () => {
     expect(await findDeletedConversations(7)).toEqual([DELETED, THEIRS]);
 
     const [, ...bound] = prismaFake.$queryRaw.mock.calls[0];
-    expect(bound).toEqual(['org-1', 7]);
+    expect(bound).toEqual(['org-1', [], 7]);
+  });
+
+  it('stops offering a conversation that keeps failing, so the rest are reached', async () => {
+    world.conversations.push({
+      id: THEIRS,
+      userId: THEM,
+      title: null,
+      summary: null,
+      summaryUpToMessageId: null,
+    });
+    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+    prismaFake.appTurn.deleteMany.mockImplementation(async () => {
+      throw new Error('lock timeout');
+    });
+    try {
+      for (let run = 1; run < MAX_SWEEP_ATTEMPTS; run += 1) {
+        await sweepDeletedConversations();
+        expect(await findDeletedConversations()).toEqual([DELETED]);
+      }
+      await sweepDeletedConversations();
+      expect(await findDeletedConversations()).toEqual([]);
+    } finally {
+      prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+    }
+  });
+
+  it('takes a conversation that failed once on the next run', async () => {
+    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+    prismaFake.appTurn.deleteMany.mockImplementationOnce(async () => {
+      throw new Error('lock timeout');
+    });
+    await sweepDeletedConversations();
+    prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+
+    const result = await sweepDeletedConversations();
+
+    // The first run took the other person's turn already.
+    expect(result.turns).toBe(2);
+    expect(world.turns.map((row) => row.id)).toEqual(['turn-b']);
   });
 
   it('does nothing when no conversation is gone', async () => {

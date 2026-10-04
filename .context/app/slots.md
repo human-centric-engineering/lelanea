@@ -1231,7 +1231,13 @@ forget what other people's deleted conversations left.
 **A failed turn retried under the same id is not taken.** Claiming it again
 resets its conversation, so the delete, which requires the deleted conversation,
 leaves it and the ledger row its new attempt writes. One person's failure is
-logged and the sweep carries on for everyone else.
+logged and the sweep carries on for everyone else; a conversation that fails
+three times is left out of the sweep until the process restarts, so it cannot
+hold a batch slot forever.
+
+**"Gone" is decided past row-level security.** The sweep's query only nominates
+candidates. Whether a conversation still exists is read in the system scope, so
+a live conversation an org's policy hides is never taken for a deleted one.
 
 ### What it changes about erasure (Art. 17)
 
