@@ -77,6 +77,7 @@
     "smoke:app-delete-exchange": "tsx --env-file=.env.local scripts/smoke/app-delete-exchange.ts",
     "smoke:app-delete-conversation": "tsx --env-file=.env.local scripts/smoke/app-delete-conversation.ts",
     "smoke:app-memory-index": "tsx --env-file=.env.local scripts/smoke/app-memory-index.ts",
+    "smoke:app-search-memory": "tsx --env-file=.env.local scripts/smoke/app-search-memory.ts",
     "smoke:voice-comparison": "tsx --env-file=.env.local scripts/smoke/voice-comparison.ts",
     "smoke:app-turn": "tsx --env-file=.env.local scripts/app/smoke-turn.ts",
     "smoke:app-metering": "tsx --env-file=.env.local scripts/app/smoke-metering.ts",

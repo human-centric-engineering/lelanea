@@ -353,12 +353,27 @@ export async function backfillMemoryIndex(
   return { indexed, failed };
 }
 
-/** How a search is bounded. */
+/** How a search is bounded, and whom its query embedding is charged to. */
 export interface MemorySearchOptions {
   /** At most this many hits; capped at {@link MAX_SEARCH_RESULTS}. */
   limit: number;
   /** Leave out hits further than this cosine distance. */
   maxDistance?: number;
+  /**
+   * Messages never to return: the turn's own message, which the AI already
+   * has in front of it and which would otherwise come back as the nearest hit.
+   */
+  excludeMessageIds?: string[];
+  /**
+   * Where the query embedding's cost row points. The person is always the
+   * subject; this adds the agent, the conversation and the turn (`turnId` in
+   * `metadata` is what the per-turn meter matches, `metering.ts`).
+   */
+  attribution?: {
+    agentId?: string;
+    conversationId?: string;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 /**
@@ -384,12 +399,16 @@ export async function searchMemory(
   if (trimmed.length === 0) return [];
   const limit = Math.max(1, Math.min(options.limit, MAX_SEARCH_RESULTS));
 
+  const { attribution } = options;
   const { embedding, model } = await embedText(trimmed.slice(0, MAX_INDEXED_CHARS), 'query', {
     userId: subject.userId,
-    metadata: { kind: MEMORY_SEARCH_COST_KIND },
+    ...(attribution?.agentId ? { agentId: attribution.agentId } : {}),
+    ...(attribution?.conversationId ? { conversationId: attribution.conversationId } : {}),
+    metadata: { ...(attribution?.metadata ?? {}), kind: MEMORY_SEARCH_COST_KIND },
   });
   const vector = toVector(embedding);
   const maxDistance = options.maxDistance ?? null;
+  const excluded = options.excludeMessageIds ?? [];
 
   const rows = await prisma.$queryRaw<
     Array<{
@@ -410,6 +429,7 @@ export async function searchMemory(
        AND e."orgId" = ${requireOrgId()}
        AND e."embeddingModel" = ${model}
        AND (${maxDistance}::float8 IS NULL OR (e.embedding <=> ${vector}::vector) < ${maxDistance}::float8)
+       AND e."messageId" <> ALL(${excluded}::text[])
      ORDER BY e.embedding <=> ${vector}::vector ASC
      LIMIT ${limit}
   `;

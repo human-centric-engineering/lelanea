@@ -376,6 +376,14 @@ describe('the register (f-registers t-125)', () => {
     expect(parts.map((part) => part.key)).toEqual(['noted_register']);
   });
 
+  it('says it looked back when the turn searched what the person said before (t-130)', () => {
+    const parts = accountParts(input({ capabilities: ['search_person_memory'] }));
+
+    expect(accountLine(parts)).toBe('Looked back at what you’ve said before');
+    // Named, so it is not the "Used search person memory" floor.
+    expect(parts.map((part) => part.key)).toEqual(['looked_back']);
+  });
+
   it('says nothing for a turn with no register, or no turn', () => {
     expect(registerSentence(turn())).toBeNull();
     expect(registerSentence(null)).toBeNull();

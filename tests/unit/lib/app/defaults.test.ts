@@ -338,11 +338,12 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). THREE registrations: two mounted OVER an
-    // upstream slug rather than beside it — f-safety t-60's search, so each
-    // result says whose material it is, and f-slots t-72's `fill_slot`, so one
-    // turn writes a slot once — and one of the app's own, f-resources t-77's
-    // `suggest_resource`. What is pinned is the handler the dispatcher ends up
+    // PINNED, not deleted (`HB2`). Two registrations mounted OVER an upstream
+    // slug rather than beside it — f-safety t-60's search, so each result says
+    // whose material it is, and f-slots t-72's `fill_slot`, so one turn writes
+    // a slot once — and the app's own: f-resources t-77's `suggest_resource`,
+    // f-registers t-126's `set_register` and f-memory t-130's
+    // `search_person_memory`. What is pinned is the handler the dispatcher ends up
     // holding for each slug after the real lazy registration pass. A
     // registration under any other slug, or a built-in flush that ran after
     // ours, fails here. A stray registration of one of THESE classes is caught
@@ -361,6 +362,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const { GuardedFillSlotCapability } = await import('@/lib/app/slots/capture');
       const { SuggestResourceCapability } = await import('@/lib/app/resources/suggest');
       const { SetRegisterCapability } = await import('@/lib/app/voice/register-capability');
+      const { SearchPersonMemoryCapability } = await import('@/lib/app/memory/search-capability');
       const registerSpy = vi.spyOn(capabilityDispatcher, 'register');
       __resetRegistrationForTests();
       registerBuiltInCapabilities();
@@ -368,12 +370,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       const capture = capabilityDispatcher.getHandler('fill_slot');
       const suggest = capabilityDispatcher.getHandler('suggest_resource');
       const register = capabilityDispatcher.getHandler('set_register');
+      const memory = capabilityDispatcher.getHandler('search_person_memory');
       const ours = registerSpy.mock.calls.filter(([capability]) =>
         [
           LabelledSearchKnowledgeCapability,
           GuardedFillSlotCapability,
           SuggestResourceCapability,
           SetRegisterCapability,
+          SearchPersonMemoryCapability,
         ].some((cls) => capability instanceof cls)
       );
       const appHandlers = [
@@ -381,6 +385,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'fill_slot',
         'suggest_resource',
         'set_register',
+        'search_person_memory',
       ];
       registerSpy.mockRestore();
       expect(search).toBeInstanceOf(LabelledSearchKnowledgeCapability);
@@ -388,7 +393,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(suggest).toBeInstanceOf(SuggestResourceCapability);
       // f-registers t-126.
       expect(register).toBeInstanceOf(SetRegisterCapability);
-      expect(ours).toHaveLength(4);
+      // f-memory t-130.
+      expect(memory).toBeInstanceOf(SearchPersonMemoryCapability);
+      expect(ours).toHaveLength(5);
       expect(appHandlers.every((slug) => capabilityDispatcher.has(slug))).toBe(true);
       expect(initAppCapabilities()).toBeUndefined();
     },

@@ -184,6 +184,17 @@ export const RESOURCE_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['suggest
 export const REGISTER_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['set_register'];
 
 /**
+ * What the memory seed grants: the agent may look back, by meaning, through
+ * what this person has said before (f-memory t-130).
+ *
+ * Its own list because its own seed grants it
+ * (`prisma/seeds/app-lelanea/024-search-person-memory.ts`) and its own
+ * migration brings existing databases the row and the grant. The tool's
+ * description says when to reach for it and how to quote what comes back.
+ */
+export const MEMORY_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_person_memory'];
+
+/**
  * The capabilities the agent holds that only read (f-safety t-60).
  *
  * `search_knowledge_base` reads chunks. It is mounted in this leaf as
@@ -203,6 +214,11 @@ export const READ_ONLY_CAPABILITY_SLUGS = [
   // id (f-resources t-77). Reads the library and returns a record: no write,
   // no delete, nothing on anyone's behalf — `lib/app/resources/suggest.ts`.
   'suggest_resource',
+  // Finds, by meaning, what this person has said before (f-memory t-130).
+  // Reads their own words only: the person is the run's, never an argument,
+  // and the search filters every row by them (`lib/app/memory/memory-index.ts`).
+  // Writes nothing. The query embedding is a cost row on their own budget.
+  'search_person_memory',
 ] as const;
 
 /**

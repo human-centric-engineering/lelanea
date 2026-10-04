@@ -26,6 +26,8 @@
 import { Prisma } from '@prisma/client';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
+
 const ME = 'user-me';
 const THEM = 'user-them';
 const ORG = 'install';
@@ -64,6 +66,7 @@ const world = vi.hoisted(() => ({
   dimension: 1536,
   embedFails: false,
   sql: [] as Array<{ text: string; values: unknown[] }>,
+  turns: [] as Array<{ userId: string; turnId: string; userMessageId: string | null }>,
 }));
 
 /** One slot per word: two texts are near when they share words. */
@@ -137,14 +140,16 @@ const prismaFake = {
         .map((m) => ({ id: m.id, userId: conversationOf(m)?.userId }));
     }
     if (text.includes('<=>')) {
-      // search: [vec, userId, userId, orgId, model, max, vec, max, vec, limit]
+      // search: [vec, userId, userId, orgId, model, max, vec, max, excluded, vec, limit]
       const query = parseVector(v[0]);
       const [, userE, userC, orgId, model, max] = v;
-      const limit = Number(v[9]);
+      const excluded = v[8] as string[];
+      const limit = Number(v[10]);
       return world.embeddings
         .filter((e) => e.userId === userE && e.orgId === orgId && e.embeddingModel === model)
         .map((e) => ({ e, m: world.messages.find((m) => m.id === e.messageId) }))
         .filter(({ m }) => m && conversationOf(m)?.userId === userC)
+        .filter(({ e }) => !excluded.includes(e.messageId))
         .map(({ e, m }) => ({
           messageId: e.messageId,
           conversationId: m!.conversationId,
@@ -181,6 +186,14 @@ const prismaFake = {
     });
     return 1;
   }),
+  appTurn: {
+    findUnique: vi.fn(
+      async ({ where }: { where: { userId_turnId: { userId: string; turnId: string } } }) =>
+        world.turns.find(
+          (t) => t.userId === where.userId_turnId.userId && t.turnId === where.userId_turnId.turnId
+        ) ?? null
+    ),
+  },
   appMemoryEmbedding: {
     findFirst: vi.fn(async ({ where }: { where: { messageId: string; userId: string } }) => {
       const row = world.embeddings.find(
@@ -230,6 +243,8 @@ const {
   MAX_BACKFILL_ATTEMPTS,
   __resetMemoryIndexForTests,
 } = await import('@/lib/app/memory/memory-index');
+const { SearchPersonMemoryCapability, spokenDate } =
+  await import('@/lib/app/memory/search-capability');
 
 let clock = 0;
 function said(
@@ -268,6 +283,7 @@ beforeEach(() => {
   world.dimension = DIM;
   world.embedFails = false;
   world.sql = [];
+  world.turns = [];
   clock = 0;
   vi.clearAllMocks();
   __resetMemoryIndexForTests();
@@ -536,6 +552,21 @@ describe('searching', () => {
     });
   });
 
+  it('leaves out the messages it is told to, and charges the query where it is told to', async () => {
+    const hits = await searchMemory({ userId: ME }, 'father lake sail', {
+      limit: 5,
+      excludeMessageIds: ['mine'],
+      attribution: { agentId: 'agent-1', conversationId: 'conv-x', metadata: { turnId: 't-9' } },
+    });
+    expect(hits.map((hit) => hit.sourceId)).toEqual(['mine-other']);
+    expect(embedText).toHaveBeenLastCalledWith('father lake sail', 'query', {
+      userId: ME,
+      agentId: 'agent-1',
+      conversationId: 'conv-x',
+      metadata: { turnId: 't-9', kind: 'memory_search' },
+    });
+  });
+
   it('answers a blank query with nothing, and spends nothing on it', async () => {
     embedText.mockClear();
     expect(await searchMemory({ userId: ME }, '   ', { limit: 5 })).toEqual([]);
@@ -575,5 +606,109 @@ describe('the subject-access list', () => {
       expect.objectContaining({ sourceKind: 'message', messageId: 'mine' }),
     ]);
     expect(entries[0]).not.toHaveProperty('embedding');
+  });
+});
+
+describe('the AI’s search tool (t-130)', () => {
+  const tool = new SearchPersonMemoryCapability();
+  const onSeat = (
+    userId: string | null,
+    seat = 'facilitator',
+    turnId = 'turn-1'
+  ): CapabilityContext => ({
+    userId,
+    agentId: 'agent-guide',
+    conversationId: `conv-${userId}-${SEAT}`,
+    costLogMetadata: { turnId, seat },
+  });
+
+  beforeEach(async () => {
+    said('mine', MY_FATHER);
+    said('mine-job', 'I started a new job in the city this spring');
+    said('theirs', THEIR_FATHER, { owner: THEM });
+    await backfillMemoryIndex();
+    expect(world.embeddings).toHaveLength(3);
+  });
+
+  it('finds the caller’s own words and never another person’s, even when theirs is nearer', async () => {
+    // The query is THEIR sentence, word for word: the nearest vector in the
+    // index is theirs, at distance zero, and it is still not mine to see.
+    const result = await tool.execute({ query: THEIR_FATHER }, onSeat(ME));
+
+    expect(result.success).toBe(true);
+    expect(result.data?.results.map((item) => item.words)).toEqual([MY_FATHER]);
+    expect(JSON.stringify(result.data)).not.toContain(THEIR_FATHER);
+
+    const theirs = await tool.execute({ query: MY_FATHER }, onSeat(THEM));
+    expect(theirs.data?.results.map((item) => item.words)).toEqual([THEIR_FATHER]);
+  });
+
+  it('searches the caller only: the person comes from the run, never the arguments', () => {
+    expect(Object.keys(tool.functionDefinition.parameters.properties as object)).toEqual(['query']);
+    // An extra key a model might add is dropped by the schema, not obeyed.
+    const parsed = tool.validate({ query: 'father', userId: THEM });
+    expect(parsed).toEqual({ query: 'father' });
+  });
+
+  it('labels each result as the person’s own words, with when they said them', async () => {
+    const result = await tool.execute({ query: MY_FATHER }, onSeat(ME));
+    const [item] = result.data?.results ?? [];
+    const saidOn = world.messages.find((m) => m.id === 'mine')!.createdAt;
+
+    expect(item.when).toBe(spokenDate(saidOn));
+    expect(item.when).toBe('1 January 1970');
+    expect(item.whose).toBe(
+      'The person’s own words, said by them on 1 January 1970. Quote them only as theirs.'
+    );
+  });
+
+  it('does not hand back the message the turn is answering', async () => {
+    world.turns.push({ userId: ME, turnId: 'turn-now', userMessageId: 'mine' });
+    const result = await tool.execute({ query: MY_FATHER }, onSeat(ME, 'facilitator', 'turn-now'));
+
+    expect(result.data?.results.map((item) => item.words)).not.toContain(MY_FATHER);
+  });
+
+  it('charges the query to the person, the agent, the conversation and the turn', async () => {
+    embedText.mockClear();
+    await tool.execute({ query: 'father' }, onSeat(ME));
+
+    expect(embedText).toHaveBeenCalledWith('father', 'query', {
+      userId: ME,
+      agentId: 'agent-guide',
+      conversationId: `conv-${ME}-${SEAT}`,
+      metadata: { turnId: 'turn-1', seat: 'facilitator', kind: 'memory_search' },
+    });
+  });
+
+  it.each([
+    ['the onboarding seat', onSeat(ME, 'onboarding'), 'wrong_seat'],
+    ['no turn at all', { userId: ME, agentId: 'agent-guide' }, 'wrong_seat'],
+    ['no person', onSeat(null), 'no_person'],
+  ] as const)('refuses from %s, and searches nothing', async (_case, context, code) => {
+    embedText.mockClear();
+    const result = await tool.execute({ query: 'father' }, context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe(code);
+    expect(embedText).not.toHaveBeenCalled();
+  });
+
+  it('answers, rather than throwing, when the search fails', async () => {
+    world.embedFails = true;
+    const result = await tool.execute({ query: 'father' }, onSeat(ME));
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('search_failed');
+    expect(result.error?.message).toMatch(/do not claim to remember/);
+  });
+
+  it('keeps neither the query nor the words on the audit row', async () => {
+    const result = await tool.execute({ query: MY_FATHER }, onSeat(ME));
+    const redacted = tool.redactProvenance({ query: MY_FATHER }, result);
+
+    expect(redacted.args).toEqual({ query: '[redacted]' });
+    expect(redacted.resultPreview).toBe('{"success":true,"found":1}');
+    expect(JSON.stringify(redacted)).not.toContain('father');
   });
 });

@@ -18,6 +18,8 @@ import type { BaseCapability } from '@/lib/orchestration/capabilities/base-capab
 import { SUGGEST_RESOURCE_IMPL } from '@/prisma/seeds/app-lelanea/014-suggest-resource';
 import { SetRegisterCapability } from '@/lib/app/voice/register-capability';
 import { SET_REGISTER_IMPL } from '@/prisma/seeds/app-lelanea/023-set-register';
+import { SearchPersonMemoryCapability } from '@/lib/app/memory/search-capability';
+import { SEARCH_PERSON_MEMORY_IMPL } from '@/prisma/seeds/app-lelanea/024-search-person-memory';
 
 export const APP_CAPABILITY_PAIRS: {
   slug: string;
@@ -33,5 +35,10 @@ export const APP_CAPABILITY_PAIRS: {
     slug: 'set_register',
     seeded: SET_REGISTER_IMPL,
     instance: new SetRegisterCapability(),
+  },
+  {
+    slug: 'search_person_memory',
+    seeded: SEARCH_PERSON_MEMORY_IMPL,
+    instance: new SearchPersonMemoryCapability(),
   },
 ];
