@@ -48,6 +48,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
 
 import { prisma } from '@/lib/db/client';
 import { ACKNOWLEDGEMENT_KINDS } from '@/lib/app/gateway/kinds';
@@ -92,19 +93,21 @@ const stamp = Date.now();
 const QUESTION =
   'I keep saying honesty is my most important value, but I lied to my manager last week to avoid a hard conversation. What do I do with that?';
 
-interface GoldenPrompt {
-  kind: string;
-  prompt: string;
-}
+/** The part of the golden set this reads: each prompt's kind and words. */
+const goldenSetSchema = z.object({
+  prompts: z.array(z.object({ kind: z.string(), prompt: z.string() })),
+});
 
 /** The golden set's refusal and decline prompts, as authored. */
 function goldenPrompts(): { refusals: string[]; declines: string[] } {
-  const file = JSON.parse(
-    readFileSync(
-      path.join(process.cwd(), 'seed-data/drafted/lelanea_voice_golden_set.json'),
-      'utf8'
+  const file = goldenSetSchema.parse(
+    JSON.parse(
+      readFileSync(
+        path.join(process.cwd(), 'seed-data/drafted/lelanea_voice_golden_set.json'),
+        'utf8'
+      )
     )
-  ) as { prompts: GoldenPrompt[] };
+  );
   const of = (kind: string) => file.prompts.filter((p) => p.kind === kind).map((p) => p.prompt);
   return { refusals: of('refusal'), declines: of('decline') };
 }
@@ -380,9 +383,9 @@ async function main(): Promise<void> {
           `and the register is ${config.crisis ? 'guiding, from safety' : 'teaching, from the module'}`
         );
         const transcript = await readTranscript(session, CONVERSATION_SEAT);
-        const account = transcript.entries.flatMap((e) =>
+        const account: TurnAccount | undefined = transcript.entries.flatMap((e) =>
           e.kind === 'reply' && e.turn ? [e.turn] : []
-        )[0] as TurnAccount | undefined;
+        )[0];
         check(
           JSON.stringify(account?.leanings) === JSON.stringify(stored),
           'and so does the transcript read'
