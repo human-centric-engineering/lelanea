@@ -1276,17 +1276,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/privacy/export-sources.ts',
         // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122; f-memory t-127, t-128, t-129).
+        // f-onboarding t-122; f-memory t-127, t-128, t-129, t-130).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
         'lib/app/memory/delete-exchange.ts',
         'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
+        'lib/app/memory/stored-results.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(11).fill('by-design')
+        Array<'by-design'>(12).fill('by-design')
       );
     },
   },
@@ -1327,6 +1328,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // t-122 — whether the member has spoken on the facilitator seat, by design.
       // t-127 — deleting the member's own exchanges, owner-scoped, by design.
       // t-129 — indexing and searching the member's own words, owner-scoped, by design.
+      // t-130 — clearing the member's own stored search results, owner-scoped, by design.
       expect(
         leafOwnerlessSurfaceExceptions.map((entry) => [entry.path, entry.disposition])
       ).toEqual([
@@ -1336,6 +1338,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
         ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
+        ['lib/app/memory/stored-results.ts', 'by-design'],
       ]);
     },
   },
