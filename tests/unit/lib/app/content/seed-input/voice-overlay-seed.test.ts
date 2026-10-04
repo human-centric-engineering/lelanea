@@ -279,3 +279,15 @@ describe('the leaning bounds migration (f-leanings t-135)', () => {
     );
   });
 });
+
+describe('the leaning bounds the seed writes (f-leanings t-135)', () => {
+  it('refuses a file without them, rather than seed a set that locks every dial', () => {
+    const { leanings: _none, ...file } = readVoiceOverlaysFile();
+
+    expect(() => buildVoiceOverlaySeed(file)).toThrow(/no `leanings` block/);
+  });
+
+  it('writes the file’s bounds onto the set', () => {
+    expect(buildVoiceOverlaySeed().set.leanings).toEqual(readVoiceOverlaysFile().leanings);
+  });
+});
