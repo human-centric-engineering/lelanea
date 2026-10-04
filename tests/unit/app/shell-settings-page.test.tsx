@@ -72,10 +72,8 @@ describe('with a session', () => {
       name: 'Verbose and exploratory to Concise and spare',
     });
     expect(
-      within(length).getByRole('radio', {
-        name: 'Strongly toward Concise and spare',
-      }).checked
-    ).toBe(true);
+      within(length).getByRole('radio', { name: 'Strongly toward Concise and spare' })
+    ).toHaveProperty('checked', true);
   });
 
   it('claims only what is built: settings now, conversation with t-137', async () => {
