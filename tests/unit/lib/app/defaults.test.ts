@@ -1269,16 +1269,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/privacy/export-sources.ts',
         // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
-        // f-onboarding t-122; f-memory t-127, t-129).
+        // f-onboarding t-122; f-memory t-127, t-128, t-129).
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
         'lib/app/memory/delete-exchange.ts',
+        'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(10).fill('by-design')
+        Array<'by-design'>(11).fill('by-design')
       );
     },
   },
@@ -1326,6 +1327,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/agent/metering.ts', 'by-design'],
         ['lib/app/conversation/opening.ts', 'by-design'],
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
+        ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
       ]);
     },
