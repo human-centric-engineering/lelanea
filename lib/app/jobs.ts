@@ -22,6 +22,7 @@
 
 import { registerAppJob } from '@/lib/orchestration/maintenance/app-jobs';
 import { backfillMemoryIndex } from '@/lib/app/memory/memory-index';
+import { sweepDeletedConversations } from '@/lib/app/memory/delete-conversation';
 
 export function initAppJobs(): void {
   registerAppJob({
@@ -32,5 +33,15 @@ export function initAppJobs(): void {
     name: 'app:memory-index-backfill',
     intervalMs: 5 * 60 * 1000,
     run: () => backfillMemoryIndex(),
+  });
+  registerAppJob({
+    // f-memory t-128. Forgets what our turns left behind in conversations a
+    // path deleted without telling us: retention, the admin deletes, or the
+    // person's own delete if its call failed. Every minute, so a note from a
+    // deleted conversation is not read into a prompt for long. Idempotent: a
+    // forgotten turn is gone, so it is never selected again.
+    name: 'app:deleted-conversation-sweep',
+    intervalMs: 60 * 1000,
+    run: () => sweepDeletedConversations(),
   });
 }

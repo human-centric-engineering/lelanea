@@ -17,6 +17,8 @@ import { successResponse } from '@/lib/api/responses';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 import { getRouteLogger } from '@/lib/api/context';
 import { cuidSchema } from '@/lib/validations/common';
+// LELANEA t-128: no conversation-deleted seam (sunrise#ISSUE). Divergence row 10.
+import { onConversationsDeleted } from '@/lib/app/memory/delete-conversation';
 
 export const GET = withAuth<{ id: string }>(
   async (request, session, { params }) => {
@@ -74,6 +76,8 @@ export const DELETE = withAuth<{ id: string }>(
     if (!existing) throw new NotFoundError(`Conversation ${id} not found`);
 
     await prisma.aiConversation.delete({ where: { id } });
+    // LELANEA t-128: forget what the app derived from it. Never throws.
+    await onConversationsDeleted({ conversationIds: [id], userId: session.user.id });
 
     log.info('Consumer conversation deleted', { conversationId: id, userId: session.user.id });
     return successResponse({ deleted: true });

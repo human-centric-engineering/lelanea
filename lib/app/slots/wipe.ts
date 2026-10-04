@@ -4,6 +4,9 @@
  * `delete-note.ts`) and deleting the exchange a note came from (t-127,
  * `lib/app/memory/delete-exchange.ts`).
  *
+ * Deleting a whole conversation (t-128, `delete-conversation.ts`) wipes through
+ * {@link wipeTurnWrites} too, the same as an exchange.
+ *
  * One definition of "wiped", so the two cannot disagree about what a
  * placeholder holds. `removed.ts` says what a placeholder is and why it stays;
  * this is only what gets written over a version, and what is dropped after.
@@ -14,6 +17,9 @@
 
 import { randomUUID } from 'crypto';
 
+import { prisma } from '@/lib/db/client';
+import type { executeTransaction } from '@/lib/db/utils';
+import { listSlotDefinitions } from '@/lib/framework/data-slots';
 import { getRegisteredModules } from '@/lib/framework/modules/registry';
 import { MODULE_CONTEXT_TYPE } from '@/lib/framework/modules/context';
 import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
@@ -81,4 +87,81 @@ export function forgetCachedContext(userId: string): void {
   for (const definition of getRegisteredModules()) {
     invalidateContext(MODULE_CONTEXT_TYPE, definition.slug, { userId });
   }
+}
+
+/** The client a transaction hands its callback. */
+type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/**
+ * The slugs here that the AI coined: no definition in either tier. A taxonomy
+ * slug is an admin's wording and stays whatever happens to the readings under it.
+ */
+export async function coinedSlugs(slugs: string[]): Promise<Set<string>> {
+  if (slugs.length === 0) return new Set();
+  const framework = await listSlotDefinitions();
+  const ours = await prisma.appSlotDefinition.findMany({
+    where: { slug: { in: slugs } },
+    select: { slug: true },
+  });
+  const defined = new Set([...framework.map((d) => d.slug), ...ours.map((d) => d.slug)]);
+  return new Set(slugs.filter((slug) => !defined.has(slug)));
+}
+
+/** One version a turn wrote, as its ledger row (`app_turn_slot_write`) records it. */
+export interface TurnWrite {
+  slotSlug: string;
+  version: number;
+}
+
+/**
+ * Make placeholders of the versions some of one person's turns wrote, and only
+ * those: earlier and later readings came from other exchanges and stay (owner
+ * ruling, 3 Oct 2026). Returns how many versions were wiped.
+ *
+ * A heading the AI coined moves to an opaque slug only once **no** version
+ * under it is left unwiped. While another exchange's reading is still filed
+ * there, the heading is what that reading is filed under, and renaming part of
+ * a chain would leave the old slug with no head, so its next capture would
+ * collide at version 1. The ledger follows the rename, as on a removal (t-78).
+ *
+ * Call {@link coinedSlugs} before the transaction opens and pass its answer.
+ *
+ * STOPGAP — a direct write to Daybreak's `framework_slot_value`. Owner ruling,
+ * 3 Oct 2026; divergence row in `.context/app/divergences.md`. Replace with
+ * Daybreak's per-value removal when it ships (daybreak#286).
+ */
+export async function wipeTurnWrites(
+  tx: Tx,
+  input: { userId: string; writes: TurnWrite[]; coined: Set<string>; removedAt: Date }
+): Promise<number> {
+  const bySlug = new Map<string, number[]>();
+  for (const write of input.writes) {
+    bySlug.set(write.slotSlug, [...(bySlug.get(write.slotSlug) ?? []), write.version]);
+  }
+  let versions = 0;
+  for (const [slotSlug, written] of bySlug) {
+    const wiped = await tx.slotValue.updateMany({
+      where: { userId: input.userId, slotSlug, version: { in: written }, ...NOT_YET_REMOVED },
+      data: placeholderFields(input.removedAt),
+    });
+    versions += wiped.count;
+
+    if (wiped.count > 0 && input.coined.has(slotSlug)) {
+      const left = await tx.slotValue.count({
+        where: { userId: input.userId, slotSlug, ...NOT_YET_REMOVED },
+      });
+      if (left === 0) {
+        const renamedTo = opaqueRemovedSlug();
+        await tx.slotValue.updateMany({
+          where: { userId: input.userId, slotSlug },
+          data: { slotSlug: renamedTo },
+        });
+        await tx.appTurnSlotWrite.updateMany({
+          where: { slotSlug, turn: { userId: input.userId } },
+          data: { slotSlug: renamedTo },
+        });
+      }
+    }
+  }
+  return versions;
 }
