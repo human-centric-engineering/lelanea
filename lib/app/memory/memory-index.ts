@@ -348,7 +348,7 @@ export async function indexNote(
        AND v."slotSlug" <> ALL(${unsearchable}::text[])
   `;
   const outcome = head ? await embedNote(subject, head, unsearchable, options) : 'skipped';
-  await forgetEarlierVersions(subject, slotSlug, head?.id ?? null);
+  await forgetSupersededVersions(subject, slotSlug);
   return outcome;
 }
 
@@ -411,12 +411,16 @@ async function embedNote(
   return inserted === 1 ? 'indexed' : 'skipped';
 }
 
-/** Drop the vectors of every version of one note except `keep`, the head. */
-async function forgetEarlierVersions(
-  subject: MemorySubject,
-  slotSlug: string,
-  keep: string | null
-): Promise<number> {
+/**
+ * Drop the vectors of every superseded version of one note.
+ *
+ * Decided at delete time, from `supersededAt`, never from the head this call
+ * read before it embedded: a revision landing during a slow embed would make
+ * that read stale, and keeping it would delete the newer version's vector
+ * instead (found by `/code-review`). A head is never superseded, so whichever
+ * call stored the current head's vector, no call removes it here.
+ */
+async function forgetSupersededVersions(subject: MemorySubject, slotSlug: string): Promise<number> {
   return prisma.$executeRaw`
     DELETE FROM app_memory_embedding e
      USING framework_slot_value v
@@ -424,7 +428,7 @@ async function forgetEarlierVersions(
        AND e."userId" = ${subject.userId}
        AND v."userId" = ${subject.userId}
        AND v."slotSlug" = ${slotSlug}
-       AND (${keep}::text IS NULL OR v.id <> ${keep}::text)
+       AND v."supersededAt" IS NOT NULL
   `;
 }
 

@@ -304,14 +304,15 @@ const prismaFake = {
       );
     }
     if (text.includes('DELETE FROM app_memory_embedding')) {
-      // earlier versions: [userId, userId, slotSlug, keep, keep]
-      const [userE, userV, slug, keep] = v;
+      // superseded versions: [userId, userId, slotSlug]
+      expect(text).toContain('v."supersededAt" IS NOT NULL');
+      const [userE, userV, slug] = v;
       return dropNoteVectors(
         (e, row) =>
           e.userId === userE &&
           row.userId === userV &&
           row.slotSlug === slug &&
-          (keep === null || row.id !== keep)
+          row.supersededAt !== null
       );
     }
     // message insert: [vec, model, provider, dimension, messageId, userId]
@@ -1000,6 +1001,35 @@ describe('indexing a note (t-107)', () => {
     expect(await indexNote({ userId: ME }, 'family')).toBe('indexed');
 
     expect(vectorsOf(ME)).toEqual([revised.id, sibling.id].sort());
+  });
+
+  it('keeps the newer version’s vector when a revision lands while an earlier index is embedding', async () => {
+    noted('family', FATHER_NOTE);
+    // Call A reads v1 as the head, then waits on a slow embedder.
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    embedText.mockImplementationOnce(async (text: string) => {
+      await slow;
+      return {
+        embedding: bag(text),
+        model: world.model,
+        provider: 'fake',
+        dimensions: DIM,
+        inputTokens: 1,
+        costUsd: 0,
+      };
+    });
+    const a = indexNote({ userId: ME }, 'family');
+    await vi.waitFor(() => expect(embedText).toHaveBeenCalledTimes(1));
+
+    // The person corrects it, and call B indexes v2 to the end.
+    const revised = noted('family', 'Their father is home again and recovering well now');
+    expect(await indexNote({ userId: ME }, 'family')).toBe('indexed');
+
+    // A resumes: v1 is superseded, so it stores nothing, and must remove nothing of v2's.
+    release();
+    expect(await a).toBe('skipped');
+    expect(vectorsOf(ME)).toEqual([revised.id]);
   });
 
   it('does not embed a note twice', async () => {
