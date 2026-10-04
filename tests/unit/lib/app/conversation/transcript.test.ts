@@ -133,6 +133,7 @@ function turn(
     fingerprintVersion: string | null;
     register: string | null;
     registerSource: string | null;
+    leanings: unknown;
     startedAt: Date;
   }> = {}
 ) {
@@ -146,6 +147,7 @@ function turn(
     fingerprintVersion: 'v1',
     register: null as string | null,
     registerSource: null as string | null,
+    leanings: null as unknown,
     inputTokens: 100,
     outputTokens: 40,
     costUsd: 0.00063,
@@ -188,6 +190,32 @@ describe('assembleTranscript', () => {
     expect(turns).toHaveLength(2);
     expect(turns[0]).toMatchObject({ register: 'teaching', registerSource: 'module' });
     expect(turns[1]).toMatchObject({ register: null, registerSource: null });
+  });
+
+  it('carries the leanings a turn applied, and reads a stamp that is not one as none (t-136)', () => {
+    const stamp = { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] };
+    const entries = assemble(
+      [
+        user('u1', 'Hello', 1, 't1'),
+        assistant('a1', 'Welcome.', 3),
+        user('u2', 'And?', 6, 't2'),
+        assistant('a2', 'Then this.', 8),
+      ],
+      [
+        turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1', leanings: stamp }),
+        turn('t2', {
+          userMessageId: 'u2',
+          assistantMessageId: 'a2',
+          // Rest is never applied, so this is not a stamp the claim writes.
+          leanings: { applied: [{ key: 'length', stop: 0 }], held: [] },
+        }),
+      ]
+    );
+
+    const turns = entries.flatMap((entry) => (entry.kind === 'reply' ? [entry.turn] : []));
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.leanings).toEqual(stamp);
+    expect(turns[1]?.leanings).toBeNull();
   });
 
   it('pairs a reply with the turn row that names it, carrying the account', () => {

@@ -172,3 +172,26 @@ describe('the done frame carries the register (f-registers t-125)', () => {
     expect(parsed).toMatchObject({ register: undefined, registerSource: undefined });
   });
 });
+
+describe('the done frame carries the leanings (f-leanings t-136)', () => {
+  const done = {
+    tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    costUsd: 0.001,
+  };
+  const leanings = { applied: [{ key: 'length', stop: -2 }], held: ['warmth'] };
+
+  it('keeps the leanings a turn applied and held', () => {
+    expect(parseConversationEvent(block('done', { ...done, leanings }))).toMatchObject({
+      type: 'done',
+      leanings,
+    });
+  });
+
+  it('drops a stamp it cannot read without dropping the frame', () => {
+    const parsed = parseConversationEvent(
+      block('done', { ...done, leanings: { applied: [{ key: 'volume', stop: 2 }], held: [] } })
+    );
+    expect(parsed).toMatchObject({ type: 'done', costUsd: 0.001 });
+    expect(parsed).toMatchObject({ leanings: undefined });
+  });
+});

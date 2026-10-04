@@ -37,6 +37,8 @@
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
+import { leaningDimension, type LeaningKey } from '@/lib/app/voice/leanings';
+import { HELD_WHEN_HARD } from '@/lib/app/voice/leanings-select';
 
 /** What a source reads: the reply's own data, live or read back. */
 export interface AccountInput {
@@ -353,11 +355,54 @@ export function registerSentence(turn: TurnAccount | null): string | null {
   return `Began ${how}${why}.`;
 }
 
+/** A pole's name inside a sentence: "Concise and spare" → "concise and spare". */
+function poleWords(label: string): string {
+  return `${label[0].toLowerCase()}${label.slice(1)}`;
+}
+
+/** The pole a held dial was leaning toward: only a hard pole is ever held. */
+function heldPole(key: LeaningKey): string {
+  const dimension = leaningDimension(key);
+  return poleWords(HELD_WHEN_HARD.get(key) === 'left' ? dimension.left : dimension.right);
+}
+
+/**
+ * The person's leanings the reply was shaded by, and any set aside, as
+ * sentences (f-leanings t-136); none for a turn that applied and held nothing.
+ *
+ * In the detail beside the register, for the register's reason. A held
+ * leaning gives the crisis as its reason only when a crisis was read
+ * (`safety`), never on a `fallback`, as `registerSentence` does.
+ */
+export function leaningsSentences(turn: TurnAccount | null): string[] {
+  const leanings = turn?.leanings;
+  if (!leanings) return [];
+  const sentences: string[] = [];
+  if (leanings.applied.length > 0) {
+    const toward = leanings.applied
+      .map(({ key, stop }) => {
+        const dimension = leaningDimension(key);
+        const pole = poleWords(stop < 0 ? dimension.left : dimension.right);
+        return `${Math.abs(stop) === 2 ? 'strongly ' : ''}toward ${pole}`;
+      })
+      .join('; ');
+    sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
+  }
+  if (leanings.held.length > 0) {
+    const poles = leanings.held.map(heldPole).join('; ');
+    const why = turn.registerSource === 'safety' ? ', because something hard came up recently' : '';
+    const noun = leanings.held.length === 1 ? 'leaning' : 'leanings';
+    sentences.push(`Set aside your ${noun} toward ${poles} for now${why}.`);
+  }
+  return sentences;
+}
+
 /** The detail, one sentence to a line: what it did, how it spoke, then what it cost. */
 export function accountDetail(input: AccountInput, parts: AccountPart[]): string {
   const lines = parts.length === 0 ? [`${NOTHING_WRITTEN}.`] : parts.map((part) => part.detail);
   const register = registerSentence(input.turn);
   if (register) lines.push(register);
+  lines.push(...leaningsSentences(input.turn));
   const cost = costSentence(input.turn);
   if (cost) lines.push(cost);
   return lines.join('\n');

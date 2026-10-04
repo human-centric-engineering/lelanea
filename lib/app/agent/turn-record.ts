@@ -44,6 +44,7 @@ import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
 import { isOpeningTurnId } from '@/lib/app/conversation/opening-id';
 import type { RegisterChoice } from '@/lib/app/voice/register';
+import type { LeaningsStamp } from '@/lib/app/voice/leanings-select';
 
 /**
  * How long past the whole-turn deadline a `running` claim is still honoured.
@@ -131,14 +132,19 @@ export interface TurnStamp {
   fingerprintVersion: string | null;
   /** The register the turn is steered to and why (f-registers t-125), or null for none. */
   register: RegisterChoice | null;
+  /**
+   * The person's leanings the turn applies, and any held (f-leanings t-136),
+   * or null on a seat with none. Optional only for the callers from before them.
+   */
+  leanings?: LeaningsStamp | null;
 }
 
 /**
  * Claim a turn id for this request.
  *
  * The stamp is written on every claim, re-runs included, because a re-run may
- * be told a different version, or steered to a different register, than the
- * attempt that failed. `staleAfterMs` is {@link staleClaimMs} of the deadline
+ * be told a different version, or steered to a different register or leanings,
+ * than the attempt that failed. `staleAfterMs` is {@link staleClaimMs} of the deadline
  * in force.
  */
 export async function claimTurn(
@@ -151,6 +157,11 @@ export async function claimTurn(
     fingerprintVersion: stamp.fingerprintVersion,
     register: stamp.register?.register ?? null,
     registerSource: stamp.register?.source ?? null,
+    // Left out when there are none, so the column stays SQL NULL: writing it
+    // back to NULL takes `Prisma.DbNull`, which `lib/app/**` may not import.
+    // A re-run never has to clear one: whether a turn has leanings follows
+    // from its seat, and an id's seat is fixed by its request hash.
+    ...(stamp.leanings ? { leanings: stamp.leanings } : {}),
   };
   const { requestHash } = request;
 

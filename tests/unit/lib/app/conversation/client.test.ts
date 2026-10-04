@@ -319,6 +319,53 @@ describe('fetchTranscript', () => {
     expect(turns[2]).toMatchObject({ register: null });
   });
 
+  it('reads a turn’s leanings leniently: absent or unreadable says nothing (t-136)', async () => {
+    const account = {
+      turnId: 't1',
+      seat: 'facilitator',
+      status: 'completed',
+      attempts: 1,
+      modelId: null,
+      providerSlug: null,
+      fingerprintVersion: null,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+      pricing: null,
+      errorCode: null,
+      startedAt: '2026-09-19T12:00:00.000Z',
+      completedAt: null,
+    };
+    const stamp = { applied: [{ key: 'pace', stop: 1 }], held: [] };
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              seat: 'facilitator',
+              conversationId: 'c1',
+              entries: [
+                { ...entry, id: 'a1', turn: { ...account, leanings: stamp } },
+                { ...entry, id: 'a2', turn: account },
+                { ...entry, id: 'a3', turn: { ...account, leanings: { applied: 'all' } } },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+    );
+
+    const turns = (await fetchTranscript('facilitator', { fetchImpl })).entries.map((e) =>
+      e.kind === 'reply' ? e.turn : null
+    );
+
+    expect(turns).toHaveLength(3);
+    expect(turns[0]).toMatchObject({ leanings: stamp });
+    expect(turns[1]).toMatchObject({ leanings: null });
+    expect(turns[2]).toMatchObject({ leanings: null });
+  });
+
   it('carries the opening flag when the read sends one (t-122)', async () => {
     const fetchImpl = vi.fn(
       async () =>

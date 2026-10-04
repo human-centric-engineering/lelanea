@@ -1,9 +1,11 @@
 /**
- * A person's voice leanings, read and written (f-leanings t-135).
+ * A person's voice leanings, read and written (f-leanings t-135), and the ones
+ * a turn applies (t-136).
  *
- * The one service for them: settings reads and writes through it, and so will
- * the prompt path (t-136) and `set_leaning` (t-137). The vocabulary is
- * `lib/app/voice/leanings.ts`.
+ * The one service for them: settings reads and writes through it, the turn
+ * seam and the prompt read through it, and so will `set_leaning` (t-137). The
+ * vocabulary is `lib/app/voice/leanings.ts`; which pole lines a turn carries is
+ * `lib/app/voice/leanings-select.ts`.
  *
  * ## Where each part lives
  *
@@ -38,6 +40,14 @@
  * Bounds that are missing or fail their schema lock every dial at rest: a
  * filter nobody configured shades nothing. The read says so, so settings can.
  *
+ * ## Decided once, at the claim, like the register
+ *
+ * The turn seam calls {@link resolveLeanings} beside `resolveRegister` and
+ * stamps what it returns on the turn row (`app_turn.leanings`). The prompt
+ * reads that stamp back ({@link leaningsForPrompt}) rather than deciding again,
+ * so the pole lines a reply was given and the leanings its account names are
+ * one value, as `registerForPrompt` does for the register.
+ *
  * @see lib/app/voice/leanings.ts — keys, stops, bounds schema
  * @see .context/app/voice.md — "The person's leanings"
  */
@@ -48,6 +58,15 @@ import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { appendSlotValue, type SlotValueProvenance } from '@/lib/framework/data-slots';
 import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-view';
+import { getVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
+import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
+import type { RegisterSource } from '@/lib/app/voice/register';
+import {
+  NO_LEANINGS,
+  parseLeaningsStamp,
+  selectLeanings,
+  type LeaningsStamp,
+} from '@/lib/app/voice/leanings-select';
 import {
   LEANING_CONFIDENCE,
   LEANING_DIMENSIONS,
@@ -275,4 +294,69 @@ async function appendOnce(input: Parameters<typeof appendSlotValue>[0]) {
     }
     throw err;
   }
+}
+
+// ─── A turn's leanings ──────────────────────────────────────────────────────
+
+/**
+ * The leanings a turn on `seat` applies, or `null` for a seat that has none.
+ * Never throws: a read that fails applies nothing, which is her voice
+ * unshaded, and is logged.
+ *
+ * Only the seat with a register has leanings. That is the seat a person keeps
+ * coming back to, and it is the one where the crisis hold has its input: the
+ * onboarding seat reads no recent crisis, so it could not hold a hard pole.
+ */
+export async function resolveLeanings(
+  userId: string,
+  seat: string,
+  registerSource: RegisterSource | null
+): Promise<LeaningsStamp | null> {
+  if (!hasRegister(seat) || userId === '') return null;
+  try {
+    const [view, content] = await Promise.all([getLeanings(userId), getVoiceOverlays()]);
+    return selectLeanings({
+      dials: view.dials.map((dial) => ({
+        key: dial.key,
+        stop: dial.position,
+        min: dial.min,
+        max: dial.max,
+      })),
+      registerSource,
+      content,
+    });
+  } catch (err) {
+    logger.error('resolveLeanings: could not be read; this turn applies none', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NO_LEANINGS;
+  }
+}
+
+/**
+ * The leanings the prompt is given: the ones the turn now running on the seat
+ * was claimed with. With no such row (a turn that reached the agent some other
+ * way, or a claim from before leanings), decided here the same way, against
+ * the register the turn would have. Never throws; null for a seat with none.
+ */
+export async function leaningsForPrompt(
+  userId: string,
+  seat: string
+): Promise<LeaningsStamp | null> {
+  if (!hasRegister(seat) || userId === '') return null;
+  try {
+    const running = await prisma.appTurn.findFirst({
+      where: { userId, seat, status: 'running' },
+      orderBy: { startedAt: 'desc' },
+      select: { leanings: true },
+    });
+    const claimed = parseLeaningsStamp(running?.leanings);
+    if (claimed !== null) return claimed;
+  } catch (err) {
+    logger.error('leaningsForPrompt: the turn row could not be read; deciding again', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  const register = await resolveRegister(userId, seat);
+  return resolveLeanings(userId, seat, register?.source ?? null);
 }

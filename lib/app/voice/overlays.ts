@@ -47,6 +47,7 @@
 
 import { getVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import type { VoiceOverlay, VoiceOverlays } from '@/lib/app/content';
+import { isLeaningSituation } from '@/lib/app/voice/leanings-select';
 
 /**
  * Normalise a situation key as it arrived over the wire.
@@ -70,10 +71,15 @@ export function normaliseSituation(situation: string): string {
  * happens to be first" are different facts, and the caller has to be able to say
  * which one it is looking at. Returning a default here would make the core-only
  * fallback unreachable and the assertion that proves it fires meaningless.
+ *
+ * A leaning row (`leaning-…`, f-leanings t-136) is never a situation: it shades
+ * a register and is added beside one (`leanings-select.ts`), so a request that
+ * names one gets the core-only block rather than a pole line in a register's
+ * place.
  */
 export function selectOverlayFrom(content: VoiceOverlays, situation: string): VoiceOverlay | null {
   const key = normaliseSituation(situation);
-  if (key === '') return null;
+  if (key === '' || isLeaningSituation(key)) return null;
   return content.overlays.find((overlay) => overlay.situation === key) ?? null;
 }
 
@@ -94,7 +100,8 @@ export async function selectOverlay(situation: string): Promise<VoiceOverlay | n
 }
 
 /**
- * Every situation this build knows how to shade, in authored order.
+ * Every situation this build knows how to shade, in authored order. The
+ * leaning rows are not situations, so they are not here.
  *
  * Exported for the surfaces that have to name them — a route pinning a
  * `contextId`, her review path in t-28, a test asserting the file and the
@@ -102,5 +109,7 @@ export async function selectOverlay(situation: string): Promise<VoiceOverlay | n
  */
 export async function knownSituations(): Promise<string[]> {
   const { overlays } = await getVoiceOverlays();
-  return overlays.map((overlay) => overlay.situation);
+  return overlays
+    .map((overlay) => overlay.situation)
+    .filter((situation) => !isLeaningSituation(situation));
 }
