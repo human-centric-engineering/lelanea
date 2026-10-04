@@ -90,6 +90,7 @@
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db/client';
+import { isLeaningSlotSlug } from '@/lib/app/voice/leanings';
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import {
   appendSlotValue,
@@ -299,6 +300,10 @@ export async function getNotes(userId: string, query: NotesQuery = {}): Promise<
     ...definitions.filter((d) => d.visibility === SLOT_VISIBILITY.hidden).map((d) => d.slug),
     ...ours.hidden,
   ]);
+  // A voice leaning is set in Settings, never shown as a note (f-leanings
+  // t-135). Its definition is `hidden` too; the prefix holds even before
+  // Daybreak's projection has it.
+  for (const head of heads) if (isLeaningSlotSlug(head.slotSlug)) hidden.add(head.slotSlug);
 
   // Withheld first, and before anything is shaped: a value that must not leave
   // the server should not exist in a structure a later branch can read from.
@@ -381,9 +386,12 @@ export async function readSlotVerdict(slotSlug: string): Promise<{
     where: { slug: slotSlug },
     select: { visibility: true, sensitivity: true },
   });
+  // A voice leaning reads as hidden here whatever the projection says: it is
+  // corrected and removed in Settings, never as a note (f-leanings t-135).
   const isHidden =
     definition?.visibility === SLOT_VISIBILITY.hidden ||
-    ours?.visibility === SLOT_VISIBILITY.hidden;
+    ours?.visibility === SLOT_VISIBILITY.hidden ||
+    isLeaningSlotSlug(slotSlug);
   return { definition, ours, isHidden };
 }
 

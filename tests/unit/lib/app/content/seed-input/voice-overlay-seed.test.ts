@@ -31,6 +31,10 @@ const REGISTER_MIGRATION =
 /** The overlays the t-125 migration adds, named for the registers that select them. */
 const REGISTER_SITUATIONS: readonly string[] = ['guiding', 'teaching'];
 
+/** t-135: the leaning bounds, on every set. */
+const LEANINGS_MIGRATION =
+  'prisma/migrations/20261010100000_app_voice_leaning_bounds/migration.sql';
+
 /** t-114: moved the set's authored name from `id` into `slug`. */
 const PER_ORG_KEYS_MIGRATION =
   'prisma/migrations/20261004100100_app_voice_crisis_budget_per_org_keys/migration.sql';
@@ -160,10 +164,13 @@ describe('the data migration', () => {
     };
     const { id: authoredName, ...setText } = embedded.set;
     // The registers' two overlays came later, in their own migration (t-125,
-    // below); t-88's literal is the seed without them.
+    // below), and so did the leaning bounds (t-135, below); t-88's literal is
+    // the seed without them.
     const seed = buildVoiceOverlaySeed();
+    const { leanings: _leanings, ...setBeforeLeanings } = seed.set;
     expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual({
       ...seed,
+      set: setBeforeLeanings,
       overlays: seed.overlays.filter((o) => !REGISTER_SITUATIONS.includes(o.situation)),
     });
     expect(migrationSql(PER_ORG_KEYS_MIGRATION)).toContain(
@@ -175,8 +182,10 @@ describe('the data migration', () => {
     const { VOICE_OVERLAY_SET_SNAPSHOT_FIELDS, VOICE_OVERLAY_SNAPSHOT_FIELDS } =
       await import('@/lib/app/content/voice-overlay-store');
     const sql = migrationSql();
+    // `leanings` joined the set's snapshot later (t-135), in its own migration.
+    const setFieldsThen = VOICE_OVERLAY_SET_SNAPSHOT_FIELDS.filter((f) => f !== 'leanings');
 
-    for (const fields of [VOICE_OVERLAY_SET_SNAPSHOT_FIELDS, VOICE_OVERLAY_SNAPSHOT_FIELDS]) {
+    for (const fields of [setFieldsThen, VOICE_OVERLAY_SNAPSHOT_FIELDS]) {
       expect(sql).toContain(`ARRAY[${fields.map((f) => `'${f}'`).join(', ')}]`);
     }
   });
@@ -234,5 +243,39 @@ describe('the registers’ data migration (f-registers t-125)', () => {
     expect(sql()).not.toContain("'signed_off'");
     expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
     expect(sql()).toContain('"set"."orgId"');
+  });
+});
+
+describe('the leaning bounds migration (f-leanings t-135)', () => {
+  const sql = () => migrationSql(LEANINGS_MIGRATION);
+
+  it('writes exactly the bounds the seed builds today', () => {
+    const match = /\$t135leanings\$([\s\S]*?)\$t135leanings\$/.exec(sql());
+
+    expect(match, 'the migration no longer embeds the leaning bounds').not.toBeNull();
+    expect(JSON.parse(match![1])).toEqual(buildVoiceOverlaySeed().set.leanings);
+  });
+
+  it('moves only a set with no bounds yet, so an edited set survives', () => {
+    expect(sql()).toContain('WHERE "leanings" IS NULL');
+  });
+
+  it('records the change as the service would: a draft revision of the bounds, by the seed', () => {
+    expect(sql()).toContain("ARRAY['leanings']");
+    expect(sql()).toContain("ARRAY['leanings', 'status']");
+    expect(sql()).toContain('"status" = \'draft\'');
+    expect(sql()).not.toContain("'signed_off'");
+    expect(sql()).toContain("'seed', NULL");
+    expect(sql()).toContain("set_config('app.bypass_rls', 'on', true)");
+    expect(sql()).toContain('"orgId"');
+  });
+
+  it('makes the set’s bounds required, and leaves older revisions without them', () => {
+    expect(sql()).toContain(
+      'ALTER TABLE "app_voice_overlay_set" ALTER COLUMN "leanings" SET NOT NULL;'
+    );
+    expect(sql()).not.toMatch(
+      /app_voice_overlay_set_revision" ALTER COLUMN "leanings" SET NOT NULL/
+    );
   });
 });

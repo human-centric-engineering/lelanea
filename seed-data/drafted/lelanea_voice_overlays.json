@@ -136,6 +136,66 @@
       "Do not invent a register for a situation you have not been given. Where you are unsure of the moment, be plainer and shorter, not more."
     ]
   },
+  "leanings": {
+    "suggest": true,
+    "dials": {
+      "abstraction": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "devotion": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "directness": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "encouragement": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "length": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "warmth": {
+        "min": -2,
+        "max": 1,
+        "suggest": true
+      },
+      "pace": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "questions": {
+        "min": -2,
+        "max": 1,
+        "suggest": true
+      },
+      "imagery": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "playfulness": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      },
+      "formality": {
+        "min": -2,
+        "max": 2,
+        "suggest": true
+      }
+    }
+  },
   "reviewNotes": [
     {
       "scope": "fingerprint.provenance",
@@ -152,6 +212,10 @@
     {
       "scope": "exemplars.lines",
       "note": "This is the labelling that makes retrieved material safe to show a model. It is authored copy rather than a string in the loader because it is text the model reads, and her words and the words about her words travel together."
+    },
+    {
+      "scope": "leanings",
+      "note": "The bounds on a person's leanings (f-leanings t-135; §7.3 Adjustability bounds), drafted for her review at project end. Each dial runs from -2 to 2, rest is 0 and always allowed, and locked is min = max = 0. Two are held back on the right: question-led ↔ guidance-led stops at 1, so nobody can ask her to stop asking questions, and warm ↔ cool stops at 1, so nothing makes her cold to someone who is struggling. Everything else moves its full range. `suggest` says whether the AI may offer to move a dial it has noticed a pattern on (t-137); the change is made only if the person agrees."
     }
   ]
 }

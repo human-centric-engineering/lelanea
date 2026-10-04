@@ -80,6 +80,8 @@ function view(overlays: OverlayAdminRow[]): OverlaysAdminView {
         unavailableNote: 'Unavailable.',
       },
       coreOnly: { heading: 'Register', lines: ['Plain.'] },
+      // The editor has no bounds field yet (t-138), so what they are is moot here.
+      leanings: null,
       status: 'draft',
       signedOffAt: null,
       revision: 1,

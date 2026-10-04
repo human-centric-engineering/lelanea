@@ -15,6 +15,8 @@
  */
 
 import { z } from 'zod';
+
+import type { LeaningBounds } from '@/lib/app/voice/leanings';
 import type { ContentCollectionMeta } from '@/lib/app/content/document-view';
 
 // ============================================================================
@@ -242,6 +244,7 @@ export function toVoiceOverlays(
 
 /** What the seed writes: the set and its overlays, at revision 1. */
 export interface VoiceOverlaySeed {
-  set: Omit<VoiceOverlaySetRow, 'revision' | 'status'>;
+  /** The set's framing, and the leaning bounds it carries (t-135). */
+  set: Omit<VoiceOverlaySetRow, 'revision' | 'status'> & { leanings: LeaningBounds };
   overlays: Omit<VoiceOverlayRow, 'revision' | 'status'>[];
 }

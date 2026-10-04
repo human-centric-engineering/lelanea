@@ -60,6 +60,15 @@ import {
   RESERVED_SLUG_MESSAGE,
   isDiscoverySlotSlug,
 } from '@/lib/app/onboarding/discovery-slot-names';
+import { LEANING_SLOT_GROUP, isLeaningSlotSlug } from '@/lib/app/voice/leanings';
+
+/** Why the taxonomy refuses a leaning's slug (f-leanings t-135). */
+export const RESERVED_LEANING_SLUG_MESSAGE =
+  'Slugs starting "leaning_" hold people’s voice leanings, which are set in Settings. Choose another.';
+
+/** Why the taxonomy refuses the leanings' group key. */
+export const RESERVED_LEANING_GROUP_MESSAGE =
+  'The "leanings" group holds people’s voice leanings, which are set in Settings. Choose another group.';
 
 /**
  * A slug is lower-case letters, digits and underscores, starting with a letter.
@@ -87,13 +96,21 @@ export const MAX_DESCRIPTION_LENGTH = 1200;
 const boundedSlug = (label: string) =>
   slotSlugSchema.max(MAX_SLUG_LENGTH, `${label} is longer than ${MAX_SLUG_LENGTH} characters.`);
 
-/** Refuses a slug reserved for a discovery answer (f-onboarding t-101). */
+/**
+ * Refuses a slug reserved for a discovery answer (f-onboarding t-101) or a
+ * voice leaning (f-leanings t-135). Both are code-owned slots that a taxonomy
+ * row of the same name would collide with.
+ */
 const notReservedSlug = (schema: z.ZodString) =>
-  schema.refine((slug) => !isDiscoverySlotSlug(slug), RESERVED_SLUG_MESSAGE);
+  schema
+    .refine((slug) => !isDiscoverySlotSlug(slug), RESERVED_SLUG_MESSAGE)
+    .refine((slug) => !isLeaningSlotSlug(slug), RESERVED_LEANING_SLUG_MESSAGE);
 
-/** Refuses the discovery answers' own group key. */
+/** Refuses the discovery answers' and the leanings' own group keys. */
 const notReservedGroup = (schema: z.ZodString) =>
-  schema.refine((group) => group !== DISCOVERY_SLOT_GROUP, RESERVED_GROUP_MESSAGE);
+  schema
+    .refine((group) => group !== DISCOVERY_SLOT_GROUP, RESERVED_GROUP_MESSAGE)
+    .refine((group) => group !== LEANING_SLOT_GROUP, RESERVED_LEANING_GROUP_MESSAGE);
 
 /**
  * A slug the TAXONOMY may use: any slug but one reserved for a discovery answer

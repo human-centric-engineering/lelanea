@@ -113,6 +113,18 @@ describe('what a person is shown', () => {
     expect(JSON.stringify(view)).not.toContain('they are at stage two');
   });
 
+  it('never shows a voice leaning as a note, even before its definition is projected', async () => {
+    // A leaning is set in Settings (f-leanings t-135). No definition in either
+    // tier here, which is the case the prefix check exists for: without it,
+    // this would read as a note the AI coined.
+    world.values.push(value(ME, 'leaning_length', { value: 'Strongly toward Concise and spare' }));
+
+    const view = await getNotes(ME);
+
+    expect(view.total).toBe(2);
+    expect(JSON.stringify(view)).not.toContain('Concise and spare');
+  });
+
   it('files each note under its taxonomy group, and counts the groups in use by title', async () => {
     const view = await getNotes(ME);
     expect(view.notes.map((note) => [note.slotSlug, note.group])).toEqual([
@@ -334,6 +346,15 @@ describe('a correction is a new version, never an overwrite', () => {
     // distinctly would disclose that a hidden slot exists and is filled.
     await expect(
       correctNote({ userId: ME, slotSlug: 'development_stage', value: 'stage four' })
+    ).rejects.toThrow(/no note under that heading/i);
+    expect(world.values).toHaveLength(2);
+  });
+
+  it('refuses a voice leaning as it refuses a hidden slot: it is changed in Settings', async () => {
+    world.values.push(value(ME, 'leaning_length', { value: 'At rest' }));
+
+    await expect(
+      correctNote({ userId: ME, slotSlug: 'leaning_length', value: 'very long please' })
     ).rejects.toThrow(/no note under that heading/i);
     expect(world.values).toHaveLength(2);
   });

@@ -1,28 +1,56 @@
 // @vitest-environment happy-dom
 
 /**
- * Settings — the one view in t-11 where a control does something.
+ * Settings: the theme, and the person's voice leanings.
  *
- * The two properties are opposite and both matter: the theme choice must
- * actually survive a reload, and the eleven leanings must NOT look as though
- * they would. A dial that moves and changes nothing is the thing D6 exists to
- * prevent, and it is invisible in a screenshot — a disabled slider and a live
- * one look nearly identical.
+ * The theme choice must survive a reload. The leanings are live since t-135:
+ * each dial saves the stop chosen, offers only the stops its bounds allow, and
+ * goes back, with the reason, when a save fails.
  *
  * @see components/app/views/settings-view.tsx
  */
 
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/client')>()),
+  apiClient: { patch },
+}));
+
 import { SettingsView } from '@/components/app/views/settings-view';
 import { ThemeProvider, useTheme } from '@/hooks/use-theme';
+import { APIClientError } from '@/lib/api/client';
+import { LEANING_DIMENSIONS, type LeaningKey } from '@/lib/app/voice/leanings';
+import type { LeaningDialView, LeaningsView } from '@/lib/app/voice/leanings-store';
 
-function renderSettings() {
+function leaningsView(
+  overrides: Partial<Record<LeaningKey, Partial<LeaningDialView>>> = {},
+  configured = true
+): LeaningsView {
+  return {
+    configured,
+    dials: LEANING_DIMENSIONS.map((dimension) => ({
+      key: dimension.key,
+      left: dimension.left,
+      right: dimension.right,
+      stored: 0,
+      position: 0,
+      min: -2,
+      max: 2,
+      locked: false,
+      suggest: true,
+      ...overrides[dimension.key],
+    })),
+  };
+}
+
+function renderSettings(leanings: LeaningsView = leaningsView()) {
   return render(
     <ThemeProvider>
-      <SettingsView />
+      <SettingsView leanings={leanings} />
     </ThemeProvider>
   );
 }
@@ -48,7 +76,7 @@ function renderWithTopbar() {
   return render(
     <ThemeProvider>
       <Topbar />
-      <SettingsView />
+      <SettingsView leanings={leaningsView()} />
     </ThemeProvider>
   );
 }
@@ -56,6 +84,7 @@ function renderWithTopbar() {
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.className = '';
+  patch.mockReset();
 });
 
 describe('the theme choice', () => {
@@ -243,44 +272,103 @@ describe('the theme choice', () => {
   });
 });
 
+/** The dial between two poles: a fieldset of radios, named by both by its legend. */
+const dial = (left: string, right: string) =>
+  screen.getByRole('group', { name: `${left} to ${right}` });
+const stop = (group: HTMLElement, name: string) => within(group).getByRole('radio', { name });
+
 describe('the eleven leanings', () => {
-  it('shows all eleven', () => {
+  it('shows all eleven, each with five stops', () => {
     renderSettings();
-    expect(screen.getAllByRole('slider')).toHaveLength(11);
+    const panel = screen.getByRole('heading', { name: 'Leanings' }).closest('section')!;
+    const groups = within(panel).getAllByRole('group');
+    expect(groups).toHaveLength(11);
+    for (const group of groups) expect(within(group).getAllByRole('radio')).toHaveLength(5);
   });
 
-  it('renders every one of them disabled', () => {
-    // The strong form on purpose: "the first one is disabled" would pass a
-    // change that wired ten of them.
+  it('names each dial by both of its ends, and each stop by what it does', () => {
+    // "Gentle" alone says nothing about which way the dial leans.
     renderSettings();
-    for (const slider of screen.getAllByRole('slider')) {
-      expect((slider as HTMLInputElement).disabled).toBe(true);
+    const gentle = dial('Gentle', 'Direct, and further, challenging');
+    expect(stop(gentle, 'Strongly toward Gentle')).toBeTruthy();
+    expect(stop(gentle, 'At rest')).toBeTruthy();
+    expect(stop(gentle, 'Toward Direct, and further, challenging')).toBeTruthy();
+  });
+
+  it('shows where each one rests, from what was stored', () => {
+    renderSettings(leaningsView({ length: { stored: 1, position: 1 } }));
+    const length = dial('Verbose and exploratory', 'Concise and spare');
+    expect((stop(length, 'Toward Concise and spare') as HTMLInputElement).checked).toBe(true);
+    expect((stop(length, 'At rest') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('saves the stop chosen, for that dial', async () => {
+    patch.mockResolvedValue({
+      outcome: 'written',
+      dial: { key: 'length', stored: 2, position: 2, min: -2, max: 2, locked: false },
+    });
+    renderSettings();
+    const length = dial('Verbose and exploratory', 'Concise and spare');
+
+    await userEvent.click(stop(length, 'Strongly toward Concise and spare'));
+
+    expect(patch).toHaveBeenCalledWith('/api/v1/app/leanings', {
+      body: { key: 'length', stop: 2 },
+    });
+    await waitFor(() =>
+      expect((stop(length, 'Strongly toward Concise and spare') as HTMLInputElement).checked).toBe(
+        true
+      )
+    );
+  });
+
+  it('goes back, and says why, when the save fails', async () => {
+    patch.mockRejectedValue(
+      new APIClientError('Lelañea keeps this one where it is.', 'CONFLICT', 409)
+    );
+    renderSettings();
+    const pace = dial('Energetic', 'Slow and spacious');
+
+    await userEvent.click(stop(pace, 'Toward Slow and spacious'));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Lelañea keeps this one where it is.'
+    );
+    expect((stop(pace, 'At rest') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('offers only the stops the bounds allow, and says it is held back', () => {
+    renderSettings(leaningsView({ questions: { max: 1 } }));
+    const questions = dial('Question-led', 'Guidance-led');
+
+    expect((stop(questions, 'Strongly toward Guidance-led') as HTMLInputElement).disabled).toBe(
+      true
+    );
+    expect((stop(questions, 'Toward Guidance-led') as HTMLInputElement).disabled).toBe(false);
+    expect(within(questions).getByText('Lelañea keeps this from going all the way.')).toBeTruthy();
+  });
+
+  it('locks a locked dial whole, and says so', () => {
+    renderSettings(leaningsView({ pace: { min: 0, max: 0, locked: true } }));
+    const pace = dial('Energetic', 'Slow and spacious');
+
+    // Every stop, not just one: a dial with one live stop is not locked.
+    for (const radio of within(pace).getAllByRole('radio')) {
+      expect((radio as HTMLInputElement).disabled).toBe(true);
     }
+    expect(within(pace).getByText('Lelañea keeps this one where it is.')).toBeTruthy();
   });
 
-  it('says on the page why they do not move', () => {
-    renderSettings();
-    expect(screen.getByText(/not yet settable/)).toBeTruthy();
-  });
-
-  it('points every slider at that explanation', () => {
-    // Disabled controls are skipped by most keyboard readers, so the reason has
-    // to be reachable from the control itself rather than only visible above it.
-    renderSettings();
-    const noteId = screen.getByText(/not yet settable/).getAttribute('id');
-    expect(noteId).toBeTruthy();
-    for (const slider of screen.getAllByRole('slider')) {
-      expect(slider.getAttribute('aria-describedby')).toBe(noteId);
-    }
-  });
-
-  it('names each slider by both of its ends', () => {
-    // "Gentle" alone says nothing about which way the handle means, and the
-    // left-hand word is what a `for`/`id` pairing would give on its own.
-    renderSettings();
-    expect(
-      screen.getByRole('slider', { name: 'Gentle Direct, and further, challenging' })
-    ).toBeTruthy();
+  it('says plainly when they can’t be changed at all', () => {
+    renderSettings(
+      leaningsView(
+        Object.fromEntries(
+          LEANING_DIMENSIONS.map((d) => [d.key, { min: 0, max: 0, locked: true }])
+        ),
+        false
+      )
+    );
+    expect(screen.getByText(/can’t be changed just now/)).toBeTruthy();
   });
 });
 

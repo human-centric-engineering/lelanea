@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { LEANING_KEYS } from '@/lib/app/voice/leanings';
 
 import type { CapabilityContext } from '@/lib/orchestration/capabilities/types';
 import { redactedString } from '@/lib/security/redact';
@@ -1234,7 +1235,11 @@ describe('notes in the backfill and the search (t-107)', () => {
 
     const notes = world.sql.find((q) => q.text.includes('JOIN framework_slot_value v'));
     const slugs = notes?.values.find(Array.isArray) as string[];
-    expect([...slugs].sort()).toEqual(['beliefs', 'development_stage']);
+    // The eleven voice leanings are always named, whatever either tier says
+    // (f-leanings t-135): they are settings, never searchable notes.
+    expect([...slugs].sort()).toEqual(
+      ['beliefs', 'development_stage', ...LEANING_KEYS.map((key) => `leaning_${key}`)].sort()
+    );
   });
 
   it('carries the same QUALIFIES lines in every note statement', () => {

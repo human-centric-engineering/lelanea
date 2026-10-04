@@ -28,6 +28,7 @@ import { voiceOverlaysFileSchema, type VoiceOverlaysFile } from '@/lib/app/conte
 // through a factory already in flight and vitest deadlocks (0% CPU, no
 // output). The view imports neither of them. See its docblock on the constant.
 import { VOICE_OVERLAY_SET_ID, type VoiceOverlaySeed } from '@/lib/app/content/voice-overlay-view';
+import type { LeaningBounds } from '@/lib/app/voice/leanings';
 
 // Re-exported so the seed unit and its tests keep importing the shape from
 // beside the builder; it is DECLARED in the view (t-89), because the store
@@ -70,6 +71,7 @@ export function buildVoiceOverlaySeed(
         unavailableNote: file.exemplars.unavailableNote,
       },
       coreOnly: { heading: file.coreOnly.heading, lines: [...file.coreOnly.lines] },
+      leanings: requireLeanings(file),
     },
     overlays: file.overlays.map((overlay, index) => ({
       situation: overlay.situation,
@@ -83,4 +85,18 @@ export function buildVoiceOverlaySeed(
       exemplarQuery: overlay.exemplarQuery,
     })),
   };
+}
+
+/**
+ * The leaning bounds the seed writes (t-135). The file schema lets an admin's
+ * import leave them out, which keeps what is stored; a seed has nothing stored
+ * to keep, so the bundled file must carry them.
+ */
+function requireLeanings(file: VoiceOverlaysFile): LeaningBounds {
+  if (!file.leanings) {
+    throw new Error(
+      'The voice overlays file has no `leanings` block, and the seed needs one: a set seeded without bounds would lock every leaning at rest.'
+    );
+  }
+  return file.leanings;
 }
