@@ -60,8 +60,12 @@ vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: logError, debug: vi.fn() },
 }));
 
-const { forgetDeletedConversations, sweepDeletedConversations, onConversationsDeleted } =
-  await import('@/lib/app/memory/delete-conversation');
+const {
+  findDeletedConversations,
+  forgetDeletedConversations,
+  sweepDeletedConversations,
+  onConversationsDeleted,
+} = await import('@/lib/app/memory/delete-conversation');
 const { REMOVED_SLUG_PREFIX, REMOVED_SOURCE_TYPE } = await import('@/lib/app/slots/removed');
 
 const DELETED = 'conv-deleted';
@@ -141,7 +145,7 @@ describe('forgetDeletedConversations', () => {
 
     const result = await forgetDeletedConversations([DELETED], { userId: ME });
 
-    expect(result).toEqual({ turns: 2, versions: 2, deferred: 0 });
+    expect(result).toEqual({ turns: 2, versions: 2, deferred: 0, failed: 0 });
     expect(world.turns.map((row) => row.id).sort()).toEqual(['turn-b', 'turn-x']);
     expect(world.ledger.map((row) => row.turnId).sort()).toEqual(['turn-b', 'turn-x']);
   });
@@ -184,7 +188,7 @@ describe('forgetDeletedConversations', () => {
 
     const result = await forgetDeletedConversations([KEPT], { userId: ME });
 
-    expect(result).toEqual({ turns: 0, versions: 0, deferred: 0 });
+    expect(result).toEqual({ turns: 0, versions: 0, deferred: 0, failed: 0 });
     expect(JSON.stringify(world)).toBe(before);
   });
 
@@ -197,10 +201,55 @@ describe('forgetDeletedConversations', () => {
 
     const result = await forgetDeletedConversations([DELETED], { userId: ME });
 
-    expect(result).toEqual({ turns: 1, versions: 1, deferred: 1 });
+    expect(result).toEqual({ turns: 1, versions: 1, deferred: 1, failed: 0 });
     expect(world.turns.some((row) => row.id === 'turn-a')).toBe(true);
     expect(world.turns.some((row) => row.id === 'turn-c')).toBe(false);
     expect(rowsOf(ME, 'life_work')[1].value).toBe('stopped teaching');
+  });
+
+  it('keeps a turn retried since it was read, so the new attempt’s ledger row survives', async () => {
+    // claimTurn takes a failed turn back between the read and the delete: it
+    // is running again, its conversation reset.
+    prismaFake.slotValue.updateMany.mockImplementationOnce(async () => {
+      const retried = world.turns.find((row) => row.id === 'turn-a')!;
+      retried.status = 'running';
+      retried.conversationId = null;
+      world.ledger.push({ turnId: 'turn-a', userId: ME, slotSlug: 'life_rhythm', version: 9 });
+      return { count: 1 };
+    });
+
+    const result = await forgetDeletedConversations([DELETED], { userId: ME });
+
+    expect(result.turns).toBe(1);
+    expect(world.turns.some((row) => row.id === 'turn-a')).toBe(true);
+    expect(world.ledger).toContainEqual({
+      turnId: 'turn-a',
+      userId: ME,
+      slotSlug: 'life_rhythm',
+      version: 9,
+    });
+    expect(world.turns.some((row) => row.id === 'turn-c')).toBe(false);
+  });
+
+  it('carries on for everyone else when one person’s forgetting fails', async () => {
+    world.conversations = world.conversations.filter((row) => row.id !== THEIRS);
+    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+    prismaFake.appTurn.deleteMany.mockImplementation(async (args) => {
+      if (args.where.userId === ME) throw new Error('lock timeout');
+      return deleteMany(args);
+    });
+    try {
+      const result = await forgetDeletedConversations([DELETED, THEIRS]);
+
+      expect(result).toEqual({ turns: 1, versions: 1, deferred: 0, failed: 2 });
+      expect(world.turns.some((row) => row.id === 'turn-x')).toBe(false);
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('one person'), {
+        turns: 2,
+        error: 'lock timeout',
+      });
+    } finally {
+      prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+    }
   });
 
   it('changes nothing on a second run', async () => {
@@ -209,7 +258,7 @@ describe('forgetDeletedConversations', () => {
 
     const again = await forgetDeletedConversations([DELETED], { userId: ME });
 
-    expect(again).toEqual({ turns: 0, versions: 0, deferred: 0 });
+    expect(again).toEqual({ turns: 0, versions: 0, deferred: 0, failed: 0 });
     expect(JSON.stringify(world.values)).toBe(after);
   });
 
@@ -229,14 +278,14 @@ describe('sweepDeletedConversations', () => {
   it('forgets what every deleted conversation in the org left, whoever’s, and keeps the kept one', async () => {
     const result = await sweepDeletedConversations();
 
-    expect(result).toEqual({ turns: 3, versions: 3, deferred: 0 });
+    expect(result).toEqual({ turns: 3, versions: 3, deferred: 0, failed: 0 });
     expect(world.turns.map((row) => row.id)).toEqual(['turn-b']);
     expect(rowsOf(THEM, 'life_work')[0].sourceType).toBe(REMOVED_SOURCE_TYPE);
     expect(rowsOf(ME, 'life_work')[2].value).toBe('retraining as a nurse');
   });
 
   it('binds the org and the batch size', async () => {
-    await sweepDeletedConversations(7);
+    expect(await findDeletedConversations(7)).toEqual([DELETED, THEIRS]);
 
     const [, ...bound] = prismaFake.$queryRaw.mock.calls[0];
     expect(bound).toEqual(['org-1', 7]);
@@ -246,7 +295,12 @@ describe('sweepDeletedConversations', () => {
     world.turns = world.turns.filter((row) => row.conversationId === KEPT);
     const before = JSON.stringify(world);
 
-    expect(await sweepDeletedConversations()).toEqual({ turns: 0, versions: 0, deferred: 0 });
+    expect(await sweepDeletedConversations()).toEqual({
+      turns: 0,
+      versions: 0,
+      deferred: 0,
+      failed: 0,
+    });
     expect(JSON.stringify(world)).toBe(before);
   });
 });

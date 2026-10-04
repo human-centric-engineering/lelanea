@@ -1223,8 +1223,15 @@ conversation's deletion. `AiUserMemory` is out of reach: no seat is advertised
 `write_user_memory`.
 
 `npm run smoke:app-delete-conversation` proves it on the dev database: one
-conversation deleted the route's way, one the retention way and then swept, and
-the kept conversation's turn and reading untouched.
+conversation deleted the route's way, one the retention way and then found by
+the sweep's query and forgotten, and the kept conversation's turn and reading
+untouched. It never runs the whole sweep, which on a shared dev database would
+forget what other people's deleted conversations left.
+
+**A failed turn retried under the same id is not taken.** Claiming it again
+resets its conversation, so the delete, which requires the deleted conversation,
+leaves it and the ledger row its new attempt writes. One person's failure is
+logged and the sweep carries on for everyone else.
 
 ### What it changes about erasure (Art. 17)
 

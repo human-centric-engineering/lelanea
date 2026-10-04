@@ -19,15 +19,15 @@
  *      `onConversationsDeleted`. Assert A's turn and ledger row are gone and
  *      its version is a placeholder, and B's are untouched.
  *   3. Delete C as `enforceRetentionPolicies` does: `deleteMany`, no call to
- *      us. Assert its turn is still there, pointing at nothing, then run the
- *      sweep and assert it is gone and its version a placeholder.
+ *      us. Assert its turn is still there, pointing at nothing, that the
+ *      sweep's query finds C and not B, then forget C as the sweep does and
+ *      assert its turn is gone and its version a placeholder.
  *   4. What the AI reads next: the note's head is B's reading, and no version
  *      holds A's or C's words.
  *
- * The sweep runs for the whole org, as the job does, so it also forgets any
- * other turn on this database whose conversation is already gone. That is the
- * outcome the job would reach within a minute anyway; the assertions are made
- * on this run's own rows only.
+ * It never runs the whole sweep: on a shared dev database that would forget
+ * what other people's deleted conversations left, which is the job's to do,
+ * not a smoke's. It runs the sweep's query, then forgets only its own.
  *
  * No server and no model. Skips (exit 0, says so) with no database or no agent
  * to hang a conversation on.
@@ -43,8 +43,9 @@
 import { prisma } from '@/lib/db/client';
 import { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots';
 import {
+  findDeletedConversations,
+  forgetDeletedConversations,
   onConversationsDeleted,
-  sweepDeletedConversations,
 } from '@/lib/app/memory/delete-conversation';
 import { isRemoved } from '@/lib/app/slots/removed';
 
@@ -153,14 +154,25 @@ async function main(): Promise<void> {
       'the kept conversation’s turn, ledger row and reading are untouched'
     );
 
-    console.log('\n3. Delete C the way retention does, then sweep');
+    console.log('\n3. Delete C the way retention does, then find and forget it as the sweep does');
     await prisma.aiConversation.deleteMany({ where: { id: c.conversation.id } });
     check(
       (await prisma.appTurn.count({ where: { id: c.turn.id } })) === 1,
       'nothing told the app: its turn is still there, pointing at a conversation that is gone'
     );
-    const swept = await sweepDeletedConversations();
-    check(swept.turns >= 1, `the sweep found it (${swept.turns} turn(s) forgotten in the org)`);
+    // Every deleted conversation in the org, not a batch, so C cannot be cut off.
+    const found = await findDeletedConversations(Number.MAX_SAFE_INTEGER);
+    check(
+      found.includes(c.conversation.id) &&
+        !found.includes(b.conversation.id) &&
+        !found.includes(a.conversation.id),
+      'the sweep’s query finds C, and neither the kept conversation nor the one already forgotten'
+    );
+    const swept = await forgetDeletedConversations([c.conversation.id]);
+    check(
+      swept.turns === 1 && swept.versions === 1,
+      'forgetting it takes one turn and one version'
+    );
     check(await turnGone(c.turn.id), 'its turn record and ledger row are gone');
     check(isRemoved(await versionOf(c.version)), 'the version it wrote is a placeholder');
     check(!(await turnGone(b.turn.id)), 'the kept conversation’s turn is still there');

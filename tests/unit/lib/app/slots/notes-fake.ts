@@ -330,19 +330,40 @@ export const prismaFake = {
           }));
       }
     ),
-    // And its delete, which cascades to the ledger as the FK does.
-    deleteMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) => {
-      if (Object.keys(where).sort().join() !== 'id,userId' || !where.id.in) {
-        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+    // And its delete, which cascades to the ledger as the FK does. The
+    // conversation deletion (t-128) also narrows to turns still pointing at a
+    // deleted conversation.
+    deleteMany: vi.fn(
+      async ({
+        where,
+      }: {
+        where: {
+          id: { in: string[] };
+          userId: string;
+          conversationId?: { in: string[] };
+        };
+      }) => {
+        const keys = Object.keys(where).sort().join();
+        if (
+          !where.id.in ||
+          (keys !== 'id,userId' &&
+            !(keys === 'conversationId,id,userId' && where.conversationId?.in))
+        ) {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        const gone = world.turns.filter(
+          (row) =>
+            where.id.in.includes(row.id) &&
+            row.userId === where.userId &&
+            (!where.conversationId ||
+              (row.conversationId !== null && where.conversationId.in.includes(row.conversationId)))
+        );
+        const ids = new Set(gone.map((row) => row.id));
+        world.turns = world.turns.filter((row) => !ids.has(row.id));
+        world.ledger = world.ledger.filter((row) => !ids.has(row.turnId));
+        return { count: gone.length };
       }
-      const gone = world.turns.filter(
-        (row) => where.id.in.includes(row.id) && row.userId === where.userId
-      );
-      const ids = new Set(gone.map((row) => row.id));
-      world.turns = world.turns.filter((row) => !ids.has(row.id));
-      world.ledger = world.ledger.filter((row) => !ids.has(row.turnId));
-      return { count: gone.length };
-    }),
+    ),
   },
   aiConversation: {
     // Which of these conversations still exist (t-128): `{ id: { in } }` only.

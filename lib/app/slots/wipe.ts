@@ -136,7 +136,9 @@ export async function wipeTurnWrites(
 ): Promise<number> {
   const bySlug = new Map<string, number[]>();
   for (const write of input.writes) {
-    bySlug.set(write.slotSlug, [...(bySlug.get(write.slotSlug) ?? []), write.version]);
+    const versions = bySlug.get(write.slotSlug) ?? [];
+    versions.push(write.version);
+    bySlug.set(write.slotSlug, versions);
   }
   let versions = 0;
   for (const [slotSlug, written] of bySlug) {

@@ -68,6 +68,8 @@ export interface ForgottenConversations {
    * back for them once they settle or go stale.
    */
   deferred: number;
+  /** Turns whose forgetting failed this time. Logged; the next sweep tries again. */
+  failed: number;
 }
 
 /** How many deleted conversations one sweep takes. */
@@ -87,7 +89,7 @@ export async function forgetDeletedConversations(
   options: { userId?: string } = {}
 ): Promise<ForgottenConversations> {
   const ids = [...new Set(conversationIds)];
-  const none: ForgottenConversations = { turns: 0, versions: 0, deferred: 0 };
+  const none: ForgottenConversations = { turns: 0, versions: 0, deferred: 0, failed: 0 };
   if (ids.length === 0) return none;
 
   const live = await prisma.aiConversation.findMany({
@@ -122,22 +124,45 @@ export async function forgetDeletedConversations(
 
   const byUser = new Map<string, typeof ready>();
   for (const turn of ready) {
-    byUser.set(turn.userId, [...(byUser.get(turn.userId) ?? []), turn]);
+    const owned = byUser.get(turn.userId) ?? [];
+    owned.push(turn);
+    byUser.set(turn.userId, owned);
   }
+  const coined = await coinedSlugs([
+    ...new Set(ready.flatMap((turn) => turn.slotWrites.map((write) => write.slotSlug))),
+  ]);
   for (const [userId, owned] of byUser) {
-    const writes = owned.flatMap((turn) => turn.slotWrites);
-    const coined = await coinedSlugs([...new Set(writes.map((write) => write.slotSlug))]);
-    const removedAt = new Date();
-    const done = await executeTransaction(async (tx) => {
-      const versions = await wipeTurnWrites(tx, { userId, writes, coined, removedAt });
-      const deleted = await tx.appTurn.deleteMany({
-        where: { id: { in: owned.map((turn) => turn.id) }, userId },
+    // One person's failure must not hold up everyone else's: log it and carry
+    // on, and the next sweep tries them again.
+    try {
+      const writes = owned.flatMap((turn) => turn.slotWrites);
+      const removedAt = new Date();
+      const done = await executeTransaction(async (tx) => {
+        const versions = await wipeTurnWrites(tx, { userId, writes, coined, removedAt });
+        // Only turns still pointing at a deleted conversation. A failed turn
+        // retried under the same id since it was read has been claimed again,
+        // which resets its conversation (`claimTurn`); deleting its record now
+        // would take the ledger row the new attempt writes, and leave that
+        // version unwiped and unfindable.
+        const deleted = await tx.appTurn.deleteMany({
+          where: {
+            id: { in: owned.map((turn) => turn.id) },
+            userId,
+            conversationId: { in: gone },
+          },
+        });
+        return { turns: deleted.count, versions };
       });
-      return { turns: deleted.count, versions };
-    });
-    result.turns += done.turns;
-    result.versions += done.versions;
-    forgetCachedContext(userId);
+      result.turns += done.turns;
+      result.versions += done.versions;
+      forgetCachedContext(userId);
+    } catch (err) {
+      result.failed += owned.length;
+      logger.error('Could not forget what a deleted conversation left behind for one person', {
+        turns: owned.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
   return result;
 }
@@ -152,6 +177,24 @@ export async function forgetDeletedConversations(
 export async function sweepDeletedConversations(
   batchSize: number = SWEEP_BATCH
 ): Promise<ForgottenConversations> {
+  const conversationIds = await findDeletedConversations(batchSize);
+  const result = await forgetDeletedConversations(conversationIds);
+  if (result.turns > 0 || result.deferred > 0 || result.failed > 0) {
+    logger.info('Forgot what deleted conversations left behind', {
+      orgId: requireOrgId(),
+      conversations: conversationIds.length,
+      ...result,
+    });
+  }
+  return result;
+}
+
+/**
+ * The ids of conversations in this org that are gone but still have our turns
+ * pointing at them, up to `batchSize`. What the sweep acts on, exported so the
+ * smoke can prove the SQL without forgetting anyone else's.
+ */
+export async function findDeletedConversations(batchSize: number = SWEEP_BATCH): Promise<string[]> {
   const orgId = requireOrgId();
   const rows = await prisma.$queryRaw<Array<{ conversationId: string }>>`
     SELECT DISTINCT t."conversationId"
@@ -162,15 +205,7 @@ export async function sweepDeletedConversations(
        AND c.id IS NULL
      LIMIT ${batchSize}
   `;
-  const result = await forgetDeletedConversations(rows.map((row) => row.conversationId));
-  if (result.turns > 0 || result.deferred > 0) {
-    logger.info('Forgot what deleted conversations left behind', {
-      orgId,
-      conversations: rows.length,
-      ...result,
-    });
-  }
-  return result;
+  return rows.map((row) => row.conversationId);
 }
 
 /** What a deleting path tells us. */
