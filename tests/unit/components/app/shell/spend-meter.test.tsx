@@ -250,6 +250,64 @@ describe('SpendMeter — when it reads', () => {
     expect(callsTo(fetchImpl)).toHaveLength(2);
   });
 
+  it('reads COST_SETTLE_MS after the turn, and not a moment sooner', async () => {
+    // The wait is the point: the turn's cost row is written without the
+    // platform waiting for it, so a read at the turn's end could sum the month
+    // without it. The test above only proves the read comes eventually.
+    const fetchImpl = fetcherFor(
+      ok(summaryOf()),
+      ok(summaryOf({ costUsd: 8.1, remainingUsd: 11.9, fractionUsed: 0.405 }))
+    );
+    renderMeter(fetchImpl);
+    await waitFor(() => expect(meter().textContent).toBe('$12.40 left'));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    act(() => screen.getByRole('button', { name: 'finish a turn' }).click());
+    await act(async () => {
+      vi.advanceTimersByTime(COST_SETTLE_MS - 1);
+    });
+    expect(callsTo(fetchImpl)).toHaveLength(1);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    await act(async () => {});
+
+    expect(callsTo(fetchImpl)).toHaveLength(2);
+    expect(meter().textContent).toBe('$11.90 left');
+  });
+
+  it('reads once for each of two turns finished inside one settle window', async () => {
+    // Each turn wrote a cost row; a person sending quickly must not leave the
+    // pill one turn behind because the two signals folded into one.
+    const fetchImpl = fetcherFor(
+      ok(summaryOf()),
+      ok(summaryOf({ costUsd: 8.1, remainingUsd: 11.9, fractionUsed: 0.405 })),
+      ok(summaryOf({ costUsd: 8.6, remainingUsd: 11.4, fractionUsed: 0.43 }))
+    );
+    renderMeter(fetchImpl);
+    await waitFor(() => expect(meter().textContent).toBe('$12.40 left'));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finish = screen.getByRole('button', { name: 'finish a turn' });
+    act(() => finish.click());
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    act(() => finish.click());
+    await act(async () => {
+      vi.advanceTimersByTime(COST_SETTLE_MS - 500);
+    });
+    await act(async () => {});
+    expect(callsTo(fetchImpl)).toHaveLength(2);
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    await act(async () => {});
+
+    expect(callsTo(fetchImpl)).toHaveLength(3);
+    expect(meter().textContent).toBe('$11.40 left');
+  });
+
   it('does not read when the shell changes for any other reason', async () => {
     // A note written, a pane switched: both re-render every consumer of the
     // provider, the meter included. Neither is spend.
