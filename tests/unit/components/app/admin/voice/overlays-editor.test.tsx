@@ -80,7 +80,8 @@ function view(overlays: OverlayAdminRow[]): OverlaysAdminView {
         unavailableNote: 'Unavailable.',
       },
       coreOnly: { heading: 'Register', lines: ['Plain.'] },
-      // The editor has no bounds field yet (t-138), so what they are is moot here.
+      // The bounds have their own editor and test (t-138,
+      // `leaning-bounds-editor.test.tsx`); without them the card shows none.
       leanings: null,
       status: 'draft',
       signedOffAt: null,

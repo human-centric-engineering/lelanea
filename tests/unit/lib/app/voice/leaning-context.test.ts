@@ -9,7 +9,11 @@ import { describe, it, expect } from 'vitest';
 
 import { LEANING_DIMENSIONS } from '@/lib/app/voice/leanings';
 import type { LeaningDialView, LeaningsView } from '@/lib/app/voice/leanings-store';
-import { LEANING_RULE, composeLeaningContext } from '@/lib/app/voice/leaning-context';
+import {
+  LEANING_RULE,
+  LEANING_RULE_ASKED_ONLY,
+  composeLeaningContext,
+} from '@/lib/app/voice/leaning-context';
 import { SET_LEANING_DEFINITION } from '@/lib/app/voice/leaning-capability';
 
 function view(overrides: Partial<Record<string, Partial<LeaningDialView>>> = {}): LeaningsView {
@@ -65,6 +69,37 @@ describe('the leanings block', () => {
     expect(lineFor(block, 'warmth')).not.toContain('You may suggest');
   });
 
+  it('leaves the propose route out when no dial that can move may be suggested (t-138)', () => {
+    const none = view(
+      Object.fromEntries(LEANING_DIMENSIONS.map((d) => [d.key, { suggest: false }]))
+    );
+    // Locked dials do not count as suggestable, whatever their flag says.
+    const onlyLockedOnes = view(
+      Object.fromEntries(
+        LEANING_DIMENSIONS.map((d) =>
+          d.key === 'devotion'
+            ? [d.key, { min: 0 as const, max: 0 as const, locked: true, suggest: true }]
+            : [d.key, { suggest: false }]
+        )
+      )
+    );
+
+    for (const block of [composeLeaningContext(none), composeLeaningContext(onlyLockedOnes)]) {
+      expect(block.endsWith(LEANING_RULE_ASKED_ONLY)).toBe(true);
+      expect(block).not.toContain('how: proposed');
+      expect(block).toContain('use set_leaning with how: asked');
+    }
+    // One suggestable dial is enough for the whole rule.
+    expect(
+      composeLeaningContext(
+        view({
+          ...Object.fromEntries(LEANING_DIMENSIONS.map((d) => [d.key, { suggest: false }])),
+          pace: { suggest: true },
+        })
+      )
+    ).toContain(LEANING_RULE);
+  });
+
   it('is empty when nothing can change: bounds unread, or every dial locked', () => {
     expect(composeLeaningContext({ ...view(), configured: false })).toBe('');
     const locked = view(
@@ -104,6 +139,19 @@ describe('a proposal awaiting an answer', () => {
       composeLeaningContext(view({ length: { locked: true, min: 0, max: 0 } }), [proposal])
     ).not.toContain('In your last reply');
     expect(composeLeaningContext(view(), [proposal])).toContain('In your last reply');
+  });
+
+  it('drops one for a dial that is no longer one to suggest (t-138)', () => {
+    const proposal = {
+      leaning: 'length' as const,
+      from: 0 as const,
+      to: 1 as const,
+      how: 'proposed' as const,
+    };
+
+    expect(composeLeaningContext(view({ length: { suggest: false } }), [proposal])).not.toContain(
+      'In your last reply'
+    );
   });
 });
 
