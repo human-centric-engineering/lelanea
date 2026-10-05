@@ -11,7 +11,7 @@
  * - The per-turn leanings block names a proposal awaiting an answer, so the AI
  *   knows to act on a yes (`leaning-context.ts`).
  *
- * Only the turn immediately before: a yes answers the reply it follows.
+ * Only the last completed turn: a yes answers the reply it follows.
  *
  * And a third: the turn seam asks {@link proposedRecently} at the claim, so the
  * cached block never carries an awaiting proposal past the turn that answered
@@ -25,11 +25,14 @@ import { answeredCalls } from '@/lib/app/agent/capability-answers';
 import { leaningChangeForCall, type LeaningChange } from '@/lib/app/voice/leaning-change';
 
 /**
- * The proposals the person's last finished turn on the seat made. Empty when
- * that turn did not complete, or proposed nothing.
+ * The proposals the person's last COMPLETED turn on the seat made. Empty when
+ * it proposed nothing.
  *
- * A turn still running is never "the previous turn": it is this one, or one
- * racing it. `excludeTurnId` names this turn as well, for a caller inside it.
+ * Completed, not merely finished: a "yes" turn that failed and is sent again
+ * must still find the proposal it answers, rather than a failed turn in
+ * between (/code-review). A turn still running is never "the previous turn":
+ * it is this one, or one racing it. `excludeTurnId` names this turn as well,
+ * for a caller inside it.
  */
 export async function previousProposals(
   userId: string,
@@ -40,7 +43,7 @@ export async function previousProposals(
     where: {
       userId,
       seat,
-      status: { not: 'running' },
+      status: 'completed',
       ...(excludeTurnId !== undefined && { turnId: { not: excludeTurnId } }),
     },
     orderBy: { startedAt: 'desc' },

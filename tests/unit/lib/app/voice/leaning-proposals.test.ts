@@ -74,7 +74,7 @@ describe('previousProposals', () => {
       where: {
         userId: 'u1',
         seat: 'facilitator',
-        status: { not: 'running' },
+        status: 'completed',
         turnId: { not: 't-now' },
       },
       orderBy: { startedAt: 'desc' },

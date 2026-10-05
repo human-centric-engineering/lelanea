@@ -386,9 +386,11 @@ describe('the register (f-registers t-125)', () => {
     it('names the pole, and says the person asked', () => {
       const parts = changed([{ leaning: 'length', from: 0, to: 1, how: 'asked' }]);
 
-      expect(accountLine(parts)).toBe('Set your leaning toward concise and spare, as you asked');
+      expect(accountLine(parts)).toBe(
+        'Moved your leaning a step toward concise and spare, as you asked'
+      );
       expect(parts[0].detail).toBe(
-        'Set your leaning toward concise and spare, as you asked. It stays until you change it, here or in Settings.'
+        'Moved your leaning a step toward concise and spare, as you asked. It stays until you change it, here or in Settings.'
       );
       // Named, so it is not the "Used set leaning" floor.
       expect(parts.map((part) => part.key)).toEqual(['changed_leaning']);
@@ -398,7 +400,7 @@ describe('the register (f-registers t-125)', () => {
       const parts = changed([{ leaning: 'directness', from: 1, to: 2, how: 'agreed' }]);
 
       expect(accountLine(parts)).toBe(
-        'Set your leaning strongly toward direct and challenging, when you agreed to the suggestion'
+        'Moved your leaning a step toward direct, when you agreed to the suggestion'
       );
       expect(accountLine(parts)).not.toMatch(/as you asked/);
     });
@@ -411,23 +413,36 @@ describe('the register (f-registers t-125)', () => {
       );
     });
 
+    it('says the way it moved, not the side it landed on (code review)', () => {
+      // Strongly verbose to verbose: still verbose, but a step toward concise,
+      // which is what the person asked for.
+      const parts = changed([{ leaning: 'length', from: -2, to: -1, how: 'asked' }]);
+
+      expect(accountLine(parts)).toBe(
+        'Moved your leaning a step toward concise and spare, as you asked'
+      );
+      expect(accountLine(changed([{ leaning: 'length', from: -2, to: -1, how: 'proposed' }]))).toBe(
+        'Suggested moving your leaning a step toward concise and spare'
+      );
+    });
+
     it('says nothing moved when the dial was already as far as it goes, rather than claiming a change', () => {
       const parts = changed([{ leaning: 'questions', from: 1, to: 1, how: 'asked' }]);
 
-      expect(accountLine(parts)).toBe(
-        'Your leaning was already toward guidance-led, as far as it goes'
-      );
+      expect(accountLine(parts)).toBe('That leaning was already as far as it goes');
       expect(parts[0].detail).toBe(
-        'Your leaning was already toward guidance-led, as far as it goes, so nothing changed.'
+        'That leaning was already as far as it goes, so nothing changed.'
       );
     });
 
     it('says a suggestion as one that changed nothing', () => {
       const parts = changed([{ leaning: 'length', from: 0, to: 1, how: 'proposed' }]);
 
-      expect(accountLine(parts)).toBe('Suggested setting your leaning toward concise and spare');
+      expect(accountLine(parts)).toBe(
+        'Suggested moving your leaning a step toward concise and spare'
+      );
       expect(parts[0].detail).toBe(
-        'Suggested setting your leaning toward concise and spare. Nothing has changed unless you say yes.'
+        'Suggested moving your leaning a step toward concise and spare. Nothing has changed unless you say yes.'
       );
     });
 
@@ -445,7 +460,7 @@ describe('the register (f-registers t-125)', () => {
       ]);
 
       expect(accountLine(parts)).toBe(
-        'Set your leaning toward concise and spare, as you asked; Set your leaning toward literal, when you agreed to the suggestion'
+        'Moved your leaning a step toward concise and spare, as you asked; Moved your leaning a step toward literal, when you agreed to the suggestion'
       );
     });
   });

@@ -247,7 +247,7 @@ describe('set_leaning: a proposal, then a yes', () => {
         where: {
           userId: ME,
           seat: 'facilitator',
-          status: { not: 'running' },
+          status: 'completed',
           turnId: { not: 't1' },
         },
         orderBy: { startedAt: 'desc' },

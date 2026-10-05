@@ -839,7 +839,7 @@ on a yes. Words alone did not hold it: in the smoke the pinned model moved a
 dial on a pattern turn and called it `agreed`, so the account would have told
 the person they agreed to something never put to them. So it is held in code
 (ruling, 5 Oct 2026): `agreed` is refused (`no_proposal`) unless the last
-finished turn on the seat proposed the same leaning and stop
+completed turn on the seat proposed the same leaning and stop
 (`lib/app/voice/leaning-proposals.ts`). The person's own message always comes
 between the proposal and the change. Whether that message was really a yes is
 still the AI's reading.
@@ -869,9 +869,10 @@ next claim stamps the new stop (the claim also drops the cache when the stamp
 differs).
 
 **The account says it, and how it came about**, live, on reload and on replay:
-"Set your leaning toward concise and spare, as you asked", "…when you agreed to
-the suggestion", "Suggested setting your leaning toward literal", or that it was
-already as far as it goes. The change rides on the call's result
+"Moved your leaning a step toward concise and spare, as you asked", "…when you
+agreed to the suggestion", "Suggested moving your leaning a step toward literal",
+or that it was already as far as it goes. Said by the way it moved, never by
+the side it landed on: strongly verbose to verbose is a step toward concise. The change rides on the call's result
 (`lib/app/voice/leaning-change.ts`), read off the live frame, and off the
 stored trace's `resultPreview` on reload and replay.
 

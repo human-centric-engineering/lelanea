@@ -258,28 +258,33 @@ const changedLeaning: AccountSource = (input) => {
   };
 };
 
-/** One change, as a clause and as a sentence. */
+/**
+ * One change, as a clause and as a sentence. Said by the way it moved, never
+ * by the side it landed on: a step from strongly verbose to verbose is a step
+ * toward concise, which is what the person asked for (/code-review).
+ */
 function leaningChangeWords(change: LeaningChange): { line: string; detail: string } {
   if (change.how === 'proposed') {
-    const what = change.to === 0 ? 'back to rest' : towardWords(change.leaning, change.to);
-    return {
-      line: `Suggested setting your leaning ${what}`,
-      detail: `Suggested setting your leaning ${what}. Nothing has changed unless you say yes.`,
-    };
+    const what = `Suggested ${stepWords(change, 'moving', 'setting')}`;
+    return { line: what, detail: `${what}. Nothing has changed unless you say yes.` };
   }
-  const why = change.how === 'agreed' ? 'when you agreed to the suggestion' : 'as you asked';
   if (change.from === change.to) {
-    const at =
-      change.to === 0
-        ? 'Your leaning was already at rest'
-        : `Your leaning was already ${towardWords(change.leaning, change.to)}, as far as it goes`;
+    const at = 'That leaning was already as far as it goes';
     return { line: at, detail: `${at}, so nothing changed.` };
   }
-  const moved =
-    change.to === 0
-      ? `Set your leaning back to rest from ${towardWords(change.leaning, change.from)}`
-      : `Set your leaning ${towardWords(change.leaning, change.to)}`;
+  const why = change.how === 'agreed' ? 'when you agreed to the suggestion' : 'as you asked';
+  const moved = stepWords(change, 'Moved', 'Set');
   return { line: `${moved}, ${why}`, detail: `${moved}, ${why}.` };
+}
+
+/** "<move> your leaning a step toward concise and spare", or "<set> your leaning back to rest from …". */
+function stepWords(change: LeaningChange, move: string, set: string): string {
+  if (change.to === 0) {
+    return `${set} your leaning back to rest from ${towardWords(change.leaning, change.from)}`;
+  }
+  const dimension = leaningDimension(change.leaning);
+  const pole = change.to > change.from ? dimension.right : dimension.left;
+  return `${move} your leaning a step toward ${poleWords(mildPole(pole))}`;
 }
 
 /**
