@@ -15,13 +15,17 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { OverlaysEditor } from '@/components/app/admin/voice/overlays-editor';
+import { readVoiceOverlaysFile } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import {
+  VOICE_OVERLAY_LEANINGS_ENDPOINT,
+  VOICE_OVERLAY_SET_ENDPOINT,
   VOICE_OVERLAYS_FILE_ENDPOINTS,
   VOICE_OVERLAY_SITUATIONS_ENDPOINT,
   voiceOverlayEndpoint,
 } from '@/lib/app/voice/endpoint';
 import { createMockRouter } from '@/tests/types/mocks';
 import type { OverlayAdminRow, OverlaysAdminView } from '@/lib/app/voice/overlays-admin';
+import type { LeaningBounds } from '@/lib/app/voice/leanings';
 
 const mockRouter = createMockRouter();
 vi.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
@@ -62,7 +66,10 @@ function overlay(over: Partial<OverlayAdminRow> = {}): OverlayAdminRow {
   };
 }
 
-function view(overlays: OverlayAdminRow[]): OverlaysAdminView {
+function view(
+  overlays: OverlayAdminRow[],
+  leanings: LeaningBounds | null = null
+): OverlaysAdminView {
   return {
     seeded: true,
     unservable: null,
@@ -82,7 +89,7 @@ function view(overlays: OverlayAdminRow[]): OverlaysAdminView {
       coreOnly: { heading: 'Register', lines: ['Plain.'] },
       // The bounds have their own editor and test (t-138,
       // `leaning-bounds-editor.test.tsx`); without them the card shows none.
-      leanings: null,
+      leanings,
       status: 'draft',
       signedOffAt: null,
       revision: 1,
@@ -223,5 +230,78 @@ describe('the file', () => {
       body: { removeAbsent: false },
     });
     expect(sent(1)).toMatchObject({ body: { removeAbsent: true } });
+  });
+});
+
+describe('the set’s card', () => {
+  it('saves the general blocks at the revision read, one line per beat', async () => {
+    render(<OverlaysEditor initialView={view([overlay()])} />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const dialog = screen.getByRole('dialog');
+    const lines = within(dialog).getAllByLabelText('Lines')[0];
+    await userEvent.clear(lines);
+    await userEvent.type(lines, 'Plain.{enter}{enter}Still plain.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(sent()).toMatchObject({
+      url: VOICE_OVERLAY_SET_ENDPOINT,
+      method: 'PUT',
+      body: { revision: 1, coreOnly: { heading: 'Register', lines: ['Plain.', 'Still plain.'] } },
+    });
+    expect(mockRouter.refresh).toHaveBeenCalled();
+  });
+
+  it('keeps the dialog open and says why when the save is refused', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: { code: 'CONFLICT', message: 'The overlay set was changed by someone else.' },
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    render(<OverlaysEditor initialView={view([overlay()])} />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    expect(
+      within(screen.getByRole('dialog')).getByText('The overlay set was changed by someone else.')
+    ).toBeInTheDocument();
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
+  });
+
+  it('signs the set off at the revision it shows', async () => {
+    render(<OverlaysEditor initialView={view([])} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign off' }));
+
+    expect(sent()).toEqual({
+      url: `${VOICE_OVERLAY_SET_ENDPOINT}/sign-off`,
+      method: 'POST',
+      body: { revision: 1 },
+    });
+  });
+
+  it('shows the leaning bounds and their editor when the set has them, and not otherwise (t-138)', async () => {
+    const { unmount } = render(<OverlaysEditor initialView={view([overlay()])} />);
+    expect(screen.queryByRole('button', { name: 'Edit leaning bounds' })).toBeNull();
+    unmount();
+
+    render(<OverlaysEditor initialView={view([overlay()], readVoiceOverlaysFile().leanings)} />);
+    expect(
+      screen.getByText(/Signed off, and kept in history, with the blocks above/)
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit leaning bounds' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    expect(sent()).toMatchObject({
+      url: VOICE_OVERLAY_LEANINGS_ENDPOINT,
+      method: 'PUT',
+      body: { revision: 1, leanings: readVoiceOverlaysFile().leanings },
+    });
   });
 });
