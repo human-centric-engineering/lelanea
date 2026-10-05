@@ -37,6 +37,10 @@ import {
   type Notice,
 } from '@/components/app/admin/content/parts';
 import {
+  LeaningBoundsEditor,
+  LeaningBoundsSummary,
+} from '@/components/app/admin/voice/leaning-bounds-editor';
+import {
   VOICE_OVERLAY_SET_ENDPOINT,
   VOICE_OVERLAY_SITUATIONS_ENDPOINT,
   VOICE_OVERLAYS_FILE_ENDPOINTS,
@@ -425,7 +429,9 @@ function SetFraming({
   return (
     <div className="space-y-2 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">When no situation matches, and around real passages</span>
+        <span className="font-medium">
+          When no situation matches, around real passages, and the leaning bounds
+        </span>
         <VoiceStatusBadge status={set.status} signedOffAt={set.signedOffAt} />
       </div>
       <p className="text-muted-foreground text-sm">
@@ -433,10 +439,22 @@ function SetFraming({
         words that frame the real passages put in front of it, including the label that tells the AI
         whose writing they are.
       </p>
+      {set.leanings && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-sm">
+            The leaning bounds: how far each person may move each dial, and which the AI may suggest
+            moving. Signed off, and kept in history, with the blocks above.
+          </p>
+          <LeaningBoundsSummary bounds={set.leanings} />
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
           Edit
         </Button>
+        {set.leanings && (
+          <LeaningBoundsEditor bounds={set.leanings} revision={set.revision} onDone={onDone} />
+        )}
         {set.status === 'draft' && (
           <Button
             type="button"
@@ -452,7 +470,7 @@ function SetFraming({
             history: `${VOICE_OVERLAY_SET_ENDPOINT}/history`,
             restore: `${VOICE_OVERLAY_SET_ENDPOINT}/restore`,
           }}
-          label="the general blocks"
+          label="the general blocks and leaning bounds"
           revisionRead={set.revision}
           restoreNote="A restore is a draft until it is signed off again."
           onRestored={onDone}

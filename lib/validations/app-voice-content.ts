@@ -14,6 +14,7 @@
 import { z } from 'zod';
 
 import { GOLDEN_SET_KINDS, voiceSituationSchema } from '@/lib/app/content/schemas';
+import { leaningBoundsSchema } from '@/lib/app/voice/leanings';
 
 const text = (label: string, max: number) =>
   z
@@ -75,6 +76,17 @@ export const overlaySetEditSchema = z.strictObject({
 });
 
 export const overlaySetSaveSchema = overlaySetEditSchema.extend({ revision: revisionRead });
+
+/**
+ * The leaning bounds (f-leanings t-138), saved on their own: every dial, its
+ * furthest stop each way, and whether the AI may suggest moving it. The
+ * schema is the stored one, so a bound that would hold a dial away from rest
+ * (`min` above 0, `max` below it) is refused here, before anything is read.
+ */
+export const overlaySetLeaningsSaveSchema = z.strictObject({
+  leanings: leaningBoundsSchema,
+  revision: revisionRead,
+});
 
 /** A sign-off names the revision it read, so nobody signs off words they did not see. */
 export const voiceSignOffSchema = z.strictObject({ revision: revisionRead });
