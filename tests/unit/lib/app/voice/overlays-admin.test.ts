@@ -34,6 +34,7 @@ import { seedVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import { buildVoiceOverlaySeed } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { loadVoiceContext } from '@/lib/app/voice/context-contributor';
 import * as overlays from '@/lib/app/voice/overlays-admin';
+import { isLeaningSituation } from '@/lib/app/voice/leanings-select';
 import type { OverlayEdit } from '@/lib/validations/app-voice-content';
 
 const EDITOR = 'editor-id';
@@ -41,9 +42,21 @@ const EDITOR = 'editor-id';
 /** The fake as the Prisma client it stands in for, for a test that edits a stored row directly. */
 const stored = () => db.current!.client as unknown as PrismaClient;
 
+/**
+ * The seed's situations, without the leaning rows (f-leanings t-136). These
+ * cases are about how the admin edits, orders, deletes and round-trips
+ * overlays, and pin the six situations by position; the leaning rows are
+ * rows like any other to every path here, and only `overlaySelectors` treats
+ * them differently (its own cases, below).
+ */
+function situationSeed() {
+  const seed = buildVoiceOverlaySeed();
+  return { ...seed, overlays: seed.overlays.filter((o) => !isLeaningSituation(o.situation)) };
+}
+
 beforeEach(async () => {
   db.current = createContentDbFake();
-  await seedVoiceOverlays(buildVoiceOverlaySeed(), db.current.client as unknown as PrismaClient);
+  await seedVoiceOverlays(situationSeed(), db.current.client as unknown as PrismaClient);
   db.current.insert('user', { id: EDITOR, email: 'editor@example.com' });
 });
 
@@ -826,5 +839,26 @@ describe('the leaning bounds travel with the set (f-leanings t-135)', () => {
     for (const revision of db.current!.rows('appVoiceOverlaySetRevision')) {
       expect(revision.leanings, `revision ${String(revision.revision)}`).toEqual(storedBounds());
     }
+  });
+});
+
+describe('what selects a leaning row (f-leanings t-136)', () => {
+  it('names the person’s own setting for a pole, and never the admin chat', () => {
+    expect(overlays.overlaySelectors('leaning-length-right-strong')).toEqual([
+      'the facilitator seat, when a person has set Verbose and exploratory ↔ Concise and spare to "Strongly toward Concise and spare"',
+    ]);
+    expect(overlays.overlaySelectors('leaning-devotion-left')).toEqual([
+      'the facilitator seat, when a person has set Spiritual and devotional ↔ Secular and plain to "Toward Spiritual and devotional"',
+    ]);
+  });
+
+  it('names the framing as what heads them, and that no leaning applies without it', () => {
+    expect(overlays.overlaySelectors('leaning-framing')).toEqual([
+      expect.stringMatching(/above the person's leanings.*without it, no leaning applies/),
+    ]);
+  });
+
+  it('names nothing for a leaning-prefixed row no dial selects', () => {
+    expect(overlays.overlaySelectors('leaning-volume-right')).toEqual([]);
   });
 });

@@ -309,7 +309,7 @@ leanings. Owner rulings, 2 Oct 2026, are journalled on f-registers.
 **Decided once, at the claim.** `runGeneratedTurn` calls `resolveRegister`
 before claiming the turn and stamps `register` / `registerSource` on the
 `app_turn` row. The contributor reads it back from the running row
-(`registerForPrompt`) rather than deciding again, so the prompt and the account
+(`promptStampFor`, with the leanings) rather than deciding again, so the prompt and the account
 are one value. The seat drops the person's cached block when a turn's register
 differs from their last turn's, so a change reaches the very next prompt.
 
@@ -674,13 +674,12 @@ and also an `upstream-gap`.
 ## It is the same for every user, except where they are
 
 `buildContext` hands a contributor the request's `userId` and partitions its
-60-second cache by it, so a per-user block is available. Two things in it are
+60-second cache by it, so a per-user block is available. Three things in it are
 per person: their discovery answers, and on the facilitator seat which
-register's overlay is chosen. That is where the person is, not what they
-prefer, and it is shown under every reply. A person's voice leanings are stored
-and set since f-leanings t-135 (below), but nothing reads them into the block
-until t-136, which stamps them on the turn and names them in the turn's account,
-so a preference never reshapes her voice where nobody can see it.
+register's overlay is chosen and which of their leanings shade it (below). The
+register is where the person is; the leanings are what they asked for. Both are
+stamped on the turn at claim and named under every reply, so a preference never
+reshapes her voice where nobody can see it.
 
 The cost is a cache partitioned more finely than the answer needs: one embedding
 per cache miss per user, and per **spelling** of a situation rather than per
@@ -754,6 +753,69 @@ every dial at rest, and the settings page says so.
 **The surface.** `GET`/`PATCH /api/v1/app/leanings`, self-scoped. Settings
 (`app/(lelanea)/app/settings`) guards its own session and renders each dial as
 five native radio stops, saved as chosen, with out-of-bounds stops disabled.
+
+### How a leaning shades a reply (t-136)
+
+**A leaning adds authored lines; it never instructs numerically** (owner ruling
+3). Each dial set off rest selects one row in `app_voice_overlay`, named
+`leaning-<key>-<left|right>`, with `-strong` at `±2`. Each stop selects exactly
+one row, so a strong row stands alone. One more row, `leaning-framing`, heads
+them and says, in her register, that a leaning shades the register, gives way
+to the moment, and never turns a refusal into anything else. **With no framing
+row, no leaning applies.** The rows are drafted, edited and signed
+off on the Voice page like any overlay, and reach existing databases by
+`20261011100100_app_voice_leaning_overlays` (pinned to the seed by
+`voice-leaning-overlays.test.ts`). The rules are `lib/app/voice/leanings-select.ts`,
+pure.
+
+**Only added, never removed.** `composeVoiceContext` emits the register (or
+the core-only body), then the framing and the poles, then her passages. The
+register overlay, the exemplar framing and every safety line are emitted
+exactly as they are without leanings, and the core rides on the profile, out
+of reach. `leanings-select.test.ts` proves it over every combination of
+extremes, under every register source. Exemplar retrieval stays with the
+register's query.
+
+**A leaning row is not a situation.** `selectOverlayFrom` refuses the
+`leaning-` prefix, so an admin chat asking for one gets the core-only block,
+and `knownSituations` leaves them out. The Voice page names the person's
+setting as what selects each.
+
+**Held when something hard is here.** Under a `safety` or `fallback` register,
+the harder poles select nothing: direct and challenging, neutral and
+unsentimental, cool and analytical, energetic, and playful (`HELD_WHEN_HARD`).
+In code, like the register's crisis hold, so no edit on the Voice page can
+loosen it.
+
+**The facilitator seat only.** It is the seat a person returns to, and the one
+whose register reads a recent crisis, so the hold always has its input. The
+onboarding seat and the admin chat carry none.
+
+**Decided once, at the claim.** `runGeneratedTurn` reads the person's dials
+(`readLeaningInputs`) beside `resolveRegister`, then selects against the
+register's source (`leaningsFrom`), and stamps `app_turn.leanings`:
+`{ applied: [{ key, stop }], held: [key] }`, or SQL NULL on a seat with none
+(migration `20261011100000_app_turn_leanings`). With every dial at rest the
+overlays are not read. The contributor reads the register and the leanings
+back from the running row together (`promptStampFor`); with no running row it
+decides both from one reading of the register, so the leanings are always held
+against the register they are composed under. A turn claimed with different
+leanings than the person's last drops their cached block, so a dial moved in
+settings reaches the very next reply. A stop whose row has been deleted is
+neither applied nor reported as set aside.
+
+**Shown to the person.** The `done` frame carries `leanings`, and the replay,
+the transcript read and the client schema all read it, so the account says the
+same under a live reply, a retry and a reload: "Leaned the way you set it in
+your settings: strongly toward concise and spare." A held leaning is named too,
+with the crisis as its reason only when one was read (`leaningsSentences`).
+
+**What it does to the pinned model.** `npm run smoke:app-leanings` sets every
+dial to each extreme through the real settings service, in Values, then again
+after a recorded crisis, and asks the register smoke's question and the golden
+set's refusal and decline prompts, each in a fresh conversation. It asserts the
+block, the turn row, the `done` frame and the transcript agree, and prints every
+reply for judgement. The lines are a draft awaiting her review (idea #46).
 
 ## The overlays are her words too, and are a DRAFT
 
@@ -1721,10 +1783,6 @@ board above. What is not done is the judgement it exists to make cheap: three
 files now await her, the core, the overlays and the golden set itself, and each
 says so in its own `provenance` block. That is a feature-level check before ship
 (`fp3b`), not something a pull request can satisfy.
-
-**A person's voice leanings in the prompt.** Stored and set since t-135 (above);
-t-136 reads them into the block as authored pole lines, and may not reach the
-core.
 
 **Six `upstream-gap` findings for Sunrise.** The three-way blob check in
 `CLAUDE.md` is what established the tier for each — the first five are on files

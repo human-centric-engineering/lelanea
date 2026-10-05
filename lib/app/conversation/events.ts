@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { parseSseBlock } from '@/lib/api/sse-parser';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { REGISTER_SOURCES, registerSchema } from '@/lib/app/voice/register';
+import { leaningsStampSchema } from '@/lib/app/voice/leanings-select';
 
 const crisisServiceSchema = z.object({
   name: z.string(),
@@ -115,6 +116,8 @@ export const conversationEventSchema = z.discriminatedUnion('type', [
     /** The leaf's own: the register the turn was steered to (f-registers t-125). */
     register: registerSchema.optional().catch(undefined),
     registerSource: z.enum(REGISTER_SOURCES).optional().catch(undefined),
+    /** The leaf's own: the person's leanings the turn applied, and any held (f-leanings t-136). */
+    leanings: leaningsStampSchema.optional().catch(undefined),
   }),
   z.object({
     type: z.literal('error'),

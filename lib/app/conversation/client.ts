@@ -28,6 +28,7 @@
  */
 
 import { REGISTER_SOURCES, registerSchema } from '@/lib/app/voice/register';
+import { leaningsStampSchema } from '@/lib/app/voice/leanings-select';
 import { z } from 'zod';
 
 import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conversation/events';
@@ -351,6 +352,8 @@ const accountSchema = z.object({
   // the reply.
   register: registerSchema.nullable().default(null).catch(null),
   registerSource: z.enum(REGISTER_SOURCES).nullable().default(null).catch(null),
+  // The same for the leanings (f-leanings t-136).
+  leanings: leaningsStampSchema.nullable().default(null).catch(null),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
   costUsd: z.number().nullable(),

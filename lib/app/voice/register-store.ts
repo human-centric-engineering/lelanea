@@ -10,7 +10,8 @@
  * A turn's register is decided when the turn seam claims it, before the model
  * is called (`lib/app/agent/turns.ts`), and written on the turn row. The
  * context contributor then reads it back from that row
- * ({@link registerForPrompt}) rather than deciding again, so what the prompt
+ * (`promptStampFor` in `leanings-store.ts`, with the leanings) rather than
+ * deciding again, so what the prompt
  * was steered to and what the account says are one value, never two reads
  * that happened to agree.
  *
@@ -162,30 +163,4 @@ export async function resolveRegister(
     options.crisisNow === true ? Promise.resolve(true) : hadRecentCrisis(userId, now),
   ]);
   return { ...selectRegister({ moduleRegister, recentCrisis, lean }), moduleSlug };
-}
-
-/**
- * The register the prompt is given: the one the turn now running on the seat
- * was claimed with. Every turn a person takes on a facilitation seat passes
- * the turn seam, which claims it before the model is called, so that row is
- * this turn's. With no such row (a turn that reached the agent some other
- * way, or a claim written before registers existed) it is decided here, the
- * same way. Never throws; null for a seat with no register.
- */
-export async function registerForPrompt(userId: string, seat: string): Promise<Register | null> {
-  if (!hasRegister(seat) || userId === '') return null;
-  try {
-    const running = await prisma.appTurn.findFirst({
-      where: { userId, seat, status: 'running' },
-      orderBy: { startedAt: 'desc' },
-      select: { register: true },
-    });
-    const claimed = parseRegister(running?.register);
-    if (claimed !== null) return claimed;
-  } catch (err) {
-    logger.error('registerForPrompt: the turn row could not be read; deciding again', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-  return (await resolveRegister(userId, seat))?.register ?? null;
 }

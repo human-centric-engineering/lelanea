@@ -1,5 +1,6 @@
 /**
- * A person's leanings, read and written (f-leanings t-135).
+ * A person's leanings, read and written (f-leanings t-135), and the ones a
+ * turn applies (t-136).
  *
  * Over a small stateful fake: the overlay set's bounds, and a slot-value table
  * that the mocked `appendSlotValue` appends to the way Daybreak's engine does
@@ -34,6 +35,11 @@ interface World {
   seeded: boolean;
   values: ValueRow[];
   appendFailures: number;
+  /** The running turn row on the facilitator seat, or no row. */
+  running: { register?: unknown; registerSource?: unknown; leanings: unknown } | null;
+  runningFails: boolean;
+  /** Why the register is what it is, when decided outside a claim. */
+  registerSource: 'module' | 'safety' | 'fallback' | 'asked';
 }
 
 const world = vi.hoisted((): World => ({
@@ -41,12 +47,21 @@ const world = vi.hoisted((): World => ({
   seeded: true,
   values: [],
   appendFailures: 0,
+  running: null,
+  runningFails: false,
+  registerSource: 'module',
 }));
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     appVoiceOverlaySet: {
       findFirst: vi.fn(async () => (world.seeded ? { leanings: world.bounds } : null)),
+    },
+    appTurn: {
+      findFirst: vi.fn(async () => {
+        if (world.runningFails) throw new Error('turn row unreadable');
+        return world.running;
+      }),
     },
     slotValue: {
       findMany: vi.fn(
@@ -80,8 +95,26 @@ const appendSlotValue = vi.hoisted(() =>
   })
 );
 vi.mock('@/lib/framework/data-slots', () => ({ appendSlotValue }));
+vi.mock('@/lib/app/content/voice-overlay-store', async () =>
+  (await import('@/tests/helpers/app/content-stores')).fakeVoiceOverlayStore()
+);
+const resolveRegister = vi.hoisted(() =>
+  vi.fn(async () => ({
+    register: world.registerSource === 'module' ? 'teaching' : 'guiding',
+    source: world.registerSource,
+    moduleSlug: null,
+  }))
+);
+vi.mock('@/lib/app/voice/register-store', () => ({
+  hasRegister: (seat: string) => seat === 'facilitator',
+  resolveRegister,
+}));
+const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
+vi.mock('@/lib/logging', () => ({ logger }));
 
-const { getLeanings, setLeaning } = await import('@/lib/app/voice/leanings-store');
+const { getLeanings, setLeaning, resolveLeanings, readLeaningInputs, promptStampFor } =
+  await import('@/lib/app/voice/leanings-store');
+const { fakeVoiceOverlayStore } = await import('@/tests/helpers/app/content-stores');
 
 const ME = 'user-me';
 const SOMEONE_ELSE = 'user-else';
@@ -110,6 +143,10 @@ beforeEach(() => {
   world.seeded = true;
   world.values = [];
   world.appendFailures = 0;
+  world.running = null;
+  world.runningFails = false;
+  world.registerSource = 'module';
+  fakeVoiceOverlayStore().reset();
 });
 
 describe('reading', () => {
@@ -287,5 +324,143 @@ describe('writing', () => {
 
     expect(result.outcome).toBe('written');
     expect(appendSlotValue).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the leanings a turn applies (t-136)', () => {
+  it('applies the person’s own settings, clamped to today’s bounds, on the facilitator seat', async () => {
+    world.values = [ours(ME, 'leaning_length', 2, 1), ours(ME, 'leaning_warmth', 2, 1)];
+
+    // The drafted bounds stop warm ↔ cool at 1.
+    await expect(resolveLeanings(ME, 'facilitator', 'module')).resolves.toEqual({
+      applied: [
+        { key: 'length', stop: 2 },
+        { key: 'warmth', stop: 1 },
+      ],
+      held: [],
+    });
+  });
+
+  it('holds the hard poles under a crisis, and names them', async () => {
+    world.values = [ours(ME, 'leaning_length', 2, 1), ours(ME, 'leaning_warmth', 2, 1)];
+
+    await expect(resolveLeanings(ME, 'facilitator', 'safety')).resolves.toEqual({
+      applied: [{ key: 'length', stop: 2 }],
+      held: ['warmth'],
+    });
+  });
+
+  it('is none on a seat with no register, or for nobody, and reads nothing', async () => {
+    world.values = [ours(ME, 'leaning_length', 2, 1)];
+
+    await expect(resolveLeanings(ME, 'onboarding', 'module')).resolves.toBeNull();
+    await expect(resolveLeanings('', 'facilitator', 'module')).resolves.toBeNull();
+    expect(fakeVoiceOverlayStore().getVoiceOverlays).not.toHaveBeenCalled();
+  });
+
+  it('applies nothing, loudly, when the rows can’t be read', async () => {
+    world.values = [ours(ME, 'leaning_length', 2, 1)];
+    fakeVoiceOverlayStore().empty();
+
+    await expect(resolveLeanings(ME, 'facilitator', 'module')).resolves.toEqual({
+      applied: [],
+      held: [],
+    });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringMatching(/readLeaningInputs/),
+      expect.any(Object)
+    );
+  });
+
+  it('does not read the overlays when every dial is at rest', async () => {
+    const inputs = await readLeaningInputs(ME, 'facilitator');
+
+    expect(inputs?.content.overlays).toEqual([]);
+    expect(fakeVoiceOverlayStore().getVoiceOverlays).not.toHaveBeenCalled();
+    await expect(resolveLeanings(ME, 'facilitator', 'module')).resolves.toEqual({
+      applied: [],
+      held: [],
+    });
+  });
+
+  describe('for the prompt', () => {
+    it('reads back the register and leanings the running turn was claimed with, as one', async () => {
+      const stamp = { applied: [{ key: 'pace', stop: 1 }], held: [] };
+      world.running = { register: 'teaching', registerSource: 'module', leanings: stamp };
+      world.values = [ours(ME, 'leaning_length', 2, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'teaching',
+        leanings: stamp,
+      });
+      expect(resolveRegister).not.toHaveBeenCalled();
+      expect(fakeVoiceOverlayStore().getVoiceOverlays).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no running turn', null, false],
+      ['an unreadable row', null, true],
+    ] as const)(
+      'decides both from one reading of the register with %s',
+      async (_case, running, fails) => {
+        world.running = running;
+        world.runningFails = fails;
+        world.registerSource = 'safety';
+        world.values = [ours(ME, 'leaning_length', -1, 1), ours(ME, 'leaning_pace', -2, 1)];
+
+        await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+          register: 'guiding',
+          leanings: { applied: [{ key: 'length', stop: -1 }], held: ['pace'] },
+        });
+        // One decision: the leanings are held against the register they are composed under.
+        expect(resolveRegister).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('keeps a claim’s register from before leanings, and holds against its source', async () => {
+      world.running = { register: 'guiding', registerSource: 'safety', leanings: null };
+      // Were it read again, the register would say teaching, from the module.
+      world.registerSource = 'module';
+      world.values = [ours(ME, 'leaning_pace', -2, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'guiding',
+        leanings: { applied: [], held: ['pace'] },
+      });
+      expect(resolveRegister).not.toHaveBeenCalled();
+    });
+
+    it('does not trust leanings stamped beside a register it cannot read, and decides both', async () => {
+      // Stamped under the module, with a hard pole applied; the register is unreadable.
+      world.running = {
+        register: 'stern',
+        registerSource: 'module',
+        leanings: { applied: [{ key: 'pace', stop: -2 }], held: [] },
+      };
+      world.registerSource = 'safety';
+      world.values = [ours(ME, 'leaning_pace', -2, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'guiding',
+        leanings: { applied: [], held: ['pace'] },
+      });
+    });
+
+    it('holds the hard poles when a claimed register’s source cannot be read', async () => {
+      world.running = { register: 'guiding', registerSource: 'whim', leanings: null };
+      world.values = [ours(ME, 'leaning_directness', 1, 1)];
+
+      await expect(promptStampFor(ME, 'facilitator')).resolves.toEqual({
+        register: 'guiding',
+        leanings: { applied: [], held: ['directness'] },
+      });
+    });
+
+    it('is nothing on a seat with no register', async () => {
+      await expect(promptStampFor(ME, 'onboarding')).resolves.toEqual({
+        register: null,
+        leanings: null,
+      });
+    });
   });
 });

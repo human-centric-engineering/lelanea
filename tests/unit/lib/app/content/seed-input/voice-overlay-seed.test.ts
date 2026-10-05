@@ -24,6 +24,7 @@ import {
   readVoiceOverlaysFile,
 } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
+import { isLeaningSituation } from '@/lib/app/voice/leanings-select';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';
 const REGISTER_MIGRATION =
@@ -160,14 +161,17 @@ describe('the data migration', () => {
     };
     const { id: authoredName, ...setText } = embedded.set;
     // The registers' two overlays came later, in their own migration (t-125,
-    // below), and so did the leaning bounds (t-135, below); t-88's literal is
-    // the seed without them.
+    // below), and so did the leaning bounds (t-135, below) and the leaning rows
+    // (t-136, `voice-leaning-overlays.test.ts`); t-88's literal is the seed
+    // without them.
     const seed = buildVoiceOverlaySeed();
     const { leanings: _leanings, ...setBeforeLeanings } = seed.set;
     expect({ ...embedded, set: { ...setText, slug: authoredName } }).toEqual({
       ...seed,
       set: setBeforeLeanings,
-      overlays: seed.overlays.filter((o) => !REGISTER_SITUATIONS.includes(o.situation)),
+      overlays: seed.overlays.filter(
+        (o) => !REGISTER_SITUATIONS.includes(o.situation) && !isLeaningSituation(o.situation)
+      ),
     });
     expect(migrationSql(PER_ORG_KEYS_MIGRATION)).toContain(
       'UPDATE "app_voice_overlay_set" SET "slug" = "id";'

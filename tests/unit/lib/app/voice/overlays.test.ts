@@ -39,16 +39,18 @@ import {
 } from '@/lib/app/voice/overlays';
 import { getVoiceOverlays } from '@/lib/app/content/voice-overlay-store';
 import { fakeVoiceOverlayStore } from '@/tests/helpers/app/content-stores';
+import { isLeaningSituation } from '@/lib/app/voice/leanings-select';
 
 beforeEach(() => fakeVoiceOverlayStore().reset());
 
 describe('selectOverlay', () => {
   it('returns the overlay stored for each situation the rows declare', async () => {
     const content = await getVoiceOverlays();
+    const situations = content.overlays.filter((o) => !isLeaningSituation(o.situation));
     // fp6: the table is non-empty, so the loop below is not vacuously green.
-    expect(content.overlays.length).toBeGreaterThan(0);
+    expect(situations.length).toBeGreaterThan(0);
 
-    for (const overlay of content.overlays) {
+    for (const overlay of situations) {
       await expect(selectOverlay(overlay.situation)).resolves.toEqual(overlay);
     }
   });
@@ -127,7 +129,9 @@ describe('selectOverlayFrom', () => {
     const store = fakeVoiceOverlayStore();
     store.getVoiceOverlays.mockClear();
 
-    for (const overlay of content.overlays) {
+    const situations = content.overlays.filter((o) => !isLeaningSituation(o.situation));
+    expect(situations.length).toBeGreaterThan(0);
+    for (const overlay of situations) {
       expect(selectOverlayFrom(content, overlay.situation)).toEqual(overlay);
     }
 
@@ -151,13 +155,30 @@ describe('normaliseSituation', () => {
   });
 });
 
-describe('knownSituations', () => {
-  it('is the stored vocabulary, in authored order', async () => {
+describe('a leaning row is never a situation (f-leanings t-136)', () => {
+  it('selects nothing for a pole row or the framing, though the rows exist', async () => {
     const content = await getVoiceOverlays();
+    const leaningRows = content.overlays.filter((o) => isLeaningSituation(o.situation));
+    // fp6: the rows are really there, so the null below is the rule, not an absence.
+    expect(leaningRows.length).toBeGreaterThan(0);
 
-    await expect(knownSituations()).resolves.toEqual(
-      content.overlays.map((overlay) => overlay.situation)
+    for (const row of leaningRows) {
+      expect(selectOverlayFrom(content, row.situation)).toBeNull();
+    }
+    // Spelled as a hand-typed `contextId` might be, too.
+    expect(selectOverlayFrom(content, '  Leaning-Warmth-Right ')).toBeNull();
+  });
+});
+
+describe('knownSituations', () => {
+  it('is the stored vocabulary less the leaning rows, in authored order', async () => {
+    const content = await getVoiceOverlays();
+    const known = await knownSituations();
+
+    expect(known).toEqual(
+      content.overlays.map((overlay) => overlay.situation).filter((s) => !isLeaningSituation(s))
     );
+    expect(known).toContain('guiding');
   });
 
   it('is every key a route could pin — each one selectable', async () => {

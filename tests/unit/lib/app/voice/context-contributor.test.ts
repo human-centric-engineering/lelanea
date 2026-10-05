@@ -135,13 +135,22 @@ vi.mock('@/lib/framework/facilitation/agents/binding-queries', () => ({
 }));
 
 /**
- * The register the facilitator seat's turn was claimed with (t-125). Its reads
- * are `register-store.test.ts`'s; here it is what the block does with one.
+ * The register (t-125) and leanings (t-136) the facilitator seat's turn was
+ * claimed with, read back as one. Their reads are `leanings-store.test.ts`'s
+ * and `register-store.test.ts`'s; here it is what the block does with them.
  */
 const registers = vi.hoisted(() => ({ value: null as 'guiding' | 'teaching' | null }));
-vi.mock('@/lib/app/voice/register-store', () => ({
-  registerForPrompt: vi.fn(async (_userId: string, seat: string) =>
-    seat === 'facilitator' ? registers.value : null
+const leanings = vi.hoisted(() => ({
+  value: null as {
+    applied: { key: 'length' | 'devotion'; stop: -2 | -1 | 1 | 2 }[];
+    held: 'warmth'[];
+  } | null,
+}));
+vi.mock('@/lib/app/voice/leanings-store', () => ({
+  promptStampFor: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator'
+      ? { register: registers.value, leanings: leanings.value }
+      : { register: null, leanings: null }
   ),
 }));
 
@@ -312,6 +321,7 @@ beforeEach(() => {
   // ran next.
   offering.text = '';
   offering.fail = false;
+  leanings.value = null;
   seedWorld();
 });
 
@@ -842,6 +852,59 @@ describe('a facilitation seat turn', () => {
       expect(searchKnowledgeMock.mock.calls[0]?.[0]).toBe(overlay.exemplarQuery);
     }
   );
+
+  it('the facilitator seat carries the pole lines its turn was claimed with, after the register (t-136)', async () => {
+    registers.value = 'teaching';
+    leanings.value = {
+      applied: [
+        { key: 'length', stop: 2 },
+        { key: 'devotion', stop: -1 },
+      ],
+      held: ['warmth'],
+    };
+    const rowOf = (situation: string) => {
+      const row = CONTENT.overlays.find((o) => o.situation === situation);
+      if (!row) throw new Error(`no authored row "${situation}"`);
+      return row;
+    };
+    const teaching = rowOf('teaching');
+    const framing = rowOf('leaning-framing');
+    const spare = rowOf('leaning-length-right-strong');
+    const devotional = rowOf('leaning-devotion-left');
+
+    const prompt = await systemPromptFor('facilitator');
+
+    // Added, never instead: the register is whole.
+    for (const line of teaching.lines) expect(prompt).toContain(line);
+    for (const row of [framing, spare, devotional]) {
+      expect(prompt).toContain(row.heading);
+      for (const line of row.lines) expect(prompt).toContain(line);
+    }
+    // In order: register, framing, the poles in stamp order, then her passages.
+    const at = (text: string) => prompt.indexOf(text);
+    expect(at(teaching.heading)).toBeLessThan(at(framing.heading));
+    expect(at(framing.heading)).toBeLessThan(at(spare.heading));
+    expect(at(spare.heading)).toBeLessThan(at(devotional.heading));
+    expect(at(devotional.heading)).toBeLessThan(at(`[${CONTENT.exemplars.originLabel}`));
+    // A held dial selects nothing, and retrieval still runs the register's query.
+    expect(prompt).not.toContain(rowOf('leaning-warmth-right').heading);
+    expect(searchKnowledgeMock.mock.calls[0]?.[0]).toBe(teaching.exemplarQuery);
+  });
+
+  it('the onboarding seat and the admin chat carry no leanings', async () => {
+    leanings.value = { applied: [{ key: 'length', stop: 2 }], held: [] };
+    const heading = (situation: string) =>
+      CONTENT.overlays.find((o) => o.situation === situation)?.heading ?? situation;
+
+    const onboarding = await systemPromptFor('onboarding');
+
+    // Population first: each block is there.
+    expect(onboarding).toContain(CONTENT.exemplars.originLabel);
+    expect(onboarding).not.toContain(heading('leaning-framing'));
+    const admin = await buildContext(VOICE_CONTEXT_TYPE, 'teaching', { userId: 'user-1' });
+    expect(admin).toContain(heading('teaching'));
+    expect(admin).not.toContain(heading('leaning-framing'));
+  });
 
   it('the facilitator seat gets the core-only block when there is no register to read', async () => {
     registers.value = null;

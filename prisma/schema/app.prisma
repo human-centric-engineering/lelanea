@@ -540,6 +540,12 @@ model AppTurn {
   /// Why: `module` (the person's current module's config) or `safety` (a
   /// crisis on this turn or within the hold).
   registerSource     String?
+  /// The person's leanings the turn applied, and any held at rest because
+  /// something hard is here (f-leanings t-136): `leaningsStampSchema` in
+  /// `lib/app/voice/leanings-select.ts`. Decided at claim beside the register;
+  /// the prompt reads it back from here. Null on a seat with no leanings, and on
+  /// a turn claimed before them.
+  leanings           Json?
   conversationId     String?
   userMessageId      String?
   assistantMessageId String?

@@ -103,6 +103,12 @@ import {
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
 import { parseRegister, parseRegisterSource } from '@/lib/app/voice/register';
+import { leaningsFrom, readLeaningInputs } from '@/lib/app/voice/leanings-store';
+import {
+  parseLeaningsStamp,
+  sameLeanings,
+  type LeaningsStamp,
+} from '@/lib/app/voice/leanings-select';
 import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { invalidateContext } from '@/lib/orchestration/chat/context-builder';
 import { prisma } from '@/lib/db/client';
@@ -187,7 +193,7 @@ async function* replay(turn: AppTurn): ChatStream {
   if (reply.citations.length > 0) yield { type: 'citations', citations: reply.citations };
   const inputTokens = turn.inputTokens ?? 0;
   const outputTokens = turn.outputTokens ?? 0;
-  yield withRegister(
+  yield withStamp(
     {
       type: 'done',
       tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
@@ -200,32 +206,49 @@ async function* replay(turn: AppTurn): ChatStream {
 }
 
 /**
- * The `done` frame with the turn's register on it (f-registers t-125), so the
- * account under a live reply says what a reload will. The platform's frame has
- * no field for it; the leaf's own event schema reads it
- * (`lib/app/conversation/events.ts`), and nothing between strips it. A turn
- * with no register passes the frame through as it was.
+ * The `done` frame with the turn's register (f-registers t-125) and leanings
+ * (f-leanings t-136) on it, so the account under a live reply says what a
+ * reload will. The platform's frame has no field for either; the leaf's own
+ * event schema reads them (`lib/app/conversation/events.ts`), and nothing
+ * between strips them. A turn with neither passes the frame through as it was.
  */
-function withRegister(done: Extract<ChatEvent, { type: 'done' }>, turn: AppTurn): ChatEvent {
+function withStamp(done: Extract<ChatEvent, { type: 'done' }>, turn: AppTurn): ChatEvent {
   const register = parseRegister(turn.register);
-  if (register === null) return done;
   const source = parseRegisterSource(turn.registerSource);
-  return Object.assign({}, done, { register, ...(source ? { registerSource: source } : {}) });
+  const leanings = parseLeaningsStamp(turn.leanings);
+  if (register === null && leanings === null) return done;
+  const stamp: Record<string, unknown> = {};
+  if (register !== null) {
+    stamp.register = register;
+    if (source) stamp.registerSource = source;
+  }
+  if (leanings !== null) stamp.leanings = leanings;
+  return Object.assign({}, done, stamp);
 }
 
-/** The register the person's last turn on the seat was claimed with, or null. Never throws. */
-async function readLastRegister(userId: string, seat: string): Promise<string | null> {
-  if (!hasRegister(seat)) return null;
+/** What the person's last turn on the seat was claimed with. */
+interface LastStamp {
+  register: string | null;
+  leanings: LeaningsStamp | null;
+}
+
+/**
+ * The register and leanings the person's last turn on the seat was claimed
+ * with, or `null` when that could not be read. Never throws.
+ */
+async function readLastStamp(userId: string, seat: string): Promise<LastStamp | null> {
+  // A seat with no register has neither, so there is nothing to have changed.
+  if (!hasRegister(seat)) return { register: null, leanings: null };
   try {
     const last = await prisma.appTurn.findFirst({
       where: { userId, seat },
       orderBy: { startedAt: 'desc' },
-      select: { register: true },
+      select: { register: true, leanings: true },
     });
-    return last?.register ?? null;
+    return { register: last?.register ?? null, leanings: parseLeaningsStamp(last?.leanings) };
   } catch {
     // Unknown is "changed": dropping the cache costs a rebuild, keeping a
-    // stale one costs the wrong register.
+    // stale one costs the wrong register or leanings.
     return null;
   }
 }
@@ -289,7 +312,7 @@ async function* recorded(turn: AppTurn, events: ChatStream, disarm: () => boolea
       } else if (event.type === 'done') {
         if (ownsSettle()) await settleCompleted(turn, event);
         settled = true;
-        yield withRegister(event, turn);
+        yield withStamp(event, turn);
         continue;
       } else if (event.type === 'error' || event.type === 'budget_exceeded_per_turn') {
         // Not while the aborted call ends past the deadline: that is its own
@@ -457,12 +480,15 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, lastRegister] = await Promise.all([
+  const [deadlines, fingerprintVersion, register, last, leaningInputs] = await Promise.all([
     getAgentDeadlines(),
     readAgentFingerprintVersion(turn.agentSlug),
     resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
-    readLastRegister(turn.userId, turn.role),
+    readLastStamp(turn.userId, turn.role),
+    readLeaningInputs(turn.userId, turn.role),
   ]);
+  // Against the register's source: under a crisis hold the harder poles are held at rest.
+  const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
   const claim = await claimTurn(
     {
       userId: turn.userId,
@@ -472,13 +498,19 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    { fingerprintVersion, register },
+    { fingerprintVersion, register, leanings },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
   // The context block is cached per person for a minute, built for the last
-  // turn's register. A turn steered elsewhere drops it, so the prompt reads
-  // this turn's (`register-store.ts`, "Decided once, at the claim").
-  if (claim.kind === 'claimed' && register !== null && register.register !== lastRegister) {
+  // turn's register and leanings. A turn claimed with either different drops
+  // it, so the prompt reads this turn's (`register-store.ts`, "Decided once, at
+  // the claim"). A leaning changed in settings reaches the next reply this way.
+  if (
+    claim.kind === 'claimed' &&
+    (last === null ||
+      (register !== null && register.register !== last.register) ||
+      !sameLeanings(leanings, last.leanings))
+  ) {
     dropContext(turn.userId, turn.role);
   }
 

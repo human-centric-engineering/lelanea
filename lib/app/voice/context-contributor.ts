@@ -13,7 +13,10 @@
  *
  * 1. **The register for this moment** — the overlay `lib/app/voice/overlays.ts`
  *    selects for the situation, or the authored core-only body when none
- *    matches.
+ *    matches. On the facilitator seat, the person's leanings follow it: the
+ *    pole lines the turn was claimed with, under their framing row
+ *    (`lib/app/voice/leanings-select.ts`, f-leanings t-136). They are added,
+ *    never in place of anything.
  * 2. **Her own passages** — retrieved by `lib/app/voice/exemplars.ts` from
  *    voice-designated documents only, each one labelled with its origin.
  * 3. **What the agent is looking for** — the live slot taxonomy
@@ -93,13 +96,15 @@
  * ## Her voice is the same for every user, except where they are
  *
  * `buildContext` hands a contributor the request's `userId` and partitions its
- * cache by it, so a per-user block is available. Two things in it are per
+ * cache by it, so a per-user block is available. Three things in it are per
  * person: the discovery answers (5, above), and on the facilitator seat which
- * register's overlay is chosen (f-registers t-125). That is where the person
- * IS, not what they prefer, and it is disclosed under every reply. A user's
- * voice leanings are a later filter over the overlays and the exemplars, and
- * until that is designed, one person's preference silently reshaping how her
- * voice comes across is a change nobody asked for and nobody can see.
+ * register's overlay is chosen (f-registers t-125) and which of the person's
+ * leanings shade it (f-leanings t-136). The register is where the person IS;
+ * the leanings are what they asked for, in settings. Both are stamped on the
+ * turn at claim and named under every reply, so a preference never reshapes
+ * her voice where nobody can see it. Exemplar retrieval stays with the
+ * register's query (owner ruling 3): a leaning adds lines, it does not change
+ * which of her passages are found.
  *
  * The cost is a cache partitioned more finely than the answer needs: one
  * embedding per cache miss per user, rather than one per situation. **And per
@@ -128,7 +133,8 @@ import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 import { loadResourceOffering } from '@/lib/app/resources/offering';
 import { loadAnswersContext } from '@/lib/app/onboarding/answers-context';
 import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
-import { registerForPrompt } from '@/lib/app/voice/register-store';
+import { promptStampFor, type PromptStamp } from '@/lib/app/voice/leanings-store';
+import { leaningOverlays, type LeaningsStamp } from '@/lib/app/voice/leanings-select';
 
 /**
  * The chat `contextType` this leaf owns.
@@ -196,13 +202,21 @@ function labelled(exemplar: VoiceExemplar, originLabel: string): string {
  *
  * A `null` exemplars argument is the third case — her material could not be
  * searched, which is not the same fact as nothing matching.
+ *
+ * `leanings` are the rows `leaningOverlays` selected — framing first, then a
+ * pole per applied dial — and are emitted after the register (or the core-only
+ * body) and before her passages. Only ever added: everything this function
+ * emits without them, it emits with them, in the same order.
  */
 export function composeVoiceContext(
   content: VoiceOverlays,
   overlay: VoiceOverlay | null,
-  exemplars: readonly VoiceExemplar[] | null
+  exemplars: readonly VoiceExemplar[] | null,
+  leanings: readonly VoiceOverlay[] = []
 ): string {
-  // Core-only means core-only: the authored fallback body and NOTHING else.
+  const shading = leanings.map((row) => block(row.heading, row.lines)).filter(Boolean);
+
+  // Core-only means the authored fallback body, and no register or exemplars.
   //
   // Never empty — a blank body reads to the model as a section that exists and
   // has nothing to say, and to whoever is debugging the prompt as a loader that
@@ -210,7 +224,14 @@ export function composeVoiceContext(
   // with no overlay there was no authored query and nothing was looked for. A
   // block that reported an empty search it never ran would be the small dishonesty
   // this whole feature is about not committing.
-  if (overlay === null) return block(content.coreOnly.heading, content.coreOnly.lines);
+  //
+  // The person's leanings still follow it: the stamp named them at claim, and
+  // the prompt and the account must agree. The framing's "the register above"
+  // then reads as the core-only body, which is authored as the register for
+  // this moment and says the core stands as it is.
+  if (overlay === null) {
+    return [block(content.coreOnly.heading, content.coreOnly.lines), ...shading].join('\n\n');
+  }
 
   const register = block(overlay.heading, overlay.lines);
 
@@ -229,7 +250,7 @@ export function composeVoiceContext(
             .filter(Boolean)
             .join('\n\n');
 
-  return [register, examples].filter(Boolean).join('\n\n');
+  return [register, ...shading, examples].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -240,8 +261,19 @@ export function composeVoiceContext(
  * subject to search her material for, and searching for the raw situation string
  * instead would be this module inventing a query — non-deterministic in effect,
  * and unreviewable by the person whose material is being searched.
+ *
+ * Registered for the `voice` type as it stands: the admin chat carries no
+ * leanings. The facilitator seat's turns go through {@link loadShadedVoiceContext}.
  */
-export async function loadVoiceContext(id: string): Promise<string> {
+export function loadVoiceContext(id: string): Promise<string> {
+  return loadShadedVoiceContext(id, null);
+}
+
+/**
+ * {@link loadVoiceContext}, with the pole lines a turn's leanings select.
+ * `leanings` is the turn's stamp, read back from its claim.
+ */
+async function loadShadedVoiceContext(id: string, leanings: LeaningsStamp | null): Promise<string> {
   // One read of the set per turn. `selectOverlayFrom` matches against what was
   // read here, and `composeVoiceContext` takes the same object for `coreOnly`
   // and `exemplars`, so the rows are not fetched twice to build one block.
@@ -293,7 +325,10 @@ export async function loadVoiceContext(id: string): Promise<string> {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  const voice = content === null ? '' : composeVoiceContext(content, overlay, exemplars);
+  const voice =
+    content === null
+      ? ''
+      : composeVoiceContext(content, overlay, exemplars, leaningOverlays(content, leanings));
   return [voice, vocabulary, offering].filter(Boolean).join('\n\n');
 }
 
@@ -328,14 +363,11 @@ export const SEAT_SITUATIONS: ReadonlyMap<string, string> = new Map([
  * The overlay a seat's turn is given: the seat's own moment, or on the
  * facilitator seat the register the turn was claimed with. The register's
  * overlays are named by the register (`guiding`, `teaching`), so a register is
- * a situation like any other and brings its own exemplar query.
- * `registerForPrompt` never throws; a seat with no situation and no register
- * gets the core-only block.
+ * a situation like any other and brings its own exemplar query. A seat with no
+ * situation and no register gets the core-only block.
  */
-async function situationFor(seat: string, userId: string): Promise<string> {
-  const situation = SEAT_SITUATIONS.get(seat);
-  if (situation !== undefined) return situation;
-  return (await registerForPrompt(userId, seat)) ?? '';
+function situationFor(seat: string, stamp: PromptStamp): string {
+  return SEAT_SITUATIONS.get(seat) ?? stamp.register ?? '';
 }
 
 /**
@@ -366,7 +398,10 @@ export async function loadFacilitationVoiceContext(
   if (binding?.agent?.slug !== VOICE_AGENT_SLUG) return '';
 
   // `loadVoiceContext` carries the taxonomy as well, for every path — see there.
-  const voice = await loadVoiceContext(await situationFor(seat, request.userId ?? ''));
+  // The register and the leanings are read back from the turn's claim
+  // together, one decision (`promptStampFor` never throws).
+  const stamp = await promptStampFor(request.userId ?? '', seat);
+  const voice = await loadShadedVoiceContext(situationFor(seat, stamp), stamp.leanings);
 
   // Guarded for the reason the overlay read is: a throw from a contributor
   // blanks the WHOLE block, taking the taxonomy with it. A turn without the

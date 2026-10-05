@@ -38,6 +38,7 @@ interface TurnRow {
   fingerprintVersion: string | null;
   register?: string | null;
   registerSource?: string | null;
+  leanings?: unknown;
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -122,6 +123,28 @@ vi.mock('@/lib/app/voice/register-store', () => ({
     seat === 'facilitator' && registers.next ? { ...registers.next, moduleSlug: 'values' } : null
   ),
 }));
+/**
+ * The leanings a facilitator turn is claimed with (f-leanings t-136). Their
+ * reads are `leanings-store.test.ts`'s; here the seam is asked what it does
+ * with them, and what it hands the read.
+ */
+const leanings = vi.hoisted(() => ({
+  next: null as {
+    applied: { key: 'length' | 'pace'; stop: 1 | 2 | -1 | -2 }[];
+    held: 'warmth'[];
+  } | null,
+}));
+const { readLeaningInputs, leaningsFrom } = vi.hoisted(() => ({
+  // The inputs carry the stamp the case wants selected; `leaningsFrom` is
+  // where the register's source is handed over, so the case can see it.
+  readLeaningInputs: vi.fn(async (_userId: string, seat: string) =>
+    seat === 'facilitator' ? { selects: leanings.next } : null
+  ),
+  leaningsFrom: vi.fn((inputs: { selects: unknown } | null, _source: string | null) =>
+    inputs === null ? null : inputs.selects
+  ),
+}));
+vi.mock('@/lib/app/voice/leanings-store', () => ({ readLeaningInputs, leaningsFrom }));
 const { invalidate } = vi.hoisted(() => ({ invalidate: vi.fn() }));
 vi.mock('@/lib/orchestration/chat/context-builder', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/orchestration/chat/context-builder')>()),
@@ -179,12 +202,14 @@ vi.mock('@/lib/db/client', () => {
             return row ? { ...row } : null;
           }
         ),
-        // The seam's read of the person's last register on a seat (t-125).
+        // The seam's read of the person's last register and leanings on a seat (t-125, t-136).
         findFirst: vi.fn(async ({ where }: { where: { userId: string; seat: string } }) => {
           const rows = db.turns
             .filter((t) => t.userId === where.userId && t.seat === where.seat)
             .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
-          return rows[0] ? { register: rows[0].register ?? null } : null;
+          return rows[0]
+            ? { register: rows[0].register ?? null, leanings: rows[0].leanings ?? null }
+            : null;
         }),
         findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => {
           const row = db.turns.find((t) => t.id === where.id);
@@ -524,6 +549,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetRegistry();
   db.turns = [];
+  registers.next = null;
+  leanings.next = null;
   db.messages = [];
   db.costs = [];
   db.providers = [{ slug: 'openai', isLocal: false }];
@@ -1221,7 +1248,7 @@ describe('the edges of a claim', () => {
 
     const claim = await claimTurn(
       request,
-      { fingerprintVersion: '1.0', register: null },
+      { fingerprintVersion: '1.0', register: null, leanings: null },
       staleClaimMs(60_000)
     );
 
@@ -1242,7 +1269,7 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        { fingerprintVersion: null, register: null },
+        { fingerprintVersion: null, register: null, leanings: null },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);
@@ -1681,6 +1708,80 @@ describe('the register a turn is steered to (f-registers t-125)', () => {
 
     expect(db.turns[0].register ?? null).toBeNull();
     expect(doneOf(events)).not.toHaveProperty('register');
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the leanings a turn applies (f-leanings t-136)', () => {
+  const facilitator = (overrides: Partial<FacilitationTurn> = {}) =>
+    turnFor({ role: 'facilitator', ...overrides });
+  const doneOf = (events: ChatEvent[]) => events.find((event) => event.type === 'done');
+  const spare = { applied: [{ key: 'length' as const, stop: 2 as const }], held: [] };
+
+  beforeEach(() => {
+    registers.next = { register: 'guiding', source: 'safety' };
+    leanings.next = { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] };
+  });
+
+  it('decides them against the register’s source, stamps the claim, and carries them on done', async () => {
+    const events = await take(facilitator());
+
+    expect(readLeaningInputs).toHaveBeenCalledWith('user-1', 'facilitator');
+    expect(leaningsFrom).toHaveBeenCalledWith(expect.anything(), 'safety');
+    expect(db.turns[0]).toMatchObject({
+      register: 'guiding',
+      leanings: { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] },
+    });
+    expect(doneOf(events)).toMatchObject({
+      register: 'guiding',
+      leanings: { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] },
+    });
+  });
+
+  it('re-stamps a failed turn run again, which may be shaded differently', async () => {
+    behaviour.outcome = 'error';
+    await take(facilitator());
+    expect(db.turns[0].status).toBe('failed');
+    leanings.next = spare;
+
+    behaviour.outcome = 'answer';
+    await take(facilitator());
+
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2, leanings: spare });
+  });
+
+  it('replays them from the row, so a retry’s account says what the first did', async () => {
+    await take(facilitator());
+    leanings.next = spare;
+
+    const replayed = await take(facilitator());
+
+    expect(modelCalls).toBe(1);
+    expect(doneOf(replayed)).toMatchObject({
+      leanings: { applied: [{ key: 'length', stop: 2 }], held: ['warmth'] },
+    });
+  });
+
+  it('drops the cached context when the leanings change under the same register, and only then', async () => {
+    await take(facilitator({ clientTurnId: 'turn-a' }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    await take(facilitator({ clientTurnId: 'turn-b', message: 'And then?' }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    // A dial moved in settings between turns: the register is the same.
+    leanings.next = spare;
+    await take(facilitator({ clientTurnId: 'turn-c', message: 'Plainer, please.' }));
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(db.turns.at(-1)).toMatchObject({ register: 'guiding', leanings: spare });
+  });
+
+  it('leaves a seat with none as it was: no stamp, no field on done', async () => {
+    const events = await take(turnFor());
+
+    // Left out, so the column stays SQL NULL rather than the JSON value `null`.
+    expect(db.turns[0]).not.toHaveProperty('leanings');
+    expect(doneOf(events)).not.toHaveProperty('leanings');
     expect(invalidate).not.toHaveBeenCalled();
   });
 });

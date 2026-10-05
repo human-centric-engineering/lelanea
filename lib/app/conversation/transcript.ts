@@ -57,6 +57,7 @@ import {
   type Register,
   type RegisterSource,
 } from '@/lib/app/voice/register';
+import { parseLeaningsStamp, type LeaningsStamp } from '@/lib/app/voice/leanings-select';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db/client';
@@ -86,6 +87,8 @@ export interface TurnAccount {
   /** The register the turn was steered to, and why (f-registers t-125); null when it had none. */
   register: Register | null;
   registerSource: RegisterSource | null;
+  /** The person's leanings the turn applied, and any held (f-leanings t-136); null when it had none. */
+  leanings: LeaningsStamp | null;
   inputTokens: number | null;
   outputTokens: number | null;
   /** Null when unpriced — never zero, which would read as free. */
@@ -174,6 +177,7 @@ interface TurnRow {
   fingerprintVersion: string | null;
   register: string | null;
   registerSource: string | null;
+  leanings: unknown;
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
@@ -210,6 +214,7 @@ function accountOf(turn: TurnRow): TurnAccount {
     fingerprintVersion: turn.fingerprintVersion,
     register: parseRegister(turn.register),
     registerSource: parseRegisterSource(turn.registerSource),
+    leanings: parseLeaningsStamp(turn.leanings),
     inputTokens: turn.inputTokens,
     outputTokens: turn.outputTokens,
     costUsd: turn.costUsd,
@@ -411,6 +416,7 @@ export async function readTranscript(
         fingerprintVersion: true,
         register: true,
         registerSource: true,
+        leanings: true,
         inputTokens: true,
         outputTokens: true,
         costUsd: true,

@@ -37,6 +37,8 @@
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
+import { leaningDimension, type LeaningKey } from '@/lib/app/voice/leanings';
+import { HELD_WHEN_HARD } from '@/lib/app/voice/leanings-select';
 
 /** What a source reads: the reply's own data, live or read back. */
 export interface AccountInput {
@@ -353,11 +355,77 @@ export function registerSentence(turn: TurnAccount | null): string | null {
   return `Began ${how}${why}.`;
 }
 
+/** A pole's name inside a sentence: "Concise and spare" → "concise and spare". */
+function poleWords(label: string): string {
+  return `${label[0].toLowerCase()}${label.slice(1)}`;
+}
+
+/**
+ * Where a label names a pole's two stops ("Direct, and further, challenging"),
+ * the first stop's part alone; otherwise the label. So a mild setting is not
+ * described as the strong one.
+ */
+const FURTHER = ', and further, ';
+function mildPole(label: string): string {
+  const at = label.indexOf(FURTHER);
+  return at === -1 ? label : label.slice(0, at);
+}
+
+/** What a stop leans toward, in a sentence: "toward direct", "strongly toward direct and challenging". */
+function towardWords(key: LeaningKey, stop: number): string {
+  const dimension = leaningDimension(key);
+  const label = stop < 0 ? dimension.left : dimension.right;
+  return Math.abs(stop) === 2
+    ? `strongly toward ${poleWords(label.replace(FURTHER, ' and '))}`
+    : `toward ${poleWords(mildPole(label))}`;
+}
+
+/**
+ * A list in a sentence: "a, b, and c". Each item starts with "toward", so an
+ * item's own "and" ("cool and analytical") does not read as the list's.
+ */
+const listOf = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
+/** The pole a held dial was leaning toward, either stop: only a hard pole is ever held. */
+function heldPole(key: LeaningKey): string {
+  const dimension = leaningDimension(key);
+  return poleWords(mildPole(HELD_WHEN_HARD.get(key) === 'left' ? dimension.left : dimension.right));
+}
+
+/**
+ * The person's leanings the reply was shaded by, and any set aside, as
+ * sentences (f-leanings t-136); none for a turn that applied and held nothing.
+ *
+ * In the detail beside the register, for the register's reason. A held
+ * leaning gives the crisis as its reason only when a crisis was read
+ * (`safety`), never on a `fallback`, as `registerSentence` does.
+ */
+export function leaningsSentences(turn: TurnAccount | null): string[] {
+  const leanings = turn?.leanings;
+  if (!leanings) return [];
+  const sentences: string[] = [];
+  if (leanings.applied.length > 0) {
+    const toward = listOf.format(leanings.applied.map(({ key, stop }) => towardWords(key, stop)));
+    sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
+  }
+  // Only a hard pole is ever held. A stamp naming another key (an old row, or a
+  // hold list changed since) is not said as something set aside.
+  const held = leanings.held.filter((key) => HELD_WHEN_HARD.has(key));
+  if (held.length > 0) {
+    const poles = listOf.format(held.map((key) => `toward ${heldPole(key)}`));
+    const why = turn.registerSource === 'safety' ? ', because something hard came up recently' : '';
+    const noun = held.length === 1 ? 'leaning' : 'leanings';
+    sentences.push(`Set aside your ${noun} ${poles} for now${why}.`);
+  }
+  return sentences;
+}
+
 /** The detail, one sentence to a line: what it did, how it spoke, then what it cost. */
 export function accountDetail(input: AccountInput, parts: AccountPart[]): string {
   const lines = parts.length === 0 ? [`${NOTHING_WRITTEN}.`] : parts.map((part) => part.detail);
   const register = registerSentence(input.turn);
   if (register) lines.push(register);
+  lines.push(...leaningsSentences(input.turn));
   const cost = costSentence(input.turn);
   if (cost) lines.push(cost);
   return lines.join('\n');

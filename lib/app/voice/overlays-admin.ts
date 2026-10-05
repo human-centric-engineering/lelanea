@@ -77,7 +77,17 @@ import {
 import { idsBySlug } from '@/lib/app/content/row-ids';
 import { SEAT_SITUATIONS } from '@/lib/app/voice/context-contributor';
 import { parseRegister } from '@/lib/app/voice/register';
-import { leaningBoundsSchema, type LeaningBounds } from '@/lib/app/voice/leanings';
+import {
+  describeLeaning,
+  leaningBoundsSchema,
+  leaningDimension,
+  type LeaningBounds,
+} from '@/lib/app/voice/leanings';
+import {
+  LEANING_FRAMING_SITUATION,
+  isLeaningSituation,
+  leaningOfSituation,
+} from '@/lib/app/voice/leanings-select';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import type {
   OverlayCreate,
@@ -257,10 +267,15 @@ function toChanges<F extends object>(before: F, after: F, changed: readonly (key
  * The contexts that select a situation, in words an admin reads.
  *
  * From the one map that pins a seat to a situation (`SEAT_SITUATIONS`), so a
- * seat added there is named here without an edit. The admin chat is always
- * listed, because it sends whatever situation it is asked for.
+ * seat added there is named here without an edit. The admin chat is listed for
+ * every situation, because it sends whatever situation it is asked for.
+ *
+ * A leaning row (f-leanings t-136) is not a situation: no request selects it,
+ * the admin chat's included. It is chosen by a person's own setting, on the
+ * facilitator seat, and is named that way.
  */
 export function overlaySelectors(situation: string): string[] {
+  if (isLeaningSituation(situation)) return leaningSelectors(situation);
   const seats = [...SEAT_SITUATIONS]
     .filter(([, selected]) => selected === situation)
     .map(([seat]) => `the ${seat} seat, on every turn a person takes there`);
@@ -272,6 +287,20 @@ export function overlaySelectors(situation: string): string[] {
       ? []
       : [`the ${CONVERSATION_SEAT} seat, whenever a turn is steered to the ${register} register`];
   return [...seats, ...registers, 'the admin chat, when it is asked for this situation'];
+}
+
+function leaningSelectors(situation: string): string[] {
+  if (situation === LEANING_FRAMING_SITUATION) {
+    return [
+      `the ${CONVERSATION_SEAT} seat, above the person's leanings, whenever a turn carries one (without it, no leaning applies)`,
+    ];
+  }
+  const leaning = leaningOfSituation(situation);
+  if (leaning === null) return [];
+  const dimension = leaningDimension(leaning.key);
+  return [
+    `the ${CONVERSATION_SEAT} seat, when a person has set ${dimension.left} ↔ ${dimension.right} to "${describeLeaning(dimension, leaning.stop)}"`,
+  ];
 }
 
 function describeUnservable(err: unknown): string {

@@ -583,6 +583,7 @@ export function useConversation(options: Options = {}): ConversationState {
                     // The leaf's own fields on `done` (t-125), as a reload reads them.
                     register: event.register ?? null,
                     registerSource: event.registerSource ?? null,
+                    leanings: event.leanings ?? null,
                     inputTokens: event.tokenUsage?.inputTokens ?? null,
                     outputTokens: event.tokenUsage?.outputTokens ?? null,
                     // A replay's `done` says `0` for an unpriced turn (turns.ts),

@@ -17,6 +17,7 @@ import {
   accountTime,
   costSentence,
   NOTHING_WRITTEN,
+  leaningsSentences,
   registerSentence,
   type AccountInput,
 } from '@/lib/app/conversation/account';
@@ -32,6 +33,7 @@ const turn = (fields: Partial<TurnAccount> = {}): TurnAccount => ({
   fingerprintVersion: 'v1',
   register: null,
   registerSource: null,
+  leanings: null,
   inputTokens: 3_812,
   outputTokens: 240,
   costUsd: 0.0123,
@@ -397,6 +399,86 @@ describe('the register (f-registers t-125)', () => {
     expect(accountDetail(data, parts).split('\n')).toEqual([
       `${NOTHING_WRITTEN}.`,
       expect.stringMatching(/^Began in a teaching register/),
+      expect.stringMatching(/^This turn used/),
+    ]);
+  });
+});
+
+describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
+  it('names each applied leaning by its pole, strongly where it was strong, in stamp order', () => {
+    const sentences = leaningsSentences(
+      turn({
+        register: 'guiding',
+        registerSource: 'module',
+        leanings: {
+          applied: [
+            { key: 'devotion', stop: 1 },
+            { key: 'length', stop: 2 },
+            { key: 'directness', stop: -2 },
+          ],
+          held: [],
+        },
+      })
+    );
+
+    expect(sentences).toEqual([
+      'Leaned the way you set it in your settings: toward secular and plain, strongly toward concise and spare, and strongly toward gentle.',
+    ]);
+  });
+
+  it('names a held leaning by the hard pole it leaned toward, and the crisis only when one was read', () => {
+    const leanings = { applied: [], held: ['warmth' as const, 'pace' as const] };
+
+    expect(leaningsSentences(turn({ registerSource: 'safety', leanings }))).toEqual([
+      'Set aside your leanings toward cool and analytical and toward energetic for now, because something hard came up recently.',
+    ]);
+    // An unread crisis check holds them too, and claims no reason.
+    expect(
+      leaningsSentences(
+        turn({ registerSource: 'fallback', leanings: { applied: [], held: ['directness'] } })
+      )
+    ).toEqual(['Set aside your leaning toward direct for now.']);
+  });
+
+  it('says a mild stop by its own name, not the strong one, where a label names both', () => {
+    const said = (stop: 1 | 2) =>
+      leaningsSentences(turn({ leanings: { applied: [{ key: 'directness', stop }], held: [] } }));
+
+    expect(said(1)).toEqual(['Leaned the way you set it in your settings: toward direct.']);
+    expect(said(2)).toEqual([
+      'Leaned the way you set it in your settings: strongly toward direct and challenging.',
+    ]);
+  });
+
+  it('does not say a pole that is never held was set aside', () => {
+    expect(
+      leaningsSentences(
+        turn({ registerSource: 'safety', leanings: { applied: [], held: ['questions'] } })
+      )
+    ).toEqual([]);
+  });
+
+  it('says nothing for a turn that applied and held nothing, had no stamp, or no turn', () => {
+    expect(leaningsSentences(turn({ leanings: { applied: [], held: [] } }))).toEqual([]);
+    expect(leaningsSentences(turn())).toEqual([]);
+    expect(leaningsSentences(null)).toEqual([]);
+  });
+
+  it('sits in the detail after the register and before the cost, never in the line', () => {
+    const data = input({
+      turn: turn({
+        register: 'teaching',
+        registerSource: 'module',
+        leanings: { applied: [{ key: 'length', stop: 1 }], held: [] },
+      }),
+    });
+    const parts = accountParts(data);
+
+    expect(accountLine(parts)).toBe(NOTHING_WRITTEN);
+    expect(accountDetail(data, parts).split('\n')).toEqual([
+      `${NOTHING_WRITTEN}.`,
+      expect.stringMatching(/^Began in a teaching register/),
+      'Leaned the way you set it in your settings: toward concise and spare.',
       expect.stringMatching(/^This turn used/),
     ]);
   });
