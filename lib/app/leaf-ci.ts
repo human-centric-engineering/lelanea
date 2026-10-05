@@ -319,4 +319,17 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       '`conversationVisibilityWhere` answers who may SEE a thread; clearing must ' +
       'be narrower than that, the owner alone.',
   },
+  {
+    path: 'lib/app/voice/leaning-proposals.ts',
+    disposition: 'by-design',
+    reason:
+      'reads the stored tool trace of ONE message: the reply of the person’s own ' +
+      'previous turn on the seat, to check a `set_leaning` "agreed" against the ' +
+      'proposal that reply made (f-leanings t-137). It runs inside a capability ' +
+      'call and the context contributor, which carry a user id and no session, ' +
+      'so `conversationVisibilityWhere` has nothing to take. The read names the ' +
+      'turn row’s own `assistantMessageId` AND `conversation: { userId }`, so it ' +
+      'can only ever match that member’s own message, never an ownerless or ' +
+      'shared thread — the same shape as `turn-record.ts` above.',
+  },
 ];

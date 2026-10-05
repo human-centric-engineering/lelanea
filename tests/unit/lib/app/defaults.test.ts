@@ -1290,10 +1290,12 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
         'lib/app/memory/stored-results.ts',
+        // f-leanings t-137: the previous reply's trace, for the proposal guard.
+        'lib/app/voice/leaning-proposals.ts',
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(12).fill('by-design')
+        Array<'by-design'>(13).fill('by-design')
       );
     },
   },
@@ -1345,6 +1347,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
         ['lib/app/memory/stored-results.ts', 'by-design'],
+        ['lib/app/voice/leaning-proposals.ts', 'by-design'],
       ]);
     },
   },
