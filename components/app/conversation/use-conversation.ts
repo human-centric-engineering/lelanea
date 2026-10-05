@@ -30,6 +30,7 @@ import {
 } from '@/lib/app/agent/endings';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
+import { leaningChangeFromResult, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import {
   suggestionFromResult,
   uniqueSuggestions,
@@ -155,6 +156,8 @@ export interface LiveTurn {
   capabilities: string[];
   /** What the turn offered — a video, audio piece or article, by id (t-77). */
   suggestions: ResourceSuggestion[];
+  /** The leanings the turn changed (f-leanings t-137). */
+  leaningChanges: LeaningChange[];
   /** A soft crisis frame shown ahead of the agent's turn. */
   resource?: CrisisResource;
   /** The same frame's `message` — the whole resource as text — shown when `resource` did not parse. */
@@ -398,6 +401,7 @@ export function useConversation(options: Options = {}): ConversationState {
         stillThinking: false,
         capabilities: [],
         suggestions: [],
+        leaningChanges: [],
         ...(message === null && { opening: true as const }),
       });
 
@@ -420,6 +424,7 @@ export function useConversation(options: Options = {}): ConversationState {
         let replyText = '';
         let capabilities: string[] = [];
         let suggestions: ResourceSuggestion[] = [];
+        let leaningChanges: LeaningChange[] = [];
         /**
          * Tell the notes panel, if this turn wrote one, and tell it once.
          *
@@ -528,7 +533,11 @@ export function useConversation(options: Options = {}): ConversationState {
                 capabilities = [...capabilities, event.capabilitySlug];
                 const suggestion = suggestionFromResult(event.result);
                 if (suggestion) suggestions = uniqueSuggestions([...suggestions, suggestion]);
-                setLive((current) => current && { ...current, capabilities, suggestions });
+                const change = leaningChangeFromResult(event.result);
+                if (change) leaningChanges = [...leaningChanges, change];
+                setLive(
+                  (current) => current && { ...current, capabilities, suggestions, leaningChanges }
+                );
               }
               return;
             case 'capability_results': {
@@ -541,7 +550,16 @@ export function useConversation(options: Options = {}): ConversationState {
                   return suggestion ? [suggestion] : [];
                 }),
               ]);
-              setLive((current) => current && { ...current, capabilities, suggestions });
+              leaningChanges = [
+                ...leaningChanges,
+                ...answered.flatMap((r) => {
+                  const change = leaningChangeFromResult(r.result);
+                  return change ? [change] : [];
+                }),
+              ];
+              setLive(
+                (current) => current && { ...current, capabilities, suggestions, leaningChanges }
+              );
               return;
             }
             case 'citations':
@@ -569,6 +587,7 @@ export function useConversation(options: Options = {}): ConversationState {
                   citations,
                   capabilities,
                   suggestions,
+                  leaningChanges,
                   ...(resource ? { resource } : {}),
                   ...(crisisText ? { crisisText } : {}),
                   turn: {

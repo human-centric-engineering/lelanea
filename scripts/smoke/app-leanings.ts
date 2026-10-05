@@ -27,6 +27,20 @@
  * and 4), each in a fresh conversation, read from the golden set file rather
  * than typed here.
  *
+ * Before them, two runs with every dial at rest (f-leanings t-137):
+ *
+ * A. **Asking.** The person asks, in a sentence, for a lasting change. The AI
+ *    calls `set_leaning` (how: asked), a dial moves, the account says so, and
+ *    the next turn is stamped with the new stop.
+ * B. **A suggestion, then a yes.** The person shows a pattern without naming
+ *    it, until the AI records a proposal (how: proposed). No dial moves on
+ *    any of those turns, and the reply is printed so the proposal can be
+ *    read. Then they say yes, and only then does a dial move, with how:
+ *    agreed.
+ *
+ * `--asking-only` runs A and B and stops, for iterating on t-137 without the
+ * twenty extreme turns.
+ *
  * Needs a seeded, migrated database (the map published, Onboarding and Values
  * active, the leaning rows from `20261011100100_app_voice_leaning_overlays`)
  * and a provider for her pinned model: about twenty turns. Skips (exit 0, says
@@ -79,7 +93,13 @@ import {
   type LeaningsStamp,
 } from '@/lib/app/voice/leanings-select';
 import { LEANING_DIMENSIONS, type LeaningStop } from '@/lib/app/voice/leanings';
-import { leaningsSentences, registerSentence } from '@/lib/app/conversation/account';
+import {
+  accountLine,
+  accountParts,
+  leaningsSentences,
+  registerSentence,
+} from '@/lib/app/conversation/account';
+import { leaningChangeFromResult, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { readTranscript, type TurnAccount } from '@/lib/app/conversation/transcript';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
@@ -175,6 +195,14 @@ async function takeTurn(userId: string, turnId: string, message: string) {
   );
   let text = '';
   let done: Done | null = null;
+  const capabilities: string[] = [];
+  const changes: LeaningChange[] = [];
+  const answered = (slug: string, result: unknown) => {
+    capabilities.push(slug);
+    if (slug === 'set_leaning') console.log(`    set_leaning answered: ${JSON.stringify(result)}`);
+    const change = leaningChangeFromResult(result);
+    if (change) changes.push(change);
+  };
   let ended: string | null = null;
   let crisis = false;
   for await (const event of events) {
@@ -183,11 +211,15 @@ async function takeTurn(userId: string, turnId: string, message: string) {
     if (event.type === 'done') done = event;
     if (event.type === 'error') ended = `error ${event.code}`;
     if (event.type === 'warning' && event.code === 'crisis') crisis = true;
+    if (event.type === 'capability_result') answered(event.capabilitySlug, event.result);
+    if (event.type === 'capability_results') {
+      for (const r of event.results) answered(r.capabilitySlug, r.result);
+    }
   }
   if (done === null) throw new Error(`the turn did not complete: ${ended ?? 'no done frame'}`);
   await new Promise((resolve) => setTimeout(resolve, 2500));
   const row = await prisma.appTurn.findUnique({ where: { userId_turnId: { userId, turnId } } });
-  return { text, done, row, crisis };
+  return { text, done, row, crisis, capabilities, changes };
 }
 
 /** A fresh conversation for the next prompt; turn rows are kept, they are what is asserted. */
@@ -288,12 +320,6 @@ async function main(): Promise<void> {
     }
     check((await beginJourney(user.id)) === 'begun', 'the journey is begun, into Values');
 
-    const configurations = [
-      { n: 1, side: -2 as const, crisis: false, name: 'every dial at its left extreme' },
-      { n: 2, side: 2 as const, crisis: false, name: 'every dial at its right extreme' },
-      { n: 3, side: -2 as const, crisis: true, name: 'left extreme, after a crisis' },
-      { n: 4, side: 2 as const, crisis: true, name: 'right extreme, after a crisis' },
-    ];
     const session = {
       user: { id: user.id, role: DEFAULT_USER_ROLE },
       principal: { userId: user.id, role: DEFAULT_USER_ROLE, credential: 'session' },
@@ -304,6 +330,119 @@ async function main(): Promise<void> {
         experiment: false,
       },
     } as unknown as AuthenticatedSession;
+
+    // ── t-137: changing a leaning in conversation ─────────────────────────
+    const reply = async (n: string, message: string) => {
+      const turn = await takeTurn(user.id, `${PREFIX}-${stamp}-${n}`, message);
+      print(`said: ${message}`, turn.text);
+      console.log(`    called: ${turn.capabilities.join(', ') || 'nothing'}`);
+      return turn;
+    };
+    const restAll = async () => {
+      for (const dimension of LEANING_DIMENSIONS) {
+        await setLeaning({ userId: user.id, key: dimension.key, stop: 0, via: 'settings' });
+      }
+    };
+    const accountOfLast = async () => {
+      const transcript = await readTranscript(session, CONVERSATION_SEAT);
+      const last = transcript.entries.filter((e) => e.kind === 'reply').at(-1);
+      return last?.kind === 'reply' ? last : null;
+    };
+
+    console.log('\nA. Asking for a lasting change');
+    await restAll();
+    await freshConversation(user.id);
+    const ask = await reply(
+      'a-1',
+      'Can you be more concise with me from now on? Shorter answers suit me, and I mean that as a lasting preference, not just for today.'
+    );
+    const asked = ask.changes.find((change) => change.from !== change.to);
+    check(asked !== undefined && asked.how === 'asked', 'set_leaning moved a dial, as asked');
+    if (!asked) throw new Error('unreachable');
+    console.log(`    moved: ${JSON.stringify(asked)}`);
+    const askedEntry = await accountOfLast();
+    check(
+      JSON.stringify(askedEntry?.leaningChanges) === JSON.stringify(ask.changes),
+      'the transcript read carries the same change as the live frame'
+    );
+    const askedLine = accountLine(
+      accountParts({
+        at: new Date().toISOString(),
+        capabilities: askedEntry?.capabilities ?? [],
+        citations: [],
+        suggestions: [],
+        leaningChanges: askedEntry?.leaningChanges ?? [],
+        turn: null,
+      })
+    );
+    console.log(`    account: ${askedLine}`);
+    check(askedLine.includes('as you asked'), 'and the account says the person asked');
+    const dialAfterAsk = (await getLeanings(user.id)).dials.find((d) => d.key === asked.leaning);
+    check(dialAfterAsk?.position === asked.to, 'the dial in Settings moved with it');
+    const next = await reply('a-2', 'Thanks. What is one small thing I could try this week?');
+    const nextStamp = parseLeaningsStamp(next.row?.leanings);
+    check(
+      nextStamp?.applied.some((a) => a.key === asked.leaning && a.stop === asked.to) === true,
+      `the next turn is stamped with ${asked.leaning} at ${asked.to}`
+    );
+
+    console.log('\nB. A pattern, a suggestion, and only then a move');
+    await restAll();
+    await freshConversation(user.id);
+    const pattern = [
+      'What does it actually mean to live by your values? I find the idea slippery.',
+      'Sorry, I lost you halfway through that. What was the main point?',
+      'Right. I have to admit I skimmed most of that one too. I only really take in the first couple of lines of anything you write.',
+    ];
+    const proposals: LeaningChange[] = [];
+    for (const [index, message] of pattern.entries()) {
+      const turn = await reply(`b-${index + 1}`, message);
+      const moved = turn.changes.filter((c) => c.how !== 'proposed' && c.from !== c.to);
+      check(moved.length === 0, `turn b.${index + 1}: no leaning moved without a yes`);
+      proposals.push(...turn.changes.filter((c) => c.how === 'proposed'));
+      // A proposal is put to the person; the next message is theirs to answer.
+      if (proposals.length > 0) break;
+    }
+    check(
+      (await getLeanings(user.id)).dials.every((d) => d.position === 0),
+      'every dial is still at rest after the pattern'
+    );
+    check(proposals.length > 0, 'the AI proposed a change, and recorded it as a proposal');
+    console.log(`    proposed: ${JSON.stringify(proposals)}`);
+    console.log('    ↑ read that reply: it should name what it noticed, and ask.');
+    const yes = await reply('b-yes', 'Yes, please do that.');
+    const agreed = yes.changes.find((change) => change.from !== change.to);
+    check(agreed !== undefined && agreed.how === 'agreed', 'the yes moved a dial, as agreed');
+    if (!agreed) throw new Error('unreachable');
+    console.log(`    moved: ${JSON.stringify(agreed)}`);
+    const agreedEntry = await accountOfLast();
+    const agreedLine = accountLine(
+      accountParts({
+        at: new Date().toISOString(),
+        capabilities: agreedEntry?.capabilities ?? [],
+        citations: [],
+        suggestions: [],
+        leaningChanges: agreedEntry?.leaningChanges ?? [],
+        turn: null,
+      })
+    );
+    console.log(`    account: ${agreedLine}`);
+    check(
+      agreedLine.includes('when you agreed to the suggestion'),
+      'and the account says it was a yes to a suggestion'
+    );
+    await restAll();
+    if (process.argv.includes('--asking-only')) {
+      console.log('\n✓ smoke:app-leanings (asking only) passed');
+      return;
+    }
+
+    const configurations = [
+      { n: 1, side: -2 as const, crisis: false, name: 'every dial at its left extreme' },
+      { n: 2, side: 2 as const, crisis: false, name: 'every dial at its right extreme' },
+      { n: 3, side: -2 as const, crisis: true, name: 'left extreme, after a crisis' },
+      { n: 4, side: 2 as const, crisis: true, name: 'right extreme, after a crisis' },
+    ];
 
     for (const config of configurations) {
       console.log(`\n${config.n}. ${config.name[0].toUpperCase()}${config.name.slice(1)}`);

@@ -178,13 +178,14 @@ async function* replay(turn: AppTurn): ChatStream {
   if (reply.capabilities.length > 0) {
     yield {
       type: 'capability_results',
-      // A suggestion rides on its own call's frame as `data`, the shape the
-      // live frame carries, so the pane reads a replay and a live turn alike.
+      // A suggestion or a leaning change rides on its own call's frame as
+      // `data`, the shape the live frame carries, so the pane reads a replay
+      // and a live turn alike.
       results: reply.capabilities.map((capabilitySlug, index) => {
-        const suggestion = reply.suggestions[index] ?? null;
+        const data = reply.suggestions[index] ?? reply.leaningChanges[index] ?? null;
         return {
           capabilitySlug,
-          result: suggestion ? { success: true, data: suggestion } : { success: true },
+          result: data ? { success: true, data } : { success: true },
         };
       }),
     };

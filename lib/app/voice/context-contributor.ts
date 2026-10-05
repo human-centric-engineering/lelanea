@@ -31,7 +31,7 @@
  *    seat turn only, after the rest (`lib/app/onboarding/answers-context.ts`,
  *    f-onboarding t-105).
  *
- * The third, fourth and fifth are here rather than in their own contributors
+ * The third to sixth are here rather than in their own contributors
  * because **a request carries one context tuple**, so registering a second
  * loader for either type would replace this block rather than add to it.
  *
@@ -133,7 +133,10 @@ import { slotVocabulary } from '@/lib/app/slots/vocabulary';
 import { loadResourceOffering } from '@/lib/app/resources/offering';
 import { loadAnswersContext } from '@/lib/app/onboarding/answers-context';
 import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
-import { promptStampFor, type PromptStamp } from '@/lib/app/voice/leanings-store';
+import { getLeanings, promptStampFor, type PromptStamp } from '@/lib/app/voice/leanings-store';
+import { composeLeaningContext } from '@/lib/app/voice/leaning-context';
+import { previousProposals } from '@/lib/app/voice/leaning-proposals';
+import { hasRegister } from '@/lib/app/voice/register-store';
 import { leaningOverlays, type LeaningsStamp } from '@/lib/app/voice/leanings-select';
 
 /**
@@ -415,5 +418,29 @@ export async function loadFacilitationVoiceContext(
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  return [voice, answers].filter(Boolean).join('\n\n');
+  return [voice, await leaningsBlock(seat, request.userId ?? ''), answers]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Where the person's leanings stand and how the AI may change them
+ * (f-leanings t-137, `leaning-context.ts`), on the seat that applies them.
+ * Guarded for the answers' reason: a throw here would blank the whole block.
+ */
+async function leaningsBlock(seat: string, userId: string): Promise<string> {
+  if (!hasRegister(seat) || userId === '') return '';
+  try {
+    const [view, proposals] = await Promise.all([
+      getLeanings(userId),
+      previousProposals(userId, seat),
+    ]);
+    return composeLeaningContext(view, proposals);
+  } catch (err) {
+    logger.error('leaningsContext: could not read them; this turn cannot change one', {
+      seat,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return '';
+  }
 }

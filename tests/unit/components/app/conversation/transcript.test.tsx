@@ -20,6 +20,7 @@ const live = (fields: Partial<LiveTurn>): LiveTurn => ({
   stillThinking: false,
   capabilities: [],
   suggestions: [],
+  leaningChanges: [],
   ...fields,
 });
 

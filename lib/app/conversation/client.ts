@@ -35,6 +35,7 @@ import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conver
 import type { Transcript, TranscriptEntry } from '@/lib/app/conversation/transcript';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resourceSuggestionSchema } from '@/lib/app/resources/suggestion';
+import { leaningChangeSchema } from '@/lib/app/voice/leaning-change';
 import { TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 
 /** The seam's request shape on Daybreak's role route. */
@@ -389,6 +390,16 @@ const entrySchema = z.discriminatedUnion('kind', [
       .transform((raw) =>
         raw.flatMap((item) => {
           const parsed = resourceSuggestionSchema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+      ),
+    // Likewise absent before f-leanings t-137, and validated one by one.
+    leaningChanges: z
+      .array(z.unknown())
+      .default([])
+      .transform((raw) =>
+        raw.flatMap((item) => {
+          const parsed = leaningChangeSchema.safeParse(item);
           return parsed.success ? [parsed.data] : [];
         })
       ),

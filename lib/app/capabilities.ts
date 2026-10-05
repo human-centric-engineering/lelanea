@@ -38,6 +38,11 @@
  *   asked to be met more gently or more directly (f-registers t-126). The
  *   app's own tool; its row and grant are seed `023-set-register.ts` and the
  *   migration `20261007100200_app_set_register_capability`.
+ * - **`set_leaning`** — the agent moves one of the person's lasting voice
+ *   leanings a stop, when they ask or say yes to its suggestion (f-leanings
+ *   t-137). The app's own tool; its row and grant are seed
+ *   `025-set-leaning.ts` and the migration
+ *   `20261012100000_app_set_leaning_capability`.
  * - **`search_person_memory`** — the agent looks back, by meaning, through
  *   what this person has said before (f-memory t-130). The app's own tool;
  *   its row and grant are seed `024-search-person-memory.ts` and the
@@ -57,6 +62,7 @@ import { SuggestResourceCapability } from '@/lib/app/resources/suggest';
 import { LabelledSearchKnowledgeCapability } from '@/lib/app/safety/labelled-search';
 import { GuardedFillSlotCapability } from '@/lib/app/slots/capture';
 import { SetRegisterCapability } from '@/lib/app/voice/register-capability';
+import { SetLeaningCapability } from '@/lib/app/voice/leaning-capability';
 
 export function initAppCapabilities(): void {
   registerAppCapability(new LabelledSearchKnowledgeCapability());
@@ -64,4 +70,5 @@ export function initAppCapabilities(): void {
   registerAppCapability(new SuggestResourceCapability());
   registerAppCapability(new SetRegisterCapability());
   registerAppCapability(new SearchPersonMemoryCapability());
+  registerAppCapability(new SetLeaningCapability());
 }

@@ -120,6 +120,7 @@ export function Transcript({ phase, entries, live, unreadable, onRevealed }: Tra
               capabilities: entry.capabilities,
               citations: entry.citations,
               suggestions: entry.suggestions,
+              leaningChanges: entry.leaningChanges,
               turn: entry.turn,
             }}
           />

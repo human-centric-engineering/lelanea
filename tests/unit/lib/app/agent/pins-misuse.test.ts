@@ -35,6 +35,7 @@ import {
   HER_CAPABILITY_SLUGS,
   READ_ONLY_CAPABILITY_SLUGS,
   MEMORY_CAPABILITY_SLUGS,
+  LEANING_CAPABILITY_SLUGS,
   REGISTER_CAPABILITY_SLUGS,
   RESOURCE_CAPABILITY_SLUGS,
   SELF_WRITE_CAPABILITY_SLUGS,
@@ -75,6 +76,8 @@ const WRITE_CAPABILITY_SLUGS = [
   'submit_proposal',
   // Lelañea (f-registers t-126): a person's own lean on their own journey node.
   'set_register',
+  // Lelañea (f-leanings t-137): a person's own lasting leaning, a new version.
+  'set_leaning',
 ];
 
 /**
@@ -97,10 +100,14 @@ const SANCTIONED_SELF_WRITES = [
   // own lean on their own node, cleared by tombstone, never deleted, and beaten
   // by a crisis, so it cannot be used to push someone who is struggling.
   'set_register',
+  // f-leanings t-137, argued in `SELF_WRITE_CAPABILITY_SLUGS`: the caller's
+  // own leaning, a new version within the bounds, never on inference, and its
+  // harder poles held at rest under a crisis.
+  'set_leaning',
 ];
 
 describe('the agent’s tools', () => {
-  it('are exactly what the five seeds grant, and nothing else', () => {
+  it('are exactly what the six seeds grant, and nothing else', () => {
     expect(
       [
         ...GRANTED_CAPABILITY_SLUGS,
@@ -108,6 +115,7 @@ describe('the agent’s tools', () => {
         ...RESOURCE_CAPABILITY_SLUGS,
         ...REGISTER_CAPABILITY_SLUGS,
         ...MEMORY_CAPABILITY_SLUGS,
+        ...LEANING_CAPABILITY_SLUGS,
       ].sort()
     ).toEqual([...HER_CAPABILITY_SLUGS].sort());
   });
@@ -123,6 +131,7 @@ describe('the agent’s tools', () => {
       ...RESOURCE_CAPABILITY_SLUGS,
       ...REGISTER_CAPABILITY_SLUGS,
       ...MEMORY_CAPABILITY_SLUGS,
+      ...LEANING_CAPABILITY_SLUGS,
     ];
     for (const slug of WRITE_CAPABILITY_SLUGS) {
       if (SANCTIONED_SELF_WRITES.includes(slug)) continue;

@@ -38,6 +38,7 @@ import type { TurnAccount } from '@/lib/app/conversation/transcript';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
 import { leaningDimension, type LeaningKey } from '@/lib/app/voice/leanings';
+import { SET_LEANING_SLUG, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { HELD_WHEN_HARD } from '@/lib/app/voice/leanings-select';
 
 /** What a source reads: the reply's own data, live or read back. */
@@ -49,6 +50,8 @@ export interface AccountInput {
   citations: Citation[];
   /** What the turn offered the person — a video, audio piece or article (t-77). */
   suggestions: ResourceSuggestion[];
+  /** The leanings the turn changed, from `set_leaning`'s results (f-leanings t-137). */
+  leaningChanges: LeaningChange[];
   /** The turn row, or null for a reply written before the seam. */
   turn: TurnAccount | null;
 }
@@ -71,6 +74,7 @@ const WRITE_THE_PROFILE = 'fill_slot';
 const OFFERED_A_RESOURCE = 'suggest_resource';
 const NOTED_HOW_TO_SPEAK = 'set_register';
 const LOOKED_BACK = 'search_person_memory';
+const CHANGED_A_LEANING = SET_LEANING_SLUG;
 
 /** Every slug this file has words for. Anything else falls to {@link otherCapability}. */
 const NAMED_CAPABILITIES = new Set([
@@ -80,6 +84,7 @@ const NAMED_CAPABILITIES = new Set([
   OFFERED_A_RESOURCE,
   NOTED_HOW_TO_SPEAK,
   LOOKED_BACK,
+  CHANGED_A_LEANING,
 ]);
 
 /** Looked something up in her material — and how many passages it drew on. */
@@ -217,6 +222,67 @@ const notedHowToSpeak: AccountSource = (input) => {
 };
 
 /**
+ * Changed one of the person's lasting leanings (f-leanings t-137).
+ *
+ * Named, with the pole and how it came about, because this is the one change
+ * the AI makes to how it will speak from now on, and the person should be able
+ * to see, under the very reply, that it happened and why: they asked, or they
+ * said yes to a suggestion (owner ruling, 4 Oct 2026). A suggestion is said
+ * too, as one that changed nothing: the person reads that it was put to them,
+ * and that only a yes moves it. A call that moved
+ * nothing, because the dial was already as far as it goes, says so rather
+ * than claiming a change. An answered call whose change cannot be read (a
+ * trace from another build) is still said, without the detail.
+ */
+const changedLeaning: AccountSource = (input) => {
+  const called = input.capabilities.includes(CHANGED_A_LEANING);
+  if (!called && input.leaningChanges.length === 0) return null;
+  if (input.leaningChanges.length === 0) {
+    // A proposal or a change: which, the trace cannot say, so neither is claimed.
+    return {
+      key: 'changed_leaning',
+      line: 'Changed, or suggested changing, one of your leanings',
+      detail:
+        'Changed, or suggested changing, one of your leanings. You can see where they all are in Settings.',
+    };
+  }
+  const said = input.leaningChanges.map(leaningChangeWords);
+  const moved = input.leaningChanges.some(
+    (change) => change.how !== 'proposed' && change.from !== change.to
+  );
+  const lasts = moved ? ' It stays until you change it, here or in Settings.' : '';
+  return {
+    key: 'changed_leaning',
+    line: said.map((words) => words.line).join('; '),
+    detail: `${said.map((words) => words.detail).join(' ')}${lasts}`,
+  };
+};
+
+/** One change, as a clause and as a sentence. */
+function leaningChangeWords(change: LeaningChange): { line: string; detail: string } {
+  if (change.how === 'proposed') {
+    const what = change.to === 0 ? 'back to rest' : towardWords(change.leaning, change.to);
+    return {
+      line: `Suggested setting your leaning ${what}`,
+      detail: `Suggested setting your leaning ${what}. Nothing has changed unless you say yes.`,
+    };
+  }
+  const why = change.how === 'agreed' ? 'when you agreed to the suggestion' : 'as you asked';
+  if (change.from === change.to) {
+    const at =
+      change.to === 0
+        ? 'Your leaning was already at rest'
+        : `Your leaning was already ${towardWords(change.leaning, change.to)}, as far as it goes`;
+    return { line: at, detail: `${at}, so nothing changed.` };
+  }
+  const moved =
+    change.to === 0
+      ? `Set your leaning back to rest from ${towardWords(change.leaning, change.from)}`
+      : `Set your leaning ${towardWords(change.leaning, change.to)}`;
+  return { line: `${moved}, ${why}`, detail: `${moved}, ${why}.` };
+}
+
+/**
  * Looked back through what the person said before (f-memory t-130).
  *
  * Said whether or not anything came back: the frame carries the call, not its
@@ -270,6 +336,7 @@ export const ACCOUNT_SOURCES: readonly AccountSource[] = [
   wroteToProfile,
   pointedTo,
   notedHowToSpeak,
+  changedLeaning,
   otherCapability,
 ];
 
@@ -406,7 +473,7 @@ export function leaningsSentences(turn: TurnAccount | null): string[] {
   const sentences: string[] = [];
   if (leanings.applied.length > 0) {
     const toward = listOf.format(leanings.applied.map(({ key, stop }) => towardWords(key, stop)));
-    sentences.push(`Leaned the way you set it in your settings: ${toward}.`);
+    sentences.push(`Leaned the way you’ve set it: ${toward}.`);
   }
   // Only a hard pole is ever held. A stamp naming another key (an old row, or a
   // hold list changed since) is not said as something set aside.

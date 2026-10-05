@@ -62,6 +62,7 @@ const input = (fields: Partial<AccountInput> = {}): AccountInput => ({
   at: '2026-09-19T12:00:05.000Z',
   capabilities: [],
   suggestions: [],
+  leaningChanges: [],
   citations: [],
   turn: turn(),
   ...fields,
@@ -378,6 +379,77 @@ describe('the register (f-registers t-125)', () => {
     expect(parts.map((part) => part.key)).toEqual(['noted_register']);
   });
 
+  describe('a leaning changed in conversation (f-leanings t-137)', () => {
+    const changed = (leaningChanges: AccountInput['leaningChanges']) =>
+      accountParts(input({ capabilities: ['set_leaning'], leaningChanges }));
+
+    it('names the pole, and says the person asked', () => {
+      const parts = changed([{ leaning: 'length', from: 0, to: 1, how: 'asked' }]);
+
+      expect(accountLine(parts)).toBe('Set your leaning toward concise and spare, as you asked');
+      expect(parts[0].detail).toBe(
+        'Set your leaning toward concise and spare, as you asked. It stays until you change it, here or in Settings.'
+      );
+      // Named, so it is not the "Used set leaning" floor.
+      expect(parts.map((part) => part.key)).toEqual(['changed_leaning']);
+    });
+
+    it('says when it was a yes to a suggestion, not an ask', () => {
+      const parts = changed([{ leaning: 'directness', from: 1, to: 2, how: 'agreed' }]);
+
+      expect(accountLine(parts)).toBe(
+        'Set your leaning strongly toward direct and challenging, when you agreed to the suggestion'
+      );
+      expect(accountLine(parts)).not.toMatch(/as you asked/);
+    });
+
+    it('says a return to rest from where it was', () => {
+      const parts = changed([{ leaning: 'warmth', from: -2, to: 0, how: 'asked' }]);
+
+      expect(accountLine(parts)).toBe(
+        'Set your leaning back to rest from strongly toward empathetic and warm, as you asked'
+      );
+    });
+
+    it('says nothing moved when the dial was already as far as it goes, rather than claiming a change', () => {
+      const parts = changed([{ leaning: 'questions', from: 1, to: 1, how: 'asked' }]);
+
+      expect(accountLine(parts)).toBe(
+        'Your leaning was already toward guidance-led, as far as it goes'
+      );
+      expect(parts[0].detail).toBe(
+        'Your leaning was already toward guidance-led, as far as it goes, so nothing changed.'
+      );
+    });
+
+    it('says a suggestion as one that changed nothing', () => {
+      const parts = changed([{ leaning: 'length', from: 0, to: 1, how: 'proposed' }]);
+
+      expect(accountLine(parts)).toBe('Suggested setting your leaning toward concise and spare');
+      expect(parts[0].detail).toBe(
+        'Suggested setting your leaning toward concise and spare. Nothing has changed unless you say yes.'
+      );
+    });
+
+    it('still says something happened when the call answered but its outcome cannot be read', () => {
+      const parts = changed([]);
+
+      expect(accountLine(parts)).toBe('Changed, or suggested changing, one of your leanings');
+      expect(parts[0].detail).toMatch(/in Settings/);
+    });
+
+    it('says each change, in order, when a turn made two', () => {
+      const parts = changed([
+        { leaning: 'length', from: 0, to: 1, how: 'asked' },
+        { leaning: 'imagery', from: 0, to: 1, how: 'agreed' },
+      ]);
+
+      expect(accountLine(parts)).toBe(
+        'Set your leaning toward concise and spare, as you asked; Set your leaning toward literal, when you agreed to the suggestion'
+      );
+    });
+  });
+
   it('says it looked back when the turn searched what the person said before (t-130)', () => {
     const parts = accountParts(input({ capabilities: ['search_person_memory'] }));
 
@@ -422,7 +494,7 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     );
 
     expect(sentences).toEqual([
-      'Leaned the way you set it in your settings: toward secular and plain, strongly toward concise and spare, and strongly toward gentle.',
+      'Leaned the way you’ve set it: toward secular and plain, strongly toward concise and spare, and strongly toward gentle.',
     ]);
   });
 
@@ -444,9 +516,9 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     const said = (stop: 1 | 2) =>
       leaningsSentences(turn({ leanings: { applied: [{ key: 'directness', stop }], held: [] } }));
 
-    expect(said(1)).toEqual(['Leaned the way you set it in your settings: toward direct.']);
+    expect(said(1)).toEqual(['Leaned the way you’ve set it: toward direct.']);
     expect(said(2)).toEqual([
-      'Leaned the way you set it in your settings: strongly toward direct and challenging.',
+      'Leaned the way you’ve set it: strongly toward direct and challenging.',
     ]);
   });
 
@@ -478,7 +550,7 @@ describe('the leanings a reply was shaded by (f-leanings t-136)', () => {
     expect(accountDetail(data, parts).split('\n')).toEqual([
       `${NOTHING_WRITTEN}.`,
       expect.stringMatching(/^Began in a teaching register/),
-      'Leaned the way you set it in your settings: toward concise and spare.',
+      'Leaned the way you’ve set it: toward concise and spare.',
       expect.stringMatching(/^This turn used/),
     ]);
   });

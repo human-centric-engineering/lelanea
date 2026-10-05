@@ -408,6 +408,7 @@ async function main(): Promise<void> {
         capabilities: answered,
         citations: [],
         suggestions: [],
+        leaningChanges: [],
         turn: null,
       })
     );

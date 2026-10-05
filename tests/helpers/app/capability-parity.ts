@@ -20,6 +20,8 @@ import { SetRegisterCapability } from '@/lib/app/voice/register-capability';
 import { SET_REGISTER_IMPL } from '@/prisma/seeds/app-lelanea/023-set-register';
 import { SearchPersonMemoryCapability } from '@/lib/app/memory/search-capability';
 import { SEARCH_PERSON_MEMORY_IMPL } from '@/prisma/seeds/app-lelanea/024-search-person-memory';
+import { SetLeaningCapability } from '@/lib/app/voice/leaning-capability';
+import { SET_LEANING_IMPL } from '@/prisma/seeds/app-lelanea/025-set-leaning';
 
 export const APP_CAPABILITY_PAIRS: {
   slug: string;
@@ -40,5 +42,10 @@ export const APP_CAPABILITY_PAIRS: {
     slug: 'search_person_memory',
     seeded: SEARCH_PERSON_MEMORY_IMPL,
     instance: new SearchPersonMemoryCapability(),
+  },
+  {
+    slug: 'set_leaning',
+    seeded: SET_LEANING_IMPL,
+    instance: new SetLeaningCapability(),
   },
 ];
